@@ -136,9 +136,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                         index, name, children,
                         Box::new(move |el_name, property| {
                             let attr = match property {
-                                Property::Attribute { name, optional } =>
+                                Property::Attribute { name, inject_as, optional } =>
                                     ElementAttr::CustomAttrText {
-                                        name: LitStr::new(&format!("{name}"), el_name.span()),
+                                        name: LitStr::new(&format!("{inject_as}"), el_name.span()),
                                         value: LitStr::new(
                                             &format!(
                                                 "{{{cx}.props.{name}{}}}",
@@ -147,9 +147,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                                             el_name.span(),
                                         ),
                                     },
-                                Property::Handler { name, optional } =>
+                                Property::Handler { name, inject_as, optional } =>
                                     ElementAttr::EventTokens {
-                                        name: Ident::new(name, el_name.span()),
+                                        name: Ident::new(inject_as, el_name.span()),
                                         tokens: if *optional {
                                             syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
                                         } else {
@@ -176,9 +176,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                         index, name, children,
                         Box::new(|el_name, property| {
                             let attr = match property {
-                                Property::Attribute { name, optional } =>
+                                Property::Attribute { name, inject_as, optional } =>
                                     ComponentField {
-                                        name: Ident::new(name, el_name.span()),
+                                        name: Ident::new(inject_as, el_name.span()),
                                         content: ContentField::Formatted(LitStr::new(
                                             &format!(
                                                 "{{{cx}.props.{name}{}}}",
@@ -187,9 +187,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                                             el_name.span(),
                                         ))
                                     },
-                                Property::Handler { name, optional } =>
+                                Property::Handler { name, inject_as, optional } =>
                                     ComponentField {
-                                        name: Ident::new(name, el_name.span()),
+                                        name: Ident::new(inject_as, el_name.span()),
                                         content: ContentField::OnHandlerRaw(
                                             if *optional {
                                                 syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?

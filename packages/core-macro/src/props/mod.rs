@@ -274,6 +274,7 @@ mod field_info {
         pub skip: bool,
         pub auto_into: bool,
         pub strip_option: bool,
+        pub inject_as: Option<String>,
         pub attr_on: Option<Selectors>,
         pub hndlr_on: Option<Selectors>,
     }
@@ -349,6 +350,13 @@ mod field_info {
                             } else {
                                 return Err(Error::new_spanned(assign.right, "Expected string"));
                             }
+                            Ok(())
+                        }
+                        "inject_as" => {
+                            let inject_as = parse_string_literal(&assign.right)?;
+
+                            self.inject_as = Some(inject_as);
+
                             Ok(())
                         }
                         // simple tag selector for applying attribute to inner element/component
@@ -1245,11 +1253,12 @@ pub mod injection {
         pub fn add_injected_fields(component: &str, fields: &mut [FieldInfo]) -> syn::Result<()> {
             let injected_fields = fields.iter_mut()
                 .filter_map(
-                    |FieldInfo { name, builder_attr: FieldBuilderAttr { attr_on, hndlr_on, strip_option, .. }, .. }| {
+                    |FieldInfo { name, builder_attr: FieldBuilderAttr { inject_as, attr_on, hndlr_on, strip_option, .. }, .. }| {
                         // attr_on and hndlr_on are checked to be mutually exclusive during parsing
                         if attr_on.is_some() || hndlr_on.is_some() {
                             Some((
-                                name,
+                                name.clone(),
+                                inject_as.take().unwrap_or(name.to_string()),
                                 attr_on.is_some(),
                                 attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap()),
                                 strip_option
@@ -1259,17 +1268,19 @@ pub mod injection {
                         }
                     });
 
-            for (name, attribute, selector, strip_option) in injected_fields {
+            for (name, inject_as, attribute, selector, strip_option) in injected_fields {
                 InjectedProperties::add_selectors(
                     component,
                     if attribute {
                         Property::Attribute {
                             name: name.to_string(),
+                            inject_as,
                             optional: *strip_option,
                         }
                     } else {
                         Property::Handler {
                             name: name.to_string(),
+                            inject_as,
                             optional: *strip_option,
                         }
                     },
@@ -1507,10 +1518,12 @@ pub mod injection {
     pub enum Property {
         Attribute {
             name: String,
+            inject_as: String,
             optional: bool,
         },
         Handler {
             name: String,
+            inject_as: String,
             optional: bool,
         },
     }
