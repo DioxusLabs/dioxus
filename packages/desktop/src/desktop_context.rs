@@ -193,6 +193,21 @@ pub(super) fn handler(
 
         DevTool => webview.devtool(),
 
-        Eval(code) => webview.evaluate_script(code.as_str()).expect("failed to eval script"),
+        Eval(code) => webview
+            .evaluate_script(code.as_str())
+            .expect("failed to eval script"),
     }
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+///
+/// # Panics
+///
+/// The closure will cause the message processing thread to panic if the
+/// provided script is not valid JavaScript code or if it returns an uncaught
+/// error.
+pub fn use_eval<S: std::fmt::Display>(cx: &ScopeState) -> impl Fn(S) + '_ {
+    let desktop = use_window(&cx);
+
+    move |script| desktop.eval(script)
 }

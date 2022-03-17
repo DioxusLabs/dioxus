@@ -62,12 +62,14 @@ use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
 use futures_util::FutureExt;
+pub use crate::util::use_eval;
 
 mod cache;
 mod cfg;
 mod dom;
 mod rehydrate;
 mod ric_raf;
+mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
 ///

@@ -44,3 +44,9 @@ pub mod prelude {
     #[cfg(feature = "fermi")]
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
 }
+
+#[cfg(all(target = "wasm", feature = "web"))]
+pub use dioxus_web::use_eval;
+
+#[cfg(all(not(target = "wasm"), feature = "desktop"))]
+pub use dioxus_desktop::use_eval;
