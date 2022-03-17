@@ -1236,6 +1236,8 @@ pub mod injection {
     use std::str::FromStr;
     use std::sync::{Mutex, Once};
 
+    use proc_macro2::Span;
+
     use crate::props::field_info::{FieldBuilderAttr, FieldInfo};
 
     /// Stores declaratively defined property injection selectors for a custom component
@@ -1303,8 +1305,9 @@ pub mod injection {
             Ok(false)
         }
 
-        pub fn component_properties<C: ToString>(component: &C) -> Result<Vec<Property>, String> {
-            let components = Self::components().lock().map_err(|err| format!("{err}"))?;
+        pub fn component_properties<C: ToString>(component: &C) -> syn::Result<Vec<Property>> {
+            let components = Self::components().lock()
+                .map_err(|err| syn::Error::new(Span::call_site(), format!("{err}")))?;
 
             if let Some(selector) = &components.0.get(component.to_string().as_str()) {
                 Ok(selector.iter().map(|(property, _)| property.clone()).collect())

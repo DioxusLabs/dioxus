@@ -86,10 +86,7 @@ impl Parse for CallBody {
 
 fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) -> syn::Result<()> {
     let mut branch = Branch::new();
-
-    let properties = InjectedProperties::component_properties(component)
-        .map_err(|err| syn::Error::new(Span::call_site(), err))?;
-
+    let properties = InjectedProperties::component_properties(component)?;
     let component = component.to_string();
     let context = ctx.to_string();
 
