@@ -309,6 +309,13 @@ mod field_info {
                 if self.skip && skip_tokens.is_none() {
                     skip_tokens = Some(attr.tokens.clone());
                 }
+
+                if self.inject_as.is_some() && self.attr_on.is_none() && self.hndlr_on.is_none() {
+                    return Err(Error::new_spanned(
+                        attr,
+                        r#"#[props(inject_as = "..")] must be accompanied by an "attribute_on" or "handler_on" declaration"#,
+                    ));
+                }
             }
 
             if self.skip && self.default.is_none() {
