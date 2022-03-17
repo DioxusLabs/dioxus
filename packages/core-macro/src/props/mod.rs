@@ -171,6 +171,7 @@ mod field_info {
 
     use proc_macro2::TokenStream;
     use quote::{quote, ToTokens};
+    use syn::Expr;
     use syn::parse::Error;
     use syn::spanned::Spanned;
 
@@ -355,21 +356,9 @@ mod field_info {
                             if self.hndlr_on.is_some() {
                                 Err(Error::new_spanned(assign, r#""handler_on" already defined, can only apply one"#))
                             } else {
-                                let selectors = (&assign.right).into_token_stream().to_string();
-                                let selectors = selectors
-                                    .strip_prefix('"').unwrap()
-                                    .strip_suffix('"').unwrap();
+                                self.attr_on = Some(parse_selectors(&assign.right)?);
 
-                                self.attr_on = Some(
-                                    Selectors::from_str(selectors)
-                                        .map_err(|err| Error::new_spanned(&assign, err))?
-                                );
-
-                                if self.attr_on.is_none() {
-                                    Err(Error::new_spanned(assign, r#""attribute_on" can not be empty, provide a selector or remove definition"#))
-                                } else {
-                                    Ok(())
-                                }
+                                Ok(())
                             }
                         },
                         // simple tag selector for applying event handler to inner element/component
@@ -377,21 +366,9 @@ mod field_info {
                             if self.attr_on.is_some() {
                                 Err(Error::new_spanned(assign, r#""attribute_on" already defined, can only apply one"#))
                             } else {
-                                let selectors = (&assign.right).into_token_stream().to_string();
-                                let selectors = selectors
-                                    .strip_prefix('"').unwrap()
-                                    .strip_suffix('"').unwrap();
+                                self.hndlr_on = Some(parse_selectors(&assign.right)?);
 
-                                self.hndlr_on = Some(
-                                    Selectors::from_str(selectors)
-                                        .map_err(|err| Error::new_spanned(&assign, err))?
-                                );
-
-                                if self.hndlr_on.is_none() {
-                                    Err(Error::new_spanned(&assign, r#""handler_on" can not be empty, provide a selector or remove definition"#))
-                                } else {
-                                    Ok(())
-                                }
+                                Ok(())
                             }
                         },
                         _ => Err(Error::new_spanned(
@@ -489,6 +466,26 @@ mod field_info {
                 }
                 _ => Err(Error::new_spanned(expr, "Expected (<...>=<...>)")),
             }
+        }
+    }
+
+    #[inline]
+    fn parse_selectors(source: &Box<Expr>) -> syn::Result<Selectors> {
+        Selectors::from_str(&parse_string_literal(source)?)
+            .map_err(|err| Error::new_spanned(&source, err))
+    }
+
+    fn parse_string_literal(source: &Box<Expr>) -> syn::Result<String> {
+        let expr = (&source).into_token_stream().to_string();
+
+        if expr.starts_with('"') && expr.ends_with('"') {
+            let literal = expr
+                .strip_prefix('"').unwrap()
+                .strip_suffix('"').unwrap();
+
+            Ok(literal.to_string())
+        } else {
+            Err(Error::new_spanned(source, "expected a string literal"))
         }
     }
 }
@@ -1564,7 +1561,7 @@ pub mod injection {
 
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             // multiple selectors can be defined separated by a semicolon
-            value.split(';')
+            let result = value.split(';')
                 .filter_map(
                     |sel| if sel.trim().is_empty() {
                         None
@@ -1588,7 +1585,17 @@ pub mod injection {
                         },
                         err => err
                     },
-                )
+                );
+
+            if let Ok(ok_result) = &result {
+                if ok_result.0.is_empty() {
+                    Err(String::from("selectors can not be empty, provide one or remove definition"))
+                } else {
+                    result
+                }
+            } else {
+                result
+            }
         }
     }
 
