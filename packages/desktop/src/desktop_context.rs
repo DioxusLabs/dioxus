@@ -119,6 +119,11 @@ impl DesktopContext {
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
     }
+
+    /// run (evaluate) a script in the WebView context
+    pub fn eval(&self, script: impl std::fmt::Display) {
+        let _ = self.proxy.send_event(Eval(script.to_string()));
+    }
 }
 
 #[derive(Debug)]
@@ -144,6 +149,8 @@ pub enum UserWindowEvent {
     SetDecorations(bool),
 
     DevTool,
+
+    Eval(String),
 }
 
 pub(super) fn handler(
@@ -185,5 +192,7 @@ pub(super) fn handler(
         SetDecorations(state) => window.set_decorations(state),
 
         DevTool => webview.devtool(),
+
+        Eval(code) => webview.evaluate_script(code.as_str()).expect("failed to eval script"),
     }
 }
