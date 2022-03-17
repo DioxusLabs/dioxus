@@ -125,9 +125,13 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                 Ok(())
             };
 
+        let mut branched = false;
+
         for (index, node) in nodes.iter_mut().enumerate() {
             match node {
                 BodyNode::Element(Element { name, attributes, children, .. }) => {
+                    branched = true;
+
                     let el_name = name.to_string();
 
                     inject_properties(
@@ -164,6 +168,8 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                     )?;
                 }
                 BodyNode::Component(Component { name, body: _body, children, manual_props: _manual_props }) => {
+                    branched = true;
+
                     let name = match name.segments.last() {
                         Some(last) => last.ident.to_string(),
                         None => return Err(syn::Error::new(Span::call_site(), ""))
@@ -171,17 +177,21 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
 
                     inject_properties(
                         index, name, children,
-                       Box::new(|_name, _property| {
-                           // todo: inject component attributes and handlers
-                           Ok(())
-                       })
+                        Box::new(|_name, _property| {
+                            // todo: inject component attributes and handlers
+                            Ok(())
+                        })
                     )?;
                 }
                 _ => {}
             }
         }
 
-        branch.last().map_err(|err| syn::Error::new(Span::call_site(), err))
+        if branched {
+            branch.last().map_err(|err| syn::Error::new(Span::call_site(), err))?;
+        }
+
+        Ok(())
     }
 }
 
