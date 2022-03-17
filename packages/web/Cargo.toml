@@ -13,7 +13,9 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.2.0" }
 dioxus-html = { path = "../html", version = "^0.2.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0", features = ["web"] }
+dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0", features = [
+    "web",
+] }
 
 js-sys = "0.3.56"
 wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
@@ -79,4 +81,3 @@ dioxus-core-macro = { path = "../core-macro" }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"
-

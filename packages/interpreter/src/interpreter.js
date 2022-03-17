@@ -20,6 +20,9 @@ export class Interpreter {
   pop() {
     return this.stack.pop();
   }
+  SetNode(id, node) {
+    this.nodes[id] = node;
+  }
   PushRoot(root) {
     const node = this.nodes[root];
     this.stack.push(node);
