@@ -100,22 +100,22 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
     ) -> syn::Result<()> {
         let mut inject_properties =
             |
-                index: usize, name: String,
+                index: usize, name: &Ident,
                 children: &mut Vec<BodyNode>,
-                mut inject_property: Box<dyn FnMut(&str, &Property) -> syn::Result<()>>
+                mut inject_property: Box<dyn FnMut(&Ident, &Property) -> syn::Result<()>>
             | -> syn::Result<()> {
 
                 if index == 0 {
-                    branch.child(&name)
+                    branch.child(name)
                 } else {
-                    branch.sibling(&name).map_err(|err| syn::Error::new(Span::call_site(), err))?;
+                    branch.sibling(name).map_err(|err| syn::Error::new(name.span(), err))?;
                 }
 
                 for property in properties {
                     let applies = InjectedProperties::check_branch(component, property, branch)
-                        .map_err(|err| syn::Error::new(Span::call_site(), err))?;
+                        .map_err(|err| syn::Error::new(name.span(), err))?;
 
-                    if applies { inject_property(&name, &property)? }
+                    if applies { inject_property(name, &property)? }
                 }
 
                 if !children.is_empty() {
@@ -132,27 +132,24 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                 BodyNode::Element(Element { name, attributes, children, .. }) => {
                     branched = true;
 
-                    let el_name = name.to_string();
-
                     inject_properties(
-                        index, el_name, children,
+                        index, name, children,
                         Box::new(move |el_name, property| {
-                            let el_name = Ident::new(el_name, Span::call_site());
                             let attr = match property {
                                 Property::Attribute { name, optional } =>
                                     ElementAttr::CustomAttrText {
-                                        name: LitStr::new(&format!("{name}"), Span::call_site()),
+                                        name: LitStr::new(&format!("{name}"), el_name.span()),
                                         value: LitStr::new(
                                             &format!(
                                                 "{{{cx}.props.{name}{}}}",
                                                 if *optional { ":?" } else { "" }
                                             ),
-                                            Span::call_site(),
+                                            el_name.span(),
                                         ),
                                     },
                                 Property::Handler { name, optional } =>
                                     ElementAttr::EventTokens {
-                                        name: Ident::new(name, Span::call_site()),
+                                        name: Ident::new(name, el_name.span()),
                                         tokens: if *optional {
                                             syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
                                         } else {
@@ -161,7 +158,7 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                                     },
                             };
 
-                            attributes.push(ElementAttrNamed { el_name, attr, });
+                            attributes.push(ElementAttrNamed { el_name: el_name.clone(), attr, });
 
                             Ok(())
                         })
@@ -171,8 +168,8 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
                     branched = true;
 
                     let name = match name.segments.last() {
-                        Some(last) => last.ident.to_string(),
-                        None => return Err(syn::Error::new(Span::call_site(), ""))
+                        Some(last) => &last.ident,
+                        None => return Err(syn::Error::new_spanned(name, "Expected component name"))
                     };
 
                     inject_properties(

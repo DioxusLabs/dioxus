@@ -1412,14 +1412,13 @@ pub mod injection {
 
         /// Adds a new child leve;, creates a new segment trace; only used
         /// to start new level, subsequent children need to use `Branch::sibling`
-        pub fn child<N: Into<String>>(&mut self, name: N) {
+        pub fn child<N: ToString>(&mut self, name: N) {
             let mut counters = HashMap::default();
-            let name = name.into();
 
-            counters.insert(name.clone(), 0);
+            counters.insert(name.to_string(), 0);
 
             self.segments.push(SegmentTrace {
-                current: name,
+                current: name.to_string(),
                 ordinal: 0,
                 counters,
             });
@@ -1428,7 +1427,7 @@ pub mod injection {
         /// Indicates no more siblings; used after last sibling is added
         pub fn last(&mut self) -> Result<(), String> {
             if self.segments.is_empty() {
-                Err(String::from("Branch is empty"))
+                Err(String::from("Branch traversal expected parent segment, ended unexpectedly"))
             } else {
                 self.segments.pop();
 
@@ -1437,14 +1436,14 @@ pub mod injection {
         }
 
         /// Adds next sibling, updates trace info
-        pub fn sibling<N: Into<String>>(&mut self, name: N) -> Result<(), String> {
+        pub fn sibling<N: ToString>(&mut self, name: N) -> Result<(), String> {
             if self.segments.is_empty() {
                 Err(String::from("Branch is empty, start with a call to child first"))
             } else {
                 let trace = self.segments.last_mut().unwrap();
 
                 trace.ordinal += 1;
-                trace.current = name.into();
+                trace.current = name.to_string();
 
                 trace.counters
                     .entry(trace.current.clone())
