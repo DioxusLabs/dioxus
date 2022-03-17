@@ -77,7 +77,7 @@ export class Interpreter {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     if (this.listeners[event_name] === undefined) {
-      this.listeners[event_name] = 0;
+      this.listeners[event_name] = 1;
       this.handlers[event_name] = handler;
       this.root.addEventListener(event_name, handler);
     } else {
@@ -190,9 +190,13 @@ export class Interpreter {
         this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
+        console.log(this.listeners);
+
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
+          console.log(event);
+
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -215,7 +219,7 @@ export class Interpreter {
               }
 
               // also prevent buttons from submitting
-              if (target.tagName === "BUTTON") {
+              if (target.tagName === "BUTTON" && event.type == "submit") {
                 event.preventDefault();
               }
             }
@@ -239,11 +243,15 @@ export class Interpreter {
             if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
             }
+
             if (event.type === "submit") {
               event.preventDefault();
             }
 
-            if (target.tagName === "FORM") {
+            if (
+              target.tagName === "FORM" &&
+              (event.type === "submit" || event.type === "input")
+            ) {
               for (let x = 0; x < target.elements.length; x++) {
                 let element = target.elements[x];
                 let name = element.getAttribute("name");
