@@ -18,7 +18,7 @@ dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0", features 
 js-sys = "0.3.56"
 wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
 wasm-bindgen-futures = "0.4.29"
-log = { version = "0.4.14", features = ["release_max_level_off"] }
+log = { version = "0.4.14" }
 fxhash = "0.2.1"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 once_cell = "1.9.0"

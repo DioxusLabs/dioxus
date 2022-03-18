@@ -14,6 +14,9 @@ pub use dioxus_ssr as ssr;
 #[cfg(feature = "web")]
 pub use dioxus_web as web;
 
+#[cfg(feature = "liveview")]
+pub use dioxus_liveview as liveview;
+
 #[cfg(feature = "desktop")]
 pub use dioxus_desktop as desktop;
 

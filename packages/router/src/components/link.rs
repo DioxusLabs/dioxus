@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::RouterCore;
+use crate::{use_route, RouterCore};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
 use dioxus_core_macro::{format_args_f, rsx, Props};
@@ -25,6 +25,14 @@ pub struct LinkProps<'a> {
     /// This can be useful when styling the inner link element.
     #[props(default, strip_option)]
     pub class: Option<&'a str>,
+
+    /// Set the class added to the inner link when the current route is the same as the "to" route.
+    ///
+    /// To set all of the active classes inside a Router at the same time use the `active_class`
+    /// prop on the Router component. If both the Router prop as well as this prop are provided then
+    /// this one has precedence. By default set to `"active"`.
+    #[props(default, strip_option)]
+    pub active_class: Option<&'a str>,
 
     /// Set the ID of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
     ///
@@ -83,6 +91,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         external,
         new_tab,
         children,
+        active_class,
         ..
     } = cx.props;
 
@@ -90,10 +99,27 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let outerlink = (*autodetect && is_http) || *external;
     let prevent_default = if outerlink { "" } else { "onclick" };
 
+    let active_class_name = match active_class {
+        Some(c) => (*c).into(),
+        None => {
+            let active_from_router = match svc {
+                Some(service) => service.cfg.active_class.clone(),
+                None => None,
+            };
+            active_from_router.unwrap_or("active".into())
+        }
+    };
+
+    let route = use_route(&cx);
+    let url = route.url();
+    let path = url.path();
+    let active = path == cx.props.to;
+    let active_class = if active { active_class_name } else { "".into() };
+
     cx.render(rsx! {
         a {
             href: "{to}",
-            class: format_args!("{}", class.unwrap_or("")),
+            class: format_args!("{} {}", class.unwrap_or(""), active_class),
             id: format_args!("{}", id.unwrap_or("")),
             title: format_args!("{}", title.unwrap_or("")),
             prevent_default: "{prevent_default}",

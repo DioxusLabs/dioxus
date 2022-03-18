@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Convert a serialized event to an event trigger
 
 use std::any::Any;
@@ -7,28 +9,15 @@ use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct IpcMessage {
-    method: String,
-    params: serde_json::Value,
+pub(crate) struct IpcMessage {
+    pub method: String,
+    pub params: serde_json::Value,
 }
 
-impl IpcMessage {
-    pub fn method(&self) -> &str {
-        self.method.as_str()
-    }
-
-    pub fn params(self) -> serde_json::Value {
-        self.params
-    }
-}
-
-pub fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
+pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     match serde_json::from_str(payload) {
         Ok(message) => Some(message),
-        Err(e) => {
-            log::error!("could not parse IPC message, error: {}", e);
-            None
-        }
+        Err(_) => None,
     }
 }
 
@@ -84,9 +73,9 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             Arc::new(serde_json::from_value::<FormData>(val).unwrap())
         }
 
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
-        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
-        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
+        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(serde_json::from_value::<MouseData>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -149,7 +138,6 @@ fn event_name_from_type(typ: &str) -> &'static str {
         "click" => "click",
         "contextmenu" => "contextmenu",
         "doubleclick" => "doubleclick",
-        "dblclick" => "dblclick",
         "drag" => "drag",
         "dragend" => "dragend",
         "dragenter" => "dragenter",
@@ -210,8 +198,8 @@ fn event_name_from_type(typ: &str) -> &'static str {
         "volumechange" => "volumechange",
         "waiting" => "waiting",
         "toggle" => "toggle",
-        a => {
-            panic!("unsupported event type {:?}", a);
+        _ => {
+            panic!("unsupported event type")
         }
     }
 }

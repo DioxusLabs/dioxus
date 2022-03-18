@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 [dependencies]
 dioxus-core = { path = "../../packages/core", version = "^0.2.0" }
 futures-channel = "0.3.21"
-log = { version = "0.4", features = ["release_max_level_off"] }
+log = { version = "0.4" }
 
 
 [dev-dependencies]

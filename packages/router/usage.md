@@ -62,6 +62,25 @@ Link { to: "/blog/welcome",
 }
 ```
 
+#### Active `Links`
+
+When your app has been navigated to a route that matches the route of a `Link`, this `Link` becomes 'active'.
+Active links have a special class attached to them. By default it is simply called `"active"` but it can be
+modified on the `Link` level or on the `Router` level. Both is done through the prop `active_class`.
+If the active class is given on both, the `Router` and the `Link`, the one on the `Link` has precedence.
+
+```rust
+Router {
+    active_class: "custom-active",  // All active links in this router get this class.
+    Link { to: "/", "Home" },
+    Link { 
+        to: "/blog",
+        active_class: "is-active",  // Only for this Link. Overwrites "custom-active" from Router.
+        "Blog" 
+    },
+}
+```
+
 ### Segments
 
 Each route in your app is comprised of segments and queries. Segments are the portions of the route delimited by forward slashes.

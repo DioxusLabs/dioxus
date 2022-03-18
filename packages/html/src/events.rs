@@ -193,6 +193,9 @@ pub mod on {
             /// ondoubleclick
             ondoubleclick
 
+            /// ondoubleclick
+            ondblclick
+
             /// ondrag
             ondrag
 

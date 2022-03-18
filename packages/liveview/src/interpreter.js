@@ -1,25 +1,41 @@
-export function main() {
+function main() {
   let root = window.document.getElementById("main");
+
   if (root != null) {
-    window.interpreter = new Interpreter(root);
+    // create a new ipc
+    window.ipc = new IPC(root);
 
-    document.addEventListener('keydown', handleKeyEvent);
-    document.addEventListener('keyup', handleKeyEvent);
-
-    window.ipc.postMessage(serializeIpcMessage("initialize"));
-
-    function handleKeyEvent(e) {
-      e.preventDefault();
-      const params = {
-        type: e.type,
-        code: e.code,
-        keyCode: e.keyCode,
-      }
-      window.ipc.postMessage(serializeIpcMessage("keyboard_event", params))
-    }
+    window.ipc.send(serializeIpcMessage("initialize"));
   }
 }
-export class Interpreter {
+
+class IPC {
+  constructor(root) {
+    // connect to the websocket
+    window.interpreter = new Interpreter(root);
+
+    this.ws = new WebSocket(WS_ADDR);
+
+    this.ws.onopen = () => {
+      console.log("Connected to the websocket");
+    };
+
+    this.ws.onerror = (err) => {
+      console.error("Error: ", err);
+    };
+
+    this.ws.onmessage = (event) => {
+      let edits = JSON.parse(event.data);
+      window.interpreter.handleEdits(edits);
+    };
+  }
+
+  send(msg) {
+    this.ws.send(msg);
+  }
+}
+
+class Interpreter {
   constructor(root) {
     this.root = root;
     this.stack = [root];
@@ -67,12 +83,14 @@ export class Interpreter {
     }
   }
   CreateTextNode(text, root) {
+    // todo: make it so the types are okay
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
   }
   CreateElement(tag, root) {
     const el = document.createElement(tag);
+    // el.setAttribute("data-dioxus-id", `${root}`);
     this.nodes[root] = el;
     this.stack.push(el);
   }
@@ -91,7 +109,7 @@ export class Interpreter {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     if (this.listeners[event_name] === undefined) {
-      this.listeners[event_name] = 1;
+      this.listeners[event_name] = 0;
       this.handlers[event_name] = handler;
       this.root.addEventListener(event_name, handler);
     } else {
@@ -145,12 +163,10 @@ export class Interpreter {
       }
     }
   }
-  RemoveAttribute(root, field, ns) {
-    const name = field;
+  RemoveAttribute(root, name) {
     const node = this.nodes[root];
-    if (ns !== null || ns !== undefined) {
-      node.removeAttributeNS(ns, name);
-    } else if (name === "value") {
+
+    if (name === "value") {
       node.value = "";
     } else if (name === "checked") {
       node.checked = false;
@@ -204,13 +220,9 @@ export class Interpreter {
         this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
-        console.log(this.listeners);
-
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-          console.log(event);
-
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -225,7 +237,7 @@ export class Interpreter {
                   event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
-                    window.ipc.postMessage(
+                    window.ipc.send(
                       serializeIpcMessage("browser_open", { href })
                     );
                   }
@@ -233,7 +245,7 @@ export class Interpreter {
               }
 
               // also prevent buttons from submitting
-              if (target.tagName === "BUTTON" && event.type == "submit") {
+              if (target.tagName === "BUTTON") {
                 event.preventDefault();
               }
             }
@@ -257,15 +269,11 @@ export class Interpreter {
             if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
             }
-
             if (event.type === "submit") {
               event.preventDefault();
             }
 
-            if (
-              target.tagName === "FORM" &&
-              (event.type === "submit" || event.type === "input")
-            ) {
+            if (target.tagName === "FORM") {
               for (let x = 0; x < target.elements.length; x++) {
                 let element = target.elements[x];
                 let name = element.getAttribute("name");
@@ -282,10 +290,10 @@ export class Interpreter {
               }
             }
 
-            if (realId === null) {
+            if (realId == null) {
               return;
             }
-            window.ipc.postMessage(
+            window.ipc.send(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,
                 mounted_dom_id: parseInt(realId),
@@ -303,13 +311,13 @@ export class Interpreter {
         this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name, edit.ns);
+        this.RemoveAttribute(edit.root, edit.name);
         break;
     }
   }
 }
 
-export function serialize_event(event) {
+function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":
@@ -387,7 +395,6 @@ export function serialize_event(event) {
     case "click":
     case "contextmenu":
     case "doubleclick":
-    case "dblclick":
     case "drag":
     case "dragend":
     case "dragenter":

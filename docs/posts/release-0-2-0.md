@@ -58,11 +58,13 @@ We also fixed and improved a bunch of stuff - check out the full list down below
 When Dioxus was initially released, we had very simple support for logging Dioxus elements out as TUI elements. In the past month or so, [@Demonthos](https://github.com/Demonthos) really stepped up and made the new crate a reality.
 
 
-![Imgur](https://i.imgur.com/GL7uu3r)
+![Imgur](https://i.imgur.com/GL7uu3r.png)
 
 The new TUI renderer even supports mouse movements, keyboard input, async tasks, borders, and a ton more.
 
-<blockquote class="imgur-embed-pub" lang="en" data-id="a/49n7Hj2" data-context="false" ><a href="//imgur.com/a/49n7Hj2"></a></blockquote><script async src="//s.imgur.com/min/embed.js" charset="utf-8"></script>
+<video controls autoplay muted>
+    <source src="https://i.imgur.com/q25tZST.mp4" type="video/mp4">
+</vido>
 
 
 
@@ -207,7 +209,7 @@ Overall, Dioxus apps are even more snappy than before.
 
 
 Before and after:
-![Before and After](https://imgur.com/byTBGlO)
+![Before and After](https://imgur.com/byTBGlO.png)
 
 
 ## Dioxus Desktop Window Context
@@ -226,21 +228,7 @@ In addition, Dioxus Desktop now autoresolves asset locations, so you can easily 
 
 You can now build entirely borderless desktop apps:
 
-![img](https://i.imgur.com/97zsVS1)
-
-<!-- ## VSCode Extension
-
-To make life easier and improve your development experience, we've launched the first iteration of the official Dioxus VSCode extension. If you're not using VSCode, you can still take advantage of these new features through the CLI tool.
-
-Included in the new extension is:
-
-- Auto-formatting of `rsx!` blocks
-- Convert selection of HTML to RSX
-- Extract RSX as component
-
-[To install the extension, go here](https://marketplace.visualstudio.com/items?itemName=matklad.rust-analyzer).
-
-The VSCode extension is really easy to contribute to and has tons of potential. This is a great place to start contributing to the Dioxus project *and* improve your development experience. -->
+![img](https://i.imgur.com/97zsVS1.png)
 
 ## CLI Tool
 
@@ -299,38 +287,46 @@ fn App(cx: Scope) -> Element {
 
 We've covered the major headlining features, but there were so many more!
 
-- [x] A new router @autarch
-- [x] Fermi for global state management
-- [x] Translation of docs and Readme into Chinese @mrxiaozhuox
-- [x] 2.5x speedup by using JS-based DOM manipulation (3x faster than React)
-- [x] Beautiful documentation overhaul
-- [x] InlineProps macro allows definition of props within a component's function arguments
-- [x] Improved dev server, hot reloading for desktop and web apps [@mrxiaozhuox](https://github.com/mrxiaozhuox)
-- [x] Templates: desktop, web, web/hydration, Axum + SSR, and more [@mrxiaozhuox](https://github.com/mrxiaozhuox)
-- [x] Web apps ship with console_error_panic_hook enabled, so you always get tracebacks
-- [x] Enhanced Hydration and server-side-rendering (recovery, validation)
-- [x] Optional fields for component properties
-- [x] Introduction of the `EventHandler` type
-- [x] Improved use_state hook to be closer to react
-- [x] Improved use_ref hook to be easier to use in async contexts
-- [x] New use_coroutine hook for carefully controlling long-running async tasks
-- [x] Prevent Default attribute
-- [x] Provide Default Context allows injection of global contexts to the top of the app
-- [x] push_future now has a spawn counterpart to be more consistent with rust
-- [x] Add gap and gap_row attributes [@FruitieX](https://github.com/FruitieX)
-- [x] File Drag n Drop support for Desktop
-- [x] Custom handler support for desktop
-- [x] Forms now collect all their values in oninput/onsubmit
-- [x] Async tasks now are dropped when components unmount
-- [x] Right-click menus are now disabled by default
+- A new router @autarch
+- Fermi for global state management
+- Translation of docs and Readme into Chinese @mrxiaozhuox
+- 2.5x speedup by using JS-based DOM manipulation (3x faster than React)
+- Beautiful documentation overhaul
+- InlineProps macro allows definition of props within a component's function arguments
+- Improved dev server, hot reloading for desktop and web apps [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- Templates: desktop, web, web/hydration, Axum + SSR, and more [@mrxiaozhuox](https://github.com/mrxiaozhuox)
+- Web apps ship with console_error_panic_hook enabled, so you always get tracebacks
+- Enhanced Hydration and server-side-rendering (recovery, validation)
+- Optional fields for component properties
+- Introduction of the `EventHandler` type
+- Improved use_state hook to be closer to react
+- Improved use_ref hook to be easier to use in async contexts
+- New use_coroutine hook for carefully controlling long-running async tasks
+- Prevent Default attribute
+- Provide Default Context allows injection of global contexts to the top of the app
+- push_future now has a spawn counterpart to be more consistent with rust
+- Add gap and gap_row attributes [@FruitieX](https://github.com/FruitieX)
+- File Drag n Drop support for Desktop
+- Custom handler support for desktop
+- Forms now collect all their values in oninput/onsubmit
+- Async tasks now are dropped when components unmount
+- Right-click menus are now disabled by default
 
 ## Fixes
-- [x] Windows support improved across the board
-- [x] Linux support improved across the board
-- [x] Bug in Calculator example
-- [x] Improved example running support
+- Windows support improved across the board
+- Linux support improved across the board
+- Bug in Calculator example
+- Improved example running support
 
 A ton more! Dioxus is now much more stable than it was at release!
+
+## Breaking Changes and Migrations
+
+- UseState is not `Copy` - but now supports Clone for use in async. `for_async` has been removed
+- UseFuture and UseEffect now take dependency tuples
+- UseCoroutine is now exposed via the context API and takes a receiver
+- Async tasks are canceled when components are dropped
+- The ContextAPI no longer uses RC to share state - anything that is `Clone` can be shared
 
 ## Community Additions
 - [Styled Components macro](https://github.com/Zomatree/Revolt-Client/blob/master/src/utils.rs#14-27) [@Zomatree](https://github.com/Zomatree)
@@ -353,10 +349,19 @@ A ton more! Dioxus is now much more stable than it was at release!
 
 Dioxus is still under rapid, active development. We'd love for you to get involved! For the next release, we're looking to add:
 
-- A query library like react-query
 - Native WGPU renderer support
+- A query library like react-query
 - Multiwindow desktop app support
 - Full LiveView integrations for Axum, Warp, and Actix
 - A builder pattern for elements (no need for rsx!)
 - Autoformatting of rsx! code (like cargo fmt)
-- Beef up and publish the VSCode Extension
+- Improvements to the VSCode Extension
+
+If you're interested in building an app with Dioxus, make sure to check us out on:
+
+- [Github](http://github.com/dioxusLabs/dioxus)
+- [Reddit](http://reddit.com/r/dioxus/)
+- [Discord](https://discord.gg/XgGxMSkvUM)
+- [Twitter](http://twitter.com/dioxuslabs)
+
+
