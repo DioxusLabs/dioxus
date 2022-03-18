@@ -4,18 +4,19 @@ use crossterm::event::{
 use dioxus_core::*;
 
 use dioxus_html::{on::*, KeyCode};
+use dioxus_native_core::{Tree, TreeNodeType};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Layout, Stretch};
 
-use crate::TuiNode;
+use crate::{style_attributes::StyleModifier, RinkLayout};
 
 // a wrapper around the input state for easier access
 // todo: fix loop
@@ -166,7 +167,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
+        layouts: &mut Tree<RinkLayout, StyleModifier>,
         node: &'a VNode<'a>,
     ) {
         struct Data<'b> {
@@ -190,7 +191,7 @@ impl InnerInputState {
             dom: &'c VirtualDom,
             resolved_events: &mut Vec<UserEvent>,
             layout: &Stretch,
-            layouts: &HashMap<ElementId, TuiNode<'c>>,
+            layouts: &Tree<RinkLayout, StyleModifier>,
             node: &'c VNode<'c>,
             data: &'d Data<'d>,
         ) -> HashSet<&'static str> {
@@ -225,9 +226,9 @@ impl InnerInputState {
             }
 
             let id = node.try_mounted_id().unwrap();
-            let node = layouts.get(&id).unwrap();
+            let node = layouts.get(id.0);
 
-            let node_layout = layout.layout(node.layout).unwrap();
+            let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
 
             let previously_contained = data
                 .old_pos
@@ -235,18 +236,18 @@ impl InnerInputState {
                 .is_some();
             let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-            match node.node {
-                VNode::Element(el) => {
+            match &node.node_type {
+                TreeNodeType::Element { children, .. } => {
                     let mut events = HashSet::new();
                     if previously_contained || currently_contains {
-                        for c in el.children {
+                        for c in children {
                             events = events
                                 .union(&get_mouse_events(
                                     dom,
                                     resolved_events,
                                     layout,
                                     layouts,
-                                    c,
+                                    dom.get_element(*c).unwrap(),
                                     data,
                                 ))
                                 .copied()
@@ -260,7 +261,7 @@ impl InnerInputState {
                                 scope_id: None,
                                 priority: EventPriority::Medium,
                                 name,
-                                element: Some(el.id.get().unwrap()),
+                                element: Some(node.id),
                                 data: Arc::new(clone_mouse_data(data.mouse_data)),
                             })
                         }
@@ -287,7 +288,7 @@ impl InnerInputState {
                                     scope_id: None,
                                     priority: EventPriority::Medium,
                                     name: "wheel",
-                                    element: Some(el.id.get().unwrap()),
+                                    element: Some(node.id),
                                     data: Arc::new(clone_wheel_data(w)),
                                 })
                             }
@@ -298,7 +299,7 @@ impl InnerInputState {
                     }
                     events
                 }
-                VNode::Text(_) => HashSet::new(),
+                TreeNodeType::Text { .. } => HashSet::new(),
                 _ => todo!(),
             }
         }
@@ -392,7 +393,7 @@ impl RinkInputHandler {
         &self,
         dom: &'a VirtualDom,
         layout: &Stretch,
-        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
+        layouts: &mut Tree<RinkLayout, StyleModifier>,
         node: &'a VNode<'a>,
     ) -> Vec<UserEvent> {
         // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus

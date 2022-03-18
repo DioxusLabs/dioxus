@@ -21,6 +21,10 @@ impl<'a> RinkBuffer<'a> {
     }
 
     pub fn set(&mut self, x: u16, y: u16, new: &RinkCell) {
+        let area = self.buf.area();
+        if x < area.x || x > area.width || y < area.y || y > area.height {
+            panic!("({x}, {y}) is not in {area:?}");
+        }
         let mut cell = self.buf.get_mut(x, y);
         cell.bg = convert(self.cfg.rendering_mode, new.bg.blend(cell.bg));
         if new.symbol.is_empty() {
@@ -71,11 +75,11 @@ impl Default for RinkCell {
             symbol: "".to_string(),
             fg: RinkColor {
                 color: Color::Rgb(0, 0, 0),
-                alpha: 0.0,
+                alpha: 0,
             },
             bg: RinkColor {
                 color: Color::Rgb(0, 0, 0),
-                alpha: 0.0,
+                alpha: 0,
             },
             modifier: Modifier::empty(),
         }

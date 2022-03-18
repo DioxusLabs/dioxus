@@ -1,11 +1,8 @@
 use dioxus_core::*;
-use std::collections::HashMap;
+use dioxus_native_core::BubbledUpState;
+use stretch2::prelude::*;
 
-use crate::{
-    attributes::{apply_attributes, StyleModifer},
-    style::RinkStyle,
-    TuiModifier, TuiNode,
-};
+use crate::layout_attributes::apply_layout_attributes;
 
 /*
 The layout system uses the lineheight as one point.
@@ -13,119 +10,84 @@ The layout system uses the lineheight as one point.
 stretch uses fractional points, so we can rasterize if we need too, but not with characters
 this means anything thats "1px" is 1 lineheight. Unfortunately, text cannot be smaller or bigger
 */
-pub fn collect_layout<'a>(
-    layout: &mut stretch2::Stretch,
-    nodes: &mut HashMap<ElementId, TuiNode<'a>>,
-    vdom: &'a VirtualDom,
-    node: &'a VNode<'a>,
-) {
-    use stretch2::prelude::*;
+#[derive(Clone, PartialEq, Default, Debug)]
+pub struct RinkLayout {
+    pub style: Style,
+    pub node: Option<Node>,
+}
 
-    match node {
-        VNode::Text(t) => {
-            let id = t.id.get().unwrap();
-            let char_len = t.text.chars().count();
+impl BubbledUpState for RinkLayout {
+    type Ctx = Stretch;
 
-            let style = Style {
-                size: Size {
-                    // characters are 1 point tall
-                    height: Dimension::Points(1.0),
+    // Although we pass in the parent, the state of RinkLayout must only depend on the parent for optimiztion purposes
+    fn reduce<'a, I>(&mut self, children: I, vnode: &VNode, stretch: &mut Self::Ctx)
+    where
+        I: Iterator<Item = &'a Self>,
+        Self: 'a,
+    {
+        match vnode {
+            VNode::Text(t) => {
+                let char_len = t.text.chars().count();
 
-                    // text is as long as it is declared
-                    width: Dimension::Points(char_len as f32),
-                },
-                ..Default::default()
-            };
+                let style = Style {
+                    size: Size {
+                        // characters are 1 point tall
+                        height: Dimension::Points(1.0),
 
-            nodes.insert(
-                id,
-                TuiNode {
-                    node,
-                    block_style: RinkStyle::default(),
-                    tui_modifier: TuiModifier::default(),
-                    layout: layout.new_node(style, &[]).unwrap(),
-                },
-            );
-        }
-        VNode::Element(el) => {
-            // gather up all the styles from the attribute list
-            let mut modifier = StyleModifer {
-                style: Style::default(),
-                tui_style: RinkStyle::default(),
-                tui_modifier: TuiModifier::default(),
-            };
+                        // text is as long as it is declared
+                        width: Dimension::Points(char_len as f32),
+                    },
+                    ..Default::default()
+                };
 
-            // handle text modifier elements
-            if el.namespace.is_none() {
-                match el.tag {
-                    "b" => apply_attributes("font-weight", "bold", &mut modifier),
-                    "strong" => apply_attributes("font-weight", "bold", &mut modifier),
-                    "u" => apply_attributes("text-decoration", "underline", &mut modifier),
-                    "ins" => apply_attributes("text-decoration", "underline", &mut modifier),
-                    "del" => apply_attributes("text-decoration", "line-through", &mut modifier),
-                    "i" => apply_attributes("font-style", "italic", &mut modifier),
-                    "em" => apply_attributes("font-style", "italic", &mut modifier),
-                    "mark" => apply_attributes(
-                        "background-color",
-                        "rgba(241, 231, 64, 50%)",
-                        &mut modifier,
-                    ),
-                    _ => (),
-                }
-            }
-
-            for &Attribute { name, value, .. } in el.attributes {
-                apply_attributes(name, value, &mut modifier);
-            }
-
-            // Layout the children
-            for child in el.children {
-                collect_layout(layout, nodes, vdom, child);
-            }
-
-            // Set all direct nodes as our children
-            let mut child_layout = vec![];
-            for el in el.children {
-                let ite = ElementIdIterator::new(vdom, el);
-                for node in ite {
-                    match node {
-                        VNode::Element(_) | VNode::Text(_) => {
-                            //
-                            child_layout.push(nodes[&node.mounted_id()].layout)
-                        }
-                        VNode::Placeholder(_) => {}
-                        VNode::Fragment(_) => todo!(),
-                        VNode::Component(_) => todo!(),
+                if let Some(n) = self.node {
+                    if self.style != style {
+                        panic!("new style: {style:?}");
+                        stretch.set_style(n, style).unwrap();
                     }
-
-                    // child_layout.push(nodes[&node.mounted_id()].layout)
+                } else {
+                    self.node = Some(stretch.new_node(style, &[]).unwrap());
                 }
-            }
 
-            nodes.insert(
-                node.mounted_id(),
-                TuiNode {
-                    node,
-                    block_style: modifier.tui_style,
-                    tui_modifier: modifier.tui_modifier,
-                    layout: layout.new_node(modifier.style, &child_layout).unwrap(),
-                },
-            );
-        }
-        VNode::Fragment(el) => {
-            //
-            for child in el.children {
-                collect_layout(layout, nodes, vdom, child);
+                self.style = style;
             }
+            VNode::Element(el) => {
+                // gather up all the styles from the attribute list
+                let mut style = Style::default();
+
+                for &Attribute { name, value, .. } in el.attributes {
+                    apply_layout_attributes(name, value, &mut style);
+                }
+
+                // todo: move
+                if el.id.get() == Some(ElementId(0)) {
+                    apply_layout_attributes("width", "100%", &mut style);
+                    apply_layout_attributes("height", "100%", &mut style);
+                }
+
+                // Set all direct nodes as our children
+                let mut child_layout = vec![];
+                for l in children {
+                    child_layout.push(l.node.unwrap());
+                }
+                child_layout.reverse();
+
+                if let Some(n) = self.node {
+                    if &stretch.children(n).unwrap() != &child_layout {
+                        panic!("new children: {child_layout:?}");
+                        stretch.set_children(n, &child_layout).unwrap();
+                    }
+                    if self.style != style {
+                        panic!("new style: {style:?}");
+                        stretch.set_style(n, style).unwrap();
+                    }
+                } else {
+                    self.node = Some(stretch.new_node(style, &child_layout).unwrap());
+                }
+
+                self.style = style;
+            }
+            _ => (),
         }
-        VNode::Component(sc) => {
-            //
-            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
-            let root = scope.root_node();
-            collect_layout(layout, nodes, vdom, root);
-        }
-        VNode::Placeholder(_) => {
-            //
-        }
-    };
+    }
 }

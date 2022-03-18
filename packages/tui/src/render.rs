@@ -1,5 +1,5 @@
-use dioxus_core::*;
-use std::{collections::HashMap, io::Stdout};
+use dioxus_native_core::{Tree, TreeNode};
+use std::io::Stdout;
 use stretch2::{
     geometry::Point,
     prelude::{Layout, Size},
@@ -9,8 +9,9 @@ use tui::{backend::CrosstermBackend, layout::Rect};
 
 use crate::{
     style::{RinkColor, RinkStyle},
+    style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    BorderEdge, BorderStyle, Config, TuiNode, UnitSystem,
+    Config, RinkLayout, StyleModifier, UnitSystem,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -18,43 +19,22 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub fn render_vnode<'a>(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    layouts: &mut HashMap<ElementId, TuiNode<'a>>,
-    vdom: &'a VirtualDom,
-    node: &'a VNode<'a>,
-    // this holds the accumulated syle state for styled text rendering
-    style: &RinkStyle,
+    tree: &Tree<RinkLayout, StyleModifier>,
+    node: &TreeNode<RinkLayout, StyleModifier>,
     cfg: Config,
 ) {
-    match node {
-        VNode::Fragment(f) => {
-            for child in f.children {
-                render_vnode(frame, layout, layouts, vdom, child, style, cfg);
-            }
-            return;
-        }
-
-        VNode::Component(vcomp) => {
-            let idx = vcomp.scope.get().unwrap();
-            let new_node = vdom.get_scope(idx).unwrap().root_node();
-            render_vnode(frame, layout, layouts, vdom, new_node, style, cfg);
-            return;
-        }
-
-        VNode::Placeholder(_) => return,
-
-        VNode::Element(_) | VNode::Text(_) => {}
+    match &node.node_type {
+        dioxus_native_core::TreeNodeType::Placeholder => return,
+        _ => (),
     }
 
-    let id = node.try_mounted_id().unwrap();
-    let mut node = layouts.remove(&id).unwrap();
-
-    let Layout { location, size, .. } = layout.layout(node.layout).unwrap();
+    let Layout { location, size, .. } = layout.layout(node.up_state.node.unwrap()).unwrap();
 
     let Point { x, y } = location;
     let Size { width, height } = size;
 
-    match node.node {
-        VNode::Text(t) => {
+    match &node.node_type {
+        dioxus_native_core::TreeNodeType::Text { text } => {
             #[derive(Default)]
             struct Label<'a> {
                 text: &'a str,
@@ -65,6 +45,7 @@ pub fn render_vnode<'a>(
                 fn render(self, area: Rect, mut buf: RinkBuffer) {
                     for (i, c) in self.text.char_indices() {
                         let mut new_cell = RinkCell::default();
+                        // println!("{:?}", self.style);
                         new_cell.set_style(self.style);
                         new_cell.symbol = c.to_string();
                         buf.set(area.left() + i as u16, area.top(), &new_cell);
@@ -73,8 +54,8 @@ pub fn render_vnode<'a>(
             }
 
             let label = Label {
-                text: t.text,
-                style: *style,
+                text: &text,
+                style: node.down_state.style,
             };
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
@@ -83,30 +64,23 @@ pub fn render_vnode<'a>(
                 frame.render_widget(WidgetWithContext::new(label, cfg), area);
             }
         }
-        VNode::Element(el) => {
+        dioxus_native_core::TreeNodeType::Element { children, .. } => {
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
-
-            let mut new_style = node.block_style.merge(*style);
-            node.block_style = new_style;
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            // do not pass background color to children
-            new_style.bg = None;
-            for el in el.children {
-                render_vnode(frame, layout, layouts, vdom, el, &new_style, cfg);
+            for c in children {
+                render_vnode(frame, layout, tree, tree.get(c.0), cfg);
             }
         }
-        VNode::Fragment(_) => todo!(),
-        VNode::Component(_) => todo!(),
-        VNode::Placeholder(_) => todo!(),
+        dioxus_native_core::TreeNodeType::Placeholder => unreachable!(),
     }
 }
 
-impl<'a> RinkWidget for TuiNode<'a> {
+impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
@@ -290,14 +264,14 @@ impl<'a> RinkWidget for TuiNode<'a> {
         for x in area.left()..area.right() {
             for y in area.top()..area.bottom() {
                 let mut new_cell = RinkCell::default();
-                if let Some(c) = self.block_style.bg {
+                if let Some(c) = self.down_state.style.bg {
                     new_cell.bg = c;
                 }
                 buf.set(x, y, &new_cell);
             }
         }
 
-        let borders = self.tui_modifier.borders;
+        let borders = &self.down_state.modifier.borders;
 
         let last_edge = &borders.left;
         let current_edge = &borders.top;
@@ -314,7 +288,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.block_style.fg);
+            let color = current_edge.color.or(self.down_state.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -349,7 +323,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.block_style.fg);
+            let color = current_edge.color.or(self.down_state.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -384,7 +358,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.block_style.fg);
+            let color = current_edge.color.or(self.down_state.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -419,7 +393,7 @@ impl<'a> RinkWidget for TuiNode<'a> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.block_style.fg);
+            let color = current_edge.color.or(self.down_state.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;

@@ -4,17 +4,17 @@ use tui::style::{Color, Modifier, Style};
 
 use crate::RenderingMode;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct RinkColor {
     pub color: Color,
-    pub alpha: f32,
+    pub alpha: u8,
 }
 
 impl Default for RinkColor {
     fn default() -> Self {
         Self {
             color: Color::Black,
-            alpha: 0.0,
+            alpha: 0,
         }
     }
 }
@@ -23,22 +23,17 @@ impl RinkColor {
     pub fn blend(self, other: Color) -> Color {
         if self.color == Color::Reset {
             Color::Reset
-        } else if self.alpha == 0.0 {
+        } else if self.alpha == 0 {
             other
         } else {
-            let [sr, sg, sb] = to_rgb(self.color);
-            let [or, og, ob] = to_rgb(other);
-            let (sr, sg, sb, sa) = (
-                sr as f32 / 255.0,
-                sg as f32 / 255.0,
-                sb as f32 / 255.0,
-                self.alpha,
-            );
-            let (or, og, ob) = (or as f32 / 255.0, og as f32 / 255.0, ob as f32 / 255.0);
+            let [sr, sg, sb] = to_rgb(self.color).map(|e| e as u16);
+            let [or, og, ob] = to_rgb(other).map(|e| e as u16);
+            let sa: u16 = self.alpha as u16;
+            let rsa = 255 - sa;
             Color::Rgb(
-                (255.0 * (sr * sa + or * (1.0 - sa))) as u8,
-                (255.0 * (sg * sa + og * (1.0 - sa))) as u8,
-                (255.0 * (sb * sa + ob * (1.0 - sa))) as u8,
+                ((sr * sa + or * rsa) / 255) as u8,
+                ((sg * sa + og * rsa) / 255) as u8,
+                ((sb * sa + ob * rsa) / 255) as u8,
             )
         }
     }
@@ -151,75 +146,75 @@ impl FromStr for RinkColor {
         match color {
             "red" => Ok(RinkColor {
                 color: Color::Red,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "black" => Ok(RinkColor {
                 color: Color::Black,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "green" => Ok(RinkColor {
                 color: Color::Green,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "yellow" => Ok(RinkColor {
                 color: Color::Yellow,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "blue" => Ok(RinkColor {
                 color: Color::Blue,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "magenta" => Ok(RinkColor {
                 color: Color::Magenta,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "cyan" => Ok(RinkColor {
                 color: Color::Cyan,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "gray" => Ok(RinkColor {
                 color: Color::Gray,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "darkgray" => Ok(RinkColor {
                 color: Color::DarkGray,
-                alpha: 1.0,
+                alpha: 255,
             }),
             // light red does not exist
             "orangered" => Ok(RinkColor {
                 color: Color::LightRed,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "lightgreen" => Ok(RinkColor {
                 color: Color::LightGreen,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "lightyellow" => Ok(RinkColor {
                 color: Color::LightYellow,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "lightblue" => Ok(RinkColor {
                 color: Color::LightBlue,
-                alpha: 1.0,
+                alpha: 255,
             }),
             // light magenta does not exist
             "orchid" => Ok(RinkColor {
                 color: Color::LightMagenta,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "lightcyan" => Ok(RinkColor {
                 color: Color::LightCyan,
-                alpha: 1.0,
+                alpha: 255,
             }),
             "white" => Ok(RinkColor {
                 color: Color::White,
-                alpha: 1.0,
+                alpha: 255,
             }),
             _ => {
                 if color.len() == 7 && color.starts_with('#') {
                     parse_hex(color).map(|c| RinkColor {
                         color: c,
-                        alpha: 1.0,
+                        alpha: 255,
                     })
                 } else if let Some(stripped) = color.strip_prefix("rgb(") {
                     let color_values = stripped.trim_end_matches(')');
@@ -234,7 +229,7 @@ impl FromStr for RinkColor {
                     } else {
                         parse_rgb(color_values).map(|c| RinkColor {
                             color: c,
-                            alpha: 1.0,
+                            alpha: 255,
                         })
                     }
                 } else if let Some(stripped) = color.strip_prefix("rgba(") {
@@ -243,14 +238,17 @@ impl FromStr for RinkColor {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
                         if let Ok(a) = parse_value(alpha, 1.0, 1.0) {
-                            parse_rgb(rgb_values).map(|c| RinkColor { color: c, alpha: a })
+                            parse_rgb(rgb_values).map(|c| RinkColor {
+                                color: c,
+                                alpha: (a * 255.0) as u8,
+                            })
                         } else {
                             Err(ParseColorError)
                         }
                     } else {
                         parse_rgb(color_values).map(|c| RinkColor {
                             color: c,
-                            alpha: 1.0,
+                            alpha: 255,
                         })
                     }
                 } else if let Some(stripped) = color.strip_prefix("hsl(") {
@@ -259,14 +257,17 @@ impl FromStr for RinkColor {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
                         if let Ok(a) = parse_value(alpha, 1.0, 1.0) {
-                            parse_hsl(rgb_values).map(|c| RinkColor { color: c, alpha: a })
+                            parse_hsl(rgb_values).map(|c| RinkColor {
+                                color: c,
+                                alpha: (a * 255.0) as u8,
+                            })
                         } else {
                             Err(ParseColorError)
                         }
                     } else {
                         parse_hsl(color_values).map(|c| RinkColor {
                             color: c,
-                            alpha: 1.0,
+                            alpha: 255,
                         })
                     }
                 } else if let Some(stripped) = color.strip_prefix("hsla(") {
@@ -275,14 +276,17 @@ impl FromStr for RinkColor {
                         let (rgb_values, alpha) =
                             color_values.rsplit_once(',').ok_or(ParseColorError)?;
                         if let Ok(a) = parse_value(alpha, 1.0, 1.0) {
-                            parse_hsl(rgb_values).map(|c| RinkColor { color: c, alpha: a })
+                            parse_hsl(rgb_values).map(|c| RinkColor {
+                                color: c,
+                                alpha: (a * 255.0) as u8,
+                            })
                         } else {
                             Err(ParseColorError)
                         }
                     } else {
                         parse_hsl(color_values).map(|c| RinkColor {
                             color: c,
-                            alpha: 1.0,
+                            alpha: 255,
                         })
                     }
                 } else {
@@ -393,7 +397,7 @@ fn rgb_to_ansi() {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct RinkStyle {
     pub fg: Option<RinkColor>,
     pub bg: Option<RinkColor>,
@@ -406,7 +410,7 @@ impl Default for RinkStyle {
         Self {
             fg: Some(RinkColor {
                 color: Color::White,
-                alpha: 1.0,
+                alpha: 255,
             }),
             bg: None,
             add_modifier: Modifier::empty(),

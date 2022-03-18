@@ -6,28 +6,32 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
+use dioxus_native_core::Tree;
 use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
 use std::{
-    collections::HashMap,
     io,
     time::{Duration, Instant},
 };
-use stretch2::{prelude::Size, Stretch};
-use style::RinkStyle;
+use stretch2::{
+    prelude::{Layout, Size},
+    Stretch,
+};
+use style_attributes::StyleModifier;
 use tui::{backend::CrosstermBackend, Terminal};
 
-mod attributes;
 mod config;
 mod hooks;
 mod layout;
+mod layout_attributes;
 mod render;
 mod style;
+mod style_attributes;
 mod widget;
 
-pub use attributes::*;
 pub use config::*;
 pub use hooks::*;
 pub use layout::*;
+pub use layout_attributes::*;
 pub use render::*;
 
 pub fn launch(app: Component<()>) {
@@ -44,16 +48,15 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     cx.provide_root_context(state);
 
-    dom.rebuild();
+    let mut tree: Tree<RinkLayout, StyleModifier> = Tree::new();
+    let mutations = dom.rebuild();
+    let to_update = tree.apply_mutations(vec![mutations]);
+    let mut stretch = Stretch::new();
+    let _to_rerender = tree
+        .update_state(&dom, to_update, &mut stretch, &mut ())
+        .unwrap();
 
-    render_vdom(&mut dom, tx, handler, cfg).unwrap();
-}
-
-pub struct TuiNode<'a> {
-    pub layout: stretch2::node::Node,
-    pub block_style: RinkStyle,
-    pub tui_modifier: TuiModifier,
-    pub node: &'a VNode<'a>,
+    render_vdom(&mut dom, tx, handler, cfg, tree, stretch).unwrap();
 }
 
 pub fn render_vdom(
@@ -61,6 +64,8 @@ pub fn render_vdom(
     ctx: UnboundedSender<TermEvent>,
     handler: RinkInputHandler,
     cfg: Config,
+    mut tree: Tree<RinkLayout, StyleModifier>,
+    mut stretch: Stretch,
 ) -> Result<()> {
     // Setup input handling
     let (tx, mut rx) = unbounded();
@@ -102,11 +107,11 @@ pub fn render_vdom(
 
             loop {
                 /*
-                -> collect all the nodes with their layout
-                -> solve their layout
+                -> collect all the nodes
                 -> resolve events
-                -> render the nodes in the right place with tui/crosstream
-                -> while rendering, apply styling
+                -> render the nodes in the right place with tui/crossterm
+                -> rendering
+                -> lazily update the layout and style based on nodes changed
 
                 use simd to compare lines for diffing?
 
@@ -114,45 +119,47 @@ pub fn render_vdom(
                 todo: reuse the layout and node objects.
                 our work_with_deadline method can tell us which nodes are dirty.
                 */
-                let mut layout = Stretch::new();
-                let mut nodes = HashMap::new();
 
-                let root_node = vdom.base_scope().root_node();
-                layout::collect_layout(&mut layout, &mut nodes, vdom, root_node);
                 /*
                 Compute the layout given the terminal size
                 */
-                let node_id = root_node.try_mounted_id().unwrap();
-                let root_layout = nodes[&node_id].layout;
                 let mut events = Vec::new();
 
                 terminal.draw(|frame| {
                     // size is guaranteed to not change when rendering
                     let dims = frame.size();
+                    println!("{dims:?}");
                     let width = dims.width;
                     let height = dims.height;
-                    layout
+                    let root_id = tree.root;
+                    let root_node = tree.get(root_id).up_state.node.unwrap();
+                    stretch
                         .compute_layout(
-                            root_layout,
+                            root_node,
                             Size {
-                                width: stretch2::prelude::Number::Defined(width as f32),
-                                height: stretch2::prelude::Number::Defined(height as f32),
+                                width: stretch2::prelude::Number::Defined((width - 1) as f32),
+                                height: stretch2::prelude::Number::Defined((height - 1) as f32),
                             },
                         )
                         .unwrap();
 
                     // resolve events before rendering
-                    events = handler.get_events(vdom, &layout, &mut nodes, root_node);
-                    render::render_vnode(
-                        frame,
-                        &layout,
-                        &mut nodes,
+                    events = handler.get_events(
                         vdom,
-                        root_node,
-                        &RinkStyle::default(),
-                        cfg,
+                        &stretch,
+                        &mut tree,
+                        vdom.base_scope().root_node(),
                     );
-                    assert!(nodes.is_empty());
+                    for n in &tree.nodes {
+                        if let Some(node) = n {
+                            let Layout { location, size, .. } =
+                                stretch.layout(node.up_state.node.unwrap()).unwrap();
+                            println!("{node:#?}");
+                            println!("\t{location:?}: {size:?}");
+                        }
+                    }
+                    let root = tree.get(tree.root);
+                    // render::render_vnode(frame, &stretch, &tree, &root, cfg);
                 })?;
 
                 for e in events {
@@ -191,7 +198,11 @@ pub fn render_vdom(
                     }
                 }
 
-                vdom.work_with_deadline(|| false);
+                let mutations = vdom.work_with_deadline(|| false);
+                let to_update = tree.apply_mutations(mutations);
+                let _to_rerender = tree
+                    .update_state(&vdom, to_update, &mut stretch, &mut ())
+                    .unwrap();
             }
 
             disable_raw_mode()?;
