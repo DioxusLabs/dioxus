@@ -199,7 +199,7 @@ impl Parse for ComponentField {
         }
 
         if input.peek(LitStr) && input.peek2(LitStr) {
-            attr_after_element!(input.span());
+            missing_trailing_comma!(input.span());
         }
 
         let content = ContentField::ManExpr(input.parse()?);
