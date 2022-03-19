@@ -34,7 +34,7 @@ impl Parse for InlinePropsBody {
         let first_arg: FnArg = content.parse()?;
         let cx_token = {
             match first_arg {
-                FnArg::Receiver(_) => panic!("first argument must not be  a reciver argument"),
+                FnArg::Receiver(_) => panic!("first argument must not be a receiver argument"),
                 FnArg::Typed(f) => f.pat,
             }
         };
