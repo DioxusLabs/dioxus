@@ -15,7 +15,7 @@ use dioxus_core::*;
 ///
 /// The closure will panic if the provided script is not valid JavaScript code
 /// or if it returns an uncaught error.
-pub fn use_eval<S: std::fmt::Display>(_cx: &ScopeState) -> impl Fn(S) {
+pub fn use_eval<S: std::string::ToString>(_cx: &ScopeState) -> impl Fn(S) {
     |script| {
         js_sys::Function::new_no_args(&script.to_string())
             .call0(&wasm_bindgen::JsValue::NULL)

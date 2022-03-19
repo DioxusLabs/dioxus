@@ -121,7 +121,7 @@ impl DesktopContext {
     }
 
     /// run (evaluate) a script in the WebView context
-    pub fn eval(&self, script: impl std::fmt::Display) {
+    pub fn eval(&self, script: impl std::string::ToString) {
         let _ = self.proxy.send_event(Eval(script.to_string()));
     }
 }
@@ -206,7 +206,7 @@ pub(super) fn handler(
 /// The closure will cause the message processing thread to panic if the
 /// provided script is not valid JavaScript code or if it returns an uncaught
 /// error.
-pub fn use_eval<S: std::fmt::Display>(cx: &ScopeState) -> impl Fn(S) + '_ {
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> impl Fn(S) + '_ {
     let desktop = use_window(&cx);
 
     move |script| desktop.eval(script)
