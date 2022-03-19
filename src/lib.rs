@@ -2,8 +2,16 @@
 
 pub use dioxus_core as core;
 
-#[cfg(feature = "hooks")]
-pub use dioxus_hooks as hooks;
+pub mod hooks {
+    #[cfg(feature = "hooks")]
+    pub use dioxus_hooks::*;
+
+    #[cfg(all(target = "wasm", feature = "web"))]
+    pub use dioxus_web::use_eval;
+
+    #[cfg(all(not(target = "wasm"), feature = "desktop"))]
+    pub use dioxus_desktop::use_eval;
+}
 
 #[cfg(feature = "router")]
 pub use dioxus_router as router;
@@ -35,7 +43,7 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
-    pub use dioxus_hooks::*;
+    pub use crate::hooks::*;
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "router")]
@@ -44,9 +52,3 @@ pub mod prelude {
     #[cfg(feature = "fermi")]
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
 }
-
-#[cfg(all(target = "wasm", feature = "web"))]
-pub use dioxus_web::use_eval;
-
-#[cfg(all(not(target = "wasm"), feature = "desktop"))]
-pub use dioxus_desktop::use_eval;
