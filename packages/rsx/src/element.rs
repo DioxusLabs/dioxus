@@ -67,7 +67,7 @@ impl Parse for Element {
                 if content.parse::<Token![,]>().is_err() {
                     proc_macro_error::emit_error!(
                         ident,
-                        "This attribute is missing a trailing comma"
+                        "this attribute is missing a trailing comma"
                     )
                 }
                 continue;
@@ -128,7 +128,7 @@ impl Parse for Element {
                 if content.parse::<Token![,]>().is_err() {
                     proc_macro_error::emit_error!(
                         ident,
-                        "This attribute is missing a trailing comma"
+                        "this attribute is missing a trailing comma"
                     )
                 }
                 continue;
@@ -142,9 +142,9 @@ impl Parse for Element {
                 let ident = content.parse::<LitStr>().unwrap();
                 let name = ident.value();
                 proc_macro_error::emit_error!(
-                    ident, "This attribute `{}` is in the wrong place.", name;
+                    ident, "this attribute `{}` is in the wrong place", name;
                     help =
-"All attribute fields must be placed above children elements.
+"all attribute fields must be placed above children elements
 
                 div {
                    attr: \"...\",  <---- attribute is above children
@@ -157,9 +157,9 @@ impl Parse for Element {
                 let ident = content.parse::<Ident>().unwrap();
                 let name = ident.to_string();
                 proc_macro_error::emit_error!(
-                    ident, "This attribute `{}` is in the wrong place.", name;
+                    ident, "this attribute `{}` is in the wrong place", name;
                     help =
-"All attribute fields must be placed above children elements.
+"all attribute fields must be placed above children elements
 
                 div {
                    attr: \"...\",  <---- attribute is above children
