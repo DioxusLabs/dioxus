@@ -241,25 +241,33 @@ fn virtual_event_from_websys_event(
                 for x in 0..elements.length() {
                     let element = elements.item(x).unwrap();
                     if let Some(name) = element.get_attribute("name") {
-                        let value: String = (&element)
+                        let value: Option<String> = (&element)
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
+                                    log::info!("Input type: {}", input.type_());
                                     match input.type_().as_str() {
                                         "checkbox" => {
                                             match input.checked() {
-                                                true => "true".to_string(),
-                                                false => "false".to_string(),
+                                                true => Some("true".to_string()),
+                                                false => Some("false".to_string()),
                                             }
                                         },
-                                        _ => input.value()
+                                        "radio" => {
+                                            match input.checked() {
+                                                true => Some(input.value()),
+                                                false => None,
+                                            }
+                                        }
+                                        _ => Some(input.value())
                                     }
                                 })
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| input.value()))
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| input.value()))
-                                .or_else(|| target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content())
+                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
+                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
+                                .or_else(|| Some(target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
                                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-
-                        values.insert(name, value);
+                        if let Some(value) = value {
+                            values.insert(name, value);
+                        }
                     }
                 }
             }
