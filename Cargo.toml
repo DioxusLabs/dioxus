@@ -51,7 +51,6 @@ liveview = ["dioxus-liveview"]
 members = [
     "packages/core",
     "packages/core-macro",
-    "packages/rsx",
     "packages/html",
     "packages/hooks",
     "packages/web",
