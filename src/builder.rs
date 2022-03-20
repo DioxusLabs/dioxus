@@ -4,7 +4,8 @@ use crate::{
     DioxusConfig,
 };
 use std::{
-    fs::{copy, create_dir_all, remove_dir_all},
+    fs::{copy, create_dir_all, remove_dir_all, File},
+    io::Read,
     panic,
     path::PathBuf,
     process::Command,
@@ -272,7 +273,19 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
 }
 
 pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
-    let mut html = String::from(include_str!("./assets/index.html"));
+    let crate_root = crate::cargo::crate_root().unwrap();
+    let custom_html_file = crate_root.join("index.html");
+    let mut html = if custom_html_file.is_file() {
+        let mut buf = String::new();
+        let file = File::open(custom_html_file).unwrap();
+        if let Ok(v) = file.read_to_string(&mut buf) {
+            buf
+        } else {
+            String::from(include_str!("./assets/index.html"))
+        }
+    } else {
+        String::from(include_str!("./assets/index.html"));
+    };
 
     let resouces = config.web.resource.clone();
 

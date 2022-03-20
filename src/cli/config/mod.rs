@@ -18,8 +18,10 @@ pub enum Config {
         #[clap(long, default_value = "web")]
         platform: String,
     },
-    /// Format Print Dioxus-Config.
-    FormatPrint {}
+    /// Format print Dioxus config.
+    FormatPrint {},
+    /// Create a custom html file.
+    CustomHtml {}
 }
 
 impl Config {
@@ -47,6 +49,13 @@ impl Config {
             }
             Config::FormatPrint {} => {
                 println!("{:#?}", crate::CrateConfig::new()?.dioxus_config);
+            }
+            Config::CustomHtml {} => {
+                let html_path = crate_root.join("index.html");
+                let mut file = File::create(html_path)?;
+                let content = include_str!("../../assets/index.html");
+                file.write_all(content.as_bytes())?;
+                log::info!("🚩 Create custom html file done.");
             }
         }
         Ok(())
