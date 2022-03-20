@@ -277,14 +277,14 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     let custom_html_file = crate_root.join("index.html");
     let mut html = if custom_html_file.is_file() {
         let mut buf = String::new();
-        let file = File::open(custom_html_file).unwrap();
-        if let Ok(v) = file.read_to_string(&mut buf) {
+        let mut file = File::open(custom_html_file).unwrap();
+        if file.read_to_string(&mut buf).is_ok() {
             buf
         } else {
             String::from(include_str!("./assets/index.html"))
         }
     } else {
-        String::from(include_str!("./assets/index.html"));
+        String::from(include_str!("./assets/index.html"))
     };
 
     let resouces = config.web.resource.clone();
