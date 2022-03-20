@@ -56,7 +56,7 @@ When using Debian/bullseye `libappindicator3-dev` is no longer available but rep
 
 ```
 # on Debian/bullseye use:
-sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatanta-appindicator3-dev
+sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
 ```
 
 If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/en/docs/get-started/setup-linux).
