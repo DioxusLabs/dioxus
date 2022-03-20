@@ -3,7 +3,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    token, Block, FnArg, Generics, Ident, Pat, Result, ReturnType, Token, Visibility,
+    *,
 };
 
 pub struct InlinePropsBody {
@@ -86,26 +86,57 @@ impl ToTokens for InlinePropsBody {
             FnArg::Typed(t) => Some(&t.pat),
         });
 
-        let modifiers = if generics.params.is_empty() {
-            quote! { #[derive(Props, PartialEq)] }
+        let first_lifetime = if let Some(GenericParam::Lifetime(lt)) = generics.params.first() {
+            Some(lt)
         } else {
-            quote! { #[derive(Props)] }
+            None
         };
 
-        let lifetime = if generics.params.is_empty() {
-            quote! {}
+        let modifiers = if first_lifetime.is_some() {
+            quote! { #[derive(Props)] }
         } else {
-            quote! { 'a, }
+            quote! { #[derive(Props, PartialEq)] }
+        };
+
+        let (scope_lifetime, fn_generics, struct_generics) = if let Some(lt) = first_lifetime {
+            let struct_generics: Punctuated<_, token::Comma> = generics
+                .params
+                .iter()
+                .map(|it| match it {
+                    GenericParam::Type(tp) => {
+                        let mut tp = tp.clone();
+                        tp.bounds.push(parse_quote!( 'a ));
+
+                        GenericParam::Type(tp)
+                    }
+                    _ => it.clone(),
+                })
+                .collect();
+
+            (
+                quote! { #lt, },
+                generics.clone(),
+                quote! { <#struct_generics> },
+            )
+        } else {
+            let lifetime: LifetimeDef = parse_quote! { 'a };
+
+            let mut fn_generics = generics.clone();
+            fn_generics
+                .params
+                .insert(0, GenericParam::Lifetime(lifetime.clone()));
+
+            (quote! { #lifetime, }, fn_generics, quote! { #generics })
         };
 
         out_tokens.append_all(quote! {
             #modifiers
             #[allow(non_camel_case_types)]
-            #vis struct #struct_name #generics {
+            #vis struct #struct_name #struct_generics {
                 #(#fields),*
             }
 
-            #vis fn #ident #generics (#cx_token: Scope<#lifetime #struct_name #generics>) #output {
+            #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output {
                 let #struct_name { #(#field_names),* } = &cx.props;
                 #block
             }
