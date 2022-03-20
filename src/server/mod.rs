@@ -33,6 +33,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     // file watcher: check file change
     let watcher_conf = config.clone();
     let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
+        log::info!("Start to rebuild project...");
         if chrono::Local::now().timestamp() > last_update_time
             && builder::build(&watcher_conf).is_ok()
         {
@@ -47,8 +48,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
             {
                 let _ = Serve::regen_dev_page(&watcher_conf);
             }
-            println!("watcher send reload");
-            reload_tx.send("reload".into()).unwrap();
+            let _ = reload_tx.send("reload".into());
             last_update_time = chrono::Local::now().timestamp();
         }
     })

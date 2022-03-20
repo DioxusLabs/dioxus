@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
