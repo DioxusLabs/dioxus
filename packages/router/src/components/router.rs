@@ -20,7 +20,6 @@ pub struct RouterProps<'a> {
     ///
     /// This will be used to trim any latent segments from the URL when your app is
     /// not deployed to the root of the domain.
-    #[props(optional)]
     pub base_url: Option<&'a str>,
 
     /// Hook into the router when the route is changed.
@@ -33,7 +32,6 @@ pub struct RouterProps<'a> {
     ///
     /// This is useful if you don't want to repeat the same `active_class` prop value in every Link.
     /// By default set to `"active"`.
-    #[props(default, strip_option)]
     pub active_class: Option<&'a str>,
 }
 

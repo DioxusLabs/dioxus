@@ -131,23 +131,29 @@ Borrowed Props cannot be safely memoized. However, this is not a problem – Dio
 
 ## Optional Props
 
-You can easily create optional fields by attaching the `optional` modifier to a field:
+You can easily create optional fields by using the `Option<…>` type for a field:
 
 ```rust
 #[derive(Props, PartialEq)]
 struct MyProps {
     name: String,
 
-    #[props(optional)]
     description: Option<String>
 }
 
 fn Demo(cx: MyProps) -> Element {
-    todo!()
+    let text = match cx.props.description {
+        Some(d) => d,             // if a value is provided
+        None => "No description"  // if the prop is omitted
+    };
+    
+    cx.render(rsx! {
+        "{name}": "{text}"
+    })
 }
 ```
-
-Then, we can completely omit the description field when calling the component:
+In this example ˋnameˋ is a required prop and ˋdescriptionˋ is optional.
+This means we can completely omit the description field when calling the component:
 
 ```rust
 rsx!{
@@ -157,15 +163,39 @@ rsx!{
     }
 }
 ```
+Additionally if we provide a value we don't have to wrap it with ˋSome(…)ˋ. This is done automatically for us:
 
-The `optional` modifier is a combination of two separate modifiers: `default` and `strip_option`. The full list of modifiers includes:
+ˋˋˋrust
+rsx!{
+    Demo {
+        name: "Thing".to_string(),
+        description: "This is explains it".to_string(),
+    }
+}
+ˋˋˋ
+
+If you want to make a prop required even though it is of type ˋOptionˋ you can provide the ˋ!optionalˋ modifier:
+
+ˋˋˋrust
+#[derive(Props, PartialEq)]
+struct MyProps {
+    name: String,
+
+    #[props(!optional)]
+    description: Option<String>
+}
+ˋˋˋ
+
+This can be especially useful if you have a type alias named ˋOptionˋ in the current scope.
+
+For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new. The `optional` modifier is a combination of two separate modifiers: `default` and `strip_option` and it is automatically detected on ˋOption<…>ˋ types.
+
+The full list of Dioxus' modifiers includes:
 
 - `default` - automatically add the field using its `Default` implementation
-- `strip_option` - automatically wrap values at the call site in `Some`
 - `optional` - alias for `default` and `strip_option`
 - `into` - automatically call `into` on the value at the callsite
 
-For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new.
 
 ## The `inline_props` macro
 
