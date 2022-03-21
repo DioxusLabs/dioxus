@@ -57,12 +57,12 @@
 use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
+pub use crate::util::use_eval;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
 use futures_util::FutureExt;
-pub use crate::util::use_eval;
 
 mod cache;
 mod cfg;
