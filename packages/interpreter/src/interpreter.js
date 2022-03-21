@@ -259,6 +259,10 @@ export class Interpreter {
                   if (element.getAttribute("type") === "checkbox") {
                     // @ts-ignore
                     contents.values[name] = element.checked ? "true" : "false";
+                  } else if (element.getAttribute("type") === "radio") {
+                    if (element.checked) {
+                      contents.values[name] = element.value;
+                    }
                   } else {
                     // @ts-ignore
                     contents.values[name] =
@@ -362,9 +366,11 @@ export function serialize_event(event) {
     case "submit": {
       let target = event.target;
       let value = target.value ?? target.textContent;
+
       if (target.type === "checkbox") {
         value = target.checked ? "true" : "false";
       }
+
       return {
         value: value,
         values: {},
