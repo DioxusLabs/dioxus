@@ -172,7 +172,7 @@ pub fn render_vdom(
                             match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
-                                        if matches!(key.code, KeyCode::Char('c'))
+                                        if matches!(key.code, KeyCode::Char('C' | 'c'))
                                             && key.modifiers.contains(KeyModifiers::CONTROL)
                                         {
                                             break;

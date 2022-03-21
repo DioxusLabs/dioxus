@@ -388,6 +388,15 @@ pub enum UnitSystem {
     Point(f32),
 }
 
+impl Into<Dimension> for UnitSystem {
+    fn into(self) -> Dimension {
+        match self {
+            Self::Percent(v) => Dimension::Percent(v),
+            Self::Point(v) => Dimension::Points(v),
+        }
+    }
+}
+
 fn parse_value(value: &str) -> Option<UnitSystem> {
     if value.ends_with("px") {
         if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
@@ -505,11 +514,16 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
             }
         }
         "border-bottom-style" => {
+            if style.style.border.bottom == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.bottom = v;
+            }
             style.tui_modifier.borders.bottom.style = parse_border_style(value)
         }
         "border-bottom-width" => {
             if let Some(v) = parse_value(value) {
                 style.tui_modifier.borders.bottom.width = v;
+                style.style.border.bottom = v.into();
             }
         }
         "border-collapse" => {}
@@ -547,10 +561,17 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
                 style.tui_modifier.borders.left.color = Some(c);
             }
         }
-        "border-left-style" => style.tui_modifier.borders.left.style = parse_border_style(value),
+        "border-left-style" => {
+            if style.style.border.start == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.start = v;
+            }
+            style.tui_modifier.borders.left.style = parse_border_style(value)
+        }
         "border-left-width" => {
             if let Some(v) = parse_value(value) {
                 style.tui_modifier.borders.left.width = v;
+                style.style.border.start = v.into();
             }
         }
         "border-radius" => {
@@ -581,7 +602,11 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
                 style.tui_modifier.borders.right.color = Some(c);
             }
         }
-        "border-right-style" => style.tui_modifier.borders.right.style = parse_border_style(value),
+        "border-right-style" => {
+            let v = Dimension::Points(1.0);
+            style.style.border.end = v;
+            style.tui_modifier.borders.right.style = parse_border_style(value)
+        }
         "border-right-width" => {
             if let Some(v) = parse_value(value) {
                 style.tui_modifier.borders.right.width = v;
@@ -590,6 +615,22 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
         "border-spacing" => {}
         "border-style" => {
             let values: Vec<_> = value.split(' ').collect();
+            if style.style.border.top == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.top = v;
+            }
+            if style.style.border.bottom == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.bottom = v;
+            }
+            if style.style.border.start == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.start = v;
+            }
+            if style.style.border.end == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.end = v;
+            }
             if values.len() == 1 {
                 let border_style = parse_border_style(values[0]);
                 style
@@ -623,9 +664,16 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
                 style.tui_modifier.borders.right.radius = v;
             }
         }
-        "border-top-style" => style.tui_modifier.borders.top.style = parse_border_style(value),
+        "border-top-style" => {
+            if style.style.border.top == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.style.border.top = v;
+            }
+            style.tui_modifier.borders.top.style = parse_border_style(value)
+        }
         "border-top-width" => {
             if let Some(v) = parse_value(value) {
+                style.style.border.top = v.into();
                 style.tui_modifier.borders.top.width = v;
             }
         }
@@ -633,6 +681,10 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
                 if let Some(w) = parse_value(values[0]) {
+                    style.style.border.top = w.into();
+                    style.style.border.bottom = w.into();
+                    style.style.border.start = w.into();
+                    style.style.border.end = w.into();
                     style
                         .tui_modifier
                         .borders
@@ -641,11 +693,19 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifer) {
                         .for_each(|b| b.width = w);
                 }
             } else {
-                for (v, b) in values
+                let border_widths = [
+                    &mut style.style.border.top,
+                    &mut style.style.border.bottom,
+                    &mut style.style.border.start,
+                    &mut style.style.border.end,
+                ];
+                for ((v, b), width) in values
                     .into_iter()
                     .zip(style.tui_modifier.borders.slice().iter_mut())
+                    .zip(border_widths)
                 {
                     if let Some(w) = parse_value(v) {
+                        *width = w.into();
                         b.width = w;
                     }
                 }
