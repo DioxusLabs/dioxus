@@ -200,8 +200,8 @@ pub(super) fn handler(
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> impl Fn(S) + '_ {
-    let desktop = use_window(&cx);
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
+    let desktop = use_window(&cx).clone();
 
-    move |script| desktop.eval(script)
+    cx.use_hook(|_| move |script| desktop.eval(script))
 }
