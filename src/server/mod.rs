@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
     routing::{get, get_service},
-    AddExtensionLayer, Router,
+    Router,
 };
 use notify::{RecommendedWatcher, Watcher};
 
@@ -88,7 +88,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                         },
                     ),
                 )
-                .layer(AddExtensionLayer::new(ws_reload_state))
+                .layer(Extension(ws_reload_state))
                 .into_make_service(),
         )
         .await?;
