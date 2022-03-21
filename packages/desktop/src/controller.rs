@@ -1,7 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     sync::Arc,
     sync::{atomic::AtomicBool, Mutex},
 };
@@ -14,7 +14,7 @@ use wry::{
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
+    pub(super) pending_edits: Arc<Mutex<VecDeque<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
 }
@@ -27,7 +27,7 @@ impl DesktopController {
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {
-        let edit_queue = Arc::new(Mutex::new(Vec::new()));
+        let edit_queue = Arc::new(Mutex::new(VecDeque::new()));
         let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
 
         let pending_edits = edit_queue.clone();
@@ -54,7 +54,7 @@ impl DesktopController {
                 edit_queue
                     .lock()
                     .unwrap()
-                    .push(serde_json::to_string(&edits.edits).unwrap());
+                    .push_back(serde_json::to_string(&edits.edits).unwrap());
 
                 // Make sure the window is ready for any new updates
                 proxy.send_event(UserWindowEvent::Update).unwrap();
@@ -67,7 +67,7 @@ impl DesktopController {
                         edit_queue
                             .lock()
                             .unwrap()
-                            .push(serde_json::to_string(&edit.edits).unwrap());
+                            .push_back(serde_json::to_string(&edit.edits).unwrap());
                     }
 
                     let _ = proxy.send_event(UserWindowEvent::Update);
@@ -97,7 +97,7 @@ impl DesktopController {
             let mut queue = self.pending_edits.lock().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            while let Some(edit) = queue.pop() {
+            while let Some(edit) = queue.pop_front() {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
