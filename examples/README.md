@@ -41,6 +41,7 @@ These examples are not necessarily meant to be run, but rather serve as a refere
 | [Anti-patterns](./antipatterns.rs)                  | A collection of discouraged patterns            | ✅      |
 | [Complete rsx reference](./rsx_usage.rs)            | A complete reference for all rsx! usage         | ✅      |
 | [Event Listeners](./listener.rs)                    | Attach closures to events on elements           | ✅      |
+| [Inline Props](./inlineprops.rs)                    | Using the `#[inline_props]` macro               | ✅      |
 | [Eval](./eval.rs)                                   | Evaluate dynamic JavaScript code                | ✅      |
 
 

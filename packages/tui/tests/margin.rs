@@ -23,7 +23,6 @@ fn margin_and_flex_row() {
                 size: stretch::geometry::Size {
                     width: stretch::style::Dimension::Points(100f32),
                     height: stretch::style::Dimension::Points(100f32),
-                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -76,7 +75,6 @@ fn margin_and_flex_row2() {
                 size: stretch::geometry::Size {
                     width: stretch::style::Dimension::Points(100f32),
                     height: stretch::style::Dimension::Points(100f32),
-                    ..Default::default()
                 },
                 ..Default::default()
             },
@@ -92,11 +90,4 @@ fn margin_and_flex_row2() {
     assert_eq!(stretch.layout(node).unwrap().size.height, 100f32);
     assert_eq!(stretch.layout(node).unwrap().location.x, 0f32);
     assert_eq!(stretch.layout(node).unwrap().location.y, 0f32);
-
-    dbg!(stretch.layout(node0));
-
-    // assert_eq!(stretch.layout(node0).unwrap().size.width, 80f32);
-    // assert_eq!(stretch.layout(node0).unwrap().size.height, 100f32);
-    // assert_eq!(stretch.layout(node0).unwrap().location.x, 10f32);
-    // assert_eq!(stretch.layout(node0).unwrap().location.y, 0f32);
 }

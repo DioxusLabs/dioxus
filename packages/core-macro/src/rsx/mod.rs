@@ -11,6 +11,9 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
+#[macro_use]
+mod errors;
+
 mod component;
 mod element;
 mod node;

@@ -12,7 +12,7 @@ extern "C" {
     pub fn new(arg: Element) -> Interpreter;
 
     #[wasm_bindgen(method)]
-    pub fn set_node(this: &Interpreter, id: usize, node: Node);
+    pub fn SetNode(this: &Interpreter, id: usize, node: Node);
 
     #[wasm_bindgen(method)]
     pub fn PushRoot(this: &Interpreter, root: u64);
