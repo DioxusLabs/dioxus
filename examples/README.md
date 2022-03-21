@@ -41,6 +41,7 @@ These examples are not necessarily meant to be run, but rather serve as a refere
 | [Anti-patterns](./antipatterns.rs)                  | A collection of discouraged patterns            | ✅      |
 | [Complete rsx reference](./rsx_usage.rs)            | A complete reference for all rsx! usage         | ✅      |
 | [Event Listeners](./listener.rs)                    | Attach closures to events on elements           | ✅      |
+| [Eval](./eval.rs)                                   | Evaluate dynamic JavaScript code                | ✅      |
 
 
 ## Show me some examples!
@@ -51,7 +52,7 @@ In our collection of examples, guides, and tutorials, we have:
 - The reference (a collection of examples with heavy documentation)
 - The general examples
 - The platform-specific examples (web, ssr, desktop, mobile, server)
-  
+
 Here's what a few common tasks look like in Dioxus:
 
 Nested components with children and internal state:
@@ -80,7 +81,7 @@ Controlled inputs:
 ```rust
 fn App(cx: Scope) -> Element {
   let value = use_state(&cx, String::new);
-  cx.render(rsx!( 
+  cx.render(rsx!(
     input {
       "type": "text",
       value: "{value}",
@@ -96,16 +97,16 @@ fn App(cx: Scope) -> Element {
   let list = (0..10).map(|i| {
     rsx!(li { key: "{i}", "Value: {i}" })
   });
-  
+
   let title = match list.len() {
     0 => rsx!("Not enough"),
     _ => rsx!("Plenty!"),
   };
 
   if should_show {
-    cx.render(rsx!( 
+    cx.render(rsx!(
       title,
-      ul { list } 
+      ul { list }
     ))
   } else {
     None
@@ -165,18 +166,18 @@ fn App(cx: Scope) -> Element {
       Route::Home => rsx!( Home {} ),
       Route::Post(id) => rsx!( Post { id: id })
     }
-  }))  
+  }))
 }
 ```
 
-Suspense 
+Suspense
 ```rust
 fn App(cx: Scope) -> Element {
   let doggo = use_suspense(cx,
     || async { reqwest::get("https://dog.ceo/api/breeds/image/random").await.unwrap().json::<Response>().await.unwrap() },
     |response| cx.render(rsx!( img { src: "{response.message}" }))
   );
-  
+
   cx.render(rsx!{
     div {
       "One doggo coming right up:",
