@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
+pub mod layout_attributes;
 
 /// A tree that can sync with dioxus mutations backed by a hashmap.
 /// Intended for use in lazy native renderers with a state that passes from parrent to children and or accumulates state from children to parrents.
@@ -10,7 +11,7 @@ use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 pub struct Tree<US: BubbledUpState = (), DS: PushedDownState = ()> {
     pub root: usize,
     pub nodes: Vec<Option<TreeNode<US, DS>>>,
-    pub listeners: HashMap<usize, HashSet<&'static str>>,
+    pub nodes_listening: HashMap<&'static str, HashSet<usize>>,
 }
 
 impl<US: BubbledUpState, DS: PushedDownState> Tree<US, DS> {
@@ -29,7 +30,7 @@ impl<US: BubbledUpState, DS: PushedDownState> Tree<US, DS> {
                 )));
                 v
             },
-            listeners: HashMap::new(),
+            nodes_listening: HashMap::new(),
         }
     }
 
@@ -128,17 +129,17 @@ impl<US: BubbledUpState, DS: PushedDownState> Tree<US, DS> {
                         scope: _,
                         root,
                     } => {
-                        if let Some(v) = self.listeners.get_mut(&(root as usize)) {
-                            v.insert(event_name);
+                        if let Some(v) = self.nodes_listening.get_mut(event_name) {
+                            v.insert(root as usize);
                         } else {
                             let mut hs = HashSet::new();
-                            hs.insert(event_name);
-                            self.listeners.insert(root as usize, hs);
+                            hs.insert(root as usize);
+                            self.nodes_listening.insert(event_name, hs);
                         }
                     }
                     RemoveEventListener { root, event } => {
-                        let v = self.listeners.get_mut(&(root as usize)).unwrap();
-                        v.remove(event);
+                        let v = self.nodes_listening.get_mut(event).unwrap();
+                        v.remove(&(root as usize));
                     }
                     SetText {
                         root,
@@ -210,10 +211,8 @@ impl<US: BubbledUpState, DS: PushedDownState> Tree<US, DS> {
                 to_rerender.insert(id);
                 if let Some(p) = parent {
                     let i = to_bubble.partition_point(|(_, h)| *h < height - 1);
-                    // println!("{i}");
-                    // println!("{to_bubble:?}");
                     // make sure the parent is not already queued
-                    if to_bubble.len() == 0 || to_bubble.get(i).unwrap().0 != p.0 {
+                    if i >= to_bubble.len() || to_bubble.get(i).unwrap().0 != p.0 {
                         to_bubble.insert(i, (p.0, height - 1));
                     }
                 }
@@ -307,10 +306,20 @@ impl<US: BubbledUpState, DS: PushedDownState> Tree<US, DS> {
     fn get_mut(&mut self, id: usize) -> &mut TreeNode<US, DS> {
         self.nodes.get_mut(id).unwrap().as_mut().unwrap()
     }
+
+    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&TreeNode<US, DS>> {
+        if let Some(nodes) = self.nodes_listening.get(event) {
+            let mut listening: Vec<_> = nodes.iter().map(|id| self.get(*id)).collect();
+            listening.sort_by(|n1, n2| (n1.height).cmp(&n2.height).reverse());
+            listening
+        } else {
+            Vec::new()
+        }
+    }
 }
 
 /// The node is stored client side and stores render data
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TreeNode<US: BubbledUpState, DS: PushedDownState> {
     pub id: ElementId,
     pub parent: Option<ElementId>,
@@ -320,7 +329,7 @@ pub struct TreeNode<US: BubbledUpState, DS: PushedDownState> {
     pub height: u16,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TreeNodeType {
     Text {
         text: String,
@@ -505,7 +514,7 @@ fn test_insert() {
             )));
             v
         },
-        listeners: HashMap::new(),
+        nodes_listening: HashMap::new(),
     };
     println!("{:?}", mutations);
     let to_update = tree.apply_mutations(vec![mutations.0]);

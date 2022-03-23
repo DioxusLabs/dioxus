@@ -4,12 +4,12 @@ use crossterm::event::{
 use dioxus_core::*;
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::{Tree, TreeNodeType};
+use dioxus_native_core::{Tree, TreeNode};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
     cell::RefCell,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -163,12 +163,35 @@ impl InnerInputState {
 
     fn update<'a>(
         &mut self,
-        dom: &'a VirtualDom,
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        layouts: &mut Tree<RinkLayout, StyleModifier>,
-        node: &'a VNode<'a>,
+        tree: &mut Tree<RinkLayout, StyleModifier>,
+    ) {
+        let previous_mouse = self
+            .mouse
+            .as_ref()
+            .map(|m| (clone_mouse_data(&m.0), m.1.clone()));
+
+        self.wheel = None;
+
+        for e in evts.iter_mut() {
+            self.apply_event(e);
+        }
+
+        self.resolve_mouse_events(previous_mouse, resolved_events, layout, tree);
+
+        // for s in &self.subscribers {
+        //     s();
+        // }
+    }
+
+    fn resolve_mouse_events(
+        &self,
+        previous_mouse: Option<(MouseData, Vec<u16>)>,
+        resolved_events: &mut Vec<UserEvent>,
+        layout: &Stretch,
+        tree: &mut Tree<RinkLayout, StyleModifier>,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -187,136 +210,31 @@ impl InnerInputState {
                 && layout.location.y as i32 + layout.size.height as i32 >= point.1
         }
 
-        fn get_mouse_events<'c, 'd>(
-            dom: &'c VirtualDom,
+        fn try_create_event(
+            name: &'static str,
+            data: Arc<dyn Any + Send + Sync>,
+            will_bubble: &mut HashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
-            layout: &Stretch,
-            layouts: &Tree<RinkLayout, StyleModifier>,
-            node: &'c VNode<'c>,
-            data: &'d Data<'d>,
-        ) -> HashSet<&'static str> {
-            match node {
-                VNode::Fragment(f) => {
-                    let mut union = HashSet::new();
-                    for child in f.children {
-                        union = union
-                            .union(&get_mouse_events(
-                                dom,
-                                resolved_events,
-                                layout,
-                                layouts,
-                                child,
-                                data,
-                            ))
-                            .copied()
-                            .collect();
-                    }
-                    return union;
+            node: &TreeNode<RinkLayout, StyleModifier>,
+            tree: &Tree<RinkLayout, StyleModifier>,
+        ) {
+            // only trigger event if the event was not triggered already by a child
+            if will_bubble.insert(node.id) {
+                let mut parent = node.parent;
+                while let Some(parent_id) = parent {
+                    will_bubble.insert(parent_id);
+                    parent = tree.get(parent_id.0).parent;
                 }
-
-                VNode::Component(vcomp) => {
-                    let idx = vcomp.scope.get().unwrap();
-                    let new_node = dom.get_scope(idx).unwrap().root_node();
-                    return get_mouse_events(dom, resolved_events, layout, layouts, new_node, data);
-                }
-
-                VNode::Placeholder(_) => return HashSet::new(),
-
-                VNode::Element(_) | VNode::Text(_) => {}
-            }
-
-            let id = node.try_mounted_id().unwrap();
-            let node = layouts.get(id.0);
-
-            let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
-
-            let previously_contained = data
-                .old_pos
-                .filter(|pos| layout_contains_point(node_layout, *pos))
-                .is_some();
-            let currently_contains = layout_contains_point(node_layout, data.new_pos);
-
-            match &node.node_type {
-                TreeNodeType::Element { children, .. } => {
-                    let mut events = HashSet::new();
-                    if previously_contained || currently_contains {
-                        for c in children {
-                            events = events
-                                .union(&get_mouse_events(
-                                    dom,
-                                    resolved_events,
-                                    layout,
-                                    layouts,
-                                    dom.get_element(*c).unwrap(),
-                                    data,
-                                ))
-                                .copied()
-                                .collect();
-                        }
-                    }
-                    let mut try_create_event = |name| {
-                        // only trigger event if the event was not triggered already by a child
-                        if events.insert(name) {
-                            resolved_events.push(UserEvent {
-                                scope_id: None,
-                                priority: EventPriority::Medium,
-                                name,
-                                element: Some(node.id),
-                                data: Arc::new(clone_mouse_data(data.mouse_data)),
-                            })
-                        }
-                    };
-                    if currently_contains {
-                        if !previously_contained {
-                            try_create_event("mouseenter");
-                            try_create_event("mouseover");
-                        }
-                        if data.clicked {
-                            try_create_event("mousedown");
-                        }
-                        if data.released {
-                            try_create_event("mouseup");
-                            match data.mouse_data.button {
-                                0 => try_create_event("click"),
-                                2 => try_create_event("contextmenu"),
-                                _ => (),
-                            }
-                        }
-                        if let Some(w) = data.wheel_data {
-                            if data.wheel_delta != 0.0 {
-                                resolved_events.push(UserEvent {
-                                    scope_id: None,
-                                    priority: EventPriority::Medium,
-                                    name: "wheel",
-                                    element: Some(node.id),
-                                    data: Arc::new(clone_wheel_data(w)),
-                                })
-                            }
-                        }
-                    } else if previously_contained {
-                        try_create_event("mouseleave");
-                        try_create_event("mouseout");
-                    }
-                    events
-                }
-                TreeNodeType::Text { .. } => HashSet::new(),
-                _ => todo!(),
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name,
+                    element: Some(node.id),
+                    data: data,
+                })
             }
         }
 
-        let previous_mouse = self
-            .mouse
-            .as_ref()
-            .map(|m| (clone_mouse_data(&m.0), m.1.clone()));
-        // println!("{previous_mouse:?}");
-
-        self.wheel = None;
-
-        for e in evts.iter_mut() {
-            self.apply_event(e);
-        }
-
-        // resolve hover events
         if let Some(mouse) = &self.mouse {
             let new_pos = (mouse.0.screen_x, mouse.0.screen_y);
             let old_pos = previous_mouse
@@ -338,12 +256,245 @@ impl InnerInputState {
                 mouse_data,
                 wheel_data,
             };
-            get_mouse_events(dom, resolved_events, layout, layouts, node, &data);
-        }
 
-        // for s in &self.subscribers {
-        //     s();
-        // }
+            {
+                // mousemove
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mousemove") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if previously_contained {
+                            try_create_event(
+                                "mousemove",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // mouseenter
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mouseenter") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if !previously_contained {
+                            try_create_event(
+                                "mouseenter",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // mouseover
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mouseover") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if !previously_contained {
+                            try_create_event(
+                                "mouseover",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // mousedown
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mousedown") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if data.clicked {
+                            try_create_event(
+                                "mousedown",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // mouseup
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mouseup") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if data.released {
+                            try_create_event(
+                                "mouseup",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // click
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("click") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if data.released && data.mouse_data.button == 0 {
+                            try_create_event(
+                                "click",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // contextmenu
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("contextmenu") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if data.released && data.mouse_data.button == 2 {
+                            try_create_event(
+                                "contextmenu",
+                                Arc::new(clone_mouse_data(data.mouse_data)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // wheel
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("wheel") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if let Some(w) = data.wheel_data {
+                            if data.wheel_delta != 0.0 {
+                                try_create_event(
+                                    "wheel",
+                                    Arc::new(clone_wheel_data(w)),
+                                    &mut will_bubble,
+                                    resolved_events,
+                                    node,
+                                    tree,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+
+            {
+                // mouseleave
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mouseleave") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if !currently_contains && previously_contained {
+                        try_create_event(
+                            "mouseleave",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mouseout
+                let mut will_bubble = HashSet::new();
+                for node in tree.get_listening_sorted("mouseout") {
+                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if !currently_contains && previously_contained {
+                        try_create_event(
+                            "mouseout",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // fn subscribe(&mut self, f: Rc<dyn Fn() + 'static>) {
@@ -364,7 +515,7 @@ impl RinkInputHandler {
         cx: &ScopeState,
     ) -> (Self, Rc<RefCell<InnerInputState>>) {
         let queued_events = Rc::new(RefCell::new(Vec::new()));
-        let queued_events2 = Rc::<RefCell<std::vec::Vec<_>>>::downgrade(&queued_events);
+        let queued_events2 = Rc::downgrade(&queued_events);
 
         cx.push_future(async move {
             while let Some(evt) = receiver.next().await {
@@ -391,68 +542,63 @@ impl RinkInputHandler {
 
     pub fn get_events<'a>(
         &self,
-        dom: &'a VirtualDom,
         layout: &Stretch,
-        layouts: &mut Tree<RinkLayout, StyleModifier>,
-        node: &'a VNode<'a>,
+        tree: &mut Tree<RinkLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
-        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
-        fn inner(
-            queue: &[(&'static str, Arc<dyn Any + Send + Sync>)],
-            resolved: &mut Vec<UserEvent>,
-            node: &VNode,
-        ) {
-            match node {
-                VNode::Fragment(frag) => {
-                    for c in frag.children {
-                        inner(queue, resolved, c);
-                    }
-                }
-                VNode::Element(el) => {
-                    for l in el.listeners {
-                        for (name, data) in queue.iter() {
-                            if *name == l.event {
-                                if let Some(id) = el.id.get() {
-                                    resolved.push(UserEvent {
-                                        scope_id: None,
-                                        priority: EventPriority::Medium,
-                                        name: *name,
-                                        element: Some(id),
-                                        data: data.clone(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    for c in el.children {
-                        inner(queue, resolved, c);
-                    }
-                }
-                _ => (),
-            }
-        }
-
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
-            dom,
             &mut (*self.queued_events).borrow_mut(),
             &mut resolved_events,
             layout,
-            layouts,
-            node,
+            tree,
         );
 
-        let events: Vec<_> = self
+        let events = self
             .queued_events
             .replace(Vec::new())
             .into_iter()
             // these events were added in the update stage
-            .filter(|e| !["mousedown", "mouseup", "mousemove", "drag", "wheel"].contains(&e.0))
-            .map(|e| (e.0, e.1.into_any()))
-            .collect();
+            .filter(|e| {
+                ![
+                    "mouseenter",
+                    "mouseover",
+                    "mouseleave",
+                    "mouseout",
+                    "mousedown",
+                    "mouseup",
+                    "mousemove",
+                    "drag",
+                    "wheel",
+                    "click",
+                    "contextmenu",
+                ]
+                .contains(&e.0)
+            })
+            .map(|evt| (evt.0, evt.1.into_any()));
 
-        inner(&events, &mut resolved_events, node);
+        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
+        let mut hm: HashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = HashMap::new();
+        for (event, data) in events {
+            if let Some(v) = hm.get_mut(event) {
+                v.push(data);
+            } else {
+                hm.insert(event, vec![data]);
+            }
+        }
+        for (event, datas) in hm {
+            for node in tree.get_listening_sorted(event) {
+                for data in &datas {
+                    resolved_events.push(UserEvent {
+                        scope_id: None,
+                        priority: EventPriority::Medium,
+                        name: event,
+                        element: Some(node.id),
+                        data: data.clone(),
+                    });
+                }
+            }
+        }
 
         resolved_events
     }

@@ -1,3 +1,6 @@
+// notes:
+// mouse events binary search was broken for absolutely positioned elements
+
 use anyhow::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
@@ -6,23 +9,19 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
+use dioxus_html::on::{KeyboardData, MouseData, PointerData, TouchData, WheelData};
 use dioxus_native_core::Tree;
 use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
-use std::{
-    io,
-    time::{Duration, Instant},
-};
-use stretch2::{
-    prelude::{Layout, Size},
-    Stretch,
-};
+use std::collections::HashSet;
+use std::{io, time::Duration};
+use stretch2::{prelude::Size, Stretch};
 use style_attributes::StyleModifier;
+use tokio::time::Instant;
 use tui::{backend::CrosstermBackend, Terminal};
 
 mod config;
 mod hooks;
 mod layout;
-mod layout_attributes;
 mod render;
 mod style;
 mod style_attributes;
@@ -31,7 +30,6 @@ mod widget;
 pub use config::*;
 pub use hooks::*;
 pub use layout::*;
-pub use layout_attributes::*;
 pub use render::*;
 
 pub fn launch(app: Component<()>) {
@@ -104,6 +102,12 @@ pub fn render_vdom(
             let mut terminal = Terminal::new(backend).unwrap();
 
             terminal.clear().unwrap();
+            let mut to_rerender: HashSet<usize> = tree
+                .nodes
+                .iter()
+                .filter_map(|n| n.as_ref())
+                .map(|n| n.id.0)
+                .collect();
 
             loop {
                 /*
@@ -115,54 +119,51 @@ pub fn render_vdom(
 
                 use simd to compare lines for diffing?
 
-
-                todo: reuse the layout and node objects.
-                our work_with_deadline method can tell us which nodes are dirty.
+                todo: lazy re-rendering
                 */
 
-                /*
-                Compute the layout given the terminal size
-                */
-                let mut events = Vec::new();
+                if !to_rerender.is_empty() {
+                    terminal.draw(|frame| {
+                        // size is guaranteed to not change when rendering
+                        let dims = frame.size();
+                        // println!("{dims:?}");
+                        let width = dims.width;
+                        let height = dims.height;
+                        let root_id = tree.root;
+                        let root_node = tree.get(root_id).up_state.node.unwrap();
+                        stretch
+                            .compute_layout(
+                                root_node,
+                                Size {
+                                    width: stretch2::prelude::Number::Defined((width - 1) as f32),
+                                    height: stretch2::prelude::Number::Defined((height - 1) as f32),
+                                },
+                            )
+                            .unwrap();
+                        let root = tree.get(tree.root);
+                        render::render_vnode(frame, &stretch, &tree, &root, cfg);
+                    })?;
+                }
 
-                terminal.draw(|frame| {
-                    // size is guaranteed to not change when rendering
-                    let dims = frame.size();
-                    println!("{dims:?}");
-                    let width = dims.width;
-                    let height = dims.height;
-                    let root_id = tree.root;
-                    let root_node = tree.get(root_id).up_state.node.unwrap();
-                    stretch
-                        .compute_layout(
-                            root_node,
-                            Size {
-                                width: stretch2::prelude::Number::Defined((width - 1) as f32),
-                                height: stretch2::prelude::Number::Defined((height - 1) as f32),
-                            },
-                        )
-                        .unwrap();
-
-                    // resolve events before rendering
-                    events = handler.get_events(
-                        vdom,
-                        &stretch,
-                        &mut tree,
-                        vdom.base_scope().root_node(),
-                    );
-                    for n in &tree.nodes {
-                        if let Some(node) = n {
-                            let Layout { location, size, .. } =
-                                stretch.layout(node.up_state.node.unwrap()).unwrap();
-                            println!("{node:#?}");
-                            println!("\t{location:?}: {size:?}");
-                        }
-                    }
-                    let root = tree.get(tree.root);
-                    // render::render_vnode(frame, &stretch, &tree, &root, cfg);
-                })?;
-
-                for e in events {
+                // resolve events before rendering
+                // todo: events do not trigger update?
+                for e in handler.get_events(&stretch, &mut tree) {
+                    let tname = if e.data.is::<PointerData>() {
+                        "PointerData"
+                    } else if e.data.is::<WheelData>() {
+                        "WheelData"
+                    } else if e.data.is::<MouseData>() {
+                        "MouseData"
+                    } else if e.data.is::<KeyboardData>() {
+                        "KeyboardData"
+                    } else if e.data.is::<TouchData>() {
+                        "TouchData"
+                    } else if e.data.is::<(u16, u16)>() {
+                        "(u16, u16)"
+                    } else {
+                        panic!()
+                    };
+                    // println!("{tname}: {e:?}");
                     vdom.handle_message(SchedulerMsg::Event(e));
                 }
 
@@ -199,8 +200,10 @@ pub fn render_vdom(
                 }
 
                 let mutations = vdom.work_with_deadline(|| false);
+                // updates the tree's nodes
                 let to_update = tree.apply_mutations(mutations);
-                let _to_rerender = tree
+                // update the style and layout
+                to_rerender = tree
                     .update_state(&vdom, to_update, &mut stretch, &mut ())
                     .unwrap();
             }
@@ -220,7 +223,6 @@ pub fn render_vdom(
 enum InputEvent {
     UserInput(TermEvent),
     Tick,
-
     #[allow(dead_code)]
     Close,
 }

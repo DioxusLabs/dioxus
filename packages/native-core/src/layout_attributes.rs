@@ -29,7 +29,7 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use stretch2::{prelude::*, style::PositionType, style::Style};
+use stretch2::{prelude::*, style::PositionType};
 
 /// applies the entire html namespace defined in dioxus-html
 pub fn apply_layout_attributes(

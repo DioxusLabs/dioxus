@@ -61,6 +61,7 @@ members = [
     "packages/fermi",
     "packages/tui",
     "packages/liveview",
+    "packages/native-core",
 ]
 
 [dev-dependencies]
@@ -88,3 +89,6 @@ harness = false
 [[bench]]
 name = "jsframework"
 harness = false
+
+[profile.release]
+debug = true

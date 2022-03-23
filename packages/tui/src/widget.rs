@@ -20,7 +20,7 @@ impl<'a> RinkBuffer<'a> {
         Self { buf, cfg }
     }
 
-    pub fn set(&mut self, x: u16, y: u16, new: &RinkCell) {
+    pub fn set(&mut self, x: u16, y: u16, new: RinkCell) {
         let area = self.buf.area();
         if x < area.x || x > area.width || y < area.y || y > area.height {
             panic!("({x}, {y}) is not in {area:?}");
@@ -34,7 +34,7 @@ impl<'a> RinkBuffer<'a> {
             }
         } else {
             cell.modifier = new.modifier;
-            cell.symbol = new.symbol.clone();
+            cell.symbol = new.symbol;
             cell.fg = convert(self.cfg.rendering_mode, new.fg.blend(cell.bg));
         }
     }

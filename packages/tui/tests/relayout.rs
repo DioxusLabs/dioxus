@@ -1,3 +1,4 @@
+use stretch::style::Dimension;
 use stretch2 as stretch;
 
 #[test]
@@ -6,14 +7,7 @@ fn relayout() {
     let node1 = stretch
         .new_node(
             stretch::style::Style {
-                position: stretch::geometry::Point {
-                    x: stretch::style::Dimension::Points(10f32),
-                    y: stretch::style::Dimension::Points(10f32),
-                },
-                size: stretch::geometry::Size {
-                    width: stretch::style::Dimension::Points(10f32),
-                    height: stretch::style::Dimension::Points(10f32),
-                },
+                size: stretch::geometry::Size { width: Dimension::Points(8f32), height: Dimension::Points(80f32) },
                 ..Default::default()
             },
             &[],
@@ -22,10 +16,9 @@ fn relayout() {
     let node0 = stretch
         .new_node(
             stretch::style::Style {
-                size: stretch::geometry::Size {
-                    width: stretch::style::Dimension::Percent(1f32),
-                    height: stretch::style::Dimension::Percent(1f32),
-                },
+                align_self: stretch::prelude::AlignSelf::Center,
+                size: stretch::geometry::Size { width: Dimension::Auto, height: Dimension::Auto },
+                // size: stretch::geometry::Size { width: Dimension::Percent(1.0), height: Dimension::Percent(1.0) },
                 ..Default::default()
             },
             &[node1],
@@ -34,30 +27,38 @@ fn relayout() {
     let node = stretch
         .new_node(
             stretch::style::Style {
-                size: stretch::geometry::Size {
-                    width: stretch::style::Dimension::Points(100f32),
-                    height: stretch::style::Dimension::Points(100f32),
-                },
+                size: stretch::geometry::Size { width: Dimension::Percent(1f32), height: Dimension::Percent(1f32) },
                 ..Default::default()
             },
             &[node0],
         )
         .unwrap();
-    for _ in 0..10 {
+    println!("0:");
+    stretch
+        .compute_layout(
+            node,
+            stretch::geometry::Size {
+                width: stretch::prelude::Number::Defined(100f32),
+                height: stretch::prelude::Number::Defined(100f32),
+            },
+        )
+        .unwrap();
+    let initial = stretch.layout(node).unwrap().location;
+    let initial0 = stretch.layout(node0).unwrap().location;
+    let initial1 = stretch.layout(node1).unwrap().location;
+    for i in 1..10 {
+        println!("\n\n{i}:");
         stretch
-            .compute_layout(node, stretch::geometry::Size::undefined())
+            .compute_layout(
+                node,
+                stretch::geometry::Size {
+                    width: stretch::prelude::Number::Defined(100f32),
+                    height: stretch::prelude::Number::Defined(100f32),
+                },
+            )
             .unwrap();
-        assert_eq!(stretch.layout(node).unwrap().size.width, 100f32);
-        assert_eq!(stretch.layout(node).unwrap().size.height, 100f32);
-        assert_eq!(stretch.layout(node).unwrap().location.x, 0f32);
-        assert_eq!(stretch.layout(node).unwrap().location.y, 0f32);
-        assert_eq!(stretch.layout(node1).unwrap().size.width, 10f32);
-        assert_eq!(stretch.layout(node1).unwrap().size.height, 10f32);
-        assert_eq!(stretch.layout(node1).unwrap().location.x, 0f32);
-        assert_eq!(stretch.layout(node1).unwrap().location.y, 0f32);
-        assert_eq!(stretch.layout(node0).unwrap().size.width, 100f32);
-        assert_eq!(stretch.layout(node0).unwrap().size.height, 100f32);
-        assert_eq!(stretch.layout(node0).unwrap().location.x, 0f32);
-        assert_eq!(stretch.layout(node0).unwrap().location.y, 0f32);
+        assert_eq!(stretch.layout(node).unwrap().location, initial);
+        assert_eq!(stretch.layout(node0).unwrap().location, initial0);
+        assert_eq!(stretch.layout(node1).unwrap().location, initial1);
     }
 }

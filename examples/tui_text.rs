@@ -15,7 +15,7 @@ fn app(cx: Scope) -> Element {
             onwheel: move |evt| alpha.set((**alpha + evt.data.delta_y as i64).min(100).max(0)),
 
             p {
-                background_color: "black",
+                // background_color: "black",
                 flex_direction: "column",
                 justify_content: "center",
                 align_items: "center",

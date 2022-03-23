@@ -2,7 +2,7 @@ use dioxus_core::*;
 use dioxus_native_core::BubbledUpState;
 use stretch2::prelude::*;
 
-use crate::layout_attributes::apply_layout_attributes;
+use dioxus_native_core::layout_attributes::apply_layout_attributes;
 
 /*
 The layout system uses the lineheight as one point.
@@ -42,7 +42,6 @@ impl BubbledUpState for RinkLayout {
 
                 if let Some(n) = self.node {
                     if self.style != style {
-                        panic!("new style: {style:?}");
                         stretch.set_style(n, style).unwrap();
                     }
                 } else {
@@ -74,11 +73,9 @@ impl BubbledUpState for RinkLayout {
 
                 if let Some(n) = self.node {
                     if &stretch.children(n).unwrap() != &child_layout {
-                        panic!("new children: {child_layout:?}");
                         stretch.set_children(n, &child_layout).unwrap();
                     }
                     if self.style != style {
-                        panic!("new style: {style:?}");
                         stretch.set_style(n, style).unwrap();
                     }
                 } else {

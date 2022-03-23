@@ -30,13 +30,12 @@
 */
 
 use dioxus_core::{Attribute, VNode};
-use dioxus_native_core::PushedDownState;
-
-use crate::{
-    parse_value,
-    style::{RinkColor, RinkStyle},
-    UnitSystem,
+use dioxus_native_core::{
+    layout_attributes::{parse_value, UnitSystem},
+    PushedDownState,
 };
+
+use crate::style::{RinkColor, RinkStyle};
 
 #[derive(Default, Clone, PartialEq, Debug)]
 pub struct StyleModifier {

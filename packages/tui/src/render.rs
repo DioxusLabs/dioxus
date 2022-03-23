@@ -1,4 +1,4 @@
-use dioxus_native_core::{Tree, TreeNode};
+use dioxus_native_core::{layout_attributes::UnitSystem, Tree, TreeNode};
 use std::io::Stdout;
 use stretch2::{
     geometry::Point,
@@ -11,7 +11,7 @@ use crate::{
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, RinkLayout, StyleModifier, UnitSystem,
+    Config, RinkLayout, StyleModifier,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -48,7 +48,7 @@ pub fn render_vnode<'a>(
                         // println!("{:?}", self.style);
                         new_cell.set_style(self.style);
                         new_cell.symbol = c.to_string();
-                        buf.set(area.left() + i as u16, area.top(), &new_cell);
+                        buf.set(area.left() + i as u16, area.top(), new_cell);
                     }
                 }
             }
@@ -150,7 +150,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
             buf.set(
                 (current[0] + pos[0] as i32) as u16,
                 (current[1] + pos[1] as i32) as u16,
-                &new_cell,
+                new_cell,
             );
         }
 
@@ -267,7 +267,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
                 if let Some(c) = self.down_state.style.bg {
                     new_cell.bg = c;
                 }
-                buf.set(x, y, &new_cell);
+                buf.set(x, y, new_cell);
             }
         }
 
@@ -295,7 +295,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
             }
             for x in (area.left() + last_radius[0] + 1)..(area.right() - radius[0]) {
                 new_cell.symbol = symbols.horizontal.to_string();
-                buf.set(x, area.top(), &new_cell);
+                buf.set(x, area.top(), new_cell.clone());
             }
             draw_arc(
                 [area.right() - radius[0] - 1, area.top() + radius[1]],
@@ -330,7 +330,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
             }
             for y in (area.top() + last_radius[1] + 1)..(area.bottom() - radius[1]) {
                 new_cell.symbol = symbols.vertical.to_string();
-                buf.set(area.right() - 1, y, &new_cell);
+                buf.set(area.right() - 1, y, new_cell.clone());
             }
             draw_arc(
                 [area.right() - radius[0] - 1, area.bottom() - radius[1] - 1],
@@ -365,7 +365,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
             }
             for x in (area.left() + radius[0])..(area.right() - last_radius[0] - 1) {
                 new_cell.symbol = symbols.horizontal.to_string();
-                buf.set(x, area.bottom() - 1, &new_cell);
+                buf.set(x, area.bottom() - 1, new_cell.clone());
             }
             draw_arc(
                 [area.left() + radius[0], area.bottom() - radius[1] - 1],
@@ -400,7 +400,7 @@ impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
             }
             for y in (area.top() + radius[1])..(area.bottom() - last_radius[1] - 1) {
                 new_cell.symbol = symbols.vertical.to_string();
-                buf.set(area.left(), y, &new_cell);
+                buf.set(area.left(), y, new_cell.clone());
             }
             draw_arc(
                 [area.left() + radius[0], area.top() + radius[1]],
