@@ -10,7 +10,7 @@ use crossterm::{
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
 use dioxus_html::on::{KeyboardData, MouseData, PointerData, TouchData, WheelData};
-use dioxus_native_core::Tree;
+use dioxus_native_core::{layout::StretchLayout, Tree};
 use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
 use std::collections::HashSet;
 use std::{io, time::Duration};
@@ -21,7 +21,6 @@ use tui::{backend::CrosstermBackend, Terminal};
 
 mod config;
 mod hooks;
-mod layout;
 mod render;
 mod style;
 mod style_attributes;
@@ -29,7 +28,6 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
-pub use layout::*;
 pub use render::*;
 
 pub fn launch(app: Component<()>) {
@@ -46,7 +44,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     cx.provide_root_context(state);
 
-    let mut tree: Tree<RinkLayout, StyleModifier> = Tree::new();
+    let mut tree: Tree<StretchLayout, StyleModifier> = Tree::new();
     let mutations = dom.rebuild();
     let to_update = tree.apply_mutations(vec![mutations]);
     let mut stretch = Stretch::new();
@@ -62,7 +60,7 @@ pub fn render_vdom(
     ctx: UnboundedSender<TermEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut tree: Tree<RinkLayout, StyleModifier>,
+    mut tree: Tree<StretchLayout, StyleModifier>,
     mut stretch: Stretch,
 ) -> Result<()> {
     // Setup input handling
@@ -148,21 +146,21 @@ pub fn render_vdom(
                 // resolve events before rendering
                 // todo: events do not trigger update?
                 for e in handler.get_events(&stretch, &mut tree) {
-                    let tname = if e.data.is::<PointerData>() {
-                        "PointerData"
-                    } else if e.data.is::<WheelData>() {
-                        "WheelData"
-                    } else if e.data.is::<MouseData>() {
-                        "MouseData"
-                    } else if e.data.is::<KeyboardData>() {
-                        "KeyboardData"
-                    } else if e.data.is::<TouchData>() {
-                        "TouchData"
-                    } else if e.data.is::<(u16, u16)>() {
-                        "(u16, u16)"
-                    } else {
-                        panic!()
-                    };
+                    // let tname = if e.data.is::<PointerData>() {
+                    //     "PointerData"
+                    // } else if e.data.is::<WheelData>() {
+                    //     "WheelData"
+                    // } else if e.data.is::<MouseData>() {
+                    //     "MouseData"
+                    // } else if e.data.is::<KeyboardData>() {
+                    //     "KeyboardData"
+                    // } else if e.data.is::<TouchData>() {
+                    //     "TouchData"
+                    // } else if e.data.is::<(u16, u16)>() {
+                    //     "(u16, u16)"
+                    // } else {
+                    //     panic!()
+                    // };
                     // println!("{tname}: {e:?}");
                     vdom.handle_message(SchedulerMsg::Event(e));
                 }

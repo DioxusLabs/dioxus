@@ -1,4 +1,4 @@
-use dioxus_native_core::{layout_attributes::UnitSystem, Tree, TreeNode};
+use dioxus_native_core::{layout::StretchLayout, layout_attributes::UnitSystem, Tree, TreeNode};
 use std::io::Stdout;
 use stretch2::{
     geometry::Point,
@@ -11,7 +11,7 @@ use crate::{
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, RinkLayout, StyleModifier,
+    Config, StyleModifier,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -19,8 +19,8 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub fn render_vnode<'a>(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    tree: &Tree<RinkLayout, StyleModifier>,
-    node: &TreeNode<RinkLayout, StyleModifier>,
+    tree: &Tree<StretchLayout, StyleModifier>,
+    node: &TreeNode<StretchLayout, StyleModifier>,
     cfg: Config,
 ) {
     match &node.node_type {
@@ -80,7 +80,7 @@ pub fn render_vnode<'a>(
     }
 }
 
-impl RinkWidget for &TreeNode<RinkLayout, StyleModifier> {
+impl RinkWidget for &TreeNode<StretchLayout, StyleModifier> {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 

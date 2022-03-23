@@ -4,7 +4,7 @@ use crossterm::event::{
 use dioxus_core::*;
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::{Tree, TreeNode};
+use dioxus_native_core::{layout::StretchLayout, Tree, TreeNode};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
@@ -16,7 +16,7 @@ use std::{
 };
 use stretch2::{prelude::Layout, Stretch};
 
-use crate::{style_attributes::StyleModifier, RinkLayout};
+use crate::style_attributes::StyleModifier;
 
 // a wrapper around the input state for easier access
 // todo: fix loop
@@ -166,7 +166,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut Tree<RinkLayout, StyleModifier>,
+        tree: &mut Tree<StretchLayout, StyleModifier>,
     ) {
         let previous_mouse = self
             .mouse
@@ -191,7 +191,7 @@ impl InnerInputState {
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut Tree<RinkLayout, StyleModifier>,
+        tree: &mut Tree<StretchLayout, StyleModifier>,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -215,8 +215,8 @@ impl InnerInputState {
             data: Arc<dyn Any + Send + Sync>,
             will_bubble: &mut HashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
-            node: &TreeNode<RinkLayout, StyleModifier>,
-            tree: &Tree<RinkLayout, StyleModifier>,
+            node: &TreeNode<StretchLayout, StyleModifier>,
+            tree: &Tree<StretchLayout, StyleModifier>,
         ) {
             // only trigger event if the event was not triggered already by a child
             if will_bubble.insert(node.id) {
@@ -543,7 +543,7 @@ impl RinkInputHandler {
     pub fn get_events<'a>(
         &self,
         layout: &Stretch,
-        tree: &mut Tree<RinkLayout, StyleModifier>,
+        tree: &mut Tree<StretchLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 

@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
+pub mod layout;
 pub mod layout_attributes;
 
 /// A tree that can sync with dioxus mutations backed by a hashmap.
