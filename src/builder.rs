@@ -105,7 +105,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         let info = dioxus_tools.get("binaryen").unwrap();
         let binaryen = crate::tools::Tool::Binaryen;
 
-        if !binaryen.is_installed() {
+        if binaryen.is_installed() {
             if let Some(sub) = info.as_table() {
                 if sub.contains_key("wasm_opt")
                     && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
