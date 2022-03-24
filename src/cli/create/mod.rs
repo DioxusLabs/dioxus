@@ -59,7 +59,7 @@ impl Create {
             .output()?;
 
         if !generate_output.status.success() {
-            return custom_error!("Generate project failed.");
+            return custom_error!("Generate project failed. Try to update cargo-generate.");
         }
 
         let mut dioxus_file = File::open(project_path.join("Dioxus.toml"))?;
