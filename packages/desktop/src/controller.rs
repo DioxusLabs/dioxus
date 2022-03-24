@@ -61,9 +61,10 @@ impl DesktopController {
 
                 loop {
                     dom.wait_for_work().await;
-                    let mut muts = dom.work_with_deadline(|| false);
 
-                    while let Some(edit) = muts.pop() {
+                    let muts = dom.work_with_deadline(|| false);
+
+                    for edit in muts {
                         edit_queue
                             .lock()
                             .unwrap()
@@ -97,7 +98,7 @@ impl DesktopController {
             let mut queue = self.pending_edits.lock().unwrap();
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            while let Some(edit) = queue.pop() {
+            for edit in queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
