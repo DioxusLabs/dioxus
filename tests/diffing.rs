@@ -749,8 +749,8 @@ fn add_nested_elements() {
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 2, tag: "div" },
             PushRoot { root: 1 },
+            CreateElement { root: 2, tag: "div" },
             AppendChildren { many: 1 },
         ]
     );
