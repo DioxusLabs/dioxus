@@ -730,3 +730,28 @@ fn remove_list_nokeyed() {
         ]
     );
 }
+
+#[test]
+fn add_nested_elements() {
+    let vdom = new_dom();
+
+    let (_create, change) = vdom.diff_lazynodes(
+        rsx! {
+            div{}
+        },
+        rsx! {
+            div{
+                div{}
+            }
+        },
+    );
+
+    assert_eq!(
+        change.edits,
+        [
+            CreateElement { root: 2, tag: "div" },
+            PushRoot { root: 1 },
+            AppendChildren { many: 1 },
+        ]
+    );
+}
