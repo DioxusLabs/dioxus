@@ -157,7 +157,7 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps. We have an entire section dedicated to using `async` properly later in this book.
+Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps.
 
 ### How do I tell Dioxus that my state changed?
 
