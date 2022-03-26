@@ -83,4 +83,4 @@ rsx!{
 
 This page is just meant to be a very brief overview of the router to show you that there's a powerful solution already built for a very common problem. For more information about the router, definitely check out its book or check out some of the examples.
 
-The router has its own documentation! [Available here](https://dioxuslabs.com/router_guide/).
+The router has its own documentation! [Available here](https://dioxuslabs.com/router/guide/).
