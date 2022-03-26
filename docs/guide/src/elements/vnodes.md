@@ -150,7 +150,7 @@ All element attributes must occur *before* child elements. The `rsx!` macro will
 
 Listeners are a special type of Attribute that only accept functions. Listeners let us attach functionality to our Elements by running a provided closure whenever the specified Listener is triggered.
 
-We'll cover listeners in more depth in the Listeners chapter, but for now, just know that every listener must start with the `on` keyword and accepts closures.
+We'll cover listeners in more depth in the Adding Interactivity chapter, but for now, just know that every listener must start with the `on` keyword and accepts closures.
 
 ```rust
 rsx!(
