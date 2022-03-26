@@ -81,7 +81,7 @@ let name = "Bob";
 rsx! ( "hello {name}" )
 ```
 
-Unfortunately, you cannot drop in arbitrary expressions directly into the string literal. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of the `rsx!` macro (which we'll cover later), our call to `format_args` must be contained within square braces.
+Unfortunately, you cannot yet drop in arbitrary expressions directly into the string literal with Rust. In the cases where we need to compute a complex value, we'll want to use `format_args!` directly. Due to specifics of the `rsx!` macro (which we'll cover later), our call to `format_args` must be contained within square braces.
 
 ```rust
 rsx!( [format_args!("Hello {}", if enabled { "Jack" } else { "Bob" } )] )
