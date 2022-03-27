@@ -37,6 +37,8 @@ hyper = "0.14.17"
 axum = { version = "0.4.5", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
 headers = "0.3.7"
+tower = "0.4.12"
+
 # hyper = { version = "0.14.11", features = ["full"] }
 
 [[bin]]
