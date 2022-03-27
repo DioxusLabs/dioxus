@@ -1,4 +1,4 @@
-use crate::BubbledUpState;
+use crate::client_tree::BubbledUpState;
 use dioxus_core::*;
 use stretch2::prelude::*;
 
@@ -58,7 +58,7 @@ impl BubbledUpState for StretchLayout {
                     apply_layout_attributes(name, value, &mut style);
                 }
 
-                // todo: move
+                // the root node fills the entire area
                 if el.id.get() == Some(ElementId(0)) {
                     apply_layout_attributes("width", "100%", &mut style);
                     apply_layout_attributes("height", "100%", &mut style);
@@ -69,7 +69,6 @@ impl BubbledUpState for StretchLayout {
                 for l in children {
                     child_layout.push(l.node.unwrap());
                 }
-                child_layout.reverse();
 
                 if let Some(n) = self.node {
                     if &stretch.children(n).unwrap() != &child_layout {

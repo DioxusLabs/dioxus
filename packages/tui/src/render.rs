@@ -1,4 +1,8 @@
-use dioxus_native_core::{layout::StretchLayout, layout_attributes::UnitSystem, Tree, TreeNode};
+use dioxus_native_core::{
+    client_tree::{ClientTree, TreeNode},
+    layout::StretchLayout,
+    layout_attributes::UnitSystem,
+};
 use std::io::Stdout;
 use stretch2::{
     geometry::Point,
@@ -19,12 +23,14 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub fn render_vnode<'a>(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    tree: &Tree<StretchLayout, StyleModifier>,
+    tree: &ClientTree<StretchLayout, StyleModifier>,
     node: &TreeNode<StretchLayout, StyleModifier>,
     cfg: Config,
 ) {
+    use dioxus_native_core::client_tree::TreeNodeType;
+
     match &node.node_type {
-        dioxus_native_core::TreeNodeType::Placeholder => return,
+        TreeNodeType::Placeholder => return,
         _ => (),
     }
 
@@ -34,7 +40,7 @@ pub fn render_vnode<'a>(
     let Size { width, height } = size;
 
     match &node.node_type {
-        dioxus_native_core::TreeNodeType::Text { text } => {
+        TreeNodeType::Text { text } => {
             #[derive(Default)]
             struct Label<'a> {
                 text: &'a str,
@@ -64,7 +70,7 @@ pub fn render_vnode<'a>(
                 frame.render_widget(WidgetWithContext::new(label, cfg), area);
             }
         }
-        dioxus_native_core::TreeNodeType::Element { children, .. } => {
+        TreeNodeType::Element { children, .. } => {
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
@@ -73,10 +79,10 @@ pub fn render_vnode<'a>(
             }
 
             for c in children {
-                render_vnode(frame, layout, tree, tree.get(c.0), cfg);
+                render_vnode(frame, layout, tree, &tree[c.0], cfg);
             }
         }
-        dioxus_native_core::TreeNodeType::Placeholder => unreachable!(),
+        TreeNodeType::Placeholder => unreachable!(),
     }
 }
 

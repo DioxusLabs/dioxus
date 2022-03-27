@@ -1,0 +1,2541 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-core'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-core"
+                ],
+                "filter": {
+                    "name": "dioxus-core",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-rsx'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-rsx"
+                ],
+                "filter": {
+                    "name": "dioxus-rsx",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-html'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-html"
+                ],
+                "filter": {
+                    "name": "dioxus-html",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-hooks'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-hooks"
+                ],
+                "filter": {
+                    "name": "dioxus-hooks",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-web'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-web"
+                ],
+                "filter": {
+                    "name": "dioxus-web",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'hydrate'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=hydrate",
+                    "--package=dioxus-web"
+                ],
+                "filter": {
+                    "name": "hydrate",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'hydrate'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=hydrate",
+                    "--package=dioxus-web"
+                ],
+                "filter": {
+                    "name": "hydrate",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'hydrate'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=hydrate",
+                    "--package=dioxus-web"
+                ],
+                "filter": {
+                    "name": "hydrate",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-interpreter-js'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-interpreter-js"
+                ],
+                "filter": {
+                    "name": "dioxus-interpreter-js",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-ssr'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-ssr"
+                ],
+                "filter": {
+                    "name": "dioxus-ssr",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'renders'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=renders",
+                    "--package=dioxus-ssr"
+                ],
+                "filter": {
+                    "name": "renders",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-desktop'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-desktop"
+                ],
+                "filter": {
+                    "name": "dioxus-desktop",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-mobile'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-mobile"
+                ],
+                "filter": {
+                    "name": "dioxus-mobile",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'fermi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=fermi"
+                ],
+                "filter": {
+                    "name": "fermi",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-tui'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-tui"
+                ],
+                "filter": {
+                    "name": "dioxus-tui",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'margin'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=margin",
+                    "--package=dioxus-tui"
+                ],
+                "filter": {
+                    "name": "margin",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-native-core'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-native-core"
+                ],
+                "filter": {
+                    "name": "dioxus-native-core",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "dioxus",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'all_css'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=all_css",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "all_css",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'all_css'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=all_css",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "all_css",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'borrowed'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=borrowed",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "borrowed",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'borrowed'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=borrowed",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "borrowed",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'calculator'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=calculator",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "calculator",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'calculator'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=calculator",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "calculator",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'crm'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=crm",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "crm",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'crm'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=crm",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "crm",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'custom_assets'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=custom_assets",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "custom_assets",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'custom_assets'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=custom_assets",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "custom_assets",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'disabled'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=disabled",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "disabled",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'disabled'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=disabled",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "disabled",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'dog_app'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=dog_app",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "dog_app",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'dog_app'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=dog_app",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "dog_app",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'error_handle'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=error_handle",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "error_handle",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'error_handle'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=error_handle",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "error_handle",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'fermi'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=fermi",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "fermi",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'fermi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=fermi",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "fermi",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'filedragdrop'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=filedragdrop",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "filedragdrop",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'filedragdrop'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=filedragdrop",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "filedragdrop",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'file_explorer'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=file_explorer",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "file_explorer",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'file_explorer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=file_explorer",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "file_explorer",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'flat_router'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=flat_router",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "flat_router",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'flat_router'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=flat_router",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "flat_router",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'form'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=form",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "form",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'form'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=form",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "form",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'framework_benchmark'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=framework_benchmark",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "framework_benchmark",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'framework_benchmark'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=framework_benchmark",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "framework_benchmark",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'heavy_compute'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=heavy_compute",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "heavy_compute",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'heavy_compute'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=heavy_compute",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "heavy_compute",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'hello_world'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=hello_world",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "hello_world",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'hello_world'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=hello_world",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "hello_world",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'hydration'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=hydration",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "hydration",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'hydration'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=hydration",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "hydration",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'inputs'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=inputs",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "inputs",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'inputs'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=inputs",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "inputs",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'link'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=link",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "link",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'link'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=link",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "link",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'login_form'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=login_form",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "login_form",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'login_form'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=login_form",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "login_form",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'nested_listeners'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=nested_listeners",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "nested_listeners",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'nested_listeners'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=nested_listeners",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "nested_listeners",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'optional_props'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=optional_props",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "optional_props",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'optional_props'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=optional_props",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "optional_props",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'pattern_model'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=pattern_model",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "pattern_model",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'pattern_model'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=pattern_model",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "pattern_model",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'pattern_reducer'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=pattern_reducer",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "pattern_reducer",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'pattern_reducer'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=pattern_reducer",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "pattern_reducer",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'readme'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=readme",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "readme",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'readme'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=readme",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "readme",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'router'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=router",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "router",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'router'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=router",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "router",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'rsx_compile_fail'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=rsx_compile_fail",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "rsx_compile_fail",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'rsx_compile_fail'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=rsx_compile_fail",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "rsx_compile_fail",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'rsx_usage'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=rsx_usage",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "rsx_usage",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'rsx_usage'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=rsx_usage",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "rsx_usage",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'ssr'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=ssr",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "ssr",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'ssr'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=ssr",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "ssr",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'suspense'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=suspense",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "suspense",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'suspense'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=suspense",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "suspense",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'svg'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=svg",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "svg",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'svg'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=svg",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "svg",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tailwind'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tailwind",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tailwind",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tailwind'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tailwind",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tailwind",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tasks'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tasks",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tasks",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tasks'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tasks",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tasks",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'textarea'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=textarea",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "textarea",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'textarea'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=textarea",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "textarea",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'todomvc'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=todomvc",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "todomvc",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'todomvc'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=todomvc",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "todomvc",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_border'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_border",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_border",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_border'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_border",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_border",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_color_test'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_color_test",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_color_test",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_color_test'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_color_test",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_color_test",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_components'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_components",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_components",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_components'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_components",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_components",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_frame'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_frame",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_frame",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_frame'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_frame",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_frame",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_hover'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_hover",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_hover",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_hover'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_hover",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_hover",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_keys'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_keys",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_keys",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_keys'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_keys",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_keys",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_list'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_list",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_list",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_list'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_list",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_list",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_margin'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_margin",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_margin",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_margin'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_margin",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_margin",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_quadrants'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_quadrants",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_quadrants",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_quadrants'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_quadrants",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_quadrants",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_readme'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_readme",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_readme",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_readme'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_readme",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_readme",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_task'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_task",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_task",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_task'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_task",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_task",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'tui_text'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=tui_text",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_text",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'tui_text'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=tui_text",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "tui_text",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'window_event'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=window_event",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "window_event",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'window_event'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=window_event",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "window_event",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'xss_safety'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=xss_safety",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "xss_safety",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'xss_safety'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=xss_safety",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "xss_safety",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'borrowedstate'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=borrowedstate",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "borrowedstate",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'create_dom'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=create_dom",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "create_dom",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'diffing'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=diffing",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "diffing",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'earlyabort'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=earlyabort",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "earlyabort",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'fermi'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=fermi",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "fermi",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'lifecycle'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=lifecycle",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "lifecycle",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'miri_stress'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=miri_stress",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "miri_stress",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'passthru'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=passthru",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "passthru",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'scheduler'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=scheduler",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "scheduler",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'sharedstate'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=sharedstate",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "sharedstate",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'task'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=task",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "task",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'test_logging'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=test_logging",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "test_logging",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'vdom_rebuild'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=vdom_rebuild",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "vdom_rebuild",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'create'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=create",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "create",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug benchmark 'jsframework'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bench=jsframework",
+                    "--package=dioxus"
+                ],
+                "filter": {
+                    "name": "jsframework",
+                    "kind": "bench"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in library 'dioxus-router'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib",
+                    "--package=dioxus-router"
+                ],
+                "filter": {
+                    "name": "dioxus-router",
+                    "kind": "lib"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug example 'simple'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--example=simple",
+                    "--package=dioxus-router"
+                ],
+                "filter": {
+                    "name": "simple",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in example 'simple'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--example=simple",
+                    "--package=dioxus-router"
+                ],
+                "filter": {
+                    "name": "simple",
+                    "kind": "example"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'ssr_router'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=ssr_router",
+                    "--package=dioxus-router"
+                ],
+                "filter": {
+                    "name": "ssr_router",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug integration test 'web_router'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=web_router",
+                    "--package=dioxus-router"
+                ],
+                "filter": {
+                    "name": "web_router",
+                    "kind": "test"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

@@ -31,8 +31,8 @@
 
 use dioxus_core::{Attribute, VNode};
 use dioxus_native_core::{
+    client_tree::PushedDownState,
     layout_attributes::{parse_value, UnitSystem},
-    PushedDownState,
 };
 
 use crate::style::{RinkColor, RinkStyle};
@@ -48,7 +48,9 @@ impl PushedDownState for StyleModifier {
 
     fn reduce(&mut self, parent: Option<&Self>, vnode: &VNode, _ctx: &mut Self::Ctx) {
         *self = StyleModifier::default();
-        self.style.fg = None;
+        if parent.is_some() {
+            self.style.fg = None;
+        }
         match vnode {
             VNode::Element(el) => {
                 // handle text modifier elements

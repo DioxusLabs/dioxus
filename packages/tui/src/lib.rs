@@ -9,10 +9,8 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_html::on::{KeyboardData, MouseData, PointerData, TouchData, WheelData};
-use dioxus_native_core::{layout::StretchLayout, Tree};
+use dioxus_native_core::{client_tree::ClientTree, layout::StretchLayout};
 use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
-use std::collections::HashSet;
 use std::{io, time::Duration};
 use stretch2::{prelude::Size, Stretch};
 use style_attributes::StyleModifier;
@@ -44,7 +42,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     cx.provide_root_context(state);
 
-    let mut tree: Tree<StretchLayout, StyleModifier> = Tree::new();
+    let mut tree: ClientTree<StretchLayout, StyleModifier> = ClientTree::new();
     let mutations = dom.rebuild();
     let to_update = tree.apply_mutations(vec![mutations]);
     let mut stretch = Stretch::new();
@@ -60,7 +58,7 @@ pub fn render_vdom(
     ctx: UnboundedSender<TermEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut tree: Tree<StretchLayout, StyleModifier>,
+    mut tree: ClientTree<StretchLayout, StyleModifier>,
     mut stretch: Stretch,
 ) -> Result<()> {
     // Setup input handling
@@ -100,12 +98,8 @@ pub fn render_vdom(
             let mut terminal = Terminal::new(backend).unwrap();
 
             terminal.clear().unwrap();
-            let mut to_rerender: HashSet<usize> = tree
-                .nodes
-                .iter()
-                .filter_map(|n| n.as_ref())
-                .map(|n| n.id.0)
-                .collect();
+            let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
+            let mut redraw = true;
 
             loop {
                 /*
@@ -120,15 +114,16 @@ pub fn render_vdom(
                 todo: lazy re-rendering
                 */
 
-                if !to_rerender.is_empty() {
+                if !to_rerender.is_empty() || redraw {
+                    redraw = false;
                     terminal.draw(|frame| {
                         // size is guaranteed to not change when rendering
                         let dims = frame.size();
                         // println!("{dims:?}");
                         let width = dims.width;
                         let height = dims.height;
-                        let root_id = tree.root;
-                        let root_node = tree.get(root_id).up_state.node.unwrap();
+                        let root_id = tree.root_id();
+                        let root_node = tree[root_id].up_state.node.unwrap();
                         stretch
                             .compute_layout(
                                 root_node,
@@ -138,7 +133,7 @@ pub fn render_vdom(
                                 },
                             )
                             .unwrap();
-                        let root = tree.get(tree.root);
+                        let root = &tree[tree.root_id()];
                         render::render_vnode(frame, &stretch, &tree, &root, cfg);
                     })?;
                 }
@@ -146,22 +141,6 @@ pub fn render_vdom(
                 // resolve events before rendering
                 // todo: events do not trigger update?
                 for e in handler.get_events(&stretch, &mut tree) {
-                    // let tname = if e.data.is::<PointerData>() {
-                    //     "PointerData"
-                    // } else if e.data.is::<WheelData>() {
-                    //     "WheelData"
-                    // } else if e.data.is::<MouseData>() {
-                    //     "MouseData"
-                    // } else if e.data.is::<KeyboardData>() {
-                    //     "KeyboardData"
-                    // } else if e.data.is::<TouchData>() {
-                    //     "TouchData"
-                    // } else if e.data.is::<(u16, u16)>() {
-                    //     "(u16, u16)"
-                    // } else {
-                    //     panic!()
-                    // };
-                    // println!("{tname}: {e:?}");
                     vdom.handle_message(SchedulerMsg::Event(e));
                 }
 
@@ -184,7 +163,8 @@ pub fn render_vdom(
                                             break;
                                         }
                                     }
-                                    TermEvent::Resize(_, _) | TermEvent::Mouse(_) => {}
+                                    TermEvent::Resize(_, _) => redraw = true,
+                                    TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Tick => {} // tick
                                 InputEvent::Close => break,

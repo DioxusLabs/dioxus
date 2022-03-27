@@ -2,14 +2,17 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
 use dioxus_core::*;
+use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::{layout::StretchLayout, Tree, TreeNode};
+use dioxus_native_core::{
+    client_tree::{ClientTree, TreeNode},
+    layout::StretchLayout,
+};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
     cell::RefCell,
-    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -166,7 +169,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut Tree<StretchLayout, StyleModifier>,
+        tree: &mut ClientTree<StretchLayout, StyleModifier>,
     ) {
         let previous_mouse = self
             .mouse
@@ -191,7 +194,7 @@ impl InnerInputState {
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut Tree<StretchLayout, StyleModifier>,
+        tree: &mut ClientTree<StretchLayout, StyleModifier>,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -213,17 +216,17 @@ impl InnerInputState {
         fn try_create_event(
             name: &'static str,
             data: Arc<dyn Any + Send + Sync>,
-            will_bubble: &mut HashSet<ElementId>,
+            will_bubble: &mut FxHashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
             node: &TreeNode<StretchLayout, StyleModifier>,
-            tree: &Tree<StretchLayout, StyleModifier>,
+            tree: &ClientTree<StretchLayout, StyleModifier>,
         ) {
             // only trigger event if the event was not triggered already by a child
             if will_bubble.insert(node.id) {
                 let mut parent = node.parent;
                 while let Some(parent_id) = parent {
                     will_bubble.insert(parent_id);
-                    parent = tree.get(parent_id.0).parent;
+                    parent = tree[parent_id.0].parent;
                 }
                 resolved_events.push(UserEvent {
                     scope_id: None,
@@ -259,7 +262,7 @@ impl InnerInputState {
 
             {
                 // mousemove
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mousemove") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let previously_contained = data
@@ -285,7 +288,7 @@ impl InnerInputState {
 
             {
                 // mouseenter
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mouseenter") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let previously_contained = data
@@ -311,7 +314,7 @@ impl InnerInputState {
 
             {
                 // mouseover
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mouseover") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let previously_contained = data
@@ -337,7 +340,7 @@ impl InnerInputState {
 
             {
                 // mousedown
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
@@ -359,7 +362,7 @@ impl InnerInputState {
 
             {
                 // mouseup
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mouseup") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
@@ -381,7 +384,7 @@ impl InnerInputState {
 
             {
                 // click
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("click") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
@@ -403,7 +406,7 @@ impl InnerInputState {
 
             {
                 // contextmenu
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("contextmenu") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
@@ -425,7 +428,7 @@ impl InnerInputState {
 
             {
                 // wheel
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("wheel") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
@@ -449,7 +452,7 @@ impl InnerInputState {
 
             {
                 // mouseleave
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mouseleave") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let previously_contained = data
@@ -473,7 +476,7 @@ impl InnerInputState {
 
             {
                 // mouseout
-                let mut will_bubble = HashSet::new();
+                let mut will_bubble = FxHashSet::default();
                 for node in tree.get_listening_sorted("mouseout") {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let previously_contained = data
@@ -543,7 +546,7 @@ impl RinkInputHandler {
     pub fn get_events<'a>(
         &self,
         layout: &Stretch,
-        tree: &mut Tree<StretchLayout, StyleModifier>,
+        tree: &mut ClientTree<StretchLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
@@ -578,7 +581,7 @@ impl RinkInputHandler {
             .map(|evt| (evt.0, evt.1.into_any()));
 
         // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
-        let mut hm: HashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = HashMap::new();
+        let mut hm: FxHashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = FxHashMap::default();
         for (event, data) in events {
             if let Some(v) = hm.get_mut(event) {
                 v.push(data);

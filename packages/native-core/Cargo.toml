@@ -3,8 +3,6 @@ name = "dioxus-native-core"
 version = "0.2.0"
 edition = "2021"
 license = "MIT/Apache-2.0"
-authors = ["@dementhos"]
-description = "TUI-based renderer for Dioxus"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 
@@ -13,5 +11,10 @@ dioxus-core = { path = "../core", version = "^0.2.0" }
 dioxus-html = { path = "../html", version = "^0.2.0" }
 dioxus-core-macro = { path = "../core-macro", version = "^0.2.0" }
 
-stretch2 = "0.4.1"
+# stretch2 = "0.4.1"
+stretch2 = { git = "https://github.com/Demonthos/stretch.git" }
 smallvec = "1.6"
+fxhash = "0.2"
+
+[dev-dependencies]
+rand = "0.8.5"
