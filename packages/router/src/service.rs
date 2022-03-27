@@ -182,7 +182,7 @@ impl RouterCore {
 
         if let Some(route) = roots.get(&scope) {
             let cur = &self.current_location().url;
-            log::debug!("Checking if {} matches {}", cur, route);
+            log::trace!("Checking if {} matches {}", cur, route);
 
             if route_matches_path(cur, route, self.cfg.base_url.as_ref()) || route.is_empty() {
                 self.route_found.set(Some(scope));
@@ -236,7 +236,7 @@ fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bo
 
     let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
 
-    log::debug!("Comparing {:?} to {:?}", cur_pieces, attempt_pieces);
+    log::trace!("Comparing {:?} to {:?}", cur_pieces, attempt_pieces);
 
     if attempt_pieces.len() != cur_pieces.len() {
         return false;

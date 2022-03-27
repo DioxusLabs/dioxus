@@ -49,7 +49,7 @@ fn main() {
     let _ = dom.rebuild();
 
     let pre = dioxus_ssr::pre_render_vdom(&dom);
-    log::debug!("{}", pre);
+    log::trace!("{}", pre);
 
     // set the inner content of main to the pre-rendered content
     window()
