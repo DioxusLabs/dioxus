@@ -122,8 +122,9 @@ impl CrateConfig {
         let dioxus_config = DioxusConfig::load()?;
 
         let crate_dir = crate::cargo::crate_root()?;
-        let workspace_dir = crate::cargo::workspace_root()?;
-        let target_dir = workspace_dir.join("target");
+        let meta = crate::cargo::Metadata::get()?;
+        let workspace_dir = meta.workspace_root;
+        let target_dir = meta.target_directory;
 
         let out_dir = match dioxus_config.application.out_dir {
             Some(ref v) => crate_dir.join(v),
