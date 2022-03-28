@@ -60,9 +60,9 @@ The best use case of `use_ref` is to manage "complex" data local to your compone
 
 
 ```rust
-let val = use_state(&cx, || vec![1, 3, 3, 7]);
-let val = use_state(&cx, || (0..10000).collect::<Vec<_>x>());
-let val = use_state(&cx, || Configuration {
+let val = use_ref(&cx, || vec![1, 3, 3, 7]);
+let val = use_ref(&cx, || (0..10000).collect::<Vec<_>x>());
+let val = use_ref(&cx, || Configuration {
     a: "asdasd",
     // .. more complex fields
 });
@@ -82,6 +82,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 
+#[inline_props]
 fn Child(cx: Scope, val: UseRef<i32>) -> Element {
     // ...
 }
