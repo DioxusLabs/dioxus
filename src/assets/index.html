@@ -11,7 +11,11 @@
     <!-- Note the usage of `type=module` here as this is an ES6 module -->
     <script type="module">
       import init from "./assets/dioxus/{app_name}.js";
-      init("./assets/dioxus/{app_name}_bg.wasm");
+      init("./assets/dioxus/{app_name}_bg.wasm").then(wasm => {
+        if (wasm.__wbindgen_start == undefined) {
+          wasm.main();
+        }
+      });
     </script>
     {script_include}
   </body>
