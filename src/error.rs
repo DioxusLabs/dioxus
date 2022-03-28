@@ -23,10 +23,10 @@ pub enum Error {
     #[error("Failed to write error")]
     FailedToWrite,
 
-    #[error("Building project failed")]
+    #[error("Build Failed: {0}")]
     BuildFailed(String),
 
-    #[error("Failed to write error")]
+    #[error("Cargo Error: {0}")]
     CargoError(String),
 
     #[error("{0}")]
