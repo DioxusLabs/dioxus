@@ -244,7 +244,6 @@ fn virtual_event_from_websys_event(
                         let value: Option<String> = (&element)
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
-                                    log::info!("Input type: {}", input.type_());
                                     match input.type_().as_str() {
                                         "checkbox" => {
                                             match input.checked() {
