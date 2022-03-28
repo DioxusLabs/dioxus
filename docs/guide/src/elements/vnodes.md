@@ -8,6 +8,7 @@ In this chapter, we'll cover:
 - Element properties
 
 ## Declaring our first Element
+
 Because Dioxus is mostly used with HTML/CSS renderers, the default Element "collection" is HTML. Provided the `html` feature is not disabled, we can declare Elements using the `rsx!` macro:
 
 ```rust
@@ -29,6 +30,7 @@ Produces:
 ```
 
 We can construct any valid HTML tag with the `tag {}` pattern and expect the resulting HTML structure to resemble our declaration.
+
 ## Composing Elements
 
 Of course, we need more complex structures to make our apps actually useful! Just like HTML, the `rsx!` macro lets us nest Elements inside of each other.
@@ -150,7 +152,7 @@ All element attributes must occur *before* child elements. The `rsx!` macro will
 
 Listeners are a special type of Attribute that only accept functions. Listeners let us attach functionality to our Elements by running a provided closure whenever the specified Listener is triggered.
 
-We'll cover listeners in more depth in the Adding Interactivity chapter, but for now, just know that every listener must start with the `on` keyword and accepts closures.
+We'll cover listeners in more depth in the Adding Interactivity chapter, but for now, just know that every listener starts with "on" and accepts closures.
 
 ```rust
 rsx!(

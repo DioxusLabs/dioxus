@@ -60,14 +60,13 @@ cx.render(rsx!{
 
 ## Uncontrolled Inputs
 
-When working with large sets of inputs, you might be quickly tired of creating `use_state` for each value. Additionally, the pattern of one use_state per interaction might deteriorate when you need to have a flexible number of inputs. In these cases, we use "uncontrolled" inputs. Here, we don't drive the value of the input from the use_state, choosing to leave it in an "uncontrolled" state.
+When working with large sets of inputs, you might be quickly tired of creating `use_state` for each value. Additionally, the pattern of one `use_state` per interaction might deteriorate when you need to have a flexible number of inputs. In these cases, we use "uncontrolled" inputs. Here, we don't drive the value of the input from the `use_state`, choosing to leave it in an "uncontrolled" state.
 
-This approach can be more performant, more flexible, but more prone to UI inconsistencies than its controlled counterpart.
+This approach can be more performant and more flexible, but more prone to UI inconsistencies than its controlled counterpart.
 
 To use the "uncontrolled" pattern, we simply omit setting the value of the input. Instead, we can react to the change directly on the input itself, or from a form element higher up in the tree.
 
-
-For this example, we don't attach any `use_state` handles into the labels. Instead, we simply attach an "oninput" handler to the form element. This will run each time any of the child inputs change, allowing us to perform tasks like form validation.
+For this example, we don't attach any `use_state` handles into the labels. Instead, we simply attach an `oninput` handler to the form element. This will run each time any of the child inputs change, allowing us to perform tasks like form validation.
 
 ```rust
 form {
@@ -81,4 +80,3 @@ form {
     input { name: "date", }
 }
 ```
-
