@@ -34,7 +34,7 @@ impl Default for DioxusConfig {
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
-                package: None,
+                sub_package: None,
             },
             web: WebConfig {
                 app: WebAppConfing {
@@ -63,7 +63,7 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
-    pub package: Option<String>,
+    pub sub_package: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +121,7 @@ impl CrateConfig {
     pub fn new() -> Result<Self> {
         let dioxus_config = DioxusConfig::load()?;
 
-        let crate_dir = if let Some(package) = &dioxus_config.application.package {
+        let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
             crate::cargo::crate_root()?.join(package)
         } else {
             crate::cargo::crate_root()?
