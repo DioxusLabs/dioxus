@@ -147,9 +147,10 @@ impl CrateConfig {
         // We just assume they're using a 'main.rs'
         // Anyway, we've already parsed the manifest, so it should be easy to change the type
         let output_filename = manifest
-            .lib
-            .as_ref()
-            .and_then(|lib| lib.name.clone())
+            .bin
+            .first()
+            .or(manifest.lib.as_ref())
+            .and_then(|product| product.name.clone())
             .or_else(|| manifest.package.as_ref().map(|pkg| pkg.name.clone()))
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);
