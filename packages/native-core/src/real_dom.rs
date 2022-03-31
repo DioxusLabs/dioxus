@@ -6,20 +6,20 @@ use std::{
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 
-/// A tree that can sync with dioxus mutations backed by a hashmap.
-/// Intended for use in lazy native renderers with a state that passes from parrent to children and or accumulates state from children to parrents.
-/// To get started implement [PushedDownState] and or [BubbledUpState] and call [Tree::apply_mutations] and [Tree::update_state].
+/// A tree that can sync with the VirtualDom mutations intended for use in lazy renderers.
+/// The render state passes from parent to children and or accumulates state from children to parents.
+/// To get started implement [PushedDownState] and or [BubbledUpState] and call [Tree::apply_mutations] to update the tree and [Tree::update_state] to update the state of the nodes.
 #[derive(Debug)]
-pub struct ClientTree<US: BubbledUpState = (), DS: PushedDownState = ()> {
+pub struct RealDom<US: BubbledUpState = (), DS: PushedDownState = ()> {
     root: usize,
     nodes: Vec<Option<TreeNode<US, DS>>>,
     nodes_listening: FxHashMap<&'static str, FxHashSet<usize>>,
     node_stack: smallvec::SmallVec<[usize; 10]>,
 }
 
-impl<US: BubbledUpState, DS: PushedDownState> ClientTree<US, DS> {
-    pub fn new() -> ClientTree<US, DS> {
-        ClientTree {
+impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
+    pub fn new() -> RealDom<US, DS> {
+        RealDom {
             root: 0,
             nodes: {
                 let mut v = Vec::new();
@@ -187,6 +187,7 @@ impl<US: BubbledUpState, DS: PushedDownState> ClientTree<US, DS> {
         ds_ctx: &mut DS::Ctx,
     ) -> Option<FxHashSet<usize>> {
         let mut to_rerender = FxHashSet::default();
+        to_rerender.extend(nodes_updated.iter());
         let mut nodes_updated: Vec<_> = nodes_updated
             .into_iter()
             .map(|id| (id, self[id].height))
@@ -296,10 +297,11 @@ impl<US: BubbledUpState, DS: PushedDownState> ClientTree<US, DS> {
         }
     }
 
+    // remove a node and it's children from the tree.
     fn remove(&mut self, id: usize) -> Option<TreeNode<US, DS>> {
         // We do not need to remove the node from the parent's children list for children.
         fn inner<US: BubbledUpState, DS: PushedDownState>(
-            tree: &mut ClientTree<US, DS>,
+            tree: &mut RealDom<US, DS>,
             id: usize,
         ) -> Option<TreeNode<US, DS>> {
             let mut node = tree.nodes[id as usize].take()?;
@@ -418,9 +420,9 @@ impl<US: BubbledUpState, DS: PushedDownState> ClientTree<US, DS> {
     }
 
     /// Call a function for each node in the tree, depth first.
-    pub fn traverse(&self, mut f: impl FnMut(&TreeNode<US, DS>)) {
+    pub fn traverse_depth_first(&self, mut f: impl FnMut(&TreeNode<US, DS>)) {
         fn inner<US: BubbledUpState, DS: PushedDownState>(
-            tree: &ClientTree<US, DS>,
+            tree: &RealDom<US, DS>,
             id: ElementId,
             f: &mut impl FnMut(&TreeNode<US, DS>),
         ) {
@@ -446,7 +448,7 @@ impl<US: BubbledUpState, DS: PushedDownState> ClientTree<US, DS> {
     }
 }
 
-impl<US: BubbledUpState, DS: PushedDownState> Index<usize> for ClientTree<US, DS> {
+impl<US: BubbledUpState, DS: PushedDownState> Index<usize> for RealDom<US, DS> {
     type Output = TreeNode<US, DS>;
 
     fn index(&self, idx: usize) -> &Self::Output {
@@ -454,7 +456,7 @@ impl<US: BubbledUpState, DS: PushedDownState> Index<usize> for ClientTree<US, DS
     }
 }
 
-impl<US: BubbledUpState, DS: PushedDownState> Index<ElementId> for ClientTree<US, DS> {
+impl<US: BubbledUpState, DS: PushedDownState> Index<ElementId> for RealDom<US, DS> {
     type Output = TreeNode<US, DS>;
 
     fn index(&self, idx: ElementId) -> &Self::Output {
@@ -462,12 +464,12 @@ impl<US: BubbledUpState, DS: PushedDownState> Index<ElementId> for ClientTree<US
     }
 }
 
-impl<US: BubbledUpState, DS: PushedDownState> IndexMut<usize> for ClientTree<US, DS> {
+impl<US: BubbledUpState, DS: PushedDownState> IndexMut<usize> for RealDom<US, DS> {
     fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
         self.get_mut(idx).expect("Node does not exist")
     }
 }
-impl<US: BubbledUpState, DS: PushedDownState> IndexMut<ElementId> for ClientTree<US, DS> {
+impl<US: BubbledUpState, DS: PushedDownState> IndexMut<ElementId> for RealDom<US, DS> {
     fn index_mut(&mut self, idx: ElementId) -> &mut Self::Output {
         &mut self[idx.0]
     }
@@ -557,7 +559,7 @@ impl PushedDownState for () {
     fn reduce(&mut self, _parent: Option<&Self>, _vnode: &VNode, _ctx: &mut Self::Ctx) {}
 }
 
-/// This state is derived from children. For example a non-flexbox div's size could be derived from the size of children.
+/// This state is derived from children. For example a node's size could be derived from the size of children.
 /// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
 /// Called at most once per update.
 pub trait BubbledUpState: Default + PartialEq + Clone {

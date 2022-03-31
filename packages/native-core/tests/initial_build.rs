@@ -4,7 +4,7 @@ use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_native_core::client_tree::ClientTree;
+use dioxus_native_core::real_dom::RealDom;
 
 #[test]
 fn tree_initial_build_simple() {
@@ -21,7 +21,7 @@ fn tree_initial_build_simple() {
         div{}
     });
 
-    let mut tree: ClientTree<(), ()> = ClientTree::new();
+    let mut tree: RealDom<(), ()> = RealDom::new();
 
     let _to_update = tree.apply_mutations(vec![mutations]);
     let root_div = VElement {
@@ -60,7 +60,7 @@ fn tree_initial_build_with_children() {
         }
     });
 
-    let mut tree: ClientTree<(), ()> = ClientTree::new();
+    let mut tree: RealDom<(), ()> = RealDom::new();
 
     let _to_update = tree.apply_mutations(vec![mutations]);
     let first_text = VText {

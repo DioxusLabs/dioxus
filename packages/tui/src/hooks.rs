@@ -5,10 +5,7 @@ use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::{
-    client_tree::{ClientTree, TreeNode},
-    layout::StretchLayout,
-};
+use dioxus_native_core::real_dom::{RealDom, TreeNode};
 use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
@@ -19,6 +16,7 @@ use std::{
 };
 use stretch2::{prelude::Layout, Stretch};
 
+use crate::layout::StretchLayout;
 use crate::style_attributes::StyleModifier;
 
 // a wrapper around the input state for easier access
@@ -169,7 +167,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut ClientTree<StretchLayout, StyleModifier>,
+        tree: &mut RealDom<StretchLayout, StyleModifier>,
     ) {
         let previous_mouse = self
             .mouse
@@ -194,7 +192,7 @@ impl InnerInputState {
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        tree: &mut ClientTree<StretchLayout, StyleModifier>,
+        tree: &mut RealDom<StretchLayout, StyleModifier>,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -219,7 +217,7 @@ impl InnerInputState {
             will_bubble: &mut FxHashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
             node: &TreeNode<StretchLayout, StyleModifier>,
-            tree: &ClientTree<StretchLayout, StyleModifier>,
+            tree: &RealDom<StretchLayout, StyleModifier>,
         ) {
             // only trigger event if the event was not triggered already by a child
             if will_bubble.insert(node.id) {
@@ -546,7 +544,7 @@ impl RinkInputHandler {
     pub fn get_events<'a>(
         &self,
         layout: &Stretch,
-        tree: &mut ClientTree<StretchLayout, StyleModifier>,
+        tree: &mut RealDom<StretchLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 

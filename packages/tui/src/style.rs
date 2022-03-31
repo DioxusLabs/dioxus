@@ -28,7 +28,7 @@ impl RinkColor {
         } else {
             let [sr, sg, sb] = to_rgb(self.color).map(|e| e as u16);
             let [or, og, ob] = to_rgb(other).map(|e| e as u16);
-            let sa: u16 = self.alpha as u16;
+            let sa = self.alpha as u16;
             let rsa = 255 - sa;
             Color::Rgb(
                 ((sr * sa + or * rsa) / 255) as u8,

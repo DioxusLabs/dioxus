@@ -2,7 +2,7 @@ use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_native_core::client_tree::*;
+use dioxus_native_core::real_dom::*;
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct CallCounter(u32);
@@ -77,7 +77,7 @@ fn tree_state_initial() {
         }
     });
 
-    let mut tree: ClientTree<BubbledUpStateTester, PushedDownStateTester> = ClientTree::new();
+    let mut tree: RealDom<BubbledUpStateTester, PushedDownStateTester> = RealDom::new();
 
     let nodes_updated = tree.apply_mutations(vec![mutations]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut 42, &mut 42);
@@ -178,12 +178,12 @@ fn tree_state_reduce_initally_called_minimally() {
         }
     });
 
-    let mut tree: ClientTree<CallCounter, CallCounter> = ClientTree::new();
+    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
 
     let nodes_updated = tree.apply_mutations(vec![mutations]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse(|n| {
+    tree.traverse_depth_first(|n| {
         assert_eq!(n.up_state.0, 1);
         assert_eq!(n.down_state.0, 1);
     });
@@ -233,7 +233,7 @@ fn tree_state_reduce_down_called_minimally_on_update() {
         }
     });
 
-    let mut tree: ClientTree<CallCounter, CallCounter> = ClientTree::new();
+    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
 
     let nodes_updated = tree.apply_mutations(vec![mutations]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
@@ -249,7 +249,7 @@ fn tree_state_reduce_down_called_minimally_on_update() {
     }]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse(|n| {
+    tree.traverse_depth_first(|n| {
         assert_eq!(n.down_state.0, 2);
     });
 }
@@ -298,7 +298,7 @@ fn tree_state_reduce_up_called_minimally_on_update() {
         }
     });
 
-    let mut tree: ClientTree<CallCounter, CallCounter> = ClientTree::new();
+    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
 
     let nodes_updated = tree.apply_mutations(vec![mutations]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
@@ -314,7 +314,7 @@ fn tree_state_reduce_up_called_minimally_on_update() {
     }]);
     let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse(|n| {
+    tree.traverse_depth_first(|n| {
         assert_eq!(n.up_state.0, if n.id.0 > 4 { 1 } else { 2 });
     });
 }

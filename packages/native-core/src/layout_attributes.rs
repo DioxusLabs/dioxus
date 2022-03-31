@@ -32,12 +32,7 @@
 use stretch2::{prelude::*, style::PositionType};
 
 /// applies the entire html namespace defined in dioxus-html
-pub fn apply_layout_attributes(
-    //
-    name: &str,
-    value: &str,
-    style: &mut Style,
-) {
+pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
     match name {
         "align-content"
         | "align-items"
@@ -253,6 +248,7 @@ pub fn apply_layout_attributes(
     }
 }
 
+/// a relative or absolute size
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum UnitSystem {
     Percent(f32),
@@ -268,6 +264,7 @@ impl Into<Dimension> for UnitSystem {
     }
 }
 
+/// parse relative or absolute value
 pub fn parse_value(value: &str) -> Option<UnitSystem> {
     if value.ends_with("px") {
         if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
@@ -605,11 +602,7 @@ fn apply_align(name: &str, value: &str, style: &mut Style) {
     }
 }
 
-pub fn apply_size(_name: &str, _value: &str, _style: &mut Style) {
-    //
-}
-
-pub fn apply_margin(name: &str, value: &str, style: &mut Style) {
+fn apply_margin(name: &str, value: &str, style: &mut Style) {
     match parse_value(value) {
         Some(UnitSystem::Percent(v)) => match name {
             "margin" => {

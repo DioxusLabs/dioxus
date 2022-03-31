@@ -9,16 +9,20 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{client_tree::ClientTree, layout::StretchLayout};
-use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
+use dioxus_native_core::real_dom::RealDom;
+use futures::{
+    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+    pin_mut, StreamExt,
+};
+use layout::StretchLayout;
 use std::{io, time::Duration};
 use stretch2::{prelude::Size, Stretch};
 use style_attributes::StyleModifier;
-use tokio::time::Instant;
 use tui::{backend::CrosstermBackend, Terminal};
 
 mod config;
 mod hooks;
+mod layout;
 mod render;
 mod style;
 mod style_attributes;
@@ -27,6 +31,16 @@ mod widget;
 pub use config::*;
 pub use hooks::*;
 pub use render::*;
+
+#[derive(Clone)]
+pub struct TuiContext {
+    tx: UnboundedSender<InputEvent>,
+}
+impl TuiContext {
+    pub fn quit(&self) {
+        self.tx.unbounded_send(InputEvent::Close).unwrap();
+    }
+}
 
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
@@ -40,9 +54,26 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     let (handler, state) = RinkInputHandler::new(rx, cx);
 
-    cx.provide_root_context(state);
+    // Setup input handling
+    let (event_tx, event_rx) = unbounded();
+    let event_tx_clone = event_tx.clone();
+    std::thread::spawn(move || {
+        let tick_rate = Duration::from_millis(1000);
+        loop {
+            if crossterm::event::poll(tick_rate).unwrap() {
+                // if crossterm::event::poll(timeout).unwrap() {
+                let evt = crossterm::event::read().unwrap();
+                if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
+                    break;
+                }
+            }
+        }
+    });
 
-    let mut tree: ClientTree<StretchLayout, StyleModifier> = ClientTree::new();
+    cx.provide_root_context(state);
+    cx.provide_root_context(TuiContext { tx: event_tx_clone });
+
+    let mut tree: RealDom<StretchLayout, StyleModifier> = RealDom::new();
     let mutations = dom.rebuild();
     let to_update = tree.apply_mutations(vec![mutations]);
     let mut stretch = Stretch::new();
@@ -50,47 +81,22 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         .update_state(&dom, to_update, &mut stretch, &mut ())
         .unwrap();
 
-    render_vdom(&mut dom, tx, handler, cfg, tree, stretch).unwrap();
+    render_vdom(&mut dom, tx, event_rx, handler, cfg, tree, stretch).unwrap();
 }
 
-pub fn render_vdom(
+fn render_vdom(
     vdom: &mut VirtualDom,
-    ctx: UnboundedSender<TermEvent>,
+    crossterm_event_sender: UnboundedSender<TermEvent>,
+    mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut tree: ClientTree<StretchLayout, StyleModifier>,
+    mut tree: RealDom<StretchLayout, StyleModifier>,
     mut stretch: Stretch,
 ) -> Result<()> {
-    // Setup input handling
-    let (tx, mut rx) = unbounded();
-    std::thread::spawn(move || {
-        let tick_rate = Duration::from_millis(100);
-        let mut last_tick = Instant::now();
-        loop {
-            // poll for tick rate duration, if no events, sent tick event.
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if crossterm::event::poll(timeout).unwrap() {
-                let evt = crossterm::event::read().unwrap();
-                tx.unbounded_send(InputEvent::UserInput(evt)).unwrap();
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                tx.unbounded_send(InputEvent::Tick).unwrap();
-                last_tick = Instant::now();
-            }
-        }
-    });
-
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
         .block_on(async {
-            /*
-            Get the terminal to calcualte the layout from
-            */
             enable_raw_mode().unwrap();
             let mut stdout = std::io::stdout();
             execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
@@ -103,10 +109,9 @@ pub fn render_vdom(
 
             loop {
                 /*
-                -> collect all the nodes
-                -> resolve events
                 -> render the nodes in the right place with tui/crossterm
-                -> rendering
+                -> wait for changes
+                -> resolve events
                 -> lazily update the layout and style based on nodes changed
 
                 use simd to compare lines for diffing?
@@ -119,11 +124,11 @@ pub fn render_vdom(
                     terminal.draw(|frame| {
                         // size is guaranteed to not change when rendering
                         let dims = frame.size();
-                        // println!("{dims:?}");
                         let width = dims.width;
                         let height = dims.height;
                         let root_id = tree.root_id();
                         let root_node = tree[root_id].up_state.node.unwrap();
+
                         stretch
                             .compute_layout(
                                 root_node,
@@ -138,18 +143,12 @@ pub fn render_vdom(
                     })?;
                 }
 
-                // resolve events before rendering
-                // todo: events do not trigger update?
-                for e in handler.get_events(&stretch, &mut tree) {
-                    vdom.handle_message(SchedulerMsg::Event(e));
-                }
-
                 use futures::future::{select, Either};
                 {
                     let wait = vdom.wait_for_work();
                     pin_mut!(wait);
 
-                    match select(wait, rx.next()).await {
+                    match select(wait, event_reciever.next()).await {
                         Either::Left((_a, _b)) => {
                             //
                         }
@@ -166,17 +165,21 @@ pub fn render_vdom(
                                     TermEvent::Resize(_, _) => redraw = true,
                                     TermEvent::Mouse(_) => {}
                                 },
-                                InputEvent::Tick => {} // tick
                                 InputEvent::Close => break,
                             };
 
                             if let InputEvent::UserInput(evt) = evt.unwrap() {
-                                ctx.unbounded_send(evt).unwrap();
+                                crossterm_event_sender.unbounded_send(evt).unwrap();
                             }
                         }
                     }
                 }
 
+                // resolve events before rendering
+                for e in handler.get_events(&stretch, &mut tree) {
+                    vdom.handle_message(SchedulerMsg::Event(e));
+                }
+                vdom.process_all_messages();
                 let mutations = vdom.work_with_deadline(|| false);
                 // updates the tree's nodes
                 let to_update = tree.apply_mutations(mutations);
@@ -200,7 +203,6 @@ pub fn render_vdom(
 
 enum InputEvent {
     UserInput(TermEvent),
-    Tick,
     #[allow(dead_code)]
     Close,
 }

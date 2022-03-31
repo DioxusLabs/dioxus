@@ -2,7 +2,7 @@ use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_native_core::client_tree::ClientTree;
+use dioxus_native_core::real_dom::RealDom;
 use std::cell::Cell;
 
 #[test]
@@ -20,7 +20,7 @@ fn tree_remove_node() {
         }
     });
 
-    let mut tree: ClientTree<(), ()> = ClientTree::new();
+    let mut tree: RealDom<(), ()> = RealDom::new();
 
     let _to_update = tree.apply_mutations(vec![mutations]);
     let child_div = VElement {
@@ -92,7 +92,7 @@ fn tree_add_node() {
         div{}
     });
 
-    let mut tree: ClientTree<(), ()> = ClientTree::new();
+    let mut tree: RealDom<(), ()> = RealDom::new();
 
     let _to_update = tree.apply_mutations(vec![mutations]);
 

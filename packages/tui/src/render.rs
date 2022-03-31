@@ -1,7 +1,7 @@
+use crate::layout::StretchLayout;
 use dioxus_native_core::{
-    client_tree::{ClientTree, TreeNode},
-    layout::StretchLayout,
     layout_attributes::UnitSystem,
+    real_dom::{RealDom, TreeNode},
 };
 use std::io::Stdout;
 use stretch2::{
@@ -23,11 +23,11 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub fn render_vnode<'a>(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    tree: &ClientTree<StretchLayout, StyleModifier>,
+    tree: &RealDom<StretchLayout, StyleModifier>,
     node: &TreeNode<StretchLayout, StyleModifier>,
     cfg: Config,
 ) {
-    use dioxus_native_core::client_tree::TreeNodeType;
+    use dioxus_native_core::real_dom::TreeNodeType;
 
     match &node.node_type {
         TreeNodeType::Placeholder => return,
@@ -51,7 +51,6 @@ pub fn render_vnode<'a>(
                 fn render(self, area: Rect, mut buf: RinkBuffer) {
                     for (i, c) in self.text.char_indices() {
                         let mut new_cell = RinkCell::default();
-                        // println!("{:?}", self.style);
                         new_cell.set_style(self.style);
                         new_cell.symbol = c.to_string();
                         buf.set(area.left() + i as u16, area.top(), new_cell);

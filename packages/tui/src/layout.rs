@@ -1,15 +1,9 @@
-use crate::client_tree::BubbledUpState;
 use dioxus_core::*;
+use dioxus_native_core::layout_attributes::apply_layout_attributes;
+use dioxus_native_core::real_dom::BubbledUpState;
 use stretch2::prelude::*;
 
-use crate::layout_attributes::apply_layout_attributes;
-
-/*
-The layout system uses the lineheight as one point.
-
-stretch uses fractional points, so we can rasterize if we need too, but not with characters
-this means anything thats "1px" is 1 lineheight. Unfortunately, text cannot be smaller or bigger
-*/
+/// the size
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct StretchLayout {
     pub style: Style,
@@ -19,7 +13,7 @@ pub struct StretchLayout {
 impl BubbledUpState for StretchLayout {
     type Ctx = Stretch;
 
-    // Although we pass in the parent, the state of RinkLayout must only depend on the parent for optimiztion purposes
+    /// Setup the layout
     fn reduce<'a, I>(&mut self, children: I, vnode: &VNode, stretch: &mut Self::Ctx)
     where
         I: Iterator<Item = &'a Self>,
