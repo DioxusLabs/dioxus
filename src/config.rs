@@ -35,6 +35,7 @@ impl Default for DioxusConfig {
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
                 tools: None,
+                sub_package: None,
             },
             web: WebConfig {
                 app: WebAppConfing {
@@ -64,6 +65,7 @@ pub struct ApplicationConfig {
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
     pub tools: Option<HashMap<String, toml::Value>>
+    pub sub_package: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +123,11 @@ impl CrateConfig {
     pub fn new() -> Result<Self> {
         let dioxus_config = DioxusConfig::load()?;
 
-        let crate_dir = crate::cargo::crate_root()?;
+        let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
+            crate::cargo::crate_root()?.join(package)
+        } else {
+            crate::cargo::crate_root()?
+        };
         let meta = crate::cargo::Metadata::get()?;
         let workspace_dir = meta.workspace_root;
         let target_dir = meta.target_directory;
@@ -143,9 +149,10 @@ impl CrateConfig {
         // We just assume they're using a 'main.rs'
         // Anyway, we've already parsed the manifest, so it should be easy to change the type
         let output_filename = manifest
-            .lib
-            .as_ref()
-            .and_then(|lib| lib.name.clone())
+            .bin
+            .first()
+            .or(manifest.lib.as_ref())
+            .and_then(|product| product.name.clone())
             .or_else(|| manifest.package.as_ref().map(|pkg| pkg.name.clone()))
             .expect("No lib found from cargo metadata");
         let executable = ExecutableType::Binary(output_filename);
