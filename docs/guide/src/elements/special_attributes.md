@@ -7,7 +7,6 @@ In this section, we'll cover special attributes built into Dioxus:
 - `dangerous_inner_html`
 - Boolean attributes
 - `prevent_default`
-<!-- - `..Attributes` -->
 - event handlers as string attributes
 - `value`, `checked`, and `selected`
 
@@ -31,7 +30,7 @@ fn BlogPost(cx: Scope) -> Element {
 ```
 
 > Note! This attribute is called "dangerous_inner_html" because it is **dangerous** to pass it data you don't trust. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users.
-> 
+>
 > If you're handling untrusted input, make sure to sanitize your HTML before passing it into `dangerous_inner_html` – or just pass it to a Text Element to escape any HTML tags.
 
 
@@ -49,9 +48,9 @@ rsx!{
     }
 }
 ```
-wouldn't actually render the `hidden` attribute: 
+wouldn't actually render the `hidden` attribute:
 ```html
-<div>hello</div> 
+<div>hello</div>
 ```
 
 Not all attributes work like this however. *Only the following attributes* have this behavior:
@@ -87,9 +86,9 @@ For any other attributes, a value of `"false"` will be sent directly to the DOM.
 
 ## Stopping form input and navigation with `prevent_default`
 
-Currently, calling `prevent_default` on events in EventHandlers is not possible from Desktop/Mobile. Until this is supported, it's possible to prevent default using the `prevent_default` attribute. 
+Currently, calling `prevent_default` on events in EventHandlers is not possible from Desktop/Mobile. Until this is supported, it's possible to prevent default using the `prevent_default` attribute.
 
-> Note: you cannot conditionally prevent default with this approach. This is a limitation until synchronous event handling is available across the Webview boundary 
+> Note: you cannot conditionally prevent default with this approach. This is a limitation until synchronous event handling is available across the Webview boundary
 
 To use `prevent_default`, simply attach the `prevent_default` attribute to a given element and set it to the name of the event handler you want to prevent default on. We can attach this attribute multiple times for multiple attributes.
 
@@ -104,7 +103,7 @@ rsx!{
     }
 }
 ```
-<!-- 
+<!--
 ## Passing attributes into children: `..Attributes`
 
 > Note: this is an experimental, unstable feature not available in released versions of Dioxus. Feel free to skip this section.
@@ -188,5 +187,5 @@ In this chapter, we learned:
 <!-- todo
 There's more to elements! For further reading, check out:
 
-- [Custom Elements]() 
+- [Custom Elements]()
 -->

@@ -1,12 +1,14 @@
 # Component Properties
+
 Dioxus components are functions that accept Props as input and output an Element. In fact, the `App` function you saw in the previous chapter was a component with no Props! Most components, however, will need to take some Props to render something useful – so, in this section, we'll learn about props:
 
 - Deriving the Props trait
 - Memoization through PartialEq
 - Optional fields on props
-- The inline_props macro    
+- The inline_props macro
 
 ## Props
+
 The input of your Component must be passed in a single struct, which must implement the `Props` trait. We can derive this trait automatically with `#[derive(Props)]`.
 
 > Dioxus `Props` is very similar to [@idanarye](https://github.com/idanarye)'s [TypedBuilder crate](https://github.com/idanarye/rust-typed-builder) and supports many of the same parameters.
@@ -56,10 +58,10 @@ And we can see that the Component indeed gets rendered:
 ![Screenshot of running app. Text: "+ \ 42 \ -"](component_example_votes.png)
 
 > The simplest Owned Props you can have is `()` - or no value at all. This is what the `App` Component takes as props. `Scope` accepts a generic for the Props which defaults to `()`.
-> 
+>
 > ```rust
 >// this scope
->Scope<()> 
+>Scope<()>
 >
 >// is the same as this scope
 >Scope
@@ -146,13 +148,13 @@ fn Demo(cx: MyProps) -> Element {
         Some(d) => d,             // if a value is provided
         None => "No description"  // if the prop is omitted
     };
-    
+
     cx.render(rsx! {
         "{name}": "{text}"
     })
 }
 ```
-In this example ˋnameˋ is a required prop and ˋdescriptionˋ is optional.
+In this example `name` is a required prop and `description` is optional.
 This means we can completely omit the description field when calling the component:
 
 ```rust
@@ -163,20 +165,20 @@ rsx!{
     }
 }
 ```
-Additionally if we provide a value we don't have to wrap it with ˋSome(…)ˋ. This is done automatically for us:
+Additionally if we provide a value we don't have to wrap it with `Some(…)`. This is done automatically for us:
 
-ˋˋˋrust
+```rust
 rsx!{
     Demo {
         name: "Thing".to_string(),
         description: "This is explains it".to_string(),
     }
 }
-ˋˋˋ
+```
 
-If you want to make a prop required even though it is of type ˋOptionˋ you can provide the ˋ!optionalˋ modifier:
+If you want to make a prop required even though it is of type `Option` you can provide the `!optional` modifier:
 
-ˋˋˋrust
+```rust
 #[derive(Props, PartialEq)]
 struct MyProps {
     name: String,
@@ -184,11 +186,11 @@ struct MyProps {
     #[props(!optional)]
     description: Option<String>
 }
-ˋˋˋ
+```
 
-This can be especially useful if you have a type alias named ˋOptionˋ in the current scope.
+This can be especially useful if you have a type alias named `Option` in the current scope.
 
-For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new. The `optional` modifier is a combination of two separate modifiers: `default` and `strip_option` and it is automatically detected on ˋOption<…>ˋ types.
+For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new. The `optional` modifier is a combination of two separate modifiers: `default` and `strip_option` and it is automatically detected on `Option<…>` types.
 
 The full list of Dioxus' modifiers includes:
 

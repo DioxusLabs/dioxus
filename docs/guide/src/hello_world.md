@@ -115,13 +115,13 @@ At this point, you could call `cargo run` and be greeted with a simple `Hello, W
 
 ### Dissecting our example
 
-The `use` statement at the top of our app imports everything from the the `prelude` module. `use`-ing the prelude imports the right traits, types, and macros needed for working with Dioxus.
+The `use` statement at the top of our app imports everything from the `prelude` module. `use`-ing the prelude imports the right traits, types, and macros needed for working with Dioxus.
 
 ```rust
 use dioxus::prelude::*;
 ```
 
-This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main-thread. Due to platform requirements, the main thread is blocked by your app's event loop.
+This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main thread. Due to platform requirements, the main thread is blocked by your app's event loop.
 
 ```rust
 fn main() {
