@@ -1,6 +1,7 @@
 use axum::{
+    body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
-    http::StatusCode,
+    http::{Response, StatusCode},
     response::IntoResponse,
     routing::{get, get_service},
     Router,
@@ -8,7 +9,8 @@ use axum::{
 use notify::{RecommendedWatcher, Watcher};
 
 use std::{path::PathBuf, sync::Arc};
-use tower_http::services::ServeDir;
+use tower::ServiceBuilder;
+use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
 use crate::{builder, serve::Serve, CrateConfig, Result};
 use tokio::sync::broadcast;
@@ -74,23 +76,56 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     let port = "8080";
     log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
 
-    axum::Server::bind(&format!("0.0.0.0:{}", port).parse().unwrap())
-        .serve(
-            Router::new()
-                .route("/_dioxus/ws", get(ws_handler))
-                .fallback(
-                    get_service(ServeDir::new(config.crate_dir.join(&dist_path))).handle_error(
-                        |error: std::io::Error| async move {
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                format!("Unhandled internal error: {}", error),
-                            )
-                        },
-                    ),
-                )
-                .layer(Extension(ws_reload_state))
-                .into_make_service(),
+    let file_service_config = config.clone();
+    let file_service = ServiceBuilder::new()
+        .and_then(
+            |response: Response<ServeFileSystemResponseBody>| async move {
+                let response = if file_service_config
+                    .dioxus_config
+                    .web
+                    .watcher
+                    .index_on_404
+                    .unwrap_or(false)
+                    && response.status() == StatusCode::NOT_FOUND
+                {
+                    let body = Full::from(
+                        // TODO: Cache/memoize this.
+                        std::fs::read_to_string(
+                            file_service_config
+                                .crate_dir
+                                .join(file_service_config.out_dir)
+                                .join("index.html"),
+                        )
+                        .ok()
+                        .unwrap(),
+                    )
+                    .map_err(|err| match err {})
+                    .boxed();
+                    Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body)
+                        .unwrap()
+                } else {
+                    response.map(|body| body.boxed())
+                };
+                Ok(response)
+            },
         )
+        .service(ServeDir::new((&config.crate_dir).join(&dist_path)));
+
+    let router = Router::new()
+        .route("/_dioxus/ws", get(ws_handler))
+        .fallback(
+            get_service(file_service).handle_error(|error: std::io::Error| async move {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Unhandled internal error: {}", error),
+                )
+            }),
+        );
+
+    axum::Server::bind(&format!("0.0.0.0:{}", port).parse().unwrap())
+        .serve(router.layer(Extension(ws_reload_state)).into_make_service())
         .await?;
 
     Ok(())

@@ -39,12 +39,12 @@ hyper = "0.14.17"
 axum = { version = "0.4.5", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
 headers = "0.3.7"
-
 # tools download
 dirs = "4.0.0"
 reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns"] }
 flate2 = "1.0.22"
 tar = "0.4.38"
+tower = "0.4.12"
 
 [[bin]]
 path = "src/main.rs"
