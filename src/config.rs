@@ -65,7 +65,7 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
-    pub tools: Option<HashMap<String, toml::Value>>
+    pub tools: Option<HashMap<String, toml::Value>>,
     pub sub_package: Option<String>,
 }
 
