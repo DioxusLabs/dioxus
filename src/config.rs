@@ -43,6 +43,7 @@ impl Default for DioxusConfig {
                 watcher: WebWatcherConfing {
                     watch_path: Some(vec![PathBuf::from("src")]),
                     reload_html: Some(false),
+                    index_on_404: Some(false),
                 },
                 resource: WebResourceConfing {
                     dev: WebDevResourceConfing {
@@ -82,6 +83,7 @@ pub struct WebAppConfing {
 pub struct WebWatcherConfing {
     pub watch_path: Option<Vec<PathBuf>>,
     pub reload_html: Option<bool>,
+    pub index_on_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
