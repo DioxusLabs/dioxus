@@ -1,6 +1,3 @@
-// notes:
-// mouse events binary search was broken for absolutely positioned elements
-
 use anyhow::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
@@ -48,11 +45,8 @@ pub fn launch(app: Component<()>) {
 
 pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let mut dom = VirtualDom::new(app);
-    let (tx, rx) = unbounded();
 
-    let cx = dom.base_scope();
-
-    let (handler, state) = RinkInputHandler::new(rx, cx);
+    let (handler, state, register_event) = RinkInputHandler::new();
 
     // Setup input handling
     let (event_tx, event_rx) = unbounded();
@@ -70,6 +64,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         }
     });
 
+    let cx = dom.base_scope();
     cx.provide_root_context(state);
     cx.provide_root_context(TuiContext { tx: event_tx_clone });
 
@@ -81,17 +76,26 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         .update_state(&dom, to_update, &mut stretch, &mut ())
         .unwrap();
 
-    render_vdom(&mut dom, tx, event_rx, handler, cfg, tree, stretch).unwrap();
+    render_vdom(
+        &mut dom,
+        event_rx,
+        handler,
+        cfg,
+        tree,
+        stretch,
+        register_event,
+    )
+    .unwrap();
 }
 
 fn render_vdom(
     vdom: &mut VirtualDom,
-    crossterm_event_sender: UnboundedSender<TermEvent>,
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
     mut tree: RealDom<StretchLayout, StyleModifier>,
     mut stretch: Stretch,
+    mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -105,7 +109,7 @@ fn render_vdom(
 
             terminal.clear().unwrap();
             let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
-            let mut redraw = true;
+            let mut resized = true;
 
             loop {
                 /*
@@ -119,8 +123,8 @@ fn render_vdom(
                 todo: lazy re-rendering
                 */
 
-                if !to_rerender.is_empty() || redraw {
-                    redraw = false;
+                if !to_rerender.is_empty() || resized {
+                    resized = false;
                     terminal.draw(|frame| {
                         // size is guaranteed to not change when rendering
                         let dims = frame.size();
@@ -138,8 +142,8 @@ fn render_vdom(
                                 },
                             )
                             .unwrap();
-                        let root = &tree[tree.root_id()];
-                        render::render_vnode(frame, &stretch, &tree, &root, cfg);
+                        // let root = &tree[tree.root_id()];
+                        // render::render_vnode(frame, &stretch, &tree, &root, cfg);
                     })?;
                 }
 
@@ -158,35 +162,44 @@ fn render_vdom(
                                     TermEvent::Key(key) => {
                                         if matches!(key.code, KeyCode::Char('C' | 'c'))
                                             && key.modifiers.contains(KeyModifiers::CONTROL)
+                                            && cfg.ctrl_c_quit
                                         {
                                             break;
                                         }
                                     }
-                                    TermEvent::Resize(_, _) => redraw = true,
+                                    TermEvent::Resize(_, _) => resized = true,
                                     TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Close => break,
                             };
 
                             if let InputEvent::UserInput(evt) = evt.unwrap() {
-                                crossterm_event_sender.unbounded_send(evt).unwrap();
+                                register_event(evt);
                             }
                         }
                     }
                 }
 
-                // resolve events before rendering
-                for e in handler.get_events(&stretch, &mut tree) {
-                    vdom.handle_message(SchedulerMsg::Event(e));
+                {
+                    // resolve events before rendering
+                    let evts = handler.get_events(&stretch, &mut tree);
+                    println!("evts: {:?}", evts);
+                    for e in evts {
+                        vdom.handle_message(SchedulerMsg::Event(e));
+                    }
+                    let mutations = vdom.work_with_deadline(|| false);
+                    // updates the tree's nodes
+                    let to_update = tree.apply_mutations(mutations);
+                    // update the style and layout
+                    to_rerender.extend(
+                        tree.update_state(vdom, to_update, &mut stretch, &mut ())
+                            .unwrap()
+                            .iter(),
+                    )
                 }
-                vdom.process_all_messages();
-                let mutations = vdom.work_with_deadline(|| false);
-                // updates the tree's nodes
-                let to_update = tree.apply_mutations(mutations);
-                // update the style and layout
-                to_rerender = tree
-                    .update_state(&vdom, to_update, &mut stretch, &mut ())
-                    .unwrap();
+                println!();
+                println!();
+                println!();
             }
 
             disable_raw_mode()?;
@@ -203,6 +216,5 @@ fn render_vdom(
 
 enum InputEvent {
     UserInput(TermEvent),
-    #[allow(dead_code)]
     Close,
 }

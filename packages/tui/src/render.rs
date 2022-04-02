@@ -1,7 +1,7 @@
 use crate::layout::StretchLayout;
 use dioxus_native_core::{
     layout_attributes::UnitSystem,
-    real_dom::{RealDom, TreeNode},
+    real_dom::{Node, RealDom},
 };
 use std::io::Stdout;
 use stretch2::{
@@ -20,18 +20,17 @@ use crate::{
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
-pub fn render_vnode<'a>(
+pub fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
     tree: &RealDom<StretchLayout, StyleModifier>,
-    node: &TreeNode<StretchLayout, StyleModifier>,
+    node: &Node<StretchLayout, StyleModifier>,
     cfg: Config,
 ) {
-    use dioxus_native_core::real_dom::TreeNodeType;
+    use dioxus_native_core::real_dom::NodeType;
 
-    match &node.node_type {
-        TreeNodeType::Placeholder => return,
-        _ => (),
+    if let NodeType::Placeholder = &node.node_type {
+        return;
     }
 
     let Layout { location, size, .. } = layout.layout(node.up_state.node.unwrap()).unwrap();
@@ -40,7 +39,7 @@ pub fn render_vnode<'a>(
     let Size { width, height } = size;
 
     match &node.node_type {
-        TreeNodeType::Text { text } => {
+        NodeType::Text { text } => {
             #[derive(Default)]
             struct Label<'a> {
                 text: &'a str,
@@ -59,7 +58,7 @@ pub fn render_vnode<'a>(
             }
 
             let label = Label {
-                text: &text,
+                text,
                 style: node.down_state.style,
             };
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
@@ -69,7 +68,7 @@ pub fn render_vnode<'a>(
                 frame.render_widget(WidgetWithContext::new(label, cfg), area);
             }
         }
-        TreeNodeType::Element { children, .. } => {
+        NodeType::Element { children, .. } => {
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
@@ -81,11 +80,11 @@ pub fn render_vnode<'a>(
                 render_vnode(frame, layout, tree, &tree[c.0], cfg);
             }
         }
-        TreeNodeType::Placeholder => unreachable!(),
+        NodeType::Placeholder => unreachable!(),
     }
 }
 
-impl RinkWidget for &TreeNode<StretchLayout, StyleModifier> {
+impl RinkWidget for &Node<StretchLayout, StyleModifier> {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
@@ -249,8 +248,8 @@ impl RinkWidget for &TreeNode<StretchLayout, StyleModifier> {
 
         fn get_radius(border: &BorderEdge, area: Rect) -> f32 {
             match border.style {
-                BorderStyle::HIDDEN => 0.0,
-                BorderStyle::NONE => 0.0,
+                BorderStyle::Hidden => 0.0,
+                BorderStyle::None => 0.0,
                 _ => match border.radius {
                     UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
                     UnitSystem::Point(p) => p,

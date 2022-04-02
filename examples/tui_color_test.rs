@@ -5,6 +5,7 @@ fn main() {
         app,
         dioxus::tui::Config {
             rendering_mode: dioxus::tui::RenderingMode::Ansi,
+            ..Default::default()
         },
     );
 }

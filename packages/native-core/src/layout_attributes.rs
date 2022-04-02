@@ -255,11 +255,11 @@ pub enum UnitSystem {
     Point(f32),
 }
 
-impl Into<Dimension> for UnitSystem {
-    fn into(self) -> Dimension {
-        match self {
-            Self::Percent(v) => Dimension::Percent(v),
-            Self::Point(v) => Dimension::Points(v),
+impl From<UnitSystem> for Dimension {
+    fn from(other: UnitSystem) -> Dimension {
+        match other {
+            UnitSystem::Percent(v) => Dimension::Percent(v),
+            UnitSystem::Point(v) => Dimension::Points(v),
         }
     }
 }

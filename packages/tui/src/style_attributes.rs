@@ -51,33 +51,28 @@ impl PushedDownState for StyleModifier {
         if parent.is_some() {
             self.style.fg = None;
         }
-        match vnode {
-            VNode::Element(el) => {
-                // handle text modifier elements
-                if el.namespace.is_none() {
-                    match el.tag {
-                        "b" => apply_style_attributes("font-weight", "bold", self),
-                        "strong" => apply_style_attributes("font-weight", "bold", self),
-                        "u" => apply_style_attributes("text-decoration", "underline", self),
-                        "ins" => apply_style_attributes("text-decoration", "underline", self),
-                        "del" => apply_style_attributes("text-decoration", "line-through", self),
-                        "i" => apply_style_attributes("font-style", "italic", self),
-                        "em" => apply_style_attributes("font-style", "italic", self),
-                        "mark" => apply_style_attributes(
-                            "background-color",
-                            "rgba(241, 231, 64, 50%)",
-                            self,
-                        ),
-                        _ => (),
+        if let VNode::Element(el) = vnode {
+            // handle text modifier elements
+            if el.namespace.is_none() {
+                match el.tag {
+                    "b" => apply_style_attributes("font-weight", "bold", self),
+                    "strong" => apply_style_attributes("font-weight", "bold", self),
+                    "u" => apply_style_attributes("text-decoration", "underline", self),
+                    "ins" => apply_style_attributes("text-decoration", "underline", self),
+                    "del" => apply_style_attributes("text-decoration", "line-through", self),
+                    "i" => apply_style_attributes("font-style", "italic", self),
+                    "em" => apply_style_attributes("font-style", "italic", self),
+                    "mark" => {
+                        apply_style_attributes("background-color", "rgba(241, 231, 64, 50%)", self)
                     }
-                }
-
-                // gather up all the styles from the attribute list
-                for &Attribute { name, value, .. } in el.attributes {
-                    apply_style_attributes(name, value, self);
+                    _ => (),
                 }
             }
-            _ => (),
+
+            // gather up all the styles from the attribute list
+            for &Attribute { name, value, .. } in el.attributes {
+                apply_style_attributes(name, value, self);
+            }
         }
 
         // keep the text styling from the parent element
@@ -125,7 +120,7 @@ impl Default for BorderEdge {
     fn default() -> Self {
         Self {
             color: None,
-            style: BorderStyle::NONE,
+            style: BorderStyle::None,
             width: UnitSystem::Point(0.0),
             radius: UnitSystem::Point(0.0),
         }
@@ -134,16 +129,16 @@ impl Default for BorderEdge {
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum BorderStyle {
-    DOTTED,
-    DASHED,
-    SOLID,
-    DOUBLE,
-    GROOVE,
-    RIDGE,
-    INSET,
-    OUTSET,
-    HIDDEN,
-    NONE,
+    Dotted,
+    Dashed,
+    Solid,
+    Double,
+    Groove,
+    Ridge,
+    Inset,
+    Outset,
+    Hidden,
+    None,
 }
 
 impl BorderStyle {
@@ -160,16 +155,16 @@ impl BorderStyle {
             ..NORMAL
         };
         match self {
-            BorderStyle::DOTTED => Some(DOTTED),
-            BorderStyle::DASHED => Some(DASHED),
-            BorderStyle::SOLID => Some(NORMAL),
-            BorderStyle::DOUBLE => Some(DOUBLE),
-            BorderStyle::GROOVE => Some(NORMAL),
-            BorderStyle::RIDGE => Some(NORMAL),
-            BorderStyle::INSET => Some(NORMAL),
-            BorderStyle::OUTSET => Some(NORMAL),
-            BorderStyle::HIDDEN => None,
-            BorderStyle::NONE => None,
+            BorderStyle::Dotted => Some(DOTTED),
+            BorderStyle::Dashed => Some(DASHED),
+            BorderStyle::Solid => Some(NORMAL),
+            BorderStyle::Double => Some(DOUBLE),
+            BorderStyle::Groove => Some(NORMAL),
+            BorderStyle::Ridge => Some(NORMAL),
+            BorderStyle::Inset => Some(NORMAL),
+            BorderStyle::Outset => Some(NORMAL),
+            BorderStyle::Hidden => None,
+            BorderStyle::None => None,
         }
     }
 }
@@ -334,16 +329,16 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifier) {
 fn apply_border(name: &str, value: &str, style: &mut StyleModifier) {
     fn parse_border_style(v: &str) -> BorderStyle {
         match v {
-            "dotted" => BorderStyle::DOTTED,
-            "dashed" => BorderStyle::DASHED,
-            "solid" => BorderStyle::SOLID,
-            "double" => BorderStyle::DOUBLE,
-            "groove" => BorderStyle::GROOVE,
-            "ridge" => BorderStyle::RIDGE,
-            "inset" => BorderStyle::INSET,
-            "outset" => BorderStyle::OUTSET,
-            "none" => BorderStyle::NONE,
-            "hidden" => BorderStyle::HIDDEN,
+            "dotted" => BorderStyle::Dotted,
+            "dashed" => BorderStyle::Dashed,
+            "solid" => BorderStyle::Solid,
+            "double" => BorderStyle::Double,
+            "groove" => BorderStyle::Groove,
+            "ridge" => BorderStyle::Ridge,
+            "inset" => BorderStyle::Inset,
+            "outset" => BorderStyle::Outset,
+            "none" => BorderStyle::None,
+            "hidden" => BorderStyle::Hidden,
             _ => todo!(),
         }
     }
@@ -505,7 +500,7 @@ fn apply_border(name: &str, value: &str, style: &mut StyleModifier) {
                     .zip(style.modifier.borders.slice().iter_mut())
                 {
                     if let Some(w) = parse_value(v) {
-                        width.width = w.into();
+                        width.width = w;
                     }
                 }
             }

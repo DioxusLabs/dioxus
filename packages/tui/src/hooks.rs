@@ -5,8 +5,7 @@ use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::real_dom::{RealDom, TreeNode};
-use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
+use dioxus_native_core::real_dom::{Node, RealDom};
 use std::{
     any::Any,
     cell::RefCell,
@@ -162,7 +161,7 @@ impl InnerInputState {
         }
     }
 
-    fn update<'a>(
+    fn update(
         &mut self,
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
@@ -176,9 +175,11 @@ impl InnerInputState {
 
         self.wheel = None;
 
+        println!("update {evts:?}");
         for e in evts.iter_mut() {
             self.apply_event(e);
         }
+        println!("->update {evts:?}");
 
         self.resolve_mouse_events(previous_mouse, resolved_events, layout, tree);
 
@@ -216,7 +217,7 @@ impl InnerInputState {
             data: Arc<dyn Any + Send + Sync>,
             will_bubble: &mut FxHashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
-            node: &TreeNode<StretchLayout, StyleModifier>,
+            node: &Node<StretchLayout, StyleModifier>,
             tree: &RealDom<StretchLayout, StyleModifier>,
         ) {
             // only trigger event if the event was not triggered already by a child
@@ -231,7 +232,7 @@ impl InnerInputState {
                     priority: EventPriority::Medium,
                     name,
                     element: Some(node.id),
-                    data: data,
+                    data,
                 })
             }
         }
@@ -269,17 +270,15 @@ impl InnerInputState {
                         .is_some();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if previously_contained {
-                            try_create_event(
-                                "mousemove",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && previously_contained {
+                        try_create_event(
+                            "mousemove",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -295,17 +294,15 @@ impl InnerInputState {
                         .is_some();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if !previously_contained {
-                            try_create_event(
-                                "mouseenter",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && !previously_contained {
+                        try_create_event(
+                            "mouseenter",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -321,17 +318,15 @@ impl InnerInputState {
                         .is_some();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if !previously_contained {
-                            try_create_event(
-                                "mouseover",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && !previously_contained {
+                        try_create_event(
+                            "mouseover",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -343,17 +338,15 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if data.clicked {
-                            try_create_event(
-                                "mousedown",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && data.clicked {
+                        try_create_event(
+                            "mousedown",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -365,17 +358,15 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if data.released {
-                            try_create_event(
-                                "mouseup",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && data.released {
+                        try_create_event(
+                            "mouseup",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -387,17 +378,15 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if data.released && data.mouse_data.button == 0 {
-                            try_create_event(
-                                "click",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && data.released && data.mouse_data.button == 0 {
+                        try_create_event(
+                            "click",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -409,17 +398,15 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if data.released && data.mouse_data.button == 2 {
-                            try_create_event(
-                                "contextmenu",
-                                Arc::new(clone_mouse_data(data.mouse_data)),
-                                &mut will_bubble,
-                                resolved_events,
-                                node,
-                                tree,
-                            );
-                        }
+                    if currently_contains && data.released && data.mouse_data.button == 2 {
+                        try_create_event(
+                            "contextmenu",
+                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            tree,
+                        );
                     }
                 }
             }
@@ -431,18 +418,16 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if let Some(w) = data.wheel_data {
-                            if data.wheel_delta != 0.0 {
-                                try_create_event(
-                                    "wheel",
-                                    Arc::new(clone_wheel_data(w)),
-                                    &mut will_bubble,
-                                    resolved_events,
-                                    node,
-                                    tree,
-                                );
-                            }
+                    if let Some(w) = data.wheel_data {
+                        if currently_contains && data.wheel_delta != 0.0 {
+                            try_create_event(
+                                "wheel",
+                                Arc::new(clone_wheel_data(w)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                tree,
+                            );
                         }
                     }
                 }
@@ -511,24 +496,22 @@ pub struct RinkInputHandler {
 impl RinkInputHandler {
     /// global context that handles events
     /// limitations: GUI key modifier is never detected, key up events are not detected, and only two mouse buttons may be pressed at once
-    pub fn new(
-        mut receiver: UnboundedReceiver<TermEvent>,
-        cx: &ScopeState,
-    ) -> (Self, Rc<RefCell<InnerInputState>>) {
+    pub fn new() -> (
+        Self,
+        Rc<RefCell<InnerInputState>>,
+        impl FnMut(crossterm::event::Event),
+    ) {
         let queued_events = Rc::new(RefCell::new(Vec::new()));
         let queued_events2 = Rc::downgrade(&queued_events);
 
-        cx.push_future(async move {
-            while let Some(evt) = receiver.next().await {
-                if let Some(evt) = get_event(evt) {
-                    if let Some(v) = queued_events2.upgrade() {
-                        (*v).borrow_mut().push(evt);
-                    } else {
-                        break;
-                    }
+        let regester_event = move |evt: crossterm::event::Event| {
+            if let Some(evt) = get_event(evt) {
+                if let Some(v) = queued_events2.upgrade() {
+                    println!("queued event: {:?}", evt);
+                    (*v).borrow_mut().push(evt);
                 }
             }
-        });
+        };
 
         let state = Rc::new(RefCell::new(InnerInputState::new()));
 
@@ -538,14 +521,16 @@ impl RinkInputHandler {
                 queued_events,
             },
             state,
+            regester_event,
         )
     }
 
-    pub fn get_events<'a>(
+    pub fn get_events(
         &self,
         layout: &Stretch,
         tree: &mut RealDom<StretchLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
+        println!("get_events");
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
@@ -799,7 +784,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
     // from https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
     Some(EventData::Keyboard(KeyboardData {
         char_code: code.raw_code(),
-        key: key_str.to_string(),
+        key: key_str,
         key_code: code,
         alt_key: event.modifiers.contains(KeyModifiers::ALT),
         ctrl_key: event.modifiers.contains(KeyModifiers::CONTROL),

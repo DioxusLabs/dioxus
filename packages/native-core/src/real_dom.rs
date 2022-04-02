@@ -12,9 +12,15 @@ use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 #[derive(Debug)]
 pub struct RealDom<US: BubbledUpState = (), DS: PushedDownState = ()> {
     root: usize,
-    nodes: Vec<Option<TreeNode<US, DS>>>,
+    nodes: Vec<Option<Node<US, DS>>>,
     nodes_listening: FxHashMap<&'static str, FxHashSet<usize>>,
     node_stack: smallvec::SmallVec<[usize; 10]>,
+}
+
+impl<US: BubbledUpState, DS: PushedDownState> Default for RealDom<US, DS> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
@@ -22,15 +28,14 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         RealDom {
             root: 0,
             nodes: {
-                let mut v = Vec::new();
-                v.push(Some(TreeNode::new(
+                let v = vec![Some(Node::new(
                     0,
-                    TreeNodeType::Element {
+                    NodeType::Element {
                         tag: "Root".to_string(),
                         namespace: Some("Root"),
                         children: Vec::new(),
                     },
-                )));
+                ))];
                 v
             },
             nodes_listening: FxHashMap::default(),
@@ -47,7 +52,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                 match e {
                     PushRoot { root } => self.node_stack.push(root as usize),
                     AppendChildren { many } => {
-                        let target = if self.node_stack.len() >= many as usize + 1 {
+                        let target = if self.node_stack.len() > many as usize {
                             *self
                                 .node_stack
                                 .get(self.node_stack.len() - (many as usize + 1))
@@ -96,9 +101,9 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                         self.remove(root as usize).unwrap();
                     }
                     CreateTextNode { root, text } => {
-                        let n = TreeNode::new(
+                        let n = Node::new(
                             root,
-                            TreeNodeType::Text {
+                            NodeType::Text {
                                 text: text.to_string(),
                             },
                         );
@@ -106,9 +111,9 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                         self.node_stack.push(root as usize)
                     }
                     CreateElement { root, tag } => {
-                        let n = TreeNode::new(
+                        let n = Node::new(
                             root,
-                            TreeNodeType::Element {
+                            NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: None,
                                 children: Vec::new(),
@@ -118,9 +123,9 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                         self.node_stack.push(root as usize)
                     }
                     CreateElementNs { root, tag, ns } => {
-                        let n = TreeNode::new(
+                        let n = Node::new(
                             root,
-                            TreeNodeType::Element {
+                            NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: Some(ns),
                                 children: Vec::new(),
@@ -130,7 +135,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                         self.node_stack.push(root as usize)
                     }
                     CreatePlaceholder { root } => {
-                        let n = TreeNode::new(root, TreeNodeType::Placeholder);
+                        let n = Node::new(root, NodeType::Placeholder);
                         self.insert(n);
                         self.node_stack.push(root as usize)
                     }
@@ -159,7 +164,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                         let target = &mut self[root as usize];
                         nodes_updated.push(root as usize);
                         match &mut target.node_type {
-                            TreeNodeType::Text { text } => {
+                            NodeType::Text { text } => {
                                 *text = new_text.to_string();
                             }
                             _ => unreachable!(),
@@ -204,13 +209,13 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
             let node_type = &node.node_type;
             let up_state = &mut node.up_state;
             let children = match node_type {
-                TreeNodeType::Element { children, .. } => Some(children),
+                NodeType::Element { children, .. } => Some(children),
                 _ => None,
             };
             // todo: reduce cloning state
             let old = up_state.clone();
             let mut new = up_state.clone();
-            let parent = node.parent.clone();
+            let parent = node.parent;
             new.reduce(
                 children
                     .unwrap_or(&Vec::new())
@@ -254,19 +259,16 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
             if new != old {
                 to_rerender.insert(id);
                 let node = &mut self[id as usize];
-                match &node.node_type {
-                    TreeNodeType::Element { children, .. } => {
-                        for c in children {
-                            let i = to_push.partition_point(|(other_id, h)| {
-                                *h < height + 1 || (*h == height + 1 && *other_id < c.0)
-                            });
-                            if i >= to_push.len() || to_push[i].0 != c.0 {
-                                to_push.insert(i, (c.0, height + 1));
-                            }
+                if let NodeType::Element { children, .. } = &node.node_type {
+                    for c in children {
+                        let i = to_push.partition_point(|(other_id, h)| {
+                            *h < height + 1 || (*h == height + 1 && *other_id < c.0)
+                        });
+                        if i >= to_push.len() || to_push[i].0 != c.0 {
+                            to_push.insert(i, (c.0, height + 1));
                         }
                     }
-                    _ => (),
-                };
+                }
                 node.down_state = new;
             }
         }
@@ -287,31 +289,25 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
     fn increase_height(&mut self, id: usize, amount: u16) {
         let n = &mut self[id];
         n.height += amount;
-        match &n.node_type {
-            TreeNodeType::Element { children, .. } => {
-                for c in children.clone() {
-                    self.increase_height(c.0, amount);
-                }
+        if let NodeType::Element { children, .. } = &n.node_type {
+            for c in children.clone() {
+                self.increase_height(c.0, amount);
             }
-            _ => (),
         }
     }
 
     // remove a node and it's children from the tree.
-    fn remove(&mut self, id: usize) -> Option<TreeNode<US, DS>> {
+    fn remove(&mut self, id: usize) -> Option<Node<US, DS>> {
         // We do not need to remove the node from the parent's children list for children.
         fn inner<US: BubbledUpState, DS: PushedDownState>(
             tree: &mut RealDom<US, DS>,
             id: usize,
-        ) -> Option<TreeNode<US, DS>> {
+        ) -> Option<Node<US, DS>> {
             let mut node = tree.nodes[id as usize].take()?;
-            match &mut node.node_type {
-                TreeNodeType::Element { children, .. } => {
-                    for c in children {
-                        inner(tree, c.0)?;
-                    }
+            if let NodeType::Element { children, .. } = &mut node.node_type {
+                for c in children {
+                    inner(tree, c.0)?;
                 }
-                _ => (),
             }
             Some(node)
         }
@@ -320,18 +316,15 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
             let parent = &mut self[parent];
             parent.remove_child(ElementId(id));
         }
-        match &mut node.node_type {
-            TreeNodeType::Element { children, .. } => {
-                for c in children {
-                    inner(self, c.0)?;
-                }
+        if let NodeType::Element { children, .. } = &mut node.node_type {
+            for c in children {
+                inner(self, c.0)?;
             }
-            _ => (),
         }
         Some(node)
     }
 
-    fn insert(&mut self, node: TreeNode<US, DS>) {
+    fn insert(&mut self, node: Node<US, DS>) {
         let current_len = self.nodes.len();
         let id = node.id.0;
         if current_len - 1 < node.id.0 {
@@ -341,15 +334,15 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         self.nodes[id] = Some(node);
     }
 
-    pub fn get(&self, id: usize) -> Option<&TreeNode<US, DS>> {
+    pub fn get(&self, id: usize) -> Option<&Node<US, DS>> {
         self.nodes.get(id)?.as_ref()
     }
 
-    pub fn get_mut(&mut self, id: usize) -> Option<&mut TreeNode<US, DS>> {
+    pub fn get_mut(&mut self, id: usize) -> Option<&mut Node<US, DS>> {
         self.nodes.get_mut(id)?.as_mut()
     }
 
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&TreeNode<US, DS>> {
+    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<US, DS>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
             listening.sort_by(|n1, n2| (n1.height).cmp(&n2.height).reverse());
@@ -369,7 +362,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                 if let Some(id) = e.id.get() {
                     let tree_node = &self[id];
                     match &tree_node.node_type {
-                        TreeNodeType::Element {
+                        NodeType::Element {
                             tag,
                             namespace,
                             children,
@@ -398,7 +391,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                 if let Some(id) = t.id.get() {
                     let tree_node = &self[id];
                     match &tree_node.node_type {
-                        TreeNodeType::Text { text } => t.text == text,
+                        NodeType::Text { text } => t.text == text,
                         _ => false,
                     }
                 } else {
@@ -420,36 +413,53 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
     }
 
     /// Call a function for each node in the tree, depth first.
-    pub fn traverse_depth_first(&self, mut f: impl FnMut(&TreeNode<US, DS>)) {
+    pub fn traverse_depth_first(&self, mut f: impl FnMut(&Node<US, DS>)) {
         fn inner<US: BubbledUpState, DS: PushedDownState>(
             tree: &RealDom<US, DS>,
             id: ElementId,
-            f: &mut impl FnMut(&TreeNode<US, DS>),
+            f: &mut impl FnMut(&Node<US, DS>),
         ) {
             let node = &tree[id];
             f(node);
-            match &node.node_type {
-                TreeNodeType::Element { children, .. } => {
-                    for c in children {
-                        inner(tree, *c, f);
-                    }
+            if let NodeType::Element { children, .. } = &node.node_type {
+                for c in children {
+                    inner(tree, *c, f);
                 }
-                _ => (),
             }
         }
-        match &self[self.root].node_type {
-            TreeNodeType::Element { children, .. } => {
-                for c in children {
-                    inner(self, *c, &mut f);
+        if let NodeType::Element { children, .. } = &self[self.root].node_type {
+            for c in children {
+                inner(self, *c, &mut f);
+            }
+        }
+    }
+
+    /// Call a function for each node in the tree, depth first.
+    pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(&mut Node<US, DS>)) {
+        fn inner<US: BubbledUpState, DS: PushedDownState>(
+            tree: &mut RealDom<US, DS>,
+            id: ElementId,
+            f: &mut impl FnMut(&mut Node<US, DS>),
+        ) {
+            let node = &mut tree[id];
+            f(node);
+            if let NodeType::Element { children, .. } = &mut node.node_type {
+                for c in children.clone() {
+                    inner(tree, c, f);
                 }
             }
-            _ => (),
+        }
+        let root = self.root;
+        if let NodeType::Element { children, .. } = &mut self[root].node_type {
+            for c in children.clone() {
+                inner(self, c, &mut f);
+            }
         }
     }
 }
 
 impl<US: BubbledUpState, DS: PushedDownState> Index<usize> for RealDom<US, DS> {
-    type Output = TreeNode<US, DS>;
+    type Output = Node<US, DS>;
 
     fn index(&self, idx: usize) -> &Self::Output {
         self.get(idx).expect("Node does not exist")
@@ -457,7 +467,7 @@ impl<US: BubbledUpState, DS: PushedDownState> Index<usize> for RealDom<US, DS> {
 }
 
 impl<US: BubbledUpState, DS: PushedDownState> Index<ElementId> for RealDom<US, DS> {
-    type Output = TreeNode<US, DS>;
+    type Output = Node<US, DS>;
 
     fn index(&self, idx: ElementId) -> &Self::Output {
         &self[idx.0]
@@ -477,7 +487,7 @@ impl<US: BubbledUpState, DS: PushedDownState> IndexMut<ElementId> for RealDom<US
 
 /// The node is stored client side and stores only basic data about the node. For more complete information about the node see [`TreeNode::element`].
 #[derive(Debug, Clone)]
-pub struct TreeNode<US: BubbledUpState, DS: PushedDownState> {
+pub struct Node<US: BubbledUpState, DS: PushedDownState> {
     /// The id of the node this node was created from.
     pub id: ElementId,
     /// The parent id of the node.
@@ -487,13 +497,13 @@ pub struct TreeNode<US: BubbledUpState, DS: PushedDownState> {
     /// State of the node that is pushed down to the children. The state must depend only on the node itself and its parent.
     pub down_state: DS,
     /// Additional inforation specific to the node type
-    pub node_type: TreeNodeType,
+    pub node_type: NodeType,
     /// The number of parents before the root node. The root node has height 1.
     pub height: u16,
 }
 
 #[derive(Debug, Clone)]
-pub enum TreeNodeType {
+pub enum NodeType {
     Text {
         text: String,
     },
@@ -505,9 +515,9 @@ pub enum TreeNodeType {
     Placeholder,
 }
 
-impl<US: BubbledUpState, DS: PushedDownState> TreeNode<US, DS> {
-    fn new(id: u64, node_type: TreeNodeType) -> Self {
-        TreeNode {
+impl<US: BubbledUpState, DS: PushedDownState> Node<US, DS> {
+    fn new(id: u64, node_type: NodeType) -> Self {
+        Node {
             id: ElementId(id as usize),
             parent: None,
             node_type,
@@ -523,20 +533,14 @@ impl<US: BubbledUpState, DS: PushedDownState> TreeNode<US, DS> {
     }
 
     fn add_child(&mut self, child: ElementId) {
-        match &mut self.node_type {
-            TreeNodeType::Element { children, .. } => {
-                children.push(child);
-            }
-            _ => (),
+        if let NodeType::Element { children, .. } = &mut self.node_type {
+            children.push(child);
         }
     }
 
     fn remove_child(&mut self, child: ElementId) {
-        match &mut self.node_type {
-            TreeNodeType::Element { children, .. } => {
-                children.retain(|c| c != &child);
-            }
-            _ => (),
+        if let NodeType::Element { children, .. } = &mut self.node_type {
+            children.retain(|c| c != &child);
         }
     }
 
