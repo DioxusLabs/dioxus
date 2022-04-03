@@ -183,7 +183,6 @@ fn render_vdom(
                 {
                     // resolve events before rendering
                     let evts = handler.get_events(&stretch, &mut tree);
-                    println!("evts: {:?}", evts);
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
@@ -197,9 +196,6 @@ fn render_vdom(
                             .iter(),
                     )
                 }
-                println!();
-                println!();
-                println!();
             }
 
             disable_raw_mode()?;

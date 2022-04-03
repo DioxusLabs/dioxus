@@ -175,11 +175,9 @@ impl InnerInputState {
 
         self.wheel = None;
 
-        println!("update {evts:?}");
         for e in evts.iter_mut() {
             self.apply_event(e);
         }
-        println!("->update {evts:?}");
 
         self.resolve_mouse_events(previous_mouse, resolved_events, layout, tree);
 
@@ -507,7 +505,6 @@ impl RinkInputHandler {
         let regester_event = move |evt: crossterm::event::Event| {
             if let Some(evt) = get_event(evt) {
                 if let Some(v) = queued_events2.upgrade() {
-                    println!("queued event: {:?}", evt);
                     (*v).borrow_mut().push(evt);
                 }
             }
@@ -530,7 +527,6 @@ impl RinkInputHandler {
         layout: &Stretch,
         tree: &mut RealDom<StretchLayout, StyleModifier>,
     ) -> Vec<UserEvent> {
-        println!("get_events");
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
