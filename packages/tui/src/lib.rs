@@ -142,8 +142,8 @@ fn render_vdom(
                                 },
                             )
                             .unwrap();
-                        // let root = &tree[tree.root_id()];
-                        // render::render_vnode(frame, &stretch, &tree, &root, cfg);
+                        let root = &tree[tree.root_id()];
+                        render::render_vnode(frame, &stretch, &tree, &root, cfg);
                     })?;
                 }
 
