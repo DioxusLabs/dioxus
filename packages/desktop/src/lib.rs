@@ -11,7 +11,7 @@ mod events;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_window, DesktopContext};
+pub use desktop_context::{use_eval, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 
