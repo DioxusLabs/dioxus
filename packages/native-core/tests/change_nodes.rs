@@ -6,7 +6,7 @@ use dioxus_native_core::real_dom::RealDom;
 use std::cell::Cell;
 
 #[test]
-fn tree_remove_node() {
+fn remove_node() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})
@@ -80,7 +80,7 @@ fn tree_remove_node() {
 }
 
 #[test]
-fn tree_add_node() {
+fn add_node() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})

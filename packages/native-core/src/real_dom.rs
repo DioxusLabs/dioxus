@@ -176,6 +176,9 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
                     RemoveAttribute { root, .. } => {
                         nodes_updated.push(root as usize);
                     }
+                    PopRoot {} => {
+                        self.node_stack.pop();
+                    }
                 }
             }
         }

@@ -59,7 +59,7 @@ impl PushedDownState for PushedDownStateTester {
 }
 
 #[test]
-fn tree_state_initial() {
+fn state_initial() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {
@@ -114,7 +114,7 @@ fn tree_state_initial() {
 }
 
 #[test]
-fn tree_state_reduce_initally_called_minimally() {
+fn state_reduce_initally_called_minimally() {
     #[derive(Debug, Clone, PartialEq, Default)]
     struct CallCounter(u32);
     impl BubbledUpState for CallCounter {
@@ -190,7 +190,7 @@ fn tree_state_reduce_initally_called_minimally() {
 }
 
 #[test]
-fn tree_state_reduce_down_called_minimally_on_update() {
+fn state_reduce_down_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {
@@ -255,7 +255,7 @@ fn tree_state_reduce_down_called_minimally_on_update() {
 }
 
 #[test]
-fn tree_state_reduce_up_called_minimally_on_update() {
+fn state_reduce_up_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {

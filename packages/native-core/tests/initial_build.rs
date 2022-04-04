@@ -7,7 +7,7 @@ use dioxus_html as dioxus_elements;
 use dioxus_native_core::real_dom::RealDom;
 
 #[test]
-fn tree_initial_build_simple() {
+fn initial_build_simple() {
     use std::cell::Cell;
 
     #[allow(non_snake_case)]
@@ -40,7 +40,7 @@ fn tree_initial_build_simple() {
 }
 
 #[test]
-fn tree_initial_build_with_children() {
+fn initial_build_with_children() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})
