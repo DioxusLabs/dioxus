@@ -105,6 +105,7 @@ impl WebsysDom {
         for edit in edits.drain(..) {
             match edit {
                 DomEdit::PushRoot { root } => self.interpreter.PushRoot(root),
+                DomEdit::PopRoot {} => self.interpreter.PopRoot(),
                 DomEdit::AppendChildren { many } => self.interpreter.AppendChildren(many),
                 DomEdit::ReplaceWith { root, m } => self.interpreter.ReplaceWith(root, m),
                 DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
