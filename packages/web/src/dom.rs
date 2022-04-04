@@ -105,6 +105,7 @@ impl WebsysDom {
         for edit in edits.drain(..) {
             match edit {
                 DomEdit::PushRoot { root } => self.interpreter.PushRoot(root),
+                DomEdit::PopRoot {} => self.interpreter.PopRoot(),
                 DomEdit::AppendChildren { many } => self.interpreter.AppendChildren(many),
                 DomEdit::ReplaceWith { root, m } => self.interpreter.ReplaceWith(root, m),
                 DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
@@ -244,7 +245,6 @@ fn virtual_event_from_websys_event(
                         let value: Option<String> = (&element)
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
-                                    log::info!("Input type: {}", input.type_());
                                     match input.type_().as_str() {
                                         "checkbox" => {
                                             match input.checked() {
@@ -261,9 +261,9 @@ fn virtual_event_from_websys_event(
                                         _ => Some(input.value())
                                     }
                                 })
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
-                                .or_else(|| Some(target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
+                                .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
+                                .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
+                                .or_else(|| Some(element.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
                                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
                         if let Some(value) = value {
                             values.insert(name, value);

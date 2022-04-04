@@ -27,6 +27,9 @@ export class Interpreter {
     const node = this.nodes[root];
     this.stack.push(node);
   }
+  PopRoot() {
+    this.stack.pop();
+  }
   AppendChildren(many) {
     let root = this.stack[this.stack.length - (1 + many)];
     let to_add = this.stack.splice(this.stack.length - many);

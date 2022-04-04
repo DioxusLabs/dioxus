@@ -18,6 +18,9 @@ extern "C" {
     pub fn PushRoot(this: &Interpreter, root: u64);
 
     #[wasm_bindgen(method)]
+    pub fn PopRoot(this: &Interpreter);
+
+    #[wasm_bindgen(method)]
     pub fn AppendChildren(this: &Interpreter, many: u32);
 
     #[wasm_bindgen(method)]

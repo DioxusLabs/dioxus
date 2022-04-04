@@ -3,7 +3,7 @@
 The first fundamental hook for state management is `use_state`. This particular hook is designed to work well with the entire Dioxus ecosystem including futures, children, and memoization.
 
 
-## Basic usage.
+## Basic usage
 
 The simplest use case of `use_state` is a simple counter. The handle returned by `use_state` implements `Add` and `AddAssign`. Writing through `AddAssign` will automatically mark the component as dirty, forcing an update.
 
