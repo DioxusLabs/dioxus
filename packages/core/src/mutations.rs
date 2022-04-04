@@ -185,6 +185,9 @@ pub enum DomEdit<'bump> {
         /// The namespace of the attribute.
         ns: Option<&'bump str>,
     },
+
+    /// Manually pop a root node from the stack.
+    PopRoot {},
 }
 
 use fxhash::FxHashSet;
@@ -203,6 +206,11 @@ impl<'a> Mutations<'a> {
     pub(crate) fn push_root(&mut self, root: ElementId) {
         let id = root.as_u64();
         self.edits.push(PushRoot { root: id });
+    }
+
+    // Navigation
+    pub(crate) fn pop_root(&mut self) {
+        self.edits.push(PopRoot {});
     }
 
     pub(crate) fn replace_with(&mut self, root: ElementId, m: u32) {

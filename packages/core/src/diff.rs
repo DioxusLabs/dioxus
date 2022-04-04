@@ -426,6 +426,7 @@ impl<'b> DiffState<'b> {
                 self.mutations.push_root(root);
                 let created = self.create_children(new.children);
                 self.mutations.append_children(created as u32);
+                self.mutations.pop_root();
             }
             (_, _) => self.diff_children(old.children, new.children),
         };
