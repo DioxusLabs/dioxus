@@ -20,9 +20,9 @@ fn remove_node() {
         }
     });
 
-    let mut tree: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<(), ()> = RealDom::new();
 
-    let _to_update = tree.apply_mutations(vec![mutations]);
+    let _to_update = dom.apply_mutations(vec![mutations]);
     let child_div = VElement {
         id: Cell::new(Some(ElementId(2))),
         key: None,
@@ -45,10 +45,10 @@ fn remove_node() {
         children: &[child_div_el],
     };
 
-    assert_eq!(tree.size(), 2);
-    assert!(&tree.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(tree[1].height, 1);
-    assert_eq!(tree[2].height, 2);
+    assert_eq!(dom.size(), 2);
+    assert!(&dom.contains_node(&VNode::Element(&root_div)));
+    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[2].height, 2);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -61,7 +61,7 @@ fn remove_node() {
             div{}
         },
     );
-    tree.apply_mutations(vec![mutations.1]);
+    dom.apply_mutations(vec![mutations.1]);
 
     let new_root_div = VElement {
         id: Cell::new(Some(ElementId(1))),
@@ -74,9 +74,9 @@ fn remove_node() {
         children: &[],
     };
 
-    assert_eq!(tree.size(), 1);
-    assert!(&tree.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(tree[1].height, 1);
+    assert_eq!(dom.size(), 1);
+    assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
+    assert_eq!(dom[1].height, 1);
 }
 
 #[test]
@@ -92,9 +92,9 @@ fn add_node() {
         div{}
     });
 
-    let mut tree: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<(), ()> = RealDom::new();
 
-    let _to_update = tree.apply_mutations(vec![mutations]);
+    let _to_update = dom.apply_mutations(vec![mutations]);
 
     let root_div = VElement {
         id: Cell::new(Some(ElementId(1))),
@@ -107,9 +107,9 @@ fn add_node() {
         children: &[],
     };
 
-    assert_eq!(tree.size(), 1);
-    assert!(&tree.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(tree[1].height, 1);
+    assert_eq!(dom.size(), 1);
+    assert!(&dom.contains_node(&VNode::Element(&root_div)));
+    assert_eq!(dom[1].height, 1);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -122,7 +122,7 @@ fn add_node() {
             }
         },
     );
-    tree.apply_mutations(vec![mutations.1]);
+    dom.apply_mutations(vec![mutations.1]);
 
     let child_div = VElement {
         id: Cell::new(Some(ElementId(2))),
@@ -146,8 +146,8 @@ fn add_node() {
         children: &[child_div_el],
     };
 
-    assert_eq!(tree.size(), 2);
-    assert!(&tree.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(tree[1].height, 1);
-    assert_eq!(tree[2].height, 2);
+    assert_eq!(dom.size(), 2);
+    assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
+    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[2].height, 2);
 }

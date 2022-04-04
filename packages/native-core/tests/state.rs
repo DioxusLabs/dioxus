@@ -77,12 +77,12 @@ fn state_initial() {
         }
     });
 
-    let mut tree: RealDom<BubbledUpStateTester, PushedDownStateTester> = RealDom::new();
+    let mut dom: RealDom<BubbledUpStateTester, PushedDownStateTester> = RealDom::new();
 
-    let nodes_updated = tree.apply_mutations(vec![mutations]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut 42, &mut 42);
+    let nodes_updated = dom.apply_mutations(vec![mutations]);
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut 42, &mut 42);
 
-    let root_div = &tree[1];
+    let root_div = &dom[1];
     assert_eq!(root_div.up_state.0, "1");
     assert_eq!(
         root_div.up_state.1,
@@ -94,7 +94,7 @@ fn state_initial() {
     assert_eq!(root_div.down_state.0, "1");
     assert_eq!(root_div.down_state.1, None);
 
-    let child_p = &tree[2];
+    let child_p = &dom[2];
     assert_eq!(child_p.up_state.0, "2");
     assert_eq!(child_p.up_state.1, Vec::new());
     assert_eq!(child_p.down_state.0, "2");
@@ -103,7 +103,7 @@ fn state_initial() {
         Some(Box::new(PushedDownStateTester("1".to_string(), None)))
     );
 
-    let child_h1 = &tree[3];
+    let child_h1 = &dom[3];
     assert_eq!(child_h1.up_state.0, "3");
     assert_eq!(child_h1.up_state.1, Vec::new());
     assert_eq!(child_h1.down_state.0, "3");
@@ -178,12 +178,12 @@ fn state_reduce_initally_called_minimally() {
         }
     });
 
-    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
 
-    let nodes_updated = tree.apply_mutations(vec![mutations]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let nodes_updated = dom.apply_mutations(vec![mutations]);
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse_depth_first(|n| {
+    dom.traverse_depth_first(|n| {
         assert_eq!(n.up_state.0, 1);
         assert_eq!(n.down_state.0, 1);
     });
@@ -233,11 +233,11 @@ fn state_reduce_down_called_minimally_on_update() {
         }
     });
 
-    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
 
-    let nodes_updated = tree.apply_mutations(vec![mutations]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
-    let nodes_updated = tree.apply_mutations(vec![Mutations {
+    let nodes_updated = dom.apply_mutations(vec![mutations]);
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 1,
             field: "width",
@@ -247,9 +247,9 @@ fn state_reduce_down_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse_depth_first(|n| {
+    dom.traverse_depth_first(|n| {
         assert_eq!(n.down_state.0, 2);
     });
 }
@@ -298,11 +298,11 @@ fn state_reduce_up_called_minimally_on_update() {
         }
     });
 
-    let mut tree: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
 
-    let nodes_updated = tree.apply_mutations(vec![mutations]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
-    let nodes_updated = tree.apply_mutations(vec![Mutations {
+    let nodes_updated = dom.apply_mutations(vec![mutations]);
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 4,
             field: "width",
@@ -312,9 +312,9 @@ fn state_reduce_up_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = tree.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
 
-    tree.traverse_depth_first(|n| {
+    dom.traverse_depth_first(|n| {
         assert_eq!(n.up_state.0, if n.id.0 > 4 { 1 } else { 2 });
     });
 }

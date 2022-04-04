@@ -6,9 +6,9 @@ use std::{
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 
-/// A tree that can sync with the VirtualDom mutations intended for use in lazy renderers.
+/// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
-/// To get started implement [PushedDownState] and or [BubbledUpState] and call [Tree::apply_mutations] to update the tree and [Tree::update_state] to update the state of the nodes.
+/// To get started implement [PushedDownState] and or [BubbledUpState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
 #[derive(Debug)]
 pub struct RealDom<US: BubbledUpState = (), DS: PushedDownState = ()> {
     root: usize,
@@ -43,7 +43,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         }
     }
 
-    /// Updates the tree, up and down state and return a set of nodes that were updated pass this to update_state.
+    /// Updates the dom, up and down state and return a set of nodes that were updated pass this to update_state.
     pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<usize> {
         let mut nodes_updated = Vec::new();
         for mutations in mutations_vec {
@@ -299,17 +299,17 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         }
     }
 
-    // remove a node and it's children from the tree.
+    // remove a node and it's children from the dom.
     fn remove(&mut self, id: usize) -> Option<Node<US, DS>> {
         // We do not need to remove the node from the parent's children list for children.
         fn inner<US: BubbledUpState, DS: PushedDownState>(
-            tree: &mut RealDom<US, DS>,
+            dom: &mut RealDom<US, DS>,
             id: usize,
         ) -> Option<Node<US, DS>> {
-            let mut node = tree.nodes[id as usize].take()?;
+            let mut node = dom.nodes[id as usize].take()?;
             if let NodeType::Element { children, .. } = &mut node.node_type {
                 for c in children {
-                    inner(tree, c.0)?;
+                    inner(dom, c.0)?;
                 }
             }
             Some(node)
@@ -355,7 +355,7 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         }
     }
 
-    /// Check if the tree contains a node and its children.
+    /// Check if the dom contains a node and its children.
     pub fn contains_node(&self, node: &VNode) -> bool {
         match node {
             VNode::Component(_) => {
@@ -363,8 +363,8 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
             }
             VNode::Element(e) => {
                 if let Some(id) = e.id.get() {
-                    let tree_node = &self[id];
-                    match &tree_node.node_type {
+                    let dom_node = &self[id];
+                    match &dom_node.node_type {
                         NodeType::Element {
                             tag,
                             namespace,
@@ -392,8 +392,8 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
             VNode::Placeholder(_) => true,
             VNode::Text(t) => {
                 if let Some(id) = t.id.get() {
-                    let tree_node = &self[id];
-                    match &tree_node.node_type {
+                    let dom_node = &self[id];
+                    match &dom_node.node_type {
                         NodeType::Text { text } => t.text == text,
                         _ => false,
                     }
@@ -404,9 +404,9 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         }
     }
 
-    /// Return the number of nodes in the tree.
+    /// Return the number of nodes in the dom.
     pub fn size(&self) -> usize {
-        // The tree has a root node, ignore it.
+        // The dom has a root node, ignore it.
         self.nodes.iter().filter(|n| n.is_some()).count() - 1
     }
 
@@ -415,18 +415,18 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         self.root
     }
 
-    /// Call a function for each node in the tree, depth first.
+    /// Call a function for each node in the dom, depth first.
     pub fn traverse_depth_first(&self, mut f: impl FnMut(&Node<US, DS>)) {
         fn inner<US: BubbledUpState, DS: PushedDownState>(
-            tree: &RealDom<US, DS>,
+            dom: &RealDom<US, DS>,
             id: ElementId,
             f: &mut impl FnMut(&Node<US, DS>),
         ) {
-            let node = &tree[id];
+            let node = &dom[id];
             f(node);
             if let NodeType::Element { children, .. } = &node.node_type {
                 for c in children {
-                    inner(tree, *c, f);
+                    inner(dom, *c, f);
                 }
             }
         }
@@ -437,18 +437,18 @@ impl<US: BubbledUpState, DS: PushedDownState> RealDom<US, DS> {
         }
     }
 
-    /// Call a function for each node in the tree, depth first.
+    /// Call a function for each node in the dom, depth first.
     pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(&mut Node<US, DS>)) {
         fn inner<US: BubbledUpState, DS: PushedDownState>(
-            tree: &mut RealDom<US, DS>,
+            dom: &mut RealDom<US, DS>,
             id: ElementId,
             f: &mut impl FnMut(&mut Node<US, DS>),
         ) {
-            let node = &mut tree[id];
+            let node = &mut dom[id];
             f(node);
             if let NodeType::Element { children, .. } = &mut node.node_type {
                 for c in children.clone() {
-                    inner(tree, c, f);
+                    inner(dom, c, f);
                 }
             }
         }
@@ -488,7 +488,7 @@ impl<US: BubbledUpState, DS: PushedDownState> IndexMut<ElementId> for RealDom<US
     }
 }
 
-/// The node is stored client side and stores only basic data about the node. For more complete information about the node see [`TreeNode::element`].
+/// The node is stored client side and stores only basic data about the node. For more complete information about the node see [`domNode::element`].
 #[derive(Debug, Clone)]
 pub struct Node<US: BubbledUpState, DS: PushedDownState> {
     /// The id of the node this node was created from.

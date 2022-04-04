@@ -68,11 +68,11 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     cx.provide_root_context(state);
     cx.provide_root_context(TuiContext { tx: event_tx_clone });
 
-    let mut tree: RealDom<StretchLayout, StyleModifier> = RealDom::new();
+    let mut rdom: RealDom<StretchLayout, StyleModifier> = RealDom::new();
     let mutations = dom.rebuild();
-    let to_update = tree.apply_mutations(vec![mutations]);
+    let to_update = rdom.apply_mutations(vec![mutations]);
     let mut stretch = Stretch::new();
-    let _to_rerender = tree
+    let _to_rerender = rdom
         .update_state(&dom, to_update, &mut stretch, &mut ())
         .unwrap();
 
@@ -81,7 +81,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         event_rx,
         handler,
         cfg,
-        tree,
+        rdom,
         stretch,
         register_event,
     )
@@ -93,7 +93,7 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut tree: RealDom<StretchLayout, StyleModifier>,
+    mut rdom: RealDom<StretchLayout, StyleModifier>,
     mut stretch: Stretch,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
@@ -130,8 +130,8 @@ fn render_vdom(
                         let dims = frame.size();
                         let width = dims.width;
                         let height = dims.height;
-                        let root_id = tree.root_id();
-                        let root_node = tree[root_id].up_state.node.unwrap();
+                        let root_id = rdom.root_id();
+                        let root_node = rdom[root_id].up_state.node.unwrap();
 
                         stretch
                             .compute_layout(
@@ -142,8 +142,8 @@ fn render_vdom(
                                 },
                             )
                             .unwrap();
-                        let root = &tree[tree.root_id()];
-                        render::render_vnode(frame, &stretch, &tree, &root, cfg);
+                        let root = &rdom[rdom.root_id()];
+                        render::render_vnode(frame, &stretch, &rdom, &root, cfg);
                     })?;
                 }
 
@@ -182,16 +182,16 @@ fn render_vdom(
 
                 {
                     // resolve events before rendering
-                    let evts = handler.get_events(&stretch, &mut tree);
+                    let evts = handler.get_events(&stretch, &mut rdom);
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
                     let mutations = vdom.work_with_deadline(|| false);
-                    // updates the tree's nodes
-                    let to_update = tree.apply_mutations(mutations);
+                    // updates the dom's nodes
+                    let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
                     to_rerender.extend(
-                        tree.update_state(vdom, to_update, &mut stretch, &mut ())
+                        rdom.update_state(vdom, to_update, &mut stretch, &mut ())
                             .unwrap()
                             .iter(),
                     )

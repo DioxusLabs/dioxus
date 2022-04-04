@@ -21,9 +21,9 @@ fn initial_build_simple() {
         div{}
     });
 
-    let mut tree: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<(), ()> = RealDom::new();
 
-    let _to_update = tree.apply_mutations(vec![mutations]);
+    let _to_update = dom.apply_mutations(vec![mutations]);
     let root_div = VElement {
         id: Cell::new(Some(ElementId(1))),
         key: None,
@@ -34,9 +34,9 @@ fn initial_build_simple() {
         attributes: &[],
         children: &[],
     };
-    assert_eq!(tree.size(), 1);
-    assert!(&tree.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(tree[1].height, 1);
+    assert_eq!(dom.size(), 1);
+    assert!(&dom.contains_node(&VNode::Element(&root_div)));
+    assert_eq!(dom[1].height, 1);
 }
 
 #[test]
@@ -60,9 +60,9 @@ fn initial_build_with_children() {
         }
     });
 
-    let mut tree: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<(), ()> = RealDom::new();
 
-    let _to_update = tree.apply_mutations(vec![mutations]);
+    let _to_update = dom.apply_mutations(vec![mutations]);
     let first_text = VText {
         id: Cell::new(Some(ElementId(3))),
         text: "hello",
@@ -113,12 +113,12 @@ fn initial_build_with_children() {
         attributes: &[],
         children: &[child_div_node],
     };
-    assert_eq!(tree.size(), 6);
-    assert!(&tree.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(tree[1].height, 1);
-    assert_eq!(tree[2].height, 2);
-    assert_eq!(tree[3].height, 3);
-    assert_eq!(tree[4].height, 3);
-    assert_eq!(tree[5].height, 4);
-    assert_eq!(tree[6].height, 3);
+    assert_eq!(dom.size(), 6);
+    assert!(&dom.contains_node(&VNode::Element(&root_div)));
+    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[2].height, 2);
+    assert_eq!(dom[3].height, 3);
+    assert_eq!(dom[4].height, 3);
+    assert_eq!(dom[5].height, 4);
+    assert_eq!(dom[6].height, 3);
 }

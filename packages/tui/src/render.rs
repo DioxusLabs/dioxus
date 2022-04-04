@@ -23,7 +23,7 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    tree: &RealDom<StretchLayout, StyleModifier>,
+    rdom: &RealDom<StretchLayout, StyleModifier>,
     node: &Node<StretchLayout, StyleModifier>,
     cfg: Config,
 ) {
@@ -77,7 +77,7 @@ pub fn render_vnode(
             }
 
             for c in children {
-                render_vnode(frame, layout, tree, &tree[c.0], cfg);
+                render_vnode(frame, layout, rdom, &rdom[c.0], cfg);
             }
         }
         NodeType::Placeholder => unreachable!(),
