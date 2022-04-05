@@ -1,15 +1,13 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dioxus::prelude::*;
-use dioxus_tui::TuiContext;
+use dioxus_tui::{Config, TuiContext};
 
-criterion_group!(mbenches, update_boxes);
+criterion_group!(mbenches, tui_update);
 criterion_main!(mbenches);
 
 /// This benchmarks the cache performance of the TUI for small edits by changing one box at a time.
-fn update_boxes(c: &mut Criterion) {
+fn tui_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("Update boxes");
-    // We can override the configuration on a per-group level
-    group.sample_size(10);
 
     // We can also use loops to define multiple benchmarks, even over multiple dimensions.
     for size in 1..=6 {
@@ -19,12 +17,48 @@ fn update_boxes(c: &mut Criterion) {
             &size,
             |b, size| {
                 b.iter(|| match size {
-                    1 => dioxus::tui::launch(app5),
-                    2 => dioxus::tui::launch(app10),
-                    3 => dioxus::tui::launch(app15),
-                    4 => dioxus::tui::launch(app20),
-                    5 => dioxus::tui::launch(app25),
-                    6 => dioxus::tui::launch(app30),
+                    1 => dioxus::tui::launch_cfg(
+                        app5,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    2 => dioxus::tui::launch_cfg(
+                        app10,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    3 => dioxus::tui::launch_cfg(
+                        app15,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    4 => dioxus::tui::launch_cfg(
+                        app20,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    5 => dioxus::tui::launch_cfg(
+                        app25,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    6 => dioxus::tui::launch_cfg(
+                        app30,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
                     _ => (),
                 })
             },

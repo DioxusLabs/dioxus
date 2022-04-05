@@ -1,9 +1,11 @@
 #[derive(Clone, Copy)]
 pub struct Config {
     pub rendering_mode: RenderingMode,
-    /// Should the terminal quit when the user presses `ctrl+c`?
+    /// Controls if the terminal quit when the user presses `ctrl+c`?
     /// To handle quiting on your own, use the [crate::TuiContext] root context.
     pub ctrl_c_quit: bool,
+    /// Controls if the terminal should dislay anything, usefull for testing.
+    pub headless: bool,
 }
 
 impl Default for Config {
@@ -11,6 +13,7 @@ impl Default for Config {
         Self {
             rendering_mode: Default::default(),
             ctrl_c_quit: true,
+            headless: false,
         }
     }
 }

@@ -15,7 +15,7 @@ use layout::StretchLayout;
 use std::{io, time::Duration};
 use stretch2::{prelude::Size, Stretch};
 use style_attributes::StyleModifier;
-use tui::{backend::CrosstermBackend, Terminal};
+use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
 mod hooks;
@@ -51,18 +51,20 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     // Setup input handling
     let (event_tx, event_rx) = unbounded();
     let event_tx_clone = event_tx.clone();
-    std::thread::spawn(move || {
-        let tick_rate = Duration::from_millis(1000);
-        loop {
-            if crossterm::event::poll(tick_rate).unwrap() {
-                // if crossterm::event::poll(timeout).unwrap() {
-                let evt = crossterm::event::read().unwrap();
-                if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
-                    break;
+    if !cfg.headless {
+        std::thread::spawn(move || {
+            let tick_rate = Duration::from_millis(1000);
+            loop {
+                if crossterm::event::poll(tick_rate).unwrap() {
+                    // if crossterm::event::poll(timeout).unwrap() {
+                    let evt = crossterm::event::read().unwrap();
+                    if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
+                        break;
+                    }
                 }
             }
-        }
-    });
+        });
+    }
 
     let cx = dom.base_scope();
     cx.provide_root_context(state);
@@ -101,13 +103,17 @@ fn render_vdom(
         .enable_all()
         .build()?
         .block_on(async {
-            enable_raw_mode().unwrap();
-            let mut stdout = std::io::stdout();
-            execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-            let backend = CrosstermBackend::new(io::stdout());
-            let mut terminal = Terminal::new(backend).unwrap();
+            let mut terminal = (!cfg.headless).then(|| {
+                enable_raw_mode().unwrap();
+                let mut stdout = std::io::stdout();
+                execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+                let backend = CrosstermBackend::new(io::stdout());
+                Terminal::new(backend).unwrap()
+            });
+            if let Some(terminal) = &mut terminal {
+                terminal.clear().unwrap();
+            }
 
-            terminal.clear().unwrap();
             let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
             let mut resized = true;
 
@@ -125,9 +131,11 @@ fn render_vdom(
 
                 if !to_rerender.is_empty() || resized {
                     resized = false;
-                    terminal.draw(|frame| {
-                        // size is guaranteed to not change when rendering
-                        let dims = frame.size();
+                    fn resize(
+                        dims: Rect,
+                        stretch: &mut Stretch,
+                        rdom: &RealDom<StretchLayout, StyleModifier>,
+                    ) {
                         let width = dims.width;
                         let height = dims.height;
                         let root_id = rdom.root_id();
@@ -142,9 +150,26 @@ fn render_vdom(
                                 },
                             )
                             .unwrap();
-                        let root = &rdom[rdom.root_id()];
-                        render::render_vnode(frame, &stretch, &rdom, &root, cfg);
-                    })?;
+                    }
+                    if let Some(terminal) = &mut terminal {
+                        terminal.draw(|frame| {
+                            // size is guaranteed to not change when rendering
+                            resize(frame.size(), &mut stretch, &rdom);
+                            let root = &rdom[rdom.root_id()];
+                            render::render_vnode(frame, &stretch, &rdom, &root, cfg);
+                        })?;
+                    } else {
+                        resize(
+                            Rect {
+                                x: 0,
+                                y: 0,
+                                width: 300,
+                                height: 300,
+                            },
+                            &mut stretch,
+                            &rdom,
+                        );
+                    }
                 }
 
                 use futures::future::{select, Either};
@@ -198,13 +223,15 @@ fn render_vdom(
                 }
             }
 
-            disable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
+            if let Some(terminal) = &mut terminal {
+                disable_raw_mode()?;
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )?;
+                terminal.show_cursor()?;
+            }
 
             Ok(())
         })
