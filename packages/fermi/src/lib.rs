@@ -30,11 +30,13 @@ pub mod hooks {
     mod init_atom_root;
     mod read;
     mod set;
+    mod state;
     pub use atom_ref::*;
     pub use atom_root::*;
     pub use init_atom_root::*;
     pub use read::*;
     pub use set::*;
+    pub use state::*;
 }
 
 /// All Atoms are `Readable` - they support reading their value.
