@@ -82,19 +82,20 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
         bindgen_builder
             .input_path(input_path)
-            .web(true).unwrap()
+            .web(true)
+            .unwrap()
             .debug(true)
             .demangle(true)
             .keep_debug(true)
             .remove_name_section(false)
             .remove_producers_section(false)
             .out_name(&dioxus_config.application.name)
-            .generate(&bindgen_outdir).unwrap();
+            .generate(&bindgen_outdir)
+            .unwrap();
     });
     if bindgen_result.is_err() {
         log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
     }
-
 
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
@@ -277,6 +278,11 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     }
 
     html = html.replace("{app_name}", &config.application.name);
+
+    html = match &config.web.app.base_path {
+        Some(path) => html.replace("{base_path}", path),
+        None => html.replace("{base_path}", "."),
+    };
 
     let title = config
         .web
