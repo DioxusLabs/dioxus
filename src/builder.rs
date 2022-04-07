@@ -132,7 +132,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             );
         }
     }
-
+  
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
         overwrite: true,
@@ -326,6 +326,11 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     }
 
     html = html.replace("{app_name}", &config.application.name);
+
+    html = match &config.web.app.base_path {
+        Some(path) => html.replace("{base_path}", path),
+        None => html.replace("{base_path}", "."),
+    };
 
     let title = config
         .web
