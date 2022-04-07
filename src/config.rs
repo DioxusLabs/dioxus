@@ -39,11 +39,12 @@ impl Default for DioxusConfig {
             web: WebConfig {
                 app: WebAppConfing {
                     title: Some("dioxus | ⛺".into()),
+                    base_path: None,
                 },
                 watcher: WebWatcherConfing {
                     watch_path: Some(vec![PathBuf::from("src")]),
                     reload_html: Some(false),
-                    index_on_404: Some(false),
+                    index_on_404: Some(true),
                 },
                 resource: WebResourceConfing {
                     dev: WebDevResourceConfing {
@@ -77,6 +78,7 @@ pub struct WebConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebAppConfing {
     pub title: Option<String>,
+    pub base_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
