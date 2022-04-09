@@ -149,6 +149,9 @@ and then to create a native .app:
 dioxus bundle --platform macOS
 ```
 
+## Note:
+- On windows-gnu platform you have to carry the WebView2Loader.dll file along with your .exe app which can be found under specific /target.. directory
+
 ## Goals
 
 Because the host VirtualDOM is running in its own native process, native applications can unlock their full potential. Dioxus-Desktop is designed to be a 100% rust alternative to ElectronJS without the memory overhead or bloat of ElectronJS apps.
