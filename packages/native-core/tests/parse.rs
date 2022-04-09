@@ -26,7 +26,7 @@ use dioxus_native_core::real_dom_new_api::NodeDepState;
 struct A;
 impl NodeDepState for A {
     type Ctx = ();
-    fn reduce(&mut self, _: NodeRef, _: &()) {
+    fn reduce(&mut self, _: NodeView, _: &()) -> bool {
         todo!()
     }
 }
@@ -38,10 +38,10 @@ impl ChildDepState for B {
     type DepState = Self;
     fn reduce(
         &mut self,
-        _: dioxus_native_core::real_dom_new_api::NodeRef,
+        _: dioxus_native_core::real_dom_new_api::NodeView,
         _: Vec<&Self::DepState>,
         _: &i32,
-    ) {
+    ) -> bool {
         todo!()
     }
 }
@@ -53,10 +53,10 @@ impl ParentDepState for C {
     type DepState = Self;
     fn reduce(
         &mut self,
-        _: dioxus_native_core::real_dom_new_api::NodeRef,
+        _: dioxus_native_core::real_dom_new_api::NodeView,
         _: &Self::DepState,
         _: &u8,
-    ) {
+    ) -> bool {
         todo!()
     }
 }

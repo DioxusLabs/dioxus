@@ -36,6 +36,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
     };
     let strct = Struct::parse(&fields);
     let state_strct = StateStruct::parse(&fields, &strct);
+
     let node_dep_state_fields = quote::__private::TokenStream::from_iter(
         state_strct
             .state_members
@@ -86,67 +87,77 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
         .state_members
         .iter()
         .filter(|f| f.dep_kind == DepKind::NodeDepState)
-        .map(|f| f.type_id());
+        .map(|f| &f.mem.ty);
     let child_types = state_strct
         .state_members
         .iter()
         .filter(|f| f.dep_kind == DepKind::ChildDepState)
-        .map(|f| f.type_id());
+        .map(|f| &f.mem.ty);
     let parent_types = state_strct
         .state_members
         .iter()
         .filter(|f| f.dep_kind == DepKind::ParentDepState)
-        .map(|f| f.type_id());
+        .map(|f| &f.mem.ty);
 
     let type_name_str = type_name.to_string();
 
     let gen = quote! {
         impl State for #type_name{
-            fn update_node_dep_state(&mut self, ty: std::any::TypeId, node: dioxus_native_core::real_dom_new_api::NodeRef, ctx: &anymap::AnyMap){
+            fn update_node_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, ctx: &anymap::AnyMap) -> bool{
                 use dioxus_native_core::real_dom_new_api::NodeDepState;
-                if false {}
+                if false {
+                    unreachable!();
+                }
                 #node_dep_state_fields
                 else{
-                    panic!("{:?} not in {}", ty, #type_name_str);
+                    panic!("{:?} not in {}", ty, #type_name_str)
                 }
             }
 
-            fn update_parent_dep_state(&mut self, ty: std::any::TypeId, node: dioxus_native_core::real_dom_new_api::NodeRef, parent: &Self, ctx: &anymap::AnyMap){
+            fn update_parent_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, parent: &Self, ctx: &anymap::AnyMap) -> bool{
                 use dioxus_native_core::real_dom_new_api::ParentDepState;
-                if false {}
+                if false {
+                    unreachable!();
+                }
                 #parent_dep_state_fields
                 else{
-                    panic!("{:?} not in {}", ty, #type_name_str);
+                    panic!("{:?} not in {}", ty, #type_name_str)
                 }
             }
 
-            fn update_child_dep_state(&mut self, ty: std::any::TypeId, node: dioxus_native_core::real_dom_new_api::NodeRef, children: Vec<&Self>, ctx: &anymap::AnyMap){
+            fn update_child_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, children: Vec<&Self>, ctx: &anymap::AnyMap) -> bool{
                 use dioxus_native_core::real_dom_new_api::ChildDepState;
-                if false {}
+                if false {
+                    unreachable!()
+                }
                 #child_dep_state_fields
                 else{
-                    panic!("{:?} not in {}", ty, #type_name_str);
+                    panic!("{:?} not in {}", ty, #type_name_str)
                 }
             }
 
-            fn child_dep_types(&self) -> Vec<std::any::TypeId>{
-                // todo: order should depend on order of dependencies
-                vec![
-                    #(#child_types,)*
-                ]
+            fn child_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+                let mut dep_types = Vec::new();
+                #(if #child_types::NODE_MASK.overlaps(mask) {
+                    dep_types.push(std::any::TypeId::of::<#child_types>());
+                })*
+                dep_types
             }
 
-            fn parent_dep_types(&self) -> Vec<std::any::TypeId>{
-                // todo: order should depend on order of dependencies
-                vec![
-                    #(#parent_types,)*
-                ]
+            fn parent_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+                let mut dep_types = Vec::new();
+                #(if #parent_types::NODE_MASK.overlaps(mask) {
+                    dep_types.push(std::any::TypeId::of::<#parent_types>());
+                })*
+                dep_types
             }
 
-            fn node_dep_types(&self) -> Vec<std::any::TypeId>{
-                vec![
-                    #(#node_types,)*
-                ]
+            fn node_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+                let mut dep_types = Vec::new();
+                #(if #node_types::NODE_MASK.overlaps(mask) {
+                    dep_types.push(std::any::TypeId::of::<#node_types>());
+                })*
+                dep_types
             }
         }
     };
@@ -176,6 +187,9 @@ impl<'a> StateStruct<'a> {
             .zip(fields.iter())
             .filter_map(|(m, f)| StateMember::parse(f, m, &strct))
             .collect();
+
+        // todo: sort members
+
         Self { state_members }
     }
 }
@@ -251,28 +265,30 @@ impl<'a> StateMember<'a> {
         } else {
             quote! {&()}
         };
+        let ty = &self.mem.ty;
+        let node_view = quote!(NodeView::new(node, #ty::NODE_MASK));
         if let Some(dep_ident) = &self.dep_mem.map(|m| &m.ident) {
             match self.dep_kind {
                 DepKind::NodeDepState => {
-                    quote!(self.#ident.reduce(node, #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, #get_ctx))
                 }
                 DepKind::ChildDepState => {
-                    quote!(self.#ident.reduce(node, children.iter().map(|s| &s.#dep_ident).collect(), #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident).collect(), #get_ctx))
                 }
                 DepKind::ParentDepState => {
-                    quote!(self.#ident.reduce(node, &parent.#dep_ident, #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, &parent.#dep_ident, #get_ctx))
                 }
             }
         } else {
             match self.dep_kind {
                 DepKind::NodeDepState => {
-                    quote!(self.#ident.reduce(node, #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, #get_ctx))
                 }
                 DepKind::ChildDepState => {
-                    quote!(self.#ident.reduce(node, &(), #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, &(), #get_ctx))
                 }
                 DepKind::ParentDepState => {
-                    quote!(self.#ident.reduce(node, &(), #get_ctx);)
+                    quote!(self.#ident.reduce(#node_view, &(), #get_ctx))
                 }
             }
         }
