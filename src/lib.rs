@@ -1,5 +1,7 @@
 pub mod builder;
 pub mod server;
+pub mod tools;
+
 pub use builder::*;
 
 pub mod cargo;

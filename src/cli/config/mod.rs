@@ -13,14 +13,26 @@ pub enum Config {
         #[clap(long)]
         #[serde(default)]
         force: bool,
+
+        /// Project default platform
+        #[clap(long, default_value = "web")]
+        platform: String,
     },
+    /// Format print Dioxus config.
+    FormatPrint {},
+    /// Create a custom html file.
+    CustomHtml {}
 }
 
 impl Config {
     pub fn config(self) -> Result<()> {
         let crate_root = crate::cargo::crate_root()?;
         match self {
-            Config::Init { name, force } => {
+            Config::Init {
+                name,
+                force,
+                platform,
+            } => {
                 let conf_path = crate_root.join("Dioxus.toml");
                 if conf_path.is_file() && !force {
                     log::warn!(
@@ -30,9 +42,20 @@ impl Config {
                 }
                 let mut file = File::create(conf_path)?;
                 let content = String::from(include_str!("../../assets/dioxus.toml"))
-                    .replace("{{project-name}}", &name);
+                    .replace("{{project-name}}", &name)
+                    .replace("{{default-platform}}", &platform);
                 file.write_all(content.as_bytes())?;
                 log::info!("🚩 Init config file completed.");
+            }
+            Config::FormatPrint {} => {
+                println!("{:#?}", crate::CrateConfig::new()?.dioxus_config);
+            }
+            Config::CustomHtml {} => {
+                let html_path = crate_root.join("index.html");
+                let mut file = File::create(html_path)?;
+                let content = include_str!("../../assets/index.html");
+                file.write_all(content.as_bytes())?;
+                log::info!("🚩 Create custom html file done.");
             }
         }
         Ok(())

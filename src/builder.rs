@@ -4,7 +4,8 @@ use crate::{
     DioxusConfig,
 };
 use std::{
-    fs::{copy, create_dir_all, remove_dir_all},
+    fs::{copy, create_dir_all, remove_dir_all, File},
+    io::Read,
     panic,
     path::PathBuf,
     process::Command,
@@ -95,8 +96,43 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     });
     if bindgen_result.is_err() {
         log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
+        return Ok(());
     }
 
+    // check binaryen:wasm-opt tool
+    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+    if dioxus_tools.contains_key("binaryen") {
+        let info = dioxus_tools.get("binaryen").unwrap();
+        let binaryen = crate::tools::Tool::Binaryen;
+
+        if binaryen.is_installed() {
+            if let Some(sub) = info.as_table() {
+                if sub.contains_key("wasm_opt")
+                    && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
+                {
+                    let target_file = out_dir
+                        .join("assets")
+                        .join("dioxus")
+                        .join(format!("{}_bg.wasm", dioxus_config.application.name));
+                    if target_file.is_file() {
+                        binaryen.call(
+                            "wasm-opt",
+                            vec![
+                                target_file.to_str().unwrap(),
+                                "-o",
+                                target_file.to_str().unwrap(),
+                            ],
+                        )?;
+                    }
+                }
+            }
+        } else {
+            log::warn!(
+                "Binaryen tool not found, you can use `dioxus tool add binaryen` to install it."
+            );
+        }
+    }
+  
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
         overwrite: true,
@@ -237,7 +273,19 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
 }
 
 pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
-    let mut html = String::from(include_str!("./assets/index.html"));
+    let crate_root = crate::cargo::crate_root().unwrap();
+    let custom_html_file = crate_root.join("index.html");
+    let mut html = if custom_html_file.is_file() {
+        let mut buf = String::new();
+        let mut file = File::open(custom_html_file).unwrap();
+        if file.read_to_string(&mut buf).is_ok() {
+            buf
+        } else {
+            String::from(include_str!("./assets/index.html"))
+        }
+    } else {
+        String::from(include_str!("./assets/index.html"))
+    };
 
     let resouces = config.web.resource.clone();
 
