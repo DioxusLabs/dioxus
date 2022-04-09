@@ -84,7 +84,7 @@ pub fn launch_cfg(
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus::desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+///     dioxus::desktop::launch_with_props(app, AppProps { name: "asd" }, |c| c);
 /// }
 ///
 /// struct AppProps {
@@ -196,7 +196,11 @@ pub fn launch_with_props<P: 'static + Send>(
                     )
                 } else {
                     // in debug, we are okay with the reload menu showing and dev tool
-                    webview = webview.with_dev_tool(true);
+                    cfg_if::cfg_if! {
+                        if #[cfg(any(debug_assertions, feature = "desktop-devtools"))] {
+                            webview = webview.with_devtools(true);
+                        }
+                    }
                 }
 
                 desktop.webviews.insert(window_id, webview.build().unwrap());

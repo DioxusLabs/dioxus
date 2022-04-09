@@ -83,13 +83,16 @@ mod util;
 /// # Example
 ///
 /// ```rust, ignore
+/// use dioxus_core::prelude::*;
+/// use dioxus_core_macro::*;
+/// use dioxus_html as dioxus_elements;
 /// fn main() {
 ///     dioxus_web::launch(App);
 /// }
 ///
 /// static App: Component = |cx| {
 ///     rsx!(cx, div {"hello world"})
-/// }
+/// };
 /// ```
 pub fn launch(root_component: Component) {
     launch_with_props(root_component, (), |c| c);
@@ -101,11 +104,15 @@ pub fn launch(root_component: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
-/// use dioxus::prelude::*;
+/// ```rust, ignore
+/// #![allow(non_upper_case_globals)]
+///
+/// use dioxus_core::prelude::*;
+/// use dioxus_core_macro::*;
+/// use dioxus_html as dioxus_elements;
 ///
 /// fn main() {
-///     dioxus_web::launch_with_props(App, |config| config.pre_render(true));
+///     dioxus_web::launch_cfg(app, |cfg| cfg.hydrate(true).rootname("myroot"));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -125,6 +132,12 @@ pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -
 /// # Example
 ///
 /// ```rust, ignore
+/// #![allow(non_upper_case_globals)]
+///
+/// use dioxus_core::prelude::*;
+/// use dioxus_core_macro::*;
+/// use dioxus_html as dioxus_elements;
+///
 /// fn main() {
 ///     dioxus_web::launch_with_props(
 ///         App,
@@ -133,14 +146,13 @@ pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -
 ///     );
 /// }
 ///
-/// #[derive(ParitalEq, Props)]
 /// struct RootProps {
 ///     name: String
 /// }
 ///
 /// static App: Component<RootProps> = |cx| {
 ///     rsx!(cx, div {"hello {cx.props.name}"})
-/// }
+/// };
 /// ```
 pub fn launch_with_props<T>(
     root_component: Component<T>,

@@ -34,18 +34,19 @@ dioxus-liveview = { path = "./packages/liveview", optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
-
 macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
+router = ["dioxus-router"]
 web = ["dioxus-web", "dioxus-router/web"]
 desktop = ["dioxus-desktop"]
-ayatana = ["dioxus-desktop/ayatana"]
-router = ["dioxus-router"]
+desktop-dox = ["dioxus-desktop/dox", "desktop"]
+desktop-devtools = ["dioxus-desktop/devtools", "desktop"]
+desktop-ayatana-tray = ["dioxus-desktop/ayatana-tray", "desktop"]
+desktop-gtk-tray = ["dioxus-desktop/gtk-tray", "desktop"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
-
 
 [workspace]
 members = [

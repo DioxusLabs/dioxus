@@ -115,9 +115,18 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetDecorations(decoration));
     }
 
+    #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
     /// opens DevTool window
-    pub fn devtool(&self) {
-        let _ = self.proxy.send_event(DevTool);
+    pub fn open_devtools(&self) {
+        let _ = self.proxy.send_event(OpenDevTools);
+    }
+
+    #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
+    /// close DevTool window,
+    ///
+    /// Note: will do nothing on Edge WebView2 (not supported).
+    pub fn close_devtools(&self) {
+        let _ = self.proxy.send_event(CloseDevTools);
     }
 
     /// run (evaluate) a script in the WebView context
@@ -129,11 +138,9 @@ impl DesktopContext {
 #[derive(Debug)]
 pub enum UserWindowEvent {
     Update,
-
     CloseWindow,
     DragWindow,
     FocusWindow,
-
     Visible(bool),
     Minimize(bool),
     Maximize(bool),
@@ -141,15 +148,14 @@ pub enum UserWindowEvent {
     Resizable(bool),
     AlwaysOnTop(bool),
     Fullscreen(bool),
-
     CursorVisible(bool),
     CursorGrab(bool),
-
     SetTitle(String),
     SetDecorations(bool),
-
-    DevTool,
-
+    #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
+    OpenDevTools,
+    #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
+    CloseDevTools,
     Eval(String),
 }
 
@@ -190,9 +196,10 @@ pub(super) fn handler(
 
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
-
-        DevTool => webview.devtool(),
-
+        #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
+        OpenDevTools => webview.open_devtools(),
+        #[cfg(any(debug_assertions, feature = "desktop-devtools"))]
+        CloseDevTools => webview.close_devtools(),
         Eval(code) => webview
             .evaluate_script(code.as_str())
             .expect("eval shouldn't panic"),

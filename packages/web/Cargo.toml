@@ -17,9 +17,9 @@ dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0", features 
     "web",
 ] }
 
-js-sys = "0.3.56"
-wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
-wasm-bindgen-futures = "0.4.29"
+js-sys = "0.3.57"
+wasm-bindgen = { version = "0.2.80", features = ["enable-interning"] }
+wasm-bindgen-futures = "0.4.30"
 log = { version = "0.4.14" }
 fxhash = "0.2.1"
 console_error_panic_hook = { version = "0.1.7", optional = true }
@@ -32,7 +32,7 @@ serde-wasm-bindgen = "0.4.2"
 futures-channel = "0.3.21"
 
 [dependencies.web-sys]
-version = "0.3.56"
+version = "0.3.57"
 features = [
     "Comment",
     "Attr",
@@ -78,6 +78,6 @@ panic_hook = ["console_error_panic_hook"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
-wasm-bindgen-test = "0.3.29"
+wasm-bindgen-test = "0.3.30"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"
