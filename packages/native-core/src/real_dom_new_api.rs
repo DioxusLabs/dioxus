@@ -111,7 +111,7 @@ pub trait NodeDepState {
     fn reduce(&mut self, node: NodeView, ctx: &Self::Ctx) -> bool;
 }
 
-pub trait State {
+pub trait State: Default {
     fn update_node_dep_state<'a>(
         &'a mut self,
         ty: TypeId,
