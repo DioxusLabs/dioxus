@@ -6,7 +6,9 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::real_dom::RealDom;
+use dioxus_native_core::{
+    dioxus_native_core_macro::State, real_dom::RealDom, real_dom_new_api::State,
+};
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
@@ -28,6 +30,9 @@ mod widget;
 pub use config::*;
 pub use hooks::*;
 pub use render::*;
+
+#[derive(Debug, Clone, State, Default)]
+struct NodeState {}
 
 #[derive(Clone)]
 pub struct TuiContext {

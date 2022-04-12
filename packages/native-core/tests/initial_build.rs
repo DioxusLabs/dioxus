@@ -5,6 +5,11 @@ use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_native_core::real_dom::RealDom;
+use dioxus_native_core::real_dom_new_api::State;
+use dioxus_native_core_macro::State;
+
+#[derive(State, Default, Clone)]
+struct Empty {}
 
 #[test]
 fn initial_build_simple() {
@@ -21,7 +26,7 @@ fn initial_build_simple() {
         div{}
     });
 
-    let mut dom: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<Empty> = RealDom::new();
 
     let _to_update = dom.apply_mutations(vec![mutations]);
     let root_div = VElement {
@@ -60,7 +65,7 @@ fn initial_build_with_children() {
         }
     });
 
-    let mut dom: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<Empty> = RealDom::new();
 
     let _to_update = dom.apply_mutations(vec![mutations]);
     let first_text = VText {

@@ -1,60 +1,125 @@
+use anymap::AnyMap;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_native_core::real_dom::*;
+use dioxus_native_core::real_dom_new_api::{
+    AttributeMask, ChildDepState, NodeDepState, NodeMask, NodeView, ParentDepState, State,
+};
+use dioxus_native_core_macro::State;
 
-#[derive(Debug, Clone, PartialEq, Default)]
-struct CallCounter(u32);
-impl BubbledUpState for CallCounter {
+#[derive(Debug, Clone, Default, State)]
+struct CallCounterState {
+    #[child_dep_state(ChildDepCallCounter)]
+    child_counter: ChildDepCallCounter,
+    #[parent_dep_state(ParentDepCallCounter)]
+    parent_counter: ParentDepCallCounter,
+    #[node_dep_state()]
+    node_counter: NodeDepCallCounter,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ChildDepCallCounter(u32);
+impl ChildDepState for ChildDepCallCounter {
     type Ctx = ();
-
-    fn reduce<'a, I>(&mut self, _children: I, _vnode: &VNode, _ctx: &mut Self::Ctx)
-    where
-        I: Iterator<Item = &'a Self>,
-        Self: 'a,
-    {
+    type DepState = Self;
+    const NODE_MASK: NodeMask = NodeMask::ALL;
+    fn reduce(
+        &mut self,
+        _node: NodeView,
+        _children: Vec<&Self::DepState>,
+        _ctx: &Self::Ctx,
+    ) -> bool {
         self.0 += 1;
+        true
     }
 }
 
-impl PushedDownState for CallCounter {
+#[derive(Debug, Clone, Default)]
+struct ParentDepCallCounter(u32);
+impl ParentDepState for ParentDepCallCounter {
     type Ctx = ();
-
-    fn reduce(&mut self, _parent: Option<&Self>, _vnode: &VNode, _ctx: &mut Self::Ctx) {
+    type DepState = Self;
+    const NODE_MASK: NodeMask = NodeMask::ALL;
+    fn reduce(
+        &mut self,
+        _node: NodeView,
+        _parent: Option<&Self::DepState>,
+        _ctx: &Self::Ctx,
+    ) -> bool {
         self.0 += 1;
+        true
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+struct NodeDepCallCounter(u32);
+impl NodeDepState for NodeDepCallCounter {
+    type Ctx = ();
+    const NODE_MASK: NodeMask = NodeMask::ALL;
+    fn reduce(&mut self, _node: NodeView, _ctx: &Self::Ctx) -> bool {
+        self.0 += 1;
+        true
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-struct BubbledUpStateTester(String, Vec<Box<BubbledUpStateTester>>);
-impl BubbledUpState for BubbledUpStateTester {
+struct BubbledUpStateTester(Option<String>, Vec<Box<BubbledUpStateTester>>);
+impl ChildDepState for BubbledUpStateTester {
     type Ctx = u32;
-
-    fn reduce<'a, I>(&mut self, children: I, vnode: &VNode, ctx: &mut Self::Ctx)
-    where
-        I: Iterator<Item = &'a Self>,
-        Self: 'a,
-    {
+    type DepState = Self;
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false);
+    fn reduce(&mut self, node: NodeView, children: Vec<&Self::DepState>, ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = BubbledUpStateTester(
-            vnode.mounted_id().to_string(),
-            children.map(|c| Box::new(c.clone())).collect(),
+            node.tag().map(|s| s.to_string()),
+            children.into_iter().map(|c| Box::new(c.clone())).collect(),
         );
+        true
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
-struct PushedDownStateTester(String, Option<Box<PushedDownStateTester>>);
-impl PushedDownState for PushedDownStateTester {
+struct PushedDownStateTester(Option<String>, Option<Box<PushedDownStateTester>>);
+impl ParentDepState for PushedDownStateTester {
     type Ctx = u32;
-
-    fn reduce(&mut self, parent: Option<&Self>, vnode: &VNode, ctx: &mut Self::Ctx) {
+    type DepState = Self;
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false);
+    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = PushedDownStateTester(
-            vnode.mounted_id().to_string(),
+            node.tag().map(|s| s.to_string()),
             parent.map(|c| Box::new(c.clone())),
         );
+        true
+    }
+}
+
+#[derive(State, Clone, Default, Debug)]
+struct StateTester {
+    #[child_dep_state(BubbledUpStateTester, u32)]
+    bubbled: BubbledUpStateTester,
+    #[parent_dep_state(PushedDownStateTester, u32)]
+    pushed: PushedDownStateTester,
+    #[node_dep_state(u32)]
+    node: NodeStateTester,
+}
+
+#[derive(Debug, Clone, PartialEq, Default)]
+struct NodeStateTester(Option<String>, Vec<(String, String)>);
+impl NodeDepState for NodeStateTester {
+    type Ctx = u32;
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, false);
+    fn reduce(&mut self, node: NodeView, ctx: &Self::Ctx) -> bool {
+        assert_eq!(*ctx, 42);
+        *self = NodeStateTester(
+            node.tag().map(|s| s.to_string()),
+            node.attributes()
+                .map(|a| (a.name.to_string(), a.value.to_string()))
+                .collect(),
+        );
+        true
     }
 }
 
@@ -72,71 +137,68 @@ fn state_initial() {
 
     let mutations = vdom.create_vnodes(rsx! {
         div {
-            p{}
+            p{
+                color: "red"
+            }
             h1{}
         }
     });
 
-    let mut dom: RealDom<BubbledUpStateTester, PushedDownStateTester> = RealDom::new();
+    let mut dom: RealDom<StateTester> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut 42, &mut 42);
+    let mut ctx = AnyMap::new();
+    ctx.insert(42u32);
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, ctx);
 
     let root_div = &dom[1];
-    assert_eq!(root_div.up_state.0, "1");
+    assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
     assert_eq!(
-        root_div.up_state.1,
+        root_div.state.bubbled.1,
         vec![
-            Box::new(BubbledUpStateTester("2".to_string(), Vec::new())),
-            Box::new(BubbledUpStateTester("3".to_string(), Vec::new()))
+            Box::new(BubbledUpStateTester(Some("p".to_string()), Vec::new())),
+            Box::new(BubbledUpStateTester(Some("h1".to_string()), Vec::new()))
         ]
     );
-    assert_eq!(root_div.down_state.0, "1");
-    assert_eq!(root_div.down_state.1, None);
+    assert_eq!(root_div.state.pushed.0, Some("div".to_string()));
+    assert_eq!(root_div.state.pushed.1, None);
+    assert_eq!(root_div.state.node.0, Some("div".to_string()));
+    assert_eq!(root_div.state.node.1, vec![]);
 
     let child_p = &dom[2];
-    assert_eq!(child_p.up_state.0, "2");
-    assert_eq!(child_p.up_state.1, Vec::new());
-    assert_eq!(child_p.down_state.0, "2");
+    assert_eq!(child_p.state.bubbled.0, Some("p".to_string()));
+    assert_eq!(child_p.state.bubbled.1, Vec::new());
+    assert_eq!(child_p.state.pushed.0, Some("p".to_string()));
     assert_eq!(
-        child_p.down_state.1,
-        Some(Box::new(PushedDownStateTester("1".to_string(), None)))
+        child_p.state.pushed.1,
+        Some(Box::new(PushedDownStateTester(
+            Some("div".to_string()),
+            None
+        )))
+    );
+    assert_eq!(child_p.state.node.0, Some("p".to_string()));
+    assert_eq!(
+        child_p.state.node.1,
+        vec![("color".to_string(), "red".to_string())]
     );
 
     let child_h1 = &dom[3];
-    assert_eq!(child_h1.up_state.0, "3");
-    assert_eq!(child_h1.up_state.1, Vec::new());
-    assert_eq!(child_h1.down_state.0, "3");
+    assert_eq!(child_h1.state.bubbled.0, Some("h1".to_string()));
+    assert_eq!(child_h1.state.bubbled.1, Vec::new());
+    assert_eq!(child_h1.state.pushed.0, Some("h1".to_string()));
     assert_eq!(
-        child_h1.down_state.1,
-        Some(Box::new(PushedDownStateTester("1".to_string(), None)))
+        child_h1.state.pushed.1,
+        Some(Box::new(PushedDownStateTester(
+            Some("div".to_string()),
+            None
+        )))
     );
+    assert_eq!(child_h1.state.node.0, Some("h1".to_string()));
+    assert_eq!(child_h1.state.node.1, vec![]);
 }
 
 #[test]
 fn state_reduce_initally_called_minimally() {
-    #[derive(Debug, Clone, PartialEq, Default)]
-    struct CallCounter(u32);
-    impl BubbledUpState for CallCounter {
-        type Ctx = ();
-
-        fn reduce<'a, I>(&mut self, _children: I, _vnode: &VNode, _ctx: &mut Self::Ctx)
-        where
-            I: Iterator<Item = &'a Self>,
-            Self: 'a,
-        {
-            self.0 += 1;
-        }
-    }
-
-    impl PushedDownState for CallCounter {
-        type Ctx = ();
-
-        fn reduce(&mut self, _parent: Option<&Self>, _vnode: &VNode, _ctx: &mut Self::Ctx) {
-            self.0 += 1;
-        }
-    }
-
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {
@@ -178,14 +240,15 @@ fn state_reduce_initally_called_minimally() {
         }
     });
 
-    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.up_state.0, 1);
-        assert_eq!(n.down_state.0, 1);
+        assert_eq!(n.state.child_counter.0, 1);
+        assert_eq!(n.state.parent_counter.0, 1);
+        assert_eq!(n.state.node_counter.0, 1);
     });
 }
 
@@ -194,6 +257,7 @@ fn state_reduce_down_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {
+            width: "100%",
             div{
                 div{
                     p{}
@@ -233,10 +297,10 @@ fn state_reduce_down_called_minimally_on_update() {
         }
     });
 
-    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 1,
@@ -247,11 +311,13 @@ fn state_reduce_down_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.down_state.0, 2);
+        println!("{:?}", n.state);
+        // assert_eq!(n.state.parent_counter.0, 2);
     });
+    panic!()
 }
 
 #[test]
@@ -259,6 +325,7 @@ fn state_reduce_up_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {
+            width: "100%",
             div{
                 div{
                     p{}
@@ -298,10 +365,10 @@ fn state_reduce_up_called_minimally_on_update() {
         }
     });
 
-    let mut dom: RealDom<CallCounter, CallCounter> = RealDom::new();
+    let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 4,
@@ -312,9 +379,11 @@ fn state_reduce_up_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, &mut (), &mut ());
+    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.up_state.0, if n.id.0 > 4 { 1 } else { 2 });
+        println!("{:?}", n.state);
+        // assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
     });
+    panic!()
 }

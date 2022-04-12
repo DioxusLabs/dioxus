@@ -3,7 +3,12 @@ use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_native_core::real_dom::RealDom;
+use dioxus_native_core::real_dom_new_api::State;
+use dioxus_native_core_macro::State;
 use std::cell::Cell;
+
+#[derive(State, Default, Clone)]
+struct Empty {}
 
 #[test]
 fn remove_node() {
@@ -20,7 +25,7 @@ fn remove_node() {
         }
     });
 
-    let mut dom: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<Empty> = RealDom::new();
 
     let _to_update = dom.apply_mutations(vec![mutations]);
     let child_div = VElement {
@@ -92,7 +97,7 @@ fn add_node() {
         div{}
     });
 
-    let mut dom: RealDom<(), ()> = RealDom::new();
+    let mut dom: RealDom<Empty> = RealDom::new();
 
     let _to_update = dom.apply_mutations(vec![mutations]);
 

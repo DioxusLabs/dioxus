@@ -5,7 +5,9 @@ use quote::{quote, ToTokens};
 use syn::{
     self,
     parse::{Parse, ParseStream},
-    Field, Ident, Token, Type,
+    punctuated::Punctuated,
+    token::Paren,
+    Field, Ident, Token, Type, TypeTuple,
 };
 
 #[derive(PartialEq)]
@@ -103,8 +105,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
     let gen = quote! {
         impl State for #type_name{
-            fn update_node_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::NodeDepState;
+            fn update_node_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::real_dom_new_api::NodeDepState as _;
+                // println!("called update_node_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!();
                 }
@@ -114,8 +117,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
 
-            fn update_parent_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, parent: &Self, ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::ParentDepState;
+            fn update_parent_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, parent: Option<&Self>, ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::real_dom_new_api::ParentDepState as _;
+                // println!("called update_parent_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!();
                 }
@@ -125,8 +129,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
 
-            fn update_child_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VElement<'a>, children: Vec<&Self>, ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::ChildDepState;
+            fn update_child_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, children: &[&Self], ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::real_dom_new_api::ChildDepState as _;
+                // println!("called update_child_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!()
                 }
@@ -200,12 +205,34 @@ struct DepTypes {
 }
 
 impl Parse for DepTypes {
-    fn parse(input: ParseStream) -> Result<DepTypes, syn::Error> {
-        let ctx_ty = input.parse::<Type>().ok();
-        let comma = input.parse::<Token![,]>().ok();
-        let dep_ty = input.parse::<Type>().ok();
-        let dep_ty = comma.and(dep_ty);
-        Ok(DepTypes { ctx_ty, dep_ty })
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let dep_ty = input.parse().ok();
+        let comma: Option<Token![,]> = input.parse().ok();
+        let ctx_ty = input.parse().ok();
+        Ok(Self {
+            ctx_ty: comma.and(ctx_ty),
+            dep_ty,
+        })
+    }
+}
+
+struct NodeDepTypes {
+    ctx_ty: Option<Type>,
+}
+
+impl Parse for NodeDepTypes {
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let ctx_ty = input.parse().ok();
+        Ok(Self { ctx_ty })
+    }
+}
+
+impl From<NodeDepTypes> for DepTypes {
+    fn from(node_dep_types: NodeDepTypes) -> Self {
+        Self {
+            ctx_ty: node_dep_types.ctx_ty,
+            dep_ty: None,
+        }
     }
 }
 
@@ -243,7 +270,10 @@ impl<'a> StateMember<'a> {
                     _ => None,
                 })
                 .flatten()?;
-            let deps: DepTypes = a.parse_args().ok()?;
+            let deps: DepTypes = match dep_kind {
+                DepKind::NodeDepState => a.parse_args::<NodeDepTypes>().ok()?.into(),
+                _ => a.parse_args().ok()?,
+            };
 
             Some(Self {
                 mem,
@@ -260,8 +290,19 @@ impl<'a> StateMember<'a> {
     fn reduce_self(&self) -> quote::__private::TokenStream {
         let ident = &self.mem.ident;
         let get_ctx = if let Some(ctx_ty) = &self.ctx_ty {
-            let msg = ctx_ty.to_token_stream().to_string() + " not found in context";
-            quote! {ctx.get().expect(#msg)}
+            if ctx_ty
+                == &Type::Tuple(TypeTuple {
+                    paren_token: Paren {
+                        span: quote::__private::Span::call_site(),
+                    },
+                    elems: Punctuated::new(),
+                })
+            {
+                quote! {&()}
+            } else {
+                let msg = ctx_ty.to_token_stream().to_string() + " not found in context";
+                quote! {ctx.get().expect(#msg)}
+            }
         } else {
             quote! {&()}
         };
@@ -276,7 +317,7 @@ impl<'a> StateMember<'a> {
                     quote!(self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident).collect(), #get_ctx))
                 }
                 DepKind::ParentDepState => {
-                    quote!(self.#ident.reduce(#node_view, &parent.#dep_ident, #get_ctx))
+                    quote!(self.#ident.reduce(#node_view, parent.as_ref().map(|p| &p.#dep_ident), #get_ctx))
                 }
             }
         } else {
@@ -288,7 +329,7 @@ impl<'a> StateMember<'a> {
                     quote!(self.#ident.reduce(#node_view, &(), #get_ctx))
                 }
                 DepKind::ParentDepState => {
-                    quote!(self.#ident.reduce(#node_view, &(), #get_ctx))
+                    quote!(self.#ident.reduce(#node_view, Some(&()), #get_ctx))
                 }
             }
         }
@@ -296,6 +337,11 @@ impl<'a> StateMember<'a> {
 
     fn type_id(&self) -> quote::__private::TokenStream {
         let ty = &self.mem.ty;
-        quote!(std::any::TypeId::of::<#ty>())
+        // quote!(std::any::TypeId::of::<#ty>())
+        quote!({
+            let type_id = std::any::TypeId::of::<#ty>();
+            // println!("{:?}", type_id);
+            type_id
+        })
     }
 }

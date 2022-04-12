@@ -1,16 +1,16 @@
 use dioxus_native_core::real_dom_new_api::*;
 use dioxus_native_core_macro::*;
 
-#[derive(State)]
+#[derive(State, Default, Clone)]
 struct Z {
     // depends on just attributes and no context
     #[node_dep_state()]
     x: A,
     // depends on attributes, the B component of children and i32 context
-    #[child_dep_state(i32, B)]
+    #[child_dep_state(B, i32)]
     y: B,
     // depends on attributes, the C component of it's parent and a u8 context
-    #[parent_dep_state(u8, C)]
+    #[parent_dep_state(C, u8)]
     z: C,
 }
 
@@ -22,7 +22,7 @@ struct Z {
 
 use dioxus_native_core::real_dom_new_api::NodeDepState;
 
-#[derive(PartialEq)]
+#[derive(Default, Clone)]
 struct A;
 impl NodeDepState for A {
     type Ctx = ();
@@ -31,7 +31,7 @@ impl NodeDepState for A {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Default, Clone)]
 struct B;
 impl ChildDepState for B {
     type Ctx = i32;
@@ -46,7 +46,7 @@ impl ChildDepState for B {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Default, Clone)]
 struct C;
 impl ParentDepState for C {
     type Ctx = u8;
@@ -54,7 +54,7 @@ impl ParentDepState for C {
     fn reduce(
         &mut self,
         _: dioxus_native_core::real_dom_new_api::NodeView,
-        _: &Self::DepState,
+        _: Option<&Self::DepState>,
         _: &u8,
     ) -> bool {
         todo!()

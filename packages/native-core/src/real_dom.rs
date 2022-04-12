@@ -1,13 +1,14 @@
 use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
 use std::{
+    any::TypeId,
     collections::VecDeque,
     ops::{Index, IndexMut},
 };
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 
-use crate::real_dom_new_api::{State, NodeMask};
+use crate::real_dom_new_api::{AttributeMask, NodeMask, State};
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -47,7 +48,7 @@ impl<S: State> RealDom<S> {
     }
 
     /// Updates the dom, up and down state and return a set of nodes that were updated pass this to update_state.
-    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<usize> {
+    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<(usize, NodeMask)> {
         let mut nodes_updated = Vec::new();
         for mutations in mutations_vec {
             for e in mutations.edits {
@@ -69,7 +70,7 @@ impl<S: State> RealDom<S> {
                             .collect();
                         for ns in drained {
                             self.link_child(ns, target).unwrap();
-                            nodes_updated.push(ns);
+                            nodes_updated.push((ns, NodeMask::ALL));
                         }
                     }
                     ReplaceWith { root, m } => {
@@ -77,7 +78,7 @@ impl<S: State> RealDom<S> {
                         let target = root.parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..m as usize).collect();
                         for ns in drained {
-                            nodes_updated.push(ns);
+                            nodes_updated.push((ns, NodeMask::ALL));
                             self.link_child(ns, target).unwrap();
                         }
                     }
@@ -85,7 +86,7 @@ impl<S: State> RealDom<S> {
                         let target = self[root as usize].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
-                            nodes_updated.push(ns);
+                            nodes_updated.push((ns, NodeMask::ALL));
                             self.link_child(ns, target).unwrap();
                         }
                     }
@@ -93,13 +94,13 @@ impl<S: State> RealDom<S> {
                         let target = self[root as usize].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
-                            nodes_updated.push(ns);
+                            nodes_updated.push((ns, NodeMask::ALL));
                             self.link_child(ns, target).unwrap();
                         }
                     }
                     Remove { root } => {
                         if let Some(parent) = self[root as usize].parent {
-                            nodes_updated.push(parent.0);
+                            nodes_updated.push((parent.0, NodeMask::NONE));
                         }
                         self.remove(root as usize).unwrap();
                     }
@@ -165,7 +166,7 @@ impl<S: State> RealDom<S> {
                         text: new_text,
                     } => {
                         let target = &mut self[root as usize];
-                        nodes_updated.push(root as usize);
+                        nodes_updated.push((root as usize, NodeMask::NONE));
                         match &mut target.node_type {
                             NodeType::Text { text } => {
                                 *text = new_text.to_string();
@@ -173,11 +174,19 @@ impl<S: State> RealDom<S> {
                             _ => unreachable!(),
                         }
                     }
-                    SetAttribute { root, .. } => {
-                        nodes_updated.push(root as usize);
+                    SetAttribute { root, field, .. } => {
+                        nodes_updated.push((
+                            root as usize,
+                            NodeMask::new(AttributeMask::single(field), false, false),
+                        ));
                     }
-                    RemoveAttribute { root, .. } => {
-                        nodes_updated.push(root as usize);
+                    RemoveAttribute {
+                        root, name: field, ..
+                    } => {
+                        nodes_updated.push((
+                            root as usize,
+                            NodeMask::new(AttributeMask::single(field), false, false),
+                        ));
                     }
                     PopRoot {} => {
                         self.node_stack.pop();
@@ -193,77 +202,148 @@ impl<S: State> RealDom<S> {
     pub fn update_state(
         &mut self,
         vdom: &VirtualDom,
-        nodes_updated: Vec<usize>,
+        nodes_updated: Vec<(usize, NodeMask)>,
         ctx: AnyMap,
     ) -> Option<FxHashSet<usize>> {
+        #[derive(PartialEq, Clone, Debug)]
+        enum StatesToCheck {
+            All,
+            Some(Vec<TypeId>),
+        }
+
         let mut to_rerender = FxHashSet::default();
-        to_rerender.extend(nodes_updated.iter());
+        to_rerender.extend(nodes_updated.iter().map(|(id, _)| id));
         let mut nodes_updated: Vec<_> = nodes_updated
             .into_iter()
-            .map(|id| (id, self[id].height))
+            .map(|(id, mask)| (id, self[id].height, mask, StatesToCheck::All))
             .collect();
         // Sort nodes first by height, then if the height is the same id.
         nodes_updated.sort_by(|fst, snd| fst.1.cmp(&snd.1).then(fst.0.cmp(&snd.0)));
-        nodes_updated.dedup();
+        {
+            // Combine mutations that affect the same node.
+            let current_key = None;
+            for i in 0..nodes_updated.len() {
+                let current = nodes_updated;
+            }
+        }
+        println!("{:?}", nodes_updated);
+
+        // update the state that only depends on nodes. The order does not matter.
+        for (id, _height, mask, to_check) in &nodes_updated {
+            let mut changed = false;
+            let node = &mut self[*id as usize];
+            let ids = match to_check {
+                StatesToCheck::All => node.state.node_dep_types(&mask),
+                StatesToCheck::Some(_) => unreachable!(),
+            };
+            for ty in ids {
+                let node = &mut self[*id as usize];
+                let el = if let &VNode::Element(e) = node.element(vdom) {
+                    Some(e)
+                } else {
+                    None
+                };
+                changed |= node.state.update_node_dep_state(ty, el, &ctx);
+            }
+            if changed {
+                to_rerender.insert(*id);
+            }
+        }
 
         // bubble up state. To avoid calling reduce more times than nessisary start from the bottom and go up.
         let mut to_bubble: VecDeque<_> = nodes_updated.clone().into();
-        while let Some((id, height)) = to_bubble.pop_back() {
-            let node = &mut self[id as usize];
-            let vnode = node.element(vdom);
-            let node_type = &node.node_type;
-            if let
-                NodeType::Element { children, tag, namespace } =node.node_type{
-
+        while let Some((id, height, mask, to_check)) = to_bubble.pop_back() {
+            let (node, children) = self.get_node_children_mut(id).unwrap();
+            let children_state: Vec<_> = children.iter().map(|c| &c.state).collect();
+            let ids = match to_check {
+                StatesToCheck::All => node.state.child_dep_types(&mask),
+                StatesToCheck::Some(ids) => ids,
+            };
+            let mut changed = Vec::new();
+            for ty in ids {
+                let el = if let &VNode::Element(e) = node.element(vdom) {
+                    Some(e)
+                } else {
+                    None
+                };
+                if node
+                    .state
+                    .update_child_dep_state(ty, el, &children_state, &ctx)
+                {
+                    changed.push(ty);
                 }
-            let mask = NodeMask::new(attritutes, tag, namespace)
-            // todo: reduce cloning state
-            for id in node.state.child_dep_types(mask) {}
-            if new != old {
-                to_rerender.insert(id);
-                if let Some(p) = parent {
-                    let i = to_bubble.partition_point(|(other_id, h)| {
-                        *h < height - 1 || (*h == height - 1 && *other_id < p.0)
+            }
+            if let Some(parent_id) = node.parent {
+                if !changed.is_empty() {
+                    to_rerender.insert(id);
+                    let i = to_bubble.partition_point(|(other_id, h, ..)| {
+                        *h < height - 1 || (*h == height - 1 && *other_id < parent_id.0)
                     });
                     // make sure the parent is not already queued
-                    if i >= to_bubble.len() || to_bubble[i].0 != p.0 {
-                        to_bubble.insert(i, (p.0, height - 1));
+                    if i >= to_bubble.len() || to_bubble[i].0 != parent_id.0 {
+                        to_bubble.insert(
+                            i,
+                            (
+                                parent_id.0,
+                                height - 1,
+                                NodeMask::NONE,
+                                StatesToCheck::Some(changed),
+                            ),
+                        );
                     }
                 }
-                let node = &mut self[id as usize];
-                node.up_state = new;
             }
         }
 
         // push down state. To avoid calling reduce more times than nessisary start from the top and go down.
         let mut to_push: VecDeque<_> = nodes_updated.clone().into();
-        while let Some((id, height)) = to_push.pop_front() {
-            let node = &self[id as usize];
-            // todo: reduce cloning state
-            let old = node.down_state.clone();
-            let mut new = node.down_state.clone();
-            let vnode = node.element(vdom);
-            new.reduce(
-                node.parent
-                    .filter(|e| e.0 != 0)
-                    .map(|e| &self[e].down_state),
-                vnode,
-                ds_ctx,
-            );
-            if new != old {
-                to_rerender.insert(id);
-                let node = &mut self[id as usize];
+        while let Some((id, height, mask, to_check)) = to_push.pop_front() {
+            let node = &self[id];
+            let ids = match to_check {
+                StatesToCheck::All => node.state.parent_dep_types(&mask),
+                StatesToCheck::Some(ids) => ids,
+            };
+            let mut changed = Vec::new();
+            let (node, parent) = self.get_node_parent_mut(id).unwrap();
+            for ty in ids {
+                let el = if let &VNode::Element(e) = node.element(vdom) {
+                    Some(e)
+                } else {
+                    None
+                };
+                let parent = parent.as_deref();
+                let state = &mut node.state;
+                if state.update_parent_dep_state(
+                    ty,
+                    el,
+                    parent.filter(|n| n.id.0 != 0).map(|n| &n.state),
+                    &ctx,
+                ) {
+                    changed.push(ty);
+                }
+            }
+
+            to_rerender.insert(id);
+            if !changed.is_empty() {
+                let node = &self[id];
                 if let NodeType::Element { children, .. } = &node.node_type {
                     for c in children {
-                        let i = to_push.partition_point(|(other_id, h)| {
+                        let i = to_push.partition_point(|(other_id, h, ..)| {
                             *h < height + 1 || (*h == height + 1 && *other_id < c.0)
                         });
                         if i >= to_push.len() || to_push[i].0 != c.0 {
-                            to_push.insert(i, (c.0, height + 1));
+                            to_push.insert(
+                                i,
+                                (
+                                    c.0,
+                                    height + 1,
+                                    NodeMask::NONE,
+                                    StatesToCheck::Some(changed.clone()),
+                                ),
+                            );
                         }
                     }
                 }
-                node.down_state = new;
             }
         }
 
@@ -331,6 +411,56 @@ impl<S: State> RealDom<S> {
 
     pub fn get_mut(&mut self, id: usize) -> Option<&mut Node<S>> {
         self.nodes.get_mut(id)?.as_mut()
+    }
+
+    // this is safe because no node will have itself as a child
+    pub fn get_node_children_mut<'a>(
+        &'a mut self,
+        id: usize,
+    ) -> Option<(&'a mut Node<S>, Vec<&'a mut Node<S>>)> {
+        let ptr = self.nodes.as_mut_ptr();
+        unsafe {
+            if id >= self.nodes.len() {
+                None
+            } else {
+                let node = &mut *ptr.add(id);
+                if let Some(node) = node.as_mut() {
+                    let children = match &node.node_type {
+                        NodeType::Element { children, .. } => children
+                            .iter()
+                            .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap())
+                            .collect(),
+                        _ => Vec::new(),
+                    };
+                    return Some((node, children));
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
+    // this is safe because no node will have itself as a parent
+    pub fn get_node_parent_mut<'a>(
+        &'a mut self,
+        id: usize,
+    ) -> Option<(&'a mut Node<S>, Option<&'a mut Node<S>>)> {
+        let ptr = self.nodes.as_mut_ptr();
+        unsafe {
+            let node = &mut *ptr.add(id);
+            if id >= self.nodes.len() {
+                None
+            } else {
+                if let Some(node) = node.as_mut() {
+                    let parent = node
+                        .parent
+                        .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap());
+                    return Some((node, parent));
+                } else {
+                    None
+                }
+            }
+        }
     }
 
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
@@ -526,41 +656,5 @@ impl<S: State> Node<S> {
 
     fn set_parent(&mut self, parent: ElementId) {
         self.parent = Some(parent);
-    }
-}
-
-/// This state that is passed down to children. For example text properties (`<b>` `<i>` `<u>`) would be passed to children.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
-/// Called at most once per update.
-pub trait PushedDownState: Default + PartialEq + Clone {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
-    /// This is sometimes nessisary for lifetime purposes.
-    type Ctx;
-    fn reduce(&mut self, parent: Option<&Self>, vnode: &VNode, ctx: &mut Self::Ctx);
-}
-impl PushedDownState for () {
-    type Ctx = ();
-    fn reduce(&mut self, _parent: Option<&Self>, _vnode: &VNode, _ctx: &mut Self::Ctx) {}
-}
-
-/// This state is derived from children. For example a node's size could be derived from the size of children.
-/// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
-/// Called at most once per update.
-pub trait BubbledUpState: Default + PartialEq + Clone {
-    /// The context is passed to the [BubbledUpState::reduce] when it is bubbled up.
-    /// This is sometimes nessisary for lifetime purposes.
-    type Ctx;
-    fn reduce<'a, I>(&mut self, children: I, vnode: &VNode, ctx: &mut Self::Ctx)
-    where
-        I: Iterator<Item = &'a Self>,
-        Self: 'a;
-}
-impl BubbledUpState for () {
-    type Ctx = ();
-    fn reduce<'a, I>(&mut self, _children: I, _vnode: &VNode, _ctx: &mut Self::Ctx)
-    where
-        I: Iterator<Item = &'a Self>,
-        Self: 'a,
-    {
     }
 }
