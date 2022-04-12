@@ -7,6 +7,7 @@ use syn::{
 };
 
 pub struct InlinePropsBody {
+    pub attrs: Vec<Attribute>,
     pub vis: syn::Visibility,
     pub fn_token: Token![fn],
     pub ident: Ident,
@@ -22,6 +23,7 @@ pub struct InlinePropsBody {
 /// The custom rusty variant of parsing rsx!
 impl Parse for InlinePropsBody {
     fn parse(input: ParseStream) -> Result<Self> {
+        let attrs: Vec<Attribute> = input.call(Attribute::parse_outer)?;
         let vis: Visibility = input.parse()?;
 
         let fn_token = input.parse()?;
@@ -57,6 +59,7 @@ impl Parse for InlinePropsBody {
             output,
             block,
             cx_token,
+            attrs,
         })
     }
 }
@@ -72,6 +75,7 @@ impl ToTokens for InlinePropsBody {
             output,
             block,
             cx_token,
+            attrs,
             ..
         } = self;
 
@@ -136,6 +140,7 @@ impl ToTokens for InlinePropsBody {
                 #(#fields),*
             }
 
+            #(#attrs)*
             #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output {
                 let #struct_name { #(#field_names),* } = &cx.props;
                 #block
