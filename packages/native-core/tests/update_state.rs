@@ -72,7 +72,7 @@ struct BubbledUpStateTester(Option<String>, Vec<Box<BubbledUpStateTester>>);
 impl ChildDepState for BubbledUpStateTester {
     type Ctx = u32;
     type DepState = Self;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false);
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false, false);
     fn reduce<'a>(
         &mut self,
         node: NodeView,
@@ -96,7 +96,7 @@ struct PushedDownStateTester(Option<String>, Option<Box<PushedDownStateTester>>)
 impl ParentDepState for PushedDownStateTester {
     type Ctx = u32;
     type DepState = Self;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false);
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false, false);
     fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = PushedDownStateTester(
@@ -121,7 +121,7 @@ struct StateTester {
 struct NodeStateTester(Option<String>, Vec<(String, String)>);
 impl NodeDepState for NodeStateTester {
     type Ctx = u32;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, false);
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, false, false);
     fn reduce(&mut self, node: NodeView, ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = NodeStateTester(
