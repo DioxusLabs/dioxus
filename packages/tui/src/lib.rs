@@ -1,4 +1,5 @@
 use anyhow::Result;
+use anymap::AnyMap;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
     execute,
@@ -6,14 +7,14 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{
-    dioxus_native_core_macro::State, real_dom::RealDom, real_dom_new_api::State,
-};
+use dioxus_native_core::{dioxus_native_core_macro::State, real_dom::RealDom, state::*};
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
 use layout::StretchLayout;
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::{io, time::Duration};
 use stretch2::{prelude::Size, Stretch};
 use style_attributes::StyleModifier;
@@ -31,8 +32,17 @@ pub use config::*;
 pub use hooks::*;
 pub use render::*;
 
+type Dom = RealDom<NodeState>;
+type Node = dioxus_native_core::real_dom::Node<NodeState>;
+
 #[derive(Debug, Clone, State, Default)]
-struct NodeState {}
+struct NodeState {
+    #[child_dep_state(StretchLayout, RefCell<Stretch>)]
+    layout: StretchLayout,
+    // depends on attributes, the C component of it's parent and a u8 context
+    #[parent_dep_state(StyleModifier)]
+    style: StyleModifier,
+}
 
 #[derive(Clone)]
 pub struct TuiContext {
@@ -75,13 +85,13 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     cx.provide_root_context(state);
     cx.provide_root_context(TuiContext { tx: event_tx_clone });
 
-    let mut rdom: RealDom<StretchLayout, StyleModifier> = RealDom::new();
+    let mut rdom: Dom = RealDom::new();
     let mutations = dom.rebuild();
     let to_update = rdom.apply_mutations(vec![mutations]);
-    let mut stretch = Stretch::new();
-    let _to_rerender = rdom
-        .update_state(&dom, to_update, &mut stretch, &mut ())
-        .unwrap();
+    let stretch = Rc::new(RefCell::new(Stretch::new()));
+    let mut any_map = AnyMap::new();
+    any_map.insert(stretch.clone());
+    let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
 
     render_vdom(
         &mut dom,
@@ -100,8 +110,8 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut rdom: RealDom<StretchLayout, StyleModifier>,
-    mut stretch: Stretch,
+    mut rdom: Dom,
+    mut stretch: Rc<RefCell<Stretch>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -119,7 +129,7 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
+            let to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
             let mut resized = true;
 
             loop {
@@ -136,15 +146,11 @@ fn render_vdom(
 
                 if !to_rerender.is_empty() || resized {
                     resized = false;
-                    fn resize(
-                        dims: Rect,
-                        stretch: &mut Stretch,
-                        rdom: &RealDom<StretchLayout, StyleModifier>,
-                    ) {
+                    fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
                         let root_id = rdom.root_id();
-                        let root_node = rdom[root_id].up_state.node.unwrap();
+                        let root_node = rdom[root_id].state.layout.node.unwrap();
 
                         stretch
                             .compute_layout(
@@ -159,9 +165,9 @@ fn render_vdom(
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut stretch, &rdom);
+                            resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
                             let root = &rdom[rdom.root_id()];
-                            render::render_vnode(frame, &stretch, &rdom, &root, cfg);
+                            render::render_vnode(frame, &stretch.borrow(), &rdom, &root, cfg);
                         })?;
                     } else {
                         resize(
@@ -171,7 +177,7 @@ fn render_vdom(
                                 width: 300,
                                 height: 300,
                             },
-                            &mut stretch,
+                            &mut stretch.borrow_mut(),
                             &rdom,
                         );
                     }
@@ -212,7 +218,7 @@ fn render_vdom(
 
                 {
                     // resolve events before rendering
-                    let evts = handler.get_events(&stretch, &mut rdom);
+                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
@@ -220,11 +226,9 @@ fn render_vdom(
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
-                    to_rerender.extend(
-                        rdom.update_state(vdom, to_update, &mut stretch, &mut ())
-                            .unwrap()
-                            .iter(),
-                    )
+                    let mut any_map = AnyMap::new();
+                    any_map.insert(stretch.clone());
+                    let _to_rerender = rdom.update_state(&vdom, to_update, any_map).unwrap();
                 }
             }
 

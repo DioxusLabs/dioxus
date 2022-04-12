@@ -1,43 +1,96 @@
-use std::any::TypeId;
+use std::{any::TypeId, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::{Attribute, VElement};
+use dioxus_core::{Attribute, ElementId, VElement, VNode, VText};
+
+pub(crate) fn union_ordered_iter<T: Ord + Debug>(
+    s_iter: impl Iterator<Item = T>,
+    o_iter: impl Iterator<Item = T>,
+    new_len_guess: usize,
+) -> Vec<T> {
+    let mut s_peekable = s_iter.peekable();
+    let mut o_peekable = o_iter.peekable();
+    let mut v = Vec::with_capacity(new_len_guess);
+    while let Some(s_i) = s_peekable.peek() {
+        loop {
+            if let Some(o_i) = o_peekable.peek() {
+                if o_i > s_i {
+                    break;
+                } else if o_i < s_i {
+                    v.push(o_peekable.next().unwrap());
+                }
+            } else {
+                break;
+            }
+        }
+        v.push(s_peekable.next().unwrap());
+    }
+    while let Some(o_i) = o_peekable.next() {
+        v.push(o_i);
+    }
+    for w in v.windows(2) {
+        debug_assert!(w[1] > w[0]);
+    }
+    v
+}
 
 #[derive(Debug)]
 pub struct NodeView<'a> {
-    inner: Option<&'a VElement<'a>>,
-    view: NodeMask,
+    inner: &'a VNode<'a>,
+    mask: NodeMask,
 }
 impl<'a> NodeView<'a> {
-    pub fn new(velement: Option<&'a VElement<'a>>, view: NodeMask) -> Self {
+    pub fn new(vnode: &'a VNode<'a>, view: NodeMask) -> Self {
         Self {
-            inner: velement,
-            view: view,
+            inner: vnode,
+            mask: view,
         }
+    }
+
+    pub fn id(&self) -> ElementId {
+        self.inner.mounted_id()
     }
 
     pub fn tag(&self) -> Option<&'a str> {
-        if self.view.tag {
-            self.inner.map(|el| el.tag)
-        } else {
-            None
-        }
+        self.mask.tag.then(|| self.el().map(|el| el.tag)).flatten()
     }
 
     pub fn namespace(&self) -> Option<&'a str> {
-        if self.view.namespace {
-            self.inner.map(|el| el.namespace).flatten()
+        self.mask
+            .namespace
+            .then(|| self.el().map(|el| el.namespace).flatten())
+            .flatten()
+    }
+
+    pub fn attributes(&self) -> impl Iterator<Item = &Attribute<'a>> {
+        self.el()
+            .map(|el| el.attributes)
+            .unwrap_or_default()
+            .iter()
+            .filter(|a| self.mask.attritutes.contains_attribute(&a.name))
+    }
+
+    pub fn text(&self) -> Option<&str> {
+        self.mask
+            .text
+            .then(|| self.txt().map(|txt| txt.text))
+            .flatten()
+    }
+
+    fn el(&self) -> Option<&'a VElement<'a>> {
+        if let VNode::Element(el) = &self.inner {
+            Some(el)
         } else {
             None
         }
     }
 
-    pub fn attributes(&self) -> impl Iterator<Item = &Attribute<'a>> {
-        self.inner
-            .map(|el| el.attributes)
-            .unwrap_or_default()
-            .iter()
-            .filter(|a| self.view.attritutes.contains_attribute(&a.name))
+    fn txt(&self) -> Option<&'a VText<'a>> {
+        if let VNode::Text(txt) = &self.inner {
+            Some(txt)
+        } else {
+            None
+        }
     }
 }
 
@@ -54,8 +107,8 @@ impl AttributeMask {
     fn contains_attribute(&self, attr: &'static str) -> bool {
         match self {
             AttributeMask::All => true,
-            AttributeMask::Dynamic(l) => l.contains(&attr),
-            AttributeMask::Static(l) => l.contains(&attr),
+            AttributeMask::Dynamic(l) => l.binary_search(&attr).is_ok(),
+            AttributeMask::Static(l) => l.binary_search(&attr).is_ok(),
         }
     }
 
@@ -78,46 +131,19 @@ impl AttributeMask {
     }
 
     pub fn union(&self, other: &Self) -> Self {
-        pub fn union_iter(
-            s_iter: impl Iterator<Item = &'static str>,
-            o_iter: impl Iterator<Item = &'static str>,
-        ) -> Vec<&'static str> {
-            let mut s_peekable = s_iter.peekable();
-            let mut o_peekable = o_iter.peekable();
-            let mut v = Vec::new();
-            while let Some(s_i) = s_peekable.peek() {
-                loop {
-                    if let Some(o_i) = o_peekable.peek() {
-                        if o_i > s_i {
-                            break;
-                        } else {
-                            v.push(o_peekable.next().unwrap());
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                v.push(s_peekable.next().unwrap());
-            }
-            while let Some(o_i) = o_peekable.next() {
-                v.push(o_i);
-            }
-            v
-        }
-
         let new = match (self, other) {
-            (AttributeMask::Dynamic(s), AttributeMask::Dynamic(o)) => {
-                AttributeMask::Dynamic(union_iter(s.iter().copied(), o.iter().copied()))
-            }
-            (AttributeMask::Static(s), AttributeMask::Dynamic(o)) => {
-                AttributeMask::Dynamic(union_iter(s.iter().copied(), o.iter().copied()))
-            }
-            (AttributeMask::Dynamic(s), AttributeMask::Static(o)) => {
-                AttributeMask::Dynamic(union_iter(s.iter().copied(), o.iter().copied()))
-            }
-            (AttributeMask::Static(s), AttributeMask::Static(o)) => {
-                AttributeMask::Dynamic(union_iter(s.iter().copied(), o.iter().copied()))
-            }
+            (AttributeMask::Dynamic(s), AttributeMask::Dynamic(o)) => AttributeMask::Dynamic(
+                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
+            ),
+            (AttributeMask::Static(s), AttributeMask::Dynamic(o)) => AttributeMask::Dynamic(
+                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
+            ),
+            (AttributeMask::Dynamic(s), AttributeMask::Static(o)) => AttributeMask::Dynamic(
+                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
+            ),
+            (AttributeMask::Static(s), AttributeMask::Static(o)) => AttributeMask::Dynamic(
+                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
+            ),
             _ => AttributeMask::All,
         };
         new.verify();
@@ -179,29 +205,37 @@ pub struct NodeMask {
     attritutes: AttributeMask,
     tag: bool,
     namespace: bool,
+    text: bool,
 }
 
 impl NodeMask {
-    pub const NONE: Self = Self::new(AttributeMask::Static(&[]), false, false);
-    pub const ALL: Self = Self::new(AttributeMask::All, true, true);
+    pub const NONE: Self = Self::new(AttributeMask::Static(&[]), false, false, false);
+    pub const ALL: Self = Self::new(AttributeMask::All, true, true, true);
 
     /// attritutes must be sorted!
-    pub const fn new(attritutes: AttributeMask, tag: bool, namespace: bool) -> Self {
+    pub const fn new(attritutes: AttributeMask, tag: bool, namespace: bool, text: bool) -> Self {
         Self {
             attritutes,
             tag,
             namespace,
+            text,
         }
     }
 
     pub fn overlaps(&self, other: &Self) -> bool {
         (self.tag && other.tag)
             || (self.namespace && other.namespace)
-            || self.attritutes_overlap(other)
+            || self.attritutes.overlaps(&other.attritutes)
+            || (self.text && other.text)
     }
 
-    fn attritutes_overlap(&self, other: &Self) -> bool {
-        self.attritutes.overlaps(&other.attritutes)
+    pub fn union(&self, other: &Self) -> Self {
+        Self {
+            attritutes: self.attritutes.union(&other.attritutes),
+            tag: self.tag | other.tag,
+            namespace: self.namespace | other.namespace,
+            text: self.text | other.text,
+        }
     }
 }
 
@@ -213,8 +247,15 @@ pub trait ChildDepState {
     /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     type DepState: ChildDepState;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, false, false);
-    fn reduce(&mut self, node: NodeView, children: Vec<&Self::DepState>, ctx: &Self::Ctx) -> bool;
+    const NODE_MASK: NodeMask = NodeMask::NONE;
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        children: impl Iterator<Item = &'a Self::DepState>,
+        ctx: &Self::Ctx,
+    ) -> bool
+    where
+        Self::DepState: 'a;
 }
 
 /// This state that is passed down to children. For example text properties (`<b>` `<i>` `<u>`) would be passed to children.
@@ -225,7 +266,7 @@ pub trait ParentDepState {
     /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     type DepState: ParentDepState;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, false, false);
+    const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool;
 }
 
@@ -234,7 +275,7 @@ pub trait ParentDepState {
 /// Called at most once per update.
 pub trait NodeDepState {
     type Ctx;
-    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, false, false);
+    const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(&mut self, node: NodeView, ctx: &Self::Ctx) -> bool;
 }
 
@@ -242,7 +283,7 @@ pub trait State: Default + Clone {
     fn update_node_dep_state<'a>(
         &'a mut self,
         ty: TypeId,
-        node: Option<&'a VElement<'a>>,
+        node: &'a VNode<'a>,
         ctx: &AnyMap,
     ) -> bool;
     /// This must be a valid resolution order. (no nodes updated before a state they rely on)
@@ -251,7 +292,7 @@ pub trait State: Default + Clone {
     fn update_parent_dep_state<'a>(
         &'a mut self,
         ty: TypeId,
-        node: Option<&'a VElement<'a>>,
+        node: &'a VNode<'a>,
         parent: Option<&Self>,
         ctx: &AnyMap,
     ) -> bool;
@@ -261,7 +302,7 @@ pub trait State: Default + Clone {
     fn update_child_dep_state<'a>(
         &'a mut self,
         ty: TypeId,
-        node: Option<&'a VElement<'a>>,
+        node: &'a VNode<'a>,
         children: &[&Self],
         ctx: &AnyMap,
     ) -> bool;

@@ -4,7 +4,7 @@ use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_native_core::real_dom::*;
-use dioxus_native_core::real_dom_new_api::{
+use dioxus_native_core::state::{
     AttributeMask, ChildDepState, NodeDepState, NodeMask, NodeView, ParentDepState, State,
 };
 use dioxus_native_core_macro::State;
@@ -25,12 +25,15 @@ impl ChildDepState for ChildDepCallCounter {
     type Ctx = ();
     type DepState = Self;
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(
+    fn reduce<'a>(
         &mut self,
-        _node: NodeView,
-        _children: Vec<&Self::DepState>,
-        _ctx: &Self::Ctx,
-    ) -> bool {
+        _: NodeView,
+        _: impl Iterator<Item = &'a Self::DepState>,
+        _: &Self::Ctx,
+    ) -> bool
+    where
+        Self::DepState: 'a,
+    {
         self.0 += 1;
         true
     }
@@ -70,7 +73,15 @@ impl ChildDepState for BubbledUpStateTester {
     type Ctx = u32;
     type DepState = Self;
     const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::NONE, true, false);
-    fn reduce(&mut self, node: NodeView, children: Vec<&Self::DepState>, ctx: &Self::Ctx) -> bool {
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        children: impl Iterator<Item = &'a Self::DepState>,
+        ctx: &Self::Ctx,
+    ) -> bool
+    where
+        Self::DepState: 'a,
+    {
         assert_eq!(*ctx, 42);
         *self = BubbledUpStateTester(
             node.tag().map(|s| s.to_string()),
@@ -246,6 +257,10 @@ fn state_reduce_initally_called_minimally() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
+        println!("{:#?}", n.state);
+    });
+
+    dom.traverse_depth_first(|n| {
         assert_eq!(n.state.child_counter.0, 1);
         assert_eq!(n.state.parent_counter.0, 1);
         assert_eq!(n.state.node_counter.0, 1);
@@ -314,10 +329,10 @@ fn state_reduce_down_called_minimally_on_update() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        println!("{:?}", n.state);
-        // assert_eq!(n.state.parent_counter.0, 2);
+        // println!("{:?}", n.state);
+        assert_eq!(n.state.parent_counter.0, 2);
     });
-    panic!()
+    // panic!()
 }
 
 #[test]
@@ -382,8 +397,6 @@ fn state_reduce_up_called_minimally_on_update() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        println!("{:?}", n.state);
-        // assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
+        assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
     });
-    panic!()
 }

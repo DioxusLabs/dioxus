@@ -1,8 +1,5 @@
 use crate::layout::StretchLayout;
-use dioxus_native_core::{
-    layout_attributes::UnitSystem,
-    real_dom::{Node, RealDom},
-};
+use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
 use stretch2::{
     geometry::Point,
@@ -15,16 +12,16 @@ use crate::{
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, StyleModifier,
+    Config, Dom, Node, StyleModifier,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
-pub fn render_vnode(
+pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Stretch,
-    rdom: &RealDom<StretchLayout, StyleModifier>,
-    node: &Node<StretchLayout, StyleModifier>,
+    rdom: &Dom,
+    node: &Node,
     cfg: Config,
 ) {
     use dioxus_native_core::real_dom::NodeType;
@@ -33,7 +30,7 @@ pub fn render_vnode(
         return;
     }
 
-    let Layout { location, size, .. } = layout.layout(node.up_state.node.unwrap()).unwrap();
+    let Layout { location, size, .. } = layout.layout(node.state.layout.node.unwrap()).unwrap();
 
     let Point { x, y } = location;
     let Size { width, height } = size;
@@ -59,7 +56,7 @@ pub fn render_vnode(
 
             let label = Label {
                 text,
-                style: node.down_state.style,
+                style: node.state.style.style,
             };
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
@@ -84,7 +81,7 @@ pub fn render_vnode(
     }
 }
 
-impl RinkWidget for &Node<StretchLayout, StyleModifier> {
+impl RinkWidget for &Node {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
@@ -268,14 +265,14 @@ impl RinkWidget for &Node<StretchLayout, StyleModifier> {
         for x in area.left()..area.right() {
             for y in area.top()..area.bottom() {
                 let mut new_cell = RinkCell::default();
-                if let Some(c) = self.down_state.style.bg {
+                if let Some(c) = self.state.style.style.bg {
                     new_cell.bg = c;
                 }
                 buf.set(x, y, new_cell);
             }
         }
 
-        let borders = &self.down_state.modifier.borders;
+        let borders = &self.state.style.modifier.borders;
 
         let last_edge = &borders.left;
         let current_edge = &borders.top;
@@ -292,7 +289,7 @@ impl RinkWidget for &Node<StretchLayout, StyleModifier> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.down_state.style.fg);
+            let color = current_edge.color.or(self.state.style.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -327,7 +324,7 @@ impl RinkWidget for &Node<StretchLayout, StyleModifier> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.down_state.style.fg);
+            let color = current_edge.color.or(self.state.style.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -362,7 +359,7 @@ impl RinkWidget for &Node<StretchLayout, StyleModifier> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.down_state.style.fg);
+            let color = current_edge.color.or(self.state.style.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -397,7 +394,7 @@ impl RinkWidget for &Node<StretchLayout, StyleModifier> {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.down_state.style.fg);
+            let color = current_edge.color.or(self.state.style.style.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;

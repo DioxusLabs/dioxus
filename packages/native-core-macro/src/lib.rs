@@ -105,8 +105,8 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
     let gen = quote! {
         impl State for #type_name{
-            fn update_node_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::NodeDepState as _;
+            fn update_node_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VNode<'a>, ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::state::NodeDepState as _;
                 // println!("called update_node_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!();
@@ -117,8 +117,8 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
 
-            fn update_parent_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, parent: Option<&Self>, ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::ParentDepState as _;
+            fn update_parent_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VNode<'a>, parent: Option<&Self>, ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::state::ParentDepState as _;
                 // println!("called update_parent_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!();
@@ -129,8 +129,8 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
 
-            fn update_child_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: Option<&'a dioxus_core::VElement<'a>>, children: &[&Self], ctx: &anymap::AnyMap) -> bool{
-                use dioxus_native_core::real_dom_new_api::ChildDepState as _;
+            fn update_child_dep_state<'a>(&'a mut self, ty: std::any::TypeId, node: &'a dioxus_core::VNode<'a>, children: &[&Self], ctx: &anymap::AnyMap) -> bool{
+                use dioxus_native_core::state::ChildDepState as _;
                 // println!("called update_child_dep_state with ty: {:?}", ty);
                 if false {
                     unreachable!()
@@ -141,7 +141,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
 
-            fn child_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+            fn child_dep_types(&self, mask: &dioxus_native_core::state::NodeMask) -> Vec<std::any::TypeId>{
                 let mut dep_types = Vec::new();
                 #(if #child_types::NODE_MASK.overlaps(mask) {
                     dep_types.push(std::any::TypeId::of::<#child_types>());
@@ -149,7 +149,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 dep_types
             }
 
-            fn parent_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+            fn parent_dep_types(&self, mask: &dioxus_native_core::state::NodeMask) -> Vec<std::any::TypeId>{
                 let mut dep_types = Vec::new();
                 #(if #parent_types::NODE_MASK.overlaps(mask) {
                     dep_types.push(std::any::TypeId::of::<#parent_types>());
@@ -157,7 +157,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 dep_types
             }
 
-            fn node_dep_types(&self, mask: &dioxus_native_core::real_dom_new_api::NodeMask) -> Vec<std::any::TypeId>{
+            fn node_dep_types(&self, mask: &dioxus_native_core::state::NodeMask) -> Vec<std::any::TypeId>{
                 let mut dep_types = Vec::new();
                 #(if #node_types::NODE_MASK.overlaps(mask) {
                     dep_types.push(std::any::TypeId::of::<#node_types>());
@@ -314,7 +314,7 @@ impl<'a> StateMember<'a> {
                     quote!(self.#ident.reduce(#node_view, #get_ctx))
                 }
                 DepKind::ChildDepState => {
-                    quote!(self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident).collect(), #get_ctx))
+                    quote!(self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident), #get_ctx))
                 }
                 DepKind::ParentDepState => {
                     quote!(self.#ident.reduce(#node_view, parent.as_ref().map(|p| &p.#dep_ident), #get_ctx))
@@ -337,10 +337,8 @@ impl<'a> StateMember<'a> {
 
     fn type_id(&self) -> quote::__private::TokenStream {
         let ty = &self.mem.ty;
-        // quote!(std::any::TypeId::of::<#ty>())
         quote!({
             let type_id = std::any::TypeId::of::<#ty>();
-            // println!("{:?}", type_id);
             type_id
         })
     }

@@ -1,4 +1,4 @@
-use dioxus_native_core::real_dom_new_api::*;
+use dioxus_native_core::state::*;
 use dioxus_native_core_macro::*;
 
 #[derive(State, Default, Clone)]
@@ -20,7 +20,7 @@ struct Z {
 //     z: C,
 // }
 
-use dioxus_native_core::real_dom_new_api::NodeDepState;
+use dioxus_native_core::state::NodeDepState;
 
 #[derive(Default, Clone)]
 struct A;
@@ -36,12 +36,15 @@ struct B;
 impl ChildDepState for B {
     type Ctx = i32;
     type DepState = Self;
-    fn reduce(
+    fn reduce<'a>(
         &mut self,
-        _: dioxus_native_core::real_dom_new_api::NodeView,
-        _: Vec<&Self::DepState>,
+        _: dioxus_native_core::state::NodeView,
+        _: impl Iterator<Item = &'a Self::DepState>,
         _: &i32,
-    ) -> bool {
+    ) -> bool
+    where
+        Self::DepState: 'a,
+    {
         todo!()
     }
 }
@@ -53,7 +56,7 @@ impl ParentDepState for C {
     type DepState = Self;
     fn reduce(
         &mut self,
-        _: dioxus_native_core::real_dom_new_api::NodeView,
+        _: dioxus_native_core::state::NodeView,
         _: Option<&Self::DepState>,
         _: &u8,
     ) -> bool {

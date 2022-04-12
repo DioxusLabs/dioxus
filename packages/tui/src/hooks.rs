@@ -5,7 +5,6 @@ use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::{on::*, KeyCode};
-use dioxus_native_core::real_dom::{Node, RealDom};
 use std::{
     any::Any,
     cell::RefCell,
@@ -17,6 +16,7 @@ use stretch2::{prelude::Layout, Stretch};
 
 use crate::layout::StretchLayout;
 use crate::style_attributes::StyleModifier;
+use crate::{Dom, Node};
 
 // a wrapper around the input state for easier access
 // todo: fix loop
@@ -166,7 +166,7 @@ impl InnerInputState {
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        dom: &mut RealDom<StretchLayout, StyleModifier>,
+        dom: &mut Dom,
     ) {
         let previous_mouse = self
             .mouse
@@ -191,7 +191,7 @@ impl InnerInputState {
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        dom: &mut RealDom<StretchLayout, StyleModifier>,
+        dom: &mut Dom,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -215,8 +215,8 @@ impl InnerInputState {
             data: Arc<dyn Any + Send + Sync>,
             will_bubble: &mut FxHashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
-            node: &Node<StretchLayout, StyleModifier>,
-            dom: &RealDom<StretchLayout, StyleModifier>,
+            node: &Node,
+            dom: &Dom,
         ) {
             // only trigger event if the event was not triggered already by a child
             if will_bubble.insert(node.id) {
@@ -261,7 +261,7 @@ impl InnerInputState {
                 // mousemove
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousemove") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let previously_contained = data
                         .old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
@@ -285,7 +285,7 @@ impl InnerInputState {
                 // mouseenter
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseenter") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let previously_contained = data
                         .old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
@@ -309,7 +309,7 @@ impl InnerInputState {
                 // mouseover
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseover") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let previously_contained = data
                         .old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
@@ -333,7 +333,7 @@ impl InnerInputState {
                 // mousedown
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
                     if currently_contains && data.clicked {
@@ -353,7 +353,7 @@ impl InnerInputState {
                 // mouseup
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseup") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
                     if currently_contains && data.released {
@@ -373,7 +373,7 @@ impl InnerInputState {
                 // click
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("click") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
                     if currently_contains && data.released && data.mouse_data.button == 0 {
@@ -393,7 +393,7 @@ impl InnerInputState {
                 // contextmenu
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("contextmenu") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
                     if currently_contains && data.released && data.mouse_data.button == 2 {
@@ -413,7 +413,7 @@ impl InnerInputState {
                 // wheel
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("wheel") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
                     if let Some(w) = data.wheel_data {
@@ -435,7 +435,7 @@ impl InnerInputState {
                 // mouseleave
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseleave") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let previously_contained = data
                         .old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
@@ -459,7 +459,7 @@ impl InnerInputState {
                 // mouseout
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseout") {
-                    let node_layout = layout.layout(node.up_state.node.unwrap()).unwrap();
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let previously_contained = data
                         .old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
@@ -522,11 +522,7 @@ impl RinkInputHandler {
         )
     }
 
-    pub fn get_events(
-        &self,
-        layout: &Stretch,
-        dom: &mut RealDom<StretchLayout, StyleModifier>,
-    ) -> Vec<UserEvent> {
+    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
