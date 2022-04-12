@@ -30,7 +30,6 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
-pub use render::*;
 
 type Dom = RealDom<NodeState>;
 type Node = dioxus_native_core::real_dom::Node<NodeState>;
@@ -111,7 +110,7 @@ fn render_vdom(
     handler: RinkInputHandler,
     cfg: Config,
     mut rdom: Dom,
-    mut stretch: Rc<RefCell<Stretch>>,
+    stretch: Rc<RefCell<Stretch>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()

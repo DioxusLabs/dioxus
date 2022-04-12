@@ -1,4 +1,3 @@
-use crate::layout::StretchLayout;
 use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
 use stretch2::{
@@ -12,7 +11,7 @@ use crate::{
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, Dom, Node, StyleModifier,
+    Config, Dom, Node,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];

@@ -14,8 +14,6 @@ use std::{
 };
 use stretch2::{prelude::Layout, Stretch};
 
-use crate::layout::StretchLayout;
-use crate::style_attributes::StyleModifier;
 use crate::{Dom, Node};
 
 // a wrapper around the input state for easier access

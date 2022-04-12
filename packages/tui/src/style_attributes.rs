@@ -29,7 +29,7 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use dioxus_core::{Attribute, VNode};
+use dioxus_core::Attribute;
 use dioxus_native_core::{
     layout_attributes::{parse_value, UnitSystem},
     state::{AttributeMask, NodeMask, NodeView, ParentDepState},
@@ -49,7 +49,7 @@ impl ParentDepState for StyleModifier {
     // todo: seperate each attribute into it's own class
     const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, true, false);
 
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
         *self = StyleModifier::default();
         if parent.is_some() {
             self.style.fg = None;
