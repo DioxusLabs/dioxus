@@ -10,50 +10,64 @@ fn tui_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("Update boxes");
 
     // We can also use loops to define multiple benchmarks, even over multiple dimensions.
-    for size in 1..=6 {
-        let parameter_string = format!("{}", 5 * size);
+    for size in 1..=8u32 {
+        let parameter_string = format!("{}", (3 * size).pow(2));
         group.bench_with_input(
             BenchmarkId::new("size", parameter_string),
             &size,
             |b, size| {
                 b.iter(|| match size {
                     1 => dioxus::tui::launch_cfg(
-                        app5,
+                        app3,
                         Config {
                             headless: true,
                             ..Default::default()
                         },
                     ),
                     2 => dioxus::tui::launch_cfg(
-                        app10,
+                        app6,
                         Config {
                             headless: true,
                             ..Default::default()
                         },
                     ),
                     3 => dioxus::tui::launch_cfg(
-                        app15,
+                        app9,
                         Config {
                             headless: true,
                             ..Default::default()
                         },
                     ),
                     4 => dioxus::tui::launch_cfg(
-                        app20,
+                        app12,
                         Config {
                             headless: true,
                             ..Default::default()
                         },
                     ),
                     5 => dioxus::tui::launch_cfg(
-                        app25,
+                        app15,
                         Config {
                             headless: true,
                             ..Default::default()
                         },
                     ),
                     6 => dioxus::tui::launch_cfg(
-                        app30,
+                        app18,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    7 => dioxus::tui::launch_cfg(
+                        app21,
+                        Config {
+                            headless: true,
+                            ..Default::default()
+                        },
+                    ),
+                    8 => dioxus::tui::launch_cfg(
+                        app24,
                         Config {
                             headless: true,
                             ..Default::default()
@@ -157,25 +171,49 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     })
 }
 
-fn app5(cx: Scope) -> Element {
+fn app3(cx: Scope) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 5,
+                size: 3,
             }
         }
     })
 }
 
-fn app10(cx: Scope) -> Element {
+fn app6(cx: Scope) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 10,
+                size: 6,
+            }
+        }
+    })
+}
+
+fn app9(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div{
+            width: "100%",
+            height: "100%",
+            Grid{
+                size: 9,
+            }
+        }
+    })
+}
+
+fn app12(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div{
+            width: "100%",
+            height: "100%",
+            Grid{
+                size: 12,
             }
         }
     })
@@ -193,37 +231,37 @@ fn app15(cx: Scope) -> Element {
     })
 }
 
-fn app20(cx: Scope) -> Element {
+fn app18(cx: Scope) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 20,
+                size: 18,
             }
         }
     })
 }
 
-fn app25(cx: Scope) -> Element {
+fn app21(cx: Scope) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 25,
+                size: 21,
             }
         }
     })
 }
 
-fn app30(cx: Scope) -> Element {
+fn app24(cx: Scope) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 30,
+                size: 24,
             }
         }
     })

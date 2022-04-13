@@ -14,12 +14,6 @@ struct Z {
     z: C,
 }
 
-// struct Z {
-//     x: A,
-//     y: B,
-//     z: C,
-// }
-
 use dioxus_native_core::state::NodeDepState;
 
 #[derive(Default, Clone)]

@@ -50,22 +50,22 @@ impl ParentDepState for StyleModifier {
     const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, true, false);
 
     fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
-        *self = StyleModifier::default();
+        let mut new = StyleModifier::default();
         if parent.is_some() {
-            self.style.fg = None;
+            new.style.fg = None;
         }
 
         // handle text modifier elements
         if node.namespace().is_none() {
             if let Some(tag) = node.tag() {
                 match tag {
-                    "b" => apply_style_attributes("font-weight", "bold", self),
-                    "strong" => apply_style_attributes("font-weight", "bold", self),
-                    "u" => apply_style_attributes("text-decoration", "underline", self),
-                    "ins" => apply_style_attributes("text-decoration", "underline", self),
-                    "del" => apply_style_attributes("text-decoration", "line-through", self),
-                    "i" => apply_style_attributes("font-style", "italic", self),
-                    "em" => apply_style_attributes("font-style", "italic", self),
+                    "b" => apply_style_attributes("font-weight", "bold", &mut new),
+                    "strong" => apply_style_attributes("font-weight", "bold", &mut new),
+                    "u" => apply_style_attributes("text-decoration", "underline", &mut new),
+                    "ins" => apply_style_attributes("text-decoration", "underline", &mut new),
+                    "del" => apply_style_attributes("text-decoration", "line-through", &mut new),
+                    "i" => apply_style_attributes("font-style", "italic", &mut new),
+                    "em" => apply_style_attributes("font-style", "italic", &mut new),
                     "mark" => {
                         apply_style_attributes("background-color", "rgba(241, 231, 64, 50%)", self)
                     }
@@ -76,16 +76,21 @@ impl ParentDepState for StyleModifier {
 
         // gather up all the styles from the attribute list
         for &Attribute { name, value, .. } in node.attributes() {
-            apply_style_attributes(name, value, self);
+            apply_style_attributes(name, value, &mut new);
         }
 
         // keep the text styling from the parent element
         if let Some(parent) = parent {
-            let mut new_style = self.style.merge(parent.style);
-            new_style.bg = self.style.bg;
-            self.style = new_style;
+            let mut new_style = new.style.merge(parent.style);
+            new_style.bg = new.style.bg;
+            new.style = new_style;
         }
-        true
+        if &mut new != self {
+            *self = new;
+            true
+        } else {
+            false
+        }
     }
 }
 

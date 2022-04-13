@@ -1,7 +1,7 @@
 use std::{any::TypeId, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::{Attribute, ElementId, VElement, VNode, VText};
+use dioxus_core::{Attribute, ElementId, VElement, VNode, VText, VirtualDom};
 
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
     s_iter: impl Iterator<Item = T>,
@@ -40,7 +40,11 @@ pub struct NodeView<'a> {
     mask: NodeMask,
 }
 impl<'a> NodeView<'a> {
-    pub fn new(vnode: &'a VNode<'a>, view: NodeMask) -> Self {
+    pub fn new(mut vnode: &'a VNode<'a>, view: NodeMask, vdom: &'a VirtualDom) -> Self {
+        if let VNode::Component(sc) = vnode {
+            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
+            vnode = scope.root_node();
+        }
         Self {
             inner: vnode,
             mask: view,
@@ -284,6 +288,7 @@ pub trait State: Default + Clone {
         &'a mut self,
         ty: TypeId,
         node: &'a VNode<'a>,
+        vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,
     ) -> bool;
     /// This must be a valid resolution order. (no nodes updated before a state they rely on)
@@ -293,6 +298,7 @@ pub trait State: Default + Clone {
         &'a mut self,
         ty: TypeId,
         node: &'a VNode<'a>,
+        vdom: &'a dioxus_core::VirtualDom,
         parent: Option<&Self>,
         ctx: &AnyMap,
     ) -> bool;
@@ -303,6 +309,7 @@ pub trait State: Default + Clone {
         &'a mut self,
         ty: TypeId,
         node: &'a VNode<'a>,
+        vdom: &'a dioxus_core::VirtualDom,
         children: &[&Self],
         ctx: &AnyMap,
     ) -> bool;

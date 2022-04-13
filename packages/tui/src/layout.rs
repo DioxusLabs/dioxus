@@ -28,11 +28,13 @@ impl ChildDepState for StretchLayout {
     where
         Self::DepState: 'a,
     {
+        let mut changed = false;
         let mut stretch = ctx.borrow_mut();
+        let mut style = Style::default();
         if let Some(text) = node.text() {
             let char_len = text.chars().count();
 
-            let style = Style {
+            style = Style {
                 size: Size {
                     // characters are 1 point tall
                     height: Dimension::Points(1.0),
@@ -42,7 +44,6 @@ impl ChildDepState for StretchLayout {
                 },
                 ..Default::default()
             };
-
             if let Some(n) = self.node {
                 if self.style != style {
                     stretch.set_style(n, style).unwrap();
@@ -50,12 +51,8 @@ impl ChildDepState for StretchLayout {
             } else {
                 self.node = Some(stretch.new_node(style, &[]).unwrap());
             }
-
-            self.style = style;
         } else {
             // gather up all the styles from the attribute list
-            let mut style = Style::default();
-
             for &Attribute { name, value, .. } in node.attributes() {
                 apply_layout_attributes(name, value, &mut style);
             }
@@ -73,18 +70,27 @@ impl ChildDepState for StretchLayout {
             }
 
             if let Some(n) = self.node {
-                if stretch.children(n).unwrap() != child_layout {
-                    stretch.set_children(n, &child_layout).unwrap();
-                }
                 if self.style != style {
                     stretch.set_style(n, style).unwrap();
                 }
             } else {
-                self.node = Some(stretch.new_node(style, &child_layout).unwrap());
+                self.node = Some(stretch.new_node(style, &[]).unwrap());
             }
-
+            if let Some(n) = self.node {
+                if self.style != style {
+                    stretch.set_style(n, style).unwrap();
+                }
+                if stretch.children(n).unwrap() != child_layout {
+                    stretch.set_children(n, &child_layout).unwrap();
+                }
+            } else {
+                self.node = Some(stretch.new_node(style, &[]).unwrap());
+            }
+        }
+        if self.style != style {
+            changed = true;
             self.style = style;
         }
-        true
+        changed
     }
 }

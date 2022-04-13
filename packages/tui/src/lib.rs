@@ -148,8 +148,7 @@ fn render_vdom(
                     fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
-                        let root_id = rdom.root_id();
-                        let root_node = rdom[root_id].state.layout.node.unwrap();
+                        let root_node = rdom[0].state.layout.node.unwrap();
 
                         stretch
                             .compute_layout(
@@ -165,7 +164,7 @@ fn render_vdom(
                         terminal.draw(|frame| {
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
-                            let root = &rdom[rdom.root_id()];
+                            let root = &rdom[0];
                             render::render_vnode(frame, &stretch.borrow(), &rdom, &root, cfg);
                         })?;
                     } else {

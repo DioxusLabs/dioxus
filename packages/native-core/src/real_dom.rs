@@ -301,7 +301,7 @@ impl<S: State> RealDom<S> {
             for ty in ids {
                 let node = &mut self[node_ref.id];
                 let vnode = node.element(vdom);
-                changed |= node.state.update_node_dep_state(ty, vnode, &ctx);
+                changed |= node.state.update_node_dep_state(ty, vnode, vdom, &ctx);
             }
             if changed {
                 to_rerender.insert(node_ref.id);
@@ -328,7 +328,7 @@ impl<S: State> RealDom<S> {
                 let vnode = node.element(vdom);
                 if node
                     .state
-                    .update_child_dep_state(ty, vnode, &children_state, &ctx)
+                    .update_child_dep_state(ty, vnode, vdom, &children_state, &ctx)
                 {
                     changed.push(ty);
                 }
@@ -387,6 +387,7 @@ impl<S: State> RealDom<S> {
                 if state.update_parent_dep_state(
                     ty,
                     vnode,
+                    vdom,
                     parent.filter(|n| n.id.0 != 0).map(|n| &n.state),
                     &ctx,
                 ) {
