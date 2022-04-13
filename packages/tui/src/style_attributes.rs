@@ -29,10 +29,10 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use dioxus_core::{Attribute, VNode};
+use dioxus_core::Attribute;
 use dioxus_native_core::{
     layout_attributes::{parse_value, UnitSystem},
-    real_dom::PushedDownState,
+    state::{AttributeMask, NodeMask, NodeView, ParentDepState},
 };
 
 use crate::style::{RinkColor, RinkStyle};
@@ -43,18 +43,22 @@ pub struct StyleModifier {
     pub modifier: TuiModifier,
 }
 
-impl PushedDownState for StyleModifier {
+impl ParentDepState for StyleModifier {
     type Ctx = ();
+    type DepState = Self;
+    // todo: seperate each attribute into it's own class
+    const NODE_MASK: NodeMask = NodeMask::new(AttributeMask::All, true, true, false);
 
-    fn reduce(&mut self, parent: Option<&Self>, vnode: &VNode, _ctx: &mut Self::Ctx) {
+    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
         *self = StyleModifier::default();
         if parent.is_some() {
             self.style.fg = None;
         }
-        if let VNode::Element(el) = vnode {
-            // handle text modifier elements
-            if el.namespace.is_none() {
-                match el.tag {
+
+        // handle text modifier elements
+        if node.namespace().is_none() {
+            if let Some(tag) = node.tag() {
+                match tag {
                     "b" => apply_style_attributes("font-weight", "bold", self),
                     "strong" => apply_style_attributes("font-weight", "bold", self),
                     "u" => apply_style_attributes("text-decoration", "underline", self),
@@ -68,11 +72,11 @@ impl PushedDownState for StyleModifier {
                     _ => (),
                 }
             }
+        }
 
-            // gather up all the styles from the attribute list
-            for &Attribute { name, value, .. } in el.attributes {
-                apply_style_attributes(name, value, self);
-            }
+        // gather up all the styles from the attribute list
+        for &Attribute { name, value, .. } in node.attributes() {
+            apply_style_attributes(name, value, self);
         }
 
         // keep the text styling from the parent element
@@ -81,6 +85,7 @@ impl PushedDownState for StyleModifier {
             new_style.bg = self.style.bg;
             self.style = new_style;
         }
+        true
     }
 }
 

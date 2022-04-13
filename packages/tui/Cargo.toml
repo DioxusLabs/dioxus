@@ -25,3 +25,4 @@ futures = "0.3.19"
 stretch2 = { git = "https://github.com/DioxusLabs/stretch" }
 smallvec = "1.6"
 fxhash = "0.2"
+anymap = "0.12.1"
