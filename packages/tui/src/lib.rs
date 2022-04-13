@@ -215,7 +215,6 @@ fn render_vdom(
                 }
 
                 {
-                    // resolve events before rendering
                     let evts = handler.get_events(&stretch.borrow(), &mut rdom);
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));

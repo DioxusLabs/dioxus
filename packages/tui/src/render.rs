@@ -30,7 +30,6 @@ pub(crate) fn render_vnode(
     }
 
     let Layout { location, size, .. } = layout.layout(node.state.layout.node.unwrap()).unwrap();
-    // println!("rendering {node:?} {location:?} {size:?}");
 
     let Point { x, y } = location;
     let Size { width, height } = size;

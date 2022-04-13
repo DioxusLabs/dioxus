@@ -1,37 +1,44 @@
 extern crate proc_macro;
 
+use std::collections::BTreeMap;
+
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use syn::{
-    self,
+    self, bracketed,
     parse::{Parse, ParseStream, Result},
+    parse_macro_input,
     punctuated::Punctuated,
     token::Paren,
     Field, Ident, LitStr, Token, Type, TypeTuple,
 };
 
-// struct StrSlice {
-//     init: LitStr,
-// }
+struct StrSlice {
+    map: BTreeMap<String, LitStr>,
+}
 
-// impl Parse for StrSlice {
-//     fn parse(input: ParseStream) -> Result<Self> {
-//         input.parse::<Token![[]>()?;
-//         let str: LitStr = input.parse()?;
-//         let name: Ident = input.parse()?;
-//         input.parse::<Token![,]>()?;
-//         input.parse::<Token![]]>()?;
-//         Ok(LazyStatic {
-//             visibility,
-//             name,
-//             ty,
-//             init,
-//         })
-//     }
-// }
+impl Parse for StrSlice {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let content;
+        bracketed!(content in input);
+        let mut map = BTreeMap::new();
+        while let Ok(s) = content.parse::<LitStr>() {
+            map.insert(s.value(), s);
+            #[allow(unused_must_use)]
+            {
+                content.parse::<Token![,]>();
+            }
+        }
+        Ok(StrSlice { map })
+    }
+}
 
-// #[proc_macro]
-// pub fn sorted_str_slice(input: TokenStream) -> TokenStream {}
+#[proc_macro]
+pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
+    let slice: StrSlice = parse_macro_input!(input as StrSlice);
+    let strings = slice.map.values();
+    quote!([#(#strings, )*]).into()
+}
 
 #[derive(PartialEq)]
 enum DepKind {

@@ -384,13 +384,7 @@ impl<S: State> RealDom<S> {
                 let vnode = node.element(vdom);
                 let parent = parent.as_deref();
                 let state = &mut node.state;
-                if state.update_parent_dep_state(
-                    ty,
-                    vnode,
-                    vdom,
-                    parent.filter(|n| n.id.0 != 0).map(|n| &n.state),
-                    &ctx,
-                ) {
+                if state.update_parent_dep_state(ty, vnode, vdom, parent.map(|n| &n.state), &ctx) {
                     changed.push(ty);
                 }
             }
