@@ -104,13 +104,11 @@ impl DesktopConfig {
         self
     }
 
-
     /// Add a custom icon for this application
     pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
         self.window.window.window_icon = Some(icon);
         self
     }
-
 
     /// Inject additional content into the document's HEAD.
     ///
