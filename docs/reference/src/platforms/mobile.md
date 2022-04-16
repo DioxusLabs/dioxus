@@ -1,15 +1,15 @@
 # Getting started: mobile
 
 
-Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some of the primitives until better supported is ready.
+Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some of the primitives until better support is ready.
 
-Currently, only iOS is supported through us, however you *can* add android support by following the same instructions below, but using the `android` guide in `cargo-mobile`.
+Currently, only iOS is supported through us, however you *can* add android support by following the same instructions below by using the `android` guide in `cargo-mobile`.
 
 Also, Dioxus Desktop and Dioxus Mobile share the same codebase, and dioxus-mobile currently just re-exports dioxus-desktop.
 
 ## Getting Set up
 
-Getting set up with mobile can but quite challenging. The tooling here isn't great (yet) and might take some hacking around to get things working. macOS M1 is broadly unexplored and might not work for you.
+Getting set up with mobile can be quite challenging. The tooling here isn't great (yet) and might take some hacking around to get things working. macOS M1 is broadly unexplored and might not work for you.
 
 We're going to be using `cargo-mobile` to build for mobile. First, install it:
 
