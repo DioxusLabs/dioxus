@@ -22,6 +22,16 @@ fn main() {
         })
     );
 
+    // render_lazy can also take components - but it won't be able to process futures
+    println!(
+        "{}",
+        dioxus::ssr::render_lazy(rsx! {
+            div {
+                Child {}
+            }
+        })
+    );
+
     // We can configure the SSR rendering to add ids for rehydration
     println!(
         "{}",
@@ -44,4 +54,9 @@ fn app(cx: Scope) -> Element {
             p { "Body" }
         }
     ))
+}
+
+#[allow(non_snake_case)]
+fn Child(_cx: Scope) -> Element {
+    None
 }

@@ -41,7 +41,6 @@ impl SsrRenderer {
 #[allow(clippy::needless_lifetimes)]
 pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     let vdom = VirtualDom::new(app);
-    let scope: *const ScopeState = vdom.base_scope();
 
     // Safety
     //
@@ -53,16 +52,16 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     //
     // Therefore, we cast our local bump allocator to the right lifetime. This is okay because our usage of the bump
     // arena is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
-    let scope = unsafe { &*scope };
-
-    let root = f.into_vnode(NodeFactory::new(scope));
+    let new_f = unsafe { std::mem::transmute(f) };
+    let _ = vdom.create_vnodes(new_f);
+    let root = vdom.base_scope().root_node();
 
     format!(
         "{:}",
         TextRenderer {
             cfg: SsrConfig::default(),
-            root: &root,
-            vdom: None
+            root,
+            vdom: Some(&vdom)
         }
     )
 }
