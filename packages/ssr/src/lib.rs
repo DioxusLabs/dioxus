@@ -42,19 +42,22 @@ impl SsrRenderer {
 pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     let vdom = VirtualDom::new(app);
 
-    // Safety
-    //
-    // The lifetimes bounds on LazyNodes are really complicated - they need to support the nesting restrictions in
-    // regular component usage. The <'a> lifetime is used to enforce that all calls of IntoVnode use the same allocator.
-    //
-    // When LazyNodes are provided, they are FnOnce, but do not come with a allocator selected to borrow from. The <'a>
-    // lifetime is therefore longer than the lifetime of the allocator which doesn't exist... yet.
-    //
-    // Therefore, we cast our local bump allocator to the right lifetime. This is okay because our usage of the bump
-    // arena is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
-    let new_f = unsafe { std::mem::transmute(f) };
-    let _ = vdom.create_vnodes(new_f);
-    let root = vdom.base_scope().root_node();
+    let f = unsafe { std::mem::transmute(f) };
+    let root = vdom.render_vnodes(f);
+
+    // // Safety
+    // //
+    // // The lifetimes bounds on LazyNodes are really complicated - they need to support the nesting restrictions in
+    // // regular component usage. The <'a> lifetime is used to enforce that all calls of IntoVnode use the same allocator.
+    // //
+    // // When LazyNodes are provided, they are FnOnce, but do not come with a allocator selected to borrow from. The <'a>
+    // // lifetime is therefore longer than the lifetime of the allocator which doesn't exist... yet.
+    // //
+    // // Therefore, we cast our local bump allocator to the right lifetime. This is okay because our usage of the bump
+    // // arena is *definitely* shorter than the <'a> lifetime, and we return *owned* data - not borrowed data.
+    // let new_f = unsafe { std::mem::transmute(f) };
+    // let _ = vdom.create_vnodes(new_f);
+    // let root = vdom.base_scope().root_node();
 
     format!(
         "{:}",

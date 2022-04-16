@@ -116,6 +116,19 @@ fn lazy() {
 }
 
 #[test]
+fn lazy_with_child() {
+    fn Child(cx: Scope) -> Element {
+        None
+    }
+
+    let p = render_lazy(rsx! {
+        div { Child {} }
+    });
+
+    assert_eq!(p, "<div></div>");
+}
+
+#[test]
 fn big_lazy() {
     let s = render_lazy(rsx! {
         div {
