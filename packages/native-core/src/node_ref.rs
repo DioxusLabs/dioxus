@@ -181,18 +181,10 @@ pub struct NodeMask {
 }
 
 impl NodeMask {
-    pub const NONE: Self = Self::new(AttributeMask::Static(&[]), false, false, false);
-    pub const ALL: Self = Self::new(AttributeMask::All, true, true, true);
-
-    /// attritutes must be sorted!
-    pub const fn new(attritutes: AttributeMask, tag: bool, namespace: bool, text: bool) -> Self {
-        Self {
-            attritutes,
-            tag,
-            namespace,
-            text,
-        }
-    }
+    pub const NONE: Self = Self::new();
+    pub const ALL: Self = Self::new_with_attrs(AttributeMask::All)
+        .with_text()
+        .with_element();
 
     pub fn overlaps(&self, other: &Self) -> bool {
         (self.tag && other.tag)
@@ -208,5 +200,37 @@ impl NodeMask {
             namespace: self.namespace | other.namespace,
             text: self.text | other.text,
         }
+    }
+
+    pub const fn new_with_attrs(attritutes: AttributeMask) -> Self {
+        Self {
+            attritutes,
+            tag: false,
+            namespace: false,
+            text: false,
+        }
+    }
+
+    pub const fn new() -> Self {
+        Self::new_with_attrs(AttributeMask::NONE)
+    }
+
+    pub const fn with_tag(mut self) -> Self {
+        self.tag = true;
+        self
+    }
+
+    pub const fn with_namespace(mut self) -> Self {
+        self.namespace = true;
+        self
+    }
+
+    pub const fn with_element(self) -> Self {
+        self.with_namespace().with_tag()
+    }
+
+    pub const fn with_text(mut self) -> Self {
+        self.text = true;
+        self
     }
 }

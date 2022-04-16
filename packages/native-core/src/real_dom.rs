@@ -169,10 +169,7 @@ impl<S: State> RealDom<S> {
                         text: new_text,
                     } => {
                         let target = &mut self[root as usize];
-                        nodes_updated.push((
-                            root as usize,
-                            NodeMask::new(AttributeMask::NONE, false, false, true),
-                        ));
+                        nodes_updated.push((root as usize, NodeMask::new().with_text()));
                         match &mut target.node_type {
                             NodeType::Text { text } => {
                                 *text = new_text.to_string();
@@ -183,7 +180,7 @@ impl<S: State> RealDom<S> {
                     SetAttribute { root, field, .. } => {
                         nodes_updated.push((
                             root as usize,
-                            NodeMask::new(AttributeMask::single(field), false, false, false),
+                            NodeMask::new_with_attrs(AttributeMask::single(field)),
                         ));
                     }
                     RemoveAttribute {
@@ -191,7 +188,7 @@ impl<S: State> RealDom<S> {
                     } => {
                         nodes_updated.push((
                             root as usize,
-                            NodeMask::new(AttributeMask::single(field), false, false, false),
+                            NodeMask::new_with_attrs(AttributeMask::single(field)),
                         ));
                     }
                     PopRoot {} => {

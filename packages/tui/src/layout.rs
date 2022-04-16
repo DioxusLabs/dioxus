@@ -37,12 +37,8 @@ impl ChildDepState for StretchLayout {
     type Ctx = Rc<RefCell<Stretch>>;
     type DepState = Self;
     // todo: update mask
-    const NODE_MASK: NodeMask = NodeMask::new(
-        AttributeMask::Static(SORTED_LAYOUT_ATTRS),
-        false,
-        false,
-        true,
-    );
+    const NODE_MASK: NodeMask =
+        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS)).with_text();
 
     /// Setup the layout
     fn reduce<'a>(

@@ -50,7 +50,7 @@ impl ParentDepState for StyleModifier {
     type DepState = Self;
     // todo: seperate each attribute into it's own class
     const NODE_MASK: NodeMask =
-        NodeMask::new(AttributeMask::Static(SORTED_STYLE_ATTRS), true, true, false);
+        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_STYLE_ATTRS)).with_element();
 
     fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
         let mut new = StyleModifier::default();
