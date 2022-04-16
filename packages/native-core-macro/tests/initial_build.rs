@@ -8,7 +8,7 @@ use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::State;
 use dioxus_native_core_macro::State;
 
-#[derive(State, Default, Clone)]
+#[derive(Default, Clone, State)]
 struct Empty {}
 
 #[test]

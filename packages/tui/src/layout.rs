@@ -2,9 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use dioxus_core::*;
-use dioxus_native_core::dioxus_native_core_macro::sorted_str_slice;
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
-use dioxus_native_core::state::{AttributeMask, ChildDepState, NodeMask, NodeView};
+use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
+use dioxus_native_core::state::ChildDepState;
+use dioxus_native_core_macro::sorted_str_slice;
 use stretch2::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -1,14 +1,17 @@
 use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
 use std::{
-    any::TypeId,
     collections::VecDeque,
     ops::{Index, IndexMut},
 };
 
 use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 
-use crate::state::{union_ordered_iter, AttributeMask, NodeMask, State};
+use crate::state::{union_ordered_iter, State};
+use crate::{
+    node_ref::{AttributeMask, NodeMask},
+    state::MemberId,
+};
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -211,7 +214,7 @@ impl<S: State> RealDom<S> {
         #[derive(PartialEq, Clone, Debug)]
         enum StatesToCheck {
             All,
-            Some(Vec<TypeId>),
+            Some(Vec<MemberId>),
         }
         impl StatesToCheck {
             fn union(&self, other: &Self) -> Self {
@@ -294,14 +297,28 @@ impl<S: State> RealDom<S> {
         for node_ref in &nodes_updated {
             let mut changed = false;
             let node = &mut self[node_ref.id];
-            let ids = match &node_ref.to_check {
+            let mut ids = match &node_ref.to_check {
                 StatesToCheck::All => node.state.node_dep_types(&node_ref.node_mask),
+                // this should only be triggered from the current node, so all members will need to be checked
                 StatesToCheck::Some(_) => unreachable!(),
             };
-            for ty in ids {
+            let mut i = 0;
+            while i < ids.len() {
+                let id = ids[i];
                 let node = &mut self[node_ref.id];
                 let vnode = node.element(vdom);
-                changed |= node.state.update_node_dep_state(ty, vnode, vdom, &ctx);
+                if let Some(members_effected) =
+                    node.state.update_node_dep_state(id, vnode, vdom, &ctx)
+                {
+                    debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
+                    for m in members_effected.node_dep {
+                        if let Err(idx) = ids.binary_search(m) {
+                            ids.insert(idx, *m);
+                        }
+                    }
+                    changed = true;
+                }
+                i += 1;
             }
             if changed {
                 to_rerender.insert(node_ref.id);
@@ -319,19 +336,30 @@ impl<S: State> RealDom<S> {
             } = node_ref;
             let (node, children) = self.get_node_children_mut(id).unwrap();
             let children_state: Vec<_> = children.iter().map(|c| &c.state).collect();
-            let ids = match to_check {
+            let mut ids = match to_check {
                 StatesToCheck::All => node.state.child_dep_types(&node_mask),
                 StatesToCheck::Some(ids) => ids,
             };
             let mut changed = Vec::new();
-            for ty in ids {
+            let mut i = 0;
+            while i < ids.len() {
+                let id = ids[i];
                 let vnode = node.element(vdom);
-                if node
-                    .state
-                    .update_child_dep_state(ty, vnode, vdom, &children_state, &ctx)
+                if let Some(members_effected) =
+                    node.state
+                        .update_child_dep_state(id, vnode, vdom, &children_state, &ctx)
                 {
-                    changed.push(ty);
+                    debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
+                    for m in members_effected.node_dep {
+                        if let Err(idx) = ids.binary_search(m) {
+                            ids.insert(idx, *m);
+                        }
+                    }
+                    for m in members_effected.child_dep {
+                        changed.push(*m);
+                    }
                 }
+                i += 1;
             }
             if let Some(parent_id) = node.parent {
                 if !changed.is_empty() {
@@ -374,19 +402,32 @@ impl<S: State> RealDom<S> {
                 to_check,
             } = node_ref;
             let node = &self[id];
-            let ids = match to_check {
+            let mut ids = match to_check {
                 StatesToCheck::All => node.state.parent_dep_types(&node_mask),
                 StatesToCheck::Some(ids) => ids,
             };
             let mut changed = Vec::new();
             let (node, parent) = self.get_node_parent_mut(id).unwrap();
-            for ty in ids {
+            let mut i = 0;
+            while i < ids.len() {
+                let id = ids[i];
                 let vnode = node.element(vdom);
                 let parent = parent.as_deref();
                 let state = &mut node.state;
-                if state.update_parent_dep_state(ty, vnode, vdom, parent.map(|n| &n.state), &ctx) {
-                    changed.push(ty);
+                if let Some(members_effected) =
+                    state.update_parent_dep_state(id, vnode, vdom, parent.map(|n| &n.state), &ctx)
+                {
+                    debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
+                    for m in members_effected.node_dep {
+                        if let Err(idx) = ids.binary_search(m) {
+                            ids.insert(idx, *m);
+                        }
+                    }
+                    for m in members_effected.parent_dep {
+                        changed.push(*m);
+                    }
                 }
+                i += 1;
             }
 
             to_rerender.insert(id);

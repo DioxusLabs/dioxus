@@ -7,7 +7,8 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{dioxus_native_core_macro::State, real_dom::RealDom, state::*};
+use dioxus_native_core::{real_dom::RealDom, state::*};
+use dioxus_native_core_macro::State;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
@@ -36,10 +37,10 @@ type Node = dioxus_native_core::real_dom::Node<NodeState>;
 
 #[derive(Debug, Clone, State, Default)]
 struct NodeState {
-    #[child_dep_state(StretchLayout, RefCell<Stretch>)]
+    #[child_dep_state(layout, RefCell<Stretch>)]
     layout: StretchLayout,
     // depends on attributes, the C component of it's parent and a u8 context
-    #[parent_dep_state(StyleModifier)]
+    #[parent_dep_state(style)]
     style: StyleModifier,
 }
 
