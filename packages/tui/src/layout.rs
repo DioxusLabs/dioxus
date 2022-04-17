@@ -55,6 +55,25 @@ pub fn collect_layout<'a>(
                 tui_modifier: TuiModifier::default(),
             };
 
+            // handle text modifier elements
+            if el.namespace.is_none() {
+                match el.tag {
+                    "b" => apply_attributes("font-weight", "bold", &mut modifier),
+                    "strong" => apply_attributes("font-weight", "bold", &mut modifier),
+                    "u" => apply_attributes("text-decoration", "underline", &mut modifier),
+                    "ins" => apply_attributes("text-decoration", "underline", &mut modifier),
+                    "del" => apply_attributes("text-decoration", "line-through", &mut modifier),
+                    "i" => apply_attributes("font-style", "italic", &mut modifier),
+                    "em" => apply_attributes("font-style", "italic", &mut modifier),
+                    "mark" => apply_attributes(
+                        "background-color",
+                        "rgba(241, 231, 64, 50%)",
+                        &mut modifier,
+                    ),
+                    _ => (),
+                }
+            }
+
             for &Attribute { name, value, .. } in el.attributes {
                 apply_attributes(name, value, &mut modifier);
             }

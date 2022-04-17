@@ -54,7 +54,6 @@ bevy-plugin = ["bevy_dioxus", "bevy"]
 members = [
     "packages/core",
     "packages/core-macro",
-    "packages/rsx",
     "packages/html",
     "packages/hooks",
     "packages/web",

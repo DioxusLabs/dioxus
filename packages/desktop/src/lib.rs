@@ -10,8 +10,8 @@ mod escape;
 pub mod events;
 pub mod protocol;
 
-pub use desktop_context::{use_window, DesktopContext};
 use desktop_context::{UserEvent, UserWindowEvent};
+pub use desktop_context::{use_eval, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 

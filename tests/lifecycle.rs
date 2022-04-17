@@ -31,7 +31,7 @@ fn manual_diffing() {
 
     let edits = dom.rebuild();
 
-    log::debug!("edits: {:?}", edits);
+    log::trace!("edits: {:?}", edits);
 }
 
 #[test]
@@ -97,7 +97,7 @@ fn components_generate() {
     };
 
     fn Child(cx: Scope) -> Element {
-        log::debug!("Running child");
+        log::trace!("Running child");
         cx.render(rsx! {
             h1 {}
         })

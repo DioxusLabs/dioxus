@@ -57,6 +57,7 @@
 use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
+pub use crate::util::use_eval;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -68,6 +69,7 @@ mod cfg;
 mod dom;
 mod rehydrate;
 mod ric_raf;
+mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
 ///

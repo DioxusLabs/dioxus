@@ -106,7 +106,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                 Some(service) => service.cfg.active_class.clone(),
                 None => None,
             };
-            active_from_router.unwrap_or("active".into())
+            active_from_router.unwrap_or_else(|| "active".into())
         }
     };
 

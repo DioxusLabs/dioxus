@@ -167,6 +167,11 @@ where
     pub fn new(proxy: ProxyType<T>) -> Self {
         Self { proxy }
     }
+
+    /// run (evaluate) a script in the WebView context
+    pub fn eval(&self, script: impl std::string::ToString) {
+        let _ = self.proxy.send_event(Eval(script.to_string()));
+    }
 }
 
 #[derive(Debug)]
@@ -198,6 +203,8 @@ pub enum UserWindowEvent {
     SetDecorations(bool),
 
     DevTool,
+
+    Eval(String),
 }
 
 pub fn user_window_event_handler(
@@ -239,5 +246,16 @@ pub fn user_window_event_handler(
         SetDecorations(state) => window.set_decorations(state),
 
         DevTool => webview.devtool(),
+
+        Eval(code) => webview
+            .evaluate_script(code.as_str())
+            .expect("eval shouldn't panic"),
     }
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
+    let desktop = use_window(&cx).clone();
+
+    cx.use_hook(|_| move |script| desktop.eval(script))
 }

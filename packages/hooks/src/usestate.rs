@@ -92,9 +92,9 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let (count, set_count) = use_state(&cx, || 0);
+    ///     let count = use_state(&cx, || 0);
     ///     cx.spawn({
-    ///         let set_count = set_count.to_owned();
+    ///         let set_count = count.to_owned();
     ///         async move {
     ///             let current = set_count.current();
     ///         }
@@ -119,11 +119,11 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///     let value = use_state(&cx, || 0);
     ///
     ///     rsx!{
     ///         Component {
-    ///             handler: set_val.setter()
+    ///             handler: value.setter()
     ///         }
     ///     }
     /// }
@@ -144,16 +144,16 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///     let value = use_state(&cx, || 0);
     ///
     ///     // to increment the value
-    ///     set_value.modify(|v| v + 1);
+    ///     value.modify(|v| v + 1);
     ///
     ///     // usage in async
     ///     cx.spawn({
-    ///         let set_value = set_value.to_owned();
+    ///         let value = value.to_owned();
     ///         async move {
-    ///             set_value.modify(|v| v + 1);
+    ///             value.modify(|v| v + 1);
     ///         }
     ///     });
     ///
@@ -185,9 +185,9 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let (value, set_value) = use_state(&cx, || 0);
+    ///     let value = use_state(&cx, || 0);
     ///
-    ///     let as_rc = set_value.get();
+    ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
     ///
     ///     # todo!()
@@ -207,12 +207,12 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let (count, set_count) = use_state(&cx, || 0);
+    ///     let count = use_state(&cx, || 0);
     ///     cx.spawn({
-    ///         let set_count = set_count.to_owned();
+    ///         let count = count.to_owned();
     ///         async move {
     ///             // for the component to re-render
-    ///             set_count.needs_update();
+    ///             count.needs_update();
     ///         }
     ///     })
     /// }
@@ -237,9 +237,9 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```
-    /// let (val, set_val) = use_state(&cx, || 0);
+    /// let val = use_state(&cx, || 0);
     ///
-    /// set_val.with_mut(|v| *v = 1);
+    /// val.with_mut(|v| *v = 1);
     /// ```
     pub fn with_mut(&self, apply: impl FnOnce(&mut T)) {
         let mut slot = self.slot.borrow_mut();
@@ -269,9 +269,9 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```
-    /// let (val, set_val) = use_state(&cx, || 0);
+    /// let val = use_state(&cx, || 0);
     ///
-    /// *set_val.make_mut() += 1;
+    /// *val.make_mut() += 1;
     /// ```
     #[must_use]
     pub fn make_mut(&self) -> RefMut<T> {

@@ -14,37 +14,38 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         Button {
             a: "asd".to_string(),
-            c: Some("asd".to_string()),
-            d: "asd".to_string(),
+            c: "asd".to_string(),
+            d: Some("asd".to_string()),
             e: "asd".to_string(),
         }
     })
 }
+
+type SthElse<T> = Option<T>;
 
 #[derive(Props, PartialEq)]
 struct ButtonProps {
     a: String,
 
     #[props(default)]
-    b: Option<String>,
+    b: String,
 
-    #[props(default)]
     c: Option<String>,
 
-    #[props(default, strip_option)]
+    #[props(!optional)]
     d: Option<String>,
 
     #[props(optional)]
-    e: Option<String>,
+    e: SthElse<String>,
 }
 
 fn Button(cx: Scope<ButtonProps>) -> Element {
     cx.render(rsx! {
         button {
-            "{cx.props.a}"
-            "{cx.props.b:?}"
-            "{cx.props.c:?}"
-            "{cx.props.d:?}"
+            "{cx.props.a} | "
+            "{cx.props.b:?} | "
+            "{cx.props.c:?} | "
+            "{cx.props.d:?} | "
             "{cx.props.e:?}"
         }
     })

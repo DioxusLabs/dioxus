@@ -80,8 +80,7 @@ impl WebsysDom {
 
                 *last_node_was_text = true;
 
-                self.interpreter.set_node(node_id.0, node);
-                // self.nodes[node_id.0] = Some(node);
+                self.interpreter.SetNode(node_id.0, node);
 
                 *cur_place += 1;
             }
@@ -93,21 +92,7 @@ impl WebsysDom {
 
                 let node = nodes.last().unwrap().child_nodes().get(*cur_place).unwrap();
 
-                use smallstr::SmallString;
-                use std::fmt::Write;
-
-                // 8 digits is enough, yes?
-                // 12 million nodes in one page?
-                let mut s: SmallString<[u8; 8]> = smallstr::SmallString::new();
-                write!(s, "{}", node_id).unwrap();
-
-                node.dyn_ref::<Element>()
-                    .unwrap()
-                    .set_attribute("dioxus-id", s.as_str())
-                    .unwrap();
-
-                self.interpreter.set_node(node_id.0, node.clone());
-                // self.nodes[node_id.0] = Some(node.clone());
+                self.interpreter.SetNode(node_id.0, node.clone());
 
                 *cur_place += 1;
 
@@ -129,6 +114,21 @@ impl WebsysDom {
                     );
                 }
 
+                if !vel.listeners.is_empty() {
+                    use smallstr::SmallString;
+                    use std::fmt::Write;
+
+                    // 8 digits is enough, yes?
+                    // 12 million nodes in one page?
+                    let mut s: SmallString<[u8; 8]> = smallstr::SmallString::new();
+                    write!(s, "{}", node_id).unwrap();
+
+                    node.dyn_ref::<Element>()
+                        .unwrap()
+                        .set_attribute("dioxus-id", s.as_str())
+                        .unwrap();
+                }
+
                 place.pop();
                 nodes.pop();
 
@@ -145,7 +145,7 @@ impl WebsysDom {
                 let cur_place = place.last_mut().unwrap();
                 let node = nodes.last().unwrap().child_nodes().get(*cur_place).unwrap();
 
-                self.interpreter.set_node(node_id.0, node);
+                self.interpreter.SetNode(node_id.0, node);
 
                 // self.nodes[node_id.0] = Some(node);
 

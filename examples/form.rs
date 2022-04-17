@@ -20,6 +20,8 @@ fn app(cx: Scope) -> Element {
                     input { r#type: "text", name: "username" }
                     input { r#type: "text", name: "full-name" }
                     input { r#type: "password", name: "password" }
+                    input { r#type: "radio", name: "color", value: "red" }
+                    input { r#type: "radio", name: "color", value: "blue" }
                     button { r#type: "submit", value: "Submit", "Submit the form" }
                 }
             }
