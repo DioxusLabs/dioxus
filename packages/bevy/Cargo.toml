@@ -8,7 +8,7 @@ dioxus-core = { path = "../core", version = "^0.2.0" }
 dioxus-desktop = { path = "../desktop", version = "^0.2.0" }
 dioxus-hooks = { path = "../hooks", version = "^0.2.0" }
 
-bevy = { version = "0.6", default-features = false, features = ["serialize"] }
+bevy = { version = "0.7", default-features = false, features = ["serialize"] }
 futures-channel = "0.3.21"
 futures-util = { version = "0.3", default-features = false }
 log = "0.4.14"

@@ -33,7 +33,7 @@ dioxus-liveview = { path = "./packages/liveview", optional = true }
 # macro = ["dioxus-core-macro", "dioxus-rsx"]
 
 bevy_dioxus = { path = "./packages/bevy", optional = true }
-bevy = { version = "0.6", default-features = false, optional = true }
+bevy = { version = "0.7", default-features = false, optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -49,9 +49,6 @@ router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
 bevy-plugin = ["bevy_dioxus", "bevy"]
-
-[patch.crates-io]
-bevy = { git = "https://github.com/bevyengine/bevy", rev = "5af7464", default-features = false, optional = true }
 
 [workspace]
 members = [

@@ -149,5 +149,6 @@ fn app(cx: Scope) -> Element {
                      }
                 }
             )))
-    }))
+        }
+    ))
 }
