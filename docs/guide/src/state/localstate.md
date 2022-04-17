@@ -19,8 +19,8 @@ cx.render(rsx!{
     ul {
         todos.read().iter().enumerate().map(|(id, todo)| rsx!{
             li {
+                onhover: move |_| *todos.write()[id].is_hovered = true,
                 h1 { "{todo.contents}" }
-                onhover: move |_| *todos.write()[id].is_hovered = true;
             }
         })
     }
