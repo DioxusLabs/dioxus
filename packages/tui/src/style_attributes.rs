@@ -41,7 +41,7 @@ use crate::style::{RinkColor, RinkStyle};
 
 #[derive(Default, Clone, PartialEq, Debug)]
 pub struct StyleModifier {
-    pub style: RinkStyle,
+    pub core: RinkStyle,
     pub modifier: TuiModifier,
 }
 
@@ -55,7 +55,7 @@ impl ParentDepState for StyleModifier {
     fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {
-            new.style.fg = None;
+            new.core.fg = None;
         }
 
         // handle text modifier elements
@@ -84,9 +84,9 @@ impl ParentDepState for StyleModifier {
 
         // keep the text styling from the parent element
         if let Some(parent) = parent {
-            let mut new_style = new.style.merge(parent.style);
-            new_style.bg = new.style.bg;
-            new.style = new_style;
+            let mut new_style = new.core.merge(parent.core);
+            new_style.bg = new.core.bg;
+            new.core = new_style;
         }
         if &mut new != self {
             *self = new;
@@ -255,7 +255,7 @@ pub fn apply_style_attributes(
 
         "color" => {
             if let Ok(c) = value.parse() {
-                style.style.fg.replace(c);
+                style.core.fg.replace(c);
             }
         }
 
@@ -324,7 +324,7 @@ fn apply_background(name: &str, value: &str, style: &mut StyleModifier) {
     match name {
         "background-color" => {
             if let Ok(c) = value.parse() {
-                style.style.bg.replace(c);
+                style.core.bg.replace(c);
             }
         }
         "background" => {}
@@ -546,14 +546,14 @@ fn apply_font(name: &str, value: &str, style: &mut StyleModifier) {
         "font-size-adjust" => (),
         "font-stretch" => (),
         "font-style" => match value {
-            "italic" => style.style = style.style.add_modifier(Modifier::ITALIC),
-            "oblique" => style.style = style.style.add_modifier(Modifier::ITALIC),
+            "italic" => style.core = style.core.add_modifier(Modifier::ITALIC),
+            "oblique" => style.core = style.core.add_modifier(Modifier::ITALIC),
             _ => (),
         },
         "font-variant" => todo!(),
         "font-weight" => match value {
-            "bold" => style.style = style.style.add_modifier(Modifier::BOLD),
-            "normal" => style.style = style.style.remove_modifier(Modifier::BOLD),
+            "bold" => style.core = style.core.add_modifier(Modifier::BOLD),
+            "normal" => style.core = style.core.remove_modifier(Modifier::BOLD),
             _ => (),
         },
         _ => (),
@@ -569,8 +569,8 @@ fn apply_text(name: &str, value: &str, style: &mut StyleModifier) {
         "text-decoration" | "text-decoration-line" => {
             for v in value.split(' ') {
                 match v {
-                    "line-through" => style.style = style.style.add_modifier(Modifier::CROSSED_OUT),
-                    "underline" => style.style = style.style.add_modifier(Modifier::UNDERLINED),
+                    "line-through" => style.core = style.core.add_modifier(Modifier::CROSSED_OUT),
+                    "underline" => style.core = style.core.add_modifier(Modifier::UNDERLINED),
                     _ => (),
                 }
             }

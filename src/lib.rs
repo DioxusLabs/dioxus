@@ -33,6 +33,8 @@ pub use dioxus_tui as tui;
 
 #[cfg(feature = "native-core")]
 pub use dioxus_native_core as native_core;
+#[cfg(feature = "native-core")]
+pub use dioxus_native_core_macro as native_core_macro;
 
 #[cfg(feature = "fermi")]
 pub use fermi;

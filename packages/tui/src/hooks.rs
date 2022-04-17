@@ -30,12 +30,12 @@ use crate::{Dom, Node};
 
 //     pub fn mouse(&self) -> Option<MouseData> {
 //         let data = (**self.0).borrow();
-//         data.mouse.as_ref().map(|m| clone_mouse_data(m))
+//         data.mouse.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn wheel(&self) -> Option<WheelData> {
 //         let data = (**self.0).borrow();
-//         data.wheel.as_ref().map(|w| clone_wheel_data(w))
+//         data.wheel.as_ref().map(|w| w.clone())
 //     }
 
 //     pub fn screen(&self) -> Option<(u16, u16)> {
@@ -47,7 +47,7 @@ use crate::{Dom, Node};
 //         let data = (**self.0).borrow();
 //         data.last_key_pressed
 //             .as_ref()
-//             .map(|k| clone_keyboard_data(&k.0))
+//             .map(|k| &k.0.clone())
 //     }
 // }
 
@@ -99,7 +99,7 @@ impl InnerInputState {
             EventData::Mouse(ref mut m) => match &mut self.mouse {
                 Some(state) => {
                     let mut buttons = state.0.buttons;
-                    state.0 = clone_mouse_data(m);
+                    state.0 = m.clone();
                     match evt.0 {
                         // this code only runs when there are no buttons down
                         "mouseup" => {
@@ -135,7 +135,7 @@ impl InnerInputState {
                 }
                 None => {
                     self.mouse = Some((
-                        clone_mouse_data(m),
+                        m.clone(),
                         if m.buttons == 0 {
                             Vec::new()
                         } else {
@@ -144,7 +144,7 @@ impl InnerInputState {
                     ));
                 }
             },
-            EventData::Wheel(ref w) => self.wheel = Some(clone_wheel_data(w)),
+            EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
                 let repeat = self
@@ -153,7 +153,7 @@ impl InnerInputState {
                     .filter(|k2| k2.0.key == k.key && k2.1.elapsed() < MAX_REPEAT_TIME)
                     .is_some();
                 k.repeat = repeat;
-                let new = clone_keyboard_data(k);
+                let new = k.clone();
                 self.last_key_pressed = Some((new, Instant::now()));
             }
         }
@@ -166,10 +166,7 @@ impl InnerInputState {
         layout: &Stretch,
         dom: &mut Dom,
     ) {
-        let previous_mouse = self
-            .mouse
-            .as_ref()
-            .map(|m| (clone_mouse_data(&m.0), m.1.clone()));
+        let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
 
         self.wheel = None;
 
@@ -269,7 +266,7 @@ impl InnerInputState {
                     if currently_contains && previously_contained {
                         try_create_event(
                             "mousemove",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -293,7 +290,7 @@ impl InnerInputState {
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseenter",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -317,7 +314,7 @@ impl InnerInputState {
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseover",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -337,7 +334,7 @@ impl InnerInputState {
                     if currently_contains && data.clicked {
                         try_create_event(
                             "mousedown",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -357,7 +354,7 @@ impl InnerInputState {
                     if currently_contains && data.released {
                         try_create_event(
                             "mouseup",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -377,7 +374,7 @@ impl InnerInputState {
                     if currently_contains && data.released && data.mouse_data.button == 0 {
                         try_create_event(
                             "click",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -397,7 +394,7 @@ impl InnerInputState {
                     if currently_contains && data.released && data.mouse_data.button == 2 {
                         try_create_event(
                             "contextmenu",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -418,7 +415,7 @@ impl InnerInputState {
                         if currently_contains && data.wheel_delta != 0.0 {
                             try_create_event(
                                 "wheel",
-                                Arc::new(clone_wheel_data(w)),
+                                Arc::new(w.clone()),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -443,7 +440,7 @@ impl InnerInputState {
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseleave",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -467,7 +464,7 @@ impl InnerInputState {
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseout",
-                            Arc::new(clone_mouse_data(data.mouse_data)),
+                            Arc::new(data.mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -785,46 +782,4 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
         repeat: Default::default(),
         which: Default::default(),
     }))
-}
-
-fn clone_mouse_data(m: &MouseData) -> MouseData {
-    MouseData {
-        client_x: m.client_x,
-        client_y: m.client_y,
-        page_x: m.page_x,
-        page_y: m.page_y,
-        screen_x: m.screen_x,
-        screen_y: m.screen_y,
-        alt_key: m.alt_key,
-        ctrl_key: m.ctrl_key,
-        meta_key: m.meta_key,
-        shift_key: m.shift_key,
-        button: m.button,
-        buttons: m.buttons,
-    }
-}
-
-fn clone_keyboard_data(k: &KeyboardData) -> KeyboardData {
-    KeyboardData {
-        char_code: k.char_code,
-        key: k.key.clone(),
-        key_code: k.key_code,
-        alt_key: k.alt_key,
-        ctrl_key: k.ctrl_key,
-        meta_key: k.meta_key,
-        shift_key: k.shift_key,
-        locale: k.locale.clone(),
-        location: k.location,
-        repeat: k.repeat,
-        which: k.which,
-    }
-}
-
-fn clone_wheel_data(w: &WheelData) -> WheelData {
-    WheelData {
-        delta_mode: w.delta_mode,
-        delta_x: w.delta_x,
-        delta_y: w.delta_y,
-        delta_z: w.delta_x,
-    }
 }

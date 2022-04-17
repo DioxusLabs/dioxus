@@ -55,7 +55,7 @@ pub(crate) fn render_vnode(
 
             let label = Label {
                 text,
-                style: node.state.style.style,
+                style: node.state.style.core,
             };
             let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
 
@@ -264,7 +264,7 @@ impl RinkWidget for &Node {
         for x in area.left()..area.right() {
             for y in area.top()..area.bottom() {
                 let mut new_cell = RinkCell::default();
-                if let Some(c) = self.state.style.style.bg {
+                if let Some(c) = self.state.style.core.bg {
                     new_cell.bg = c;
                 }
                 buf.set(x, y, new_cell);
@@ -288,7 +288,7 @@ impl RinkWidget for &Node {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.style.fg);
+            let color = current_edge.color.or(self.state.style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -323,7 +323,7 @@ impl RinkWidget for &Node {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.style.fg);
+            let color = current_edge.color.or(self.state.style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -358,7 +358,7 @@ impl RinkWidget for &Node {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.style.fg);
+            let color = current_edge.color.or(self.state.style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
@@ -393,7 +393,7 @@ impl RinkWidget for &Node {
                 (last_r * RADIUS_MULTIPLIER[0]) as u16,
                 (last_r * RADIUS_MULTIPLIER[1]) as u16,
             ];
-            let color = current_edge.color.or(self.state.style.style.fg);
+            let color = current_edge.color.or(self.state.style.core.fg);
             let mut new_cell = RinkCell::default();
             if let Some(c) = color {
                 new_cell.fg = c;
