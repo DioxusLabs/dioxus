@@ -51,7 +51,7 @@ impl UseRoute {
     #[cfg(feature = "query")]
     pub fn query<T: serde::de::DeserializeOwned>(&self) -> Option<T> {
         let query = self.url().query()?;
-        serde_urlencoded::from_str(query.strip_prefix('?').unwrap_or("")).ok()
+        serde_urlencoded::from_str(query).ok()
     }
 
     /// Get the first query parameter given the parameter name.
