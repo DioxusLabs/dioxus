@@ -130,6 +130,7 @@ pub trait State: Default + Clone {
     fn node_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
 }
 
+// Todo: once GATs land we can model multable dependencies
 impl ChildDepState for () {
     type Ctx = ();
     type DepState = ();
