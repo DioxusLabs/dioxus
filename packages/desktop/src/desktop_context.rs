@@ -170,7 +170,9 @@ where
 
     /// run (evaluate) a script in the WebView context
     pub fn eval(&self, script: impl std::string::ToString) {
-        let _ = self.proxy.send_event(Eval(script.to_string()));
+        let _ = self
+            .proxy
+            .send_event(UserEvent::WindowEvent(Eval(script.to_string())));
     }
 }
 
@@ -253,9 +255,9 @@ pub fn user_window_event_handler(
     }
 }
 
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-    let desktop = use_window(&cx).clone();
+// TODO: /// Get a closure that executes any JavaScript in the WebView context.
+// pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
+//     let desktop = use_window(&cx).clone();
 
-    cx.use_hook(|_| move |script| desktop.eval(script))
-}
+//     cx.use_hook(|_| move |script| desktop.eval(script))
+// }

@@ -9,8 +9,8 @@ pub mod hooks {
     #[cfg(all(target = "wasm", feature = "web"))]
     pub use dioxus_web::use_eval;
 
-    #[cfg(all(not(target = "wasm"), feature = "desktop"))]
-    pub use dioxus_desktop::use_eval;
+    // #[cfg(all(not(target = "wasm"), feature = "desktop"))]
+    // TODO: pub use dioxus_desktop::use_eval;
 }
 
 #[cfg(feature = "router")]

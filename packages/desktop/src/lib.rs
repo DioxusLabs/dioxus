@@ -1,7 +1,7 @@
 #![doc = include_str!("readme.md")]
 #![doc(html_logo_url = "https://avatars.githubusercontent.com/u/79236386")]
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
-// #![deny(missing_docs)]
+// TODO:  #![deny(missing_docs)]
 
 pub mod cfg;
 pub mod controller;
@@ -10,8 +10,8 @@ mod escape;
 pub mod events;
 pub mod protocol;
 
+pub use desktop_context::{/* todo: use_eval, */ use_window, DesktopContext};
 use desktop_context::{UserEvent, UserWindowEvent};
-pub use desktop_context::{use_eval, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 

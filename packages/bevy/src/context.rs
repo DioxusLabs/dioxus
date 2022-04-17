@@ -45,4 +45,11 @@ where
     pub fn send(&self, cmd: CoreCommand) -> Result<(), TrySendError<CoreCommand>> {
         self.channel.0.unbounded_send(cmd)
     }
+
+    // TODO: /// run (evaluate) a script in the WebView context
+    // pub fn eval(&self, script: impl std::string::ToString) {
+    //     let _ = self
+    //         .proxy
+    //         .send_event(UserEvent::WindowEvent(Eval(script.to_string())));
+    // }
 }
