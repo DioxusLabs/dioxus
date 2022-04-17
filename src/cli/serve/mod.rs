@@ -1,9 +1,9 @@
+use super::*;
 use std::{
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
 };
-use super::*;
 
 /// Run the WASM project on dev-server
 #[derive(Clone, Debug, Parser)]
@@ -47,16 +47,9 @@ impl Serve {
                         if cfg!(windows) {
                             file.set_extension("exe");
                         }
-                        Command::new(
-                            crate_config
-                                .out_dir
-                                .join(file)
-                                .to_str()
-                                .unwrap()
-                                .to_string(),
-                        )
-                        .stdout(Stdio::inherit())
-                        .output()?;
+                        Command::new(crate_config.out_dir.join(file).to_str().unwrap())
+                            .stdout(Stdio::inherit())
+                            .output()?;
                     }
                 }
                 return Ok(());
