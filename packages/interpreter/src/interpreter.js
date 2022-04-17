@@ -10,12 +10,7 @@ export function main() {
 
     function handleKeyEvent(e) {
       e.preventDefault();
-      const params = {
-        type: e.type,
-        code: e.code,
-        keyCode: e.keyCode,
-      }
-      window.ipc.postMessage(serializeIpcMessage("keyboard_event", params))
+      window.ipc.postMessage(serializeIpcMessage("keyboard_event", serialize_event(e)))
     }
   }
 }
@@ -348,18 +343,20 @@ export function serialize_event(event) {
         location,
         repeat,
         which,
+        type,
       } = event;
       return {
         char_code: charCode,
-        key: key,
+        key,
         alt_key: altKey,
         ctrl_key: ctrlKey,
         meta_key: metaKey,
         key_code: keyCode,
         shift_key: shiftKey,
-        location: location,
-        repeat: repeat,
-        which: which,
+        location,
+        repeat,
+        which,
+        type,
         locale: "locale",
       };
     }
