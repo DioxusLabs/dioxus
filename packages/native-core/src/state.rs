@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
 use dioxus_core::VNode;
@@ -14,20 +14,20 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
     let mut o_peekable = o_iter.peekable();
     let mut v = Vec::with_capacity(new_len_guess);
     while let Some(s_i) = s_peekable.peek() {
-        loop {
-            if let Some(o_i) = o_peekable.peek() {
-                if o_i > s_i {
+        while let Some(o_i) = o_peekable.peek() {
+            match o_i.cmp(s_i) {
+                Ordering::Greater => {
                     break;
-                } else if o_i < s_i {
+                }
+                Ordering::Less => {
                     v.push(o_peekable.next().unwrap());
                 }
-            } else {
-                break;
+                Ordering::Equal => (),
             }
         }
         v.push(s_peekable.next().unwrap());
     }
-    while let Some(o_i) = o_peekable.next() {
+    for o_i in o_peekable {
         v.push(o_i);
     }
     for w in v.windows(2) {

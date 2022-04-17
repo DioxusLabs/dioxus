@@ -115,7 +115,7 @@ impl ChildDepState for StretchLayout {
 }
 
 // these are the attributes in layout_attiributes in native-core
-const SORTED_LAYOUT_ATTRS: &'static [&'static str] = &sorted_str_slice!([
+const SORTED_LAYOUT_ATTRS: &[&str] = &sorted_str_slice!([
     "align-content",
     "align-items",
     "align-self",

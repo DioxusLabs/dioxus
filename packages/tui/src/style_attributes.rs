@@ -590,7 +590,7 @@ fn apply_transition(_name: &str, _value: &str, _style: &mut StyleModifier) {
     todo!()
 }
 
-const SORTED_STYLE_ATTRS: &'static [&'static str] = &sorted_str_slice!([
+const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
     "animation",
     "animation-delay",
     "animation-direction",

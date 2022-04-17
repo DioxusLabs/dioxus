@@ -166,7 +166,7 @@ fn render_vdom(
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
                             let root = &rdom[0];
-                            render::render_vnode(frame, &stretch.borrow(), &rdom, &root, cfg);
+                            render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
                         })?;
                     } else {
                         resize(
@@ -226,7 +226,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = AnyMap::new();
                     any_map.insert(stretch.clone());
-                    let _to_rerender = rdom.update_state(&vdom, to_update, any_map).unwrap();
+                    let _to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
                 }
             }
 

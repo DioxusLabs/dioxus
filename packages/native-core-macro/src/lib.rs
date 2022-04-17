@@ -21,9 +21,9 @@ pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
 
 #[derive(PartialEq, Debug, Clone)]
 enum DepKind {
-    NodeDepState,
-    ChildDepState,
-    ParentDepState,
+    Node,
+    Child,
+    Parent,
 }
 
 #[proc_macro_derive(State, attributes(node_dep_state, child_dep_state, parent_dep_state))]
@@ -50,23 +50,23 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let node_dep_state_fields = state_strct
                 .state_members
                 .iter()
-                .filter(|f| f.dep_kind == DepKind::NodeDepState)
+                .filter(|f| f.dep_kind == DepKind::Node)
                 .map(|f| f.reduce_self());
             let child_dep_state_fields = state_strct
                 .state_members
                 .iter()
-                .filter(|f| f.dep_kind == DepKind::ChildDepState)
+                .filter(|f| f.dep_kind == DepKind::Child)
                 .map(|f| f.reduce_self());
             let parent_dep_state_fields = state_strct
                 .state_members
                 .iter()
-                .filter(|f| f.dep_kind == DepKind::ParentDepState)
+                .filter(|f| f.dep_kind == DepKind::Parent)
                 .map(|f| f.reduce_self());
 
             let node_iter = state_strct
                 .state_members
                 .iter()
-                .filter(|m| m.dep_kind == DepKind::NodeDepState);
+                .filter(|m| m.dep_kind == DepKind::Node);
             let node_ids = node_iter.clone().map(|m| m.member_id.0);
             let node_ids_clone = node_ids.clone();
             let node_types = node_iter.map(|f| &f.mem.ty);
@@ -74,7 +74,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let child_iter = state_strct
                 .state_members
                 .iter()
-                .filter(|m| m.dep_kind == DepKind::ChildDepState);
+                .filter(|m| m.dep_kind == DepKind::Child);
             let child_ids = child_iter.clone().map(|m| m.member_id.0);
             let child_ids_clone = child_ids.clone();
             let child_types = child_iter.map(|f| &f.mem.ty);
@@ -82,7 +82,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let parent_iter = state_strct
                 .state_members
                 .iter()
-                .filter(|m| m.dep_kind == DepKind::ParentDepState);
+                .filter(|m| m.dep_kind == DepKind::Parent);
             let parent_ids = parent_iter.clone().map(|m| m.member_id.0);
             let parent_ids_clone = parent_ids.clone();
             let parent_types = parent_iter.map(|f| &f.mem.ty);
@@ -191,24 +191,22 @@ struct StateStruct<'a> {
 impl<'a> StateStruct<'a> {
     fn parse(fields: &[&'a Field], strct: &'a Struct) -> Result<Self> {
         let mut parse_err = Ok(());
-        let state_members: Vec<_> = strct
+        let state_members = strct
             .members
             .iter()
             .zip(fields.iter())
-            .filter_map(|(m, f)| match StateMember::parse(f, m, &strct) {
+            .filter_map(|(m, f)| match StateMember::parse(f, m, strct) {
                 Ok(m) => m,
                 Err(err) => {
                     parse_err = Err(err);
                     None
                 }
-            })
-            .collect();
-        parse_err?;
+            });
 
         #[derive(Debug, Clone)]
         struct DepNode<'a> {
             state_mem: StateMember<'a>,
-            depandants: Vec<Box<DepNode<'a>>>,
+            depandants: Vec<DepNode<'a>>,
         }
         impl<'a> DepNode<'a> {
             fn new(state_mem: StateMember<'a>) -> Self {
@@ -266,15 +264,14 @@ impl<'a> StateStruct<'a> {
             fn kind(&self) -> Result<&DepKind> {
                 fn reduce_kind<'a>(dk1: &'a DepKind, dk2: &'a DepKind) -> Result<&'a DepKind> {
                     match (dk1, dk2) {
-                        (DepKind::ChildDepState, DepKind::ParentDepState)
-                        | (DepKind::ParentDepState, DepKind::ChildDepState) => Err(Error::new(
-                            Span::call_site(),
-                            "There is a ChildDepState that depends on a ParentDepState",
-                        )),
-                        // node dep state takes the lowest priority
-                        (DepKind::NodeDepState, important) | (important, DepKind::NodeDepState) => {
-                            Ok(important)
+                        (DepKind::Child, DepKind::Parent) | (DepKind::Parent, DepKind::Child) => {
+                            Err(Error::new(
+                                Span::call_site(),
+                                "There is a ChildDepState that depends on a ParentDepState",
+                            ))
                         }
+                        // node dep state takes the lowest priority
+                        (DepKind::Node, important) | (important, DepKind::Node) => Ok(important),
                         // they are the same
                         (fst, _) => Ok(fst),
                     }
@@ -282,9 +279,7 @@ impl<'a> StateStruct<'a> {
                 reduce_kind(
                     self.depandants
                         .iter()
-                        .try_fold(&DepKind::NodeDepState, |dk1, dk2| {
-                            reduce_kind(dk1, dk2.kind()?)
-                        })?,
+                        .try_fold(&DepKind::Node, |dk1, dk2| reduce_kind(dk1, dk2.kind()?))?,
                     &self.state_mem.dep_kind,
                 )
             }
@@ -293,7 +288,7 @@ impl<'a> StateStruct<'a> {
                 let dep = other.state_mem.dep_mem.unwrap();
                 if self.contains_member(dep) {
                     if self.state_mem.mem == dep {
-                        self.depandants.push(Box::new(other));
+                        self.depandants.push(other);
                         true
                     } else {
                         self.depandants
@@ -310,7 +305,7 @@ impl<'a> StateStruct<'a> {
 
         // members need to be sorted so that members are updated after the members they depend on
         let mut roots: Vec<DepNode> = vec![];
-        for m in state_members.into_iter() {
+        for m in state_members {
             if let Some(dep) = m.dep_mem {
                 let root_depends_on = roots
                     .iter()
@@ -342,6 +337,7 @@ impl<'a> StateStruct<'a> {
             }
             roots.push(new);
         }
+        parse_err?;
         let mut current_id = 0;
         for r in &mut roots {
             r.set_ids(&mut current_id);
@@ -351,8 +347,7 @@ impl<'a> StateStruct<'a> {
         } else {
             let state_members: Vec<_> = roots
                 .into_iter()
-                .map(|r| r.flatten().into_iter())
-                .flatten()
+                .flat_map(|r| r.flatten().into_iter())
                 .collect();
 
             Ok(Self { state_members })
@@ -417,13 +412,12 @@ impl<'a> StateMember<'a> {
             let dep_kind = a
                 .path
                 .get_ident()
-                .map(|i| match i.to_string().as_str() {
-                    "node_dep_state" => Some(DepKind::NodeDepState),
-                    "child_dep_state" => Some(DepKind::ChildDepState),
-                    "parent_dep_state" => Some(DepKind::ParentDepState),
+                .and_then(|i| match i.to_string().as_str() {
+                    "node_dep_state" => Some(DepKind::Node),
+                    "child_dep_state" => Some(DepKind::Child),
+                    "parent_dep_state" => Some(DepKind::Parent),
                     _ => None,
-                })
-                .flatten()?;
+                })?;
             match a.parse_args::<Dependancy>() {
                 Ok(dependancy) => {
                     let dep_mem = if let Some(name) = &dependancy.dep {
@@ -474,27 +468,27 @@ impl<'a> StateMember<'a> {
             let child_dep = self
                 .dependants
                 .iter()
-                .filter(|(_, kind)| kind == &DepKind::ChildDepState)
+                .filter(|(_, kind)| kind == &DepKind::Child)
                 .map(|(id, _)| id.0);
             let parent_dep = self
                 .dependants
                 .iter()
-                .filter(|(_, kind)| kind == &DepKind::ParentDepState)
+                .filter(|(_, kind)| kind == &DepKind::Parent)
                 .map(|(id, _)| id.0);
             let node_dep = self
                 .dependants
                 .iter()
-                .filter(|(_, kind)| kind == &DepKind::NodeDepState)
+                .filter(|(_, kind)| kind == &DepKind::Node)
                 .map(|(id, _)| id.0);
             match self.dep_kind {
-                DepKind::NodeDepState => {
+                DepKind::Node => {
                     quote! {
                         dioxus_native_core::state::NodeStatesChanged{
                             node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
                         }
                     }
                 }
-                DepKind::ChildDepState => {
+                DepKind::Child => {
                     quote! {
                         dioxus_native_core::state::ChildStatesChanged{
                             node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
@@ -502,7 +496,7 @@ impl<'a> StateMember<'a> {
                         }
                     }
                 }
-                DepKind::ParentDepState => {
+                DepKind::Parent => {
                     quote! {
                         dioxus_native_core::state::ParentStatesChanged{
                             node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
@@ -519,7 +513,7 @@ impl<'a> StateMember<'a> {
         let id = self.member_id.0;
         if let Some(dep_ident) = &self.dep_mem.map(|m| &m.ident) {
             match self.dep_kind {
-                DepKind::NodeDepState => {
+                DepKind::Node => {
                     quote!({
                         // println!("node: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, &self.#dep_ident, #get_ctx){
@@ -529,7 +523,7 @@ impl<'a> StateMember<'a> {
                         }
                     })
                 }
-                DepKind::ChildDepState => {
+                DepKind::Child => {
                     quote!({
                         // println!("child: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident), #get_ctx){
@@ -539,7 +533,7 @@ impl<'a> StateMember<'a> {
                         }
                     })
                 }
-                DepKind::ParentDepState => {
+                DepKind::Parent => {
                     quote!({
                         // println!("parent: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, parent.as_ref().map(|p| &p.#dep_ident), #get_ctx){
@@ -552,7 +546,7 @@ impl<'a> StateMember<'a> {
             }
         } else {
             match self.dep_kind {
-                DepKind::NodeDepState => {
+                DepKind::Node => {
                     quote!({
                         // println!("node: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, &(), #get_ctx){
@@ -562,7 +556,7 @@ impl<'a> StateMember<'a> {
                         }
                     })
                 }
-                DepKind::ChildDepState => {
+                DepKind::Child => {
                     quote!({
                         // println!("child: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, std::iter::empty(), #get_ctx){
@@ -572,7 +566,7 @@ impl<'a> StateMember<'a> {
                         }
                     })
                 }
-                DepKind::ParentDepState => {
+                DepKind::Parent => {
                     quote!({
                         println!("parent: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, Some(&()), #get_ctx){

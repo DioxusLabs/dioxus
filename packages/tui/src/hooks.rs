@@ -161,7 +161,7 @@ impl InnerInputState {
 
     fn update(
         &mut self,
-        evts: &mut Vec<EventCore>,
+        evts: &mut [EventCore],
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
         dom: &mut Dom,

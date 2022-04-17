@@ -390,7 +390,7 @@ impl<S: State> RealDom<S> {
         }
 
         // push down state. To avoid calling reduce more times than nessisary start from the top and go down.
-        let mut to_push = nodes_updated.clone();
+        let mut to_push = nodes_updated;
         while let Some(node_ref) = to_push.pop_front() {
             let NodeRef {
                 id,
@@ -528,10 +528,10 @@ impl<S: State> RealDom<S> {
     }
 
     // this is safe because no node will have itself as a child
-    pub fn get_node_children_mut<'a>(
-        &'a mut self,
+    pub fn get_node_children_mut(
+        &mut self,
         id: usize,
-    ) -> Option<(&'a mut Node<S>, Vec<&'a mut Node<S>>)> {
+    ) -> Option<(&mut Node<S>, Vec<&mut Node<S>>)> {
         let ptr = self.nodes.as_mut_ptr();
         unsafe {
             if id >= self.nodes.len() {
@@ -546,7 +546,7 @@ impl<S: State> RealDom<S> {
                             .collect(),
                         _ => Vec::new(),
                     };
-                    return Some((node, children));
+                    Some((node, children))
                 } else {
                     None
                 }
@@ -555,24 +555,22 @@ impl<S: State> RealDom<S> {
     }
 
     // this is safe because no node will have itself as a parent
-    pub fn get_node_parent_mut<'a>(
-        &'a mut self,
+    pub fn get_node_parent_mut(
+        &mut self,
         id: usize,
-    ) -> Option<(&'a mut Node<S>, Option<&'a mut Node<S>>)> {
+    ) -> Option<(&mut Node<S>, Option<&mut Node<S>>)> {
         let ptr = self.nodes.as_mut_ptr();
         unsafe {
             let node = &mut *ptr.add(id);
             if id >= self.nodes.len() {
                 None
+            } else if let Some(node) = node.as_mut() {
+                let parent = node
+                    .parent
+                    .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap());
+                Some((node, parent))
             } else {
-                if let Some(node) = node.as_mut() {
-                    let parent = node
-                        .parent
-                        .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap());
-                    return Some((node, parent));
-                } else {
-                    None
-                }
+                None
             }
         }
     }

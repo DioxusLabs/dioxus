@@ -30,7 +30,7 @@ impl<'a> NodeView<'a> {
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then(|| self.el().map(|el| el.namespace).flatten())
+            .then(|| self.el().and_then(|el| el.namespace))
             .flatten()
     }
 
@@ -39,7 +39,7 @@ impl<'a> NodeView<'a> {
             .map(|el| el.attributes)
             .unwrap_or_default()
             .iter()
-            .filter(|a| self.mask.attritutes.contains_attribute(&a.name))
+            .filter(|a| self.mask.attritutes.contains_attribute(a.name))
     }
 
     pub fn text(&self) -> Option<&str> {
@@ -124,11 +124,11 @@ impl AttributeMask {
 
     fn overlaps(&self, other: &Self) -> bool {
         fn overlaps_iter(
-            mut self_iter: impl Iterator<Item = &'static str>,
+            self_iter: impl Iterator<Item = &'static str>,
             mut other_iter: impl Iterator<Item = &'static str>,
         ) -> bool {
             if let Some(mut other_attr) = other_iter.next() {
-                while let Some(self_attr) = self_iter.next() {
+                for self_attr in self_iter {
                     while other_attr < self_attr {
                         if let Some(attr) = other_iter.next() {
                             other_attr = attr;
