@@ -21,7 +21,7 @@ pub enum Config {
     /// Format print Dioxus config.
     FormatPrint {},
     /// Create a custom html file.
-    CustomHtml {}
+    CustomHtml {},
 }
 
 impl Config {

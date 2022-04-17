@@ -11,9 +11,7 @@ pub enum Tool {
     /// Get default app install path.
     AppPath {},
     /// Install a new tool.
-    Add {
-        name: String
-    }
+    Add { name: String },
 }
 
 impl Tool {
@@ -33,7 +31,7 @@ impl Tool {
             }
             Tool::Add { name } => {
                 let tool_list = tools::tool_list();
-                
+
                 if !tool_list.contains(&name.as_str()) {
                     log::error!("Tool {name} not found.");
                     return Ok(());

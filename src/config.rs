@@ -1,6 +1,6 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::{fs::File, io::Read, path::PathBuf, collections::HashMap};
+use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
