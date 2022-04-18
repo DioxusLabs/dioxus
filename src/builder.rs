@@ -132,7 +132,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             );
         }
     }
-  
+
     // this code will copy all public file to the output dir
     let copy_options = fs_extra::dir::CopyOptions {
         overwrite: true,
@@ -204,18 +204,15 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
         let mut res_path = match &config.executable {
             crate::ExecutableType::Binary(name) | crate::ExecutableType::Lib(name) => {
                 file_name = name.clone();
-                config
-                    .target_dir
-                    .join(release_type.to_string())
-                    .join(name.to_string())
+                config.target_dir.join(release_type).join(name)
             }
             crate::ExecutableType::Example(name) => {
                 file_name = name.clone();
                 config
                     .target_dir
-                    .join(release_type.to_string())
+                    .join(release_type)
                     .join("examples")
-                    .join(name.to_string())
+                    .join(name)
             }
         };
 

@@ -12,7 +12,6 @@ impl Build {
     pub fn build(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
-
         // change the release state.
         crate_config.with_release(self.build.release);
 
