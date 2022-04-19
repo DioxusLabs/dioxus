@@ -4,7 +4,20 @@ use wry::{
     Result,
 };
 
-pub(super) fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) -> Result<Response> {
+const MODULE_LOADER: &str = r#"
+<script>
+    import("./index.js").then(function (module) {
+    module.main();
+    });
+</script>
+"#;
+
+pub(super) fn desktop_handler(
+    request: &Request,
+    asset_root: Option<PathBuf>,
+    custom_head: Option<String>,
+    custom_index: Option<String>,
+) -> Result<Response> {
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
     let path = request.uri().replace("dioxus://", "");
@@ -13,9 +26,25 @@ pub(super) fn desktop_handler(request: &Request, asset_root: Option<PathBuf>) ->
     let trimmed = path.trim_start_matches("index.html/");
 
     if trimmed.is_empty() {
-        ResponseBuilder::new()
-            .mimetype("text/html")
-            .body(include_bytes!("./index.html").to_vec())
+        // If a custom index is provided, just defer to that, expecting the user to know what they're doing.
+        // we'll look for the closing </body> tag and insert our little module loader there.
+        if let Some(custom_index) = custom_index {
+            let rendered = custom_index
+                .replace("</body>", &format!("{}</body>", MODULE_LOADER))
+                .into_bytes();
+            ResponseBuilder::new().mimetype("text/html").body(rendered)
+        } else {
+            // Otherwise, we'll serve the default index.html and apply a custom head if that's specified.
+            let mut template = include_str!("./index.html").to_string();
+            if let Some(custom_head) = custom_head {
+                template = template.replace("<!-- CUSTOM HEAD -->", &custom_head);
+            }
+            template = template.replace("<!-- MODULE LOADER -->", MODULE_LOADER);
+
+            ResponseBuilder::new()
+                .mimetype("text/html")
+                .body(template.into_bytes())
+        }
     } else if trimmed == "index.js" {
         ResponseBuilder::new()
             .mimetype("text/javascript")
