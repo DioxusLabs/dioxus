@@ -166,9 +166,9 @@ mod field_info {
 
     use proc_macro2::TokenStream;
     use quote::{quote, ToTokens};
-    use syn::Expr;
     use syn::parse::Error;
     use syn::spanned::Spanned;
+    use syn::Expr;
 
     use crate::props::injection::Selectors;
 
@@ -352,23 +352,29 @@ mod field_info {
                         // simple tag selector for applying attribute to inner element/component
                         "attribute_on" => {
                             if self.hndlr_on.is_some() {
-                                Err(Error::new_spanned(assign, r#""handler_on" already defined, can only apply one"#))
+                                Err(Error::new_spanned(
+                                    assign,
+                                    r#""handler_on" already defined, can only apply one"#,
+                                ))
                             } else {
                                 self.attr_on = Some(parse_selectors(&assign.right)?);
 
                                 Ok(())
                             }
-                        },
+                        }
                         // simple tag selector for applying event handler to inner element/component
-                        "handler_on" =>  {
+                        "handler_on" => {
                             if self.attr_on.is_some() {
-                                Err(Error::new_spanned(assign, r#""attribute_on" already defined, can only apply one"#))
+                                Err(Error::new_spanned(
+                                    assign,
+                                    r#""attribute_on" already defined, can only apply one"#,
+                                ))
                             } else {
                                 self.hndlr_on = Some(parse_selectors(&assign.right)?);
 
                                 Ok(())
                             }
-                        },
+                        }
                         _ => Err(Error::new_spanned(
                             &assign,
                             format!("Unknown parameter {:?}", name),
@@ -469,18 +475,16 @@ mod field_info {
     }
 
     #[inline]
-    fn parse_selectors(source: &Box<Expr>) -> syn::Result<Selectors> {
+    fn parse_selectors(source: &Expr) -> syn::Result<Selectors> {
         Selectors::from_str(&parse_string_literal(source)?)
             .map_err(|err| Error::new_spanned(&source, err))
     }
 
-    fn parse_string_literal(source: &Box<Expr>) -> syn::Result<String> {
+    fn parse_string_literal(source: &Expr) -> syn::Result<String> {
         let expr = (&source).into_token_stream().to_string();
 
         if expr.starts_with('"') && expr.ends_with('"') {
-            let literal = expr
-                .strip_prefix('"').unwrap()
-                .strip_suffix('"').unwrap();
+            let literal = expr.strip_prefix('"').unwrap().strip_suffix('"').unwrap();
 
             Ok(literal.to_string())
         } else {
@@ -1252,9 +1256,9 @@ pub mod injection {
     use std::borrow::BorrowMut;
     use std::collections::{HashMap, HashSet};
     use std::fmt;
-    use std::fmt::{Display, Formatter, Write};
     #[cfg(debug_assertions)]
     use std::fmt::Debug;
+    use std::fmt::{Display, Formatter, Write};
     use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
     use std::str::FromStr;
     use std::sync::{Mutex, Once};
@@ -1269,22 +1273,33 @@ pub mod injection {
     impl InjectedProperties {
         /// traverses and adds injected fields and their reciprocal selectors to the static cache
         pub fn add_injected_fields(component: &str, fields: &mut [FieldInfo]) -> syn::Result<()> {
-            let injected_fields = fields.iter_mut()
-                .filter_map(
-                    |FieldInfo { name, builder_attr: FieldBuilderAttr { inject_as, attr_on, hndlr_on, strip_option, .. }, .. }| {
-                        // attr_on and hndlr_on are checked to be mutually exclusive during parsing
-                        if attr_on.is_some() || hndlr_on.is_some() {
-                            Some((
-                                name.clone(),
-                                inject_as.take().unwrap_or(name.to_string()),
-                                attr_on.is_some(),
-                                attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap()),
-                                strip_option
-                            ))
-                        } else {
-                            None
-                        }
-                    });
+            let injected_fields = fields.iter_mut().filter_map(
+                |FieldInfo {
+                     name,
+                     builder_attr:
+                         FieldBuilderAttr {
+                             inject_as,
+                             attr_on,
+                             hndlr_on,
+                             strip_option,
+                             ..
+                         },
+                     ..
+                 }| {
+                    // attr_on and hndlr_on are checked to be mutually exclusive during parsing
+                    if attr_on.is_some() || hndlr_on.is_some() {
+                        Some((
+                            name.clone(),
+                            inject_as.take().unwrap_or_else(|| name.to_string()),
+                            attr_on.is_some(),
+                            attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap()),
+                            strip_option,
+                        ))
+                    } else {
+                        None
+                    }
+                },
+            );
 
             for (name, inject_as, attribute, selector, strip_option) in injected_fields {
                 InjectedProperties::add_selectors(
@@ -1303,14 +1318,15 @@ pub mod injection {
                         }
                     },
                     selector,
-                ).map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+                )
+                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
             }
 
-/*
-            #[cfg(debug_assertions)]
-            InjectedProperties::debug(component)
-                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
-*/
+            /*
+                        #[cfg(debug_assertions)]
+                        InjectedProperties::debug(component)
+                            .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+            */
 
             Ok(())
         }
@@ -1318,7 +1334,9 @@ pub mod injection {
         /// Thread safe method for checking if a property applies to
         /// a child element/component branch
         pub fn check_branch(
-            component: &str, property: &Property, branch: &Branch,
+            component: &str,
+            property: &Property,
+            branch: &Branch,
         ) -> Result<bool, String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
 
@@ -1332,11 +1350,15 @@ pub mod injection {
         }
 
         pub fn component_properties<C: ToString>(component: &C) -> syn::Result<Vec<Property>> {
-            let components = Self::components().lock()
+            let components = Self::components()
+                .lock()
                 .map_err(|err| syn::Error::new(Span::call_site(), format!("{err}")))?;
 
             if let Some(selector) = &components.0.get(component.to_string().as_str()) {
-                Ok(selector.iter().map(|(property, _)| property.clone()).collect())
+                Ok(selector
+                    .iter()
+                    .map(|(property, _)| property.clone())
+                    .collect())
             } else {
                 Ok(vec![])
             }
@@ -1349,7 +1371,7 @@ pub mod injection {
             let selectors = &components.0.get(component);
             let selectors = match selectors {
                 Some(selectors) => *selectors,
-                None => return Ok(())
+                None => return Ok(()),
             };
 
             println!("{component}:");
@@ -1366,10 +1388,15 @@ pub mod injection {
         /// Thread safe method for adding selectors for a property of a component;
         /// used during the derivation of Props trait for component properties
         fn add_selectors(
-            component: &str, property: Property, selectors: Selectors,
+            component: &str,
+            property: Property,
+            selectors: Selectors,
         ) -> Result<(), String> {
             let mut components = Self::components().lock().map_err(|err| format!("{err}"))?;
-            let component = components.0.entry(component.into()).or_insert_with(PropertySelectors::new);
+            let component = components
+                .0
+                .entry(component.into())
+                .or_insert_with(PropertySelectors::new);
 
             component.entry(property).or_insert(selectors);
 
@@ -1382,7 +1409,9 @@ pub mod injection {
             static INIT: Once = Once::new();
 
             // Since this access is inside a call_once, before any other accesses, it is safe
-            INIT.call_once(|| unsafe { *INNER.borrow_mut() = Some(Mutex::new(Self(HashMap::new()))) });
+            INIT.call_once(|| unsafe {
+                *INNER.borrow_mut() = Some(Mutex::new(Self(HashMap::new())))
+            });
 
             // As long as this function is the only place with access to the static variable,
             // giving out a read-only borrow here is safe because it is guaranteed no more mutable
@@ -1407,7 +1436,9 @@ pub mod injection {
                 }
                 fmt.write_fmt(format_args!(
                     "{}:[{}][{}]",
-                    segment.current, segment.ordinal, segment.counters.get(&segment.current).unwrap()
+                    segment.current,
+                    segment.ordinal,
+                    segment.counters.get(&segment.current).unwrap()
                 ))?;
             }
 
@@ -1433,7 +1464,9 @@ pub mod injection {
         #[inline]
         #[must_use]
         pub const fn new() -> Self {
-            Self { segments: Vec::new() }
+            Self {
+                segments: Vec::new(),
+            }
         }
 
         /// Adds a new child leve;, creates a new segment trace; only used
@@ -1453,7 +1486,9 @@ pub mod injection {
         /// Indicates no more siblings; used after last sibling is added
         pub fn last(&mut self) -> Result<(), String> {
             if self.segments.is_empty() {
-                Err(String::from("Branch traversal expected parent segment, ended unexpectedly"))
+                Err(String::from(
+                    "Branch traversal expected parent segment, ended unexpectedly",
+                ))
             } else {
                 self.segments.pop();
 
@@ -1464,14 +1499,17 @@ pub mod injection {
         /// Adds next sibling, updates trace info
         pub fn sibling<N: ToString>(&mut self, name: N) -> Result<(), String> {
             if self.segments.is_empty() {
-                Err(String::from("Branch is empty, start with a call to child first"))
+                Err(String::from(
+                    "Branch is empty, start with a call to child first",
+                ))
             } else {
                 let trace = self.segments.last_mut().unwrap();
 
                 trace.ordinal += 1;
                 trace.current = name.to_string();
 
-                trace.counters
+                trace
+                    .counters
                     .entry(trace.current.clone())
                     .and_modify(|cnt| *cnt += 1)
                     .or_insert(0);
@@ -1549,8 +1587,7 @@ pub mod injection {
     impl Display for Property {
         fn fmt(&self, fmt: &mut Formatter<'_>) -> fmt::Result {
             fmt.write_str(match self {
-                Property::Attribute { name, .. } |
-                Property::Handler { name, .. } => name
+                Property::Attribute { name, .. } | Property::Handler { name, .. } => name,
             })
         }
     }
@@ -1572,16 +1609,17 @@ pub mod injection {
             let name = branch.to_string();
 
             match self.0.get(&name) {
-                Some(segments) => {
-                    segments.iter()
-                        .filter(|segments| segments.len() == branch.segments.len())
-                        .any(
-                            |segments|
-                                segments.deref().iter().zip(branch.segments.iter())
-                                    .all(|(lfh, rth)| lfh.matches(rth))
-                        )
-                }
-                None => false
+                Some(segments) => segments
+                    .iter()
+                    .filter(|segments| segments.len() == branch.segments.len())
+                    .any(|segments| {
+                        segments
+                            .deref()
+                            .iter()
+                            .zip(branch.segments.iter())
+                            .all(|(lfh, rth)| lfh.matches(rth))
+                    }),
+                None => false,
             }
         }
     }
@@ -1592,35 +1630,36 @@ pub mod injection {
 
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             // multiple selectors can be defined separated by a semicolon
-            let result = value.split(';')
-                .filter_map(
-                    |sel| if sel.trim().is_empty() {
+            let result = value
+                .split(';')
+                .filter_map(|sel| {
+                    if sel.trim().is_empty() {
                         None
                     } else {
                         Some(Selector::from_str(sel.trim()))
                     }
-                )
+                })
                 // an identifier key may represent multiple selectors, group them
-                .fold(
-                    Ok(Self::new()),
-                    |acc, next| match acc {
-                        Ok(mut acc) => match next {
-                            Ok(next) => {
-                                acc.0.entry(next.identifier.clone())
-                                    .or_insert_with(HashSet::new)
-                                    .insert(next.segments);
+                .fold(Ok(Self::new()), |acc, next| match acc {
+                    Ok(mut acc) => match next {
+                        Ok(next) => {
+                            acc.0
+                                .entry(next.identifier.clone())
+                                .or_insert_with(HashSet::new)
+                                .insert(next.segments);
 
-                                Ok(acc)
-                            }
-                            Err(err) => Err(err)
-                        },
-                        err => err
+                            Ok(acc)
+                        }
+                        Err(err) => Err(err),
                     },
-                );
+                    err => err,
+                });
 
             if let Ok(ok_result) = &result {
                 if ok_result.0.is_empty() {
-                    Err(String::from("selectors can not be empty, provide one or remove definition"))
+                    Err(String::from(
+                        "selectors can not be empty, provide one or remove definition",
+                    ))
                 } else {
                     result
                 }
@@ -1645,27 +1684,30 @@ pub mod injection {
 
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             // a selector is broken down into segments, each separated by a `>`
-            let segments = value.split('>')
+            let segments = value
+                .split('>')
                 .map(Segment::from_str)
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|err| format!("'{value}' exception parsing selector; {err}"))?;
-            let identifier = segments.iter()
+            let identifier = segments
+                .iter()
                 .map(|seg| match seg {
-                    Segment::Component { name, .. } |
-                    Segment::Element { name, .. } => name
+                    Segment::Component { name, .. } | Segment::Element { name, .. } => name,
                 })
-                .fold(
-                    String::new(),
-                    |mut acc, next| {
-                        if !acc.is_empty() { acc.push(' '); }
+                .fold(String::new(), |mut acc, next| {
+                    if !acc.is_empty() {
+                        acc.push(' ');
+                    }
 
-                        acc.push_str(next);
+                    acc.push_str(next);
 
-                        acc
-                    },
-                );
+                    acc
+                });
 
-            Ok(Self { identifier, segments: Segments(segments) })
+            Ok(Self {
+                identifier,
+                segments: Segments(segments),
+            })
         }
     }
 
@@ -1760,9 +1802,17 @@ pub mod injection {
                     )?;
 
                     if is_component {
-                        Self::Component { name: name.to_string(), mode, nth }
+                        Self::Component {
+                            name: name.to_string(),
+                            mode,
+                            nth,
+                        }
                     } else {
-                        Self::Element { name: name.to_string(), mode, nth }
+                        Self::Element {
+                            name: name.to_string(),
+                            mode,
+                            nth,
+                        }
                     }
                 }
             })
@@ -1773,17 +1823,15 @@ pub mod injection {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
         fn matches(&self, target: &SegmentTrace) -> bool {
             match self {
-                Segment::Component { name, mode, nth } if *name == target.current =>
-                    match mode {
-                        SelectorMode::NthElement => nth.matches(target.get_current_position()),
-                        SelectorMode::NthSibling => nth.matches(target.ordinal)
-                    },
-                Segment::Element { name, mode, nth } if *name == target.current =>
-                    match mode {
-                        SelectorMode::NthElement => nth.matches(target.get_current_position()),
-                        SelectorMode::NthSibling => nth.matches(target.ordinal)
-                    },
-                _ => false
+                Segment::Component { name, mode, nth } if *name == target.current => match mode {
+                    SelectorMode::NthElement => nth.matches(target.get_current_position()),
+                    SelectorMode::NthSibling => nth.matches(target.ordinal),
+                },
+                Segment::Element { name, mode, nth } if *name == target.current => match mode {
+                    SelectorMode::NthElement => nth.matches(target.get_current_position()),
+                    SelectorMode::NthSibling => nth.matches(target.ordinal),
+                },
+                _ => false,
             }
         }
     }
@@ -1821,7 +1869,7 @@ pub mod injection {
                 Nth::Range(range) => range.contains(&position),
                 Nth::RangeFrom(range) => range.contains(&position),
                 Nth::RangeTo(range) => range.contains(&position),
-                Nth::List(list) => list.contains(&position)
+                Nth::List(list) => list.contains(&position),
             }
         }
     }
@@ -1841,7 +1889,7 @@ pub mod injection {
 
                     Self::EveryN(
                         usize::from_str(value)
-                            .map_err(|_| format!("'{nth}' is not a valid nth value"))?
+                            .map_err(|_| format!("'{nth}' is not a valid nth value"))?,
                     )
                 }
                 range_to if range_to.starts_with("..") => {
@@ -1862,25 +1910,32 @@ pub mod injection {
 
                     if end < usize::max(start, 1) - 1 {
                         return if range.contains('=') {
-                            Err(format!("Range start cannot be less than inclusive end; {} < {start}", end - 1))
+                            Err(format!(
+                                "Range start cannot be less than inclusive end; {} < {start}",
+                                end - 1
+                            ))
                         } else {
-                            Err(format!("Range start cannot be less than end; {end} < {start}"))
+                            Err(format!(
+                                "Range start cannot be less than end; {end} < {start}"
+                            ))
                         };
                     }
 
                     Self::Range(Range { start, end })
                 }
-                list =>
-                    Self::List(
-                        list.split(',')
-                            .map(usize::from_str)
-                            .collect::<Result<Vec<_>, _>>()
-                            .map_err(|_| format!("'{list}' is not a valid list of values"))?
-                    )
+                list => Self::List(
+                    list.split(',')
+                        .map(usize::from_str)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|_| format!("'{list}' is not a valid list of values"))?,
+                ),
             });
 
             fn range_values(range: &str) -> Result<Vec<usize>, String> {
-                range.split("..").enumerate().take(2)
+                range
+                    .split("..")
+                    .enumerate()
+                    .take(2)
                     .map(|(idx, val)| {
                         let val = val.trim();
 
@@ -1889,8 +1944,7 @@ pub mod injection {
                         } else if idx == 0 || !val.starts_with('=') {
                             usize::from_str(val)
                         } else {
-                            usize::from_str(val.strip_prefix('=').unwrap())
-                                .map(|val| val + 1)
+                            usize::from_str(val.strip_prefix('=').unwrap()).map(|val| val + 1)
                         }
                     })
                     .collect::<Result<Vec<_>, _>>()

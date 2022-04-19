@@ -13,8 +13,11 @@
 
 // imports
 use proc_macro2::{Span, TokenStream as TokenStream2};
-use quote::{quote, TokenStreamExt, ToTokens};
-use syn::{Ident, LitStr, parse::{Parse, ParseStream}, Result, Token};
+use quote::{quote, ToTokens, TokenStreamExt};
+use syn::{
+    parse::{Parse, ParseStream},
+    Ident, LitStr, Result, Token,
+};
 
 // Re-export the namespaces into each other
 pub use component::*;
@@ -45,21 +48,24 @@ pub struct CallBody {
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = if input.peek(Ident) &&
-            input.peek2(Token![:]) &&
-            input.peek3(Ident)
-        {
+        let custom_context = if input.peek(Ident) && input.peek2(Token![:]) && input.peek3(Ident) {
             let name = input.parse::<Ident>()?;
             input.parse::<Token![:]>()?;
             let r#type = input.parse::<Ident>()?;
             input.parse::<Token![;]>()?;
 
-            Some(CustomContext { name, cx_type: Some(r#type) })
+            Some(CustomContext {
+                name,
+                cx_type: Some(r#type),
+            })
         } else if input.peek(Ident) && input.peek2(Token![,]) {
             let name = input.parse::<Ident>()?;
             input.parse::<Token![,]>()?;
 
-            Some(CustomContext { name, cx_type: None })
+            Some(CustomContext {
+                name,
+                cx_type: None,
+            })
         } else {
             None
         };
@@ -76,7 +82,11 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        if let Some(CustomContext { name, cx_type: Some(cx_type) }) = custom_context.as_ref() {
+        if let Some(CustomContext {
+            name,
+            cx_type: Some(cx_type),
+        }) = custom_context.as_ref()
+        {
             inject_attributes(name, cx_type, &mut roots)?;
         }
 
@@ -87,7 +97,7 @@ impl Parse for CallBody {
     }
 }
 
-fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) -> syn::Result<()> {
+fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> syn::Result<()> {
     let mut branch = Branch::new();
     let properties = InjectedProperties::component_properties(component)?;
     let component = component.to_string();
@@ -96,29 +106,33 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
     return inject_attributes(&context, &component, roots, &mut branch, &properties);
 
     fn inject_attributes(
-        cx: &str, component: &str,
-        nodes: &mut Vec<BodyNode>,
+        cx: &str,
+        component: &str,
+        nodes: &mut [BodyNode],
         branch: &mut Branch,
         properties: &[Property],
     ) -> syn::Result<()> {
         let mut inject_properties =
-            |
-                index: usize, name: &Ident,
-                children: &mut Vec<BodyNode>,
-                mut inject_property: Box<dyn FnMut(&Ident, &Property) -> syn::Result<()>>
-            | -> syn::Result<()> {
-
+            |index: usize,
+             name: &Ident,
+             children: &mut Vec<BodyNode>,
+             mut inject_property: Box<dyn FnMut(&Ident, &Property) -> syn::Result<()>>|
+             -> syn::Result<()> {
                 if index == 0 {
                     branch.child(name)
                 } else {
-                    branch.sibling(name).map_err(|err| syn::Error::new(name.span(), err))?;
+                    branch
+                        .sibling(name)
+                        .map_err(|err| syn::Error::new(name.span(), err))?;
                 }
 
                 for property in properties {
                     let applies = InjectedProperties::check_branch(component, property, branch)
                         .map_err(|err| syn::Error::new(name.span(), err))?;
 
-                    if applies { inject_property(name, &property)? }
+                    if applies {
+                        inject_property(name, property)?
+                    }
                 }
 
                 if !children.is_empty() {
@@ -132,81 +146,114 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
 
         for (index, node) in nodes.iter_mut().enumerate() {
             match node {
-                BodyNode::Element(Element { name, attributes, children, .. }) => {
+                BodyNode::Element(Element {
+                    name,
+                    attributes,
+                    children,
+                    ..
+                }) => {
                     branched = true;
 
                     inject_properties(
-                        index, name, children,
+                        index,
+                        name,
+                        children,
                         Box::new(move |el_name, property| {
                             let attr = match property {
-                                Property::Attribute { name, inject_as, optional } =>
-                                    ElementAttr::CustomAttrText {
-                                        name: LitStr::new(&format!("{inject_as}"), el_name.span()),
-                                        value: LitStr::new(
-                                            &format!(
-                                                "{{{cx}.props.{name}{}}}",
-                                                if *optional { ":?" } else { "" }
-                                            ),
-                                            el_name.span(),
+                                Property::Attribute {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ElementAttr::CustomAttrText {
+                                    name: LitStr::new(inject_as, el_name.span()),
+                                    value: LitStr::new(
+                                        &format!(
+                                            "{{{cx}.props.{name}{}}}",
+                                            if *optional { ":?" } else { "" }
                                         ),
+                                        el_name.span(),
+                                    ),
+                                },
+                                Property::Handler {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ElementAttr::EventTokens {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    tokens: if *optional {
+                                        syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                    } else {
+                                        syn::parse_str(&format!(
+                                            "|evt| {cx}.props.{name}.call(evt)"
+                                        ))?
                                     },
-                                Property::Handler { name, inject_as, optional } =>
-                                    ElementAttr::EventTokens {
-                                        name: Ident::new(inject_as, el_name.span()),
-                                        tokens: if *optional {
-                                            syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
-                                        } else {
-                                            syn::parse_str(&format!("|evt| {cx}.props.{name}.call(evt)"))?
-                                        },
-                                    },
+                                },
                             };
 
-                            attributes.push(ElementAttrNamed { el_name: el_name.clone(), attr, });
+                            attributes.push(ElementAttrNamed {
+                                el_name: el_name.clone(),
+                                attr,
+                            });
 
                             Ok(())
-                        })
+                        }),
                     )?;
                 }
-                BodyNode::Component(Component { name, body, children, .. }) => {
+                BodyNode::Component(Component {
+                    name,
+                    body,
+                    children,
+                    ..
+                }) => {
                     branched = true;
 
                     let name = match name.segments.last() {
                         Some(last) => &last.ident,
-                        None => return Err(syn::Error::new_spanned(name, "Expected component name"))
+                        None => {
+                            return Err(syn::Error::new_spanned(name, "Expected component name"))
+                        }
                     };
 
                     inject_properties(
-                        index, name, children,
+                        index,
+                        name,
+                        children,
                         Box::new(|el_name, property| {
                             let attr = match property {
-                                Property::Attribute { name, inject_as, optional } =>
-                                    ComponentField {
-                                        name: Ident::new(inject_as, el_name.span()),
-                                        content: ContentField::Formatted(LitStr::new(
-                                            &format!(
-                                                "{{{cx}.props.{name}{}}}",
-                                                if *optional { ":?" } else { "" }
-                                            ),
-                                            el_name.span(),
-                                        ))
-                                    },
-                                Property::Handler { name, inject_as, optional } =>
-                                    ComponentField {
-                                        name: Ident::new(inject_as, el_name.span()),
-                                        content: ContentField::OnHandlerRaw(
-                                            if *optional {
-                                                syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
-                                            } else {
-                                                syn::parse_str(&format!("|evt| {cx}.props.{name}.call(evt)"))?
-                                            }
-                                        )
-                                    },
+                                Property::Attribute {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ComponentField {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    content: ContentField::Formatted(LitStr::new(
+                                        &format!(
+                                            "{{{cx}.props.{name}{}}}",
+                                            if *optional { ":?" } else { "" }
+                                        ),
+                                        el_name.span(),
+                                    )),
+                                },
+                                Property::Handler {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ComponentField {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    content: ContentField::OnHandlerRaw(if *optional {
+                                        syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                    } else {
+                                        syn::parse_str(&format!(
+                                            "|evt| {cx}.props.{name}.call(evt)"
+                                        ))?
+                                    }),
+                                },
                             };
 
                             body.push(attr);
 
                             Ok(())
-                        })
+                        }),
                     )?;
                 }
                 _ => {}
@@ -214,7 +261,9 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut Vec<BodyNode>) 
         }
 
         if branched {
-            branch.last().map_err(|err| syn::Error::new(Span::call_site(), err))?;
+            branch
+                .last()
+                .map_err(|err| syn::Error::new(Span::call_site(), err))?;
         }
 
         Ok(())
