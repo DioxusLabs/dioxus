@@ -44,7 +44,6 @@ pub enum Location {
 
 pub fn parse_keyboard_input(val: Value) -> KeyboardInput {
     let event: WebKeyboardEvent = serde_json::from_value(val).unwrap();
-    println!("event: {:#?}", event);
 
     match event {
         WebKeyboardEvent::Keydown {
