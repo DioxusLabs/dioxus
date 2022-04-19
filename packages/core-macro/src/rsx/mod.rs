@@ -23,6 +23,9 @@ pub use node::*;
 
 use crate::props::injection::{Branch, InjectedProperties, Property};
 
+#[macro_use]
+mod errors;
+
 mod component;
 mod element;
 mod node;

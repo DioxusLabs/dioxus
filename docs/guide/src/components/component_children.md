@@ -1,6 +1,6 @@
 # Passing children and attributes
 
-Often times, you'll want to wrap some important functionality *around* your state, not directly nested *inside* another component. In these cases, you'll want to pass elements and attributes into a component and let the component place them appropriately.
+Oftentimes, you'll want to wrap some important functionality *around* your state, not directly nested *inside* another component. In these cases, you'll want to pass elements and attributes into a component and let the component place them appropriately.
 
 In this chapter, you'll learn about:
 - Passing elements into components
@@ -216,4 +216,3 @@ In this chapter, we learned:
 - How the `attributes` field works on component properties
 - How to convert `listeners` into `EventHandlers` for components
 - How to extend any node with custom attributes and children
-

@@ -508,7 +508,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Get the custom alloactor for this component
+    /// Get the custom allocator for this component
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
         self.bump

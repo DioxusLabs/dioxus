@@ -1,6 +1,6 @@
 # Event handlers
 
-To make our boring UIs less static and more interesting, we want to add the ability to interact to user input. To do this, we need to add some event handlers.
+To make our boring UIs less static and more interesting, we want to add the ability to interact with user input. To do this, we need to add some event handlers.
 
 
 ## The most basic events: clicks
@@ -82,7 +82,7 @@ div {
 }
 ```
 
-In this particular layout, a click on the inner div is transitively also a click on the outer div. If we didn't want the outer div to be triggered every time we trigger the inner div, then we'd want to call "cancel_bubble".
+In this particular layout, a click on the inner div is transitively also a click on the outer div. If we didn't want the outer div to be triggered every time we trigger the inner div, then we'd want to call `cancel_bubble()`.
 
 This will prevent any listeners above the current listener from being triggered.
 
@@ -102,7 +102,7 @@ div {
 
 ## Prevent Default
 
-With HTML based renderers, the browser will automatically perform some action. For text inputs, this would be entering the provided key. For forms, this might involve navigating the page.
+With HTML-based renderers, the browser will automatically perform some action. For text inputs, this would be entering the provided key. For forms, this might involve navigating the page.
 
 In some instances, you don't want this default behavior. In these cases, instead of handling the event directly, you'd want to prevent any default handlers.
 

@@ -27,7 +27,6 @@ pub struct RedirectProps<'a> {
     /// // Relative path
     /// Redirect { from: "", to: "../" }
     /// ```
-    #[props(optional)]
     pub from: Option<&'a str>,
 }
 

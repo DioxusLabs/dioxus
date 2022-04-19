@@ -36,7 +36,7 @@ pub fn NonUpdatingEvents(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             button {
-                onclick: move |_| log::info!("Did not cause any updates!"),
+                onclick: move |_| log::trace!("Did not cause any updates!"),
                 "Click me to log!"
             }
         }
@@ -46,9 +46,9 @@ pub fn NonUpdatingEvents(cx: Scope) -> Element {
 pub fn DisablePropagation(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
-            onclick: move |_| log::info!("event propagated to the div!")
+            onclick: move |_| log::trace!("event propagated to the div!")
             button {
-                onclick: move |evt| log::info!("Button will allow propagation"),
+                onclick: move |evt| log::trace!("Button will allow propagation"),
             }
         }
     })

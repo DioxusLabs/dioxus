@@ -1,6 +1,6 @@
 # Conditional Rendering
 
-Your components will often need to display different things depending on different conditions. With Dioxus, we can use Rust's normal control flow to conditional hide, show, and modify the structure of our markup.
+Your components will often need to display different things depending on different conditions. With Dioxus, we can use Rust's normal control flow to conditionally hide, show, and modify the structure of our markup.
 
 In this chapter, you'll learn:
 - How to return different Elements depending on a condition

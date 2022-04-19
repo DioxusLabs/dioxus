@@ -41,27 +41,21 @@ pub fn impl_my_derive(ast: &syn::DeriveInput) -> Result<TokenStream, Error> {
             syn::Fields::Unnamed(_) => {
                 return Err(Error::new(
                     ast.span(),
-                    "TypedBuilder is not supported for tuple structs",
+                    "Props is not supported for tuple structs",
                 ))
             }
             syn::Fields::Unit => {
                 return Err(Error::new(
                     ast.span(),
-                    "TypedBuilder is not supported for unit structs",
+                    "Props is not supported for unit structs",
                 ))
             }
         },
         syn::Data::Enum(_) => {
-            return Err(Error::new(
-                ast.span(),
-                "TypedBuilder is not supported for enums",
-            ))
+            return Err(Error::new(ast.span(), "Props is not supported for enums"))
         }
         syn::Data::Union(_) => {
-            return Err(Error::new(
-                ast.span(),
-                "TypedBuilder is not supported for unions",
-            ))
+            return Err(Error::new(ast.span(), "Props is not supported for unions"))
         }
     };
     Ok(data)
@@ -167,6 +161,7 @@ mod util {
 }
 
 mod field_info {
+    use crate::props::type_from_inside_option;
     use std::str::FromStr;
 
     use proc_macro2::TokenStream;
@@ -205,6 +200,16 @@ mod field_info {
                         Some(syn::parse(quote!(Default::default()).into()).unwrap());
                 }
 
+                // auto detect optional
+                let strip_option_auto = builder_attr.strip_option
+                    || !builder_attr.ignore_option
+                        && type_from_inside_option(&field.ty, true).is_some();
+                if !builder_attr.strip_option && strip_option_auto {
+                    builder_attr.strip_option = true;
+                    builder_attr.default =
+                        Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                }
+
                 Ok(FieldInfo {
                     ordinal,
                     name,
@@ -239,31 +244,8 @@ mod field_info {
             .into()
         }
 
-        pub fn type_from_inside_option(&self) -> Option<&syn::Type> {
-            let path = if let syn::Type::Path(type_path) = self.ty {
-                if type_path.qself.is_some() {
-                    return None;
-                } else {
-                    &type_path.path
-                }
-            } else {
-                return None;
-            };
-            let segment = path.segments.last()?;
-            if segment.ident != "Option" {
-                return None;
-            }
-            let generic_params =
-                if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
-                    generic_params
-                } else {
-                    return None;
-                };
-            if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
-                Some(ty)
-            } else {
-                None
-            }
+        pub fn type_from_inside_option(&self, check_option_name: bool) -> Option<&syn::Type> {
+            type_from_inside_option(self.ty, check_option_name)
         }
     }
 
@@ -274,6 +256,7 @@ mod field_info {
         pub skip: bool,
         pub auto_into: bool,
         pub strip_option: bool,
+        pub ignore_option: bool,
         pub inject_as: Option<String>,
         pub attr_on: Option<Selectors>,
         pub hndlr_on: Option<Selectors>,
@@ -466,8 +449,9 @@ mod field_info {
                                 self.auto_into = false;
                                 Ok(())
                             }
-                            "strip_option" => {
+                            "optional" => {
                                 self.strip_option = false;
+                                self.ignore_option = true;
                                 Ok(())
                             }
                             _ => Err(Error::new_spanned(path, "Unknown setting".to_owned())),
@@ -502,6 +486,33 @@ mod field_info {
         } else {
             Err(Error::new_spanned(source, "expected a string literal"))
         }
+    }
+}
+
+fn type_from_inside_option(ty: &syn::Type, check_option_name: bool) -> Option<&syn::Type> {
+    let path = if let syn::Type::Path(type_path) = ty {
+        if type_path.qself.is_some() {
+            return None;
+        } else {
+            &type_path.path
+        }
+    } else {
+        return None;
+    };
+    let segment = path.segments.last()?;
+    if check_option_name && segment.ident != "Option" {
+        return None;
+    }
+    let generic_params =
+        if let syn::PathArguments::AngleBracketed(generic_params) = &segment.arguments {
+            generic_params
+        } else {
+            return None;
+        };
+    if let syn::GenericArgument::Type(ty) = generic_params.args.first()? {
+        Some(ty)
+    } else {
+        None
     }
 }
 
@@ -831,7 +842,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
             // nesting is different so we have to do this little dance.
             let arg_type = if field.builder_attr.strip_option {
-                let internal_type = field.type_from_inside_option().ok_or_else(|| {
+                let internal_type = field.type_from_inside_option(false).ok_or_else(|| {
                     Error::new_spanned(
                         &field_type,
                         "can't `strip_option` - field is not `Option<...>`",

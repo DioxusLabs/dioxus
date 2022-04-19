@@ -199,8 +199,7 @@ impl Parse for ComponentField {
         }
 
         if input.peek(LitStr) && input.peek2(LitStr) {
-            let item = input.parse::<LitStr>().unwrap();
-            proc_macro_error::emit_error!(item, "This attribute is missing a trailing comma")
+            missing_trailing_comma!(input.span());
         }
 
         let content = ContentField::ManExpr(input.parse()?);
