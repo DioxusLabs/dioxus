@@ -11,7 +11,7 @@ async fn main() {
 
     // todo: compactify this routing under one liveview::app method
     let view = liveview::new(addr);
-    let body = view.body();
+    let body = view.body("<title>Dioxus LiveView</title>");
 
     let routes = warp::path::end()
         .map(move || warp::reply::html(body.clone()))
