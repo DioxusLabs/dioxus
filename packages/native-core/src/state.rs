@@ -26,7 +26,10 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
                 Ordering::Less => {
                     v.push(o_peekable.next().unwrap());
                 }
-                Ordering::Equal => (),
+                Ordering::Equal => {
+                    o_peekable.next();
+                    break;
+                }
             }
         }
         v.push(s_peekable.next().unwrap());

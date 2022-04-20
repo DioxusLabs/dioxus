@@ -638,7 +638,6 @@ impl<'a> StateMember<'a> {
         let ty = &self.mem.ty;
         let node_view =
             quote!(dioxus_native_core::node_ref::NodeView::new(node, #ty::NODE_MASK, vdom));
-        let id = self.member_id.0;
         if let Some(dep_ident) = &self.dep_mem.map(|m| &m.ident) {
             match self.dep_kind {
                 DepKind::Node => {
