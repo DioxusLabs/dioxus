@@ -308,7 +308,7 @@ impl<S: State> RealDom<S> {
                     node.state.update_node_dep_state(id, vnode, vdom, &ctx)
                 {
                     debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
-                    for m in members_effected.node_dep {
+                    for m in &members_effected.node_dep {
                         if let Err(idx) = ids.binary_search(m) {
                             ids.insert(idx, *m);
                         }
@@ -348,12 +348,12 @@ impl<S: State> RealDom<S> {
                 {
                     debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
                     for m in members_effected.node_dep {
-                        if let Err(idx) = ids.binary_search(m) {
-                            ids.insert(idx, *m);
+                        if let Err(idx) = ids.binary_search(&m) {
+                            ids.insert(idx, m);
                         }
                     }
                     for m in members_effected.child_dep {
-                        changed.push(*m);
+                        changed.push(m);
                     }
                 }
                 i += 1;
@@ -416,12 +416,12 @@ impl<S: State> RealDom<S> {
                 {
                     debug_assert!(members_effected.node_dep.iter().all(|i| i >= &id));
                     for m in members_effected.node_dep {
-                        if let Err(idx) = ids.binary_search(m) {
-                            ids.insert(idx, *m);
+                        if let Err(idx) = ids.binary_search(&m) {
+                            ids.insert(idx, m);
                         }
                     }
                     for m in members_effected.parent_dep {
-                        changed.push(*m);
+                        changed.push(m);
                     }
                 }
                 i += 1;

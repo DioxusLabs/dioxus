@@ -4,6 +4,7 @@ mod sorted_slice;
 
 use dioxus_native_core::state::MemberId;
 use proc_macro::TokenStream;
+use quote::format_ident;
 use quote::{quote, ToTokens, __private::Span};
 use sorted_slice::StrSlice;
 use syn::{
@@ -26,7 +27,10 @@ enum DepKind {
     Parent,
 }
 
-#[proc_macro_derive(State, attributes(node_dep_state, child_dep_state, parent_dep_state))]
+#[proc_macro_derive(
+    State,
+    attributes(node_dep_state, child_dep_state, parent_dep_state, state)
+)]
 pub fn state_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
     impl_derive_macro(&ast)
@@ -89,8 +93,51 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
             let type_name_str = type_name.to_string();
 
+            let child_states = &state_strct.child_states;
+
+            let member_size = state_strct.state_members.len();
+
+            let child_state_ty = child_states.iter().map(|m| &m.ty);
+            let child_state_idents: Vec<_> = child_states.iter().map(|m| &m.ident).collect();
+            let sum_const_declarations = child_state_ty.clone().enumerate().map(|(i, ty)| {
+                let ident = format_ident!("__{}_SUM_{}", i, type_name.to_string());
+                let ident_minus = format_ident!("__{}_SUM_{}_minus", i, type_name.to_string());
+                if i == 0 {
+                    quote!(const #ident_minus: usize = #member_size + #ty::SIZE - 1;
+                    const #ident: usize = #member_size + #ty::SIZE;)
+                } else {
+                    let prev_ident = format_ident!("__{}_SUM_{}", i - 1, type_name.to_string());
+                    quote!(const #ident_minus: usize = #prev_ident + #ty::SIZE - 1;
+                    const #ident: usize = #prev_ident + #ty::SIZE;)
+                }
+            });
+            let sum_idents: Vec<_> = std::iter::once(quote!(#member_size))
+                .chain((0..child_states.len()).map(|i| {
+                    let ident = format_ident!("__{}_SUM_{}", i, type_name.to_string());
+                    quote!(#ident)
+                }))
+                .collect();
+
+            let child_state_ranges: Vec<_> = (0..child_state_ty.len())
+                .map(|i| {
+                    let current = format_ident!("__{}_SUM_{}_minus", i, type_name.to_string());
+                    let previous = if i == 0 {
+                        quote!(#member_size)
+                    } else {
+                        let ident = format_ident!("__{}_SUM_{}", i - 1, type_name.to_string());
+                        quote!(#ident)
+                    };
+                    quote!(#previous..=#current)
+                })
+                .collect();
+
             let gen = quote! {
+                #(
+                    #sum_const_declarations
+                )*
                 impl State for #type_name{
+                    const SIZE: usize = #member_size #( + #child_state_ty::SIZE)*;
+
                     fn update_node_dep_state<'a>(
                         &'a mut self,
                         ty: dioxus_native_core::state::MemberId,
@@ -99,9 +146,25 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ctx: &anymap::AnyMap,
                     ) -> Option<dioxus_native_core::state::NodeStatesChanged>{
                         use dioxus_native_core::state::NodeDepState as _;
+                        use dioxus_native_core::state::State as _;
                         match ty.0{
                             #(
                                 #node_ids => #node_dep_state_fields,
+                            )*
+                            #(
+                                #child_state_ranges => {
+                                    self.#child_state_idents.update_node_dep_state(
+                                        ty - #sum_idents,
+                                        node,
+                                        vdom,
+                                        ctx,
+                                    ).map(|mut changed|{
+                                        for id in &mut changed.node_dep{
+                                            *id += #sum_idents;
+                                        }
+                                        changed
+                                    })
+                                }
                             )*
                             _ => panic!("{:?} not in {}", ty, #type_name_str),
                         }
@@ -120,6 +183,25 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                             #(
                                 #parent_ids => #parent_dep_state_fields,
                             )*
+                            #(
+                                #child_state_ranges => {
+                                    self.#child_state_idents.update_parent_dep_state(
+                                        ty - #sum_idents,
+                                        node,
+                                        vdom,
+                                        parent.map(|p| &p.#child_state_idents),
+                                        ctx,
+                                    ).map(|mut changed|{
+                                        for id in &mut changed.node_dep{
+                                            *id += #sum_idents;
+                                        }
+                                        for id in &mut changed.parent_dep{
+                                            *id += #sum_idents;
+                                        }
+                                        changed
+                                    })
+                                }
+                            )*
                             _ => panic!("{:?} not in {}", ty, #type_name_str),
                         }
                     }
@@ -129,13 +211,32 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ty: dioxus_native_core::state::MemberId,
                         node: &'a dioxus_core::VNode<'a>,
                         vdom: &'a dioxus_core::VirtualDom,
-                        children: &[&Self],
+                        children: &Vec<&Self>,
                         ctx: &anymap::AnyMap,
                     ) -> Option<dioxus_native_core::state::ChildStatesChanged>{
                         use dioxus_native_core::state::ChildDepState as _;
                         match ty.0{
                             #(
-                                #child_ids => {#child_dep_state_fields},
+                                #child_ids => #child_dep_state_fields,
+                            )*
+                            #(
+                                #child_state_ranges => {
+                                    self.#child_state_idents.update_child_dep_state(
+                                        ty - #sum_idents,
+                                        node,
+                                        vdom,
+                                        &children.iter().map(|p| &p.#child_state_idents).collect(),
+                                        ctx,
+                                    ).map(|mut changed|{
+                                        for id in &mut changed.node_dep{
+                                            *id += #sum_idents;
+                                        }
+                                        for id in &mut changed.child_dep{
+                                            *id += #sum_idents;
+                                        }
+                                        changed
+                                    })
+                                }
                             )*
                             _ => panic!("{:?} not in {}", ty, #type_name_str),
                         }
@@ -146,6 +247,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         #(if #child_types::NODE_MASK.overlaps(mask) {
                             dep_types.push(dioxus_native_core::state::MemberId(#child_ids_clone));
                         })*
+                        #(
+                            dep_types.extend(self.#child_state_idents.child_dep_types(mask).into_iter().map(|id| id + #sum_idents));
+                        )*
                         dep_types
                     }
 
@@ -154,6 +258,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         #(if #parent_types::NODE_MASK.overlaps(mask) {
                             dep_types.push(dioxus_native_core::state::MemberId(#parent_ids_clone));
                         })*
+                        #(
+                            dep_types.extend(self.#child_state_idents.parent_dep_types(mask).into_iter().map(|id| id + #sum_idents));
+                        )*
                         dep_types
                     }
 
@@ -162,6 +269,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         #(if #node_types::NODE_MASK.overlaps(mask) {
                             dep_types.push(dioxus_native_core::state::MemberId(#node_ids_clone));
                         })*
+                        #(
+                            dep_types.extend(self.#child_state_idents.node_dep_types(mask).into_iter().map(|id| id + #sum_idents));
+                        )*
                         dep_types
                     }
                 }
@@ -186,6 +296,7 @@ impl Struct {
 
 struct StateStruct<'a> {
     state_members: Vec<StateMember<'a>>,
+    child_states: Vec<&'a Member>,
 }
 
 impl<'a> StateStruct<'a> {
@@ -202,6 +313,20 @@ impl<'a> StateStruct<'a> {
                     None
                 }
             });
+
+        let child_states = strct
+            .members
+            .iter()
+            .zip(fields.iter())
+            .filter(|(_, f)| {
+                f.attrs.iter().any(|a| {
+                    a.path
+                        .get_ident()
+                        .filter(|i| i.to_string().as_str() == "state")
+                        .is_some()
+                })
+            })
+            .map(|(m, _)| m);
 
         #[derive(Debug, Clone)]
         struct DepNode<'a> {
@@ -350,7 +475,10 @@ impl<'a> StateStruct<'a> {
                 .flat_map(|r| r.flatten().into_iter())
                 .collect();
 
-            Ok(Self { state_members })
+            Ok(Self {
+                state_members,
+                child_states: child_states.collect(),
+            })
         }
     }
 }
@@ -484,23 +612,23 @@ impl<'a> StateMember<'a> {
                 DepKind::Node => {
                     quote! {
                         dioxus_native_core::state::NodeStatesChanged{
-                            node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
+                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
                         }
                     }
                 }
                 DepKind::Child => {
                     quote! {
                         dioxus_native_core::state::ChildStatesChanged{
-                            node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
-                            child_dep: &[#(dioxus_native_core::state::MemberId(#child_dep), )*],
+                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
+                            child_dep: vec![#(dioxus_native_core::state::MemberId(#child_dep), )*],
                         }
                     }
                 }
                 DepKind::Parent => {
                     quote! {
                         dioxus_native_core::state::ParentStatesChanged{
-                            node_dep: &[#(dioxus_native_core::state::MemberId(#node_dep), )*],
-                            parent_dep: &[#(dioxus_native_core::state::MemberId(#parent_dep), )*],
+                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
+                            parent_dep: vec![#(dioxus_native_core::state::MemberId(#parent_dep), )*],
                         }
                     }
                 }
@@ -515,7 +643,6 @@ impl<'a> StateMember<'a> {
             match self.dep_kind {
                 DepKind::Node => {
                     quote!({
-                        // println!("node: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, &self.#dep_ident, #get_ctx){
                             Some(#states_changed)
                         } else{
@@ -525,7 +652,6 @@ impl<'a> StateMember<'a> {
                 }
                 DepKind::Child => {
                     quote!({
-                        // println!("child: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident), #get_ctx){
                             Some(#states_changed)
                         } else{
@@ -535,7 +661,6 @@ impl<'a> StateMember<'a> {
                 }
                 DepKind::Parent => {
                     quote!({
-                        // println!("parent: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, parent.as_ref().map(|p| &p.#dep_ident), #get_ctx){
                             Some(#states_changed)
                         } else{
@@ -548,7 +673,6 @@ impl<'a> StateMember<'a> {
             match self.dep_kind {
                 DepKind::Node => {
                     quote!({
-                        // println!("node: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, &(), #get_ctx){
                             Some(#states_changed)
                         } else{
@@ -558,7 +682,6 @@ impl<'a> StateMember<'a> {
                 }
                 DepKind::Child => {
                     quote!({
-                        // println!("child: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, std::iter::empty(), #get_ctx){
                             Some(#states_changed)
                         } else{
@@ -568,7 +691,6 @@ impl<'a> StateMember<'a> {
                 }
                 DepKind::Parent => {
                     quote!({
-                        println!("parent: {:?} {:?} {:?}", self.#ident, #id, #node_view.id());
                         if self.#ident.reduce(#node_view, Some(&()), #get_ctx){
                             Some(#states_changed)
                         } else{

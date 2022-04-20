@@ -1,4 +1,8 @@
-use std::{cmp::Ordering, fmt::Debug};
+use std::{
+    cmp::Ordering,
+    fmt::Debug,
+    ops::{Add, AddAssign, Sub, SubAssign},
+};
 
 use anymap::AnyMap;
 use dioxus_core::VNode;
@@ -81,22 +85,24 @@ pub trait NodeDepState {
 
 #[derive(Debug)]
 pub struct ChildStatesChanged {
-    pub node_dep: &'static [MemberId],
-    pub child_dep: &'static [MemberId],
+    pub node_dep: Vec<MemberId>,
+    pub child_dep: Vec<MemberId>,
 }
 
 #[derive(Debug)]
 pub struct ParentStatesChanged {
-    pub node_dep: &'static [MemberId],
-    pub parent_dep: &'static [MemberId],
+    pub node_dep: Vec<MemberId>,
+    pub parent_dep: Vec<MemberId>,
 }
 
 #[derive(Debug)]
 pub struct NodeStatesChanged {
-    pub node_dep: &'static [MemberId],
+    pub node_dep: Vec<MemberId>,
 }
 
 pub trait State: Default + Clone {
+    const SIZE: usize;
+
     fn update_node_dep_state<'a>(
         &'a mut self,
         ty: MemberId,
@@ -123,7 +129,7 @@ pub trait State: Default + Clone {
         ty: MemberId,
         node: &'a VNode<'a>,
         vdom: &'a dioxus_core::VirtualDom,
-        children: &[&Self],
+        children: &Vec<&Self>,
         ctx: &AnyMap,
     ) -> Option<ChildStatesChanged>;
     /// This must be a valid resolution order. (no nodes updated before a state they rely on)
@@ -165,3 +171,29 @@ impl NodeDepState for () {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MemberId(pub usize);
+
+impl Sub<usize> for MemberId {
+    type Output = MemberId;
+    fn sub(self, rhs: usize) -> Self::Output {
+        MemberId(self.0 - rhs)
+    }
+}
+
+impl Add<usize> for MemberId {
+    type Output = MemberId;
+    fn add(self, rhs: usize) -> Self::Output {
+        MemberId(self.0 + rhs)
+    }
+}
+
+impl SubAssign<usize> for MemberId {
+    fn sub_assign(&mut self, rhs: usize) {
+        *self = *self - rhs;
+    }
+}
+
+impl AddAssign<usize> for MemberId {
+    fn add_assign(&mut self, rhs: usize) {
+        *self = *self + rhs;
+    }
+}

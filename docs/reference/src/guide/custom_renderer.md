@@ -304,7 +304,7 @@ flowchart TB
     end
 ```
 
-To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState.
+To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct.
 
 ```rust
 use dioxus_native_core::node_ref::*;
@@ -433,6 +433,48 @@ struct ToyState {
     // depends on the layout_width member of children and f32 context (for text size)
     #[child_dep_state(size, f32)]
     size: Size,
+}
+```
+
+Now that we have our state, we can put it to use in our dom. Re can update the dom with update_state to update the structure of the dom (adding, removing, and chaning properties of nodes) and then apply_mutations to update the ToyState for each of the nodes that changed.
+```rust
+fn main(){
+    fn app(cx: Scope) -> Element {
+        cx.render(rsx!{
+            div{
+                color: "red",
+                "hello world"
+            }
+        })
+    }
+    let vdom = VirtualDom::new(app);
+    let rdom: RealDom<ToyState> = RealDom::new();
+
+    let mutations = dom.rebuild();
+    // update the structure of the real_dom tree
+    let to_update = rdom.apply_mutations(vec![mutations]);
+    let mut ctx = AnyMap::new();
+    // set the font size to 3.3
+    ctx.insert(3.3);
+    // update the ToyState for nodes in the real_dom tree
+    let _to_rerender = rdom.update_state(&dom, to_update, ctx).unwrap();
+
+    // we need to run the vdom in a async runtime
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?
+        .block_on(async {
+            loop{
+                let wait = vdom.wait_for_work();
+                let mutations = vdom.work_with_deadline(|| false);
+                let to_update = rdom.apply_mutations(mutations);
+                let mut ctx = AnyMap::new();
+                ctx.insert(3.3);
+                let _to_rerender = rdom.update_state(vdom, to_update, ctx).unwrap();
+
+                // render...
+            }
+        })
 }
 ```
 

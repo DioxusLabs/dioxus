@@ -9,11 +9,35 @@ use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, Sta
 use dioxus_native_core_macro::State;
 
 #[derive(Debug, Clone, Default, State)]
+struct CallCounterStatePart1 {
+    #[child_dep_state(child_counter)]
+    child_counter: ChildDepCallCounter,
+}
+
+#[derive(Debug, Clone, Default, State)]
+struct CallCounterStatePart2 {
+    #[parent_dep_state(parent_counter)]
+    parent_counter: ParentDepCallCounter,
+}
+
+#[derive(Debug, Clone, Default, State)]
+struct CallCounterStatePart3 {
+    #[node_dep_state()]
+    node_counter: NodeDepCallCounter,
+}
+
+#[derive(Debug, Clone, Default, State)]
 struct CallCounterState {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
+    #[state]
+    part2: CallCounterStatePart2,
     #[parent_dep_state(parent_counter)]
     parent_counter: ParentDepCallCounter,
+    #[state]
+    part1: CallCounterStatePart1,
+    #[state]
+    part3: CallCounterStatePart3,
     #[node_dep_state()]
     node_counter: NodeDepCallCounter,
 }
@@ -261,8 +285,11 @@ fn state_reduce_initally_called_minimally() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
+        assert_eq!(n.state.part1.child_counter.0, 1);
         assert_eq!(n.state.child_counter.0, 1);
+        assert_eq!(n.state.part2.parent_counter.0, 1);
         assert_eq!(n.state.parent_counter.0, 1);
+        assert_eq!(n.state.part3.node_counter.0, 1);
         assert_eq!(n.state.node_counter.0, 1);
     });
 }
@@ -329,6 +356,7 @@ fn state_reduce_parent_called_minimally_on_update() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
+        assert_eq!(n.state.part2.parent_counter.0, 2);
         assert_eq!(n.state.parent_counter.0, 2);
     });
 }
@@ -398,6 +426,10 @@ fn state_reduce_child_called_minimally_on_update() {
 
     dom.traverse_depth_first(|n| {
         println!("{:?}", n);
+        assert_eq!(
+            n.state.part1.child_counter.0,
+            if n.id.0 > 4 { 1 } else { 2 }
+        );
         assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
     });
 }
@@ -486,4 +518,16 @@ fn dependancies_order_independant() {
         assert_eq!(&n.state.b, &b);
         assert_eq!(&n.state.c, &c);
     });
+}
+
+#[derive(Clone, Default, State)]
+struct DependanciesStateTest {
+    #[node_dep_state(c)]
+    b: BDepCallCounter,
+    #[node_dep_state()]
+    c: CDepCallCounter,
+    #[node_dep_state(b)]
+    a: ADepCallCounter,
+    #[state]
+    child: UnorderedDependanciesState,
 }
