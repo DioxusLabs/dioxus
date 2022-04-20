@@ -39,8 +39,6 @@ impl AtomRoot {
     }
 
     pub fn register<V: 'static>(&self, f: impl Readable<V>, scope: ScopeId) -> Rc<V> {
-        log::trace!("registering atom {:?}", f.unique_id());
-
         let mut atoms = self.atoms.borrow_mut();
 
         // initialize the value if it's not already initialized
