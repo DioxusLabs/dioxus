@@ -215,6 +215,7 @@ fn render_vdom(
                                     TermEvent::Key(key) => {
                                         if matches!(key.code, KeyCode::Char('C' | 'c'))
                                             && key.modifiers.contains(KeyModifiers::CONTROL)
+                                            && cfg.ctrl_c_quit
                                         {
                                             break;
                                         }
