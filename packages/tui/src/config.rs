@@ -21,15 +21,18 @@ impl Config {
         }
     }
 
-    pub fn with_ctrl_c_quit(self, ctrl_c_quit: bool) -> Self {
+    pub fn with_ctrl_c_quit(self) -> Self {
         Self {
-            ctrl_c_quit,
+            ctrl_c_quit: true,
             ..self
         }
     }
 
-    pub fn with_headless(self, headless: bool) -> Self {
-        Self { headless, ..self }
+    pub fn with_headless(self) -> Self {
+        Self {
+            headless: true,
+            ..self
+        }
     }
 }
 
