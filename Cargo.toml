@@ -88,3 +88,7 @@ harness = false
 [[bench]]
 name = "jsframework"
 harness = false
+
+[[bench]]
+name = "tui_update"
+harness = false
