@@ -9,12 +9,11 @@ dioxus-desktop = { path = "../desktop", version = "^0.2.0" }
 dioxus-hooks = { path = "../hooks", version = "^0.2.0" }
 
 bevy = { version = "0.7", default-features = false, features = ["serialize"] }
-futures-channel = "0.3.21"
-futures-util = { version = "0.3", default-features = false }
+futures-intrusive = "0.4"
 log = "0.4.14"
 serde = "1.0.136"
 serde_json = "1.0.79"
 serde_repr = "0.1"
-tokio = { version = "1.16.1", features = ["sync"], default-features = false }
+tokio = { version = "1.16.1", features = ["rt"], default-features = false }
 webbrowser = "0.5.5"
 wry = { version = "0.13.1" }

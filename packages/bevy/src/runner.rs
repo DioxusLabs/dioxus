@@ -17,8 +17,7 @@ use dioxus_desktop::{
         window::Window,
     },
 };
-use futures_channel::mpsc::UnboundedReceiver;
-use futures_util::stream::StreamExt;
+use futures_intrusive::channel::shared::Receiver;
 use std::fmt::Debug;
 use tokio::runtime::Runtime;
 use wry::webview::WebViewBuilder;
@@ -40,19 +39,23 @@ where
         .world
         .remove_non_send_resource::<DesktopConfig>()
         .unwrap_or_default();
+    let core_rx = app
+        .world
+        .remove_resource::<Receiver<CoreCommand>>()
+        .expect("Failed to retrieve CoreCommand receiver resource");
+
     let mut app_exit_event_reader = ManualEventReader::<AppExit>::default();
     app.world
         .insert_non_send_resource(event_loop.create_proxy());
 
-    let runtime = Runtime::new().unwrap();
-    let mut core_rx = app
+    let runtime = app
         .world
-        .remove_resource::<UnboundedReceiver<CoreCommand>>()
-        .unwrap();
+        .get_resource::<Runtime>()
+        .expect("Failed to retrieve async runtime");
     let proxy = event_loop.create_proxy();
 
     runtime.spawn(async move {
-        while let Some(cmd) = core_rx.next().await {
+        while let Some(cmd) = core_rx.receive().await {
             proxy
                 .clone()
                 .send_event(UserEvent::CustomEvent(CustomUserEvent::CoreCommand(cmd)))

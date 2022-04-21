@@ -1,16 +1,15 @@
 use dioxus_desktop::desktop_context::{ProxyType, WindowController};
-use futures_channel::mpsc::{TrySendError, UnboundedSender};
+use futures_intrusive::channel::shared::{Receiver, Sender};
 use std::fmt::Debug;
-use tokio::sync::broadcast::{Receiver, Sender};
 
 #[derive(Clone)]
 pub struct BevyDesktopContext<
     CustomUserEvent: Debug + 'static,
     CoreCommand: Debug + 'static + Clone,
-    UICommand,
+    UICommand: 'static,
 > {
     proxy: ProxyType<CustomUserEvent>,
-    channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
+    channel: (Sender<CoreCommand>, Receiver<UICommand>),
 }
 
 impl<CustomUserEvent, CoreCommand, UICommand> WindowController<CustomUserEvent>
@@ -33,17 +32,20 @@ where
 {
     pub fn new(
         proxy: ProxyType<CustomUserEvent>,
-        channel: (UnboundedSender<CoreCommand>, Sender<UICommand>),
+        channel: (Sender<CoreCommand>, Receiver<UICommand>),
     ) -> Self {
         Self { proxy, channel }
     }
 
     pub fn receiver(&self) -> Receiver<UICommand> {
-        self.channel.1.subscribe()
+        self.channel.1.clone()
     }
 
-    pub fn send(&self, cmd: CoreCommand) -> Result<(), TrySendError<CoreCommand>> {
-        self.channel.0.unbounded_send(cmd)
+    pub fn send(&self, cmd: CoreCommand) {
+        self.channel
+            .0
+            .try_send(cmd)
+            .expect("Failed to send CoreCommand");
     }
 
     // TODO: /// run (evaluate) a script in the WebView context
