@@ -49,6 +49,10 @@ impl<'a> NodeView<'a> {
             .flatten()
     }
 
+    pub fn listeners(&self) -> &'a [Listener<'a>] {
+        self.el().map(|el| el.listeners).unwrap_or_default()
+    }
+
     fn el(&self) -> Option<&'a VElement<'a>> {
         if let VNode::Element(el) = &self.inner {
             Some(el)
@@ -178,6 +182,7 @@ pub struct NodeMask {
     tag: bool,
     namespace: bool,
     text: bool,
+    listeners: bool,
 }
 
 impl NodeMask {
@@ -191,6 +196,7 @@ impl NodeMask {
             || (self.namespace && other.namespace)
             || self.attritutes.overlaps(&other.attritutes)
             || (self.text && other.text)
+            || (self.listeners && other.listeners)
     }
 
     pub fn union(&self, other: &Self) -> Self {
@@ -199,6 +205,7 @@ impl NodeMask {
             tag: self.tag | other.tag,
             namespace: self.namespace | other.namespace,
             text: self.text | other.text,
+            listeners: self.listeners | other.listeners,
         }
     }
 
@@ -208,6 +215,7 @@ impl NodeMask {
             tag: false,
             namespace: false,
             text: false,
+            listeners: false,
         }
     }
 
@@ -231,6 +239,11 @@ impl NodeMask {
 
     pub const fn with_text(mut self) -> Self {
         self.text = true;
+        self
+    }
+
+    pub const fn with_listeners(mut self) -> Self {
+        self.listeners = true;
         self
     }
 }

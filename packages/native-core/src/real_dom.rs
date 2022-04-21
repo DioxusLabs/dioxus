@@ -152,6 +152,7 @@ impl<S: State> RealDom<S> {
                         scope: _,
                         root,
                     } => {
+                        nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
                         if let Some(v) = self.nodes_listening.get_mut(event_name) {
                             v.insert(root as usize);
                         } else {
@@ -161,6 +162,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     RemoveEventListener { root, event } => {
+                        nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
                         let v = self.nodes_listening.get_mut(event).unwrap();
                         v.remove(&(root as usize));
                     }
