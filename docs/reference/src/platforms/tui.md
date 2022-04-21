@@ -9,13 +9,12 @@ TUI support is currently quite experimental. Even the project name will change. 
 ## Getting Set up
 
 
-To tinker with TUI support, start by making a new package and adding our TUI package from git.
+To tinker with TUI support, start by making a new package and adding our TUI feature.
 
 ```shell
 $ cargo new --bin demo
 $ cd demo
-$ cargo add dioxus
-$ cargo add rink --git https://github.com/DioxusLabs/rink.git
+$ cargo add dioxus --features tui
 ```
 
 
@@ -27,10 +26,7 @@ Then, edit your `main.rs` with the basic template.
 use dioxus::prelude::*;
 
 fn main() {
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild();
-
-    rink::render_vdom(&mut dom).unwrap();
+    dioxus::tui::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -54,7 +50,44 @@ To run our app:
 $ cargo run
 ```
 
-Press "q" to close the app (yes, this is hardcoded, we are working on handlers to expose this in your code.)
+Press "ctrl-c" to close the app. To switch from "ctrl-c" to  just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
+
+```rust
+//  main
+use dioxus::events::{KeyCode, KeyboardEvent};
+use dioxus::prelude::*;
+use dioxus::tui::TuiContext;
+
+fn main() {
+    dioxus::tui::launch_cfg(
+        app,
+        dioxus::tui::Config {
+            ctrl_c_quit: false,
+            // Some older terminals only support 16 colors or ANSI colors if your terminal is one of these change this to BaseColors or ANSI
+            rendering_mode: dioxus::tui::RenderingMode::Rgb,
+        },
+    );
+}
+
+fn app(cx: Scope) -> Element {
+    let tui_ctx: TuiContext = cx.consume_context().unwrap();
+
+    cx.render(rsx! {
+        div {
+            width: "100%",
+            height: "10px",
+            background_color: "red",
+            justify_content: "center",
+            align_items: "center",
+            onkeydown: move |k: KeyboardEvent| if let KeyCode::Q = k.data.key_code {
+                tui_ctx.quit();
+            },
+
+            "Hello world!"
+        }
+    })
+}
+```
 
 ## Notes
 
