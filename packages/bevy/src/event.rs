@@ -31,6 +31,31 @@ enum WebKeyboardEvent {
     },
 }
 
+impl Into<KeyboardInput> for WebKeyboardEvent {
+    fn into(self) -> KeyboardInput {
+        match self {
+            WebKeyboardEvent::Keydown {
+                key,
+                location,
+                scan_code,
+            } => KeyboardInput {
+                scan_code,
+                key_code: try_parse_key(key, location),
+                state: ElementState::Pressed,
+            },
+            WebKeyboardEvent::Keyup {
+                key,
+                location,
+                scan_code,
+            } => KeyboardInput {
+                scan_code,
+                key_code: try_parse_key(key, location),
+                state: ElementState::Released,
+            },
+        }
+    }
+}
+
 #[derive(Deserialize_repr, PartialEq, Debug)]
 #[repr(u8)]
 pub enum Location {
@@ -42,29 +67,9 @@ pub enum Location {
     Joystick,
 }
 
-pub fn parse_keyboard_input(val: Value) -> KeyboardInput {
+pub fn parse_keyboard_event(val: Value) -> KeyboardInput {
     let event: WebKeyboardEvent = serde_json::from_value(val).unwrap();
-
-    match event {
-        WebKeyboardEvent::Keydown {
-            key,
-            location,
-            scan_code,
-        } => KeyboardInput {
-            scan_code,
-            key_code: try_parse_key(key, location),
-            state: ElementState::Pressed,
-        },
-        WebKeyboardEvent::Keyup {
-            key,
-            location,
-            scan_code,
-        } => KeyboardInput {
-            scan_code,
-            key_code: try_parse_key(key, location),
-            state: ElementState::Released,
-        },
-    }
+    event.into()
 }
 
 // reference: https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values

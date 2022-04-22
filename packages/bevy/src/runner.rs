@@ -1,4 +1,4 @@
-use crate::event::{parse_keyboard_input, CustomUserEvent};
+use crate::event::{parse_keyboard_event, CustomUserEvent};
 use bevy::{
     app::{App, AppExit},
     ecs::event::{Events, ManualEventReader},
@@ -112,8 +112,8 @@ where
                                         sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                                     }
                                     "keyboard_event" => {
-                                        let event = parse_keyboard_input(message.params());
-                                        proxy.send_event(UserEvent::CustomEvent(CustomUserEvent::KeyboardInput(event))).unwrap();
+                                        let input = parse_keyboard_event(message.params());
+                                        proxy.send_event(UserEvent::CustomEvent(CustomUserEvent::KeyboardInput(input))).unwrap();
                                     }
                                     "initialize" => {
                                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);

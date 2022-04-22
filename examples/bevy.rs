@@ -57,15 +57,20 @@ fn send_keyboard_input(mut events: EventReader<KeyboardInput>, mut event: EventW
 fn app(cx: Scope) -> Element {
     let window = use_bevy_window::<CoreCommand, UICommand>(&cx);
     let input = use_state(&cx, || None);
+    let state = use_state(&cx, || None);
 
     use_future(&cx, (), |_| {
         let input = input.clone();
+        let state = state.clone();
         let rx = window.receiver();
 
         async move {
             while let Some(cmd) = rx.receive().await {
                 match cmd {
-                    UICommand::KeyboardInput(i) => input.set(i.key_code),
+                    UICommand::KeyboardInput(i) => {
+                        input.set(i.key_code);
+                        state.set(Some(i.state));
+                    }
                     _ => {}
                 }
             }
@@ -103,7 +108,7 @@ fn app(cx: Scope) -> Element {
                          border_radius: "4px",
                          padding: "1rem",
                          code {
-                             [format_args!("{:#?}", input)],
+                             [format_args!("input: {:?}, state: {:?}", input, state.unwrap())],
                          }
                      }
                 }
