@@ -258,8 +258,7 @@ mod field_info {
         pub strip_option: bool,
         pub ignore_option: bool,
         pub inject_as: Option<String>,
-        pub attr_on: Option<Selectors>,
-        pub hndlr_on: Option<Selectors>,
+        pub selectors: Option<Selectors>,
     }
 
     impl FieldBuilderAttr {
@@ -293,10 +292,10 @@ mod field_info {
                     skip_tokens = Some(attr.tokens.clone());
                 }
 
-                if self.inject_as.is_some() && self.attr_on.is_none() && self.hndlr_on.is_none() {
+                if self.inject_as.is_some() && self.selectors.is_none() {
                     return Err(Error::new_spanned(
                         attr,
-                        r#"#[props(inject_as = "..")] must be accompanied by an "attribute_on" or "handler_on" declaration"#,
+                        r#"#[props(inject_as = "..")] must be accompanied by a "selector" declaration"#,
                     ));
                 }
             }
@@ -349,28 +348,15 @@ mod field_info {
 
                             Ok(())
                         }
-                        // simple tag selector for applying attribute to inner element/component
-                        "attribute_on" => {
-                            if self.hndlr_on.is_some() {
-                                Err(Error::new_spanned(
-                                    assign,
-                                    r#""handler_on" already defined, can only apply one"#,
-                                ))
-                            } else {
-                                self.attr_on = Some(parse_selectors(&assign.right)?);
-
-                                Ok(())
-                            }
-                        }
                         // simple tag selector for applying event handler to inner element/component
-                        "handler_on" => {
-                            if self.attr_on.is_some() {
+                        "selector" => {
+                            if self.selectors.is_some() {
                                 Err(Error::new_spanned(
                                     assign,
-                                    r#""attribute_on" already defined, can only apply one"#,
+                                    r#""selector" already defined, can only apply one"#,
                                 ))
                             } else {
-                                self.hndlr_on = Some(parse_selectors(&assign.right)?);
+                                self.selectors = Some(parse_selectors(&assign.right)?);
 
                                 Ok(())
                             }
@@ -1264,6 +1250,7 @@ pub mod injection {
     use std::sync::{Mutex, Once};
 
     use proc_macro2::Span;
+    use quote::ToTokens;
 
     use crate::props::field_info::{FieldBuilderAttr, FieldInfo};
 
@@ -1276,23 +1263,23 @@ pub mod injection {
             let injected_fields = fields.iter_mut().filter_map(
                 |FieldInfo {
                      name,
+                     ty,
                      builder_attr:
                          FieldBuilderAttr {
                              inject_as,
-                             attr_on,
-                             hndlr_on,
+                             selectors,
                              strip_option,
                              ..
                          },
                      ..
                  }| {
-                    // attr_on and hndlr_on are checked to be mutually exclusive during parsing
-                    if attr_on.is_some() || hndlr_on.is_some() {
+                    // selectors are checked to be mutually exclusive during parsing
+                    if selectors.is_some() {
                         Some((
                             name.clone(),
                             inject_as.take().unwrap_or_else(|| name.to_string()),
-                            attr_on.is_some(),
-                            attr_on.take().unwrap_or_else(|| hndlr_on.take().unwrap()),
+                            ty.to_token_stream().to_string().starts_with("EventHandler"),
+                            selectors.take().unwrap_or_else(Selectors::new),
                             strip_option,
                         ))
                     } else {
@@ -1301,17 +1288,17 @@ pub mod injection {
                 },
             );
 
-            for (name, inject_as, attribute, selector, strip_option) in injected_fields {
+            for (name, inject_as, handler, selector, strip_option) in injected_fields {
                 InjectedProperties::add_selectors(
                     component,
-                    if attribute {
-                        Property::Attribute {
+                    if handler {
+                        Property::Handler {
                             name: name.to_string(),
                             inject_as,
                             optional: *strip_option,
                         }
                     } else {
-                        Property::Handler {
+                        Property::Attribute {
                             name: name.to_string(),
                             inject_as,
                             optional: *strip_option,
