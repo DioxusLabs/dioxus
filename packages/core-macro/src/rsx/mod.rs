@@ -112,6 +112,7 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> 
         branch: &mut Branch,
         properties: &[Property],
     ) -> syn::Result<()> {
+        let total = nodes.len();
         let mut inject_properties =
             |index: usize,
              name: &Ident,
@@ -127,7 +128,7 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> 
                 }
 
                 for property in properties {
-                    let applies = InjectedProperties::check_branch(component, property, branch)
+                    let applies = InjectedProperties::check_branch(component, property, branch, total)
                         .map_err(|err| syn::Error::new(name.span(), err))?;
 
                     if applies {

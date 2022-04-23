@@ -1324,12 +1324,13 @@ pub mod injection {
             component: &str,
             property: &Property,
             branch: &Branch,
+            total: usize,
         ) -> Result<bool, String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
 
             if let Some(property_selectors) = components.0.get(component) {
                 if let Some(selectors) = property_selectors.get(property) {
-                    return Ok(selectors.matches(branch));
+                    return Ok(selectors.matches(branch, total));
                 }
             }
 
@@ -1531,7 +1532,6 @@ pub mod injection {
             *self.counters.get(self.current.as_str()).unwrap()
         }
     }
-
     /// Declarative selectors of custom properties
     struct PropertySelectors(HashMap<Property, Selectors>);
 
@@ -1592,7 +1592,7 @@ pub mod injection {
         }
 
         /// Checks if a `Branch` matches any of the selector rules
-        fn matches(&self, branch: &Branch) -> bool {
+        fn matches(&self, branch: &Branch, total: usize) -> bool {
             let name = branch.to_string();
 
             match self.0.get(&name) {
@@ -1604,7 +1604,7 @@ pub mod injection {
                             .deref()
                             .iter()
                             .zip(branch.segments.iter())
-                            .all(|(lfh, rth)| lfh.matches(rth))
+                            .all(|(segment, trace)| segment.matches(trace, total))
                     }),
                 None => false,
             }
@@ -1780,13 +1780,7 @@ pub mod injection {
                     nth: Nth::All,
                 },
                 Some((name, nth)) => {
-                    let nth = Nth::from_str(
-                        nth.strip_prefix('[')
-                            .and_then(|v| v.strip_suffix(']'))
-                            .ok_or_else(|| format!(
-                                "'{nth}' is not a valid nth value, nth values need to be enclosed in brackets, i.e. elm_name:[nth]"
-                            ))?
-                    )?;
+                    let nth = Nth::from_str(nth)?;
 
                     if is_component {
                         Self::Component {
@@ -1808,15 +1802,15 @@ pub mod injection {
 
     impl Segment {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
-        fn matches(&self, target: &SegmentTrace) -> bool {
+        fn matches(&self, target: &SegmentTrace, total: usize) -> bool {
             match self {
                 Segment::Component { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthElement => nth.matches(target.get_current_position()),
-                    SelectorMode::NthSibling => nth.matches(target.ordinal),
+                    SelectorMode::NthElement => nth.matches(target.get_current_position(), total),
+                    SelectorMode::NthSibling => nth.matches(target.ordinal, total),
                 },
                 Segment::Element { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthElement => nth.matches(target.get_current_position()),
-                    SelectorMode::NthSibling => nth.matches(target.ordinal),
+                    SelectorMode::NthElement => nth.matches(target.get_current_position(), total),
+                    SelectorMode::NthSibling => nth.matches(target.ordinal, total),
                 },
                 _ => false,
             }
@@ -1833,6 +1827,10 @@ pub mod injection {
         Even,
         /// matches odd instances
         Odd,
+        /// matches first instance
+        First,
+        /// matches last instance
+        Last,
         /// matches every n instances
         EveryN(usize),
         /// matches a range of instances
@@ -1841,22 +1839,27 @@ pub mod injection {
         RangeFrom(RangeFrom<usize>),
         /// matches a range of instances up to a position
         RangeTo(RangeTo<usize>),
-        /// matches a list of specific instances
-        List(Vec<usize>),
+        /// matches a list of specific nth instances
+        Nth(Vec<isize>),
     }
 
     impl Nth {
         /// Checks if a `SegmentTrace` position of a branches matches `Nth` rule
-        fn matches(&self, position: usize) -> bool {
+        fn matches(&self, position: usize, count: usize) -> bool {
             match self {
                 Nth::All => true,
                 Nth::Even => position % 2 == 1,
                 Nth::Odd => position % 2 == 0,
+                Nth::First => position == 0,
+                Nth::Last => position == count - 1,
                 Nth::EveryN(n) => position % n == n - 1,
-                Nth::Range(range) => range.contains(&position),
-                Nth::RangeFrom(range) => range.contains(&position),
-                Nth::RangeTo(range) => range.contains(&position),
-                Nth::List(list) => list.contains(&position),
+                Nth::Range(range) => range.contains(&(position as usize)),
+                Nth::RangeFrom(range) => range.contains(&(position as usize)),
+                Nth::RangeTo(range) => range.contains(&(position as usize)),
+                Nth::Nth(list) => {
+                    list.contains(&(position as isize))
+                        || list.contains(&(-((count - 1 - position) as isize)))
+                }
             }
         }
     }
@@ -1870,26 +1873,43 @@ pub mod injection {
             return Ok(match value.trim() {
                 "even" => Self::Even,
                 "odd" => Self::Odd,
-                ".." => Self::All,
-                nth if nth.ends_with('n') => {
-                    let value = nth.strip_suffix('n').unwrap();
+                "first" => Self::First,
+                "last" => Self::Last,
+                "[..]" => Self::All,
+                nth if nth.starts_with('[') && nth.ends_with("n]") => {
+                    let value = nth
+                        .strip_prefix('[')
+                        .and_then(|v| v.strip_suffix("n]"))
+                        .unwrap();
 
                     Self::EveryN(
                         usize::from_str(value)
                             .map_err(|_| format!("'{nth}' is not a valid nth value"))?,
                     )
                 }
-                range_to if range_to.starts_with("..") => {
+                range_to if range_to.starts_with("[..") && range_to.ends_with(']') => {
+                    let range_to = range_to
+                        .strip_prefix("[..")
+                        .and_then(|v| v.strip_suffix(']'))
+                        .unwrap();
                     let values = range_values(range_to)?;
 
                     Self::RangeTo(RangeTo { end: values[1] })
                 }
-                range_from if range_from.ends_with("..") => {
+                range_from if range_from.starts_with('[') && range_from.ends_with("..]") => {
+                    let range_from = range_from
+                        .strip_prefix('[')
+                        .and_then(|v| v.strip_suffix("n]"))
+                        .unwrap();
                     let values = range_values(range_from)?;
 
                     Self::RangeFrom(RangeFrom { start: values[0] })
                 }
-                range if range.contains("..") => {
+                range if range.starts_with('[') && range.contains("..") && range.ends_with(']') => {
+                    let range = range
+                        .strip_prefix('[')
+                        .and_then(|v| v.strip_suffix(']'))
+                        .unwrap();
                     let values = range_values(range)?;
 
                     let end = values[1];
@@ -1910,12 +1930,20 @@ pub mod injection {
 
                     Self::Range(Range { start, end })
                 }
-                list => Self::List(
-                    list.split(',')
-                        .map(usize::from_str)
-                        .collect::<Result<Vec<_>, _>>()
-                        .map_err(|_| format!("'{list}' is not a valid list of values"))?,
-                ),
+                list if list.starts_with('[') && list.ends_with(']') => {
+                    let list = list
+                        .strip_prefix('[')
+                        .and_then(|v| v.strip_suffix(']'))
+                        .unwrap();
+
+                    Self::Nth(
+                        list.split(',')
+                            .map(isize::from_str)
+                            .collect::<Result<Vec<_>, _>>()
+                            .map_err(|_| format!("'{list}' is not a valid list of values"))?,
+                    )
+                }
+                unknown => return Err(format!("{unknown:?} is not a valid Nth selector value")),
             });
 
             fn range_values(range: &str) -> Result<Vec<usize>, String> {
