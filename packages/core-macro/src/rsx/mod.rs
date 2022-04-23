@@ -11,6 +11,7 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
+use std::collections::HashMap;
 // imports
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
@@ -113,6 +114,22 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> 
         properties: &[Property],
     ) -> syn::Result<()> {
         let total = nodes.len();
+        let type_totals = nodes
+            .iter()
+            .filter_map(|bn| match bn {
+                BodyNode::Element(elm) => Some(elm.name.to_token_stream().to_string()),
+                BodyNode::Component(cmp) => {
+                    Some(cmp.name.segments.last().unwrap().ident.to_string())
+                }
+                BodyNode::Text(_) | BodyNode::RawExpr(_) => None,
+            })
+            .fold(HashMap::new(), |mut acc, next| {
+                let entry = acc.entry(next).or_insert(0_usize);
+
+                *entry += 1;
+
+                acc
+            });
         let mut inject_properties =
             |index: usize,
              name: &Ident,
@@ -128,8 +145,14 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> 
                 }
 
                 for property in properties {
-                    let applies = InjectedProperties::check_branch(component, property, branch, total)
-                        .map_err(|err| syn::Error::new(name.span(), err))?;
+                    let applies = InjectedProperties::check_branch(
+                        component,
+                        property,
+                        branch,
+                        total,
+                        &type_totals,
+                    )
+                    .map_err(|err| syn::Error::new(name.span(), err))?;
 
                     if applies {
                         inject_property(name, property)?

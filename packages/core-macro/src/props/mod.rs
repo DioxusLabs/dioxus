@@ -1325,12 +1325,13 @@ pub mod injection {
             property: &Property,
             branch: &Branch,
             total: usize,
+            type_totals: &HashMap<String, usize>,
         ) -> Result<bool, String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
 
             if let Some(property_selectors) = components.0.get(component) {
                 if let Some(selectors) = property_selectors.get(property) {
-                    return Ok(selectors.matches(branch, total));
+                    return Ok(selectors.matches(branch, total, type_totals));
                 }
             }
 
@@ -1592,7 +1593,12 @@ pub mod injection {
         }
 
         /// Checks if a `Branch` matches any of the selector rules
-        fn matches(&self, branch: &Branch, total: usize) -> bool {
+        fn matches(
+            &self,
+            branch: &Branch,
+            total: usize,
+            type_totals: &HashMap<String, usize>,
+        ) -> bool {
             let name = branch.to_string();
 
             match self.0.get(&name) {
@@ -1604,7 +1610,7 @@ pub mod injection {
                             .deref()
                             .iter()
                             .zip(branch.segments.iter())
-                            .all(|(segment, trace)| segment.matches(trace, total))
+                            .all(|(segment, trace)| segment.matches(trace, total, type_totals))
                     }),
                 None => false,
             }
@@ -1715,12 +1721,12 @@ pub mod injection {
     #[derive(Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(debug_assertions, derive(Debug))]
     enum SelectorMode {
+        /// Indicates the Nth rule should use the absolute position
+        /// of a child, disregarding element/component types
+        NthChild,
         /// Indicates the Nth rule should use the relative position
         /// of an element/component within a list of only like types
-        NthElement,
-        /// Indicates the Nth rule should use the absolute position
-        /// of a sibling, disregarding element/component types
-        NthSibling,
+        NthTypeOf,
     }
 
     /// Defines the rules for a segment
@@ -1763,20 +1769,20 @@ pub mod injection {
 
             // determine selection mode
             let (mode, splitter) = if value.contains(':') {
-                (SelectorMode::NthSibling, ':')
+                (SelectorMode::NthChild, ':')
             } else {
-                (SelectorMode::NthElement, '@')
+                (SelectorMode::NthTypeOf, '@')
             };
 
             Ok(match value.split_once(splitter) {
                 None if is_component => Self::Component {
                     name: value.to_string(),
-                    mode: SelectorMode::NthSibling,
+                    mode,
                     nth: Nth::All,
                 },
                 None => Self::Element {
                     name: value.to_string(),
-                    mode: SelectorMode::NthSibling,
+                    mode,
                     nth: Nth::All,
                 },
                 Some((name, nth)) => {
@@ -1802,15 +1808,24 @@ pub mod injection {
 
     impl Segment {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
-        fn matches(&self, target: &SegmentTrace, total: usize) -> bool {
+        fn matches(
+            &self,
+            target: &SegmentTrace,
+            total: usize,
+            type_totals: &HashMap<String, usize>,
+        ) -> bool {
             match self {
                 Segment::Component { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthElement => nth.matches(target.get_current_position(), total),
-                    SelectorMode::NthSibling => nth.matches(target.ordinal, total),
+                    SelectorMode::NthChild => nth.matches(target.ordinal, total),
+                    SelectorMode::NthTypeOf => {
+                        nth.matches(target.get_current_position(), type_totals[name])
+                    }
                 },
                 Segment::Element { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthElement => nth.matches(target.get_current_position(), total),
-                    SelectorMode::NthSibling => nth.matches(target.ordinal, total),
+                    SelectorMode::NthChild => nth.matches(target.ordinal, total),
+                    SelectorMode::NthTypeOf => {
+                        nth.matches(target.get_current_position(), type_totals[name])
+                    }
                 },
                 _ => false,
             }
