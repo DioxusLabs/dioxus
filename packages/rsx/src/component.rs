@@ -150,11 +150,11 @@ impl ToTokens for Component {
 
 // the struct's fields info
 pub struct ComponentField {
-    name: Ident,
-    content: ContentField,
+    pub name: Ident,
+    pub content: ContentField,
 }
 
-enum ContentField {
+pub enum ContentField {
     ManExpr(Expr),
     Formatted(LitStr),
     OnHandlerRaw(Expr),

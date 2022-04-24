@@ -53,9 +53,43 @@ fn parse_comment() {
     }
         "#;
 
-    // let parsed: CallBody = syn::parse_str(block).ok()?;
-
     let parsed: TokenStream2 = syn::parse_str(block).unwrap();
 
     dbg!(parsed);
+}
+
+#[test]
+fn formats_component() {
+    let block = r#"
+    Component {
+        adsasd: "asd", // this is a comment
+        onclick: move |_| {
+            let blah = 120;
+            let blah = 120;
+        },
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
+}
+
+#[test]
+fn formats_component_man_props() {
+    let block = r#"
+    Component {
+        ..MyProps {
+            val: 123
+        },
+        adsasd: "asd", // this is a comment
+        onclick: move |_| {
+            let blah = 120;
+        },
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
 }

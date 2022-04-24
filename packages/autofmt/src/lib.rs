@@ -1,5 +1,6 @@
 //! pretty printer for rsx!
 use dioxus_rsx::*;
+use quote::ToTokens;
 use std::fmt::{self, Write};
 mod prettyplease;
 
@@ -15,7 +16,7 @@ pub fn fmt_block(block: &str) -> Option<String> {
     Some(buf)
 }
 
-pub fn write_ident(buf: &mut dyn Write, node: &BodyNode, indent: usize) -> fmt::Result {
+pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Result {
     match node {
         BodyNode::Element(el) => {
             let Element {
@@ -81,7 +82,66 @@ pub fn write_ident(buf: &mut dyn Write, node: &BodyNode, indent: usize) -> fmt::
             write_tabs(buf, indent)?;
             writeln!(buf, "}}")?;
         }
-        BodyNode::Component(_) => {
+        BodyNode::Component(component) => {
+            let Component {
+                name,
+                body,
+                children,
+                manual_props,
+            } = component;
+
+            let name = name.to_token_stream().to_string();
+
+            write_tabs(buf, indent)?;
+            writeln!(buf, "{name} {{")?;
+
+            for field in body {
+                write_tabs(buf, indent + 1)?;
+                let name = &field.name;
+                match &field.content {
+                    ContentField::ManExpr(exp) => {
+                        let out = prettyplease::unparse_expr(exp);
+                        writeln!(buf, "{}: {},", name, out)?;
+                    }
+                    ContentField::Formatted(s) => {
+                        writeln!(buf, "{}: {},", name, s.value())?;
+                    }
+                    ContentField::OnHandlerRaw(exp) => {
+                        let out = prettyplease::unparse_expr(exp);
+                        let mut lines = out.split('\n').peekable();
+                        let first = lines.next().unwrap();
+                        write!(buf, "{}: {}", name, first)?;
+                        for line in lines {
+                            writeln!(buf)?;
+                            write_tabs(buf, indent + 1)?;
+                            write!(buf, "{}", line)?;
+                        }
+                        writeln!(buf, ",")?;
+                    }
+                }
+            }
+
+            if let Some(exp) = manual_props {
+                write_tabs(buf, indent + 1)?;
+                let out = prettyplease::unparse_expr(exp);
+                let mut lines = out.split('\n').peekable();
+                let first = lines.next().unwrap();
+                write!(buf, "..{}", first)?;
+                for line in lines {
+                    writeln!(buf)?;
+                    write_tabs(buf, indent + 1)?;
+                    write!(buf, "{}", line)?;
+                }
+                writeln!(buf)?;
+            }
+
+            for child in children {
+                write_ident(buf, child, indent + 1)?;
+            }
+
+            write_tabs(buf, indent)?;
+            writeln!(buf, "}}")?;
+
             //
             // write!(buf, "{}", " ".repeat(ident))
         }
