@@ -6,13 +6,19 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use futures::{channel::mpsc::UnboundedSender, pin_mut, StreamExt};
+use futures::{
+    channel::mpsc::{UnboundedReceiver, UnboundedSender},
+    pin_mut, StreamExt,
+};
 use std::{
     collections::HashMap,
     io,
     time::{Duration, Instant},
 };
-use stretch2::{prelude::Size, Stretch};
+use stretch2::{
+    prelude::{Node, Size},
+    Stretch,
+};
 use style::RinkStyle;
 use tui::{backend::CrosstermBackend, Terminal};
 
@@ -30,6 +36,16 @@ pub use hooks::*;
 pub use layout::*;
 pub use render::*;
 
+#[derive(Clone)]
+pub struct TuiContext {
+    tx: UnboundedSender<InputEvent>,
+}
+impl TuiContext {
+    pub fn quit(&self) {
+        self.tx.unbounded_send(InputEvent::Close).unwrap();
+    }
+}
+
 pub fn launch(app: Component<()>) {
     launch_cfg(app, Config::default())
 }
@@ -37,8 +53,34 @@ pub fn launch(app: Component<()>) {
 pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let mut dom = VirtualDom::new(app);
     let (tx, rx) = unbounded();
+    // Setup input handling
+    let (event_tx, event_rx) = unbounded();
+    let event_tx_clone = event_tx.clone();
+    if !cfg.headless {
+        std::thread::spawn(move || {
+            let tick_rate = Duration::from_millis(100);
+            let mut last_tick = Instant::now();
+            loop {
+                // poll for tick rate duration, if no events, sent tick event.
+                let timeout = tick_rate
+                    .checked_sub(last_tick.elapsed())
+                    .unwrap_or_else(|| Duration::from_secs(0));
+
+                if crossterm::event::poll(timeout).unwrap() {
+                    let evt = crossterm::event::read().unwrap();
+                    event_tx.unbounded_send(InputEvent::UserInput(evt)).unwrap();
+                }
+
+                if last_tick.elapsed() >= tick_rate {
+                    event_tx.unbounded_send(InputEvent::Tick).unwrap();
+                    last_tick = Instant::now();
+                }
+            }
+        });
+    }
 
     let cx = dom.base_scope();
+    cx.provide_root_context(TuiContext { tx: event_tx_clone });
 
     let (handler, state) = RinkInputHandler::new(rx, cx);
 
@@ -46,7 +88,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     dom.rebuild();
 
-    render_vdom(&mut dom, tx, handler, cfg).unwrap();
+    render_vdom(&mut dom, event_rx, tx, handler, cfg).unwrap();
 }
 
 pub struct TuiNode<'a> {
@@ -56,35 +98,13 @@ pub struct TuiNode<'a> {
     pub node: &'a VNode<'a>,
 }
 
-pub fn render_vdom(
+fn render_vdom(
     vdom: &mut VirtualDom,
+    mut event_reciever: UnboundedReceiver<InputEvent>,
     ctx: UnboundedSender<TermEvent>,
     handler: RinkInputHandler,
     cfg: Config,
 ) -> Result<()> {
-    // Setup input handling
-    let (tx, mut rx) = unbounded();
-    std::thread::spawn(move || {
-        let tick_rate = Duration::from_millis(100);
-        let mut last_tick = Instant::now();
-        loop {
-            // poll for tick rate duration, if no events, sent tick event.
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if crossterm::event::poll(timeout).unwrap() {
-                let evt = crossterm::event::read().unwrap();
-                tx.unbounded_send(InputEvent::UserInput(evt)).unwrap();
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                tx.unbounded_send(InputEvent::Tick).unwrap();
-                last_tick = Instant::now();
-            }
-        }
-    });
-
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?
@@ -92,13 +112,17 @@ pub fn render_vdom(
             /*
             Get the terminal to calcualte the layout from
             */
-            enable_raw_mode().unwrap();
-            let mut stdout = std::io::stdout();
-            execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-            let backend = CrosstermBackend::new(io::stdout());
-            let mut terminal = Terminal::new(backend).unwrap();
+            let mut terminal = (!cfg.headless).then(|| {
+                enable_raw_mode().unwrap();
+                let mut stdout = std::io::stdout();
+                execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+                let backend = CrosstermBackend::new(io::stdout());
+                Terminal::new(backend).unwrap()
+            });
 
-            terminal.clear().unwrap();
+            if let Some(terminal) = &mut terminal {
+                terminal.clear().unwrap();
+            }
 
             loop {
                 /*
@@ -126,34 +150,51 @@ pub fn render_vdom(
                 let root_layout = nodes[&node_id].layout;
                 let mut events = Vec::new();
 
-                terminal.draw(|frame| {
-                    // size is guaranteed to not change when rendering
-                    let dims = frame.size();
+                fn resize(dims: tui::layout::Rect, stretch: &mut Stretch, root_layout: Node) {
                     let width = dims.width;
                     let height = dims.height;
-                    layout
+
+                    stretch
                         .compute_layout(
                             root_layout,
                             Size {
-                                width: stretch2::prelude::Number::Defined(width as f32),
-                                height: stretch2::prelude::Number::Defined(height as f32),
+                                width: stretch2::prelude::Number::Defined((width - 1) as f32),
+                                height: stretch2::prelude::Number::Defined((height - 1) as f32),
                             },
                         )
                         .unwrap();
+                }
 
-                    // resolve events before rendering
-                    events = handler.get_events(vdom, &layout, &mut nodes, root_node);
-                    render::render_vnode(
-                        frame,
-                        &layout,
-                        &mut nodes,
-                        vdom,
-                        root_node,
-                        &RinkStyle::default(),
-                        cfg,
+                if let Some(terminal) = &mut terminal {
+                    terminal.draw(|frame| {
+                        // size is guaranteed to not change when rendering
+                        resize(frame.size(), &mut layout, root_layout);
+
+                        // resolve events before rendering
+                        events = handler.get_events(vdom, &layout, &mut nodes, root_node);
+                        render::render_vnode(
+                            frame,
+                            &layout,
+                            &mut nodes,
+                            vdom,
+                            root_node,
+                            &RinkStyle::default(),
+                            cfg,
+                        );
+                        assert!(nodes.is_empty());
+                    })?;
+                } else {
+                    resize(
+                        tui::layout::Rect {
+                            x: 0,
+                            y: 0,
+                            width: 100,
+                            height: 100,
+                        },
+                        &mut layout,
+                        root_layout,
                     );
-                    assert!(nodes.is_empty());
-                })?;
+                }
 
                 for e in events {
                     vdom.handle_message(SchedulerMsg::Event(e));
@@ -164,7 +205,7 @@ pub fn render_vdom(
                     let wait = vdom.wait_for_work();
                     pin_mut!(wait);
 
-                    match select(wait, rx.next()).await {
+                    match select(wait, event_reciever.next()).await {
                         Either::Left((_a, _b)) => {
                             //
                         }
@@ -174,6 +215,7 @@ pub fn render_vdom(
                                     TermEvent::Key(key) => {
                                         if matches!(key.code, KeyCode::Char('C' | 'c'))
                                             && key.modifiers.contains(KeyModifiers::CONTROL)
+                                            && cfg.ctrl_c_quit
                                         {
                                             break;
                                         }
@@ -194,13 +236,15 @@ pub fn render_vdom(
                 vdom.work_with_deadline(|| false);
             }
 
-            disable_raw_mode()?;
-            execute!(
-                terminal.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
-            terminal.show_cursor()?;
+            if let Some(terminal) = &mut terminal {
+                disable_raw_mode()?;
+                execute!(
+                    terminal.backend_mut(),
+                    LeaveAlternateScreen,
+                    DisableMouseCapture
+                )?;
+                terminal.show_cursor()?;
+            }
 
             Ok(())
         })
