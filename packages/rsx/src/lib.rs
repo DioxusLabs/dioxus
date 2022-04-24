@@ -18,8 +18,6 @@ mod component;
 mod element;
 mod node;
 
-pub mod pretty;
-
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;

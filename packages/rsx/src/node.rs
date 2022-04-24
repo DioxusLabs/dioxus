@@ -20,6 +20,7 @@ pub enum BodyNode {
     Component(Component),
     Text(LitStr),
     RawExpr(Expr),
+    Meta(String),
 }
 
 impl Parse for BodyNode {
@@ -79,6 +80,7 @@ impl ToTokens for BodyNode {
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
+            BodyNode::Meta(_) => {}
         }
     }
 }

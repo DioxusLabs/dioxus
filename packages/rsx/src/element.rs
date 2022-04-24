@@ -191,21 +191,38 @@ impl ToTokens for Element {
 
 pub enum ElementAttr {
     /// attribute: "valuee {}"
-    AttrText { name: Ident, value: LitStr },
+    AttrText {
+        name: Ident,
+        value: LitStr,
+    },
 
     /// attribute: true,
-    AttrExpression { name: Ident, value: Expr },
+    AttrExpression {
+        name: Ident,
+        value: Expr,
+    },
 
     /// "attribute": "value {}"
-    CustomAttrText { name: LitStr, value: LitStr },
+    CustomAttrText {
+        name: LitStr,
+        value: LitStr,
+    },
 
     /// "attribute": true,
-    CustomAttrExpression { name: LitStr, value: Expr },
+    CustomAttrExpression {
+        name: LitStr,
+        value: Expr,
+    },
 
     // /// onclick: move |_| {}
     // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
-    EventTokens { name: Ident, tokens: Expr },
+    EventTokens {
+        name: Ident,
+        tokens: Expr,
+    },
+
+    Meta(String),
 }
 
 pub struct ElementAttrNamed {
@@ -247,6 +264,10 @@ impl ToTokens for ElementAttrNamed {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)
                 }
+            }
+
+            ElementAttr::Meta(_) => {
+                todo!("meta attributes not supported yet");
             }
         });
     }

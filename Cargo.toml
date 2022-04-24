@@ -28,6 +28,7 @@ dioxus-tui = { path = "./packages/tui", version = "^0.2.0", optional = true }
 
 dioxus-liveview = { path = "./packages/liveview", optional = true }
 dioxus-rsx = { path = "./packages/rsx", optional = true }
+dioxus-autofmt = { path = "./packages/autofmt", optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -42,7 +43,7 @@ ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
-
+autofmt = ["dioxus-autofmt"]
 
 [workspace]
 members = [
