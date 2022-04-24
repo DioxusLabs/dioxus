@@ -22,9 +22,12 @@ jobs:
 
       - run: cd docs && mdbook build
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@v4.2.3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs/book
+          branch: gh-pages # The branch the action should deploy to.
+          folder: docs/book # The folder the action should deploy.
+          target-folder: docs/nightly/cli
+          repository-name: dioxuslabs/docsite
+          clean: false
+          token: ${{ secrets.DEPLOY_KEY }} # let's pretend I don't need it for now
