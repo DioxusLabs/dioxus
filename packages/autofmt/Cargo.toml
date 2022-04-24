@@ -10,3 +10,5 @@ proc-macro2 = { version = "1.0.6" }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }
 dioxus-rsx = { path = "../rsx" }
+triple_accel = "0.4.0"
+serde = { version = "1.0.136", features = ["derive"] }

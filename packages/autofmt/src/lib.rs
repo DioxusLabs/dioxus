@@ -1,8 +1,73 @@
 //! pretty printer for rsx!
 use dioxus_rsx::*;
+use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
-use std::fmt::{self, Write};
+use std::{
+    fmt::{self, Write},
+    ptr::NonNull,
+};
+use syn::{
+    buffer::TokenBuffer,
+    parse::{ParseBuffer, ParseStream},
+};
+use triple_accel::{levenshtein_search, Match};
+
 mod prettyplease;
+
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Hash)]
+pub struct ForamttedBlock {
+    pub formatted: String,
+    pub start: usize,
+    pub end: usize,
+}
+
+/*
+TODO: nested rsx! calls
+
+*/
+pub fn formmat_document(contents: &str) -> Vec<ForamttedBlock> {
+    let mut matches = levenshtein_search(b"rsx! {", contents.as_bytes()).peekable();
+
+    let mut cur_match: Option<Match> = None;
+
+    let mut formatted_blocks = Vec::new();
+
+    while let Some(item) = matches.next() {
+        let Match { start, end, k } = item;
+
+        match cur_match {
+            Some(ref this_match) => {
+                // abort nested matches - these get handled automatically
+                if start < this_match.end {
+                    continue;
+                } else {
+                    cur_match = Some(item);
+                }
+            }
+            None => {
+                cur_match = Some(item);
+            }
+        }
+
+        let remaining = &contents[end - 1..];
+
+        if let Some(bracket_end) = find_bracket_end(remaining) {
+            let sub_string = &contents[end..bracket_end + end - 1];
+
+            if let Some(new) = fmt_block(sub_string) {
+                if !new.is_empty() {
+                    formatted_blocks.push(ForamttedBlock {
+                        formatted: new,
+                        start: end,
+                        end: end + bracket_end - 1,
+                    });
+                }
+            }
+        }
+    }
+
+    formatted_blocks
+}
 
 pub fn fmt_block(block: &str) -> Option<String> {
     let parsed: CallBody = syn::parse_str(block).ok()?;
@@ -174,4 +239,25 @@ pub fn write_tabs(f: &mut dyn Write, num: usize) -> std::fmt::Result {
         write!(f, "    ")?
     }
     Ok(())
+}
+
+fn find_bracket_end(contents: &str) -> Option<usize> {
+    let mut depth = 0;
+    let mut i = 0;
+
+    for c in contents.chars() {
+        if c == '{' {
+            depth += 1;
+        } else if c == '}' {
+            depth -= 1;
+        }
+
+        if depth == 0 {
+            return Some(i);
+        }
+
+        i += 1;
+    }
+
+    None
 }

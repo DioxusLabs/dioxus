@@ -60,6 +60,7 @@ members = [
     "packages/tui",
     "packages/liveview",
     "packages/rsx",
+    "packages/autofmt",
 ]
 
 [dev-dependencies]

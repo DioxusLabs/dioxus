@@ -93,3 +93,41 @@ fn formats_component_man_props() {
 
     print!("{formatted}");
 }
+
+#[test]
+fn formats_document() {
+    let block = r#"
+rsx!{
+    Component {
+        adsasd: "asd", // this is a comment
+        onclick: move |_| {
+            let blah = 120;
+        },
+    }
+}
+
+
+"#;
+
+    let formatted = formmat_document(block);
+
+    print!("{formatted:?}");
+}
+
+#[test]
+fn formats_valid_rust_src() {
+    let src = r#"
+//
+rsx! {
+    div {}
+    div {
+        h3 {"asd"
+        }
+    }
+}
+"#;
+
+    let formatted = formmat_document(src);
+
+    println!("{formatted:?}");
+}
