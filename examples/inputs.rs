@@ -104,7 +104,6 @@ fn app(cx: Scope) -> Element {
 
             // elements with driven values will preventdefault automatically.
             // you can disable this override with preventdefault: false
-
             div {
                 input {
                     id: "pdf",
@@ -120,8 +119,6 @@ fn app(cx: Scope) -> Element {
                     "pdf"
                 }
             }
-
-
 
             FIELDS.iter().map(|(field, value)| rsx!(
                 div {

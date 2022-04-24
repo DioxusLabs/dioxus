@@ -12,10 +12,13 @@ extern "C" {
     pub fn new(arg: Element) -> Interpreter;
 
     #[wasm_bindgen(method)]
-    pub fn set_node(this: &Interpreter, id: usize, node: Node);
+    pub fn SetNode(this: &Interpreter, id: usize, node: Node);
 
     #[wasm_bindgen(method)]
     pub fn PushRoot(this: &Interpreter, root: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn PopRoot(this: &Interpreter);
 
     #[wasm_bindgen(method)]
     pub fn AppendChildren(this: &Interpreter, many: u32);
@@ -63,5 +66,5 @@ extern "C" {
     );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str);
+    pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str, ns: Option<&str>);
 }

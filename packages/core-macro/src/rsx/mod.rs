@@ -11,9 +11,14 @@
 //!
 //! Any errors in using rsx! will likely occur when people start using it, so the first errors must be really helpful.
 
+#[macro_use]
+mod errors;
+
 mod component;
 mod element;
 mod node;
+
+pub mod pretty;
 
 // Re-export the namespaces into each other
 pub use component::*;
@@ -29,8 +34,8 @@ use syn::{
 };
 
 pub struct CallBody {
-    custom_context: Option<Ident>,
-    roots: Vec<BodyNode>,
+    pub custom_context: Option<Ident>,
+    pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {
@@ -77,7 +82,7 @@ impl ToTokens for CallBody {
         match &self.custom_context {
             // The `in cx` pattern allows directly rendering
             Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
+                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
                     use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 }))
@@ -85,7 +90,7 @@ impl ToTokens for CallBody {
 
             // Otherwise we just build the LazyNode wrapper
             None => out_tokens.append_all(quote! {
-                LazyNodes::new_some(move |__cx: NodeFactory| -> VNode {
+                LazyNodes::new(move |__cx: NodeFactory| -> VNode {
                     use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 })

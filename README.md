@@ -1,8 +1,5 @@
 <div align="center">
   <h1>Dioxus</h1>
-  <p>
-    <strong>Frontend that scales.</strong>
-  </p>
 </div>
 
 <div align="center">
@@ -45,19 +42,12 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Master) </a>
-  </h3>
-</div>
-
-<div align="center">
-  <h4>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
+    <a href="https://dioxuslabs.com/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
   </h3>
 </div>
+
 
 <br/>
 
@@ -65,17 +55,17 @@ Dioxus is a portable, performant, and ergonomic framework for building cross-pla
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let (count, set_count) = use_state(&cx, || 0);
+    let mut count = use_state(&cx, || 0);
 
-    cx.render(rsx!(
+    cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
-        button { onclick: move |_| set_count(count + 1), "Up high!" }
-        button { onclick: move |_| set_count(count - 1), "Down low!" }
-    ))
+        button { onclick: move |_| count += 1, "Up high!" }
+        button { onclick: move |_| count -= 1, "Down low!" }
+    })
 }
 ```
 
-Dioxus can be used to deliver webapps, desktop apps, static sites, liveview apps, mobile apps (WIP), and more. At its core, Dioxus is entirely renderer agnostic and has great documentation for creating new renderers for any platform.
+Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, TUI apps, liveview apps, and more. Dioxus is entirely renderer agnostic and can be used as platform for any renderer.
 
 If you know React, then you already know Dioxus.
 
@@ -86,15 +76,6 @@ If you know React, then you already know Dioxus.
 - Extremely memory efficient - 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
 - And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
-
-
-### Examples
-
-All examples in this repo are desktop apps. To run an example, simply clone this repo and use `cargo run --example XYZ`
-
-```
-cargo run --example EXAMPLE
-```
 
 ## Get Started with...
 
@@ -119,12 +100,9 @@ cargo run --example EXAMPLE
 
 See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for a curated list of content in the Dioxus Ecosystem.
 
-
 ## Why Dioxus and why Rust?
 
 TypeScript is a fantastic addition to JavaScript, but it's still fundamentally JavaScript. TS code runs slightly slower, has tons of configuration options, and not every package is properly typed.
-
-In contrast, Dioxus is written in Rust - which is almost like "TypeScript on steroids".
 
 By using Rust, we gain:
 
@@ -160,9 +138,9 @@ You shouldn't use Dioxus if:
 ## Comparison with other Rust UI frameworks
 Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
-- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead of React-hooks, no borrowed props, supports SSR (no hydration).
+- [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead, no borrowed props, supports SSR (no hydration), no direct desktop/mobile support.
 - [Percy](https://github.com/chinedufn/percy): Supports SSR but with less emphasis on state management and event handling.
-- [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but lacking in ergonomics.
+- [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but no direct support for desktop/mobile.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
 - [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
 
@@ -197,7 +175,7 @@ Want to jump in and help build the future of Rust frontend? There's plenty of pl
 
 This project is licensed under the [MIT license].
 
-[MIT license]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+[MIT license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 ### Contribution
 

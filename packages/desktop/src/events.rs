@@ -1,5 +1,4 @@
-//! Convert a serialized event to an event Trigger
-//!
+//! Convert a serialized event to an event trigger
 
 use std::any::Any;
 use std::sync::Arc;
@@ -8,26 +7,48 @@ use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct IpcMessage {
+    method: String,
+    params: serde_json::Value,
+}
+
+impl IpcMessage {
+    pub(crate) fn method(&self) -> &str {
+        self.method.as_str()
+    }
+
+    pub(crate) fn params(self) -> serde_json::Value {
+        self.params
+    }
+}
+
+pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
+    match serde_json::from_str(payload) {
+        Ok(message) => Some(message),
+        Err(e) => {
+            log::error!("could not parse IPC message, error: {}", e);
+            None
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
     event: String,
     mounted_dom_id: u64,
-    // scope: u64,
     contents: serde_json::Value,
 }
 
 pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
-    let ims: Vec<ImEvent> = serde_json::from_value(val).unwrap();
-
     let ImEvent {
         event,
         mounted_dom_id,
         contents,
-    } = ims.into_iter().next().unwrap();
+    } = serde_json::from_value(val).unwrap();
 
-    // let scope_id = ScopeId(scope as usize);
     let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
 
-    let name = event_name_from_typ(&event);
+    let name = event_name_from_type(&event);
     let event = make_synthetic_event(&event, contents);
 
     UserEvent {
@@ -63,9 +84,9 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             Arc::new(serde_json::from_value::<FormData>(val).unwrap())
         }
 
-        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
-        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
+        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
+        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(serde_json::from_value::<MouseData>(val).unwrap())
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -105,7 +126,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
     }
 }
 
-fn event_name_from_typ(typ: &str) -> &'static str {
+fn event_name_from_type(typ: &str) -> &'static str {
     match typ {
         "copy" => "copy",
         "cut" => "cut",
@@ -128,6 +149,7 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "click" => "click",
         "contextmenu" => "contextmenu",
         "doubleclick" => "doubleclick",
+        "dblclick" => "dblclick",
         "drag" => "drag",
         "dragend" => "dragend",
         "dragenter" => "dragenter",
@@ -188,8 +210,8 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "volumechange" => "volumechange",
         "waiting" => "waiting",
         "toggle" => "toggle",
-        _ => {
-            panic!("unsupported event type")
+        a => {
+            panic!("unsupported event type {:?}", a);
         }
     }
 }

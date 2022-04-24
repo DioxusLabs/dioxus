@@ -87,14 +87,11 @@ impl WebsysDom {
             }
         });
 
+        // a match here in order to avoid some error during runtime browser test
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
             Some(root) => root,
-            // a match here in order to avoid some error during runtime browser test
-            None => {
-                let body = document.create_element("body").ok().unwrap();
-                body
-            }
+            None => document.create_element("body").ok().unwrap(),
         };
 
         Self {
@@ -108,6 +105,7 @@ impl WebsysDom {
         for edit in edits.drain(..) {
             match edit {
                 DomEdit::PushRoot { root } => self.interpreter.PushRoot(root),
+                DomEdit::PopRoot {} => self.interpreter.PopRoot(),
                 DomEdit::AppendChildren { many } => self.interpreter.AppendChildren(many),
                 DomEdit::ReplaceWith { root, m } => self.interpreter.ReplaceWith(root, m),
                 DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
@@ -130,8 +128,8 @@ impl WebsysDom {
                     self.interpreter.RemoveEventListener(root, event)
                 }
 
-                DomEdit::RemoveAttribute { root, name } => {
-                    self.interpreter.RemoveAttribute(root, name)
+                DomEdit::RemoveAttribute { root, name, ns } => {
+                    self.interpreter.RemoveAttribute(root, name, ns)
                 }
 
                 DomEdit::CreateTextNode { text, root } => {
@@ -228,25 +226,32 @@ fn virtual_event_from_websys_event(
                 for x in 0..elements.length() {
                     let element = elements.item(x).unwrap();
                     if let Some(name) = element.get_attribute("name") {
-                        let value: String = (&element)
+                        let value: Option<String> = (&element)
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
                                     match input.type_().as_str() {
                                         "checkbox" => {
                                             match input.checked() {
-                                                true => "true".to_string(),
-                                                false => "false".to_string(),
+                                                true => Some("true".to_string()),
+                                                false => Some("false".to_string()),
                                             }
                                         },
-                                        _ => input.value()
+                                        "radio" => {
+                                            match input.checked() {
+                                                true => Some(input.value()),
+                                                false => None,
+                                            }
+                                        }
+                                        _ => Some(input.value())
                                     }
                                 })
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| input.value()))
-                                .or_else(|| target.dyn_ref().map(|input: &web_sys::HtmlSelectElement| input.value()))
-                                .or_else(|| target.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content())
+                                .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlTextAreaElement| Some(input.value())))
+                                .or_else(|| element.dyn_ref().map(|input: &web_sys::HtmlSelectElement| Some(input.value())))
+                                .or_else(|| Some(element.dyn_ref::<web_sys::HtmlElement>().unwrap().text_content()))
                                 .expect("only an InputElement or TextAreaElement or an element with contenteditable=true can have an oninput event listener");
-
-                        values.insert(name, value);
+                        if let Some(value) = value {
+                            values.insert(name, value);
+                        }
                     }
                 }
             }

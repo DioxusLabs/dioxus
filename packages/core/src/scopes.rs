@@ -7,10 +7,11 @@ use std::{
     any::{Any, TypeId},
     borrow::Borrow,
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     rc::Rc,
+    sync::Arc,
 };
 
 /// for traceability, we use the raw fn pointer to identify the function
@@ -67,7 +68,12 @@ impl ScopeArena {
             heuristics: RefCell::new(FxHashMap::default()),
             free_scopes: RefCell::new(Vec::new()),
             nodes: RefCell::new(nodes),
-            tasks: TaskQueue::new(sender),
+            tasks: Rc::new(TaskQueue {
+                tasks: RefCell::new(FxHashMap::default()),
+                task_map: RefCell::new(FxHashMap::default()),
+                gen: Cell::new(0),
+                sender,
+            }),
         }
     }
 
@@ -96,11 +102,10 @@ impl ScopeArena {
 
         // Get the height of the scope
         let height = parent_scope
-            .map(|id| self.get_scope(id).map(|scope| scope.height + 1))
-            .flatten()
+            .and_then(|id| self.get_scope(id).map(|scope| scope.height + 1))
             .unwrap_or_default();
 
-        let parent_scope = parent_scope.map(|f| self.get_scope_raw(f)).flatten();
+        let parent_scope = parent_scope.and_then(|f| self.get_scope_raw(f));
 
         /*
         This scopearena aggressively reuses old scopes when possible.
@@ -178,6 +183,15 @@ impl ScopeArena {
     pub fn try_remove(&self, id: ScopeId) -> Option<()> {
         log::trace!("removing scope {:?}", id);
         self.ensure_drop_safety(id);
+
+        // Dispose of any ongoing tasks
+        let mut tasks = self.tasks.tasks.borrow_mut();
+        let mut task_map = self.tasks.task_map.borrow_mut();
+        if let Some(cur_tasks) = task_map.remove(&id) {
+            for task in cur_tasks {
+                tasks.remove(&task);
+            }
+        }
 
         // Safety:
         // - ensure_drop_safety ensures that no references to this scope are in use
@@ -313,12 +327,12 @@ impl ScopeArena {
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
-                log::debug!("looking for listener on {:?}", real_el);
+                log::trace!("looking for listener on {:?}", real_el);
 
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            log::debug!("calling listener {:?}", listener.event);
+                            log::trace!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
                                 break;
@@ -396,7 +410,10 @@ impl ScopeArena {
 /// }
 /// ```
 pub struct Scope<'a, P = ()> {
+    /// The internal ScopeState for this component
     pub scope: &'a ScopeState,
+
+    /// The props for this component
     pub props: &'a P,
 }
 
@@ -423,7 +440,7 @@ impl<'a, P> std::ops::Deref for Scope<'a, P> {
 /// `ScopeId` is a `usize` that is unique across the entire VirtualDOM and across time. ScopeIDs will never be reused
 /// once a component has been unmounted.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
 /// A task's unique identifier.
@@ -432,7 +449,13 @@ pub struct ScopeId(pub usize);
 /// once a Task has been completed.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TaskId(pub usize);
+pub struct TaskId {
+    /// The global ID of the task
+    pub id: usize,
+
+    /// The original scope that this task was scheduled in
+    pub scope: ScopeId,
+}
 
 /// Every component in Dioxus is represented by a `ScopeState`.
 ///
@@ -466,7 +489,7 @@ pub struct ScopeState {
     pub(crate) hook_idx: Cell<usize>,
 
     // shared state -> todo: move this out of scopestate
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
 }
 
@@ -579,12 +602,17 @@ impl ScopeState {
         self.our_arena_idx
     }
 
+    /// Get a handle to the raw update scheduler channel
+    pub fn scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
+        self.tasks.sender.clone()
+    }
+
     /// Create a subscription that schedules a future render for the reference component
     ///
     /// ## Notice: you should prefer using prepare_update and get_scope_id
-    pub fn schedule_update(&self) -> Rc<dyn Fn() + 'static> {
+    pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Rc::new(move || {
+        Arc::new(move || {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -594,9 +622,9 @@ impl ScopeState {
     /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
-    pub fn schedule_update_any(&self) -> Rc<dyn Fn(ScopeId)> {
+    pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
-        Rc::new(move |id| {
+        Arc::new(move |id| {
             let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
         })
     }
@@ -648,13 +676,11 @@ impl ScopeState {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static>(&self, value: T) -> Rc<T> {
-        let value = Rc::new(value);
+    pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
         self.shared_contexts
             .borrow_mut()
-            .insert(TypeId::of::<T>(), value.clone())
-            .map(|f| f.downcast::<T>().ok())
-            .flatten();
+            .insert(TypeId::of::<T>(), Box::new(value.clone()))
+            .and_then(|f| f.downcast::<T>().ok());
         value
     }
 
@@ -676,16 +702,13 @@ impl ScopeState {
     ///     rsx!(cx, div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_root_context<T: 'static>(&self, value: T) -> Rc<T> {
-        let value = Rc::new(value);
-
+    pub fn provide_root_context<T: 'static + Clone>(&self, value: T) -> T {
         // if we *are* the root component, then we can just provide the context directly
         if self.scope_id() == ScopeId(0) {
             self.shared_contexts
                 .borrow_mut()
-                .insert(TypeId::of::<T>(), value.clone())
-                .map(|f| f.downcast::<T>().ok())
-                .flatten();
+                .insert(TypeId::of::<T>(), Box::new(value.clone()))
+                .and_then(|f| f.downcast::<T>().ok());
             return value;
         }
 
@@ -698,7 +721,7 @@ impl ScopeState {
                 let exists = parent
                     .shared_contexts
                     .borrow_mut()
-                    .insert(TypeId::of::<T>(), value.clone());
+                    .insert(TypeId::of::<T>(), Box::new(value.clone()));
 
                 if exists.is_some() {
                     log::warn!("Context already provided to parent scope - replacing it");
@@ -713,9 +736,9 @@ impl ScopeState {
     }
 
     /// Try to retrieve a SharedState with type T from the any parent Scope.
-    pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
+    pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-            Some(shared.clone().downcast::<T>().unwrap())
+            Some((*shared.downcast_ref::<T>().unwrap()).clone())
         } else {
             let mut search_parent = self.parent_scope;
 
@@ -723,7 +746,7 @@ impl ScopeState {
                 // safety: all parent pointers are valid thanks to the bump arena
                 let parent = unsafe { &*parent_ptr };
                 if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                    return Some(shared.clone().downcast::<T>().unwrap());
+                    return Some(shared.downcast_ref::<T>().unwrap().clone());
                 }
                 search_parent = parent.parent_scope;
             }
@@ -739,7 +762,7 @@ impl ScopeState {
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
             .unwrap();
 
-        self.tasks.push_fut(fut)
+        self.tasks.spawn(self.our_arena_idx, fut)
     }
 
     /// Spawns the future but does not return the TaskId
@@ -747,9 +770,24 @@ impl ScopeState {
         self.push_future(fut);
     }
 
-    // todo: attach some state to the future to know if we should poll it
+    /// Spawn a future that Dioxus will never clean up
+    ///
+    /// This is good for tasks that need to be run after the component has been dropped.
+    pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        // wake up the scheduler if it is sleeping
+        self.tasks
+            .sender
+            .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
+            .unwrap();
+
+        // The root scope will never be unmounted so we can just add the task at the top of the app
+        self.tasks.spawn(ScopeId(0), fut)
+    }
+
+    /// Informs the scheduler that this task is no longer needed and should be removed
+    /// on next poll.
     pub fn remove_future(&self, id: TaskId) {
-        self.tasks.remove_fut(id);
+        self.tasks.remove(id);
     }
 
     /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
@@ -933,36 +971,43 @@ impl BumpFrame {
 
 pub(crate) struct TaskQueue {
     pub(crate) tasks: RefCell<FxHashMap<TaskId, InnerTask>>,
+    pub(crate) task_map: RefCell<FxHashMap<ScopeId, HashSet<TaskId>>>,
     gen: Cell<usize>,
     sender: UnboundedSender<SchedulerMsg>,
 }
+
 pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
 impl TaskQueue {
-    fn new(sender: UnboundedSender<SchedulerMsg>) -> Rc<Self> {
-        Rc::new(Self {
-            tasks: RefCell::new(FxHashMap::default()),
-            gen: Cell::new(0),
-            sender,
-        })
-    }
-    fn push_fut(&self, task: impl Future<Output = ()> + 'static) -> TaskId {
+    fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
         let pinned = Box::pin(task);
         let id = self.gen.get();
         self.gen.set(id + 1);
-        let tid = TaskId(id);
+        let tid = TaskId { id, scope };
 
         self.tasks.borrow_mut().insert(tid, pinned);
+
+        // also add to the task map
+        // when the component is unmounted we know to remove it from the map
+        self.task_map
+            .borrow_mut()
+            .entry(scope)
+            .or_default()
+            .insert(tid);
+
         tid
     }
-    fn remove_fut(&self, id: TaskId) {
+
+    fn remove(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
             let _ = tasks.remove(&id);
-        } else {
-            // todo: it should be okay to remote a fut while the queue is being polled
-            // However, it's not currently possible to do that.
-            log::trace!("Unable to remove task from task queue. This is probably a bug.");
+        }
+
+        // the task map is still around, but it'll be removed when the scope is unmounted
+        if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
+            task_map.remove(&id);
         }
     }
+
     pub(crate) fn has_tasks(&self) -> bool {
         !self.tasks.borrow().is_empty()
     }

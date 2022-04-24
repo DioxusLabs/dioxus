@@ -1,4 +1,4 @@
-use dioxus_core::Element;
+use std::sync::Arc;
 
 use dioxus_core as dioxus;
 use dioxus_core::prelude::*;
@@ -6,31 +6,42 @@ use dioxus_core_macro::Props;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 
-use crate::{RouteContext, RouterService};
+use crate::{RouteContext, RouterCore};
 
+/// Props for the [`Route`](struct.Route.html) component.
 #[derive(Props)]
 pub struct RouteProps<'a> {
-    to: &'a str,
+    /// The path to match.
+    pub to: &'a str,
 
-    children: Element<'a>,
-
-    #[props(default)]
-    fallback: bool,
+    /// The component to render when the path matches.
+    pub children: Element<'a>,
 }
 
+/// A component that conditionally renders children based on the current location.
+///
+/// # Example
+///
+///```rust, ignore
+/// rsx!(
+///     Router {
+///         Route { to: "/home", Home {} }
+///         Route { to: "/about", About {} }
+///         Route { to: "/Blog", Blog {} }
+///     }
+/// )
+/// ```
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
-    // now we want to submit
     let router_root = cx
-        .use_hook(|_| cx.consume_context::<RouterService>())
+        .use_hook(|_| cx.consume_context::<Arc<RouterCore>>())
         .as_ref()?;
 
     cx.use_hook(|_| {
         // create a bigger, better, longer route if one above us exists
         let total_route = match cx.consume_context::<RouteContext>() {
-            Some(ctx) => ctx.total_route.to_string(),
+            Some(ctx) => ctx.total_route,
             None => cx.props.to.to_string(),
         };
-        // log::trace!("total route for {} is {}", cx.props.to, total_route);
 
         // provide our route context
         let route_context = cx.provide_context(RouteContext {
@@ -39,28 +50,16 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         });
 
         // submit our rout
-        router_root.register_total_route(
-            route_context.total_route.clone(),
-            cx.scope_id(),
-            cx.props.fallback,
-        );
-
-        Some(RouteInner {})
+        router_root.register_total_route(route_context.total_route, cx.scope_id());
     });
 
-    // log::trace!("Checking route {}", cx.props.to);
+    log::trace!("Checking Route: {:?}", cx.props.to);
 
     if router_root.should_render(cx.scope_id()) {
+        log::trace!("Route should render: {:?}", cx.scope_id());
         cx.render(rsx!(&cx.props.children))
     } else {
+        log::trace!("Route should *not* render: {:?}", cx.scope_id());
         None
-    }
-}
-
-struct RouteInner {}
-
-impl Drop for RouteInner {
-    fn drop(&mut self) {
-        // todo!()
     }
 }

@@ -15,16 +15,16 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let (state, set_state) = use_state(&cx, PlayerState::new);
+    let state = use_state(&cx, PlayerState::new);
 
     cx.render(rsx!(
         div {
             h1 {"Select an option"}
             h3 { "The radio is... " [state.is_playing()] "!" }
-            button { onclick: move |_| set_state.make_mut().reduce(PlayerAction::Pause),
+            button { onclick: move |_| state.make_mut().reduce(PlayerAction::Pause),
                 "Pause"
             }
-            button { onclick: move |_| set_state.make_mut().reduce(PlayerAction::Play),
+            button { onclick: move |_| state.make_mut().reduce(PlayerAction::Play),
                 "Play"
             }
         }

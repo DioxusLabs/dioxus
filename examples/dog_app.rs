@@ -16,7 +16,9 @@ struct ListBreeds {
 }
 
 fn app(cx: Scope) -> Element {
-    let breeds = use_future(&cx, || async move {
+    let breed = use_state(&cx, || None);
+
+    let breeds = use_future(&cx, (), |_| async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -24,26 +26,23 @@ fn app(cx: Scope) -> Element {
             .await
     });
 
-    let (breed, set_breed) = use_state(&cx, || None);
-
     match breeds.value() {
         Some(Ok(breeds)) => cx.render(rsx! {
             div {
-                h1 {"Select a dog breed!"}
-
+                h1 { "Select a dog breed!" }
                 div { display: "flex",
                     ul { flex: "50%",
-                        breeds.message.keys().map(|breed| rsx!(
+                        breeds.message.keys().map(|cur_breed| rsx!(
                             li {
                                 button {
-                                    onclick: move |_| set_breed(Some(breed.clone())),
-                                    "{breed}"
+                                    onclick: move |_| breed.set(Some(cur_breed.clone())),
+                                    "{cur_breed}"
                                 }
                             }
                         ))
                     }
                     div { flex: "50%",
-                        match breed {
+                        match breed.get() {
                             Some(breed) => rsx!( Breed { breed: breed.clone() } ),
                             None => rsx!("No Breed selected"),
                         }
@@ -51,33 +50,25 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }),
-        Some(Err(_e)) => cx.render(rsx! {
-            div { "Error fetching breeds" }
-        }),
-        None => cx.render(rsx! {
-            div { "Loading dogs..." }
-        }),
+        Some(Err(_e)) => cx.render(rsx! { div { "Error fetching breeds" } }),
+        None => cx.render(rsx! { div { "Loading dogs..." } }),
     }
+}
+
+#[derive(serde::Deserialize, Debug)]
+struct DogApi {
+    message: String,
 }
 
 #[inline_props]
 fn Breed(cx: Scope, breed: String) -> Element {
-    #[derive(serde::Deserialize, Debug)]
-    struct DogApi {
-        message: String,
-    }
-
-    let endpoint = format!("https://dog.ceo/api/breed/{}/images/random", breed);
-
-    let fut = use_future(&cx, || async move {
-        reqwest::get(endpoint).await.unwrap().json::<DogApi>().await
+    let fut = use_future(&cx, (breed,), |(breed,)| async move {
+        reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
+            .await
+            .unwrap()
+            .json::<DogApi>()
+            .await
     });
-
-    let (name, set_name) = use_state(&cx, || breed.clone());
-    if name != breed {
-        set_name(breed.clone());
-        fut.restart();
-    }
 
     cx.render(match fut.value() {
         Some(Ok(resp)) => rsx! {

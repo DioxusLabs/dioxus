@@ -148,7 +148,7 @@ impl<'src> VNode<'src> {
     }
 
     // Create an "owned" version of the vnode.
-    pub fn decouple(&self) -> VNode<'src> {
+    pub(crate) fn decouple(&self) -> VNode<'src> {
         match *self {
             VNode::Text(t) => VNode::Text(t),
             VNode::Element(e) => VNode::Element(e),
@@ -163,25 +163,32 @@ impl Debug for VNode<'_> {
     fn fmt(&self, s: &mut Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         match &self {
             VNode::Element(el) => s
-                .debug_struct("VNode::VElement")
+                .debug_struct("VNode::Element")
                 .field("name", &el.tag)
                 .field("key", &el.key)
                 .field("attrs", &el.attributes)
                 .field("children", &el.children)
                 .field("id", &el.id)
                 .finish(),
-            VNode::Text(t) => write!(s, "VNode::VText {{ text: {} }}", t.text),
-            VNode::Placeholder(t) => write!(s, "VNode::VPlaceholder {{ id: {:?} }}", t.id),
-            VNode::Fragment(frag) => {
-                write!(s, "VNode::VFragment {{ children: {:?} }}", frag.children)
-            }
+            VNode::Text(t) => s
+                .debug_struct("VNode::Text")
+                .field("text", &t.text)
+                .field("id", &t.id)
+                .finish(),
+            VNode::Placeholder(t) => s
+                .debug_struct("VNode::Placholder")
+                .field("id", &t.id)
+                .finish(),
+            VNode::Fragment(frag) => s
+                .debug_struct("VNode::Fragment")
+                .field("children", &frag.children)
+                .finish(),
             VNode::Component(comp) => s
-                .debug_struct("VNode::VComponent")
+                .debug_struct("VNode::Component")
                 .field("name", &comp.fn_name)
                 .field("fnptr", &comp.user_fc)
                 .field("key", &comp.key)
                 .field("scope", &comp.scope)
-                .field("originator", &comp.originator)
                 .finish(),
         }
     }
@@ -200,6 +207,7 @@ impl std::fmt::Display for ElementId {
 }
 
 impl ElementId {
+    /// Convertt the ElementId to a `u64`.
     pub fn as_u64(self) -> u64 {
         self.0 as u64
     }
@@ -211,18 +219,26 @@ fn empty_cell() -> Cell<Option<ElementId>> {
 
 /// A placeholder node only generated when Fragments don't have any children.
 pub struct VPlaceholder {
+    /// The [`ElementId`] of the placeholder.
     pub id: Cell<Option<ElementId>>,
 }
 
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {
-    pub text: &'src str,
+    /// The [`ElementId`] of the VText.
     pub id: Cell<Option<ElementId>>,
+
+    /// The text of the VText.
+    pub text: &'src str,
+
+    /// An indiciation if this VText can be ignored during diffing
+    /// Is usually only when there are no strings to be formatted (so the text is &'static str)
     pub is_static: bool,
 }
 
 /// A list of VNodes with no single root.
 pub struct VFragment<'src> {
+    /// The key of the fragment to be used during keyed diffing.
     pub key: Option<&'src str>,
 
     /// Fragments can never have zero children. Enforced by NodeFactory.
@@ -233,13 +249,34 @@ pub struct VFragment<'src> {
 
 /// An element like a "div" with children, listeners, and attributes.
 pub struct VElement<'a> {
-    pub tag: &'static str,
-    pub namespace: Option<&'static str>,
-    pub key: Option<&'a str>,
+    /// The [`ElementId`] of the VText.
     pub id: Cell<Option<ElementId>>,
+
+    /// The key of the element to be used during keyed diffing.
+    pub key: Option<&'a str>,
+
+    /// The tag name of the element.
+    ///
+    /// IE "div"
+    pub tag: &'static str,
+
+    /// The namespace of the VElement
+    ///
+    /// IE "svg"
+    pub namespace: Option<&'static str>,
+
+    /// The parent of the Element (if any).
+    ///
+    /// Used when bubbling events
     pub parent: Cell<Option<ElementId>>,
+
+    /// The Listeners of the VElement.
     pub listeners: &'a [Listener<'a>],
+
+    /// The attributes of the VElement.
     pub attributes: &'a [Attribute<'a>],
+
+    /// The children of the VElement.
     pub children: &'a [VNode<'a>],
 }
 
@@ -275,12 +312,19 @@ impl Debug for VElement<'_> {
 /// };
 /// ```
 pub trait DioxusElement {
+    /// The tag name of the element.
     const TAG_NAME: &'static str;
+
+    /// The namespace of the element.
     const NAME_SPACE: Option<&'static str>;
+
+    /// The tag name of the element.
     #[inline]
     fn tag_name(&self) -> &'static str {
         Self::TAG_NAME
     }
+
+    /// The namespace of the element.
     #[inline]
     fn namespace(&self) -> Option<&'static str> {
         Self::NAME_SPACE
@@ -291,16 +335,25 @@ pub trait DioxusElement {
 /// `href="https://example.com"`.
 #[derive(Clone, Debug)]
 pub struct Attribute<'a> {
+    /// The name of the attribute.
     pub name: &'static str,
 
+    /// The value of the attribute.
     pub value: &'a str,
 
+    /// An indication if this attribute can be ignored during diffing
+    ///
+    /// Usually only when there are no strings to be formatted (so the value is &'static str)
     pub is_static: bool,
 
+    /// An indication of we should always try and set the attribute.
+    /// Used in controlled components to ensure changes are propagated.
     pub is_volatile: bool,
 
-    // Doesn't exist in the html spec.
-    // Used in Dioxus to denote "style" tags.
+    /// The namespace of the attribute.
+    ///
+    /// Doesn't exist in the html spec.
+    /// Used in Dioxus to denote "style" tags and other attribute groups.
     pub namespace: Option<&'static str>,
 }
 
@@ -353,6 +406,8 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 ///
 /// ```
 pub struct EventHandler<'bump, T = ()> {
+    /// The (optional) callback that the user specified
+    /// Uses a `RefCell` to allow for interior mutability, and FnMut closures.
     pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
@@ -381,12 +436,23 @@ impl<T> EventHandler<'_, T> {
 /// Virtual Components for custom user-defined components
 /// Only supports the functional syntax
 pub struct VComponent<'src> {
+    /// The key of the component to be used during keyed diffing.
     pub key: Option<&'src str>,
-    pub originator: ScopeId,
+
+    /// The ID of the component.
+    /// Will not be assigned until after the component has been initialized.
     pub scope: Cell<Option<ScopeId>>,
+
+    /// An indication if the component is static (can be memozied)
     pub can_memoize: bool,
+
+    /// The function pointer to the component's render function.
     pub user_fc: ComponentPtr,
+
+    /// The actual name of the component.
     pub fn_name: &'static str,
+
+    /// The props of the component.
     pub props: RefCell<Option<Box<dyn AnyProps + 'src>>>,
 }
 
@@ -434,6 +500,7 @@ pub struct NodeFactory<'a> {
 }
 
 impl<'a> NodeFactory<'a> {
+    /// Create a new [`NodeFactory`] from a [`Scope`] or [`ScopeState`]
     pub fn new(scope: &'a ScopeState) -> NodeFactory<'a> {
         NodeFactory {
             scope,
@@ -441,6 +508,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Get the custom allocator for this component
     #[inline]
     pub fn bump(&self) -> &'a bumpalo::Bump {
         self.bump
@@ -482,6 +550,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
+    /// Create a new [`VNode::VElement`]
     pub fn element(
         &self,
         el: impl DioxusElement,
@@ -500,6 +569,9 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
+    /// Create a new [`VNode::VElement`] without the trait bound
+    ///
+    /// IE pass in "div" instead of `div`
     pub fn raw_element(
         &self,
         tag_name: &'static str,
@@ -529,6 +601,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
+    /// Create a new [`Attribute`]
     pub fn attr(
         &self,
         name: &'static str,
@@ -546,6 +619,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Create a new [`VNode::VComponent`]
     pub fn component<P>(
         &self,
         component: fn(Scope<'a, P>) -> Element,
@@ -561,11 +635,8 @@ impl<'a> NodeFactory<'a> {
             scope: Default::default(),
             can_memoize: P::IS_STATIC,
             user_fc: component as ComponentPtr,
-            originator: self.scope.scope_id(),
             fn_name,
             props: RefCell::new(Some(Box::new(VComponentProps {
-                // local_props: RefCell::new(Some(props)),
-                // heap_props: RefCell::new(None),
                 props,
                 memo: P::memoize, // smuggle the memoization function across borders
 
@@ -586,6 +657,7 @@ impl<'a> NodeFactory<'a> {
         VNode::Component(vcomp)
     }
 
+    /// Create a new [`Listener`]
     pub fn listener(self, event: &'static str, callback: InternalHandler<'a>) -> Listener<'a> {
         Listener {
             event,
@@ -594,6 +666,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Create a new [`VNode::VFragment`] from a root of the rsx! call
     pub fn fragment_root<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
@@ -614,6 +687,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Create a new [`VNode::VFragment`] from any iterator
     pub fn fragment_from_iter<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
@@ -653,8 +727,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    // this isn't quite feasible yet
-    // I think we need some form of interior mutability or state on nodefactory that stores which subtree was created
+    /// Create a new [`VNode`] from any iterator of children
     pub fn create_children(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a>>,
@@ -679,6 +752,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    /// Create a new [`EventHandler`] from an [`FnMut`]
     pub fn event_handler<T>(self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
         let handler: &mut dyn FnMut(T) = self.bump.alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
@@ -709,6 +783,7 @@ impl Debug for NodeFactory<'_> {
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
 pub trait IntoVNode<'a> {
+    /// Convert this into a [`VNode`], using the [`NodeFactory`] as a source of allocation
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 

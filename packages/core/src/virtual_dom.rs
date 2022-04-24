@@ -114,15 +114,18 @@ pub struct VirtualDom {
     ),
 }
 
+/// The type of message that can be sent to the scheduler.
+///
+/// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
 pub enum SchedulerMsg {
-    // events from the host
+    /// Events from the Renderer
     Event(UserEvent),
 
-    // setstate
+    /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
-    // an async task pushed from an event handler (or just spawned)
+    /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
 
@@ -388,6 +391,9 @@ impl VirtualDom {
         }
     }
 
+    /// Handle an individual message for the scheduler.
+    ///
+    /// This will either call an event listener or mark a component as dirty.
     pub fn process_message(&mut self, msg: SchedulerMsg) {
         match msg {
             SchedulerMsg::NewTask(_id) => {
@@ -469,7 +475,7 @@ impl VirtualDom {
                 h1.cmp(&h2).reverse()
             });
 
-            log::debug!("dirty_scopes: {:?}", self.dirty_scopes);
+            log::trace!("dirty_scopes: {:?}", self.dirty_scopes);
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 if !ran_scopes.contains(&scopeid) {
@@ -481,12 +487,15 @@ impl VirtualDom {
 
                     let DiffState { mutations, .. } = diff_state;
 
-                    log::debug!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
+                    log::trace!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
+
                     for scope in &mutations.dirty_scopes {
                         self.dirty_scopes.remove(scope);
                     }
 
-                    committed_mutations.push(mutations);
+                    if !mutations.edits.is_empty() {
+                        committed_mutations.push(mutations);
+                    }
 
                     // todo: pause the diff machine
                     // if diff_state.work(&mut deadline) {

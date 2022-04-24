@@ -108,7 +108,7 @@ There are a few different approaches to choosing when to update your state. You 
 
 When responding to user-triggered events, we'll want to "listen" for an event on some element in our component.
 
-For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `on_click` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
+For example, let's say we provide a button to generate a new post. Whenever the user clicks the button, they get a new post. To achieve this functionality, we'll want to attach a function to the `onclick` method of `button`. Whenever the button is clicked, our function will run, and we'll get new Post data to work with.
 
 ```rust
 fn App(cx: Scope)-> Element {
@@ -116,7 +116,7 @@ fn App(cx: Scope)-> Element {
 
     cx.render(rsx!{
         button {
-            on_click: move |_| set_post(PostData::random())
+            onclick: move |_| set_post(PostData::random())
             "Generate a random post"
         }
         Post { props: &post }
@@ -128,10 +128,10 @@ We'll dive much deeper into event listeners later.
 
 ### Updating state asynchronously
 
-We can also update our state outside of event listeners with `futures` and `coroutines`. 
+We can also update our state outside of event listeners with `futures` and `coroutines`.
 
 - `Futures` are Rust's version of promises that can execute asynchronous work by an efficient polling system. We can submit new futures to Dioxus either through `push_future` which returns a `TaskId` or with `spawn`.
-- `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component. 
+- `Coroutines` are asynchronous blocks of our component that have the ability to cleanly interact with values, hooks, and other data in the component.
 
 Since coroutines and Futures stick around between renders, the data in them must be valid for the `'static` lifetime. We must explicitly declare which values our task will rely on to avoid the `stale props` problem common in React.
 
@@ -157,7 +157,7 @@ fn App(cx: Scope)-> Element {
 }
 ```
 
-Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps. We have an entire section dedicated to using `async` properly later in this book.
+Using asynchronous code can be difficult! This is just scratching the surface of what's possible. We have an entire chapter on using async properly in your Dioxus Apps.
 
 ### How do I tell Dioxus that my state changed?
 
@@ -173,9 +173,9 @@ With these building blocks, we can craft new hooks similar to `use_state` that l
 
 In general, Dioxus should be plenty fast for most use cases. However, there are some rules you should consider following to ensure your apps are quick.
 
-- 1) **Don't call set_state _while rendering_**. This will cause Dioxus to unnecessarily re-check the component for updates or enter an infinite loop.
-- 2) **Break your state apart into smaller sections.** Hooks are explicitly designed to "unshackle" your state from the typical model-view-controller paradigm, making it easy to reuse useful bits of code with a single function.
-- 3) **Move local state down**. Dioxus will need to re-check child components of your app if the root component is constantly being updated. You'll get best results if rapidly-changing state does not cause major re-renders.
+1) **Don't call set_state _while rendering_**. This will cause Dioxus to unnecessarily re-check the component for updates or enter an infinite loop.
+2) **Break your state apart into smaller sections.** Hooks are explicitly designed to "unshackle" your state from the typical model-view-controller paradigm, making it easy to reuse useful bits of code with a single function.
+3) **Move local state down**. Dioxus will need to re-check child components of your app if the root component is constantly being updated. You'll get best results if rapidly-changing state does not cause major re-renders.
 
 <!-- todo: link when the section exists
 Don't worry - Dioxus is fast. But, if your app needs *extreme performance*, then take a look at the `Performance Tuning` in the `Advanced Guides` book.

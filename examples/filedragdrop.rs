@@ -12,7 +12,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     cx.render(rsx!(
         div {
-            h1 { "drag an file here" }
+            h1 { "drag a file here and check your console" }
         }
     ))
 }

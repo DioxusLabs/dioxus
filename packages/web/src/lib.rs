@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 //! Dioxus WebSys
 //!
 //! ## Overview
@@ -55,6 +57,7 @@
 use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
+pub use crate::util::use_eval;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
@@ -66,6 +69,7 @@ mod cfg;
 mod dom;
 mod rehydrate;
 mod ric_raf;
+mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
 ///
@@ -211,7 +215,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let work_loop = ric_raf::RafLoop::new();
+    let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");

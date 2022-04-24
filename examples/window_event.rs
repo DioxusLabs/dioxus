@@ -13,9 +13,9 @@ fn app(cx: Scope) -> Element {
     // window.set_fullscreen(true);
     // window.set_resizable(false);
 
-    let (fullscreen, set_fullscreen) = use_state(&cx, || false);
-    let (always_on_top, set_always_on_top) = use_state(&cx, || false);
-    let (decorations, set_decorations) = use_state(&cx, || false);
+    let fullscreen = use_state(&cx, || false);
+    let always_on_top = use_state(&cx, || false);
+    let decorations = use_state(&cx, || false);
 
     cx.render(rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
@@ -39,10 +39,9 @@ fn app(cx: Scope) -> Element {
                     onmousedown: |evt| evt.cancel_bubble(),
                     onclick: move |_| {
 
-                        window.set_fullscreen(!fullscreen);
-                        window.set_resizable(*fullscreen);
-
-                        set_fullscreen(!fullscreen);
+                        window.set_fullscreen(!**fullscreen);
+                        window.set_resizable(**fullscreen);
+                        fullscreen.modify(|f| !*f);
                     },
                     "Fullscreen"
                 }
@@ -65,7 +64,7 @@ fn app(cx: Scope) -> Element {
                         onmousedown: |evt| evt.cancel_bubble(),
                         onclick: move |_| {
                             window.set_always_on_top(!always_on_top);
-                            set_always_on_top(!always_on_top);
+                            always_on_top.set(!always_on_top);
                         },
                         "Always On Top"
                     }
@@ -76,7 +75,7 @@ fn app(cx: Scope) -> Element {
                         onmousedown: |evt| evt.cancel_bubble(),
                         onclick: move |_| {
                             window.set_decorations(!decorations);
-                            set_decorations(!decorations);
+                            decorations.set(!decorations);
                         },
                         "Set Decorations"
                     }

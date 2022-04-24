@@ -11,12 +11,11 @@ use syn::{
 // Parse the VNode::Element type
 // =======================================
 pub struct Element {
-    name: Ident,
-    key: Option<LitStr>,
-    attributes: Vec<ElementAttrNamed>,
-    listeners: Vec<ElementAttrNamed>,
-    children: Vec<BodyNode>,
-    _is_static: bool,
+    pub name: Ident,
+    pub key: Option<LitStr>,
+    pub attributes: Vec<ElementAttrNamed>,
+    pub children: Vec<BodyNode>,
+    pub _is_static: bool,
 }
 
 impl Parse for Element {
@@ -28,7 +27,6 @@ impl Parse for Element {
         syn::braced!(content in stream);
 
         let mut attributes: Vec<ElementAttrNamed> = vec![];
-        let mut listeners: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
         let mut key = None;
         let mut _el_ref = None;
@@ -54,6 +52,7 @@ impl Parse for Element {
                     });
                 } else {
                     let value = content.parse::<Expr>()?;
+
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrExpression { name, value },
@@ -64,12 +63,8 @@ impl Parse for Element {
                     break;
                 }
 
-                // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
-                    proc_macro_error::emit_error!(
-                        ident,
-                        "This attribute is missing a trailing comma"
-                    )
+                    missing_trailing_comma!(ident);
                 }
                 continue;
             }
@@ -82,7 +77,7 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 if name_str.starts_with("on") {
-                    listeners.push(ElementAttrNamed {
+                    attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::EventTokens {
                             name,
@@ -127,10 +122,7 @@ impl Parse for Element {
 
                 // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
-                    proc_macro_error::emit_error!(
-                        ident,
-                        "This attribute is missing a trailing comma"
-                    )
+                    missing_trailing_comma!(ident);
                 }
                 continue;
             }
@@ -140,33 +132,11 @@ impl Parse for Element {
 
         while !content.is_empty() {
             if (content.peek(LitStr) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
-                let ident = content.parse::<LitStr>().unwrap();
-                let name = ident.value();
-                proc_macro_error::emit_error!(
-                    ident, "This attribute `{}` is in the wrong place.", name;
-                    help =
-"All attribute fields must be placed above children elements.
-
-                div {
-                   attr: \"...\",  <---- attribute is above children
-                   div { }       <---- children are below attributes
-                }";
-                )
+                attr_after_element!(content.span());
             }
 
             if (content.peek(Ident) && content.peek2(Token![:])) && !content.peek3(Token![:]) {
-                let ident = content.parse::<Ident>().unwrap();
-                let name = ident.to_string();
-                proc_macro_error::emit_error!(
-                    ident, "This attribute `{}` is in the wrong place.", name;
-                    help =
-"All attribute fields must be placed above children elements.
-
-                div {
-                   attr: \"...\",  <---- attribute is above children
-                   div { }       <---- children are below attributes
-                }";
-                )
+                attr_after_element!(content.span());
             }
 
             children.push(content.parse::<BodyNode>()?);
@@ -182,7 +152,6 @@ impl Parse for Element {
             name: el_name,
             attributes,
             children,
-            listeners,
             _is_static: false,
         })
     }
@@ -193,13 +162,20 @@ impl ToTokens for Element {
         let name = &self.name;
         let children = &self.children;
 
-        let listeners = &self.listeners;
-        let attr = &self.attributes;
-
         let key = match &self.key {
             Some(ty) => quote! { Some(format_args_f!(#ty)) },
             None => quote! { None },
         };
+
+        let listeners = self
+            .attributes
+            .iter()
+            .filter(|f| matches!(f.attr, ElementAttr::EventTokens { .. }));
+
+        let attr = self
+            .attributes
+            .iter()
+            .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
 
         tokens.append_all(quote! {
             __cx.element(
@@ -213,29 +189,28 @@ impl ToTokens for Element {
     }
 }
 
-enum ElementAttr {
-    // attribute: "valuee {}"
+pub enum ElementAttr {
+    /// attribute: "valuee {}"
     AttrText { name: Ident, value: LitStr },
 
-    // attribute: true,
+    /// attribute: true,
     AttrExpression { name: Ident, value: Expr },
 
-    // "attribute": "value {}"
+    /// "attribute": "value {}"
     CustomAttrText { name: LitStr, value: LitStr },
 
-    // "attribute": true,
+    /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
 
-    // // onclick: move |_| {}
+    // /// onclick: move |_| {}
     // EventClosure { name: Ident, closure: ExprClosure },
-
-    // onclick: {}
+    /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
 }
 
-struct ElementAttrNamed {
-    el_name: Ident,
-    attr: ElementAttr,
+pub struct ElementAttrNamed {
+    pub el_name: Ident,
+    pub attr: ElementAttr,
 }
 
 impl ToTokens for ElementAttrNamed {

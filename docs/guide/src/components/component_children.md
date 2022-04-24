@@ -1,6 +1,6 @@
 # Passing children and attributes
 
-Often times, you'll want to wrap some important functionality *around* your state, not directly nested *inside* another component. In these cases, you'll want to pass elements and attributes into a component and let the component place them appropriately.
+Oftentimes, you'll want to wrap some important functionality *around* your state, not directly nested *inside* another component. In these cases, you'll want to pass elements and attributes into a component and let the component place them appropriately.
 
 In this chapter, you'll learn about:
 - Passing elements into components
@@ -30,7 +30,7 @@ struct ClickableProps<'a> {
     title: &'a str
 }
 
-fn Clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     cx.render(rsx!(
         a {
             href: "{cx.props.href}"
@@ -64,7 +64,7 @@ struct ClickableProps<'a> {
     body: Element<'a>
 }
 
-fn Clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     cx.render(rsx!(
         a {
             href: "{cx.props.href}",
@@ -98,7 +98,7 @@ struct ClickableProps<'a> {
     children: Element<'a>
 }
 
-fn Clickable(cx: Scope<ClickableProps>) -> Element {
+fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     cx.render(rsx!(
         a {
             href: "{cx.props.href}",
@@ -125,7 +125,7 @@ While technically allowed, it's an antipattern to pass children more than once i
 However, because the `Element` is transparently a `VNode`, we can actually match on it to extract the nodes themselves, in case we are expecting a specific format:
 
 ```rust
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     match cx.props.children {
         Some(VNode::Text(text)) => {
             // ...
@@ -136,6 +136,8 @@ fn clickable(cx: Scope<ClickableProps>) -> Element {
     }
 }
 ```
+
+Passing nodes through props means that they are immutable. If you find yourself needing to mutate nodes passed through props, consider creating a new node in its place that takes on its attributes, children, and listeners.
 
 <!-- ## Passing attributes
 
@@ -160,7 +162,7 @@ struct ClickableProps<'a> {
     attributes: Attributes<'a>
 }
 
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn clickable(cx: Scope<ClickableProps<'a>>) -> Element {
     cx.render(rsx!(
         a {
             ..cx.props.attributes,
@@ -184,7 +186,7 @@ struct ClickableProps<'a> {
     onclick: EventHandler<'a, MouseEvent>
 }
 
-fn clickable(cx: Scope<ClickableProps>) -> Element {
+fn clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     cx.render(rsx!(
         a {
             onclick: move |evt| cx.props.onclick.call(evt)
@@ -214,4 +216,3 @@ In this chapter, we learned:
 - How the `attributes` field works on component properties
 - How to convert `listeners` into `EventHandlers` for components
 - How to extend any node with custom attributes and children
-

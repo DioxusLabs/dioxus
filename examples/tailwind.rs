@@ -11,12 +11,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus::desktop::launch_cfg(app, |c| {
+        c.with_custom_head("<script src=\"https://cdn.tailwindcss.com\"></script>".to_string())
+    });
 }
 
 pub fn app(cx: Scope) -> Element {
     cx.render(rsx!(
-        link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }
         div {
             header { class: "text-gray-400 bg-gray-900 body-font",
                 div { class: "container mx-auto flex flex-wrap p-5 flex-col md:flex-row items-center",

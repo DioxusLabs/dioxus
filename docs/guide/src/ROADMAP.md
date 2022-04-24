@@ -62,10 +62,12 @@ Generally, here's the status of each platform:
 
 
 ## Roadmap
+These Features are planned for the future of Dioxus:
+
 ---
 
 
-Core:
+### Core
 - [x] Release of Dioxus Core
 - [x] Upgrade documentation to include more theory and be more comprehensive
 - [ ] Support for HTML-side templates for lightning-fast dom manipulation
@@ -73,18 +75,18 @@ Core:
 - [ ] Support for ThreadSafe (Send + Sync)
 - [ ] Support for Portals
 
-SSR
+### SSR
 - [x] SSR Support + Hydration
 - [ ] Integrated suspense support for SSR
 
-Desktop
+### Desktop
 - [ ] Declarative window management
 - [ ] Templates for building/bundling
 - [ ] Fully native renderer
 - [ ] Access to Canvas/WebGL context natively
 
-Mobile
-- [ ] Mobile standard library 
+### Mobile
+- [ ] Mobile standard library
   - [ ] GPS
   - [ ] Camera
   - [ ] filesystem
@@ -93,22 +95,23 @@ Mobile
   - [ ] Bluetooth
   - [ ] Notifications
   - [ ] Clipboard
-  - [ ] 
+- [ ] Animations
+- [ ] Native Renderer
 
-Bundling (CLI)
-- [x] translation from HTML into RSX
-- [ ] dev server
-- [ ] live reload
-- [ ] translation from JSX into RSX
-- [ ] hot module replacement
-- [ ] code splitting
-- [ ] asset macros
-- [ ] css pipeline
-- [ ] image pipeline
+### Bundling (CLI)
+- [x] Translation from HTML into RSX
+- [x] Dev server
+- [x] Live reload
+- [x] Translation from JSX into RSX
+- [ ] Hot module replacement
+- [ ] Code splitting
+- [ ] Asset macros
+- [ ] Css pipeline
+- [ ] Image pipeline
 
-Essential hooks
-- [ ] Router
-- [ ] Global state management
+### Essential hooks
+- [x] Router
+- [x] Global state management
 - [ ] Resize observer
 
 

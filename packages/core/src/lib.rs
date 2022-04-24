@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
 
 pub(crate) mod diff;
 pub(crate) mod events;
@@ -76,10 +77,13 @@ pub use crate::innerlude::{
     VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
+/// The purpose of this module is to alleviate imports of many common types
+///
+/// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
-        LazyNodes, NodeFactory, Properties, Scope, ScopeState, VNode, VirtualDom,
+        LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode, VirtualDom,
     };
 }
 
@@ -97,4 +101,27 @@ pub(crate) mod unsafe_utils {
     pub(crate) unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
         std::mem::transmute(node)
     }
+}
+
+#[macro_export]
+/// A helper macro for using hooks in async environements.
+///
+/// # Usage
+///
+///
+/// ```
+/// let (data) = use_ref(&cx, || {});
+///
+/// let handle_thing = move |_| {
+///     to_owned![data]
+///     cx.spawn(async move {
+///         // do stuff
+///     });
+/// }
+/// ```
+macro_rules! to_owned {
+    ($($es:ident),+) => {$(
+        #[allow(unused_mut)]
+        let mut $es = $es.to_owned();
+    )*}
 }

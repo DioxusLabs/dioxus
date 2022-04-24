@@ -1,29 +1,36 @@
 [package]
 name = "dioxus"
-version = "0.1.8"
+version = "0.2.3"
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
+rust-version = "1.56.0"
 
 [dependencies]
-dioxus-core = { path = "./packages/core", version = "^0.1.9" }
-dioxus-html = { path = "./packages/html", version = "^0.1.6", optional = true }
-dioxus-core-macro = { path = "./packages/core-macro", version = "^0.1.7", optional = true }
-dioxus-hooks = { path = "./packages/hooks", version = "^0.1.7", optional = true }
+dioxus-core = { path = "./packages/core", version = "^0.2.0" }
+dioxus-html = { path = "./packages/html", version = "^0.2.0", optional = true }
+dioxus-core-macro = { path = "./packages/core-macro", version = "^0.2.0", optional = true }
+dioxus-hooks = { path = "./packages/hooks", version = "^0.2.0", optional = true }
+fermi = { path = "./packages/fermi", version = "^0.2.0", optional = true }
 
-dioxus-web = { path = "./packages/web", version = "^0.0.5", optional = true }
-dioxus-desktop = { path = "./packages/desktop", version = "^0.1.6", optional = true }
-dioxus-ssr = { path = "./packages/ssr", version = "^0.1.3", optional = true }
+dioxus-web = { path = "./packages/web", version = "^0.2.0", optional = true }
+dioxus-desktop = { path = "./packages/desktop", version = "^0.2.2", optional = true }
+dioxus-ssr = { path = "./packages/ssr", version = "^0.2.0", optional = true }
 
-dioxus-router = { path = "./packages/router", version = "^0.1.1", optional = true }
-dioxus-mobile = { path = "./packages/mobile", version = "^0.0.3", optional = true }
-dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.0.0", optional = true }
-# dioxus-liveview = { path = "./packages/liveview", optional = true }
+dioxus-router = { path = "./packages/router", version = "^0.2.1", optional = true }
+dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.2.0", optional = true }
+dioxus-tui = { path = "./packages/tui", version = "^0.2.0", optional = true }
+
+dioxus-liveview = { path = "./packages/liveview", optional = true }
+
+# dioxus-mobile = { path = "./packages/mobile", version = "^0.2.0", optional = true }
+# dioxus-rsx = { path = "./packages/rsx", optional = true }
+# macro = ["dioxus-core-macro", "dioxus-rsx"]
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -32,15 +39,12 @@ macro = ["dioxus-core-macro"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
-web = ["dioxus-web"]
+web = ["dioxus-web", "dioxus-router/web"]
 desktop = ["dioxus-desktop"]
+ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
-
-# "dioxus-router/web"
-# "dioxus-router/desktop"
-# desktop = ["dioxus-desktop", "dioxus-router/desktop"]
-# mobile = ["dioxus-mobile"]
-# liveview = ["dioxus-liveview"]
+tui = ["dioxus-tui"]
+liveview = ["dioxus-liveview"]
 
 
 [workspace]
@@ -54,18 +58,37 @@ members = [
     "packages/desktop",
     "packages/mobile",
     "packages/interpreter",
+    "packages/fermi",
+    "packages/tui",
+    "packages/liveview",
 ]
 
 [dev-dependencies]
-futures-util = "0.3.17"
+futures-util = "0.3.21"
 log = "0.4.14"
 num-format = "0.4.0"
 separator = "0.4.1"
-serde = { version = "1.0.131", features = ["derive"] }
+serde = { version = "1.0.136", features = ["derive"] }
 im-rc = "15.0.0"
-anyhow = "1.0.51"
-serde_json = "1.0.73"
+anyhow = "1.0.53"
+serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
-tokio = { version = "1.14.0", features = ["full"] }
-reqwest = { version = "0.11.8", features = ["json"] }
-dioxus = { path = ".", features = ["desktop", "ssr", "router"] }
+tokio = { version = "1.16.1", features = ["full"] }
+reqwest = { version = "0.11.9", features = ["json"] }
+dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi", "tui"] }
+fern = { version = "0.6.0", features = ["colored"] }
+criterion = "0.3.5"
+thiserror = "1.0.30"
+env_logger = "0.9.0"
+
+[[bench]]
+name = "create"
+harness = false
+
+[[bench]]
+name = "jsframework"
+harness = false
+
+[[bench]]
+name = "tui_update"
+harness = false

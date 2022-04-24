@@ -193,6 +193,9 @@ pub mod on {
             /// ondoubleclick
             ondoubleclick
 
+            /// ondoubleclick
+            ondblclick
+
             /// ondrag
             ondrag
 
@@ -608,7 +611,7 @@ pub mod on {
     feature = "serialize",
     derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr)
 )]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
 pub enum KeyCode {
     // That key has no keycode, = 0

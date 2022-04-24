@@ -1,6 +1,6 @@
-# Thinking in React
+# Thinking in Reactively
 
-We've finally reached the point in our tutorial where we can talk about the theory of Reactive interfaces. We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
+We've finally reached the point in our tutorial where we can talk about the theory of Reactivity. We've talked about defining a declarative view, but not about the aspects that make our code *reactive*.
 
 Understanding the theory of reactive programming is essential to making sense of Dioxus and writing effective, performant UIs.
 
@@ -15,7 +15,7 @@ This section is a bit long, but worth the read. We recommend coffee, tea, and/or
 
 ## Reactive Programming
 
-Dioxus is one the very few Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm - much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
+Dioxus is one of a handful of Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm - much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
 
 Reactive programming is a programming model concerned with deriving computations from asynchronous data flow. Most reactive programs are comprised of datasources, intermediate computations, and a final result.
 
@@ -51,7 +51,7 @@ fn compute_graph(constant: i32, seconds: i32) -> bool {
 
 ## How is Dioxus Reactive?
 
-The Dioxus VirtualDom provides us a framework for reactive programming. When we build apps with dioxus, we need to provide our own datasources. This can be either initial props or some values fetched from the network. We then pass this data through our app into components through properties. 
+The Dioxus VirtualDom provides us a framework for reactive programming. When we build apps with dioxus, we need to provide our own datasources. This can be either initial props or some values fetched from the network. We then pass this data through our app into components through properties.
 
 If we represented the reactive graph presented above in Dioxus, it would look very similar:
 
@@ -61,8 +61,8 @@ fn RenderGraph(cx: Scope) -> Element {
     let seconds = use_datasource(SECONDS);
     let constant = use_state(&cx, || 1);
 
-    cx.render(rsx!( 
-        RenderG { seconds: seconds } 
+    cx.render(rsx!(
+        RenderG { seconds: seconds }
         RenderT { seconds: seconds, constant: constant }
     ))
 }
@@ -108,8 +108,8 @@ For local state in hooks, Dioxus gives us the `use_hook` method which returns an
 fn app(cx: Scope) -> Element {
     let mut count = cx.use_hook(|_| 0);
     cx.render(rsx!{
-        button { 
-            onclick: move |_| *count += 1, 
+        button {
+            onclick: move |_| *count += 1,
             "Count: {count}"
         }
     })
@@ -119,11 +119,11 @@ fn app(cx: Scope) -> Element {
 However, when this value is written to, the component does not know to be reevaluated. We must explicitly tell Dioxus that this component is "dirty" and needs to be re-rendered. This is done through the `cx.needs_update` method:
 
 ```rust
-button { 
+button {
     onclick: move |_| {
         *count += 1;
         cx.needs_update();
-    }, 
+    },
     "Count: {count}"
 }
 ```
@@ -144,7 +144,7 @@ With the `provide_context` and `consume_context` methods on `Scope`, we can shar
 
 To make app-global state easier to reason about, Dioxus makes all values provided through `provide_context` immutable. This means any library built on top of `provide_context` needs to use interior mutability to modify shared global state.
 
-In these cases, App-Global state needs to manually track which components need to be re-generated. 
+In these cases, App-Global state needs to manually track which components need to be re-generated.
 
 To regenerate *any* component in your app, you can get a handle to the Dioxus' internal scheduler through `schedule_update_any`:
 
@@ -165,7 +165,7 @@ The tree of UI that dioxus creates will roughly look like the tree of components
 
 ![Tree of UI](../images/component_tree.png)
 
-But what happens when we call `needs_update` after modifying some important state? Well, if Dioxus called our component's function again, then we would produce new, different nodes. In fact, this is exactly what Dioxus does! 
+But what happens when we call `needs_update` after modifying some important state? Well, if Dioxus called our component's function again, then we would produce new, different nodes. In fact, this is exactly what Dioxus does!
 
 At this point, we have some old nodes and some new nodes. Again, we call this "rendering" because Dioxus had to create new nodes because of our explicit actions. Any time new nodes get created, our VirtualDom is being "rendered."
 
@@ -216,7 +216,7 @@ However, for components that borrow data, it doesn't make sense to implement Par
 You can technically override this behavior by implementing the `Props` trait manually, though it's unsafe and easy to mess up:
 
 ```rust
-impl Properties for CustomProps {
+unsafe impl Properties for CustomProps {
     fn memoize(&self, other &Self) -> bool {
         self != other
     }
