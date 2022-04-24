@@ -21,7 +21,7 @@ jobs:
           mdbook-version: "0.4.10"
 
       - name: Build
-        run: cd docs && md build -d ../build
+        run: cd docs && mdbook build -d ../build
 
       - name: Deploy 🚀
         uses: JamesIves/github-pages-deploy-action@v4.2.3
