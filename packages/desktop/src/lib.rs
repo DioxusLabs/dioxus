@@ -125,8 +125,9 @@ pub fn launch_with_props<P: 'static + Send>(
                 let proxy = proxy.clone();
 
                 let file_handler = cfg.file_drop_handler.take();
-
+                let custom_head = cfg.custom_head.clone();
                 let resource_dir = cfg.resource_dir.clone();
+                let index_file = cfg.custom_index.clone();
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
@@ -164,7 +165,12 @@ pub fn launch_with_props<P: 'static + Send>(
                             });
                     })
                     .with_custom_protocol(String::from("dioxus"), move |r| {
-                        protocol::desktop_handler(r, resource_dir.clone())
+                        protocol::desktop_handler(
+                            r,
+                            resource_dir.clone(),
+                            custom_head.clone(),
+                            index_file.clone(),
+                        )
                     })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
@@ -183,12 +189,10 @@ pub fn launch_with_props<P: 'static + Send>(
                         r#"
                         if (document.addEventListener) {
                         document.addEventListener('contextmenu', function(e) {
-                            alert("You've tried to open context menu");
                             e.preventDefault();
                         }, false);
                         } else {
                         document.attachEvent('oncontextmenu', function() {
-                            alert("You've tried to open context menu");
                             window.event.returnValue = false;
                         });
                         }

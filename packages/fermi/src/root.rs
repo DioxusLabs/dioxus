@@ -39,8 +39,6 @@ impl AtomRoot {
     }
 
     pub fn register<V: 'static>(&self, f: impl Readable<V>, scope: ScopeId) -> Rc<V> {
-        log::trace!("registering atom {:?}", f.unique_id());
-
         let mut atoms = self.atoms.borrow_mut();
 
         // initialize the value if it's not already initialized
@@ -97,7 +95,22 @@ impl AtomRoot {
         }
     }
 
-    pub fn read<V>(&self, _f: impl Readable<V>) -> &V {
-        todo!()
+    pub fn read<V: 'static>(&self, f: impl Readable<V>) -> Rc<V> {
+        let mut atoms = self.atoms.borrow_mut();
+
+        // initialize the value if it's not already initialized
+        if let Some(slot) = atoms.get_mut(&f.unique_id()) {
+            slot.value.clone().downcast().unwrap()
+        } else {
+            let value = Rc::new(f.init());
+            atoms.insert(
+                f.unique_id(),
+                Slot {
+                    value: value.clone(),
+                    subscribers: HashSet::new(),
+                },
+            );
+            value
+        }
     }
 }

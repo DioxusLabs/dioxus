@@ -21,6 +21,8 @@ pub struct DesktopConfig {
     pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
+    pub(crate) custom_head: Option<String>,
+    pub(crate) custom_index: Option<String>,
 }
 
 pub(crate) type WryProtocol = (
@@ -42,6 +44,8 @@ impl DesktopConfig {
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
+            custom_head: None,
+            custom_index: None,
         }
     }
 
@@ -100,8 +104,28 @@ impl DesktopConfig {
         self
     }
 
+    /// Add a custom icon for this application
     pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
         self.window.window.window_icon = Some(icon);
+        self
+    }
+
+    /// Inject additional content into the document's HEAD.
+    ///
+    /// This is useful for loading CSS libraries, JS libraries, etc.
+    pub fn with_custom_head(&mut self, head: String) -> &mut Self {
+        self.custom_head = Some(head);
+        self
+    }
+
+    /// Use a custom index.html instead of the default Dioxus one.
+    ///
+    /// Make sure your index.html is valid HTML.
+    ///
+    /// Dioxus injects some loader code into the closing body tag. Your document
+    /// must include a body element!
+    pub fn with_custom_index(&mut self, index: String) -> &mut Self {
+        self.custom_index = Some(index);
         self
     }
 }

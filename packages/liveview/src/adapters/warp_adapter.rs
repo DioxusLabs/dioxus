@@ -6,6 +6,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 use warp::ws::{Message, WebSocket};
 
+#[cfg(feature = "warp")]
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app).await;
@@ -65,8 +66,10 @@ pub async fn connect(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Ele
             Either::Left((l, _)) => {
                 if let Some(Ok(msg)) = l {
                     if let Ok(Some(msg)) = msg.to_str().map(events::parse_ipc_message) {
-                        let user_event = events::trigger_from_serialized(msg.params);
-                        event_tx.send(user_event).unwrap();
+                        if msg.method == "user_event" {
+                            let user_event = events::trigger_from_serialized(msg.params);
+                            event_tx.send(user_event).unwrap();
+                        }
                     } else {
                         break;
                     }
