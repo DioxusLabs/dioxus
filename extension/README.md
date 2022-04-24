@@ -12,13 +12,3 @@ Converts a selection of html to valid rsx.
 ### Convert HTML to Dioxus Component
 
 Converts a selection of html to a valid Dioxus component with all SVGs factored out into their own module.
-
-## packaging
-
-```
-$ cd myExtension
-$ vsce package
-# myExtension.vsix generated
-$ vsce publish
-# <publisherID>.myExtension published to VS Code Marketplace
-```

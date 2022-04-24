@@ -48,6 +48,12 @@ async fn main() -> Result<()> {
                 log::error!("tool error: {}", e);
             }
         }
+
+        Commands::Autoformat(opts) => {
+            if let Err(e) = opts.autoformat() {
+                log::error!("format error: {}", e);
+            }
+        }
     }
 
     Ok(())

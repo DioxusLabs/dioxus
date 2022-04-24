@@ -1,3 +1,4 @@
+pub mod autoformat;
 pub mod build;
 pub mod cfg;
 pub mod clean;
@@ -45,17 +46,27 @@ pub struct Cli {
 pub enum Commands {
     /// Build the Rust WASM app and all of its assets.
     Build(build::Build),
+
     /// Translate some source file into Dioxus code.
     Translate(translate::Translate),
+
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
+
     /// Init a new project for Dioxus.
     Create(create::Create),
+
     /// Clean output artifacts.
     Clean(clean::Clean),
+
+    /// Format some rsx
+    #[clap(name = "fmt")]
+    Autoformat(autoformat::Autoformat),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
+
     /// Install  & Manage tools for Dioxus-cli.
     #[clap(subcommand)]
     Tool(tool::Tool),
