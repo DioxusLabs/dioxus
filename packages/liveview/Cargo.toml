@@ -35,7 +35,8 @@ axum = { version = "0.5.1", optional = true, features = ["ws"] }
 tower = { version = "0.4.12", optional = true }
 
 [dev-dependencies]
-dioxus-liveview = { path = "./", features = ["warp"] }
+tokio = { version = "1", features = ["full"] }
+dioxus = { path = "../../" }
 warp = "0.3"
 axum = { version = "0.5.1", features = ["ws"] }
 tower = "0.4.12"
