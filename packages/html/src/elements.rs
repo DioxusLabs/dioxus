@@ -429,6 +429,11 @@ builder_constructors! {
     mark {};
 
     /// Build a
+    /// [`<menu>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/menu)
+    /// element.
+    menu {};
+
+    /// Build a
     /// [`<q>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/q)
     /// element.
     q {

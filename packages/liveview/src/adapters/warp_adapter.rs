@@ -6,6 +6,7 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 use warp::ws::{Message, WebSocket};
 
+#[cfg(feature = "warp")]
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app).await;
