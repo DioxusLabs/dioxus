@@ -13,6 +13,10 @@ pub struct Translate {
     #[clap(short, long)]
     pub file: Option<String>,
 
+    /// Input file
+    #[clap(short, long)]
+    pub raw: Option<String>,
+
     /// Output file, stdout if not present
     #[clap(parse(from_os_str))]
     pub output: Option<PathBuf>,
@@ -24,14 +28,20 @@ impl Translate {
             component,
             output,
             file,
+            raw,
         } = self;
 
-        let contents = match file {
-            Some(input) => std::fs::read_to_string(&input).unwrap_or_else(|e| {
+        let contents = match (file, raw) {
+            (Some(input), None) => std::fs::read_to_string(&input).unwrap_or_else(|e| {
                 log::error!("Cloud not read input file: {}.", e);
                 exit(0);
             }),
-            None => {
+            (None, Some(raw)) => raw,
+            (Some(_), Some(_)) => {
+                log::error!("Only one of --file or --raw can be specified.");
+                exit(0);
+            }
+            (None, None) => {
                 if atty::is(atty::Stream::Stdin) {
                     log::error!("No input file, source, or stdin to translate from.");
                     exit(0);
@@ -67,7 +77,11 @@ impl Translate {
 }
 
 /// render without handling svgs or anything
-fn simple_render_child(f: &mut impl std::fmt::Write, child: &Node, il: u32) -> std::fmt::Result {
+pub fn simple_render_child(
+    f: &mut impl std::fmt::Write,
+    child: &Node,
+    il: u32,
+) -> std::fmt::Result {
     write_tabs(f, il)?;
     match child {
         Node::Text(t) => writeln!(f, "\"{}\"", t)?,

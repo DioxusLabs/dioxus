@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { spawn } from "child_process";
 
 export function activate(context: vscode.ExtensionContext) {
+
 	function registerCommand(cmd: string) {
 		function convert(cmd: string) {
 			const editor = vscode.window.activeTextEditor;// Get the active text editor
@@ -10,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
 				if (html.length > 0) {
 					let params = ["translate"];
 					if (cmd.includes("Component")) params.push("--component");
-					params.push("--source");
+					params.push("--raw");
 					params.push(html);
 					const child_proc = spawn("dioxus", params);
 					let result = '';
@@ -23,6 +24,8 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 			}
 		}
+
+
 		const handle = vscode.commands.registerCommand(cmd, () => convert(cmd));
 		context.subscriptions.push(handle);
 	}

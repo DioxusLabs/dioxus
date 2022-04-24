@@ -1,7 +1,7 @@
 {
     "name": "dioxusstudio",
-    "displayName": "dioxusStudio",
-    "description": "Toolkit for IDE support in Dioxus apps",
+    "displayName": "Dioxus",
+    "description": "Useful tools for working with Dioxus",
     "version": "0.0.1",
     "publisher": "jkelleyrtp",
     "private": true,
