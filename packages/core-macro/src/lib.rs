@@ -5,7 +5,9 @@ use syn::parse_macro_input;
 mod ifmt;
 mod inlineprops;
 mod props;
-mod rsx;
+use dioxus_rsx as rsx;
+
+// mod rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {

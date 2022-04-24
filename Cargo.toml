@@ -27,15 +27,12 @@ dioxus-interpreter-js = { path = "./packages/interpreter", version = "^0.2.0", o
 dioxus-tui = { path = "./packages/tui", version = "^0.2.0", optional = true }
 
 dioxus-liveview = { path = "./packages/liveview", optional = true }
-
-# dioxus-mobile = { path = "./packages/mobile", version = "^0.2.0", optional = true }
-# dioxus-rsx = { path = "./packages/rsx", optional = true }
-# macro = ["dioxus-core-macro", "dioxus-rsx"]
+dioxus-rsx = { path = "./packages/rsx", optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
 
-macro = ["dioxus-core-macro"]
+macro = ["dioxus-core-macro", "dioxus-rsx"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
@@ -61,6 +58,7 @@ members = [
     "packages/fermi",
     "packages/tui",
     "packages/liveview",
+    "packages/rsx",
 ]
 
 [dev-dependencies]
