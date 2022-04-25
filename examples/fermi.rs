@@ -47,7 +47,8 @@ fn ChildWithRef(cx: Scope) -> Element {
                     cx.spawn(async move {
                         names.write().push("asd".to_string());
                     })
-                }
+                },
+                "Add name"
             }
         }
     })

@@ -16,15 +16,35 @@ use std::{
 pub fn use_atom_ref<T: 'static>(cx: &ScopeState, atom: AtomRef<T>) -> &UseAtomRef<T> {
     let root = use_atom_root(cx);
 
-    cx.use_hook(|_| {
+    &cx.use_hook(|_| {
         root.initialize(atom);
-        UseAtomRef {
-            ptr: atom.unique_id(),
-            root: root.clone(),
-            scope_id: cx.scope_id(),
-            value: root.register(atom, cx.scope_id()),
-        }
+        (
+            UseAtomRef {
+                ptr: atom.unique_id(),
+                root: root.clone(),
+                scope_id: cx.scope_id(),
+                value: root.register(atom, cx.scope_id()),
+            },
+            AtomRefSubscription {
+                ptr: atom.unique_id(),
+                root: root.clone(),
+                scope_id: cx.scope_id(),
+            },
+        )
     })
+    .0
+}
+
+pub struct AtomRefSubscription {
+    ptr: AtomId,
+    root: Rc<AtomRoot>,
+    scope_id: ScopeId,
+}
+
+impl Drop for AtomRefSubscription {
+    fn drop(&mut self) {
+        self.root.unsubscribe(self.ptr, self.scope_id)
+    }
 }
 
 pub struct UseAtomRef<T> {
@@ -63,11 +83,5 @@ impl<T: 'static> UseAtomRef<T> {
     pub fn set(&self, new: T) {
         self.root.force_update(self.ptr);
         self.root.set(self.ptr, new);
-    }
-}
-
-impl<T> Drop for UseAtomRef<T> {
-    fn drop(&mut self) {
-        self.root.unsubscribe(self.ptr, self.scope_id)
     }
 }
