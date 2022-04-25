@@ -109,7 +109,7 @@ rsx!{
 
 "#;
 
-    let formatted = formmat_document(block);
+    let formatted = get_format_blocks(block);
 
     print!("{formatted:?}");
 }
@@ -127,7 +127,52 @@ rsx! {
 }
 "#;
 
-    let formatted = formmat_document(src);
+    let formatted = get_format_blocks(src);
 
     println!("{formatted:?}");
+}
+
+#[test]
+fn formats_valid_rust_src_with_indents() {
+    let mut src = r#"
+#[inline_props]
+fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) -> Element {
+    const ICON_SIZE: u32 = 36;
+
+    rsx! {
+        div {
+
+            h1 {"thing"}
+
+
+        }
+
+
+
+
+    }
+}
+"#
+    .to_string();
+
+    let formatted = get_format_blocks(&src);
+
+    let block = formatted.into_iter().next().unwrap();
+
+    // println!("{}", &src[block.start..block.end]);
+    // println!("{}", &src[block.start..block.end - 1]);
+
+    src.replace_range(
+        block.start - 1..block.end + 1,
+        &format!("{{ {}        }}", &block.formatted),
+        // &format!("{{ {}    }}", &block.formatted),
+    );
+
+    println!("{src}");
+
+    println!("\tthing");
+
+    // for block in formatted {
+    //     println!("{}", block.formatted);
+    // }
 }

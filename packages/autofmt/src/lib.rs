@@ -15,24 +15,24 @@ use triple_accel::{levenshtein_search, Match};
 mod prettyplease;
 
 #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Hash)]
-pub struct ForamttedBlock {
+pub struct FormattedBlock {
     pub formatted: String,
     pub start: usize,
     pub end: usize,
 }
 
 /*
-TODO: nested rsx! calls
+
 
 */
-pub fn formmat_document(contents: &str) -> Vec<ForamttedBlock> {
+pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
     let mut matches = levenshtein_search(b"rsx! {", contents.as_bytes()).peekable();
 
     let mut cur_match: Option<Match> = None;
 
     let mut formatted_blocks = Vec::new();
 
-    while let Some(item) = matches.next() {
+    for item in matches {
         let Match { start, end, k } = item;
 
         match cur_match {
@@ -54,10 +54,22 @@ pub fn formmat_document(contents: &str) -> Vec<ForamttedBlock> {
         if let Some(bracket_end) = find_bracket_end(remaining) {
             let sub_string = &contents[end..bracket_end + end - 1];
 
+            // with the edge brackets
+            // println!("{}", &contents[end - 1..bracket_end + end]);
+
             if let Some(new) = fmt_block(sub_string) {
                 if !new.is_empty() {
-                    formatted_blocks.push(ForamttedBlock {
-                        formatted: new,
+                    // if we have code to push, we want the code to end up on the right lines with the right indentation
+
+                    let mut output = String::new();
+                    writeln!(output).unwrap();
+
+                    for line in new.lines() {
+                        writeln!(output, "\t{}", line).ok();
+                    }
+
+                    formatted_blocks.push(FormattedBlock {
+                        formatted: output,
                         start: end,
                         end: end + bracket_end - 1,
                     });
