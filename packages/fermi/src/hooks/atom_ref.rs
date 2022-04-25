@@ -34,6 +34,17 @@ pub struct UseAtomRef<T> {
     scope_id: ScopeId,
 }
 
+impl<T> Clone for UseAtomRef<T> {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            value: self.value.clone(),
+            root: self.root.clone(),
+            scope_id: self.scope_id,
+        }
+    }
+}
+
 impl<T: 'static> UseAtomRef<T> {
     pub fn read(&self) -> Ref<T> {
         self.value.borrow()
