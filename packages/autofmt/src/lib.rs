@@ -32,27 +32,35 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
 
     let mut formatted_blocks = Vec::new();
 
+    let mut last_bracket_end = 0;
+
     for item in matches {
         let Match { start, end, k } = item;
 
-        match cur_match {
-            Some(ref this_match) => {
-                // abort nested matches - these get handled automatically
-                if start < this_match.end {
-                    continue;
-                } else {
-                    cur_match = Some(item);
-                }
-            }
-            None => {
-                cur_match = Some(item);
-            }
+        if start < last_bracket_end {
+            continue;
         }
+
+        // match cur_match {
+        //     Some(ref this_match) => {
+        //         // abort nested matches - these get handled automatically
+        //         if start < this_match.end {
+        //             continue;
+        //         } else {
+        //             cur_match = Some(item);
+        //         }
+        //     }
+        //     None => {
+        //         cur_match = Some(item);
+        //     }
+        // }
 
         let remaining = &contents[end - 1..];
 
         if let Some(bracket_end) = find_bracket_end(remaining) {
             let sub_string = &contents[end..bracket_end + end - 1];
+
+            last_bracket_end = bracket_end + end - 1;
 
             // with the edge brackets
             // println!("{}", &contents[end - 1..bracket_end + end]);
@@ -65,7 +73,7 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
                     writeln!(output).unwrap();
 
                     for line in new.lines() {
-                        writeln!(output, "\t{}", line).ok();
+                        writeln!(output, "        {}", line).ok();
                     }
 
                     formatted_blocks.push(FormattedBlock {
@@ -74,7 +82,11 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
                         end: end + bracket_end - 1,
                     });
                 }
+            } else {
+                panic!("failed to format block: {}", sub_string);
             }
+        } else {
+            panic!("failed to find end of block: {}", remaining);
         }
     }
 
@@ -105,58 +117,120 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
             } = el;
 
             write_tabs(buf, indent)?;
-            writeln!(buf, "{name} {{")?;
+            write!(buf, "{name} {{")?;
+
+            let total_attr_len = attributes
+                .iter()
+                .map(|attr| match &attr.attr {
+                    ElementAttr::AttrText { name, value } => value.value().len(),
+                    ElementAttr::AttrExpression { name, value } => 10,
+                    ElementAttr::CustomAttrText { name, value } => value.value().len(),
+                    ElementAttr::CustomAttrExpression { name, value } => 10,
+                    ElementAttr::EventTokens { name, tokens } => 1000000,
+                    ElementAttr::Meta(_) => todo!(),
+                })
+                .sum::<usize>();
+
+            let is_long_attr_list = total_attr_len > 80;
 
             if let Some(key) = key {
                 let key = key.value();
-                write_tabs(buf, indent + 1)?;
+                if is_long_attr_list {
+                    write_tabs(buf, indent + 1)?;
+                } else {
+                    write!(buf, " ")?;
+                }
                 write!(buf, "key: \"{key}\"")?;
+
                 if !attributes.is_empty() {
                     writeln!(buf, ",")?;
                 }
             }
 
-            for attr in attributes {
-                write_tabs(buf, indent + 1)?;
+            let mut attr_iter = attributes.iter().peekable();
+            while let Some(attr) = attr_iter.next() {
+                if is_long_attr_list {
+                    writeln!(buf)?;
+                    write_tabs(buf, indent + 1)?;
+                } else {
+                    write!(buf, " ")?;
+                }
+
                 match &attr.attr {
                     ElementAttr::AttrText { name, value } => {
-                        writeln!(buf, "{name}: \"{value}\",", value = value.value())?;
+                        write!(buf, "{name}: \"{value}\"", value = value.value())?;
                     }
                     ElementAttr::AttrExpression { name, value } => {
                         let out = prettyplease::unparse_expr(value);
-                        writeln!(buf, "{}: {},", name, out)?;
+                        write!(buf, "{}: {}", name, out)?;
                     }
 
-                    ElementAttr::CustomAttrText { name, value } => todo!(),
-                    ElementAttr::CustomAttrExpression { name, value } => todo!(),
+                    ElementAttr::CustomAttrText { name, value } => {
+                        write!(
+                            buf,
+                            "{name}: \"{value}\"",
+                            name = name.value(),
+                            value = value.value()
+                        )?;
+                    }
+
+                    ElementAttr::CustomAttrExpression { name, value } => {
+                        let out = prettyplease::unparse_expr(value);
+                        write!(buf, "{}: {}", name.value(), out)?;
+                    }
 
                     ElementAttr::EventTokens { name, tokens } => {
                         let out = prettyplease::unparse_expr(tokens);
 
                         let mut lines = out.split('\n').peekable();
                         let first = lines.next().unwrap();
-                        writeln!(buf, "{}: {}", name, first)?;
+                        write!(buf, "{}: {}", name, first)?;
 
                         while let Some(line) = lines.next() {
                             write_tabs(buf, indent + 1)?;
                             write!(buf, "{}", line)?;
-                            // writeln!(buf, "{}", line)?;
+                            // write!(buf, "{}", line)?;
                             if lines.peek().is_none() {
-                                writeln!(buf, ",")?;
-                            } else {
-                                writeln!(buf)?;
+                                write!(buf, "")?;
                             }
                         }
                     }
                     ElementAttr::Meta(_) => {}
                 }
+
+                if attr_iter.peek().is_some() || !children.is_empty() {
+                    write!(buf, ",")?;
+                }
             }
 
-            for child in children {
-                write_ident(buf, child, indent + 1)?;
+            if children.len() == 1 && children[0].is_litstr() && !is_long_attr_list {
+                if let BodyNode::Text(text) = &children[0] {
+                    let text_val = text.value();
+                    if total_attr_len + text_val.len() > 80 {
+                        writeln!(buf)?;
+                        write_tabs(buf, indent + 1)?;
+                        writeln!(buf, "\"{}\"", text.value())?;
+                        write_tabs(buf, indent)?;
+                    } else {
+                        write!(buf, " \"{}\" ", text.value())?;
+                    }
+                }
+            } else {
+                if is_long_attr_list || !children.is_empty() {
+                    writeln!(buf)?;
+                }
+
+                for child in children {
+                    write_ident(buf, child, indent + 1)?;
+                }
+
+                if is_long_attr_list || !children.is_empty() {
+                    write_tabs(buf, indent)?;
+                } else {
+                    write!(buf, " ")?;
+                }
             }
 
-            write_tabs(buf, indent)?;
             writeln!(buf, "}}")?;
         }
         BodyNode::Component(component) => {
@@ -167,10 +241,15 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
                 manual_props,
             } = component;
 
-            let name = name.to_token_stream().to_string();
+            let mut name = name.to_token_stream().to_string();
+            name.retain(|c| !c.is_whitespace());
 
             write_tabs(buf, indent)?;
-            writeln!(buf, "{name} {{")?;
+            write!(buf, "{name} {{")?;
+
+            if !body.is_empty() || !children.is_empty() {
+                writeln!(buf)?;
+            }
 
             for field in body {
                 write_tabs(buf, indent + 1)?;
@@ -216,7 +295,10 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
                 write_ident(buf, child, indent + 1)?;
             }
 
-            write_tabs(buf, indent)?;
+            if !body.is_empty() || !children.is_empty() {
+                write_tabs(buf, indent)?;
+            }
+
             writeln!(buf, "}}")?;
 
             //

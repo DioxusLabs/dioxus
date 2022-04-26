@@ -23,6 +23,15 @@ pub enum BodyNode {
     Meta(String),
 }
 
+impl BodyNode {
+    pub fn is_litstr(&self) -> bool {
+        match self {
+            BodyNode::Text(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl Parse for BodyNode {
     fn parse(stream: ParseStream) -> Result<Self> {
         if stream.peek(LitStr) {
