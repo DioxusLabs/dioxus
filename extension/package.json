@@ -20,7 +20,8 @@
     "activationEvents": [
         "onCommand:extension.htmlToDioxusRsx",
         "onCommand:extension.htmlToDioxusComponent",
-        "onCommand:extension.formatRsx"
+        "onCommand:extension.formatRsx",
+        "onCommand:extension.formatRsxDocument"
     ],
     "main": "./out/extension",
     "contributes": {
@@ -36,6 +37,10 @@
             {
                 "command": "extension.formatRsx",
                 "title": "Dioxus: Format RSX"
+            },
+            {
+                "command": "extension.formatRsxDocument",
+                "title": "Dioxus: Format RSX Document"
             }
         ]
     },
