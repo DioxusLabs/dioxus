@@ -6,20 +6,19 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 use warp::ws::{Message, WebSocket};
 
-#[cfg(feature = "warp")]
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app, ()).await;
     }
-    pub async fn upgrade_with_props<T>(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element, props: T) 
+    pub async fn upgrade_with_props<T>(&self, ws: warp::ws::WebSocket, app: fn(Scope<T>) -> Element, props: T) 
     where 
         T: Send + Sync + 'static 
     {
-        connect(ws, self.pool.clone(), app, props)
+        connect(ws, self.pool.clone(), app, props).await;
     }
 }
 
-pub async fn connect<T>(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Element, props: T) 
+pub async fn connect<T>(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope<T>) -> Element, props: T) 
 where 
     T: Send + Sync+  'static 
 {

@@ -9,7 +9,6 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 
-#[cfg(feature = "axum")]
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app, ()).await;
