@@ -76,7 +76,6 @@ impl<T: 'static> UseAtomRef<T> {
     }
 
     pub fn write_silent(&self) -> RefMut<T> {
-        self.root.force_update(self.ptr);
         self.value.borrow_mut()
     }
 
