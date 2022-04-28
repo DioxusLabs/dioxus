@@ -41,20 +41,6 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
             continue;
         }
 
-        // match cur_match {
-        //     Some(ref this_match) => {
-        //         // abort nested matches - these get handled automatically
-        //         if start < this_match.end {
-        //             continue;
-        //         } else {
-        //             cur_match = Some(item);
-        //         }
-        //     }
-        //     None => {
-        //         cur_match = Some(item);
-        //     }
-        // }
-
         let remaining = &contents[end - 1..];
 
         if let Some(bracket_end) = find_bracket_end(remaining) {
@@ -67,6 +53,14 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
 
             if let Some(new) = fmt_block(sub_string) {
                 if !new.is_empty() {
+                    println!("{}", &contents[end + 1..bracket_end + end - 1]);
+                    println!("{}", new);
+
+                    let stripped = &contents[end + 1..bracket_end + end - 1];
+                    if stripped == new {
+                        println!("no changes necessary");
+                    }
+
                     // if we have code to push, we want the code to end up on the right lines with the right indentation
 
                     let mut output = String::new();
@@ -94,18 +88,25 @@ pub fn get_format_blocks(contents: &str) -> Vec<FormattedBlock> {
 }
 
 pub fn fmt_block(block: &str) -> Option<String> {
+    let mut raw_lines = block.split('\n').collect::<Vec<_>>();
+
     let parsed: CallBody = syn::parse_str(block).ok()?;
 
     let mut buf = String::new();
 
     for node in parsed.roots.iter() {
-        write_ident(&mut buf, node, 0).ok()?;
+        write_ident(&mut buf, &raw_lines, node, 0).ok()?;
     }
 
     Some(buf)
 }
 
-pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Result {
+pub fn write_ident(
+    buf: &mut String,
+    lines: &[&str],
+    node: &BodyNode,
+    indent: usize,
+) -> fmt::Result {
     match node {
         BodyNode::Element(el) => {
             let Element {
@@ -168,7 +169,7 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
                     ElementAttr::CustomAttrText { name, value } => {
                         write!(
                             buf,
-                            "{name}: \"{value}\"",
+                            "\"{name}\": \"{value}\"",
                             name = name.value(),
                             value = value.value()
                         )?;
@@ -176,22 +177,32 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
 
                     ElementAttr::CustomAttrExpression { name, value } => {
                         let out = prettyplease::unparse_expr(value);
-                        write!(buf, "{}: {}", name.value(), out)?;
+                        write!(buf, "\"{}\": {}", name.value(), out)?;
                     }
 
                     ElementAttr::EventTokens { name, tokens } => {
                         let out = prettyplease::unparse_expr(tokens);
 
+                        dbg!(&out);
+
                         let mut lines = out.split('\n').peekable();
                         let first = lines.next().unwrap();
-                        write!(buf, "{}: {}", name, first)?;
 
-                        while let Some(line) = lines.next() {
-                            write_tabs(buf, indent + 1)?;
-                            write!(buf, "{}", line)?;
-                            // write!(buf, "{}", line)?;
-                            if lines.peek().is_none() {
-                                write!(buf, "")?;
+                        // a one-liner for whatever reason
+                        // Does not need a new line
+                        if lines.peek().is_none() {
+                            write!(buf, "{}: {}", name, first)?;
+                        } else {
+                            writeln!(buf, "{}: {}", name, first)?;
+
+                            while let Some(line) = lines.next() {
+                                write_tabs(buf, indent + 1)?;
+                                write!(buf, "{}", line)?;
+                                if lines.peek().is_none() {
+                                    write!(buf, "")?;
+                                } else {
+                                    writeln!(buf)?;
+                                }
                             }
                         }
                     }
@@ -221,7 +232,7 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
                 }
 
                 for child in children {
-                    write_ident(buf, child, indent + 1)?;
+                    write_ident(buf, lines, child, indent + 1)?;
                 }
 
                 if is_long_attr_list || !children.is_empty() {
@@ -260,7 +271,7 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
                         writeln!(buf, "{}: {},", name, out)?;
                     }
                     ContentField::Formatted(s) => {
-                        writeln!(buf, "{}: {},", name, s.value())?;
+                        writeln!(buf, "{}: \"{}\",", name, s.value())?;
                     }
                     ContentField::OnHandlerRaw(exp) => {
                         let out = prettyplease::unparse_expr(exp);
@@ -292,7 +303,7 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
             }
 
             for child in children {
-                write_ident(buf, child, indent + 1)?;
+                write_ident(buf, lines, child, indent + 1)?;
             }
 
             if !body.is_empty() || !children.is_empty() {
@@ -310,7 +321,52 @@ pub fn write_ident(buf: &mut String, node: &BodyNode, indent: usize) -> fmt::Res
             write_tabs(buf, indent)?;
             writeln!(buf, "\"{}\"", t.value())?;
         }
-        BodyNode::RawExpr(_) => {
+        BodyNode::RawExpr(exp) => {
+            use syn::spanned::Spanned;
+
+            let placement = exp.span();
+
+            let start = placement.start();
+            let end = placement.end();
+
+            let num_spaces_desired = (indent * 4) as isize;
+            let first = lines[start.line - 1];
+            let num_spaces_real = first.chars().take_while(|c| c.is_whitespace()).count() as isize;
+            let offset = num_spaces_real - num_spaces_desired;
+
+            for line_id in start.line - 1..end.line {
+                let line = lines[line_id];
+
+                // trim the leading whitespace
+
+                if offset < 0 {
+                    for _ in 0..-offset {
+                        write!(buf, " ")?;
+                    }
+
+                    writeln!(buf, "{}", line)?;
+                } else {
+                    let offset = offset as usize;
+
+                    let right = &line[offset..];
+                    writeln!(buf, "{}", right)?;
+                }
+            }
+
+            // let toks = exp.to_token_stream();
+
+            // let out = prettyplease::unparse_expr(exp);
+            // let mut lines = out.split('\n').peekable();
+            // for line in lines {
+            //     write_tabs(buf, indent)?;
+            //     writeln!(buf, "{}", line)?;
+            //     // writeln!(buf)?;
+            // }
+            // write_tabs(buf, indent)?;
+            // let first = lines.next().unwrap();
+            // write!(buf, "{}", name, first)?;
+            // writeln!(buf)?;
+
             //
             // write!(buf, "{}", " ".repeat(ident))
         }

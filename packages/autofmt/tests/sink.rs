@@ -204,6 +204,98 @@ fn formats_component_tiny() {
 }
 
 #[test]
+fn formats_exprs() {
+    let block = r#"
+    ul {
+        (0..10).map(|f| rsx!{
+            li {
+                "hi"
+            }
+        })
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
+}
+
+#[test]
+fn formats_exprs_neg_indent() {
+    let block = r#"
+            ul {
+        (0..10).map(|f| rsx!{
+            li {
+                "hi"
+            }
+        })
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
+}
+
+#[test]
+fn formats_exprs_handlers() {
+    let block = r#"
+            button {
+                class: "flex items-center pl-3 py-3 pr-2 text-gray-500 hover:bg-indigo-50 rounded",
+                onclick: move |evt| {
+                    show_user_menu.set(!show_user_menu.get());            evt.cancel_bubble();        },
+
+                onclick: move |evt|
+
+                show_user_menu.set(!show_user_menu.get()),
+                span { class: "inline-block mr-4",
+                    icons::icon_14 {}
+                }
+                span { "Settings" }
+            }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
+}
+
+#[test]
+fn formats_complex() {
+    let block = r#"
+        li {
+            Link {
+                class: "flex items-center pl-3 py-3 pr-4 {active_class} rounded",
+                to: "{to}",
+                span { class: "inline-block mr-3",
+                    icons::icon_0 {}
+                }
+                span { "{name}" }
+                children.is_some().then(|| rsx!{
+                    span {
+                        class: "inline-block ml-auto hover:bg-gray-500",
+                        onclick: move |evt| {
+                            // open.set(!open.get());
+                            evt.cancel_bubble();
+                        },
+                        icons::icon_8 {}
+                    }
+                })
+            }
+            div {
+                class: "px-4",
+                is_current.then(|| rsx!{ children })
+                // open.then(|| rsx!{ children })
+            }
+        }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    print!("{formatted}");
+}
+
+#[test]
 fn formats_document() {
     let block = r#"
 rsx!{
@@ -321,7 +413,6 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
         }
     }
 }
-
 #[inline_props]
 fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) -> Element {
     const ICON_SIZE: u32 = 36;
@@ -361,4 +452,20 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
         block.start - 1..block.end + 1,
         &format!("{{ {}    }}", &block.formatted),
     );
+}
+
+#[test]
+fn empty_blocks() {
+    let mut src = r###"
+pub fn Alert(cx: Scope) -> Element {
+    cx.render(rsx! {
+        div { }
+    })
+}
+"###
+    .to_string();
+
+    let formatted = get_format_blocks(&src);
+
+    dbg!(&formatted);
 }
