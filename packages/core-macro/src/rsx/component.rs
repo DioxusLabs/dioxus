@@ -18,19 +18,63 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, Ident, LitStr, Result, Token,
+    token, AngleBracketedGenericArguments, Expr, Ident, LitStr, PathArguments, Result, Token,
 };
 
 pub struct Component {
     pub name: syn::Path,
+    pub prop_gen_args: Option<AngleBracketedGenericArguments>,
     pub body: Vec<ComponentField>,
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
 }
 
+impl Component {
+    pub fn validate_component_path(path: &syn::Path) -> Result<()> {
+        // ensure path segments doesn't have PathArguments, only the last
+        // segment is allowed to have one.
+        if path
+            .segments
+            .iter()
+            .take(path.segments.len() - 1)
+            .any(|seg| seg.arguments != PathArguments::None)
+        {
+            component_path_cannot_have_arguments!(path);
+        }
+
+        // ensure last segment only have value of None or AngleBracketed
+        if !matches!(
+            path.segments.last().unwrap().arguments,
+            PathArguments::None | PathArguments::AngleBracketed(_)
+        ) {
+            invalid_component_path!(path);
+        }
+
+        // if matches!(
+        //     path.segments.last().unwrap().arguments,
+        //     PathArguments::AngleBracketed(_)
+        // ) {
+        //     proc_macro_error::abort!(path, "path: {}", path.to_token_stream().to_string());
+        // }
+
+        Ok(())
+    }
+}
+
 impl Parse for Component {
     fn parse(stream: ParseStream) -> Result<Self> {
-        let name = syn::Path::parse_mod_style(stream)?;
+        let mut name = stream.parse::<syn::Path>()?;
+        Component::validate_component_path(&name)?;
+
+        // extract the path arguments from the path into prop_gen_args
+        let prop_gen_args = name.segments.last_mut().and_then(|seg| {
+            if let PathArguments::AngleBracketed(args) = seg.arguments.clone() {
+                seg.arguments = PathArguments::None;
+                Some(args)
+            } else {
+                None
+            }
+        });
 
         let content: ParseBuffer;
 
@@ -64,6 +108,7 @@ impl Parse for Component {
 
         Ok(Self {
             name,
+            prop_gen_args,
             body,
             children,
             manual_props,
@@ -74,6 +119,7 @@ impl Parse for Component {
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
+        let prop_gen_args = &self.prop_gen_args;
 
         let mut has_key = None;
 
@@ -101,7 +147,10 @@ impl ToTokens for Component {
                 }}
             }
             None => {
-                let mut toks = quote! { fc_to_builder(#name) };
+                let mut toks = match prop_gen_args {
+                    Some(gen_args) => quote! { fc_to_builder::#gen_args(#name) },
+                    None => quote! { fc_to_builder(#name) },
+                };
                 for field in &self.body {
                     match field.name.to_string().as_str() {
                         "key" => {
