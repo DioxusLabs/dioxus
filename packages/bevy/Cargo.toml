@@ -10,10 +10,10 @@ dioxus-hooks = { path = "../hooks", version = "^0.2.0" }
 
 bevy = { version = "0.7", default-features = false, features = ["serialize"] }
 futures-intrusive = "0.4"
-log = "0.4.14"
-serde = "1.0.136"
-serde_json = "1.0.79"
+log = "0.4"
+raw-window-handle = "0.4"
+serde = "1.0"
+serde_json = "1.0"
 serde_repr = "0.1"
-tokio = { version = "1.16.1", features = ["rt"], default-features = false }
-webbrowser = "0.5.5"
-wry = { version = "0.13.1" }
+tokio = { version = "1.16", features = ["rt"], default-features = false }
+webbrowser = "0.5"

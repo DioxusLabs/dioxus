@@ -3,6 +3,7 @@ mod event;
 mod hooks;
 mod plugin;
 mod runner;
+mod window;
 
 pub use dioxus_desktop::cfg::DesktopConfig;
 
