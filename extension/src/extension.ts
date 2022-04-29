@@ -64,9 +64,10 @@ export function activate(context: vscode.ExtensionContext) {
 		// const formatOnSave: string | undefined = vscode.workspace.getConfiguration('rust').get('formatOnSave');
 
 		if (document.languageId === "rust" && document.uri.scheme === "file") {
-			const editor = vscode.window.activeTextEditor;// Get the active text editor
-			if (editor) {
-				const text = editor.document.getText();
+			const active_editor = vscode.window.activeTextEditor;// Get the active text editor
+
+			if (active_editor?.document.fileName === document.fileName) {
+				const text = document.getText();
 
 				console.error(text);
 
@@ -83,33 +84,37 @@ export function activate(context: vscode.ExtensionContext) {
 				}
 
 				child_proc.on('close', () => {
-					// if (result.length > 0) {
-					// 	editor.edit(editBuilder => editBuilder.insert(new vscode.Position(0, 0), result));
-					// } else {
-					// 	console.error("No result");
-					// }
+
 					if (result.length > 0) {
 						let decoded: RsxEdit[] = JSON.parse(result);
 
 						console.log("Decoded edits: ", decoded);
 
-						editor.edit(editBuilder => {
+						// Get the active text editor
+						const cur_editor = vscode.window.activeTextEditor;
 
-							for (let edit of decoded) {
-								console.log("Handling Edit: ", edit);
 
-								let start = document.positionAt(edit.start - 1);
-								let end = document.positionAt(edit.end + 1);
-								const range = new vscode.Range(start, end);
+						// even if we build an empty edit stream, it tries to save the editor
+						// this makes sure the editor is actually saved
+						if (decoded.length > 0 && cur_editor == active_editor) {
+							active_editor.edit(editBuilder => {
 
-								editBuilder.replace(range, `{ ${edit.formatted}    }`);
-								// editor.edit(editBuilder => editBuilder.replace(range, `{ ${edit.formatted}    }`)).then((could_be_applied) => {
-								// });
-								// editor.edit(editBuilder => editBuilder.replace(range, `{ ${edit.formatted}    }`)).then((could_be_applied) => {
-								// 	console.log("Edit applied: ", could_be_applied);
-								// });
-							}
-						})
+								for (let edit of decoded) {
+									console.log("Handling Edit: ", edit);
+
+									let start = document.positionAt(edit.start - 1);
+									let end = document.positionAt(edit.end + 1);
+									const range = new vscode.Range(start, end);
+
+									editBuilder.replace(range, `{ ${edit.formatted}    }`);
+									// editor.edit(editBuilder => editBuilder.replace(range, `{ ${edit.formatted}    }`)).then((could_be_applied) => {
+									// });
+									// editor.edit(editBuilder => editBuilder.replace(range, `{ ${edit.formatted}    }`)).then((could_be_applied) => {
+									// 	console.log("Edit applied: ", could_be_applied);
+									// });
+								}
+							})
+						}
 					}
 				});
 
