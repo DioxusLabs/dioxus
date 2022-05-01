@@ -16,6 +16,8 @@ pub struct LinkProps<'a> {
     pub active_class: Option<&'a str>,
     /// The children to render within the [`Link`].
     pub children: Element<'a>,
+    /// The `rel` attribute of the rendered `a` tag.
+    pub rel: Option<&'a str>,
     /// The navigation target. Corresponds to the `href` of an `a` tag.
     pub target: NavigationTarget,
 }
@@ -34,6 +36,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let LinkProps {
         active_class,
         children,
+        rel,
         target,
     } = cx.props;
 
@@ -69,7 +72,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         }
     }
 
-    // generate url for path
+    // generate href
     let href = match target {
         NavigationTarget::RPath(path) | NavigationTarget::RExternal(path) => path.to_string(),
         NavigationTarget::RName(name, vars) => {
@@ -84,6 +87,14 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         false => "onclick",
     };
 
+    let rel = rel
+        .or(if target.is_rexternal() {
+            Some("noopener noreferrer")
+        } else {
+            None
+        })
+        .unwrap_or("");
+
     cx.render(rsx! {
         a {
             href: "{href}",
@@ -94,6 +105,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                     tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();
                 }
             },
+            rel: "{rel}",
             children
         }
     })
