@@ -7,6 +7,7 @@ use std::{
 use anymap::AnyMap;
 use dioxus_core::VNode;
 
+use crate::element_borrowable::ElementBorrowable;
 use crate::node_ref::{NodeMask, NodeView};
 
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
@@ -47,16 +48,14 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 /// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
 /// Called at most once per update.
 pub trait ChildDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
-    /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
-    /// This must be either a [ChildDepState] or [NodeDepState]
-    type DepState;
+    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
+    type DepState: ElementBorrowable;
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        children: impl Iterator<Item = &'a Self::DepState>,
+        children: impl Iterator<Item = <Self::DepState as ElementBorrowable>::Borrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool
     where
@@ -67,13 +66,16 @@ pub trait ChildDepState {
 /// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
 /// Called at most once per update.
 pub trait ParentDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
-    /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
-    /// This must be either a [ParentDepState] or [NodeDepState]
-    type DepState;
+    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
+    type DepState: ElementBorrowable;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool;
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        parent: Option<<Self::DepState as ElementBorrowable>::Borrowed<'a>>,
+        ctx: &Self::Ctx,
+    ) -> bool;
 }
 
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
@@ -81,62 +83,34 @@ pub trait ParentDepState {
 /// Called at most once per update.
 pub trait NodeDepState {
     type Ctx;
-    type DepState: NodeDepState;
+    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
+    type DepState: ElementBorrowable;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, node: NodeView, sibling: &Self::DepState, ctx: &Self::Ctx) -> bool;
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        siblings: <Self::DepState as ElementBorrowable>::Borrowed<'a>,
+        ctx: &Self::Ctx,
+    ) -> bool;
 }
 
 #[derive(Debug)]
-pub struct ChildStatesChanged {
-    pub node_dep: Vec<MemberId>,
-    pub child_dep: Vec<MemberId>,
-}
-
-#[derive(Debug)]
-pub struct ParentStatesChanged {
+pub struct StatesChanged {
     pub node_dep: Vec<MemberId>,
     pub parent_dep: Vec<MemberId>,
-}
-
-#[derive(Debug)]
-pub struct NodeStatesChanged {
-    pub node_dep: Vec<MemberId>,
+    pub child_dep: Vec<MemberId>,
 }
 
 pub trait State: Default + Clone {
     const SIZE: usize;
 
-    fn update_node_dep_state<'a>(
+    fn update_dep_state<'a>(
         &'a mut self,
         ty: MemberId,
         node: &'a VNode<'a>,
         vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,
-    ) -> Option<NodeStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn child_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
-
-    fn update_parent_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
-        vdom: &'a dioxus_core::VirtualDom,
-        parent: Option<&Self>,
-        ctx: &AnyMap,
-    ) -> Option<ParentStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn parent_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
-
-    fn update_child_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
-        vdom: &'a dioxus_core::VirtualDom,
-        children: &Vec<&Self>,
-        ctx: &AnyMap,
-    ) -> Option<ChildStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn node_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
+    ) -> Option<StatesChanged>;
 }
 
 // Todo: once GATs land we can model multable dependencies
@@ -146,7 +120,7 @@ impl ChildDepState for () {
     fn reduce<'a>(
         &mut self,
         _: NodeView,
-        _: impl Iterator<Item = &'a Self::DepState>,
+        _: impl Iterator<Item = Self::DepState>,
         _: &Self::Ctx,
     ) -> bool
     where
@@ -159,7 +133,7 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce(&mut self, _: NodeView, _: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _: Option<Self::DepState>, _: &Self::Ctx) -> bool {
         false
     }
 }
@@ -167,7 +141,7 @@ impl ParentDepState for () {
 impl NodeDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce(&mut self, _: NodeView, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _sibling: Self::DepState, _: &Self::Ctx) -> bool {
         false
     }
 }
