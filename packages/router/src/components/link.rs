@@ -1,141 +1,48 @@
-use std::sync::Arc;
-
-use crate::{use_route, RouterCore};
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core_macro::{format_args_f, rsx, Props};
+use dioxus_core::{self as dioxus, prelude::*};
+use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
+use log::error;
 
-/// Props for the [`Link`](struct.Link.html) component.
+use crate::{helpers::sub_to_router, service::RouterMessage};
+
+/// The properties for a [`Link`].
 #[derive(Props)]
 pub struct LinkProps<'a> {
-    /// The route to link to. This can be a relative path, or a full URL.
-    ///
-    /// ```rust, ignore
-    /// // Absolute path
-    /// Link { to: "/home", "Go Home" }
-    ///
-    /// // Relative path
-    /// Link { to: "../", "Go Up" }
-    /// ```
-    pub to: &'a str,
-
-    /// Set the class of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
-    ///
-    /// This can be useful when styling the inner link element.
-    #[props(default, strip_option)]
-    pub class: Option<&'a str>,
-
-    /// Set the class added to the inner link when the current route is the same as the "to" route.
-    ///
-    /// To set all of the active classes inside a Router at the same time use the `active_class`
-    /// prop on the Router component. If both the Router prop as well as this prop are provided then
-    /// this one has precedence. By default set to `"active"`.
-    #[props(default, strip_option)]
-    pub active_class: Option<&'a str>,
-
-    /// Set the ID of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
-    ///
-    /// This can be useful when styling the inner link element.
-    #[props(default, strip_option)]
-    pub id: Option<&'a str>,
-
-    /// Set the title of the window after the link is clicked..
-    #[props(default, strip_option)]
-    pub title: Option<&'a str>,
-
-    /// Autodetect if a link is external or not.
-    ///
-    /// This is automatically set to `true` and will use http/https detection
-    #[props(default = true)]
-    pub autodetect: bool,
-
-    /// Is this link an external link?
-    #[props(default = false)]
-    pub external: bool,
-
-    /// New tab?
-    #[props(default = false)]
-    pub new_tab: bool,
-
-    /// Pass children into the `<a>` element
+    /// The children to render within the [`Link`].
     pub children: Element<'a>,
+    /// The navigation target. Corresponds to the `href` of an `a` tag.
+    pub target: &'a str,
 }
 
-/// A component that renders a link to a route.
+/// A link to navigate to another route.
 ///
-/// `Link` components are just [`<a>`](https://www.w3schools.com/tags/tag_a.asp) elements
-/// that link to different pages *within* your single-page app.
+/// Needs a [Router](crate::components::Router) as an ancestor.
 ///
-/// If you need to link to a resource outside of your app, then just use a regular
-/// `<a>` element directly.
+/// Unlike a regular `a` tag, a [`Link`] allows the router to handle the navigation and doesn't
+/// cause the browser to load a new page.
 ///
-/// # Examples
-///
-/// ```rust, ignore
-/// fn Header(cx: Scope) -> Element {
-///     cx.render(rsx!{
-///         Link { to: "/home", "Go Home" }
-///     })
-/// }
-/// ```
+/// However, in the background a [`Link`] still generates an `a` tag, which you can use for styling
+/// as normal.
+#[allow(non_snake_case)]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let svc = cx.use_hook(|_| cx.consume_context::<Arc<RouterCore>>());
+    let LinkProps { children, target } = cx.props;
 
-    let LinkProps {
-        to,
-        class,
-        id,
-        title,
-        autodetect,
-        external,
-        new_tab,
-        children,
-        active_class,
-        ..
-    } = cx.props;
-
-    let is_http = to.starts_with("http") || to.starts_with("https");
-    let outerlink = (*autodetect && is_http) || *external;
-    let prevent_default = if outerlink { "" } else { "onclick" };
-
-    let active_class_name = match active_class {
-        Some(c) => (*c).into(),
+    // hook up to router
+    let router = match sub_to_router(&cx) {
+        Some(x) => x,
         None => {
-            let active_from_router = match svc {
-                Some(service) => service.cfg.active_class.clone(),
-                None => None,
-            };
-            active_from_router.unwrap_or_else(|| "active".into())
+            error!("`Link` can only be used as a descendent of a `Router`");
+            return None;
         }
     };
-
-    let route = use_route(&cx);
-    let url = route.url();
-    let path = url.path();
-    let active = path == cx.props.to;
-    let active_class = if active { active_class_name } else { "".into() };
+    // let state = router.state.read().expect("router lock poison");
+    let tx = router.tx.clone();
 
     cx.render(rsx! {
         a {
-            href: "{to}",
-            class: format_args!("{} {}", class.unwrap_or(""), active_class),
-            id: format_args!("{}", id.unwrap_or("")),
-            title: format_args!("{}", title.unwrap_or("")),
-            prevent_default: "{prevent_default}",
-            target: format_args!("{}", if *new_tab { "_blank" } else { "" }),
-            onclick: move |_| {
-                if !outerlink {
-                    if let Some(service) = svc {
-                        service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
-                    } else {
-                        log::error!(
-                            "Attempted to create a Link to {} outside of a Router context",
-                            cx.props.to,
-                        );
-                    }
-                }
-            },
+            href: "{target}",
+            prevent_default: "onclick",
+            onclick: move |_| {tx.unbounded_send(RouterMessage::Push(target.to_string())).ok();},
             children
         }
     })

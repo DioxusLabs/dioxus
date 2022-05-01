@@ -1,32 +1,56 @@
-#![doc = include_str!("../README.md")]
-#![warn(missing_docs)]
+#![deny(missing_docs)]
 
-mod hooks {
-    mod use_route;
-    mod use_router;
-    pub use use_route::*;
-    pub use use_router::*;
-}
-pub use hooks::*;
+//! A router for dioxus.
 
-mod components {
-    #![allow(non_snake_case)]
-
+/// All components of the router.
+pub mod components {
     mod link;
-    mod redirect;
-    mod route;
-    mod router;
-
     pub use link::*;
-    pub use redirect::*;
-    pub use route::*;
+
+    mod history_buttons;
+    pub use history_buttons::*;
+
+    mod outlet;
+    pub use outlet::*;
+
+    mod router;
     pub use router::*;
 }
-pub use components::*;
 
-mod cfg;
-mod routecontext;
+/// All contexts of the router.
+///
+/// Contexts are deliberately not exposed to users. The public API consists of components and hooks.
+mod contexts {
+    mod outlet;
+    pub(crate) use outlet::*;
+
+    mod router;
+    pub(crate) use router::*;
+}
+
+mod helpers;
+
+pub mod history;
+
+/// All hooks of the router.
+pub mod hooks {
+    mod use_navigate;
+    pub use use_navigate::*;
+
+    mod use_route;
+    pub use use_route::*;
+}
+
+/// Reexports of commonly used elements.
+pub mod prelude {
+    pub use crate::components::*;
+    pub use crate::hooks::*;
+    pub use crate::route_definition::*;
+    pub use crate::state::*;
+}
+
+pub mod route_definition;
+
 mod service;
 
-pub use routecontext::*;
-pub use service::*;
+pub mod state;

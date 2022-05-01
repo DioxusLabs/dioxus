@@ -1,129 +1,43 @@
-use crate::ParsedRoute;
-use crate::{cfg::RouterCfg, RouteEvent, RouterCore};
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
+use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use futures_util::stream::StreamExt;
-use std::sync::Arc;
+use log::warn;
 
-/// The props for the [`Router`](fn.Router.html) component.
+use crate::{contexts::RouterContext, route_definition::Segment, service::RouterService};
+
+/// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
-    /// The routes and elements that should be rendered when the path matches.
-    ///
-    /// If elements are not contained within Routes, the will be rendered
-    /// regardless of the path.
+    /// The components to render where the [`Router`] itself is. Should contain at least one
+    /// [Outlet](crate::components::Outlet).
     pub children: Element<'a>,
-
-    /// The URL to point at
-    ///
-    /// This will be used to trim any latent segments from the URL when your app is
-    /// not deployed to the root of the domain.
-    pub base_url: Option<&'a str>,
-
-    /// Hook into the router when the route is changed.
-    ///
-    /// This lets you easily implement redirects
-    #[props(default)]
-    pub onchange: EventHandler<'a, Arc<RouterCore>>,
-
-    /// Set the active class of all Link components contained in this router.
-    ///
-    /// This is useful if you don't want to repeat the same `active_class` prop value in every Link.
-    /// By default set to `"active"`.
-    pub active_class: Option<&'a str>,
+    /// The routes the router should work on.
+    pub routes: &'a Segment,
 }
 
-/// A component that conditionally renders children based on the current location of the app.
+/// The base component on which the entire router system builds.
 ///
-/// Uses BrowserRouter in the browser and HashRouter everywhere else.
+/// All other router components and hooks can only be used as descendants of a [`Router`] component.
 ///
-/// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
+/// [`Router`] components cannot be nested. If you nest multiple [`Router`]s, the inner [`Router`]
+/// will be inactive and ignored by all other components and hooks.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let svc = cx.use_hook(|_| {
-        let (tx, mut rx) = futures_channel::mpsc::unbounded::<RouteEvent>();
+    cx.use_hook(|_| {
+        // make sure no router context exists
+        if cx.consume_context::<RouterContext>().is_some() {
+            warn!("routers cannot be nested; inner router will be inactive");
+            return;
+        };
 
-        let svc = RouterCore::new(
-            tx,
-            RouterCfg {
-                base_url: cx.props.base_url.map(|s| s.to_string()),
-                active_class: cx.props.active_class.map(|s| s.to_string()),
-            },
-        );
+        // create router service and inject context
+        let (mut service, context) =
+            RouterService::new(cx.props.routes.clone(), cx.schedule_update_any());
+        cx.provide_context(context);
 
-        cx.spawn({
-            let svc = svc.clone();
-            let regen_route = cx.schedule_update_any();
-            let router_id = cx.scope_id();
-
-            async move {
-                while let Some(msg) = rx.next().await {
-                    match msg {
-                        RouteEvent::Push {
-                            route,
-                            serialized_state,
-                            title,
-                        } => {
-                            let new_route = Arc::new(ParsedRoute {
-                                url: svc.current_location().url.join(&route).ok().unwrap(),
-                                title,
-                                serialized_state,
-                            });
-
-                            svc.history.push(&new_route);
-                            svc.stack.borrow_mut().push(new_route);
-                        }
-
-                        RouteEvent::Replace {
-                            route,
-                            title,
-                            serialized_state,
-                        } => {
-                            let new_route = Arc::new(ParsedRoute {
-                                url: svc.current_location().url.join(&route).ok().unwrap(),
-                                title,
-                                serialized_state,
-                            });
-
-                            svc.history.replace(&new_route);
-                            *svc.stack.borrow_mut().last_mut().unwrap() = new_route;
-                        }
-
-                        RouteEvent::Pop => {
-                            let mut stack = svc.stack.borrow_mut();
-
-                            if stack.len() == 1 {
-                                continue;
-                            }
-
-                            stack.pop();
-                        }
-                    }
-
-                    svc.route_found.set(None);
-
-                    regen_route(router_id);
-
-                    for listener in svc.onchange_listeners.borrow().iter() {
-                        regen_route(*listener);
-                    }
-
-                    for route in svc.ordering.borrow().iter().rev() {
-                        regen_route(*route);
-                    }
-                }
-            }
-        });
-
-        cx.provide_context(svc)
+        // run service
+        cx.spawn(async move { service.run().await });
     });
-
-    // next time we run the rout_found will be filled
-    if svc.route_found.get().is_none() {
-        cx.props.onchange.call(svc.clone());
-    }
 
     cx.render(rsx!(&cx.props.children))
 }

@@ -47,6 +47,7 @@ wasm_test = []
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
+dioxus-desktop = { path = "../desktop" }
 dioxus-web = { path = "../web" }
 log = "0.4.14"
 wasm-logger = "0.2.0"
