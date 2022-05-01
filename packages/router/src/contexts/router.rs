@@ -10,6 +10,8 @@ use crate::{navigation::NamedNavigationSegment, service::RouterMessage, state::C
 /// A context providing read and write access to the [router service](crate::service::RouterService).
 #[derive(Clone)]
 pub(crate) struct RouterContext {
+    /// A class to apply to active links.
+    pub(crate) active_class: Option<String>,
     /// A sender to send messages to the [router service](crate::service::RouterService).
     pub(crate) tx: UnboundedSender<RouterMessage>,
     /// A shared memory space the [router service](crate::service::RouterService) uses

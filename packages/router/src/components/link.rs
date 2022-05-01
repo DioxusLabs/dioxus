@@ -12,6 +12,8 @@ use crate::{
 /// The properties for a [`Link`].
 #[derive(Props)]
 pub struct LinkProps<'a> {
+    /// A class to apply to the generated `a` tag when the link is active.
+    pub active_class: Option<&'a str>,
     /// The children to render within the [`Link`].
     pub children: Element<'a>,
     /// The navigation target. Corresponds to the `href` of an `a` tag.
@@ -29,7 +31,11 @@ pub struct LinkProps<'a> {
 /// as normal.
 #[allow(non_snake_case)]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let LinkProps { children, target } = cx.props;
+    let LinkProps {
+        active_class,
+        children,
+        target,
+    } = cx.props;
 
     // hook up to router
     let router = match sub_to_router(&cx) {
@@ -39,8 +45,29 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             return None;
         }
     };
-    // let state = router.state.read().expect("router lock poison");
+    let state = router.state.read().expect("router lock poison");
     let tx = router.tx.clone();
+
+    // check if route is active
+    let active_class = active_class
+        .map(|ac| ac.to_string())
+        .or(router.active_class.clone());
+    let mut active = String::new();
+    if let Some(ac) = active_class {
+        match target {
+            NavigationTarget::RPath(p) => {
+                if state.path.starts_with(p) {
+                    active = ac;
+                }
+            }
+            NavigationTarget::RName(n, _) => {
+                if state.names.contains(n) {
+                    active = ac
+                }
+            }
+            NavigationTarget::RExternal(_) => { /* do nothing */ }
+        }
+    }
 
     // generate url for path
     let href = match target {
@@ -60,6 +87,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     cx.render(rsx! {
         a {
             href: "{href}",
+            class: "{active}",
             prevent_default: "{prevent}",
             onclick: move |_| {
                 if !target.is_rexternal() {

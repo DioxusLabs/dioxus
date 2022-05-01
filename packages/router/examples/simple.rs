@@ -59,7 +59,15 @@ fn app(cx: Scope) -> Element {
     });
 
     cx.render(rsx! {
+        style {
+            r#"
+                .active {{
+                    color: red;
+                }}
+            "#
+        }
         Router {
+            active_class: "active",
             named_navigation_fallback_path: String::from("/named_fallback"),
             routes: routes,
             header {

@@ -66,6 +66,7 @@ impl RouterService {
         routes: Segment,
         update: Arc<dyn Fn(ScopeId)>,
         named_navigation_fallback_path: Option<String>,
+        active_class: Option<String>,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -79,6 +80,7 @@ impl RouterService {
         // create state and context
         let state = Arc::new(RwLock::new(CurrentRoute::default()));
         let context = RouterContext {
+            active_class,
             tx,
             state: state.clone(),
             named_routes: named_routes.clone(),
@@ -174,10 +176,11 @@ impl RouterService {
 
             // handle index on root
             let next = if path.len() == 0 {
-                if let Some(comp) = &self.routes.index {
-                    match comp {
+                if let Some(target) = &self.routes.index {
+                    match target {
                         RouteTarget::TComponent(c) => {
                             components.push(*c);
+                            names.insert("root_index");
                             None
                         }
                         RouteTarget::TRedirect(t) => Some(t.clone()),

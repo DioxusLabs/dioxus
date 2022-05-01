@@ -8,6 +8,10 @@ use crate::{contexts::RouterContext, route_definition::Segment, service::RouterS
 /// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
+    /// A class to apply to active links.
+    ///
+    /// Can be overwritten on individual links.
+    pub active_class: Option<&'a str>,
     /// The components to render where the [`Router`] itself is. Should contain at least one
     /// [Outlet](crate::components::Outlet).
     pub children: Element<'a>,
@@ -37,6 +41,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.props.routes.clone(),
             cx.schedule_update_any(),
             cx.props.named_navigation_fallback_path.clone(),
+            cx.props.active_class.map(|ac| ac.to_string()),
         );
         cx.provide_context(context);
 
