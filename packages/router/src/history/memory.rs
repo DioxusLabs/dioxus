@@ -1,15 +1,19 @@
+use url::Url;
+
 use super::HistoryProvider;
 
 /// A [`HistoryProvider`] that stores all information in memory.
 pub struct MemoryHistoryProvider {
-    current: Vec<String>,
+    current: Url,
+    past: Vec<String>,
     future: Vec<String>,
 }
 
 impl Default for MemoryHistoryProvider {
     fn default() -> Self {
         Self {
-            current: vec![String::from("/")],
+            current: Url::parse("dioxus://index.html/").unwrap(),
+            past: Default::default(),
             future: Default::default(),
         }
     }
@@ -17,11 +21,14 @@ impl Default for MemoryHistoryProvider {
 
 impl HistoryProvider for MemoryHistoryProvider {
     fn current_path<'a>(&'a self) -> &'a str {
-        &self.current.last().unwrap() // memory history always has at least one item
+        dbg!(&self.current);
+        dbg!(&self.past);
+        dbg!(&self.future);
+        self.current.path()
     }
 
     fn can_go_back(&self) -> bool {
-        self.current.len() > 1
+        !self.past.is_empty()
     }
 
     fn can_go_forward(&self) -> bool {
@@ -30,22 +37,35 @@ impl HistoryProvider for MemoryHistoryProvider {
 
     fn go_back(&mut self) {
         if self.can_go_back() {
-            self.future.push(self.current.pop().unwrap());
+            self.future.push(self.current.to_string());
+            self.current = Url::parse(&self.past.pop().unwrap()).unwrap();
+
+            // past urls are always valid, they came from the url struct itself
         }
     }
 
     fn go_forward(&mut self) {
         if self.can_go_forward() {
-            self.current.push(self.future.pop().unwrap());
+            self.past.push(self.current.to_string());
+            self.current = Url::parse(&self.future.pop().unwrap()).unwrap();
+
+            // future urls are always valid, they came from the url struct itself
         }
     }
 
     fn push(&mut self, path: String) {
-        self.current.push(path);
-        self.future.clear();
+        let previous_path = self.current.to_string();
+
+        if let Ok(url) = self.current.join(&path) {
+            self.past.push(previous_path);
+            self.current = url;
+            self.future.clear();
+        }
     }
 
     fn replace(&mut self, path: String) {
-        *self.current.last_mut().unwrap() = path; // memory history always has at least one item
+        if let Ok(url) = self.current.join(&path) {
+            self.current = url;
+        }
     }
 }

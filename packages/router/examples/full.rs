@@ -182,6 +182,10 @@ fn BlogPost(cx: Scope) -> Element {
         pre {
            "{id:#?}"
         }
+        Link {
+            target: RPath(String::from("..")),
+            "go to blog list"
+        }
     })
 }
 
