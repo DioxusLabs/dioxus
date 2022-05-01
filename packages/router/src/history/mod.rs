@@ -18,6 +18,8 @@ pub trait HistoryProvider {
     fn can_go_back(&self) -> bool;
     /// Check if there is a future path that can be navigated forward to.
     fn can_go_forward(&self) -> bool;
+    /// Check if the implementor can handle external navigation targets.
+    fn can_handle_external(&self) -> bool;
 
     /// Navigate to the last active path.
     fn go_back(&mut self);

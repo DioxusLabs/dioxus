@@ -11,6 +11,8 @@ pub struct RouterProps<'a> {
     /// The components to render where the [`Router`] itself is. Should contain at least one
     /// [Outlet](crate::components::Outlet).
     pub children: Element<'a>,
+    /// A path that the router navigates to if a named navigation doesn't result in a path.
+    pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
     pub routes: &'a Segment,
 }
@@ -31,8 +33,11 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         };
 
         // create router service and inject context
-        let (mut service, context) =
-            RouterService::new(cx.props.routes.clone(), cx.schedule_update_any());
+        let (mut service, context) = RouterService::new(
+            cx.props.routes.clone(),
+            cx.schedule_update_any(),
+            cx.props.named_navigation_fallback_path.clone(),
+        );
         cx.provide_context(context);
 
         // run service

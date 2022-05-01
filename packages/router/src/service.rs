@@ -6,10 +6,13 @@ use std::{
 use dioxus_core::{Component, ScopeId};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
+use log::error;
 
 use crate::{
     contexts::RouterContext,
+    helpers::construct_named_path,
     history::{HistoryProvider, MemoryHistoryProvider},
+    prelude::{NamedNavigationSegment, NavigationTarget},
     route_definition::{DynamicRoute, Segment},
     state::CurrentRoute,
 };
@@ -23,10 +26,10 @@ pub(crate) enum RouterMessage {
     GoForward,
 
     /// Push a new path.
-    Push(String),
+    Push(NavigationTarget),
 
     /// Replace the current path with a new one.
-    Replace(String),
+    Replace(NavigationTarget),
 
     /// Subscribe the specified scope to router updates.
     Subscribe(Arc<ScopeId>),
@@ -45,6 +48,8 @@ pub(crate) enum RouterMessage {
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
     history: Box<dyn HistoryProvider>,
+    named_navigation_fallback_path: Option<String>,
+    named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
     routes: Segment,
     rx: UnboundedReceiver<RouterMessage>,
     state: Arc<RwLock<CurrentRoute>>,
@@ -56,20 +61,33 @@ impl RouterService {
     /// Create a new [`RouterService`].
     ///
     /// The returned [`RouterService`] and [`RouterContext`] are linked with each other.
-    pub(crate) fn new(routes: Segment, update: Arc<dyn Fn(ScopeId)>) -> (Self, RouterContext) {
+    pub(crate) fn new(
+        routes: Segment,
+        update: Arc<dyn Fn(ScopeId)>,
+        named_navigation_fallback_path: Option<String>,
+    ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
+
+        // create named navigation targets
+        let mut named_routes = BTreeMap::new();
+        construct_named_targets(&routes, &Vec::new(), &mut named_routes);
+        named_routes.insert("root_index", Vec::new());
+        let named_routes = Arc::new(named_routes);
 
         // create state and context
         let state = Arc::new(RwLock::new(CurrentRoute::default()));
         let context = RouterContext {
             tx,
             state: state.clone(),
+            named_routes: named_routes.clone(),
         };
 
         (
             Self {
                 history: Box::new(MemoryHistoryProvider::default()),
+                named_navigation_fallback_path,
+                named_routes,
                 routes,
                 rx,
                 state,
@@ -90,8 +108,40 @@ impl RouterService {
             match x {
                 RouterMessage::GoBack => self.history.go_back(),
                 RouterMessage::GoForward => self.history.go_forward(),
-                RouterMessage::Push(path) => self.history.push(path),
-                RouterMessage::Replace(path) => self.history.replace(path),
+                RouterMessage::Push(target) => match target {
+                    NavigationTarget::RPath(path) => self.history.push(path),
+                    NavigationTarget::RName(name, vars) => {
+                        let path = construct_named_path(name, &vars, &self.named_routes)
+                            .or(self.named_navigation_fallback_path.clone());
+                        if let Some(path) = path {
+                            self.history.push(path);
+                        }
+                    }
+                    NavigationTarget::RExternal(url) => {
+                        if self.history.can_handle_external() {
+                            self.history.push(url);
+                        } else {
+                            error!("the current history provider cannot handle external navigation targets; pass it to a `Link` component or render an `a` tag instead.");
+                        }
+                    }
+                },
+                RouterMessage::Replace(target) => match target {
+                    NavigationTarget::RPath(path) => self.history.replace(path),
+                    NavigationTarget::RName(name, vars) => {
+                        let path = construct_named_path(name, &vars, &self.named_routes)
+                            .or(self.named_navigation_fallback_path.clone());
+                        if let Some(path) = path {
+                            self.history.replace(path);
+                        }
+                    }
+                    NavigationTarget::RExternal(url) => {
+                        if self.history.can_handle_external() {
+                            self.history.replace(url);
+                        } else {
+                            error!("the current history provider cannot handle external navigation targets; pass it to a `Link` component or render an `a` tag instead.");
+                        }
+                    }
+                },
                 RouterMessage::Subscribe(id) => {
                     self.subscribers.push(Arc::downgrade(&id));
                     (self.update)(*id);
@@ -139,7 +189,7 @@ impl RouterService {
                 names.insert("root_index");
             }
         } else {
-            Self::match_segment(&segments, &self.routes, components, names, variables);
+            match_segment(&segments, &self.routes, components, names, variables);
         }
     }
 
@@ -167,55 +217,102 @@ impl RouterService {
             }
         });
     }
+}
 
-    fn match_segment(
-        path: &[&str],
-        segment: &Segment,
-        components: &mut Vec<Component>,
-        names: &mut BTreeSet<&'static str>,
-        vars: &mut BTreeMap<&'static str, String>,
-    ) {
-        // check static paths
-        if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
-            components.push(route.component);
-            if let Some(name) = &route.name {
-                names.insert(name);
-            }
+fn construct_named_targets(
+    seg: &Segment,
+    ancestors: &Vec<NamedNavigationSegment>,
+    named: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+) {
+    for (path, route) in &seg.fixed {
+        // prepare new ancestors
+        let mut ancestors = ancestors.clone();
+        ancestors.push(NamedNavigationSegment::Fixed(path.to_string()));
 
-            if let Some(sub) = &route.sub {
-                if path.len() == 1 && sub.index.is_some() {
-                    components.push(sub.index.unwrap());
-                } else if path.len() > 1 {
-                    Self::match_segment(&path[1..], sub, components, names, vars);
-                }
-            }
-        } else {
-            match &segment.dynamic {
-                DynamicRoute::None => {}
-                DynamicRoute::Variable {
-                    name,
-                    key,
-                    component,
-                    sub,
-                } => {
-                    components.push(*component);
-                    vars.insert(key, path[0].to_string());
-                    if let Some(name) = name {
-                        names.insert(name);
-                    }
+        if let Some(seg) = &route.sub {
+            construct_named_targets(seg, &ancestors, named);
+        }
 
-                    if let Some(sub) = sub.as_deref() {
-                        if path.len() == 1 && sub.index.is_some() {
-                            components.push(sub.index.unwrap());
-                        } else if path.len() > 1 {
-                            Self::match_segment(&path[1..], sub, components, names, vars)
-                        }
-                    }
-                }
-                DynamicRoute::Fallback(comp) => {
-                    components.push(*comp);
-                }
-            }
-        };
+        if let Some(name) = route.name {
+            if named.insert(name, ancestors).is_some() {
+                error!(r#"route names must be unique; duplicate name: "{name}""#);
+                #[cfg(debug_assertions)]
+                panic!(r#"duplicate route name: "{name}""#)
+            };
+        }
     }
+
+    if let DynamicRoute::Variable {
+        name,
+        key,
+        component: _,
+        sub,
+    } = &seg.dynamic
+    {
+        let mut ancestors = ancestors.clone();
+        ancestors.push(NamedNavigationSegment::Variable(key));
+
+        if let Some(seg) = sub {
+            construct_named_targets(seg, &ancestors, named);
+        }
+
+        if let Some(name) = name {
+            if named.insert(name, ancestors).is_some() {
+                error!(r#"route names must be unique; duplicate name: "{name}""#);
+                #[cfg(debug_assertions)]
+                panic!(r#"duplicate route name: "{name}""#)
+            }
+        }
+    }
+}
+
+fn match_segment(
+    path: &[&str],
+    segment: &Segment,
+    components: &mut Vec<Component>,
+    names: &mut BTreeSet<&'static str>,
+    vars: &mut BTreeMap<&'static str, String>,
+) {
+    // check static paths
+    if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
+        components.push(route.component);
+        if let Some(name) = &route.name {
+            names.insert(name);
+        }
+
+        if let Some(sub) = &route.sub {
+            if path.len() == 1 && sub.index.is_some() {
+                components.push(sub.index.unwrap());
+            } else if path.len() > 1 {
+                match_segment(&path[1..], sub, components, names, vars);
+            }
+        }
+    } else {
+        match &segment.dynamic {
+            DynamicRoute::None => {}
+            DynamicRoute::Variable {
+                name,
+                key,
+                component,
+                sub,
+            } => {
+                components.push(*component);
+                vars.insert(key, path[0].to_string());
+                if let Some(name) = name {
+                    names.insert(name);
+                }
+
+                if let Some(sub) = sub.as_deref() {
+                    if path.len() == 1 && sub.index.is_some() {
+                        components.push(sub.index.unwrap());
+                    } else if path.len() > 1 {
+                        match_segment(&path[1..], sub, components, names, vars)
+                    }
+                }
+            }
+            DynamicRoute::Fallback(comp) => {
+                components.push(*comp);
+            }
+        }
+    };
 }

@@ -3,7 +3,11 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use log::error;
 
-use crate::{helpers::sub_to_router, service::RouterMessage};
+use crate::{
+    helpers::{construct_named_path, sub_to_router},
+    prelude::NavigationTarget,
+    service::RouterMessage,
+};
 
 /// The properties for a [`Link`].
 #[derive(Props)]
@@ -11,7 +15,7 @@ pub struct LinkProps<'a> {
     /// The children to render within the [`Link`].
     pub children: Element<'a>,
     /// The navigation target. Corresponds to the `href` of an `a` tag.
-    pub target: &'a str,
+    pub target: NavigationTarget,
 }
 
 /// A link to navigate to another route.
@@ -38,11 +42,30 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     // let state = router.state.read().expect("router lock poison");
     let tx = router.tx.clone();
 
+    // generate url for path
+    let href = match target {
+        NavigationTarget::RPath(path) | NavigationTarget::RExternal(path) => path.to_string(),
+        NavigationTarget::RName(name, vars) => {
+            construct_named_path(name, vars, &router.named_routes)
+                .unwrap_or(String::from("invalid path"))
+        }
+    };
+
+    // prepare prevented defaults
+    let prevent = match target.is_rexternal() {
+        true => "",
+        false => "onclick",
+    };
+
     cx.render(rsx! {
         a {
-            href: "{target}",
-            prevent_default: "onclick",
-            onclick: move |_| {tx.unbounded_send(RouterMessage::Push(target.to_string())).ok();},
+            href: "{href}",
+            prevent_default: "{prevent}",
+            onclick: move |_| {
+                if !target.is_rexternal() {
+                    tx.unbounded_send(RouterMessage::Push(target.clone())).ok();
+                }
+            },
             children
         }
     })

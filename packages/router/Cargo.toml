@@ -1,7 +1,7 @@
 [package]
 name = "dioxus-router"
 version = "0.2.2"
-edition = "2018"
+edition = "2021"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
@@ -49,6 +49,7 @@ wasm_test = []
 console_error_panic_hook = "0.1.7"
 dioxus-desktop = { path = "../desktop" }
 dioxus-web = { path = "../web" }
+env_logger = "0.9.0"
 log = "0.4.14"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"

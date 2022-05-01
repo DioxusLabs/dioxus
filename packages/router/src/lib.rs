@@ -41,10 +41,13 @@ pub mod hooks {
     pub use use_route::*;
 }
 
+pub mod navigation;
+
 /// Reexports of commonly used elements.
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::hooks::*;
+    pub use crate::navigation::{NavigationTarget::*, *};
     pub use crate::route_definition::*;
     pub use crate::state::*;
 }
