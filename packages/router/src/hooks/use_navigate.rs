@@ -2,7 +2,9 @@ use dioxus_core::ScopeState;
 use futures_channel::mpsc::UnboundedSender;
 use log::error;
 
-use crate::{contexts::RouterContext, navigation::NavigationTarget, service::RouterMessage};
+use crate::{
+    contexts::RouterContext, navigation::InternalNavigationTarget, service::RouterMessage,
+};
 
 /// A hook that allows you to acquire a [`Navigator`] object.
 ///
@@ -55,14 +57,14 @@ impl Navigator {
     /// Push a new path.
     ///
     /// Previous path will be available to go back to.
-    pub fn push(&self, target: NavigationTarget) {
+    pub fn push(&self, target: InternalNavigationTarget) {
         self.tx.unbounded_send(RouterMessage::Push(target)).ok();
     }
 
     /// Replace the current path.
     ///
     /// Previous path will **not** be available to go back to.
-    pub fn replace(&self, target: NavigationTarget) {
+    pub fn replace(&self, target: InternalNavigationTarget) {
         self.tx.unbounded_send(RouterMessage::Replace(target)).ok();
     }
 }

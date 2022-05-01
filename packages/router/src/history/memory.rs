@@ -28,10 +28,6 @@ impl HistoryProvider for MemoryHistoryProvider {
         !self.future.is_empty()
     }
 
-    fn can_handle_external(&self) -> bool {
-        false
-    }
-
     fn go_back(&mut self) {
         if self.can_go_back() {
             self.future.push(self.current.pop().unwrap());

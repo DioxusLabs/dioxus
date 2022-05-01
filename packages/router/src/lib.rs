@@ -47,8 +47,8 @@ pub mod navigation;
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::hooks::*;
-    pub use crate::navigation::{NavigationTarget::*, *};
-    pub use crate::route_definition::*;
+    pub use crate::navigation::{InternalNavigationTarget::*, NavigationTarget::*, *};
+    pub use crate::route_definition::{RouteTarget::*, *};
     pub use crate::state::*;
 }
 

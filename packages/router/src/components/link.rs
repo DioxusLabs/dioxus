@@ -63,7 +63,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             prevent_default: "{prevent}",
             onclick: move |_| {
                 if !target.is_rexternal() {
-                    tx.unbounded_send(RouterMessage::Push(target.clone())).ok();
+                    tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();
                 }
             },
             children

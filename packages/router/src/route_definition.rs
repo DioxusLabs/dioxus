@@ -4,11 +4,13 @@
 
 use dioxus_core::Component;
 
+use crate::navigation::InternalNavigationTarget;
+
 /// TODO
 #[derive(Clone)]
 pub struct Segment {
     /// TODO
-    pub index: Option<Component>,
+    pub index: Option<RouteTarget>,
     /// TODO
     pub dynamic: DynamicRoute,
     /// TDO
@@ -21,7 +23,7 @@ pub struct Route {
     /// TODO
     pub name: Option<&'static str>,
     /// TODO
-    pub component: Component,
+    pub content: RouteTarget,
     /// TODO
     pub sub: Option<Segment>,
 }
@@ -38,10 +40,19 @@ pub enum DynamicRoute {
         /// TODO
         key: &'static str,
         /// TODO
-        component: Component,
+        content: RouteTarget,
         /// TODO
         sub: Option<Box<Segment>>,
     },
     /// TODO
-    Fallback(Component),
+    Fallback(RouteTarget),
+}
+
+/// TODO
+#[derive(Clone)]
+pub enum RouteTarget {
+    /// TODO
+    TComponent(Component),
+    /// TODO
+    TRedirect(InternalNavigationTarget),
 }
