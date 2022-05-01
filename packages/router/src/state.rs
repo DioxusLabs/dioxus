@@ -14,7 +14,7 @@ pub struct CurrentRoute {
     pub can_go_forward: bool,
 
     /// The components specified by the active routes.
-    pub(crate) components: Vec<Component>,
+    pub(crate) components: Vec<(Component, BTreeMap<&'static str, Component>)>,
 
     /// The names of the currently active routes.
     pub names: BTreeSet<&'static str>,

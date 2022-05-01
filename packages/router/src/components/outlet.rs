@@ -1,11 +1,16 @@
-use crate::{
-    contexts::{OutletContext},
-    helpers::sub_to_router,
-};
-use dioxus_core::prelude::*;
+use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use log::error;
+
+use crate::{contexts::OutletContext, helpers::sub_to_router};
+
+/// Properties for an [`Outlet`].
+#[derive(PartialEq, Props)]
+pub struct OutletProps {
+    /// The name of the side_content to render. Will render main content if absent.
+    pub name: Option<&'static str>,
+}
 
 /// An outlet tells the router where to render the components corresponding to the current route.
 ///
@@ -14,7 +19,7 @@ use log::error;
 /// Each [`Outlet`] renders a single component. To render the components of nested routes simply
 /// provide nested [`Outlet`]s.
 #[allow(non_snake_case)]
-pub fn Outlet(cx: Scope) -> Element {
+pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     // get own depth and communicate to lower outlets
     let depth = cx.use_hook(|_| {
         let higher = cx.consume_context::<OutletContext>();
@@ -32,12 +37,22 @@ pub fn Outlet(cx: Scope) -> Element {
         }
     };
 
+    // get the component to render
     let state = router.state.read().unwrap();
-    match state.components.get(*depth) {
+    let X = match state.components.get(*depth) {
+        Some((main, side)) => match cx.props.name {
+            Some(name) => side.get(name),
+            None => Some(main),
+        },
+        None => None,
+    };
+
+    // render component or nothing
+    match X {
         Some(X) => {
             let X = *X;
-            cx.render(rsx!(X {}))
+            cx.render(rsx! { X {} })
         }
-        None => cx.render(rsx! {Fragment {}}),
+        None => cx.render(rsx! { Fragment { } }),
     }
 }

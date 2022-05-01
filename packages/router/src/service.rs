@@ -178,8 +178,8 @@ impl RouterService {
             let next = if path.len() == 0 {
                 if let Some(target) = &self.routes.index {
                     match target {
-                        RouteTarget::TComponent(c) => {
-                            components.push(*c);
+                        RouteTarget::TComponent(main, side) => {
+                            components.push((*main, BTreeMap::from_iter(side.clone().into_iter())));
                             names.insert("root_index");
                             None
                         }
@@ -286,14 +286,16 @@ fn construct_named_targets(
 fn match_segment(
     path: &[&str],
     segment: &Segment,
-    components: &mut Vec<Component>,
+    components: &mut Vec<(Component, BTreeMap<&'static str, Component>)>,
     names: &mut BTreeSet<&'static str>,
     vars: &mut BTreeMap<&'static str, String>,
 ) -> Option<InternalNavigationTarget> {
     // check static paths
     if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
         match &route.content {
-            RouteTarget::TComponent(c) => components.push(*c),
+            RouteTarget::TComponent(main, side) => {
+                components.push((*main, BTreeMap::from_iter(side.clone().into_iter())));
+            }
             RouteTarget::TRedirect(t) => return Some(t.clone()),
         }
 
@@ -305,7 +307,9 @@ fn match_segment(
             if path.len() == 1 {
                 if let Some(content) = &sub.index {
                     match content {
-                        RouteTarget::TComponent(c) => components.push(*c),
+                        RouteTarget::TComponent(main, side) => {
+                            components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
+                        }
                         RouteTarget::TRedirect(t) => return Some(t.clone()),
                     }
                 }
@@ -323,7 +327,9 @@ fn match_segment(
                 sub,
             } => {
                 match content {
-                    RouteTarget::TComponent(c) => components.push(*c),
+                    RouteTarget::TComponent(main, side) => {
+                        components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
+                    }
                     RouteTarget::TRedirect(t) => return Some(t.clone()),
                 }
 
@@ -338,7 +344,8 @@ fn match_segment(
                     if path.len() == 1 {
                         if let Some(content) = &sub.index {
                             match content {
-                                RouteTarget::TComponent(c) => components.push(*c),
+                                RouteTarget::TComponent(main, side) => components
+                                    .push((*main, BTreeMap::from_iter(side.clone().into_iter()))),
                                 RouteTarget::TRedirect(t) => return Some(t.clone()),
                             }
                         }
@@ -348,7 +355,9 @@ fn match_segment(
                 }
             }
             DynamicRoute::Fallback(content) => match content {
-                RouteTarget::TComponent(c) => components.push(*c),
+                RouteTarget::TComponent(main, side) => {
+                    components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
+                }
                 RouteTarget::TRedirect(t) => return Some(t.clone()),
             },
         }

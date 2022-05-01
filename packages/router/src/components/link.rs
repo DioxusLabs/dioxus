@@ -5,7 +5,7 @@ use log::error;
 
 use crate::{
     helpers::{construct_named_path, sub_to_router},
-    prelude::NavigationTarget,
+    navigation::NavigationTarget,
     service::RouterMessage,
 };
 

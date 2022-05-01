@@ -11,20 +11,20 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
-        index: Some(TComponent(Home)),
+        index: Some(TComponent(Home, vec![])),
         dynamic: DynamicRoute::None,
         fixed: vec![
             (
                 String::from("blog"),
                 Route {
                     name: None,
-                    content: TComponent(Blog),
+                    content: TComponent(Blog, vec![]),
                     sub: Some(Segment {
-                        index: Some(TComponent(BlogWelcome)),
+                        index: Some(TComponent(BlogWelcome, vec![])),
                         dynamic: DynamicRoute::Variable {
                             name: Some("blog_post"),
                             key: "blog_id",
-                            content: TComponent(BlogPost),
+                            content: TComponent(BlogPost, vec![]),
                             sub: None,
                         },
                         fixed: vec![],
@@ -35,7 +35,7 @@ fn app(cx: Scope) -> Element {
                 String::from("raspberry"),
                 Route {
                     name: Some("raspberry"),
-                    content: TComponent(RaspberryPage),
+                    content: TComponent(RaspberryPage, vec![("other", StrawberryPage)]),
                     sub: None,
                 },
             ),
@@ -51,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 String::from("named_fallback"),
                 Route {
                     name: None,
-                    content: TComponent(NamedNavigationFallback),
+                    content: TComponent(NamedNavigationFallback, vec![]),
                     sub: None,
                 },
             ),
@@ -63,6 +63,11 @@ fn app(cx: Scope) -> Element {
             r#"
                 .active {{
                     color: red;
+                }}
+                .other {{
+                    color: white;
+                    background-color: blue;
+                    float: right;
                 }}
             "#
         }
@@ -82,6 +87,7 @@ fn app(cx: Scope) -> Element {
                     "go forward"
                 }
                 PathDisplay {}
+                Outlet { name: "other" }
             }
             Outlet { }
         }
@@ -208,5 +214,15 @@ fn PathDisplay(cx: Scope) -> Element {
 fn RaspberryPage(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Raspberries are very tasty!" }
+    })
+}
+
+#[allow(non_snake_case)]
+fn StrawberryPage(cx: Scope) -> Element {
+    cx.render(rsx! {
+        span {
+            class: "other",
+            "Strawberries are good too!"
+        }
     })
 }

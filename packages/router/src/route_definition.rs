@@ -52,7 +52,7 @@ pub enum DynamicRoute {
 #[derive(Clone)]
 pub enum RouteTarget {
     /// TODO
-    TComponent(Component),
+    TComponent(Component, Vec<(&'static str, Component)>),
     /// TODO
     TRedirect(InternalNavigationTarget),
 }
