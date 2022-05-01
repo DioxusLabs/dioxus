@@ -4,6 +4,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dioxus_core::ScopeState;
 use log::error;
+use urlencoding::encode;
 
 use crate::{contexts::RouterContext, navigation::NamedNavigationSegment};
 
@@ -50,8 +51,8 @@ pub(crate) fn construct_named_path(
         match seg {
             NamedNavigationSegment::Fixed(f) => path = format!("{path}{f}/"),
             NamedNavigationSegment::Variable(key) => {
-                let (_, value) = match vars.iter().find(|(k, _)| k == key) {
-                    Some(v) => v,
+                let value = match vars.iter().find(|(k, _)| k == key) {
+                    Some((_, v)) => encode(v).into_owned(),
                     None => {
                         error!(r#"no value for varible "{key}""#);
                         return None;

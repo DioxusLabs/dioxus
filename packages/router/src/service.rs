@@ -7,6 +7,7 @@ use dioxus_core::{Component, ScopeId};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
 use log::error;
+use urlencoding::decode;
 
 use crate::{
     contexts::RouterContext,
@@ -323,7 +324,9 @@ fn match_segment(
                     RouteTarget::TRedirect(t) => return Some(t.clone()),
                 }
 
-                vars.insert(key, path[0].to_string());
+                if let Ok(val) = decode(path[0]) {
+                    vars.insert(key, val.into_owned());
+                }
                 if let Some(name) = name {
                     names.insert(name);
                 }

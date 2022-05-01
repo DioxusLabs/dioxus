@@ -144,6 +144,12 @@ fn BlogWelcome(cx: Scope) -> Element {
                     "Go to second blog post"
                 }
             }
+            li {
+                Link {
+                    target: RName("blog_post",vec![("blog_id", String::from("🎺"))]),
+                    "Go to trumpet blog post 🎺"
+                }
+            }
         }
     })
 }
