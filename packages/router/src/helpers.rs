@@ -34,9 +34,11 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
 
 pub(crate) fn construct_named_path(
     name: &'static str,
-    vars: &Vec<(&'static str, String)>,
+    vars: &[(&'static str, String)],
+    query_params: &[(String, String)],
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
+    // find path layout
     let segments = match targets.get(name) {
         Some(x) => x,
         None => {
@@ -45,8 +47,8 @@ pub(crate) fn construct_named_path(
         }
     };
 
+    // assemble path
     let mut path = String::from("/");
-
     for seg in segments {
         match seg {
             NamedNavigationSegment::Fixed(f) => path = format!("{path}{f}/"),
@@ -60,6 +62,13 @@ pub(crate) fn construct_named_path(
                 };
                 path = format!("{path}{value}/");
             }
+        }
+    }
+
+    // add query
+    if !query_params.is_empty() {
+        if let Ok(q) = serde_urlencoded::to_string(query_params) {
+            path = format!("{path}?{q}")
         }
     }
 

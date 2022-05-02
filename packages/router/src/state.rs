@@ -22,6 +22,20 @@ pub struct CurrentRoute {
     /// The current path.
     pub path: String,
 
+    /// The current query string, if present.
+    pub query: Option<String>,
+
     /// The variables read from the path as specified by the current routes.
     pub variables: BTreeMap<&'static str, String>,
+}
+
+impl CurrentRoute {
+    /// Get the query parameters as a [`BTreeMap`].
+    pub fn query_params(&self) -> Option<BTreeMap<String, String>> {
+        if let Some(query) = &self.query {
+            serde_urlencoded::from_str(query).ok()
+        } else {
+            None
+        }
+    }
 }

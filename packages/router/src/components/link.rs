@@ -68,8 +68,10 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     // generate href
     let href = match target {
         NtPath(path) | NavigationTarget::NtExternal(path) => path.to_string(),
-        NtName(name, vars) => construct_named_path(name, vars, &router.named_routes)
-            .unwrap_or(String::from("invalid path")),
+        NtName(name, vars, query_params) => {
+            construct_named_path(name, vars, query_params, &router.named_routes)
+                .unwrap_or(String::from("invalid path"))
+        }
     };
 
     // check if route is active
@@ -91,7 +93,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                         }
                     }
                 }
-                NtName(n, _) => {
+                NtName(n, _, _) => {
                     if state.names.contains(n) {
                         return format!(" {ac}");
                     }

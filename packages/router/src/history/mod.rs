@@ -13,6 +13,8 @@ pub use memory::*;
 pub trait HistoryProvider {
     /// Get the current path.
     fn current_path(&self) -> &str;
+    /// Get the current query string.
+    fn current_query(&self) -> Option<&str>;
 
     /// Check if there is a prior path that can be navigated back to.
     fn can_go_back(&self) -> bool;

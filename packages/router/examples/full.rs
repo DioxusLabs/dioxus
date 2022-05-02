@@ -43,7 +43,7 @@ fn app(cx: Scope) -> Element {
                 String::from("the_best_berry"),
                 Route {
                     name: Some("best_berry"),
-                    content: TRedirect(ItName("raspberry", vec![])),
+                    content: TRedirect(ItName("raspberry", vec![], vec![])),
                     sub: None,
                 },
             ),
@@ -77,7 +77,7 @@ fn app(cx: Scope) -> Element {
             routes: routes,
             header {
                 Link {
-                    target: NtName("root_index", vec![])
+                    target: NtName("root_index", vec![], vec![])
                     "go home"
                 }
                 GoBackButton {
@@ -107,7 +107,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("nonexisting name", vec![]),
+                    target: NtName("nonexisting name", vec![], vec![]),
                     "trigger a named navigation error"
                 }
             }
@@ -119,13 +119,13 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("raspberry", vec![]),
+                    target: NtName("raspberry", vec![], vec![]),
                     "Go to the page about raspberries"
                 }
             }
             li {
                 Link {
-                    target: NtName("best_berry", vec![]),
+                    target: NtName("best_berry", vec![], vec![]),
                     "Go to the page about the best berry"
                 }
             }
@@ -154,13 +154,13 @@ fn BlogWelcome(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("2"))]),
+                    target: NtName("blog_post",vec![("blog_id", String::from("2"))], vec![]),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))]),
+                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))], vec![]),
                     "Go to trumpet blog post 🎺"
                 }
             }

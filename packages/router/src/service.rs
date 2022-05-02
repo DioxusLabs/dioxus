@@ -113,9 +113,10 @@ impl RouterService {
                 RouterMessage::GoForward => self.history.go_forward(),
                 RouterMessage::Push(target) => match target {
                     InternalNavigationTarget::ItPath(path) => self.history.push(path),
-                    InternalNavigationTarget::ItName(name, vars) => {
-                        let path = construct_named_path(name, &vars, &self.named_routes)
-                            .or(self.named_navigation_fallback_path.clone());
+                    InternalNavigationTarget::ItName(name, vars, query_params) => {
+                        let path =
+                            construct_named_path(name, &vars, &query_params, &self.named_routes)
+                                .or(self.named_navigation_fallback_path.clone());
                         if let Some(path) = path {
                             self.history.push(path);
                         }
@@ -123,9 +124,10 @@ impl RouterService {
                 },
                 RouterMessage::Replace(target) => match target {
                     InternalNavigationTarget::ItPath(path) => self.history.replace(path),
-                    InternalNavigationTarget::ItName(name, vars) => {
-                        let path = construct_named_path(name, &vars, &self.named_routes)
-                            .or(self.named_navigation_fallback_path.clone());
+                    InternalNavigationTarget::ItName(name, vars, query_param) => {
+                        let path =
+                            construct_named_path(name, &vars, &query_param, &self.named_routes)
+                                .or(self.named_navigation_fallback_path.clone());
                         if let Some(path) = path {
                             self.history.replace(path);
                         }
@@ -152,22 +154,23 @@ impl RouterService {
             can_go_forward,
             components,
             names,
-            path: s_path,
+            path,
+            query,
             variables,
         } = &mut *state;
 
         loop {
-            let mut path = self.history.current_path().to_string();
-
             // clear state
             *can_go_back = self.history.can_go_back();
             *can_go_forward = self.history.can_go_forward();
             components.clear();
             names.clear();
-            *s_path = path.clone();
+            *path = self.history.current_path().to_string();
+            *query = self.history.current_query().map(|q| q.to_string());
             variables.clear();
 
             // normalize and split path
+            let mut path = path.clone();
             path.remove(0);
             if path.ends_with("/") {
                 path.remove(path.len() - 1);
@@ -185,8 +188,8 @@ impl RouterService {
             if let Some(target) = next {
                 self.history.replace(match target {
                     InternalNavigationTarget::ItPath(p) => p,
-                    InternalNavigationTarget::ItName(name, vars) => {
-                        match construct_named_path(name, &vars, &self.named_routes)
+                    InternalNavigationTarget::ItName(name, vars, query_params) => {
+                        match construct_named_path(name, &vars, &query_params, &self.named_routes)
                             .or(self.named_navigation_fallback_path.clone())
                         {
                             Some(p) => p,

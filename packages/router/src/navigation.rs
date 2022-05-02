@@ -11,6 +11,8 @@ pub enum InternalNavigationTarget {
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
         Vec<(&'static str, String)>,
+        /// A list of query string parameters.
+        Vec<(String, String)>,
     ),
 }
 
@@ -18,7 +20,7 @@ impl From<NavigationTarget> for InternalNavigationTarget {
     fn from(t: NavigationTarget) -> Self {
         match t {
             NavigationTarget::NtPath(p) => Self::ItPath(p),
-            NavigationTarget::NtName(n, v) => Self::ItName(n, v),
+            NavigationTarget::NtName(n, v, p) => Self::ItName(n, v, p),
             NavigationTarget::NtExternal(_) => panic!(
                 "NavigationTarget::RExternal cannot be converted to InternalNavigationTarget"
             ),
@@ -37,6 +39,8 @@ pub enum NavigationTarget {
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
         Vec<(&'static str, String)>,
+        /// A list of query string parameters.
+        Vec<(String, String)>,
     ),
     /// Navigate to an external page.
     NtExternal(String),

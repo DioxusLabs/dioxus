@@ -21,10 +21,11 @@ impl Default for MemoryHistoryProvider {
 
 impl HistoryProvider for MemoryHistoryProvider {
     fn current_path<'a>(&'a self) -> &'a str {
-        dbg!(&self.current);
-        dbg!(&self.past);
-        dbg!(&self.future);
         self.current.path()
+    }
+
+    fn current_query(&self) -> Option<&str> {
+        self.current.query()
     }
 
     fn can_go_back(&self) -> bool {
