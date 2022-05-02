@@ -4,9 +4,9 @@
 #[derive(Clone)]
 pub enum InternalNavigationTarget {
     /// Navigate to the specified path.
-    IPath(String),
+    ItPath(String),
     /// Navigate to the route with the corresponding name.
-    IName(
+    ItName(
         /// The name of the target route.
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
@@ -17,9 +17,9 @@ pub enum InternalNavigationTarget {
 impl From<NavigationTarget> for InternalNavigationTarget {
     fn from(t: NavigationTarget) -> Self {
         match t {
-            NavigationTarget::RPath(p) => Self::IPath(p),
-            NavigationTarget::RName(n, v) => Self::IName(n, v),
-            NavigationTarget::RExternal(_) => panic!(
+            NavigationTarget::NtPath(p) => Self::ItPath(p),
+            NavigationTarget::NtName(n, v) => Self::ItName(n, v),
+            NavigationTarget::NtExternal(_) => panic!(
                 "NavigationTarget::RExternal cannot be converted to InternalNavigationTarget"
             ),
         }
@@ -30,28 +30,29 @@ impl From<NavigationTarget> for InternalNavigationTarget {
 #[derive(Clone)]
 pub enum NavigationTarget {
     /// Navigate to the specified path.
-    RPath(String),
+    NtPath(String),
     /// Navigate to the route with the corresponding name.
-    RName(
+    NtName(
         /// The name of the target route.
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
         Vec<(&'static str, String)>,
     ),
     /// Navigate to an external page.
-    RExternal(String),
+    NtExternal(String),
 }
 
 impl NavigationTarget {
-    /// Returns `true` if the navigation target is [`RExternal`].
+    /// Returns `true` if the navigation target is [`NtExternal`].
     ///
-    /// [`RExternal`]: NavigationTarget::RExternal
+    /// [`NtExternal`]: NavigationTarget::NtExternal
     #[must_use]
-    pub fn is_rexternal(&self) -> bool {
-        matches!(self, Self::RExternal(..))
+    pub fn is_nt_external(&self) -> bool {
+        matches!(self, Self::NtExternal(..))
     }
 }
 
+/// A specific path segment. Used to
 #[derive(Clone)]
 pub(crate) enum NamedNavigationSegment {
     Fixed(String),

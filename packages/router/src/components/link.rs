@@ -58,37 +58,38 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let mut active = String::new();
     if let Some(ac) = active_class {
         match target {
-            NavigationTarget::RPath(p) => {
+            NavigationTarget::NtPath(p) => {
                 if state.path.starts_with(p) {
                     active = ac;
                 }
             }
-            NavigationTarget::RName(n, _) => {
+            NavigationTarget::NtName(n, _) => {
                 if state.names.contains(n) {
                     active = ac
                 }
             }
-            NavigationTarget::RExternal(_) => { /* do nothing */ }
+            NavigationTarget::NtExternal(_) => { /* do nothing */ }
         }
     }
 
     // generate href
     let href = match target {
-        NavigationTarget::RPath(path) | NavigationTarget::RExternal(path) => path.to_string(),
-        NavigationTarget::RName(name, vars) => {
+        NavigationTarget::NtPath(path) | NavigationTarget::NtExternal(path) => path.to_string(),
+        NavigationTarget::NtName(name, vars) => {
             construct_named_path(name, vars, &router.named_routes)
                 .unwrap_or(String::from("invalid path"))
         }
     };
 
     // prepare prevented defaults
-    let prevent = match target.is_rexternal() {
+    let prevent = match target.is_nt_external() {
         true => "",
         false => "onclick",
     };
 
+    // get rel attribute or apply default if external
     let rel = rel
-        .or(if target.is_rexternal() {
+        .or(if target.is_nt_external() {
             Some("noopener noreferrer")
         } else {
             None
@@ -101,7 +102,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             class: "{active}",
             prevent_default: "{prevent}",
             onclick: move |_| {
-                if !target.is_rexternal() {
+                if !target.is_nt_external() {
                     tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();
                 }
             },

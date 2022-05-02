@@ -11,20 +11,20 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
-        index: Some(TComponent(Home, vec![])),
-        dynamic: DynamicRoute::None,
+        index: TComponent(Home),
+        dynamic: DrNone,
         fixed: vec![
             (
                 String::from("blog"),
                 Route {
                     name: None,
-                    content: TComponent(Blog, vec![]),
+                    content: TComponent(Blog),
                     sub: Some(Segment {
-                        index: Some(TComponent(BlogWelcome, vec![])),
-                        dynamic: DynamicRoute::Variable {
+                        index: TComponent(BlogWelcome),
+                        dynamic: DrVariable {
                             name: Some("blog_post"),
                             key: "blog_id",
-                            content: TComponent(BlogPost, vec![]),
+                            content: TComponent(BlogPost),
                             sub: None,
                         },
                         fixed: vec![],
@@ -35,7 +35,7 @@ fn app(cx: Scope) -> Element {
                 String::from("raspberry"),
                 Route {
                     name: Some("raspberry"),
-                    content: TComponent(RaspberryPage, vec![("other", StrawberryPage)]),
+                    content: TMulti(RaspberryPage, vec![("other", StrawberryPage)]),
                     sub: None,
                 },
             ),
@@ -43,7 +43,7 @@ fn app(cx: Scope) -> Element {
                 String::from("the_best_berry"),
                 Route {
                     name: Some("best_berry"),
-                    content: TRedirect(IName("raspberry", vec![])),
+                    content: TRedirect(ItName("raspberry", vec![])),
                     sub: None,
                 },
             ),
@@ -51,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 String::from("named_fallback"),
                 Route {
                     name: None,
-                    content: TComponent(NamedNavigationFallback, vec![]),
+                    content: TComponent(NamedNavigationFallback),
                     sub: None,
                 },
             ),
@@ -77,7 +77,7 @@ fn app(cx: Scope) -> Element {
             routes: routes,
             header {
                 Link {
-                    target: RName("root_index", vec![])
+                    target: NtName("root_index", vec![])
                     "go home"
                 }
                 GoBackButton {
@@ -101,31 +101,31 @@ fn Home(cx: Scope) -> Element {
         ul {
             li{
                 Link {
-                    target: RPath(String::from("/blog")),
+                    target: NtPath(String::from("/blog")),
                     "go to blog"
                 }
             }
             li {
                 Link {
-                    target: RName("nonexisting name", vec![]),
+                    target: NtName("nonexisting name", vec![]),
                     "trigger a named navigation error"
                 }
             }
             li {
                 Link {
-                    target: RExternal(String::from("https://dioxuslabs.com/")),
+                    target: NtExternal(String::from("https://dioxuslabs.com/")),
                     "Go to an external website"
                 }
             }
             li {
                 Link {
-                    target: RName("raspberry", vec![]),
+                    target: NtName("raspberry", vec![]),
                     "Go to the page about raspberries"
                 }
             }
             li {
                 Link {
-                    target: RName("best_berry", vec![]),
+                    target: NtName("best_berry", vec![]),
                     "Go to the page about the best berry"
                 }
             }
@@ -148,19 +148,19 @@ fn BlogWelcome(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: RPath(String::from("/blog/1")),
+                    target: NtPath(String::from("/blog/1")),
                     "Go to first blog post"
                 }
             }
             li {
                 Link {
-                    target: RName("blog_post",vec![("blog_id", String::from("2"))]),
+                    target: NtName("blog_post",vec![("blog_id", String::from("2"))]),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: RName("blog_post",vec![("blog_id", String::from("🎺"))]),
+                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))]),
                     "Go to trumpet blog post 🎺"
                 }
             }
@@ -183,7 +183,7 @@ fn BlogPost(cx: Scope) -> Element {
            "{id:#?}"
         }
         Link {
-            target: RPath(String::from("..")),
+            target: NtPath(String::from("..")),
             "go to blog list"
         }
     })

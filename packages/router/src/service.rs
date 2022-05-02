@@ -14,7 +14,7 @@ use crate::{
     helpers::construct_named_path,
     history::{HistoryProvider, MemoryHistoryProvider},
     navigation::{InternalNavigationTarget, NamedNavigationSegment},
-    route_definition::{DynamicRoute, RouteTarget, Segment},
+    route_definition::{DynamicRoute, Segment},
     state::CurrentRoute,
 };
 
@@ -112,8 +112,8 @@ impl RouterService {
                 RouterMessage::GoBack => self.history.go_back(),
                 RouterMessage::GoForward => self.history.go_forward(),
                 RouterMessage::Push(target) => match target {
-                    InternalNavigationTarget::IPath(path) => self.history.push(path),
-                    InternalNavigationTarget::IName(name, vars) => {
+                    InternalNavigationTarget::ItPath(path) => self.history.push(path),
+                    InternalNavigationTarget::ItName(name, vars) => {
                         let path = construct_named_path(name, &vars, &self.named_routes)
                             .or(self.named_navigation_fallback_path.clone());
                         if let Some(path) = path {
@@ -122,8 +122,8 @@ impl RouterService {
                     }
                 },
                 RouterMessage::Replace(target) => match target {
-                    InternalNavigationTarget::IPath(path) => self.history.replace(path),
-                    InternalNavigationTarget::IName(name, vars) => {
+                    InternalNavigationTarget::ItPath(path) => self.history.replace(path),
+                    InternalNavigationTarget::ItName(name, vars) => {
                         let path = construct_named_path(name, &vars, &self.named_routes)
                             .or(self.named_navigation_fallback_path.clone());
                         if let Some(path) = path {
@@ -176,26 +176,16 @@ impl RouterService {
 
             // handle index on root
             let next = if path.len() == 0 {
-                if let Some(target) = &self.routes.index {
-                    match target {
-                        RouteTarget::TComponent(main, side) => {
-                            components.push((*main, BTreeMap::from_iter(side.clone().into_iter())));
-                            names.insert("root_index");
-                            None
-                        }
-                        RouteTarget::TRedirect(t) => Some(t.clone()),
-                    }
-                } else {
-                    None
-                }
+                names.insert("root_index");
+                self.routes.index.add_to_list(components)
             } else {
                 match_segment(&segments, &self.routes, components, names, variables)
             };
 
             if let Some(target) = next {
                 self.history.replace(match target {
-                    InternalNavigationTarget::IPath(p) => p,
-                    InternalNavigationTarget::IName(name, vars) => {
+                    InternalNavigationTarget::ItPath(p) => p,
+                    InternalNavigationTarget::ItName(name, vars) => {
                         match construct_named_path(name, &vars, &self.named_routes)
                             .or(self.named_navigation_fallback_path.clone())
                         {
@@ -259,7 +249,7 @@ fn construct_named_targets(
         }
     }
 
-    if let DynamicRoute::Variable {
+    if let DynamicRoute::DrVariable {
         name,
         key,
         content: _,
@@ -292,26 +282,18 @@ fn match_segment(
 ) -> Option<InternalNavigationTarget> {
     // check static paths
     if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
-        match &route.content {
-            RouteTarget::TComponent(main, side) => {
-                components.push((*main, BTreeMap::from_iter(side.clone().into_iter())));
-            }
-            RouteTarget::TRedirect(t) => return Some(t.clone()),
-        }
-
         if let Some(name) = &route.name {
             names.insert(name);
         }
 
+        if let Some(target) = route.content.add_to_list(components) {
+            return Some(target);
+        }
+
         if let Some(sub) = &route.sub {
             if path.len() == 1 {
-                if let Some(content) = &sub.index {
-                    match content {
-                        RouteTarget::TComponent(main, side) => {
-                            components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
-                        }
-                        RouteTarget::TRedirect(t) => return Some(t.clone()),
-                    }
+                if let Some(target) = sub.index.add_to_list(components) {
+                    return Some(target);
                 }
             } else if path.len() > 1 {
                 return match_segment(&path[1..], sub, components, names, vars);
@@ -319,47 +301,40 @@ fn match_segment(
         }
     } else {
         match &segment.dynamic {
-            DynamicRoute::None => {}
-            DynamicRoute::Variable {
+            DynamicRoute::DrNone => {}
+            DynamicRoute::DrVariable {
                 name,
                 key,
                 content,
                 sub,
             } => {
-                match content {
-                    RouteTarget::TComponent(main, side) => {
-                        components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
-                    }
-                    RouteTarget::TRedirect(t) => return Some(t.clone()),
+                if let Some(name) = name {
+                    names.insert(name);
+                }
+
+                if let Some(target) = content.add_to_list(components) {
+                    return Some(target);
                 }
 
                 if let Ok(val) = decode(path[0]) {
                     vars.insert(key, val.into_owned());
                 }
-                if let Some(name) = name {
-                    names.insert(name);
-                }
 
                 if let Some(sub) = sub.as_deref() {
                     if path.len() == 1 {
-                        if let Some(content) = &sub.index {
-                            match content {
-                                RouteTarget::TComponent(main, side) => components
-                                    .push((*main, BTreeMap::from_iter(side.clone().into_iter()))),
-                                RouteTarget::TRedirect(t) => return Some(t.clone()),
-                            }
+                        if let Some(target) = sub.index.add_to_list(components) {
+                            return Some(target);
                         }
                     } else if path.len() > 1 {
                         return match_segment(&path[1..], sub, components, names, vars);
                     }
                 }
             }
-            DynamicRoute::Fallback(content) => match content {
-                RouteTarget::TComponent(main, side) => {
-                    components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
+            DynamicRoute::DrFallback(content) => {
+                if let Some(target) = content.add_to_list(components) {
+                    return Some(target);
                 }
-                RouteTarget::TRedirect(t) => return Some(t.clone()),
-            },
+            }
         }
     };
 
