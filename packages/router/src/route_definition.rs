@@ -75,6 +75,10 @@ pub enum RouteContent {
     /// Indicates the absence of content.
     ///
     /// When used for an `index` it marks that no index content exists.
+    ///
+    /// When used for a `fixed` or `dynamic` no components will be rendered. If a nested route is
+    /// matched its content will be rendered in the outlet where this segments content would be
+    /// rendered.
     TNone,
     /// A single component.
     TComponent(Component),
