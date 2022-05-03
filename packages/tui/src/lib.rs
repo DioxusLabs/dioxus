@@ -139,8 +139,6 @@ fn render_vdom(
             let to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
             let mut updated = true;
 
-            let mut focus_state = FocusState::default();
-
             loop {
                 /*
                 -> render the nodes in the right place with tui/crossterm
@@ -201,8 +199,6 @@ fn render_vdom(
                             //
                         }
                         Either::Right((evt, _o)) => {
-                            let mut evt_intersepted = false;
-
                             match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
@@ -212,13 +208,6 @@ fn render_vdom(
                                         {
                                             break;
                                         }
-                                        if let KeyCode::BackTab = key.code {
-                                            evt_intersepted =
-                                                focus_state.progress(&mut rdom, false);
-                                        }
-                                        if let KeyCode::Tab = key.code {
-                                            evt_intersepted = focus_state.progress(&mut rdom, true);
-                                        }
                                     }
                                     TermEvent::Resize(_, _) => updated = true,
                                     TermEvent::Mouse(_) => {}
@@ -226,23 +215,22 @@ fn render_vdom(
                                 InputEvent::Close => break,
                             };
 
-                            if !evt_intersepted {
-                                if let InputEvent::UserInput(evt) = evt.unwrap() {
-                                    register_event(evt);
-                                }
+                            if let InputEvent::UserInput(evt) = evt.unwrap() {
+                                register_event(evt);
                             }
                         }
                     }
                 }
 
                 {
-                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
+                    let (evts, rerender) = handler.get_events(&stretch.borrow(), &mut rdom);
+                    updated |= rerender;
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
                     let mutations = vdom.work_with_deadline(|| false);
                     for m in &mutations {
-                        focus_state.prune(m, &rdom);
+                        handler.prune(m, &rdom);
                     }
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);

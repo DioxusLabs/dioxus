@@ -2,6 +2,7 @@ use crate::Dom;
 
 use dioxus_core::ElementId;
 use dioxus_native_core::utils::{ElementProduced, PersistantElementIter};
+use dioxus_native_core_macro::sorted_str_slice;
 
 use std::num::NonZeroU16;
 
@@ -100,9 +101,8 @@ impl NodeDepState for Focus {
     }
 }
 
-// must be sorted
-const FOCUS_EVENTS: &[&str] = &["keydown", "keypress", "keyup"];
-const FOCUS_ATTRIBUTES: &[&str] = &["dioxus-prevent-default", "tabindex"];
+const FOCUS_EVENTS: &[&str] = &sorted_str_slice!(["keydown", "keypress", "keyup"]);
+const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["dioxus-prevent-default", "tabindex"]);
 
 #[derive(Default)]
 pub(crate) struct FocusState {
@@ -123,6 +123,7 @@ impl FocusState {
         let focus_level = &mut self.focus_level;
         let mut next_focus = None;
         let starting_focus_level = *focus_level;
+        let mut focus_level_changed = false;
 
         loop {
             let new = if forward {
@@ -131,22 +132,21 @@ impl FocusState {
                 self.focus_iter.prev(&rdom)
             };
             let new_id = new.id();
-            let current_level = rdom[new_id].state.focus.level;
             if let ElementProduced::Looped(_) = new {
                 let mut closest_level = None;
 
                 if forward {
                     // find the closest focusable element after the current level
                     rdom.traverse_depth_first(|n| {
-                        let current_level = n.state.focus.level;
-                        if current_level != *focus_level {
-                            if current_level > *focus_level {
+                        let node_level = n.state.focus.level;
+                        if node_level != *focus_level && node_level.focusable() {
+                            if node_level > *focus_level {
                                 if let Some(level) = &mut closest_level {
-                                    if current_level < *level {
-                                        *level = current_level;
+                                    if node_level < *level {
+                                        *level = node_level;
                                     }
                                 } else {
-                                    closest_level = Some(current_level);
+                                    closest_level = Some(node_level);
                                 }
                             }
                         }
@@ -154,15 +154,15 @@ impl FocusState {
                 } else {
                     // find the closest focusable element before the current level
                     rdom.traverse_depth_first(|n| {
-                        let current_level = n.state.focus.level;
-                        if current_level != *focus_level {
-                            if current_level < *focus_level {
+                        let node_level = n.state.focus.level;
+                        if node_level != *focus_level && node_level.focusable() {
+                            if node_level < *focus_level {
                                 if let Some(level) = &mut closest_level {
-                                    if current_level > *level {
-                                        *level = current_level;
+                                    if node_level > *level {
+                                        *level = node_level;
                                     }
                                 } else {
-                                    closest_level = Some(current_level);
+                                    closest_level = Some(node_level);
                                 }
                             }
                         }
@@ -174,6 +174,9 @@ impl FocusState {
 
                 if let Some(level) = closest_level {
                     *focus_level = level;
+                    if *focus_level != starting_focus_level {
+                        focus_level_changed = true;
+                    }
                 } else {
                     if forward {
                         *focus_level = FocusLevel::Unfocusable;
@@ -183,7 +186,7 @@ impl FocusState {
                 }
 
                 // if the focus level looped, we are done
-                if *focus_level == starting_focus_level {
+                if *focus_level == starting_focus_level && focus_level_changed {
                     break;
                 }
             }
@@ -197,6 +200,7 @@ impl FocusState {
                 loop_marker_id = Some(new_id);
             }
 
+            let current_level = rdom[new_id].state.focus.level;
             let after_previous_focused = if forward {
                 current_level >= *focus_level
             } else {

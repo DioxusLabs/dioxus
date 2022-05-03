@@ -14,6 +14,7 @@ use std::{
 };
 use stretch2::{prelude::Layout, Stretch};
 
+use crate::FocusState;
 use crate::{Dom, Node};
 
 // a wrapper around the input state for easier access
@@ -78,6 +79,7 @@ pub struct InnerInputState {
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
     screen: Option<(u16, u16)>,
+    focus_state: FocusState,
     // subscribers: Vec<Rc<dyn Fn() + 'static>>,
 }
 
@@ -89,6 +91,7 @@ impl InnerInputState {
             last_key_pressed: None,
             screen: None,
             // subscribers: Vec::new(),
+            focus_state: FocusState::default(),
         }
     }
 
@@ -96,54 +99,56 @@ impl InnerInputState {
     fn apply_event(&mut self, evt: &mut EventCore) {
         match evt.1 {
             // limitations: only two buttons may be held at once
-            EventData::Mouse(ref mut m) => match &mut self.mouse {
-                Some(state) => {
-                    let mut buttons = state.0.buttons;
-                    state.0 = m.clone();
-                    match evt.0 {
-                        // this code only runs when there are no buttons down
-                        "mouseup" => {
-                            buttons = 0;
-                            state.1 = Vec::new();
-                        }
-                        "mousedown" => {
-                            if state.1.contains(&m.buttons) {
-                                // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
-                                if state.1.len() > 1 {
-                                    evt.0 = "mouseup";
-                                    state.1 = vec![m.buttons];
-                                }
-                                // otherwise some other button was pressed. In testing it was consistantly this mapping
-                                else {
-                                    match m.buttons {
-                                        0x01 => state.1.push(0x02),
-                                        0x02 => state.1.push(0x01),
-                                        0x04 => state.1.push(0x01),
-                                        _ => (),
-                                    }
-                                }
-                            } else {
-                                state.1.push(m.buttons);
+            EventData::Mouse(ref mut m) => {
+                match &mut self.mouse {
+                    Some(state) => {
+                        let mut buttons = state.0.buttons;
+                        state.0 = m.clone();
+                        match evt.0 {
+                            // this code only runs when there are no buttons down
+                            "mouseup" => {
+                                buttons = 0;
+                                state.1 = Vec::new();
                             }
+                            "mousedown" => {
+                                if state.1.contains(&m.buttons) {
+                                    // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
+                                    if state.1.len() > 1 {
+                                        evt.0 = "mouseup";
+                                        state.1 = vec![m.buttons];
+                                    }
+                                    // otherwise some other button was pressed. In testing it was consistantly this mapping
+                                    else {
+                                        match m.buttons {
+                                            0x01 => state.1.push(0x02),
+                                            0x02 => state.1.push(0x01),
+                                            0x04 => state.1.push(0x01),
+                                            _ => (),
+                                        }
+                                    }
+                                } else {
+                                    state.1.push(m.buttons);
+                                }
 
-                            buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
+                                buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
+                            }
+                            _ => (),
                         }
-                        _ => (),
+                        state.0.buttons = buttons;
+                        m.buttons = buttons;
                     }
-                    state.0.buttons = buttons;
-                    m.buttons = buttons;
+                    None => {
+                        self.mouse = Some((
+                            m.clone(),
+                            if m.buttons == 0 {
+                                Vec::new()
+                            } else {
+                                vec![m.buttons]
+                            },
+                        ));
+                    }
                 }
-                None => {
-                    self.mouse = Some((
-                        m.clone(),
-                        if m.buttons == 0 {
-                            Vec::new()
-                        } else {
-                            vec![m.buttons]
-                        },
-                    ));
-                }
-            },
+            }
             EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
@@ -161,14 +166,27 @@ impl InnerInputState {
 
     fn update(
         &mut self,
-        evts: &mut [EventCore],
+        evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
         dom: &mut Dom,
-    ) {
+    ) -> bool {
         let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
 
         self.wheel = None;
+        let mut force_redraw = false;
+
+        evts.retain(|e| match &e.1 {
+            EventData::Keyboard(k) => match k.key_code {
+                KeyCode::Tab => {
+                    let focus_event = self.focus_state.progress(dom, !k.shift_key);
+                    force_redraw |= focus_event;
+                    !focus_event
+                }
+                _ => true,
+            },
+            _ => true,
+        });
 
         for e in evts.iter_mut() {
             self.apply_event(e);
@@ -179,6 +197,7 @@ impl InnerInputState {
         // for s in &self.subscribers {
         //     s();
         // }
+        force_redraw
     }
 
     fn resolve_mouse_events(
@@ -517,10 +536,15 @@ impl RinkInputHandler {
         )
     }
 
-    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
+    pub(crate) fn prune(&self, mutations: &dioxus_core::Mutations, rdom: &Dom) {
+        self.state.borrow_mut().focus_state.prune(mutations, rdom);
+    }
+
+    // returns a list of events and if a event will force a rerender
+    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> (Vec<UserEvent>, bool) {
         let mut resolved_events = Vec::new();
 
-        (*self.state).borrow_mut().update(
+        let rerender = (*self.state).borrow_mut().update(
             &mut (*self.queued_events).borrow_mut(),
             &mut resolved_events,
             layout,
@@ -574,7 +598,7 @@ impl RinkInputHandler {
             }
         }
 
-        resolved_events
+        (resolved_events, rerender)
     }
 }
 
@@ -759,7 +783,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
                 12 => KeyCode::F12,
                 _ => return None,
             },
-            TermKeyCode::BackTab => return None,
+            TermKeyCode::BackTab => KeyCode::Tab,
             TermKeyCode::Null => return None,
             _ => return None,
         };

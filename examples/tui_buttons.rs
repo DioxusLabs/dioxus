@@ -20,6 +20,7 @@ fn Button(cx: Scope) -> Element {
             justify_content: "center",
             align_items: "center",
             onkeydown: |_| state.modify(|s| !s),
+            onclick: |_| state.modify(|s| !s),
 
             "{text}"
         }
