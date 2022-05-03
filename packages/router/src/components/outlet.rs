@@ -10,6 +10,13 @@ use crate::{contexts::OutletContext, helpers::sub_to_router};
 /// Properties for an [`Outlet`].
 #[derive(PartialEq, Props)]
 pub struct OutletProps {
+    /// Override the [`Outlet`]s depth.
+    ///
+    /// By default an outlets depth will increase with each nesting. This allows you to override
+    /// that depth. Descendants will ignore this override.
+    ///
+    /// Be careful when using this option. It is very easy to create a recursive component with it.
+    pub depth: Option<usize>,
     /// The name of the side_content to render. Will render main content if absent.
     pub name: Option<&'static str>,
 }
@@ -67,6 +74,10 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
         cx.provide_context(new_ctx);
         depth
     });
+    let depth = match cx.props.depth {
+        Some(x) => x,
+        None => *depth,
+    };
 
     // get router state and register for updates
     let router = match sub_to_router(&cx) {
@@ -81,11 +92,11 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let state = router.state.read().unwrap();
     let X = if let Some(name) = cx.props.name {
         match state.components.1.get(name) {
-            Some(x) => x.get(*depth),
+            Some(x) => x.get(depth),
             None => None,
         }
     } else {
-        state.components.0.get(*depth)
+        state.components.0.get(depth)
     };
 
     // render component or nothing
