@@ -14,6 +14,7 @@ use crate::{
     helpers::construct_named_path,
     history::{HistoryProvider, MemoryHistoryProvider},
     navigation::{InternalNavigationTarget, NamedNavigationSegment},
+    prelude::RouteContent,
     route_definition::{DynamicRoute, Segment},
     state::CurrentRoute,
 };
@@ -48,6 +49,7 @@ pub(crate) enum RouterMessage {
 /// The [`RouterService`] provides information about its current state via the `state` field the
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
+    global_fallback: RouteContent,
     history: Box<dyn HistoryProvider>,
     named_navigation_fallback_path: Option<String>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
@@ -67,6 +69,7 @@ impl RouterService {
         update: Arc<dyn Fn(ScopeId)>,
         named_navigation_fallback_path: Option<String>,
         active_class: Option<String>,
+        global_fallback: RouteContent,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -88,6 +91,7 @@ impl RouterService {
 
         (
             Self {
+                global_fallback,
                 history: Box::new(MemoryHistoryProvider::default()),
                 named_navigation_fallback_path,
                 named_routes,
@@ -182,7 +186,14 @@ impl RouterService {
                 names.insert("root_index");
                 self.routes.index.add_to_list(components)
             } else {
-                match_segment(&segments, &self.routes, components, names, variables)
+                match_segment(
+                    &segments,
+                    &self.routes,
+                    components,
+                    names,
+                    variables,
+                    &self.global_fallback,
+                )
             };
 
             if let Some(target) = next {
@@ -282,6 +293,7 @@ fn match_segment(
     components: &mut Vec<(Component, BTreeMap<&'static str, Component>)>,
     names: &mut BTreeSet<&'static str>,
     vars: &mut BTreeMap<&'static str, String>,
+    global_fallback: &RouteContent,
 ) -> Option<InternalNavigationTarget> {
     // check static paths
     if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
@@ -299,12 +311,24 @@ fn match_segment(
                     return Some(target);
                 }
             } else if path.len() > 1 {
-                return match_segment(&path[1..], sub, components, names, vars);
+                return match_segment(&path[1..], sub, components, names, vars, global_fallback);
             }
+        } else if path.len() > 1 && !global_fallback.is_tnone() {
+            components.clear();
+            names.clear();
+            vars.clear();
+            return global_fallback.add_to_list(components);
         }
     } else {
         match &segment.dynamic {
-            DynamicRoute::DrNone => {}
+            DynamicRoute::DrNone => {
+                if !global_fallback.is_tnone() {
+                    components.clear();
+                    names.clear();
+                    vars.clear();
+                    return global_fallback.add_to_list(components);
+                }
+            }
             DynamicRoute::DrVariable {
                 name,
                 key,
@@ -329,13 +353,30 @@ fn match_segment(
                             return Some(target);
                         }
                     } else if path.len() > 1 {
-                        return match_segment(&path[1..], sub, components, names, vars);
+                        return match_segment(
+                            &path[1..],
+                            sub,
+                            components,
+                            names,
+                            vars,
+                            global_fallback,
+                        );
                     }
+                } else if path.len() > 1 && !global_fallback.is_tnone() {
+                    components.clear();
+                    names.clear();
+                    vars.clear();
+                    return global_fallback.add_to_list(components);
                 }
             }
             DynamicRoute::DrFallback(content) => {
-                if let Some(target) = content.add_to_list(components) {
-                    return Some(target);
+                if path.len() > 1 && !global_fallback.is_tnone() {
+                    components.clear();
+                    names.clear();
+                    vars.clear();
+                    return global_fallback.add_to_list(components);
+                } else {
+                    return content.add_to_list(components);
                 }
             }
         }

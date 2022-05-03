@@ -3,7 +3,11 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use log::warn;
 
-use crate::{contexts::RouterContext, route_definition::Segment, service::RouterService};
+use crate::{
+    contexts::RouterContext,
+    route_definition::{RouteContent, Segment},
+    service::RouterService,
+};
 
 /// The props for a [`Router`].
 #[derive(Props)]
@@ -15,6 +19,9 @@ pub struct RouterProps<'a> {
     /// The components to render where the [`Router`] itself is. Should contain at least one
     /// [Outlet](crate::components::Outlet).
     pub children: Element<'a>,
+    /// The global fallback content.
+    #[props(default)]
+    pub global_fallback: RouteContent,
     /// A path that the router navigates to if a named navigation doesn't result in a path.
     pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
@@ -42,6 +49,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.schedule_update_any(),
             cx.props.named_navigation_fallback_path.clone(),
             cx.props.active_class.map(|ac| ac.to_string()),
+            cx.props.global_fallback.clone(),
         );
         cx.provide_context(context);
 

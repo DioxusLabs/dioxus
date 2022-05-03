@@ -113,4 +113,18 @@ impl RouteContent {
 
         None
     }
+
+    /// Returns `true` if the route content is [`TNone`].
+    ///
+    /// [`TNone`]: RouteContent::TNone
+    #[must_use]
+    pub fn is_tnone(&self) -> bool {
+        matches!(self, Self::TNone)
+    }
+}
+
+impl Default for RouteContent {
+    fn default() -> Self {
+        Self::TNone
+    }
 }
