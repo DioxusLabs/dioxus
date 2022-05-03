@@ -25,8 +25,8 @@ pub struct CurrentRoute {
     /// The current query string, if present.
     pub query: Option<String>,
 
-    /// The variables read from the path as specified by the current routes.
-    pub variables: BTreeMap<&'static str, String>,
+    /// The parameters read from the path as specified by the current routes.
+    pub parameters: BTreeMap<&'static str, String>,
 }
 
 impl CurrentRoute {

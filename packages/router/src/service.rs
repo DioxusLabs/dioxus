@@ -160,7 +160,7 @@ impl RouterService {
             names,
             path,
             query,
-            variables,
+            parameters: variables,
         } = &mut *state;
 
         loop {

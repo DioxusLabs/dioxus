@@ -172,7 +172,7 @@ fn BlogWelcome(cx: Scope) -> Element {
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).expect("called in router");
 
-    let id = route.variables.get("blog_id");
+    let id = route.parameters.get("blog_id");
     let title = id
         .map(|id| format!("Blog Post: {id}"))
         .unwrap_or(String::from("Unknown Blog Post"));
