@@ -74,7 +74,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
 
         if let Some(pre) = &self.prefix {
             if p.starts_with(pre) {
-                p = p.split_at(pre.len() - 1).1.to_string();
+                p = p.split_at(pre.len()).1.to_string();
             }
         }
 
