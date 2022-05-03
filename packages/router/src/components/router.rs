@@ -21,7 +21,7 @@ pub struct RouterProps<'a> {
     pub children: Element<'a>,
     /// The global fallback content.
     #[props(default)]
-    pub global_fallback: RouteContent,
+    pub fallback: RouteContent,
     /// A path that the router navigates to if a named navigation doesn't result in a path.
     pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
@@ -49,7 +49,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.schedule_update_any(),
             cx.props.named_navigation_fallback_path.clone(),
             cx.props.active_class.map(|ac| ac.to_string()),
-            cx.props.global_fallback.clone(),
+            cx.props.fallback.clone(),
         );
         cx.provide_context(context);
 
