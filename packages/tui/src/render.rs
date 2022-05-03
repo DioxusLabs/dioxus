@@ -5,7 +5,7 @@ use stretch2::{
     prelude::{Layout, Size},
     Stretch,
 };
-use tui::{backend::CrosstermBackend, layout::Rect};
+use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
     style::{RinkColor, RinkStyle},
@@ -43,7 +43,7 @@ pub(crate) fn render_vnode(
             }
 
             impl<'a> RinkWidget for Label<'a> {
-                fn render(self, area: Rect, mut buf: RinkBuffer) {
+                fn render(self, area: Rect, buf: &mut RinkBuffer) {
                     for (i, c) in self.text.char_indices() {
                         let mut new_cell = RinkCell::default();
                         new_cell.set_style(self.style);
@@ -81,7 +81,7 @@ pub(crate) fn render_vnode(
 }
 
 impl RinkWidget for &Node {
-    fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
+    fn render(self, area: Rect, mut buf: &mut RinkBuffer<'_>) {
         use tui::symbols::line::*;
 
         enum Direction {
@@ -266,6 +266,10 @@ impl RinkWidget for &Node {
                 let mut new_cell = RinkCell::default();
                 if let Some(c) = self.state.style.core.bg {
                     new_cell.bg = c;
+                }
+                if self.state.focused {
+                    new_cell.bg.alpha = 100;
+                    new_cell.bg.color = new_cell.bg.blend(Color::White);
                 }
                 buf.set(x, y, new_cell);
             }

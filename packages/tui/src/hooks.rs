@@ -550,7 +550,6 @@ impl RinkInputHandler {
             })
             .map(|evt| (evt.0, evt.1.into_any()));
 
-        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
         let mut hm: FxHashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = FxHashMap::default();
         for (event, data) in events {
             if let Some(v) = hm.get_mut(event) {
@@ -562,13 +561,15 @@ impl RinkInputHandler {
         for (event, datas) in hm {
             for node in dom.get_listening_sorted(event) {
                 for data in &datas {
-                    resolved_events.push(UserEvent {
-                        scope_id: None,
-                        priority: EventPriority::Medium,
-                        name: event,
-                        element: Some(node.id),
-                        data: data.clone(),
-                    });
+                    if node.state.focused {
+                        resolved_events.push(UserEvent {
+                            scope_id: None,
+                            priority: EventPriority::Medium,
+                            name: event,
+                            element: Some(node.id),
+                            data: data.clone(),
+                        });
+                    }
                 }
             }
         }

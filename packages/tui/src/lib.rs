@@ -7,7 +7,9 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, state::*};
+use dioxus_native_core::real_dom::{NodeType, RealDom};
+use dioxus_native_core::state::*;
+use dioxus_native_core::utils::PersistantElementIter;
 use dioxus_native_core_macro::State;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -42,6 +44,7 @@ struct NodeState {
     // depends on attributes, the C component of it's parent and a u8 context
     #[parent_dep_state(style)]
     style: StyleModifier,
+    focused: bool,
 }
 
 #[derive(Clone)]
@@ -130,7 +133,10 @@ fn render_vdom(
             }
 
             let to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
-            let mut resized = true;
+            let mut updated = true;
+
+            let mut focus_iter = PersistantElementIter::new();
+            let mut focus_id = ElementId(0);
 
             loop {
                 /*
@@ -144,8 +150,8 @@ fn render_vdom(
                 todo: lazy re-rendering
                 */
 
-                if !to_rerender.is_empty() || resized {
-                    resized = false;
+                if !to_rerender.is_empty() || updated {
+                    updated = false;
                     fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
@@ -192,6 +198,8 @@ fn render_vdom(
                             //
                         }
                         Either::Right((evt, _o)) => {
+                            let mut evt_intersepted = false;
+
                             match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
@@ -201,15 +209,51 @@ fn render_vdom(
                                         {
                                             break;
                                         }
+                                        if let KeyCode::BackTab = key.code {
+                                            let mut new_focused_id;
+                                            loop {
+                                                new_focused_id = focus_iter.prev(&rdom).id();
+                                                if let NodeType::Element { .. } =
+                                                    &rdom[new_focused_id].node_type
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                            rdom[focus_id].state.focused = false;
+                                            focus_id = new_focused_id;
+                                            rdom[focus_id].state.focused = true;
+                                            evt_intersepted = true;
+                                            updated = true;
+                                            // println!("{:?}", focus_id);
+                                        }
+                                        if let KeyCode::Tab = key.code {
+                                            let mut new_focused_id;
+                                            loop {
+                                                new_focused_id = focus_iter.next(&rdom).id();
+                                                if let NodeType::Element { .. } =
+                                                    &rdom[new_focused_id].node_type
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                            rdom[focus_id].state.focused = false;
+                                            focus_id = new_focused_id;
+                                            rdom[focus_id].state.focused = true;
+                                            evt_intersepted = true;
+                                            updated = true;
+                                            // println!("{:?}", focus_id);
+                                        }
                                     }
-                                    TermEvent::Resize(_, _) => resized = true,
+                                    TermEvent::Resize(_, _) => updated = true,
                                     TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Close => break,
                             };
 
-                            if let InputEvent::UserInput(evt) = evt.unwrap() {
-                                register_event(evt);
+                            if !evt_intersepted {
+                                if let InputEvent::UserInput(evt) = evt.unwrap() {
+                                    register_event(evt);
+                                }
                             }
                         }
                     }
@@ -221,6 +265,9 @@ fn render_vdom(
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
                     let mutations = vdom.work_with_deadline(|| false);
+                    for m in &mutations {
+                        focus_iter.prune(m, &rdom);
+                    }
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
