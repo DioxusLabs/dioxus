@@ -9,6 +9,9 @@ use super::HistoryProvider;
 /// A [`HistoryProvider`] that uses the [History API] and [Location API] to integrate with the
 /// browser.
 ///
+/// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
+/// [Location API]: https://developer.mozilla.org/en-US/docs/Web/API/Location
+///
 /// # Prefix
 /// This [`HistoryProvider`] supports a prefix, which allows its use for web apps not located at the
 /// root of their domain.
