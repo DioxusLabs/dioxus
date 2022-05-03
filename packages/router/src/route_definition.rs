@@ -18,6 +18,12 @@ pub struct Segment {
     pub dynamic: DynamicRoute,
 }
 
+impl Default for Segment {
+    fn default() -> Self {
+        Self { index: Default::default(), fixed: Default::default(), dynamic: Default::default() }
+    }
+}
+
 /// A definition of a static route.
 #[derive(Clone)]
 pub struct Route {
@@ -35,6 +41,16 @@ pub struct Route {
     pub content: RouteContent,
     /// The routes for the next path segment.
     pub sub: Option<Segment>,
+}
+
+impl Default for Route {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            content: Default::default(),
+            sub: Default::default(),
+        }
+    }
 }
 
 /// A dynamic route definition.
@@ -67,6 +83,12 @@ pub enum DynamicRoute {
     },
     /// A fallback that is rendered when no other route matches.
     DrFallback(RouteContent),
+}
+
+impl Default for DynamicRoute {
+    fn default() -> Self {
+        Self::DrNone
+    }
 }
 
 /// The actual content of a [`Route`] or [`DynamicRoute`].
