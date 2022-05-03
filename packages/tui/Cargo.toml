@@ -23,7 +23,7 @@ crossterm = "0.23.0"
 anyhow = "1.0.42"
 tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
-stretch2 = { git = "https://github.com/DioxusLabs/stretch" }
+stretch2 = "0.4.2"
 smallvec = "1.6"
 fxhash = "0.2"
 anymap = "0.12.1"
