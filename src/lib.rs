@@ -47,7 +47,7 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "router")]
-    pub use dioxus_router::{use_route, use_router, Link, Redirect, Route, Router, UseRoute};
+    pub use dioxus_router::prelude::*;
 
     #[cfg(feature = "fermi")]
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
