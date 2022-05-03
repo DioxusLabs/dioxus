@@ -7,7 +7,7 @@ use fxhash::{FxHashMap, FxHashSet};
 use dioxus_html::{on::*, KeyCode};
 use std::{
     any::Any,
-    cell::RefCell,
+    cell::{RefCell, RefMut},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
@@ -79,7 +79,7 @@ pub struct InnerInputState {
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
     screen: Option<(u16, u16)>,
-    focus_state: FocusState,
+    pub(crate) focus_state: FocusState,
     // subscribers: Vec<Rc<dyn Fn() + 'static>>,
 }
 
@@ -170,19 +170,14 @@ impl InnerInputState {
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
         dom: &mut Dom,
-    ) -> bool {
+    ) {
         let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
 
         self.wheel = None;
-        let mut force_redraw = false;
 
         evts.retain(|e| match &e.1 {
             EventData::Keyboard(k) => match k.key_code {
-                KeyCode::Tab => {
-                    let focus_event = self.focus_state.progress(dom, !k.shift_key);
-                    force_redraw |= focus_event;
-                    !focus_event
-                }
+                KeyCode::Tab => !self.focus_state.progress(dom, !k.shift_key),
                 _ => true,
             },
             _ => true,
@@ -197,11 +192,10 @@ impl InnerInputState {
         // for s in &self.subscribers {
         //     s();
         // }
-        force_redraw
     }
 
     fn resolve_mouse_events(
-        &self,
+        &mut self,
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
@@ -343,14 +337,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // mousedown
+            // mousedown
+            if data.clicked {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains && data.clicked {
+                    if currently_contains {
                         try_create_event(
                             "mousedown",
                             Arc::new(data.mouse_data.clone()),
@@ -363,14 +357,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // mouseup
+            // mouseup
+            if data.released {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseup") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains && data.released {
+                    if currently_contains {
                         try_create_event(
                             "mouseup",
                             Arc::new(data.mouse_data.clone()),
@@ -383,14 +377,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // click
+            // click
+            if data.released && data.mouse_data.button == 0 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("click") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains && data.released && data.mouse_data.button == 0 {
+                    if currently_contains {
                         try_create_event(
                             "click",
                             Arc::new(data.mouse_data.clone()),
@@ -403,14 +397,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // contextmenu
+            // contextmenu
+            if data.released && data.mouse_data.button == 2 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("contextmenu") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains && data.released && data.mouse_data.button == 2 {
+                    if currently_contains {
                         try_create_event(
                             "contextmenu",
                             Arc::new(data.mouse_data.clone()),
@@ -423,15 +417,15 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // wheel
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("wheel") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+            // wheel
+            if let Some(w) = data.wheel_data {
+                if data.wheel_delta != 0.0 {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("wheel") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if let Some(w) = data.wheel_data {
-                        if currently_contains && data.wheel_delta != 0.0 {
+                        if currently_contains {
                             try_create_event(
                                 "wheel",
                                 Arc::new(w.clone()),
@@ -492,6 +486,24 @@ impl InnerInputState {
                     }
                 }
             }
+
+            // update focus
+            if data.released {
+                let mut focus_id = None;
+                dom.traverse_depth_first(|node| {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains {
+                        if node.state.focus.level.focusable() {
+                            focus_id = Some(node.id);
+                        }
+                    }
+                });
+                if let Some(id) = focus_id {
+                    self.focus_state.set_focus(dom, id);
+                }
+            }
         }
     }
 
@@ -541,10 +553,10 @@ impl RinkInputHandler {
     }
 
     // returns a list of events and if a event will force a rerender
-    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> (Vec<UserEvent>, bool) {
+    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
-        let rerender = (*self.state).borrow_mut().update(
+        (*self.state).borrow_mut().update(
             &mut (*self.queued_events).borrow_mut(),
             &mut resolved_events,
             layout,
@@ -598,7 +610,11 @@ impl RinkInputHandler {
             }
         }
 
-        (resolved_events, rerender)
+        resolved_events
+    }
+
+    pub(crate) fn state(&self) -> RefMut<InnerInputState> {
+        self.state.borrow_mut()
     }
 }
 

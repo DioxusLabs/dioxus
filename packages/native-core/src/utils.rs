@@ -64,7 +64,9 @@ impl PersistantElementIter {
     }
 
     /// remove stale element refreneces
-    pub fn prune<S: State>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) {
+    /// returns true if the focused element is removed
+    pub fn prune<S: State>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) -> bool {
+        let mut changed = false;
         let ids_removed: Vec<_> = mutations
             .edits
             .iter()
@@ -82,6 +84,7 @@ impl PersistantElementIter {
             .position(|(el_id, _)| ids_removed.iter().any(|id| el_id.as_u64() == *id))
         {
             self.stack.truncate(r);
+            changed = true;
         }
         // if a child is removed or inserted before or at the current element, update the child index
         for (el_id, child_idx) in self.stack.iter_mut() {
@@ -122,6 +125,7 @@ impl PersistantElementIter {
                 }
             }
         }
+        changed
     }
 
     /// get the next element

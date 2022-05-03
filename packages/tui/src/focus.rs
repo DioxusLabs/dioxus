@@ -109,10 +109,11 @@ pub(crate) struct FocusState {
     pub(crate) focus_iter: PersistantElementIter,
     pub(crate) last_focused_id: Option<ElementId>,
     pub(crate) focus_level: FocusLevel,
+    pub(crate) dirty: bool,
 }
 
 impl FocusState {
-    // returns true if the focus has changed
+    /// Returns true if the focus has changed.
     pub fn progress(&mut self, rdom: &mut Dom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
             if !rdom[last].state.focus.pass_focus {
@@ -227,6 +228,7 @@ impl FocusState {
                     self.focus_iter.prev(&rdom).id()
                 } != id
                 {}
+                self.dirty = true;
                 return true;
             }
         }
@@ -253,6 +255,9 @@ impl FocusState {
                 }
             }
         }
+        if self.focus_iter.prune(mutations, rdom) {
+            self.dirty = true;
+        }
         for m in &mutations.edits {
             match m {
                 dioxus_core::DomEdit::ReplaceWith { root, .. } => remove_children(
@@ -268,5 +273,23 @@ impl FocusState {
                 _ => (),
             }
         }
+    }
+
+    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: ElementId) {
+        if let Some(old) = self.last_focused_id.replace(id) {
+            rdom[old].state.focused = false;
+        }
+        let state = &mut rdom[id].state;
+        state.focused = true;
+        self.focus_level = state.focus.level;
+        // reset the position to the currently focused element
+        while self.focus_iter.next(&rdom).id() != id {}
+        self.dirty = true;
+    }
+
+    pub(crate) fn clean(&mut self) -> bool {
+        let old = self.dirty;
+        self.dirty = false;
+        old
     }
 }

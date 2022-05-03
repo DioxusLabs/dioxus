@@ -223,8 +223,10 @@ fn render_vdom(
                 }
 
                 {
-                    let (evts, rerender) = handler.get_events(&stretch.borrow(), &mut rdom);
-                    updated |= rerender;
+                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
+                    {
+                        updated |= handler.state().focus_state.clean();
+                    }
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
