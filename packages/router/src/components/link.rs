@@ -20,6 +20,11 @@ pub struct LinkProps<'a> {
     ///
     /// When the link is active and an `active_class` is provided, it is appended at the end.
     pub class: Option<&'a str>,
+    /// Require a complete path match for the link to be active.
+    ///
+    /// This only has an effect if `target` is [`NtPath`].
+    #[props(default)]
+    pub exact: bool,
     /// An ID of the inner `a` tag.
     pub id: Option<&'a str>,
     /// Specify whether the link should be opened in a new tab.
@@ -48,6 +53,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         active_class,
         children,
         class,
+        exact,
         id,
         new_tab,
         rel,
@@ -68,10 +74,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     // generate href
     let href = match target {
         NtPath(path) | NavigationTarget::NtExternal(path) => path.to_string(),
-        NtName(name, vars, query_params) => {
-            construct_named_path(name, vars, query_params, &router.named_routes)
-                .unwrap_or(String::from("invalid path"))
-        }
+        NtName(name, vars, query) => construct_named_path(name, vars, query, &router.named_routes)
+            .unwrap_or(String::from("invalid path")),
     };
 
     // check if route is active
@@ -81,6 +85,14 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         .map(|ac| {
             match target {
                 NtPath(p) => {
+                    if *exact {
+                        if &state.path == p {
+                            return format!(" {ac}");
+                        } else {
+                            return String::new();
+                        }
+                    }
+
                     if p.starts_with("/") && state.path.starts_with(p) {
                         return format!(" {ac}");
                     }
