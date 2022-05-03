@@ -114,9 +114,10 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     };
 
     // prepare prevented defaults
-    let prevent = match target.is_nt_external() {
-        true => "",
-        false => "onclick",
+    let is_router_navigation = !target.is_nt_external() && !new_tab;
+    let prevent_str = match is_router_navigation {
+        true => "onclick",
+        false => "",
     };
 
     // get rel attribute or apply default if external
@@ -131,9 +132,9 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     cx.render(rsx! {
         a {
             href: "{href}",
-            prevent_default: "{prevent}",
+            prevent_default: "{prevent_str}",
             onclick: move |_| {
-                if !target.is_nt_external() {
+                if is_router_navigation {
                     tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();
                 }
             },
