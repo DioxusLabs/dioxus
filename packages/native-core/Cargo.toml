@@ -1,0 +1,20 @@
+[package]
+name = "dioxus-native-core"
+version = "0.2.0"
+edition = "2021"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+
+[dependencies]
+dioxus-core = { path = "../core", version = "^0.2.0" }
+dioxus-html = { path = "../html", version = "^0.2.0" }
+dioxus-core-macro = { path = "../core-macro", version = "^0.2.0" }
+
+stretch2 = { git = "https://github.com/DioxusLabs/stretch" }
+smallvec = "1.6"
+fxhash = "0.2"
+anymap = "0.12.1"
+
+[dev-dependencies]
+rand = "0.8.5"

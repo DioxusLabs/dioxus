@@ -2,20 +2,19 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
 use dioxus_core::*;
+use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::{on::*, KeyCode};
-use futures::{channel::mpsc::UnboundedReceiver, StreamExt};
 use std::{
     any::Any,
     cell::RefCell,
-    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Layout, Stretch};
 
-use crate::TuiNode;
+use crate::{Dom, Node};
 
 // a wrapper around the input state for easier access
 // todo: fix loop
@@ -31,12 +30,12 @@ use crate::TuiNode;
 
 //     pub fn mouse(&self) -> Option<MouseData> {
 //         let data = (**self.0).borrow();
-//         data.mouse.as_ref().map(|m| clone_mouse_data(m))
+//         data.mouse.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn wheel(&self) -> Option<WheelData> {
 //         let data = (**self.0).borrow();
-//         data.wheel.as_ref().map(|w| clone_wheel_data(w))
+//         data.wheel.as_ref().map(|w| w.clone())
 //     }
 
 //     pub fn screen(&self) -> Option<(u16, u16)> {
@@ -48,7 +47,7 @@ use crate::TuiNode;
 //         let data = (**self.0).borrow();
 //         data.last_key_pressed
 //             .as_ref()
-//             .map(|k| clone_keyboard_data(&k.0))
+//             .map(|k| &k.0.clone())
 //     }
 // }
 
@@ -100,7 +99,7 @@ impl InnerInputState {
             EventData::Mouse(ref mut m) => match &mut self.mouse {
                 Some(state) => {
                     let mut buttons = state.0.buttons;
-                    state.0 = clone_mouse_data(m);
+                    state.0 = m.clone();
                     match evt.0 {
                         // this code only runs when there are no buttons down
                         "mouseup" => {
@@ -136,7 +135,7 @@ impl InnerInputState {
                 }
                 None => {
                     self.mouse = Some((
-                        clone_mouse_data(m),
+                        m.clone(),
                         if m.buttons == 0 {
                             Vec::new()
                         } else {
@@ -145,7 +144,7 @@ impl InnerInputState {
                     ));
                 }
             },
-            EventData::Wheel(ref w) => self.wheel = Some(clone_wheel_data(w)),
+            EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
                 let repeat = self
@@ -154,20 +153,40 @@ impl InnerInputState {
                     .filter(|k2| k2.0.key == k.key && k2.1.elapsed() < MAX_REPEAT_TIME)
                     .is_some();
                 k.repeat = repeat;
-                let new = clone_keyboard_data(k);
+                let new = k.clone();
                 self.last_key_pressed = Some((new, Instant::now()));
             }
         }
     }
 
-    fn update<'a>(
+    fn update(
         &mut self,
-        dom: &'a VirtualDom,
-        evts: &mut Vec<EventCore>,
+        evts: &mut [EventCore],
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
-        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
-        node: &'a VNode<'a>,
+        dom: &mut Dom,
+    ) {
+        let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
+
+        self.wheel = None;
+
+        for e in evts.iter_mut() {
+            self.apply_event(e);
+        }
+
+        self.resolve_mouse_events(previous_mouse, resolved_events, layout, dom);
+
+        // for s in &self.subscribers {
+        //     s();
+        // }
+    }
+
+    fn resolve_mouse_events(
+        &self,
+        previous_mouse: Option<(MouseData, Vec<u16>)>,
+        resolved_events: &mut Vec<UserEvent>,
+        layout: &Stretch,
+        dom: &mut Dom,
     ) {
         struct Data<'b> {
             new_pos: (i32, i32),
@@ -186,136 +205,31 @@ impl InnerInputState {
                 && layout.location.y as i32 + layout.size.height as i32 >= point.1
         }
 
-        fn get_mouse_events<'c, 'd>(
-            dom: &'c VirtualDom,
+        fn try_create_event(
+            name: &'static str,
+            data: Arc<dyn Any + Send + Sync>,
+            will_bubble: &mut FxHashSet<ElementId>,
             resolved_events: &mut Vec<UserEvent>,
-            layout: &Stretch,
-            layouts: &HashMap<ElementId, TuiNode<'c>>,
-            node: &'c VNode<'c>,
-            data: &'d Data<'d>,
-        ) -> HashSet<&'static str> {
-            match node {
-                VNode::Fragment(f) => {
-                    let mut union = HashSet::new();
-                    for child in f.children {
-                        union = union
-                            .union(&get_mouse_events(
-                                dom,
-                                resolved_events,
-                                layout,
-                                layouts,
-                                child,
-                                data,
-                            ))
-                            .copied()
-                            .collect();
-                    }
-                    return union;
+            node: &Node,
+            dom: &Dom,
+        ) {
+            // only trigger event if the event was not triggered already by a child
+            if will_bubble.insert(node.id) {
+                let mut parent = node.parent;
+                while let Some(parent_id) = parent {
+                    will_bubble.insert(parent_id);
+                    parent = dom[parent_id.0].parent;
                 }
-
-                VNode::Component(vcomp) => {
-                    let idx = vcomp.scope.get().unwrap();
-                    let new_node = dom.get_scope(idx).unwrap().root_node();
-                    return get_mouse_events(dom, resolved_events, layout, layouts, new_node, data);
-                }
-
-                VNode::Placeholder(_) => return HashSet::new(),
-
-                VNode::Element(_) | VNode::Text(_) => {}
-            }
-
-            let id = node.try_mounted_id().unwrap();
-            let node = layouts.get(&id).unwrap();
-
-            let node_layout = layout.layout(node.layout).unwrap();
-
-            let previously_contained = data
-                .old_pos
-                .filter(|pos| layout_contains_point(node_layout, *pos))
-                .is_some();
-            let currently_contains = layout_contains_point(node_layout, data.new_pos);
-
-            match node.node {
-                VNode::Element(el) => {
-                    let mut events = HashSet::new();
-                    if previously_contained || currently_contains {
-                        for c in el.children {
-                            events = events
-                                .union(&get_mouse_events(
-                                    dom,
-                                    resolved_events,
-                                    layout,
-                                    layouts,
-                                    c,
-                                    data,
-                                ))
-                                .copied()
-                                .collect();
-                        }
-                    }
-                    let mut try_create_event = |name| {
-                        // only trigger event if the event was not triggered already by a child
-                        if events.insert(name) {
-                            resolved_events.push(UserEvent {
-                                scope_id: None,
-                                priority: EventPriority::Medium,
-                                name,
-                                element: Some(el.id.get().unwrap()),
-                                data: Arc::new(clone_mouse_data(data.mouse_data)),
-                            })
-                        }
-                    };
-                    if currently_contains {
-                        if !previously_contained {
-                            try_create_event("mouseenter");
-                            try_create_event("mouseover");
-                        }
-                        if data.clicked {
-                            try_create_event("mousedown");
-                        }
-                        if data.released {
-                            try_create_event("mouseup");
-                            match data.mouse_data.button {
-                                0 => try_create_event("click"),
-                                2 => try_create_event("contextmenu"),
-                                _ => (),
-                            }
-                        }
-                        if let Some(w) = data.wheel_data {
-                            if data.wheel_delta != 0.0 {
-                                resolved_events.push(UserEvent {
-                                    scope_id: None,
-                                    priority: EventPriority::Medium,
-                                    name: "wheel",
-                                    element: Some(el.id.get().unwrap()),
-                                    data: Arc::new(clone_wheel_data(w)),
-                                })
-                            }
-                        }
-                    } else if previously_contained {
-                        try_create_event("mouseleave");
-                        try_create_event("mouseout");
-                    }
-                    events
-                }
-                VNode::Text(_) => HashSet::new(),
-                _ => todo!(),
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name,
+                    element: Some(node.id),
+                    data,
+                })
             }
         }
 
-        let previous_mouse = self
-            .mouse
-            .as_ref()
-            .map(|m| (clone_mouse_data(&m.0), m.1.clone()));
-        // println!("{previous_mouse:?}");
-
-        self.wheel = None;
-
-        for e in evts.iter_mut() {
-            self.apply_event(e);
-        }
-
-        // resolve hover events
         if let Some(mouse) = &self.mouse {
             let new_pos = (mouse.0.screen_x, mouse.0.screen_y);
             let old_pos = previous_mouse
@@ -337,12 +251,229 @@ impl InnerInputState {
                 mouse_data,
                 wheel_data,
             };
-            get_mouse_events(dom, resolved_events, layout, layouts, node, &data);
-        }
 
-        // for s in &self.subscribers {
-        //     s();
-        // }
+            {
+                // mousemove
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mousemove") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && previously_contained {
+                        try_create_event(
+                            "mousemove",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mouseenter
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mouseenter") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && !previously_contained {
+                        try_create_event(
+                            "mouseenter",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mouseover
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mouseover") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && !previously_contained {
+                        try_create_event(
+                            "mouseover",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mousedown
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mousedown") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && data.clicked {
+                        try_create_event(
+                            "mousedown",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mouseup
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mouseup") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && data.released {
+                        try_create_event(
+                            "mouseup",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // click
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("click") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && data.released && data.mouse_data.button == 0 {
+                        try_create_event(
+                            "click",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // contextmenu
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("contextmenu") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if currently_contains && data.released && data.mouse_data.button == 2 {
+                        try_create_event(
+                            "contextmenu",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // wheel
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("wheel") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if let Some(w) = data.wheel_data {
+                        if currently_contains && data.wheel_delta != 0.0 {
+                            try_create_event(
+                                "wheel",
+                                Arc::new(w.clone()),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                dom,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // mouseleave
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mouseleave") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if !currently_contains && previously_contained {
+                        try_create_event(
+                            "mouseleave",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+
+            {
+                // mouseout
+                let mut will_bubble = FxHashSet::default();
+                for node in dom.get_listening_sorted("mouseout") {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let previously_contained = data
+                        .old_pos
+                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .is_some();
+                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+
+                    if !currently_contains && previously_contained {
+                        try_create_event(
+                            "mouseout",
+                            Arc::new(data.mouse_data.clone()),
+                            &mut will_bubble,
+                            resolved_events,
+                            node,
+                            dom,
+                        );
+                    }
+                }
+            }
+        }
     }
 
     // fn subscribe(&mut self, f: Rc<dyn Fn() + 'static>) {
@@ -358,24 +489,21 @@ pub struct RinkInputHandler {
 impl RinkInputHandler {
     /// global context that handles events
     /// limitations: GUI key modifier is never detected, key up events are not detected, and only two mouse buttons may be pressed at once
-    pub fn new(
-        mut receiver: UnboundedReceiver<TermEvent>,
-        cx: &ScopeState,
-    ) -> (Self, Rc<RefCell<InnerInputState>>) {
+    pub fn new() -> (
+        Self,
+        Rc<RefCell<InnerInputState>>,
+        impl FnMut(crossterm::event::Event),
+    ) {
         let queued_events = Rc::new(RefCell::new(Vec::new()));
-        let queued_events2 = Rc::<RefCell<std::vec::Vec<_>>>::downgrade(&queued_events);
+        let queued_events2 = Rc::downgrade(&queued_events);
 
-        cx.push_future(async move {
-            while let Some(evt) = receiver.next().await {
-                if let Some(evt) = get_event(evt) {
-                    if let Some(v) = queued_events2.upgrade() {
-                        (*v).borrow_mut().push(evt);
-                    } else {
-                        break;
-                    }
+        let regester_event = move |evt: crossterm::event::Event| {
+            if let Some(evt) = get_event(evt) {
+                if let Some(v) = queued_events2.upgrade() {
+                    (*v).borrow_mut().push(evt);
                 }
             }
-        });
+        };
 
         let state = Rc::new(RefCell::new(InnerInputState::new()));
 
@@ -385,73 +513,65 @@ impl RinkInputHandler {
                 queued_events,
             },
             state,
+            regester_event,
         )
     }
 
-    pub fn get_events<'a>(
-        &self,
-        dom: &'a VirtualDom,
-        layout: &Stretch,
-        layouts: &mut HashMap<ElementId, TuiNode<'a>>,
-        node: &'a VNode<'a>,
-    ) -> Vec<UserEvent> {
-        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
-        fn inner(
-            queue: &[(&'static str, Arc<dyn Any + Send + Sync>)],
-            resolved: &mut Vec<UserEvent>,
-            node: &VNode,
-        ) {
-            match node {
-                VNode::Fragment(frag) => {
-                    for c in frag.children {
-                        inner(queue, resolved, c);
-                    }
-                }
-                VNode::Element(el) => {
-                    for l in el.listeners {
-                        for (name, data) in queue.iter() {
-                            if *name == l.event {
-                                if let Some(id) = el.id.get() {
-                                    resolved.push(UserEvent {
-                                        scope_id: None,
-                                        priority: EventPriority::Medium,
-                                        name: *name,
-                                        element: Some(id),
-                                        data: data.clone(),
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    for c in el.children {
-                        inner(queue, resolved, c);
-                    }
-                }
-                _ => (),
-            }
-        }
-
+    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
-            dom,
             &mut (*self.queued_events).borrow_mut(),
             &mut resolved_events,
             layout,
-            layouts,
-            node,
+            dom,
         );
 
-        let events: Vec<_> = self
+        let events = self
             .queued_events
             .replace(Vec::new())
             .into_iter()
             // these events were added in the update stage
-            .filter(|e| !["mousedown", "mouseup", "mousemove", "drag", "wheel"].contains(&e.0))
-            .map(|e| (e.0, e.1.into_any()))
-            .collect();
+            .filter(|e| {
+                ![
+                    "mouseenter",
+                    "mouseover",
+                    "mouseleave",
+                    "mouseout",
+                    "mousedown",
+                    "mouseup",
+                    "mousemove",
+                    "drag",
+                    "wheel",
+                    "click",
+                    "contextmenu",
+                ]
+                .contains(&e.0)
+            })
+            .map(|evt| (evt.0, evt.1.into_any()));
 
-        inner(&events, &mut resolved_events, node);
+        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
+        let mut hm: FxHashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = FxHashMap::default();
+        for (event, data) in events {
+            if let Some(v) = hm.get_mut(event) {
+                v.push(data);
+            } else {
+                hm.insert(event, vec![data]);
+            }
+        }
+        for (event, datas) in hm {
+            for node in dom.get_listening_sorted(event) {
+                for data in &datas {
+                    resolved_events.push(UserEvent {
+                        scope_id: None,
+                        priority: EventPriority::Medium,
+                        name: event,
+                        element: Some(node.id),
+                        data: data.clone(),
+                    });
+                }
+            }
+        }
 
         resolved_events
     }
@@ -651,7 +771,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
     // from https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
     Some(EventData::Keyboard(KeyboardData {
         char_code: code.raw_code(),
-        key: key_str.to_string(),
+        key: key_str,
         key_code: code,
         alt_key: event.modifiers.contains(KeyModifiers::ALT),
         ctrl_key: event.modifiers.contains(KeyModifiers::CONTROL),
@@ -662,46 +782,4 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
         repeat: Default::default(),
         which: Default::default(),
     }))
-}
-
-fn clone_mouse_data(m: &MouseData) -> MouseData {
-    MouseData {
-        client_x: m.client_x,
-        client_y: m.client_y,
-        page_x: m.page_x,
-        page_y: m.page_y,
-        screen_x: m.screen_x,
-        screen_y: m.screen_y,
-        alt_key: m.alt_key,
-        ctrl_key: m.ctrl_key,
-        meta_key: m.meta_key,
-        shift_key: m.shift_key,
-        button: m.button,
-        buttons: m.buttons,
-    }
-}
-
-fn clone_keyboard_data(k: &KeyboardData) -> KeyboardData {
-    KeyboardData {
-        char_code: k.char_code,
-        key: k.key.clone(),
-        key_code: k.key_code,
-        alt_key: k.alt_key,
-        ctrl_key: k.ctrl_key,
-        meta_key: k.meta_key,
-        shift_key: k.shift_key,
-        locale: k.locale.clone(),
-        location: k.location,
-        repeat: k.repeat,
-        which: k.which,
-    }
-}
-
-fn clone_wheel_data(w: &WheelData) -> WheelData {
-    WheelData {
-        delta_mode: w.delta_mode,
-        delta_x: w.delta_x,
-        delta_y: w.delta_y,
-        delta_z: w.delta_x,
-    }
 }

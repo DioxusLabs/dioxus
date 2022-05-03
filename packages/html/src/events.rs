@@ -398,21 +398,21 @@ pub mod on {
 
     pub type ClipboardEvent = UiEvent<ClipboardData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct ClipboardData {
         // DOMDataTransfer clipboardData
     }
 
     pub type CompositionEvent = UiEvent<CompositionData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct CompositionData {
         pub data: String,
     }
 
     pub type KeyboardEvent = UiEvent<KeyboardData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct KeyboardData {
         pub char_code: u32,
 
@@ -481,12 +481,12 @@ pub mod on {
 
     pub type FocusEvent = UiEvent<FocusData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct FocusData {/* DOMEventInner:  Send + SyncTarget relatedTarget */}
 
     pub type FormEvent = UiEvent<FormData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct FormData {
         pub value: String,
         pub values: HashMap<String, String>,
@@ -495,7 +495,7 @@ pub mod on {
 
     pub type MouseEvent = UiEvent<MouseData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct MouseData {
         pub alt_key: bool,
         pub button: i16,
@@ -514,7 +514,7 @@ pub mod on {
 
     pub type PointerEvent = UiEvent<PointerData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct PointerData {
         // Mouse only
         pub alt_key: bool,
@@ -544,12 +544,12 @@ pub mod on {
 
     pub type SelectionEvent = UiEvent<SelectionData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct SelectionData {}
 
     pub type TouchEvent = UiEvent<TouchData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct TouchData {
         pub alt_key: bool,
         pub ctrl_key: bool,
@@ -563,7 +563,7 @@ pub mod on {
 
     pub type WheelEvent = UiEvent<WheelData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct WheelData {
         pub delta_mode: u32,
         pub delta_x: f64,
@@ -573,19 +573,19 @@ pub mod on {
 
     pub type MediaEvent = UiEvent<MediaData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct MediaData {}
 
     pub type ImageEvent = UiEvent<ImageData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct ImageData {
         pub load_error: bool,
     }
 
     pub type AnimationEvent = UiEvent<AnimationData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct AnimationData {
         pub animation_name: String,
         pub pseudo_element: String,
@@ -594,7 +594,7 @@ pub mod on {
 
     pub type TransitionEvent = UiEvent<TransitionData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct TransitionData {
         pub property_name: String,
         pub pseudo_element: String,
@@ -603,7 +603,7 @@ pub mod on {
 
     pub type ToggleEvent = UiEvent<ToggleData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct ToggleData {}
 }
 

@@ -28,6 +28,9 @@ dioxus-tui = { path = "./packages/tui", version = "^0.2.0", optional = true }
 
 dioxus-liveview = { path = "./packages/liveview", optional = true }
 
+dioxus-native-core = { path = "./packages/native-core", optional = true }
+dioxus-native-core-macro = { path = "./packages/native-core-macro", optional = true }
+
 # dioxus-mobile = { path = "./packages/mobile", version = "^0.2.0", optional = true }
 # dioxus-rsx = { path = "./packages/rsx", optional = true }
 # macro = ["dioxus-core-macro", "dioxus-rsx"]
@@ -45,6 +48,7 @@ ayatana = ["dioxus-desktop/ayatana"]
 router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
+native-core = ["dioxus-native-core", "dioxus-native-core-macro"]
 
 
 [workspace]
@@ -61,6 +65,8 @@ members = [
     "packages/fermi",
     "packages/tui",
     "packages/liveview",
+    "packages/native-core",
+    "packages/native-core-macro",
 ]
 
 [dev-dependencies]
