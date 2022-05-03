@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -22,9 +24,47 @@ pub struct OutletProps {
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     // get own depth and communicate to lower outlets
     let depth = cx.use_hook(|_| {
-        let higher = cx.consume_context::<OutletContext>();
-        let depth = higher.map(|ctx| ctx.depth + 1).unwrap_or(0);
-        cx.provide_context(OutletContext { depth });
+        let (depth, new_ctx) = if let Some(OutletContext {
+            depth,
+            mut named_depth,
+        }) = cx.consume_context::<OutletContext>()
+        {
+            if let Some(name) = cx.props.name {
+                let d = named_depth.get(name).map(|d| d + 1).unwrap_or_default();
+                named_depth.insert(name.to_string(), d);
+                (d, OutletContext { depth, named_depth })
+            } else {
+                let d = depth.map(|d| d + 1).unwrap_or_default();
+                (
+                    d,
+                    OutletContext {
+                        depth: Some(d),
+                        named_depth,
+                    },
+                )
+            }
+        } else {
+            if let Some(name) = cx.props.name {
+                let mut named_depth = BTreeMap::new();
+                named_depth.insert(name.to_string(), 0);
+                (
+                    0,
+                    OutletContext {
+                        depth: None,
+                        named_depth,
+                    },
+                )
+            } else {
+                (
+                    0,
+                    OutletContext {
+                        depth: Some(0),
+                        named_depth: BTreeMap::new(),
+                    },
+                )
+            }
+        };
+        cx.provide_context(new_ctx);
         depth
     });
 
@@ -39,12 +79,13 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
 
     // get the component to render
     let state = router.state.read().unwrap();
-    let X = match state.components.get(*depth) {
-        Some((main, side)) => match cx.props.name {
-            Some(name) => side.get(name),
-            None => Some(main),
-        },
-        None => None,
+    let X = if let Some(name) = cx.props.name {
+        match state.components.1.get(name) {
+            Some(x) => x.get(*depth),
+            None => None,
+        }
+    } else {
+        state.components.0.get(*depth)
     };
 
     // render component or nothing

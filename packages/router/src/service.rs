@@ -167,7 +167,8 @@ impl RouterService {
             // clear state
             *can_go_back = self.history.can_go_back();
             *can_go_forward = self.history.can_go_forward();
-            components.clear();
+            components.0.clear();
+            components.1.clear();
             names.clear();
             *path = self.history.current_path().to_string();
             *query = self.history.current_query().map(|q| q.to_string());
@@ -290,7 +291,7 @@ fn construct_named_targets(
 fn match_segment(
     path: &[&str],
     segment: &Segment,
-    components: &mut Vec<(Component, BTreeMap<&'static str, Component>)>,
+    components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     names: &mut BTreeSet<&'static str>,
     vars: &mut BTreeMap<&'static str, String>,
     global_fallback: &RouteContent,
@@ -314,7 +315,8 @@ fn match_segment(
                 return match_segment(&path[1..], sub, components, names, vars, global_fallback);
             }
         } else if path.len() > 1 && !global_fallback.is_tnone() {
-            components.clear();
+            components.0.clear();
+            components.1.clear();
             names.clear();
             vars.clear();
             return global_fallback.add_to_list(components);
@@ -323,7 +325,8 @@ fn match_segment(
         match &segment.dynamic {
             DynamicRoute::DrNone => {
                 if !global_fallback.is_tnone() {
-                    components.clear();
+                    components.0.clear();
+                    components.1.clear();
                     names.clear();
                     vars.clear();
                     return global_fallback.add_to_list(components);
@@ -363,7 +366,8 @@ fn match_segment(
                         );
                     }
                 } else if path.len() > 1 && !global_fallback.is_tnone() {
-                    components.clear();
+                    components.0.clear();
+                    components.1.clear();
                     names.clear();
                     vars.clear();
                     return global_fallback.add_to_list(components);
@@ -371,7 +375,8 @@ fn match_segment(
             }
             DynamicRoute::DrFallback(content) => {
                 if path.len() > 1 && !global_fallback.is_tnone() {
-                    components.clear();
+                    components.0.clear();
+                    components.1.clear();
                     names.clear();
                     vars.clear();
                     return global_fallback.add_to_list(components);

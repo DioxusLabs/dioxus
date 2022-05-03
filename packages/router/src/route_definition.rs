@@ -100,13 +100,20 @@ pub enum RouteContent {
 impl RouteContent {
     pub(crate) fn add_to_list(
         &self,
-        components: &mut Vec<(Component, BTreeMap<&'static str, Component>)>,
+        components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     ) -> Option<InternalNavigationTarget> {
         match self {
             RouteContent::TNone => {}
-            RouteContent::TComponent(comp) => components.push((*comp, BTreeMap::new())),
+            RouteContent::TComponent(comp) => components.0.push(*comp),
             RouteContent::TMulti(main, side) => {
-                components.push((*main, BTreeMap::from_iter(side.clone().into_iter())))
+                components.0.push(*main);
+                for (name, comp) in side {
+                    if let Some(x) = components.1.get_mut(name) {
+                        x.push(*comp);
+                    } else {
+                        components.1.insert(name, vec![*comp]);
+                    }
+                }
             }
             RouteContent::TRedirect(t) => return Some(t.clone()),
         }
