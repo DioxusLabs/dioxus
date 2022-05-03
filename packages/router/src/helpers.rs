@@ -6,7 +6,10 @@ use dioxus_core::ScopeState;
 use log::error;
 use urlencoding::encode;
 
-use crate::{contexts::RouterContext, navigation::NamedNavigationSegment};
+use crate::{
+    contexts::RouterContext,
+    navigation::{NamedNavigationSegment, Query},
+};
 
 /// A private "hook" to subscribe to the router.
 ///
@@ -35,7 +38,7 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
 pub(crate) fn construct_named_path(
     name: &'static str,
     vars: &[(&'static str, String)],
-    query_params: &[(String, String)],
+    query: &Query,
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
     // find path layout
@@ -66,9 +69,19 @@ pub(crate) fn construct_named_path(
     }
 
     // add query
-    if !query_params.is_empty() {
-        if let Ok(q) = serde_urlencoded::to_string(query_params) {
-            path = format!("{path}?{q}")
+    match query {
+        Query::QNone | Query::QString(None) => {}
+        Query::QString(Some(qs)) => {
+            if qs.starts_with("?") {
+                path = format!("{path}{qs}")
+            } else {
+                path = format!("{path}?{qs}")
+            }
+        }
+        Query::QVec(vals) => {
+            if let Ok(q) = serde_urlencoded::to_string(vals) {
+                path = format!("{path}?{q}")
+            }
         }
     }
 

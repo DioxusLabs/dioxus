@@ -11,8 +11,8 @@ pub enum InternalNavigationTarget {
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
         Vec<(&'static str, String)>,
-        /// A list of query string parameters.
-        Vec<(String, String)>,
+        /// The query string.
+        Query,
     ),
 }
 
@@ -39,11 +39,22 @@ pub enum NavigationTarget {
         &'static str,
         /// A list of variables that can be inserted into the path needed to navigate to the route.
         Vec<(&'static str, String)>,
-        /// A list of query string parameters.
-        Vec<(String, String)>,
+        /// The query string.
+        Query,
     ),
     /// Navigate to an external page.
     NtExternal(String),
+}
+
+/// A description of a query string.
+#[derive(Clone)]
+pub enum Query {
+    /// No query string.
+    QNone,
+    /// The query string is the provided string.
+    QString(Option<String>),
+    /// Construct a new query string from the provided values.
+    QVec(Vec<(String, String)>),
 }
 
 impl NavigationTarget {
