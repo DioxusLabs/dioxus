@@ -101,11 +101,11 @@ pub enum RouteContent {
     /// When used for a `fixed` or `dynamic` no components will be rendered. If a nested route is
     /// matched its content will be rendered in the outlet where this segments content would be
     /// rendered.
-    TNone,
+    RcNone,
     /// A single component.
-    TComponent(Component),
+    RcComponent(Component),
     /// One main and several side components.
-    TMulti(Component, Vec<(&'static str, Component)>),
+    RcMulti(Component, Vec<(&'static str, Component)>),
     /// Causes a redirect when the route is matched.
     ///
     /// Redirects are performed as a _replace_ operation. This means that the original path won't be
@@ -116,7 +116,7 @@ pub enum RouteContent {
     ///
     /// [HistoryProvider]: crate::history::HistoryProvider
     /// [MemoryHistoryProvider]: crate::history::MemoryHistoryProvider
-    TRedirect(InternalNavigationTarget),
+    RcRedirect(InternalNavigationTarget),
 }
 
 impl RouteContent {
@@ -125,9 +125,9 @@ impl RouteContent {
         components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     ) -> Option<InternalNavigationTarget> {
         match self {
-            RouteContent::TNone => {}
-            RouteContent::TComponent(comp) => components.0.push(*comp),
-            RouteContent::TMulti(main, side) => {
+            RouteContent::RcNone => {}
+            RouteContent::RcComponent(comp) => components.0.push(*comp),
+            RouteContent::RcMulti(main, side) => {
                 components.0.push(*main);
                 for (name, comp) in side {
                     if let Some(x) = components.1.get_mut(name) {
@@ -137,7 +137,7 @@ impl RouteContent {
                     }
                 }
             }
-            RouteContent::TRedirect(t) => return Some(t.clone()),
+            RouteContent::RcRedirect(t) => return Some(t.clone()),
         }
 
         None
@@ -147,13 +147,13 @@ impl RouteContent {
     ///
     /// [`TNone`]: RouteContent::TNone
     #[must_use]
-    pub fn is_tnone(&self) -> bool {
-        matches!(self, Self::TNone)
+    pub fn is_rc_none(&self) -> bool {
+        matches!(self, Self::RcNone)
     }
 }
 
 impl Default for RouteContent {
     fn default() -> Self {
-        Self::TNone
+        Self::RcNone
     }
 }

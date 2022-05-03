@@ -11,20 +11,20 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
-        index: TComponent(Home),
+        index: RcComponent(Home),
         dynamic: DrNone,
         fixed: vec![
             (
                 String::from("blog"),
                 Route {
                     name: None,
-                    content: TComponent(Blog),
+                    content: RcComponent(Blog),
                     sub: Some(Segment {
-                        index: TComponent(BlogWelcome),
+                        index: RcComponent(BlogWelcome),
                         dynamic: DrVariable {
                             name: Some("blog_post"),
                             key: "blog_id",
-                            content: TComponent(BlogPost),
+                            content: RcComponent(BlogPost),
                             sub: None,
                         },
                         fixed: vec![],
@@ -35,7 +35,7 @@ fn app(cx: Scope) -> Element {
                 String::from("raspberry"),
                 Route {
                     name: Some("raspberry"),
-                    content: TMulti(RaspberryPage, vec![("other", StrawberryPage)]),
+                    content: RcMulti(RaspberryPage, vec![("other", StrawberryPage)]),
                     sub: None,
                 },
             ),
@@ -43,7 +43,7 @@ fn app(cx: Scope) -> Element {
                 String::from("the_best_berry"),
                 Route {
                     name: Some("best_berry"),
-                    content: TRedirect(ItName("raspberry", vec![], QNone)),
+                    content: RcRedirect(ItName("raspberry", vec![], QNone)),
                     sub: None,
                 },
             ),
@@ -51,7 +51,7 @@ fn app(cx: Scope) -> Element {
                 String::from("named_fallback"),
                 Route {
                     name: None,
-                    content: TComponent(NamedNavigationFallback),
+                    content: RcComponent(NamedNavigationFallback),
                     sub: None,
                 },
             ),

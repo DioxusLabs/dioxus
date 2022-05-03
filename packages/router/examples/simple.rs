@@ -11,13 +11,13 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
-        index: TComponent(Home),
+        index: RcComponent(Home),
         dynamic: DrNone,
         fixed: vec![
             (
                 String::from("apple"),
                 Route {
-                    content: TComponent(Apple),
+                    content: RcComponent(Apple),
                     ..Default::default()
                 },
             ),
@@ -25,7 +25,7 @@ fn app(cx: Scope) -> Element {
                 String::from("potato"),
                 Route {
                     name: Some("potato"),
-                    content: TComponent(Potato),
+                    content: RcComponent(Potato),
                     ..Default::default()
                 },
             ),

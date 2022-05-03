@@ -314,7 +314,7 @@ fn match_segment(
             } else if path.len() > 1 {
                 return match_segment(&path[1..], sub, components, names, vars, global_fallback);
             }
-        } else if path.len() > 1 && !global_fallback.is_tnone() {
+        } else if path.len() > 1 && !global_fallback.is_rc_none() {
             components.0.clear();
             components.1.clear();
             names.clear();
@@ -324,7 +324,7 @@ fn match_segment(
     } else {
         match &segment.dynamic {
             DynamicRoute::DrNone => {
-                if !global_fallback.is_tnone() {
+                if !global_fallback.is_rc_none() {
                     components.0.clear();
                     components.1.clear();
                     names.clear();
@@ -365,7 +365,7 @@ fn match_segment(
                             global_fallback,
                         );
                     }
-                } else if path.len() > 1 && !global_fallback.is_tnone() {
+                } else if path.len() > 1 && !global_fallback.is_rc_none() {
                     components.0.clear();
                     components.1.clear();
                     names.clear();
@@ -374,7 +374,7 @@ fn match_segment(
                 }
             }
             DynamicRoute::DrFallback(content) => {
-                if path.len() > 1 && !global_fallback.is_tnone() {
+                if path.len() > 1 && !global_fallback.is_rc_none() {
                     components.0.clear();
                     components.1.clear();
                     names.clear();
