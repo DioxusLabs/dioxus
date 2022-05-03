@@ -7,10 +7,11 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::real_dom::{NodeType, RealDom};
+use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::*;
-use dioxus_native_core::utils::PersistantElementIter;
 use dioxus_native_core_macro::State;
+use focus::Focus;
+use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
@@ -24,6 +25,7 @@ use style_attributes::StyleModifier;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
+mod focus;
 mod hooks;
 mod layout;
 mod render;
@@ -44,6 +46,8 @@ struct NodeState {
     // depends on attributes, the C component of it's parent and a u8 context
     #[parent_dep_state(style)]
     style: StyleModifier,
+    #[node_dep_state()]
+    focus: Focus,
     focused: bool,
 }
 
@@ -135,8 +139,7 @@ fn render_vdom(
             let to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
             let mut updated = true;
 
-            let mut focus_iter = PersistantElementIter::new();
-            let mut focus_id = ElementId(0);
+            let mut focus_state = FocusState::default();
 
             loop {
                 /*
@@ -210,38 +213,11 @@ fn render_vdom(
                                             break;
                                         }
                                         if let KeyCode::BackTab = key.code {
-                                            let mut new_focused_id;
-                                            loop {
-                                                new_focused_id = focus_iter.prev(&rdom).id();
-                                                if let NodeType::Element { .. } =
-                                                    &rdom[new_focused_id].node_type
-                                                {
-                                                    break;
-                                                }
-                                            }
-                                            rdom[focus_id].state.focused = false;
-                                            focus_id = new_focused_id;
-                                            rdom[focus_id].state.focused = true;
-                                            evt_intersepted = true;
-                                            updated = true;
-                                            // println!("{:?}", focus_id);
+                                            evt_intersepted =
+                                                focus_state.progress(&mut rdom, false);
                                         }
                                         if let KeyCode::Tab = key.code {
-                                            let mut new_focused_id;
-                                            loop {
-                                                new_focused_id = focus_iter.next(&rdom).id();
-                                                if let NodeType::Element { .. } =
-                                                    &rdom[new_focused_id].node_type
-                                                {
-                                                    break;
-                                                }
-                                            }
-                                            rdom[focus_id].state.focused = false;
-                                            focus_id = new_focused_id;
-                                            rdom[focus_id].state.focused = true;
-                                            evt_intersepted = true;
-                                            updated = true;
-                                            // println!("{:?}", focus_id);
+                                            evt_intersepted = focus_state.progress(&mut rdom, true);
                                         }
                                     }
                                     TermEvent::Resize(_, _) => updated = true,
@@ -266,7 +242,7 @@ fn render_vdom(
                     }
                     let mutations = vdom.work_with_deadline(|| false);
                     for m in &mutations {
-                        focus_iter.prune(m, &rdom);
+                        focus_state.prune(m, &rdom);
                     }
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
