@@ -2,6 +2,13 @@
 name = "dioxus-native-core-macro"
 version = "0.2.0"
 edition = "2021"
+description = "Build natively rendered apps with Dioxus"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+
 
 [lib]
 proc-macro = true

@@ -5,6 +5,10 @@ edition = "2021"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
+description = "Build natively rendered apps with Dioxus"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.2.1" }
