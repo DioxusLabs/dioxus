@@ -66,6 +66,7 @@ members = [
     "packages/tui",
     "packages/liveview",
     "packages/native-core",
+    "packages/native-core-macro",
 ]
 
 [dev-dependencies]
