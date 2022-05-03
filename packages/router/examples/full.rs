@@ -21,7 +21,7 @@ fn app(cx: Scope) -> Element {
                     content: RcComponent(Blog),
                     sub: Some(Segment {
                         index: RcComponent(BlogWelcome),
-                        dynamic: DrVariable {
+                        dynamic: DrParameter {
                             name: Some("blog_post"),
                             key: "blog_id",
                             content: RcComponent(BlogPost),

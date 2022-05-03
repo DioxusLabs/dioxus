@@ -20,7 +20,11 @@ pub struct Segment {
 
 impl Default for Segment {
     fn default() -> Self {
-        Self { index: Default::default(), fixed: Default::default(), dynamic: Default::default() }
+        Self {
+            index: Default::default(),
+            fixed: Default::default(),
+            dynamic: Default::default(),
+        }
     }
 }
 
@@ -58,12 +62,12 @@ impl Default for Route {
 pub enum DynamicRoute {
     /// Indicates the absence of an actual dynamic route.
     DrNone,
-    /// A dynamic route that treats the actual value of its segment as a variable.
+    /// A dynamic route that treats the actual value of its segment as a parameter.
     ///
     /// The value will be accessible to components via [use_route].
     ///
     /// [use_route]: crate::hooks::use_route
-    DrVariable {
+    DrParameter {
         /// The name of the route.
         ///
         /// Can be used for name-based navigation. See [NtName] or [ItName].

@@ -264,7 +264,7 @@ fn construct_named_targets(
         }
     }
 
-    if let DynamicRoute::DrVariable {
+    if let DynamicRoute::DrParameter {
         name,
         key,
         content: _,
@@ -332,7 +332,7 @@ fn match_segment(
                     return global_fallback.add_to_list(components);
                 }
             }
-            DynamicRoute::DrVariable {
+            DynamicRoute::DrParameter {
                 name,
                 key,
                 content,
