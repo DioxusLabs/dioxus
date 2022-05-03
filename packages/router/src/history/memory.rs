@@ -20,12 +20,12 @@ impl Default for MemoryHistoryProvider {
 }
 
 impl HistoryProvider for MemoryHistoryProvider {
-    fn current_path<'a>(&'a self) -> &'a str {
-        self.current.path()
+    fn current_path<'a>(&'a self) -> String {
+        self.current.path().to_string()
     }
 
-    fn current_query(&self) -> Option<&str> {
-        self.current.query()
+    fn current_query(&self) -> Option<String> {
+        self.current.query().map(|q| q.to_string())
     }
 
     fn can_go_back(&self) -> bool {

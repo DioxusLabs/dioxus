@@ -5,6 +5,7 @@ use log::warn;
 
 use crate::{
     contexts::RouterContext,
+    history::HistoryProvider,
     route_definition::{RouteContent, Segment},
     service::RouterService,
 };
@@ -22,6 +23,8 @@ pub struct RouterProps<'a> {
     /// The global fallback content.
     #[props(default)]
     pub fallback: RouteContent,
+    /// A function that constructs a history provider.
+    pub history: Option<Box<dyn Fn() -> Box<dyn HistoryProvider>>>,
     /// A path that the router navigates to if a named navigation doesn't result in a path.
     pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
@@ -43,6 +46,12 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             return;
         };
 
+        // create history provider
+        let history = match &cx.props.history {
+            Some(x) => Some(x()),
+            None => None,
+        };
+
         // create router service and inject context
         let (mut service, context) = RouterService::new(
             cx.props.routes.clone(),
@@ -50,6 +59,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.props.named_navigation_fallback_path.clone(),
             cx.props.active_class.map(|ac| ac.to_string()),
             cx.props.fallback.clone(),
+            history,
         );
         cx.provide_context(context);
 

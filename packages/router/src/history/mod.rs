@@ -1,6 +1,13 @@
 //! A trait that defines methods used by the router for history and navigation and default
 //! implementations.
 
+use std::sync::Arc;
+
+#[cfg(feature = "web")]
+mod browser_path;
+#[cfg(feature = "web")]
+pub use browser_path::*;
+
 mod memory;
 pub use memory::*;
 
@@ -11,15 +18,30 @@ pub use memory::*;
 /// documentation either look at the source code or build the documentation with
 /// `--document-private-items`.
 pub trait HistoryProvider {
+    /// Provides the [`HistoryProvider`] with a way to trigger a routing update.
+    ///
+    /// Some [`HistoryProvider`]s may receive updates from outside the router and need to inform it
+    /// about the new location. To do that, they can call the provided callback.
+    #[allow(unused)]
+    fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
+
     /// Get the current path.
-    fn current_path(&self) -> &str;
+    fn current_path(&self) -> String;
     /// Get the current query string.
-    fn current_query(&self) -> Option<&str>;
+    fn current_query(&self) -> Option<String>;
 
     /// Check if there is a prior path that can be navigated back to.
-    fn can_go_back(&self) -> bool;
+    ///
+    /// If unknown return `true` and do nothing when `go_back` is called.
+    fn can_go_back(&self) -> bool {
+        true
+    }
     /// Check if there is a future path that can be navigated forward to.
-    fn can_go_forward(&self) -> bool;
+    ///
+    /// If unknown return `true` and do nothing when `go_forward` is called.
+    fn can_go_forward(&self) -> bool {
+        true
+    }
 
     /// Navigate to the last active path.
     fn go_back(&mut self);

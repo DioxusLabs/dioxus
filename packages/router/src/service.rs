@@ -9,10 +9,14 @@ use futures_util::StreamExt;
 use log::error;
 use urlencoding::decode;
 
+#[cfg(feature = "web")]
+use crate::history::BrowserPathHistoryProvider;
+#[cfg(not(feature = "web"))]
+use crate::history::MemoryHistoryProvider;
 use crate::{
     contexts::RouterContext,
     helpers::construct_named_path,
-    history::{HistoryProvider, MemoryHistoryProvider},
+    history::HistoryProvider,
     navigation::{InternalNavigationTarget, NamedNavigationSegment},
     prelude::RouteContent,
     route_definition::{DynamicRoute, Segment},
@@ -35,6 +39,9 @@ pub(crate) enum RouterMessage {
 
     /// Subscribe the specified scope to router updates.
     Subscribe(Arc<ScopeId>),
+
+    /// Tell the router to update the current state.
+    Update,
 }
 
 /// The core of the router.
@@ -70,6 +77,7 @@ impl RouterService {
         named_navigation_fallback_path: Option<String>,
         active_class: Option<String>,
         global_fallback: RouteContent,
+        history: Option<Box<dyn HistoryProvider>>,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -84,15 +92,24 @@ impl RouterService {
         let state = Arc::new(RwLock::new(CurrentRoute::default()));
         let context = RouterContext {
             active_class,
-            tx,
+            tx: tx.clone(),
             state: state.clone(),
             named_routes: named_routes.clone(),
         };
 
+        // initiate the history provider
+        #[cfg(not(feature = "web"))]
+        let mut history = history.unwrap_or(Box::new(MemoryHistoryProvider::default()));
+        #[cfg(feature = "web")]
+        let mut history = history.unwrap_or(Box::new(BrowserPathHistoryProvider::default()));
+        history.foreign_navigation_handler(Arc::new(move || {
+            tx.unbounded_send(RouterMessage::Update).ok();
+        }));
+
         (
             Self {
                 global_fallback,
-                history: Box::new(MemoryHistoryProvider::default()),
+                history,
                 named_navigation_fallback_path,
                 named_routes,
                 routes,
@@ -142,6 +159,7 @@ impl RouterService {
                     (self.update)(*id);
                     continue; // no navigation happened
                 }
+                RouterMessage::Update => { /* update triggered at end of loop */ }
             }
 
             self.update_routing();
