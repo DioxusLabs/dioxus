@@ -4,6 +4,11 @@
 use std::sync::Arc;
 
 #[cfg(feature = "web")]
+mod browser_hash;
+#[cfg(feature = "web")]
+pub use browser_hash::*;
+
+#[cfg(feature = "web")]
 mod browser_path;
 #[cfg(feature = "web")]
 pub use browser_path::*;
