@@ -523,6 +523,10 @@ pub mod on {
         pub ctrl_key: bool,
         /// True if the meta key was down when the mouse event was fired.
         pub meta_key: bool,
+        /// The offset in the X coordinate of the mouse pointer between that event and the padding edge of the target node.
+        pub offset_x: i32,
+        /// The offset in the Y coordinate of the mouse pointer between that event and the padding edge of the target node.
+        pub offset_y: i32,
         /// The X (horizontal) coordinate (in pixels) of the mouse, relative to the left edge of the entire document. This includes any portion of the document not currently visible.
         ///
         /// Being based on the edge of the document as it is, this property takes into account any horizontal scrolling of the page. For example, if the page is scrolled such that 200 pixels of the left side of the document are scrolled out of view, and the mouse is clicked 100 pixels inward from the left edge of the view, the value returned by pageX will be 300.
