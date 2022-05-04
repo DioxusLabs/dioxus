@@ -494,10 +494,8 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, data.new_pos);
 
-                    if currently_contains {
-                        if node.state.focus.level.focusable() {
-                            focus_id = Some(node.id);
-                        }
+                    if currently_contains && node.state.focus.level.focusable() {
+                        focus_id = Some(node.id);
                     }
                 });
                 if let Some(id) = focus_id {

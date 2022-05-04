@@ -198,7 +198,7 @@ impl PersistantElementIter {
                     } else {
                         *o_child_idx = o_child_idx.map(|i| i - 1);
                         if let NodePosition::InChild(child_idx) = o_child_idx {
-                            if *child_idx >= children.len() || children.len() == 0 {
+                            if *child_idx >= children.len() || children.is_empty() {
                                 self.pop();
                                 self.prev(rdom)
                             } else {

@@ -4,7 +4,7 @@ use dioxus_core::ElementId;
 use dioxus_native_core::utils::{ElementProduced, PersistantElementIter};
 use dioxus_native_core_macro::sorted_str_slice;
 
-use std::num::NonZeroU16;
+use std::{cmp::Ordering, num::NonZeroU16};
 
 use dioxus_native_core::{
     node_ref::{AttributeMask, NodeMask, NodeView},
@@ -12,7 +12,7 @@ use dioxus_native_core::{
     state::NodeDepState,
 };
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum FocusLevel {
     Unfocusable,
     Focusable,
@@ -45,6 +45,12 @@ impl PartialOrd for FocusLevel {
     }
 }
 
+impl Ord for FocusLevel {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 impl Default for FocusLevel {
     fn default() -> Self {
         FocusLevel::Unfocusable
@@ -70,26 +76,24 @@ impl NodeDepState for Focus {
                 .any(|a| a.name == "dioxus-prevent-default" && a.value.trim() == "keydown"),
             level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
                 if let Ok(index) = a.value.parse::<i32>() {
-                    if index < 0 {
-                        FocusLevel::Unfocusable
-                    } else if index == 0 {
-                        FocusLevel::Focusable
-                    } else {
-                        FocusLevel::Ordered(NonZeroU16::new(index as u16).unwrap())
+                    match index.cmp(&0) {
+                        Ordering::Less => FocusLevel::Unfocusable,
+                        Ordering::Equal => FocusLevel::Focusable,
+                        Ordering::Greater => {
+                            FocusLevel::Ordered(NonZeroU16::new(index as u16).unwrap())
+                        }
                     }
                 } else {
                     FocusLevel::Unfocusable
                 }
+            } else if node
+                .listeners()
+                .iter()
+                .any(|l| FOCUS_EVENTS.binary_search(&l.event).is_ok())
+            {
+                FocusLevel::Focusable
             } else {
-                if node
-                    .listeners()
-                    .iter()
-                    .any(|l| FOCUS_EVENTS.binary_search(&l.event).is_ok())
-                {
-                    FocusLevel::Focusable
-                } else {
-                    FocusLevel::Unfocusable
-                }
+                FocusLevel::Unfocusable
             },
         };
         if *self != new {
@@ -127,9 +131,9 @@ impl FocusState {
 
         loop {
             let new = if forward {
-                self.focus_iter.next(&rdom)
+                self.focus_iter.next(rdom)
             } else {
-                self.focus_iter.prev(&rdom)
+                self.focus_iter.prev(rdom)
             };
             let new_id = new.id();
             if let ElementProduced::Looped(_) = new {
@@ -139,15 +143,16 @@ impl FocusState {
                     // find the closest focusable element after the current level
                     rdom.traverse_depth_first(|n| {
                         let node_level = n.state.focus.level;
-                        if node_level != *focus_level && node_level.focusable() {
-                            if node_level > *focus_level {
-                                if let Some(level) = &mut closest_level {
-                                    if node_level < *level {
-                                        *level = node_level;
-                                    }
-                                } else {
-                                    closest_level = Some(node_level);
+                        if node_level != *focus_level
+                            && node_level.focusable()
+                            && node_level > *focus_level
+                        {
+                            if let Some(level) = &mut closest_level {
+                                if node_level < *level {
+                                    *level = node_level;
                                 }
+                            } else {
+                                closest_level = Some(node_level);
                             }
                         }
                     });
@@ -155,15 +160,16 @@ impl FocusState {
                     // find the closest focusable element before the current level
                     rdom.traverse_depth_first(|n| {
                         let node_level = n.state.focus.level;
-                        if node_level != *focus_level && node_level.focusable() {
-                            if node_level < *focus_level {
-                                if let Some(level) = &mut closest_level {
-                                    if node_level > *level {
-                                        *level = node_level;
-                                    }
-                                } else {
-                                    closest_level = Some(node_level);
+                        if node_level != *focus_level
+                            && node_level.focusable()
+                            && node_level < *focus_level
+                        {
+                            if let Some(level) = &mut closest_level {
+                                if node_level > *level {
+                                    *level = node_level;
                                 }
+                            } else {
+                                closest_level = Some(node_level);
                             }
                         }
                     });
@@ -174,12 +180,10 @@ impl FocusState {
 
                 if let Some(level) = closest_level {
                     *focus_level = level;
+                } else if forward {
+                    *focus_level = FocusLevel::Unfocusable;
                 } else {
-                    if forward {
-                        *focus_level = FocusLevel::Unfocusable;
-                    } else {
-                        *focus_level = FocusLevel::Focusable;
-                    }
+                    *focus_level = FocusLevel::Focusable;
                 }
             }
 
@@ -198,11 +202,10 @@ impl FocusState {
             } else {
                 current_level <= *focus_level
             };
-            if after_previous_focused && current_level.focusable() {
-                if current_level == *focus_level {
-                    next_focus = Some(new_id);
-                    break;
-                }
+            if after_previous_focused && current_level.focusable() && current_level == *focus_level
+            {
+                next_focus = Some(new_id);
+                break;
             }
         }
 
@@ -212,7 +215,7 @@ impl FocusState {
                 rdom[old].state.focused = false;
             }
             // reset the position to the currently focused element
-            while self.focus_iter.next(&rdom).id() != id {}
+            while self.focus_iter.next(rdom).id() != id {}
             self.dirty = true;
             return true;
         }
@@ -267,7 +270,7 @@ impl FocusState {
         state.focused = true;
         self.focus_level = state.focus.level;
         // reset the position to the currently focused element
-        while self.focus_iter.next(&rdom).id() != id {}
+        while self.focus_iter.next(rdom).id() != id {}
         self.dirty = true;
     }
 
