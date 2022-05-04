@@ -67,7 +67,7 @@ impl NodeDepState for Focus {
         let new = Focus {
             pass_focus: !node
                 .attributes()
-                .any(|a| a.name == "dioxus-prevent-default" && a.value.trim() == "true"),
+                .any(|a| a.name == "dioxus-prevent-default" && a.value.trim() == "keydown"),
             level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
                 if let Ok(index) = a.value.parse::<i32>() {
                     if index < 0 {
