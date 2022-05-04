@@ -41,7 +41,7 @@ impl<'a> RinkBuffer<'a> {
 }
 
 pub trait RinkWidget {
-    fn render(self, area: Rect, buf: &mut RinkBuffer);
+    fn render(self, area: Rect, buf: RinkBuffer);
 }
 
 pub struct WidgetWithContext<T: RinkWidget> {
@@ -57,8 +57,7 @@ impl<T: RinkWidget> WidgetWithContext<T> {
 
 impl<T: RinkWidget> Widget for WidgetWithContext<T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let mut rbuf = RinkBuffer::new(buf, self.config);
-        self.widget.render(area, &mut rbuf);
+        self.widget.render(area, RinkBuffer::new(buf, self.config));
     }
 }
 
