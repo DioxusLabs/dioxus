@@ -497,17 +497,45 @@ pub mod on {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Clone)]
     pub struct MouseData {
+        /// True if the alt key was down when the mouse event was fired.
         pub alt_key: bool,
+        /// The button number that was pressed (if applicable) when the mouse event was fired.
         pub button: i16,
+        /// Indicates which buttons are pressed on the mouse (or other input device) when a mouse event is triggered.
+        ///
+        /// Each button that can be pressed is represented by a given number (see below). If more than one button is pressed, the button values are added together to produce a new number. For example, if the secondary (2) and auxiliary (4) buttons are pressed simultaneously, the value is 6 (i.e., 2 + 4).
+        ///
+        /// - 1: Primary button (usually the left button)
+        /// - 2: Secondary button (usually the right button)
+        /// - 4: Auxiliary button (usually the mouse wheel button or middle button)
+        /// - 8: 4th button (typically the "Browser Back" button)
+        /// - 16 : 5th button (typically the "Browser Forward" button)
         pub buttons: u16,
+        /// The horizontal coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
+        ///
+        /// For example, clicking on the left edge of the viewport will always result in a mouse event with a clientX value of 0, regardless of whether the page is scrolled horizontally.
         pub client_x: i32,
+        /// The vertical coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
+        ///
+        /// For example, clicking on the top edge of the viewport will always result in a mouse event with a clientY value of 0, regardless of whether the page is scrolled vertically.
         pub client_y: i32,
+        /// True if the control key was down when the mouse event was fired.
         pub ctrl_key: bool,
+        /// True if the meta key was down when the mouse event was fired.
         pub meta_key: bool,
+        /// The X (horizontal) coordinate (in pixels) of the mouse, relative to the left edge of the entire document. This includes any portion of the document not currently visible.
+        ///
+        /// Being based on the edge of the document as it is, this property takes into account any horizontal scrolling of the page. For example, if the page is scrolled such that 200 pixels of the left side of the document are scrolled out of view, and the mouse is clicked 100 pixels inward from the left edge of the view, the value returned by pageX will be 300.
         pub page_x: i32,
+        /// The Y (vertical) coordinate in pixels of the event relative to the whole document.
+        ///
+        /// See `page_x`.
         pub page_y: i32,
+        /// The X coordinate of the mouse pointer in global (screen) coordinates.
         pub screen_x: i32,
+        /// The Y coordinate of the mouse pointer in global (screen) coordinates.
         pub screen_y: i32,
+        /// True if the shift key was down when the mouse event was fired.
         pub shift_key: bool,
         // fn get_modifier_state(&self, key_code: &str) -> bool;
     }
