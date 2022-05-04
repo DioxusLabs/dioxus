@@ -79,6 +79,8 @@ impl From<&MouseEvent> for MouseData {
             client_y: e.client_y(),
             ctrl_key: e.ctrl_key(),
             meta_key: e.meta_key(),
+            offset_x: e.offset_x(),
+            offset_y: e.offset_y(),
             screen_x: e.screen_x(),
             screen_y: e.screen_y(),
             shift_key: e.shift_key(),
