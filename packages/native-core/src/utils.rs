@@ -78,6 +78,7 @@ impl PersistantElementIter {
                 }
             })
             .collect();
+        // if any element is removed in the chain, remove it and its children from the stack
         if let Some(r) = self
             .stack
             .iter()
@@ -165,6 +166,7 @@ impl PersistantElementIter {
 
     /// get the previous element
     pub fn prev<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
+        // recursively add the last child element to the stack
         fn push_back<S: State>(
             stack: &mut smallvec::SmallVec<[(ElementId, NodePosition); 5]>,
             new_node: ElementId,

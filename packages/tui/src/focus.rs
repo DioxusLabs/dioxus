@@ -120,11 +120,10 @@ impl FocusState {
                 return false;
             }
         }
+        // the id that started focused to track when a loop has happened
         let mut loop_marker_id = self.last_focused_id;
         let focus_level = &mut self.focus_level;
         let mut next_focus = None;
-        let starting_focus_level = *focus_level;
-        let mut focus_level_changed = false;
 
         loop {
             let new = if forward {
@@ -175,20 +174,12 @@ impl FocusState {
 
                 if let Some(level) = closest_level {
                     *focus_level = level;
-                    if *focus_level != starting_focus_level {
-                        focus_level_changed = true;
-                    }
                 } else {
                     if forward {
                         *focus_level = FocusLevel::Unfocusable;
                     } else {
                         *focus_level = FocusLevel::Focusable;
                     }
-                }
-
-                // if the focus level looped, we are done
-                if *focus_level == starting_focus_level && focus_level_changed {
-                    break;
                 }
             }
 
@@ -209,28 +200,21 @@ impl FocusState {
             };
             if after_previous_focused && current_level.focusable() {
                 if current_level == *focus_level {
-                    next_focus = Some((new_id, current_level));
+                    next_focus = Some(new_id);
                     break;
                 }
             }
         }
 
-        if let Some((id, order)) = next_focus {
-            if order.focusable() {
-                rdom[id].state.focused = true;
-                if let Some(old) = self.last_focused_id.replace(id) {
-                    rdom[old].state.focused = false;
-                }
-                // reset the position to the currently focused element
-                while if forward {
-                    self.focus_iter.next(&rdom).id()
-                } else {
-                    self.focus_iter.prev(&rdom).id()
-                } != id
-                {}
-                self.dirty = true;
-                return true;
+        if let Some(id) = next_focus {
+            rdom[id].state.focused = true;
+            if let Some(old) = self.last_focused_id.replace(id) {
+                rdom[old].state.focused = false;
             }
+            // reset the position to the currently focused element
+            while self.focus_iter.next(&rdom).id() != id {}
+            self.dirty = true;
+            return true;
         }
 
         false
