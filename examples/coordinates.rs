@@ -7,9 +7,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let page_coordinates = use_state(&cx, ||"".to_string());
-    let screen_coordinates = use_state(&cx, ||"".to_string());
-    let offset_coordinates = use_state(&cx, ||"".to_string());
+    let page_coordinates = use_state(&cx, || "".to_string());
+    let screen_coordinates = use_state(&cx, || "".to_string());
+    let offset_coordinates = use_state(&cx, || "".to_string());
 
     let container_style = r#"
         display: flex;
