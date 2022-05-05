@@ -655,6 +655,10 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                     Some(MouseButton::Right) => 2,
                 };
                 // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
+
+                // The `offset`, `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
+                // todo?
+                // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
                 EventData::Mouse(MouseData {
                     alt_key: alt,
                     button: button_state,
@@ -663,6 +667,8 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                     client_y: y,
                     ctrl_key: ctrl,
                     meta_key: meta,
+                    offset_x: x,
+                    offset_y: y,
                     page_x: x,
                     page_y: y,
                     screen_x: x,
