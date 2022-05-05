@@ -32,6 +32,7 @@ pub struct BrowserPathHistoryProvider {
 
 impl BrowserPathHistoryProvider {
     /// Create a new [`BrowserPathHistoryProvider`] with a prefix.
+    #[must_use]
     pub fn with_prefix(prefix: String) -> Box<Self> {
         Box::new(Self {
             prefix: Some(prefix),

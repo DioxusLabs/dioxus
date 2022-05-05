@@ -2,9 +2,7 @@ use dioxus_core::ScopeState;
 use futures_channel::mpsc::UnboundedSender;
 use log::error;
 
-use crate::{
-    contexts::RouterContext, navigation::NavigationTarget, service::RouterMessage,
-};
+use crate::{contexts::RouterContext, navigation::NavigationTarget, service::RouterMessage};
 
 /// A hook that allows you to acquire a [`Navigator`] object.
 ///
@@ -13,6 +11,7 @@ use crate::{
 /// - Otherwise [`Some`].
 ///
 /// [`Router`]: crate::components::Router
+#[must_use]
 pub fn use_navigate(cx: &ScopeState) -> Option<Navigator> {
     let router = cx.use_hook(|_| {
         let router = cx.consume_context::<RouterContext>();

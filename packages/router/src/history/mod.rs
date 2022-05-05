@@ -33,23 +33,28 @@ pub trait HistoryProvider {
     fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {}
 
     /// Get the current path.
+    #[must_use]
     fn current_path(&self) -> String;
     /// Get a prefix for `href`s.
+    #[must_use]
     fn current_prefix(&self) -> String {
         String::new()
     }
     /// Get the current query string.
+    #[must_use]
     fn current_query(&self) -> Option<String>;
 
     /// Check if there is a prior path that can be navigated back to.
     ///
     /// If unknown return [`true`] and do nothing when [`HistoryProvider::go_back`] is called.
+    #[must_use]
     fn can_go_back(&self) -> bool {
         true
     }
     /// Check if there is a future path that can be navigated forward to.
     ///
     /// If unknown return [`true`] and do nothing when [`HistoryProvider::go_forward`] is called.
+    #[must_use]
     fn can_go_forward(&self) -> bool {
         true
     }
@@ -73,6 +78,7 @@ pub trait HistoryProvider {
     fn replace(&mut self, path: String);
 
     /// Whether the provider can handle external targets.
+    #[must_use]
     fn can_external(&self) -> bool {
         false
     }

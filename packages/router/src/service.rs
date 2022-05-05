@@ -70,6 +70,7 @@ impl RouterService {
     /// Create a new [`RouterService`].
     ///
     /// The returned [`RouterService`] and [`RouterContext`] are linked with each other.
+    #[must_use]
     pub(crate) fn new(
         routes: Segment,
         update: Arc<dyn Fn(ScopeId)>,
@@ -342,6 +343,7 @@ fn construct_named_targets(
 /// If `path` contains more segments than specified by `segment`, `names` and `vars` will be empty
 /// and `components` will only contain the `global_fallback`. This only applies if `components` is
 /// not [`RouteContent::RcNone`].
+#[must_use]
 fn match_segment(
     path: &[&str],
     segment: &Segment,

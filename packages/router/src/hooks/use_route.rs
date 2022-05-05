@@ -16,6 +16,7 @@ use crate::{helpers::sub_to_router, state::RouterState};
 /// # Important usage information
 /// Make sure to [`drop`] the returned [`RwLockReadGuard`] when your component is done rendering.
 /// Otherwise you prevent the router from updating the data when navigating.
+#[must_use]
 pub fn use_route(cx: &ScopeState) -> Option<RwLockReadGuard<RouterState>> {
     let router = sub_to_router(cx);
 

@@ -35,6 +35,7 @@ pub struct RouterState {
 
 impl RouterState {
     /// Get the query parameters as a [`BTreeMap`].
+    #[must_use]
     pub fn query_params(&self) -> Option<BTreeMap<String, String>> {
         if let Some(query) = &self.query {
             serde_urlencoded::from_str(query).ok()

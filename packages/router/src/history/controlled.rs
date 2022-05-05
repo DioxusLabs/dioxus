@@ -120,6 +120,7 @@ pub struct HistoryController {
 
 impl HistoryController {
     /// Create a new [`HistoryController`] and a linked [`ControlledHistoryProvider`].
+    #[must_use]
     pub fn new(internal: Box<dyn HistoryProvider>) -> (Self, ControlledHistoryProvider) {
         let core = Arc::new(Mutex::new(ControlledHistoryCore {
             callback: None,
@@ -137,12 +138,14 @@ impl HistoryController {
     /// Get the external URL the router has navigated to.
     ///
     /// [`None`] if the router hasn't navigated to an external URL.
+    #[must_use]
     pub fn get_external(&self) -> Option<String> {
         self.core.lock().unwrap().external.clone()
     }
 
     /// Check if the linked [`ControlledHistoryProvider`] has triggered a navigation since the last
     /// navigation triggered by the [`HistoryController`].
+    #[must_use]
     pub fn has_redirected(&self) -> bool {
         self.core.lock().unwrap().changed
     }

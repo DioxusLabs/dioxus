@@ -19,6 +19,7 @@ use crate::{
 /// - Otherwise [`Some`].
 ///
 /// [`Router`]: crate::components::router
+#[must_use]
 pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterContext> {
     let id = cx.use_hook(|_| Arc::new(cx.scope_id()));
 
@@ -45,6 +46,7 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
 /// # Return values:
 /// - [`Some`] if the navigation was successful.
 /// - [`None`] if no target for the `name` was found, or a required parameter was not provided.
+#[must_use]
 pub(crate) fn construct_named_path(
     name: &'static str,
     parameters: &[(&'static str, String)],

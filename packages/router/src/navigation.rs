@@ -36,7 +36,7 @@ pub enum NavigationTarget {
 }
 
 impl NavigationTarget {
-    /// Returns `true` if the navigation target is [`NtExternal`].
+    /// Returns [`true`] if the navigation target is [`NtExternal`].
     ///
     /// [`NtExternal`]: NavigationTarget::NtExternal
     #[must_use]

@@ -145,6 +145,7 @@ pub enum RouteContent {
 }
 
 impl RouteContent {
+    #[must_use]
     pub(crate) fn add_to_list(
         &self,
         components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
