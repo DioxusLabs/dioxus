@@ -149,7 +149,7 @@ impl RouteContent {
 
     /// Returns `true` if the route content is [`RcNone`].
     ///
-    /// [`TNone`]: RouteContent::RcNone
+    /// [`RcNone`]: RouteContent::RcNone
     #[must_use]
     pub fn is_rc_none(&self) -> bool {
         matches!(self, Self::RcNone)

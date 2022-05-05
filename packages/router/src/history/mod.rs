@@ -13,6 +13,9 @@ mod browser_path;
 #[cfg(feature = "web")]
 pub use browser_path::*;
 
+mod controlled;
+pub use controlled::*;
+
 mod memory;
 pub use memory::*;
 
