@@ -7,20 +7,19 @@ use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 use dioxus_native_core::utils::cursor::Cursor;
 use std::collections::HashMap;
-use std::fmt::Arguments;
 
 #[derive(Props)]
 pub(crate) struct TextInputProps<'a> {
     #[props(!optional)]
     raw_oninput: Option<&'a EventHandler<'a, FormData>>,
     #[props(!optional)]
-    value: Option<Arguments<'a>>,
+    value: Option<&'a str>,
     #[props(!optional)]
-    size: Option<Arguments<'a>>,
+    size: Option<&'a str>,
     #[props(!optional)]
-    width: Option<Arguments<'a>>,
+    width: Option<&'a str>,
     #[props(!optional)]
-    height: Option<Arguments<'a>>,
+    height: Option<&'a str>,
 }
 #[allow(non_snake_case)]
 pub(crate) fn TextInput<'a>(cx: Scope<'a, TextInputProps>) -> Element<'a> {
@@ -45,16 +44,40 @@ pub(crate) fn TextInput<'a>(cx: Scope<'a, TextInputProps>) -> Element<'a> {
     } else {
         text_highlighted.to_string() + "|"
     };
+
     let max_len = cx
         .props
         .size
-        .and_then(|s| s.to_string().parse().ok())
+        .as_ref()
+        .and_then(|s| s.parse().ok())
         .unwrap_or(usize::MAX);
+
+    let width = cx.props.width.unwrap_or("10px");
+    let height = cx.props.height.unwrap_or("3px");
+
+    // don't draw a border unless there is enough space
+    let border = if width
+        .strip_suffix("px")
+        .and_then(|w| w.parse::<i32>().ok())
+        .filter(|w| *w < 3)
+        .is_some()
+        || height
+            .strip_suffix("px")
+            .and_then(|h| h.parse::<i32>().ok())
+            .filter(|h| *h < 3)
+            .is_some()
+    {
+        "none"
+    } else {
+        "solid"
+    };
 
     cx.render({
         rsx! {
             div{
-                border_style: "solid",
+                width: "{width}",
+                height: "{height}",
+                border_style: "{border}",
                 align_items: "left",
 
                 // prevent tabing out of the textbox
@@ -72,13 +95,11 @@ pub(crate) fn TextInput<'a>(cx: Scope<'a, TextInputProps>) -> Element<'a> {
 
                 "{text_before_first_cursor}|"
 
-                cx.render(rsx! {span{
-                    margin: "0px",
-                    padding: "0px",
+                span{
                     background_color: "rgba(100, 100, 100, 50%)",
 
                     "{text_highlighted}"
-                }})
+                }
 
                 "{text_after_second_cursor}"
             }

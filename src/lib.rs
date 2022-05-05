@@ -49,7 +49,10 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
     pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
+    #[cfg(not(feature = "tui"))]
     pub use dioxus_html as dioxus_elements;
+    #[cfg(feature = "tui")]
+    pub use dioxus_tui::prelude as dioxus_elements;
 
     #[cfg(feature = "router")]
     pub use dioxus_router::{use_route, use_router, Link, Redirect, Route, Router, UseRoute};

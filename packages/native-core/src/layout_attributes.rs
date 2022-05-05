@@ -336,7 +336,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-bottom-left-radius" => {}
         "border-bottom-right-radius" => {}
         "border-bottom-style" => {
-            if style.border.bottom == Dimension::default() {
+            if value != "none" && style.border.bottom == Dimension::default() {
                 let v = Dimension::Points(1.0);
                 style.border.bottom = v;
             }
@@ -357,7 +357,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-left" => {}
         "border-left-color" => {}
         "border-left-style" => {
-            if style.border.start == Dimension::default() {
+            if value != "none" && style.border.start == Dimension::default() {
                 let v = Dimension::Points(1.0);
                 style.border.start = v;
             }
@@ -371,8 +371,10 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-right" => {}
         "border-right-color" => {}
         "border-right-style" => {
-            let v = Dimension::Points(1.0);
-            style.border.end = v;
+            if value != "none" && style.border.end == Dimension::default() {
+                let v = Dimension::Points(1.0);
+                style.border.end = v;
+            }
         }
         "border-right-width" => {
             if let Some(v) = parse_value(value) {
@@ -381,21 +383,23 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         }
         "border-spacing" => {}
         "border-style" => {
-            if style.border.top == Dimension::default() {
-                let v = Dimension::Points(1.0);
-                style.border.top = v;
-            }
-            if style.border.bottom == Dimension::default() {
-                let v = Dimension::Points(1.0);
-                style.border.bottom = v;
-            }
-            if style.border.start == Dimension::default() {
-                let v = Dimension::Points(1.0);
-                style.border.start = v;
-            }
-            if style.border.end == Dimension::default() {
-                let v = Dimension::Points(1.0);
-                style.border.end = v;
+            if value != "none" {
+                if style.border.top == Dimension::default() {
+                    let v = Dimension::Points(1.0);
+                    style.border.top = v;
+                }
+                if style.border.bottom == Dimension::default() {
+                    let v = Dimension::Points(1.0);
+                    style.border.bottom = v;
+                }
+                if style.border.start == Dimension::default() {
+                    let v = Dimension::Points(1.0);
+                    style.border.start = v;
+                }
+                if style.border.end == Dimension::default() {
+                    let v = Dimension::Points(1.0);
+                    style.border.end = v;
+                }
             }
         }
         "border-top" => {}
@@ -403,7 +407,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-top-left-radius" => {}
         "border-top-right-radius" => {}
         "border-top-style" => {
-            if style.border.top == Dimension::default() {
+            if value != "none" && style.border.top == Dimension::default() {
                 let v = Dimension::Points(1.0);
                 style.border.top = v;
             }

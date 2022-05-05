@@ -24,6 +24,7 @@ use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 mod config;
 mod hooks;
 mod layout;
+pub mod prelude;
 mod render;
 mod style;
 mod style_attributes;

@@ -1,5 +1,3 @@
-use std::fmt::Arguments;
-
 use dioxus_core as dioxus;
 use dioxus_core::prelude::fc_to_builder;
 use dioxus_core::VNode;
@@ -15,10 +13,10 @@ use crate::widgets::textbox::TextInput;
 pub struct InputProps<'a> {
     r#type: Option<&'static str>,
     oninput: Option<EventHandler<'a, FormData>>,
-    value: Option<Arguments<'a>>,
-    size: Option<Arguments<'a>>,
-    width: Option<Arguments<'a>>,
-    height: Option<Arguments<'a>>,
+    value: Option<&'a str>,
+    size: Option<&'a str>,
+    width: Option<&'a str>,
+    height: Option<&'a str>,
 }
 
 #[allow(non_snake_case)]
