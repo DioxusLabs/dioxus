@@ -8,26 +8,22 @@ use crossterm::{
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
 use dioxus_native_core::real_dom::RealDom;
-use dioxus_native_core::state::*;
-use dioxus_native_core_macro::State;
-use focus::Focus;
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
-use layout::StretchLayout;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
 use stretch2::{prelude::Size, Stretch};
-use style_attributes::StyleModifier;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
 mod focus;
 mod hooks;
 mod layout;
+mod node;
 mod render;
 mod style;
 mod style_attributes;
@@ -35,21 +31,7 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
-
-type Dom = RealDom<NodeState>;
-type Node = dioxus_native_core::real_dom::Node<NodeState>;
-
-#[derive(Debug, Clone, State, Default)]
-struct NodeState {
-    #[child_dep_state(layout, RefCell<Stretch>)]
-    layout: StretchLayout,
-    // depends on attributes, the C component of it's parent and a u8 context
-    #[parent_dep_state(style)]
-    style: StyleModifier,
-    #[node_dep_state()]
-    focus: Focus,
-    focused: bool,
-}
+pub(crate) use node::*;
 
 #[derive(Clone)]
 pub struct TuiContext {

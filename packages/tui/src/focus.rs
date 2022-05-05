@@ -1,4 +1,4 @@
-use crate::Dom;
+use crate::{node::PreventDefault, Dom};
 
 use dioxus_core::ElementId;
 use dioxus_native_core::utils::{ElementProduced, PersistantElementIter};
@@ -59,7 +59,6 @@ impl Default for FocusLevel {
 
 #[derive(Clone, PartialEq, Debug, Default)]
 pub(crate) struct Focus {
-    pub pass_focus: bool,
     pub level: FocusLevel,
 }
 
@@ -71,9 +70,6 @@ impl NodeDepState for Focus {
 
     fn reduce(&mut self, node: NodeView<'_>, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
         let new = Focus {
-            pass_focus: !node
-                .attributes()
-                .any(|a| a.name == "dioxus-prevent-default" && a.value.trim() == "keydown"),
             level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
                 if let Ok(index) = a.value.parse::<i32>() {
                     match index.cmp(&0) {
@@ -106,7 +102,7 @@ impl NodeDepState for Focus {
 }
 
 const FOCUS_EVENTS: &[&str] = &sorted_str_slice!(["keydown", "keypress", "keyup"]);
-const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["dioxus-prevent-default", "tabindex"]);
+const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["tabindex"]);
 
 #[derive(Default)]
 pub(crate) struct FocusState {
@@ -120,7 +116,7 @@ impl FocusState {
     /// Returns true if the focus has changed.
     pub fn progress(&mut self, rdom: &mut Dom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
-            if !rdom[last].state.focus.pass_focus {
+            if rdom[last].state.prevent_default == PreventDefault::KeyDown {
                 return false;
             }
         }
