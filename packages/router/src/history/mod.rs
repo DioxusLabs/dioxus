@@ -65,3 +65,9 @@ pub trait HistoryProvider {
     /// Replace the current path with a new one.
     fn replace(&mut self, path: String);
 }
+
+#[derive(serde::Deserialize, serde::Serialize)]
+struct ScrollPosition {
+    x: i32,
+    y: i32,
+}
