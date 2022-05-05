@@ -5,17 +5,17 @@
 
 <div align="center">
   <!-- Crates version -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/v/dioxus.svg?style=flat-square"
+  <a href="https://crates.io/crates/dioxus-router">
+    <img src="https://img.shields.io/crates/v/dioxus-router.svg?style=flat-square"
     alt="Crates.io version" />
   </a>
   <!-- Downloads -->
-  <a href="https://crates.io/crates/dioxus">
-    <img src="https://img.shields.io/crates/d/dioxus.svg?style=flat-square"
+  <a href="https://crates.io/crates/dioxus-router">
+    <img src="https://img.shields.io/crates/d/dioxus-router.svg?style=flat-square"
       alt="Download" />
   </a>
   <!-- docs -->
-  <a href="https://docs.rs/dioxus">
+  <a href="https://docs.rs/dioxus-router">
     <img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square"
       alt="docs.rs docs" />
   </a>
@@ -39,25 +39,46 @@
 
 <div align="center">
   <h3>
-    <a href="https://dioxuslabs.com"> Website </a>
+    <a href="https://dioxuslabs.com">Website</a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
+    <a href="https://dioxuslabs.com/router/guide">Guide (Release)</a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Master) </a>
+    <a href="https://dioxuslabs.com/nightly/router/guide">Guide (Master)</a>
   </h3>
 </div>
 
-Dioxus Router is a first-party Router for all your Dioxus Apps. It provides a React-Router style interface that works anywhere: across the browser, SSR, and natively.
 
-```rust, ignore
+Dioxus Router is a first-party Router for all your Dioxus Apps. It provides an
+interface that works anywhere: across the browser, SSR, and natively.
+
+```rust ,ignore
 fn app() {
+    let routes = cx.use_hook(|_| Segment {
+        index: RcComponent(Home),
+        fixed: vec![(
+          String::from("blog"),
+          Route {
+              content: RcComponent(Blog),
+              sub: Segment {
+                  index: RcComponent(BlogList),
+                  dynamic: DrParameter {
+                      name: None,
+                      key: "id",
+                      content: RcComponent(BlogPost),
+                      sub: None,
+                  }
+                  ..Default::default()
+              }
+              ..Default::default()
+          }
+        )]
+        ..Default::default()
+    });
+
     cx.render(rsx! {
         Router {
-            Route { to: "/", Component {} },
-            Route { to: "/blog", Blog {} },
-            Route { to: "/blog/:id", BlogPost {} },
+            routes: routes,
+            Outlet { },
         }
     })
 }
@@ -66,7 +87,8 @@ fn app() {
 
 ## Resources
 
-- See the mdbook
-- See the one-page brief
-- See the guide on the doc site
-- The crates.io API
+- See the [mdbook][guide]
+- The [crates.io API][api]
+
+[api]: https://docs.rs/dioxus-router
+[guide]: https://dioxuslabs.com/router/guide
