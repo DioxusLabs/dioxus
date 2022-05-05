@@ -131,7 +131,11 @@ impl HistoryProvider for BrowserPathHistoryProvider {
 
     fn push(&mut self, path: String) {
         let path = if let Some(pre) = &self.prefix {
-            format!("{pre}{path}")
+            if !path.starts_with("/") {
+                format!("{pre}{path}")
+            } else {
+                path
+            }
         } else {
             path
         };
@@ -152,7 +156,11 @@ impl HistoryProvider for BrowserPathHistoryProvider {
 
     fn replace(&mut self, path: String) {
         let path = if let Some(pre) = &self.prefix {
-            format!("{pre}{path}")
+            if !path.starts_with("/") {
+                format!("{pre}{path}")
+            } else {
+                path
+            }
         } else {
             path
         };
