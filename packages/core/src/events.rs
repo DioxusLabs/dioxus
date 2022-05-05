@@ -49,7 +49,7 @@ impl BubbleState {
 ///     }
 /// )).unwrap();
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UserEvent {
     /// The originator of the event trigger if available
     pub scope_id: Option<ScopeId>,

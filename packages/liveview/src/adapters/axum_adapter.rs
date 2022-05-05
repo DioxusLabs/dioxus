@@ -9,21 +9,33 @@ use tokio::sync::mpsc;
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 
-#[cfg(feature = "axum")]
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: WebSocket, app: fn(Scope) -> Element) {
-        connect(ws, self.pool.clone(), app).await;
+        connect(ws, self.pool.clone(), app, ()).await;
+    }
+    pub async fn upgrade_with_props<T>(&self, ws: WebSocket, app: fn(Scope<T>) -> Element, props: T)
+    where
+        T: Send + Sync + 'static,
+    {
+        connect(ws, self.pool.clone(), app, props).await;
     }
 }
 
-pub async fn connect(socket: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Element) {
+pub async fn connect<T>(
+    socket: WebSocket,
+    pool: LocalPoolHandle,
+    app: fn(Scope<T>) -> Element,
+    props: T,
+) where
+    T: Send + Sync + 'static,
+{
     let (mut user_ws_tx, mut user_ws_rx) = socket.split();
     let (event_tx, event_rx) = mpsc::unbounded_channel();
     let (edits_tx, edits_rx) = mpsc::unbounded_channel();
     let mut edits_rx = UnboundedReceiverStream::new(edits_rx);
     let mut event_rx = UnboundedReceiverStream::new(event_rx);
     let vdom_fut = pool.clone().spawn_pinned(move || async move {
-        let mut vdom = VirtualDom::new(app);
+        let mut vdom = VirtualDom::new_with_props(app, props);
         let edits = vdom.rebuild();
         let serialized = serde_json::to_string(&edits.edits).unwrap();
         edits_tx.send(serialized).unwrap();

@@ -1,32 +1,64 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use dioxus_core::*;
-use std::collections::HashMap;
+use dioxus_native_core::layout_attributes::apply_layout_attributes;
+use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
+use dioxus_native_core::state::ChildDepState;
+use dioxus_native_core_macro::sorted_str_slice;
+use stretch2::prelude::*;
 
-use crate::{
-    attributes::{apply_attributes, StyleModifer},
-    style::RinkStyle,
-    TuiModifier, TuiNode,
-};
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum PossiblyUninitalized<T> {
+    Uninitalized,
+    Initialized(T),
+}
+impl<T> PossiblyUninitalized<T> {
+    pub fn unwrap(self) -> T {
+        match self {
+            Self::Initialized(i) => i,
+            _ => panic!(),
+        }
+    }
+}
+impl<T> Default for PossiblyUninitalized<T> {
+    fn default() -> Self {
+        Self::Uninitalized
+    }
+}
 
-/*
-The layout system uses the lineheight as one point.
+#[derive(Clone, PartialEq, Default, Debug)]
+pub(crate) struct StretchLayout {
+    pub style: Style,
+    pub node: PossiblyUninitalized<Node>,
+}
 
-stretch uses fractional points, so we can rasterize if we need too, but not with characters
-this means anything thats "1px" is 1 lineheight. Unfortunately, text cannot be smaller or bigger
-*/
-pub fn collect_layout<'a>(
-    layout: &mut stretch2::Stretch,
-    nodes: &mut HashMap<ElementId, TuiNode<'a>>,
-    vdom: &'a VirtualDom,
-    node: &'a VNode<'a>,
-) {
-    use stretch2::prelude::*;
+impl ChildDepState for StretchLayout {
+    type Ctx = Rc<RefCell<Stretch>>;
+    type DepState = Self;
+    // use tag to force this to be called when a node is built
+    const NODE_MASK: NodeMask =
+        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS))
+            .with_text()
+            .with_tag();
 
-    match node {
-        VNode::Text(t) => {
-            let id = t.id.get().unwrap();
-            let char_len = t.text.chars().count();
+    /// Setup the layout
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        children: impl Iterator<Item = &'a Self::DepState>,
+        ctx: &Self::Ctx,
+    ) -> bool
+    where
+        Self::DepState: 'a,
+    {
+        let mut changed = false;
+        let mut stretch = ctx.borrow_mut();
+        let mut style = Style::default();
+        if let Some(text) = node.text() {
+            let char_len = text.chars().count();
 
-            let style = Style {
+            style = Style {
                 size: Size {
                     // characters are 1 point tall
                     height: Dimension::Points(1.0),
@@ -36,96 +68,208 @@ pub fn collect_layout<'a>(
                 },
                 ..Default::default()
             };
-
-            nodes.insert(
-                id,
-                TuiNode {
-                    node,
-                    block_style: RinkStyle::default(),
-                    tui_modifier: TuiModifier::default(),
-                    layout: layout.new_node(style, &[]).unwrap(),
-                },
-            );
-        }
-        VNode::Element(el) => {
-            // gather up all the styles from the attribute list
-            let mut modifier = StyleModifer {
-                style: Style::default(),
-                tui_style: RinkStyle::default(),
-                tui_modifier: TuiModifier::default(),
-            };
-
-            // handle text modifier elements
-            if el.namespace.is_none() {
-                match el.tag {
-                    "b" => apply_attributes("font-weight", "bold", &mut modifier),
-                    "strong" => apply_attributes("font-weight", "bold", &mut modifier),
-                    "u" => apply_attributes("text-decoration", "underline", &mut modifier),
-                    "ins" => apply_attributes("text-decoration", "underline", &mut modifier),
-                    "del" => apply_attributes("text-decoration", "line-through", &mut modifier),
-                    "i" => apply_attributes("font-style", "italic", &mut modifier),
-                    "em" => apply_attributes("font-style", "italic", &mut modifier),
-                    "mark" => apply_attributes(
-                        "background-color",
-                        "rgba(241, 231, 64, 50%)",
-                        &mut modifier,
-                    ),
-                    _ => (),
+            if let PossiblyUninitalized::Initialized(n) = self.node {
+                if self.style != style {
+                    stretch.set_style(n, style).unwrap();
                 }
+            } else {
+                self.node =
+                    PossiblyUninitalized::Initialized(stretch.new_node(style, &[]).unwrap());
+                changed = true;
+            }
+        } else {
+            // gather up all the styles from the attribute list
+            for &Attribute { name, value, .. } in node.attributes() {
+                assert!(SORTED_LAYOUT_ATTRS.binary_search(&name).is_ok());
+                apply_layout_attributes(name, value, &mut style);
             }
 
-            for &Attribute { name, value, .. } in el.attributes {
-                apply_attributes(name, value, &mut modifier);
-            }
-
-            // Layout the children
-            for child in el.children {
-                collect_layout(layout, nodes, vdom, child);
+            // the root node fills the entire area
+            if node.id() == ElementId(0) {
+                apply_layout_attributes("width", "100%", &mut style);
+                apply_layout_attributes("height", "100%", &mut style);
             }
 
             // Set all direct nodes as our children
             let mut child_layout = vec![];
-            for el in el.children {
-                let ite = ElementIdIterator::new(vdom, el);
-                for node in ite {
-                    match node {
-                        VNode::Element(_) | VNode::Text(_) => {
-                            //
-                            child_layout.push(nodes[&node.mounted_id()].layout)
-                        }
-                        VNode::Placeholder(_) => {}
-                        VNode::Fragment(_) => todo!(),
-                        VNode::Component(_) => todo!(),
-                    }
+            for l in children {
+                child_layout.push(l.node.unwrap());
+            }
 
-                    // child_layout.push(nodes[&node.mounted_id()].layout)
+            if let PossiblyUninitalized::Initialized(n) = self.node {
+                if self.style != style {
+                    stretch.set_style(n, style).unwrap();
                 }
-            }
-
-            nodes.insert(
-                node.mounted_id(),
-                TuiNode {
-                    node,
-                    block_style: modifier.tui_style,
-                    tui_modifier: modifier.tui_modifier,
-                    layout: layout.new_node(modifier.style, &child_layout).unwrap(),
-                },
-            );
-        }
-        VNode::Fragment(el) => {
-            //
-            for child in el.children {
-                collect_layout(layout, nodes, vdom, child);
+                if stretch.children(n).unwrap() != child_layout {
+                    stretch.set_children(n, &child_layout).unwrap();
+                }
+            } else {
+                self.node = PossiblyUninitalized::Initialized(
+                    stretch.new_node(style, &child_layout).unwrap(),
+                );
+                changed = true;
             }
         }
-        VNode::Component(sc) => {
-            //
-            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
-            let root = scope.root_node();
-            collect_layout(layout, nodes, vdom, root);
+        if self.style != style {
+            changed = true;
+            self.style = style;
         }
-        VNode::Placeholder(_) => {
-            //
-        }
-    };
+        changed
+    }
 }
+
+// these are the attributes in layout_attiributes in native-core
+const SORTED_LAYOUT_ATTRS: &[&str] = &sorted_str_slice!([
+    "align-content",
+    "align-items",
+    "align-self",
+    "animation",
+    "animation-delay",
+    "animation-direction",
+    "animation-duration",
+    "animation-fill-mode",
+    "animation-iteration-count",
+    "animation-name",
+    "animation-play-state",
+    "animation-timing-function",
+    "backface-visibility",
+    "border",
+    "border-bottom",
+    "border-bottom-color",
+    "border-bottom-left-radius",
+    "border-bottom-right-radius",
+    "border-bottom-style",
+    "border-bottom-width",
+    "border-collapse",
+    "border-color",
+    "border-image",
+    "border-image-outset",
+    "border-image-repeat",
+    "border-image-slice",
+    "border-image-source",
+    "border-image-width",
+    "border-left",
+    "border-left-color",
+    "border-left-style",
+    "border-left-width",
+    "border-radius",
+    "border-right",
+    "border-right-color",
+    "border-right-style",
+    "border-right-width",
+    "border-spacing",
+    "border-style",
+    "border-top",
+    "border-top-color",
+    "border-top-left-radius",
+    "border-top-right-radius",
+    "border-top-style",
+    "border-top-width",
+    "border-width",
+    "bottom",
+    "box-shadow",
+    "box-sizing",
+    "caption-side",
+    "clear",
+    "clip",
+    "column-count",
+    "column-fill",
+    "column-gap",
+    "column-rule",
+    "column-rule-color",
+    "column-rule-style",
+    "column-rule-width",
+    "column-span",
+    "column-width",
+    "columns",
+    "content",
+    "counter-increment",
+    "counter-reset",
+    "cursor",
+    "direction",
+    "ltr",
+    "rtl",
+    "display",
+    "empty-cells",
+    "flex",
+    "flex-basis",
+    "flex-direction",
+    "flex-flow",
+    "flex-grow",
+    "flex-shrink",
+    "flex-wrap",
+    "float",
+    "height",
+    "justify-content",
+    "flex-start",
+    "flex-end",
+    "center",
+    "space-between",
+    "space-around",
+    "space-evenly",
+    "left",
+    "letter-spacing",
+    "line-height",
+    "list-style",
+    "list-style-image",
+    "list-style-position",
+    "list-style-type",
+    "margin",
+    "margin-bottom",
+    "margin-left",
+    "margin-right",
+    "margin-top",
+    "max-height",
+    "max-width",
+    "min-height",
+    "min-width",
+    "opacity",
+    "order",
+    "outline",
+    "outline-color",
+    "outline-offset",
+    "outline-style",
+    "outline-width",
+    "overflow",
+    "overflow-x",
+    "overflow-y",
+    "padding",
+    "padding-bottom",
+    "padding-left",
+    "padding-right",
+    "padding-top",
+    "page-break-after",
+    "page-break-before",
+    "page-break-inside",
+    "perspective",
+    "perspective-origin",
+    "position",
+    "static",
+    "relative",
+    "fixed",
+    "absolute",
+    "sticky",
+    "pointer-events",
+    "quotes",
+    "resize",
+    "right",
+    "tab-size",
+    "table-layout",
+    "top",
+    "transform",
+    "transform-origin",
+    "transform-style",
+    "transition",
+    "transition-delay",
+    "transition-duration",
+    "transition-property",
+    "transition-timing-function",
+    "vertical-align",
+    "visibility",
+    "white-space",
+    "width",
+    "word-break",
+    "word-spacing",
+    "word-wrap",
+    "z-index"
+]);
