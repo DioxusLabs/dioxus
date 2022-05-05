@@ -4,7 +4,6 @@ use dioxus_html as dioxus_elements;
 use dioxus_router::prelude::*;
 
 fn main() {
-    console_error_panic_hook::set_once();
     env_logger::init();
     dioxus_desktop::launch(app);
 }
