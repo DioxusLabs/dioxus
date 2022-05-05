@@ -28,6 +28,7 @@ mod render;
 mod style;
 mod style_attributes;
 mod widget;
+pub mod widgets;
 
 pub use config::*;
 pub use hooks::*;
