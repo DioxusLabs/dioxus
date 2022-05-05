@@ -175,6 +175,8 @@ impl InnerInputState {
 
         self.wheel = None;
 
+        let old_focus = self.focus_state.last_focused_id;
+
         evts.retain(|e| match &e.1 {
             EventData::Keyboard(k) => match k.key_code {
                 KeyCode::Tab => !self.focus_state.progress(dom, !k.shift_key),
@@ -188,6 +190,18 @@ impl InnerInputState {
         }
 
         self.resolve_mouse_events(previous_mouse, resolved_events, layout, dom);
+
+        if old_focus != self.focus_state.last_focused_id {
+            if let Some(id) = self.focus_state.last_focused_id {
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name: "focus",
+                    element: Some(id),
+                    data: Arc::new(FocusData {}),
+                });
+            }
+        }
 
         // for s in &self.subscribers {
         //     s();
@@ -500,13 +514,6 @@ impl InnerInputState {
                 });
                 if let Some(id) = focus_id {
                     self.focus_state.set_focus(dom, id);
-                    resolved_events.push(UserEvent {
-                        scope_id: None,
-                        priority: EventPriority::Medium,
-                        name: "focus",
-                        element: Some(id),
-                        data: Arc::new(FocusData {}),
-                    })
                 }
             }
         }
