@@ -31,22 +31,22 @@ use crate::{Dom, Node};
 
 //     pub fn mouse(&self) -> Option<MouseData> {
 //         let data = (**self.0).borrow();
-//         data.mouse.as_ref().map(|m| m.clone())
+//         mouse.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn wheel(&self) -> Option<WheelData> {
 //         let data = (**self.0).borrow();
-//         data.wheel.as_ref().map(|w| w.clone())
+//         wheel.as_ref().map(|w| w.clone())
 //     }
 
 //     pub fn screen(&self) -> Option<(u16, u16)> {
 //         let data = (**self.0).borrow();
-//         data.screen.as_ref().map(|m| m.clone())
+//         screen.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn last_key_pressed(&self) -> Option<KeyboardData> {
 //         let data = (**self.0).borrow();
-//         data.last_key_pressed
+//         last_key_pressed
 //             .as_ref()
 //             .map(|k| &k.0.clone())
 //     }
@@ -215,16 +215,6 @@ impl InnerInputState {
         layout: &Stretch,
         dom: &mut Dom,
     ) {
-        struct Data<'b> {
-            new_pos: (i32, i32),
-            old_pos: Option<(i32, i32)>,
-            clicked: bool,
-            released: bool,
-            wheel_delta: f64,
-            mouse_data: &'b MouseData,
-            wheel_data: &'b Option<WheelData>,
-        }
-
         fn layout_contains_point(layout: &Layout, point: (i32, i32)) -> bool {
             layout.location.x as i32 <= point.0
                 && layout.location.x as i32 + layout.size.width as i32 >= point.0
@@ -257,6 +247,13 @@ impl InnerInputState {
             }
         }
 
+        fn prepare_mouse_data(mouse_data: &MouseData, layout: &Layout) -> MouseData {
+            let mut data = mouse_data.clone();
+            data.offset_x = data.client_x - layout.location.x as i32;
+            data.offset_y = data.client_y - layout.location.y as i32;
+            data
+        }
+
         if let Some(mouse) = &self.mouse {
             let new_pos = (mouse.0.screen_x, mouse.0.screen_y);
             let old_pos = previous_mouse
@@ -269,31 +266,21 @@ impl InnerInputState {
             let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
             let mouse_data = &mouse.0;
             let wheel_data = &self.wheel;
-            let data = Data {
-                new_pos,
-                old_pos,
-                clicked,
-                released,
-                wheel_delta,
-                mouse_data,
-                wheel_data,
-            };
 
             {
                 // mousemove
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousemove") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = data
-                        .old_pos
+                    let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && previously_contained {
                         try_create_event(
                             "mousemove",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -308,16 +295,15 @@ impl InnerInputState {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseenter") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = data
-                        .old_pos
+                    let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseenter",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(mouse_data.clone()),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -332,16 +318,15 @@ impl InnerInputState {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseover") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = data
-                        .old_pos
+                    let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseover",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -352,16 +337,16 @@ impl InnerInputState {
             }
 
             // mousedown
-            if data.clicked {
+            if clicked {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains {
                         try_create_event(
                             "mousedown",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -372,16 +357,16 @@ impl InnerInputState {
             }
 
             // mouseup
-            if data.released {
+            if released {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseup") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains {
                         try_create_event(
                             "mouseup",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -392,16 +377,16 @@ impl InnerInputState {
             }
 
             // click
-            if data.released && data.mouse_data.button == 0 {
+            if released && mouse_data.button == 0 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("click") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains {
                         try_create_event(
                             "click",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -412,16 +397,16 @@ impl InnerInputState {
             }
 
             // contextmenu
-            if data.released && data.mouse_data.button == 2 {
+            if released && mouse_data.button == 2 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("contextmenu") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains {
                         try_create_event(
                             "contextmenu",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -432,12 +417,12 @@ impl InnerInputState {
             }
 
             // wheel
-            if let Some(w) = data.wheel_data {
-                if data.wheel_delta != 0.0 {
+            if let Some(w) = wheel_data {
+                if wheel_delta != 0.0 {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("wheel") {
                         let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                        let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
 
                         if currently_contains {
                             try_create_event(
@@ -458,16 +443,15 @@ impl InnerInputState {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseleave") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = data
-                        .old_pos
+                    let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseleave",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -482,16 +466,15 @@ impl InnerInputState {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseout") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = data
-                        .old_pos
+                    let previously_contained = old_pos
                         .filter(|pos| layout_contains_point(node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseout",
-                            Arc::new(data.mouse_data.clone()),
+                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -502,11 +485,11 @@ impl InnerInputState {
             }
 
             // update focus
-            if data.released {
+            if released {
                 let mut focus_id = None;
                 dom.traverse_depth_first(|node| {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, data.new_pos);
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && node.state.focus.level.focusable() {
                         focus_id = Some(node.id);
@@ -656,7 +639,7 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 };
                 // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
 
-                // The `offset`, `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
+                // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
                 // todo?
                 // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
                 EventData::Mouse(MouseData {
@@ -667,8 +650,9 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                     client_y: y,
                     ctrl_key: ctrl,
                     meta_key: meta,
-                    offset_x: x,
-                    offset_y: y,
+                    // offset x/y are set when the origin of the event is assigned to an element
+                    offset_x: 0,
+                    offset_y: 0,
                     page_x: x,
                     page_y: y,
                     screen_x: x,
