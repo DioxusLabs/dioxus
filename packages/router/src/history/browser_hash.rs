@@ -61,6 +61,10 @@ impl HistoryProvider for BrowserHashHistoryProvider {
         }
     }
 
+    fn current_prefix(&self) -> String {
+        String::from("#")
+    }
+
     fn current_query(&self) -> Option<String> {
         let mut p = self
             .window

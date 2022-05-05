@@ -30,6 +30,10 @@ impl HistoryProvider for ControlledHistoryProvider {
         self.core.lock().unwrap().history.current_path()
     }
 
+    fn current_prefix(&self) -> String {
+        self.core.lock().unwrap().history.current_prefix()
+    }
+
     fn current_query(&self) -> Option<String> {
         self.core.lock().unwrap().history.current_query()
     }
@@ -110,6 +114,10 @@ impl HistoryController {
 impl HistoryProvider for HistoryController {
     fn current_path(&self) -> String {
         self.core.lock().unwrap().history.current_path()
+    }
+    
+    fn current_prefix(&self) -> String {
+        self.core.lock().unwrap().history.current_prefix()
     }
 
     fn current_query(&self) -> Option<String> {

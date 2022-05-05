@@ -22,6 +22,9 @@ pub struct CurrentRoute {
     /// The current path.
     pub path: String,
 
+    /// The current prefix.
+    pub prefix: String,
+
     /// The current query string, if present.
     pub query: Option<String>,
 

@@ -35,6 +35,10 @@ pub trait HistoryProvider {
 
     /// Get the current path.
     fn current_path(&self) -> String;
+    /// Get a prefix for `href`s.
+    fn current_prefix(&self) -> String {
+        String::new()
+    }
     /// Get the current query string.
     fn current_query(&self) -> Option<String>;
 
@@ -58,7 +62,6 @@ pub trait HistoryProvider {
 
     /// Push a new path onto the history.
     fn push(&mut self, path: String);
-
     /// Replace the current path with a new one.
     fn replace(&mut self, path: String);
 }

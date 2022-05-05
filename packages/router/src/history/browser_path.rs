@@ -85,6 +85,14 @@ impl HistoryProvider for BrowserPathHistoryProvider {
         p
     }
 
+    fn current_prefix(&self) -> String {
+        if let Some(pre) = &self.prefix {
+            pre.clone()
+        } else {
+            String::new()
+        }
+    }
+
     fn current_query(&self) -> Option<String> {
         let mut q = self
             .window

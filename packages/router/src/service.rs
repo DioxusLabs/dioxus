@@ -183,6 +183,7 @@ impl RouterService {
             components,
             names,
             path,
+            prefix,
             query,
             parameters: variables,
         } = &mut *state;
@@ -194,8 +195,9 @@ impl RouterService {
             components.0.clear();
             components.1.clear();
             names.clear();
-            *path = self.history.current_path().to_string();
-            *query = self.history.current_query().map(|q| q.to_string());
+            *path = self.history.current_path();
+            *prefix = self.history.current_prefix().to_string();
+            *query = self.history.current_query();
             variables.clear();
 
             // normalize and split path
