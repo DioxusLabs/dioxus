@@ -28,6 +28,14 @@ fn app(cx: Scope) -> Element {
                     ..Default::default()
                 },
             ),
+            (
+                String::from("earth_apple"),
+                Route {
+                    name: Some("earth apple"),
+                    content: RcRedirect(NtName("potato", vec![], QNone)),
+                    ..Default::default()
+                },
+            ),
         ],
     });
 
@@ -55,6 +63,12 @@ fn Home(cx: Scope) -> Element {
                 Link {
                     target: NtName("potato", vec![], QNone),
                     "Read about potatoes…"
+                }
+            }
+            li {
+                Link {
+                    target: NtName("earth apple", vec![], QNone),
+                    "Read about earth apples (literal translation of a german word for potato)…"
                 }
             }
         }
