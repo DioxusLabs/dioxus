@@ -24,7 +24,7 @@ pub struct RouterProps<'a> {
     #[props(default)]
     pub fallback: RouteContent,
     /// A function that constructs a history provider.
-    pub history: Option<Box<dyn Fn() -> Box<dyn HistoryProvider>>>,
+    pub history: Option<&'a dyn Fn() -> Box<dyn HistoryProvider>>,
     /// If `true`, the router will perform the initial routing and then become inactive.
     #[props(default)]
     pub init_only: bool,

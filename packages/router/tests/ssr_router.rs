@@ -47,12 +47,19 @@ fn App<'a>(cx: Scope<AppProps>) -> Element {
         )],
         ..Default::default()
     });
-    let history = cx.props.history.clone();
+    let history = cx.use_hook(|_| {
+        let history = cx.props.history.clone();
+
+        return move || {
+            let x: Box<dyn HistoryProvider> = Box::new(history.clone());
+            x
+        };
+    });
 
     cx.render(rsx! {
         Router {
             init_only: true,
-            history: Box::new(move || Box::new(history.clone())),
+            history: history,
             routes: routes,
             nav { "navbar" }
             Outlet {}
