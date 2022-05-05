@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState, AttributeValue},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -339,7 +339,7 @@ pub struct Attribute<'a> {
     pub name: &'static str,
 
     /// The value of the attribute.
-    pub value: &'a str,
+    pub value: AttributeValue<'a>,
 
     /// An indication if this attribute can be ignored during diffing
     ///
@@ -356,6 +356,7 @@ pub struct Attribute<'a> {
     /// Used in Dioxus to denote "style" tags and other attribute groups.
     pub namespace: Option<&'static str>,
 }
+
 
 /// An event listener.
 /// IE onclick, onkeydown, etc
@@ -610,6 +611,24 @@ impl<'a> NodeFactory<'a> {
         is_volatile: bool,
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
+        Attribute {
+            name,
+            value: AttributeValue::Text(value),
+            is_static,
+            namespace,
+            is_volatile,
+        }
+    }
+
+    /// Create a new [`Attribute`] using non-arguments
+    pub fn custom_attr(
+        &self,
+        name: &'static str,
+        value: AttributeValue<'a>,
+        namespace: Option<&'static str>,
+        is_volatile: bool,
+        is_static: bool,
+    ) -> Attribute<'a> {
         Attribute {
             name,
             value,
