@@ -1,33 +1,5 @@
 //! Types relating to navigation.
 
-/// An internal target for the router to navigate to.
-#[derive(Clone)]
-pub enum InternalNavigationTarget {
-    /// Navigate to the specified path.
-    ItPath(String),
-    /// Navigate to the route with the corresponding name.
-    ItName(
-        /// The name of the target route.
-        &'static str,
-        /// A list of variables that can be inserted into the path needed to navigate to the route.
-        Vec<(&'static str, String)>,
-        /// The query string.
-        Query,
-    ),
-}
-
-impl From<NavigationTarget> for InternalNavigationTarget {
-    fn from(t: NavigationTarget) -> Self {
-        match t {
-            NavigationTarget::NtPath(p) => Self::ItPath(p),
-            NavigationTarget::NtName(n, v, p) => Self::ItName(n, v, p),
-            NavigationTarget::NtExternal(_) => panic!(
-                "NavigationTarget::RExternal cannot be converted to InternalNavigationTarget"
-            ),
-        }
-    }
-}
-
 /// A target for the router to navigate to.
 #[derive(Clone)]
 pub enum NavigationTarget {

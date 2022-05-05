@@ -177,4 +177,12 @@ impl HistoryProvider for BrowserHashHistoryProvider {
             self.body.set_scroll_left(0);
         };
     }
+
+    fn can_external(&self) -> bool {
+        true
+    }
+
+    fn external(&self, url: String) {
+        self.window.location().set_href(&url).ok();
+    }
 }

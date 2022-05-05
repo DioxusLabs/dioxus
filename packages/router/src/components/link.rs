@@ -7,6 +7,7 @@ use crate::{
     helpers::{construct_named_path, sub_to_router},
     navigation::NavigationTarget::{self, *},
     service::RouterMessage,
+    NAMED_NAVIGATION_FAILURE_PATH,
 };
 
 /// The properties for a [`Link`].
@@ -47,6 +48,12 @@ pub struct LinkProps<'a> {
 ///
 /// However, in the background a [`Link`] still generates an `a` tag, which you can use for styling
 /// as normal.
+///
+/// A [`Link`] can navigate to [`NtExternal`] targets independent, even if the [`HistoryProvider`]
+/// the [`Router`] uses cannot.
+///
+/// [`HistoryProvider`]: crate::history::HistoryProvider
+/// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let LinkProps {
@@ -79,7 +86,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                 "{prefix}{path}",
                 prefix = state.prefix,
                 path = construct_named_path(name, vars, query, &router.named_routes)
-                    .unwrap_or(String::from("invalid path"))
+                    .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string())
             )
         }
         NtExternal(href) => href.to_string(),

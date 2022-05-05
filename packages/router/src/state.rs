@@ -7,6 +7,9 @@ use dioxus_core::Component;
 /// The current routing information.
 #[derive(Default)]
 pub struct CurrentRoute {
+    /// Whether the service can handle external navigation targets.
+    pub can_external: bool,
+
     /// Whether there is a prior path to go back to.
     pub can_go_back: bool,
 

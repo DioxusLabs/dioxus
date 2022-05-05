@@ -28,8 +28,6 @@ pub struct RouterProps<'a> {
     /// If `true`, the router will perform the initial routing and then become inactive.
     #[props(default)]
     pub init_only: bool,
-    /// A path that the router navigates to if a named navigation doesn't result in a path.
-    pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
     pub routes: &'a Segment,
 }
@@ -59,7 +57,6 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         let (mut service, context) = RouterService::new(
             cx.props.routes.clone(),
             cx.schedule_update_any(),
-            cx.props.named_navigation_fallback_path.clone(),
             cx.props.active_class.map(|ac| ac.to_string()),
             cx.props.fallback.clone(),
             history,

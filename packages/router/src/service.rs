@@ -7,7 +7,7 @@ use dioxus_core::{Component, ScopeId};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
 use log::error;
-use urlencoding::decode;
+use urlencoding::{decode, encode};
 
 #[cfg(feature = "web")]
 use crate::history::BrowserPathHistoryProvider;
@@ -17,10 +17,10 @@ use crate::{
     contexts::RouterContext,
     helpers::construct_named_path,
     history::HistoryProvider,
-    navigation::{InternalNavigationTarget, NamedNavigationSegment},
-    prelude::RouteContent,
-    route_definition::{DynamicRoute, Segment},
+    navigation::{NamedNavigationSegment, NavigationTarget},
+    route_definition::{DynamicRoute, RouteContent, Segment},
     state::CurrentRoute,
+    EXTERNAL_NAVIGATION_FAILURE_PATH, NAMED_NAVIGATION_FAILURE_PATH,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -32,10 +32,10 @@ pub(crate) enum RouterMessage {
     GoForward,
 
     /// Push a new path.
-    Push(InternalNavigationTarget),
+    Push(NavigationTarget),
 
     /// Replace the current path with a new one.
-    Replace(InternalNavigationTarget),
+    Replace(NavigationTarget),
 
     /// Subscribe the specified scope to router updates.
     Subscribe(Arc<ScopeId>),
@@ -58,7 +58,6 @@ pub(crate) enum RouterMessage {
 pub(crate) struct RouterService {
     global_fallback: RouteContent,
     history: Box<dyn HistoryProvider>,
-    named_navigation_fallback_path: Option<String>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
     routes: Segment,
     rx: UnboundedReceiver<RouterMessage>,
@@ -74,7 +73,6 @@ impl RouterService {
     pub(crate) fn new(
         routes: Segment,
         update: Arc<dyn Fn(ScopeId)>,
-        named_navigation_fallback_path: Option<String>,
         active_class: Option<String>,
         global_fallback: RouteContent,
         history: Option<Box<dyn HistoryProvider>>,
@@ -110,7 +108,6 @@ impl RouterService {
             Self {
                 global_fallback,
                 history,
-                named_navigation_fallback_path,
                 named_routes,
                 routes,
                 rx,
@@ -139,24 +136,38 @@ impl RouterService {
                 RouterMessage::GoBack => self.history.go_back(),
                 RouterMessage::GoForward => self.history.go_forward(),
                 RouterMessage::Push(target) => match target {
-                    InternalNavigationTarget::ItPath(path) => self.history.push(path),
-                    InternalNavigationTarget::ItName(name, vars, query_params) => {
-                        let path =
-                            construct_named_path(name, &vars, &query_params, &self.named_routes)
-                                .or(self.named_navigation_fallback_path.clone());
-                        if let Some(path) = path {
-                            self.history.push(path);
+                    NavigationTarget::NtPath(path) => self.history.push(path),
+                    NavigationTarget::NtName(name, vars, query) => self.history.push(
+                        construct_named_path(name, &vars, &query, &self.named_routes)
+                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string()),
+                    ),
+                    NavigationTarget::NtExternal(url) => {
+                        if self.history.can_external() {
+                            self.history.external(url);
+                        } else {
+                            self.history.push(format!(
+                                "/{path}?url={url}",
+                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                url = encode(&url)
+                            ));
                         }
                     }
                 },
                 RouterMessage::Replace(target) => match target {
-                    InternalNavigationTarget::ItPath(path) => self.history.replace(path),
-                    InternalNavigationTarget::ItName(name, vars, query_param) => {
-                        let path =
-                            construct_named_path(name, &vars, &query_param, &self.named_routes)
-                                .or(self.named_navigation_fallback_path.clone());
-                        if let Some(path) = path {
-                            self.history.replace(path);
+                    NavigationTarget::NtPath(path) => self.history.replace(path),
+                    NavigationTarget::NtName(name, vars, query) => self.history.replace(
+                        construct_named_path(name, &vars, &query, &self.named_routes)
+                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string()),
+                    ),
+                    NavigationTarget::NtExternal(url) => {
+                        if self.history.can_external() {
+                            self.history.external(url);
+                        } else {
+                            self.history.replace(format!(
+                                "/{path}?url={url}",
+                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                url = encode(&url)
+                            ));
                         }
                     }
                 },
@@ -178,6 +189,7 @@ impl RouterService {
         // prepare varibles
         let mut state = self.state.write().unwrap();
         let CurrentRoute {
+            can_external,
             can_go_back,
             can_go_forward,
             components,
@@ -190,6 +202,7 @@ impl RouterService {
 
         loop {
             // clear state
+            *can_external = self.history.can_external();
             *can_go_back = self.history.can_go_back();
             *can_go_forward = self.history.can_go_forward();
             components.0.clear();
@@ -225,13 +238,21 @@ impl RouterService {
 
             if let Some(target) = next {
                 self.history.replace(match target {
-                    InternalNavigationTarget::ItPath(p) => p,
-                    InternalNavigationTarget::ItName(name, vars, query_params) => {
-                        match construct_named_path(name, &vars, &query_params, &self.named_routes)
-                            .or(self.named_navigation_fallback_path.clone())
-                        {
-                            Some(p) => p,
-                            None => break,
+                    NavigationTarget::NtPath(p) => p,
+                    NavigationTarget::NtName(name, vars, query_params) => {
+                        construct_named_path(name, &vars, &query_params, &self.named_routes)
+                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string())
+                    }
+                    NavigationTarget::NtExternal(url) => {
+                        if self.history.can_external() {
+                            self.history.external(url);
+                            break;
+                        } else {
+                            format!(
+                                "/{path}?url={url}",
+                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                url = encode(&url)
+                            )
                         }
                     }
                 })
@@ -321,7 +342,7 @@ fn match_segment(
     names: &mut BTreeSet<&'static str>,
     vars: &mut BTreeMap<&'static str, String>,
     global_fallback: &RouteContent,
-) -> Option<InternalNavigationTarget> {
+) -> Option<NavigationTarget> {
     // check static paths
     if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
         if let Some(name) = &route.name {

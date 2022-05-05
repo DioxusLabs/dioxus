@@ -5,6 +5,7 @@ use super::HistoryProvider;
 struct ControlledHistoryCore {
     callback: Option<Arc<dyn Fn() + Send + Sync>>,
     changed: bool,
+    external: Option<String>,
     history: Box<dyn HistoryProvider>,
 }
 
@@ -48,26 +49,46 @@ impl HistoryProvider for ControlledHistoryProvider {
 
     fn go_back(&mut self) {
         let mut core = self.core.lock().unwrap();
-        core.history.go_back();
+
         core.changed = true;
+        core.external = None;
+        core.history.go_back();
     }
 
     fn go_forward(&mut self) {
         let mut core = self.core.lock().unwrap();
-        core.history.go_forward();
+
         core.changed = true;
+        core.external = None;
+        core.history.go_forward();
     }
 
     fn push(&mut self, path: String) {
         let mut core = self.core.lock().unwrap();
-        core.history.push(path);
+
         core.changed = true;
+        core.external = None;
+        core.history.push(path);
     }
 
     fn replace(&mut self, path: String) {
         let mut core = self.core.lock().unwrap();
-        core.history.replace(path);
+
         core.changed = true;
+        core.external = None;
+        core.history.replace(path);
+    }
+
+    fn can_external(&self) -> bool {
+        true
+    }
+
+    fn external(&self, url: String) {
+        let mut core = self.core.lock().unwrap();
+
+        core.changed = true;
+        core.external = Some(url.clone());
+        core.history.external(url);
     }
 }
 
@@ -95,6 +116,7 @@ impl HistoryController {
         let core = Arc::new(Mutex::new(ControlledHistoryCore {
             callback: None,
             changed: false,
+            external: None,
             history: internal,
         }));
 
@@ -102,6 +124,13 @@ impl HistoryController {
             Self { core: core.clone() },
             ControlledHistoryProvider { core },
         )
+    }
+
+    /// Get the external URL the router has navigated to.
+    ///
+    /// [`None`] if the router hasn't navigated to an external URL.
+    pub fn get_external(&self) -> Option<String> {
+        self.core.lock().unwrap().external.clone()
     }
 
     /// Check if the linked [`ControlledHistoryProvider`] has triggered a navigation since the last
@@ -115,7 +144,7 @@ impl HistoryProvider for HistoryController {
     fn current_path(&self) -> String {
         self.core.lock().unwrap().history.current_path()
     }
-    
+
     fn current_prefix(&self) -> String {
         self.core.lock().unwrap().history.current_prefix()
     }
@@ -134,8 +163,11 @@ impl HistoryProvider for HistoryController {
 
     fn go_back(&mut self) {
         let mut core = self.core.lock().unwrap();
-        core.history.go_back();
+
         core.changed = false;
+        core.external = None;
+        core.history.go_back();
+
         if let Some(callback) = &core.callback {
             callback()
         }
@@ -143,8 +175,11 @@ impl HistoryProvider for HistoryController {
 
     fn go_forward(&mut self) {
         let mut core = self.core.lock().unwrap();
-        core.history.go_forward();
+
         core.changed = false;
+        core.external = None;
+        core.history.go_forward();
+
         if let Some(callback) = &core.callback {
             callback()
         }
@@ -152,8 +187,11 @@ impl HistoryProvider for HistoryController {
 
     fn push(&mut self, path: String) {
         let mut core = self.core.lock().unwrap();
-        core.history.push(path);
+
         core.changed = false;
+        core.external = None;
+        core.history.push(path);
+
         if let Some(callback) = &core.callback {
             callback()
         }
@@ -161,8 +199,27 @@ impl HistoryProvider for HistoryController {
 
     fn replace(&mut self, path: String) {
         let mut core = self.core.lock().unwrap();
-        core.history.replace(path);
+
         core.changed = false;
+        core.external = None;
+        core.history.replace(path);
+
+        if let Some(callback) = &core.callback {
+            callback()
+        }
+    }
+
+    fn can_external(&self) -> bool {
+        self.core.lock().unwrap().history.can_external()
+    }
+
+    fn external(&self, url: String) {
+        let mut core = self.core.lock().unwrap();
+
+        core.changed = false;
+        core.external = Some(url.clone());
+        core.history.external(url);
+
         if let Some(callback) = &core.callback {
             callback()
         }

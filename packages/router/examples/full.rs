@@ -1,7 +1,7 @@
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_router::prelude::*;
+use dioxus_router::{prelude::*, NAMED_NAVIGATION_FAILURE_PATH};
 
 fn main() {
     env_logger::init();
@@ -42,12 +42,12 @@ fn app(cx: Scope) -> Element {
                 String::from("the_best_berry"),
                 Route {
                     name: Some("best_berry"),
-                    content: RcRedirect(ItName("raspberry", vec![], QNone)),
+                    content: RcRedirect(NtName("raspberry", vec![], QNone)),
                     sub: None,
                 },
             ),
             (
-                String::from("named_fallback"),
+                String::from(NAMED_NAVIGATION_FAILURE_PATH),
                 Route {
                     name: None,
                     content: RcComponent(NamedNavigationFallback),
@@ -72,7 +72,6 @@ fn app(cx: Scope) -> Element {
         }
         Router {
             active_class: "active",
-            named_navigation_fallback_path: String::from("/named_fallback"),
             routes: routes,
             header {
                 Link {

@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use dioxus_core::Component;
 
-use crate::navigation::InternalNavigationTarget;
+use crate::navigation::NavigationTarget;
 
 /// A collection of routes for a single path segment.
 #[derive(Clone)]
@@ -33,13 +33,12 @@ impl Default for Segment {
 pub struct Route {
     /// The name of the route.
     ///
-    /// Can be used for name-based navigation. See [NtName] or [ItName].
+    /// Can be used for name-based navigation. See [NtName].
     ///
     /// Make sure that the name is unique among the routes passed to a
     /// [Router](crate::components::Router).
     ///
     /// [NtName]: crate::navigation::NavigationTarget::NtName
-    /// [ItName]: crate::navigation::InternalNavigationTarget::ItName
     pub name: Option<&'static str>,
     /// The content to render if the route is matched.
     pub content: RouteContent,
@@ -70,13 +69,12 @@ pub enum DynamicRoute {
     DrParameter {
         /// The name of the route.
         ///
-        /// Can be used for name-based navigation. See [NtName] or [ItName].
+        /// Can be used for name-based navigation. See [NtName].
         ///
         /// Make sure that the name is unique among the routes passed to a
         /// [Router](crate::components::Router).
         ///
         /// [NtName]: crate::navigation::NavigationTarget::NtName
-        /// [ItName]: crate::navigation::InternalNavigationTarget::ItName
         name: Option<&'static str>,
         /// The key that the segments value will be accessible under.
         key: &'static str,
@@ -120,14 +118,14 @@ pub enum RouteContent {
     ///
     /// [HistoryProvider]: crate::history::HistoryProvider
     /// [MemoryHistoryProvider]: crate::history::MemoryHistoryProvider
-    RcRedirect(InternalNavigationTarget),
+    RcRedirect(NavigationTarget),
 }
 
 impl RouteContent {
     pub(crate) fn add_to_list(
         &self,
         components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
-    ) -> Option<InternalNavigationTarget> {
+    ) -> Option<NavigationTarget> {
         match self {
             RouteContent::RcNone => {}
             RouteContent::RcComponent(comp) => components.0.push(*comp),

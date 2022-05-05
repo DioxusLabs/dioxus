@@ -61,9 +61,23 @@ pub trait HistoryProvider {
     fn go_forward(&mut self);
 
     /// Push a new path onto the history.
+    ///
+    /// Only works for internal targets.
     fn push(&mut self, path: String);
     /// Replace the current path with a new one.
+    ///
+    /// Only works for internal targets.
     fn replace(&mut self, path: String);
+
+    /// Whether the provider can handle external targets.
+    fn can_external(&self) -> bool {
+        false
+    }
+    /// Go to an external target.
+    ///
+    /// May be called even if [`Self::can_external`] returns [`false`].
+    #[allow(unused)]
+    fn external(&self, url: String) {}
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
