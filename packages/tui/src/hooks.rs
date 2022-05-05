@@ -500,6 +500,13 @@ impl InnerInputState {
                 });
                 if let Some(id) = focus_id {
                     self.focus_state.set_focus(dom, id);
+                    resolved_events.push(UserEvent {
+                        scope_id: None,
+                        priority: EventPriority::Medium,
+                        name: "focus",
+                        element: Some(id),
+                        data: Arc::new(FocusData {}),
+                    })
                 }
             }
         }
