@@ -1,19 +1,17 @@
-//! Public interface for the internal state of the router.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use dioxus_core::Component;
 
 /// The current routing information.
 #[derive(Default)]
-pub struct CurrentRoute {
+pub struct RouterState {
     /// Whether the service can handle external navigation targets.
     pub can_external: bool,
 
     /// Whether there is a prior path to go back to.
     pub can_go_back: bool,
 
-    /// Whether there is a future path resulting from a "go back" operation that can be reapplied.
+    /// Whether there is a later path to forward to.
     pub can_go_forward: bool,
 
     /// The components specified by the active routes.
@@ -35,7 +33,7 @@ pub struct CurrentRoute {
     pub parameters: BTreeMap<&'static str, String>,
 }
 
-impl CurrentRoute {
+impl RouterState {
     /// Get the query parameters as a [`BTreeMap`].
     pub fn query_params(&self) -> Option<BTreeMap<String, String>> {
         if let Some(query) = &self.query {

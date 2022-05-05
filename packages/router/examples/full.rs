@@ -1,7 +1,7 @@
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_router::{prelude::*, NAMED_NAVIGATION_FAILURE_PATH};
+use dioxus_router::{prelude::*, PATH_FOR_NAMED_NAVIGATION_FAILURE};
 
 fn main() {
     env_logger::init();
@@ -47,7 +47,7 @@ fn app(cx: Scope) -> Element {
                 },
             ),
             (
-                String::from(NAMED_NAVIGATION_FAILURE_PATH),
+                String::from(PATH_FOR_NAMED_NAVIGATION_FAILURE),
                 Route {
                     name: None,
                     content: RcComponent(NamedNavigationFallback),

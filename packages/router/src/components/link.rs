@@ -7,26 +7,30 @@ use crate::{
     helpers::{construct_named_path, sub_to_router},
     navigation::NavigationTarget::{self, *},
     service::RouterMessage,
-    NAMED_NAVIGATION_FAILURE_PATH,
+    PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
 
 /// The properties for a [`Link`].
 #[derive(Props)]
 pub struct LinkProps<'a> {
     /// A class to apply to the inner `a` tag when the link is active.
+    ///
+    /// This overrides the `active_class` property of a [`Router`].
+    ///
+    /// [`Router`]: crate::components::Router
     pub active_class: Option<&'a str>,
     /// The children to render within the [`Link`].
     pub children: Element<'a>,
     /// The classes of the inner `a` tag.
     ///
-    /// When the link is active and an `active_class` is provided, it is appended at the end.
+    /// When the link is active and the `active_class` is appended at the end.
     pub class: Option<&'a str>,
-    /// Require a complete path match for the link to be active.
+    /// Require the complete path to match exactly for the [`Link`] to be active.
     ///
     /// This only has an effect if `target` is [`NtPath`].
     #[props(default)]
     pub exact: bool,
-    /// An ID of the inner `a` tag.
+    /// The ID of the inner `a` tag.
     pub id: Option<&'a str>,
     /// Specify whether the link should be opened in a new tab.
     #[props(default)]
@@ -41,7 +45,7 @@ pub struct LinkProps<'a> {
 
 /// A link to navigate to another route.
 ///
-/// Needs a [Router](crate::components::Router) as an ancestor.
+/// Needs a [`Router`] as an ancestor.
 ///
 /// Unlike a regular `a` tag, a [`Link`] allows the router to handle the navigation and doesn't
 /// cause the browser to load a new page.
@@ -49,7 +53,7 @@ pub struct LinkProps<'a> {
 /// However, in the background a [`Link`] still generates an `a` tag, which you can use for styling
 /// as normal.
 ///
-/// A [`Link`] can navigate to [`NtExternal`] targets independent, even if the [`HistoryProvider`]
+/// A [`Link`] navigates to [`NtExternal`] targets independently, even if the [`HistoryProvider`]
 /// the [`Router`] uses cannot.
 ///
 /// [`HistoryProvider`]: crate::history::HistoryProvider
@@ -86,7 +90,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                 "{prefix}{path}",
                 prefix = state.prefix,
                 path = construct_named_path(name, vars, query, &router.named_routes)
-                    .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string())
+                    .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
             )
         }
         NtExternal(href) => href.to_string(),
@@ -132,8 +136,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
 
     // prepare id, class and target for the `a` tag
     let id = id.unwrap_or_default();
-    let class = class.unwrap_or_default();
-    let class = format!("{class}{active_class}");
+    let class = format!("{class}{active_class}", class = class.unwrap_or_default());
     let tag_target = match new_tab {
         true => "_blank",
         false => "",
@@ -141,7 +144,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
 
     // prepare prevented defaults
     let is_router_navigation = !target.is_nt_external() && !new_tab;
-    let prevent_str = match is_router_navigation {
+    let prevent_default = match is_router_navigation {
         true => "onclick",
         false => "",
     };
@@ -158,7 +161,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     cx.render(rsx! {
         a {
             href: "{href}",
-            prevent_default: "{prevent_str}",
+            prevent_default: "{prevent_default}",
             onclick: move |_| {
                 if is_router_navigation {
                     tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();

@@ -19,8 +19,8 @@ use crate::{
     history::HistoryProvider,
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{DynamicRoute, RouteContent, Segment},
-    state::CurrentRoute,
-    EXTERNAL_NAVIGATION_FAILURE_PATH, NAMED_NAVIGATION_FAILURE_PATH,
+    state::RouterState,
+    PATH_FOR_EXTERNAL_NAVIGATION_FAILURE, PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -31,10 +31,10 @@ pub(crate) enum RouterMessage {
     /// Go a step forward in the navigation history.
     GoForward,
 
-    /// Push a new path.
+    /// Push a new history item.
     Push(NavigationTarget),
 
-    /// Replace the current path with a new one.
+    /// Replace the current history item with a new one.
     Replace(NavigationTarget),
 
     /// Subscribe the specified scope to router updates.
@@ -61,7 +61,7 @@ pub(crate) struct RouterService {
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
     routes: Segment,
     rx: UnboundedReceiver<RouterMessage>,
-    state: Arc<RwLock<CurrentRoute>>,
+    state: Arc<RwLock<RouterState>>,
     subscribers: Vec<Weak<ScopeId>>,
     update: Arc<dyn Fn(ScopeId)>,
 }
@@ -87,7 +87,7 @@ impl RouterService {
         let named_routes = Arc::new(named_routes);
 
         // create state and context
-        let state = Arc::new(RwLock::new(CurrentRoute::default()));
+        let state = Arc::new(RwLock::new(RouterState::default()));
         let context = RouterContext {
             active_class,
             tx: tx.clone(),
@@ -119,10 +119,9 @@ impl RouterService {
         )
     }
 
-    /// Perform one initial routing.
-    pub(crate) fn initial_routing(&mut self) {
+    /// Perform a single routing operation. Doesn't trigger updates.
+    pub(crate) fn single_routing(&mut self) {
         self.update_routing();
-        self.update_subscribers();
     }
 
     /// The routers event loop.
@@ -139,7 +138,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.push(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.push(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string()),
+                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -147,7 +146,7 @@ impl RouterService {
                         } else {
                             self.history.push(format!(
                                 "/{path}?url={url}",
-                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
                                 url = encode(&url)
                             ));
                         }
@@ -157,7 +156,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.replace(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.replace(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string()),
+                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -165,7 +164,7 @@ impl RouterService {
                         } else {
                             self.history.replace(format!(
                                 "/{path}?url={url}",
-                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
                                 url = encode(&url)
                             ));
                         }
@@ -188,7 +187,7 @@ impl RouterService {
     fn update_routing(&mut self) {
         // prepare varibles
         let mut state = self.state.write().unwrap();
-        let CurrentRoute {
+        let RouterState {
             can_external,
             can_go_back,
             can_go_forward,
@@ -241,7 +240,7 @@ impl RouterService {
                     NavigationTarget::NtPath(p) => p,
                     NavigationTarget::NtName(name, vars, query_params) => {
                         construct_named_path(name, &vars, &query_params, &self.named_routes)
-                            .unwrap_or(NAMED_NAVIGATION_FAILURE_PATH.to_string())
+                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
                     }
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -250,7 +249,7 @@ impl RouterService {
                         } else {
                             format!(
                                 "/{path}?url={url}",
-                                path = EXTERNAL_NAVIGATION_FAILURE_PATH,
+                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
                                 url = encode(&url)
                             )
                         }
@@ -288,12 +287,13 @@ impl RouterService {
     }
 }
 
+/// Traverse the provided `segment` and populate `named` with the named routes.
 fn construct_named_targets(
-    seg: &Segment,
+    segment: &Segment,
     ancestors: &Vec<NamedNavigationSegment>,
     named: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) {
-    for (path, route) in &seg.fixed {
+    for (path, route) in &segment.fixed {
         // prepare new ancestors
         let mut ancestors = ancestors.clone();
         ancestors.push(NamedNavigationSegment::Fixed(path.to_string()));
@@ -316,10 +316,10 @@ fn construct_named_targets(
         key,
         content: _,
         sub,
-    } = &seg.dynamic
+    } = &segment.dynamic
     {
         let mut ancestors = ancestors.clone();
-        ancestors.push(NamedNavigationSegment::Variable(key));
+        ancestors.push(NamedNavigationSegment::Parameter(key));
 
         if let Some(seg) = sub {
             construct_named_targets(seg, &ancestors, named);
@@ -335,6 +335,13 @@ fn construct_named_targets(
     }
 }
 
+/// Match the first `path` segment with the `segment`.
+///
+/// Populates `components`, `names` and `vars` with the values found while matching.
+///
+/// If `path` contains more segments than specified by `segment`, `names` and `vars` will be empty
+/// and `components` will only contain the `global_fallback`. This only applies if `components` is
+/// not [`RouteContent::RcNone`].
 fn match_segment(
     path: &[&str],
     segment: &Segment,

@@ -13,19 +13,35 @@ use crate::{
 /// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
-    /// A class to apply to active links.
+    /// A class to apply to active [`Link`]s.
     ///
-    /// Can be overwritten on individual links.
+    /// Can be overwritten on individual [`Link`]s via a prop with the same name.
+    ///
+    /// [`Link`]: crate::components::Link
     pub active_class: Option<&'a str>,
-    /// The components to render where the [`Router`] itself is. Should contain at least one
-    /// [Outlet](crate::components::Outlet).
+    /// The components to render where the [`Router`] itself is.
+    ///
+    /// Usually contains at least one [`Outlet`].
+    ///
+    /// [`Outlet`]: crate::components::Outlet
     pub children: Element<'a>,
     /// The global fallback content.
+    ///
+    /// This can be used to implement a 404 page.
     #[props(default)]
     pub fallback: RouteContent,
     /// A function that constructs a history provider.
+    ///
+    /// If none is provided, a default is used. [`BrowserPathHistoryProvider`] when the `web`
+    /// feature is enabled, otherwise [`MemoryHistoryProvider`].
+    ///
+    /// [`BrowserPathHistoryProvider`]: crate::history::BrowserPathHistoryProvider
+    /// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider
     pub history: Option<&'a dyn Fn() -> Box<dyn HistoryProvider>>,
     /// If `true`, the router will perform the initial routing and then become inactive.
+    ///
+    /// This behavior is useful for server side rendering. The router will not spawn any async
+    /// tasks.
     #[props(default)]
     pub init_only: bool,
     /// The routes the router should work on.
@@ -34,7 +50,8 @@ pub struct RouterProps<'a> {
 
 /// The base component on which the entire router system builds.
 ///
-/// All other router components and hooks can only be used as descendants of a [`Router`] component.
+/// All other components provided by the router, as well as all hooks, can only be used as
+/// descendants of a [`Router`] component.
 ///
 /// [`Router`] components cannot be nested. If you nest multiple [`Router`]s, the inner [`Router`]
 /// will be inactive and ignored by all other components and hooks.
@@ -65,7 +82,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
 
         // run service
         if cx.props.init_only {
-            service.initial_routing();
+            service.single_routing();
         } else {
             cx.spawn(async move { service.run().await });
         }

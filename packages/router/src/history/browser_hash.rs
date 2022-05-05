@@ -7,11 +7,12 @@ use web_sys::{History, HtmlElement, Window};
 
 use super::{HistoryProvider, ScrollPosition};
 
-/// A [`HistoryProvider`] that uses the [History API] and [Location API] to integrate with the
-/// browser.
+/// A [`HistoryProvider`] that stores the current path and query in the browsers URL fragment.
+///
+/// Uses the [History API] to integrate with the browsers history. Also stores the current scroll
+/// position and restores it when traversing the history.
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
-/// [Location API]: https://developer.mozilla.org/en-US/docs/Web/API/Location
 pub struct BrowserHashHistoryProvider {
     body: HtmlElement,
     history: History,

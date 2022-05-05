@@ -104,6 +104,14 @@ impl HistoryProvider for ControlledHistoryProvider {
 /// changed the current path/query. This is always reset when triggering a navigation from the
 /// outside.
 ///
+/// The [`HistoryController::get_external`] can be used to get the external URL the [`Router`] has
+/// navigated to. This is always reset when triggering a navigation from the outside.
+///
+/// If the internal [`HistoryProvider`] doesn't support external navigation targets (e.g. the
+/// [`MemoryHistoryProvider`]), application developers handle the external navigation. The router
+/// may render an incomplete page if this is not done.
+///
+/// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider
 /// [`Router`]: crate::components::Router
 #[derive(Clone)]
 pub struct HistoryController {

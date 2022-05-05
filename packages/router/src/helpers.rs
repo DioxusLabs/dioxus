@@ -1,5 +1,3 @@
-//! Helpers that provide common functionality.
-
 use std::{collections::BTreeMap, sync::Arc};
 
 use dioxus_core::ScopeState;
@@ -14,12 +12,13 @@ use crate::{
 /// A private "hook" to subscribe to the router.
 ///
 /// Used to reduce redundancy within other components/hooks. Safe to call multiple times for a
-/// single component, but not recommended.
+/// single component, but not recommended. Multiple subscriptions will be discarded.
 ///
 /// # Return values
-/// - [`None`], when the current component isn't a descendant of a
-///   [Router](crate::components::Router).
+/// - [`None`], when the current component isn't a descendant of a [`Router`].
 /// - Otherwise [`Some`].
+///
+/// [`Router`]: crate::components::router
 pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterContext> {
     let id = cx.use_hook(|_| Arc::new(cx.scope_id()));
 
@@ -35,9 +34,20 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
     })
 }
 
+/// Constructs a path for named navigation.
+///
+/// # Parameters
+/// - `name`: the name to navigate to
+/// - `parameters`: a list of parameters that can be inserted into the path
+/// - `query`: the query to append to the path
+/// - `targets`: the list of possible targets for the named navigation
+///
+/// # Return values:
+/// - [`Some`] if the navigation was successful.
+/// - [`None`] if no target for the `name` was found, or a required parameter was not provided.
 pub(crate) fn construct_named_path(
     name: &'static str,
-    vars: &[(&'static str, String)],
+    parameters: &[(&'static str, String)],
     query: &Query,
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
@@ -55,8 +65,8 @@ pub(crate) fn construct_named_path(
     for seg in segments {
         match seg {
             NamedNavigationSegment::Fixed(f) => path = format!("{path}{f}/"),
-            NamedNavigationSegment::Variable(key) => {
-                let value = match vars.iter().find(|(k, _)| k == key) {
+            NamedNavigationSegment::Parameter(key) => {
+                let value = match parameters.iter().find(|(k, _)| k == key) {
                     Some((_, v)) => encode(v).into_owned(),
                     None => {
                         error!(r#"no value for varible "{key}""#);

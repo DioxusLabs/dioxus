@@ -16,16 +16,12 @@ use super::{HistoryProvider, ScrollPosition};
 /// This [`HistoryProvider`] supports a prefix, which allows its use for web apps not located at the
 /// root of their domain.
 ///
-/// When fetching the current path, the prefix will be removed from the start of it, if it is
-/// present. When navigating somewhere, the path provided by the router will be prefixed with
-/// prefix.
-///
 /// It is up to the application developer to ensure the prefix ends at a `/`. Otherwise, the first
 /// navigation from within the app will add one.
 ///
-/// It is up to the application developer to ensure that the router or app are not mounted when the
-/// prefix isn't present. If the router is rendered and a navigation is caused, the prefix will be
-/// introduced to the URL.
+/// Application developers are responsible for unmounting the router or app when the prefix isn't
+/// present in the current URL. If the router is rendered and a navigation is caused, the prefix
+/// will be introduced to the URL.
 pub struct BrowserPathHistoryProvider {
     body: HtmlElement,
     history: History,

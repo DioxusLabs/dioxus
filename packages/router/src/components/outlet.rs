@@ -23,10 +23,12 @@ pub struct OutletProps {
 
 /// An outlet tells the router where to render the components corresponding to the current route.
 ///
-/// Needs a [Router](crate::components::Router) as an ancestor.
+/// Needs a [`Router`] as an ancestor.
 ///
 /// Each [`Outlet`] renders a single component. To render the components of nested routes simply
 /// provide nested [`Outlet`]s.
+///
+/// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     // get own depth and communicate to lower outlets
@@ -36,6 +38,8 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
             mut named_depth,
         }) = cx.consume_context::<OutletContext>()
         {
+            // if a parent outlet exists
+
             if let Some(name) = cx.props.name {
                 let d = named_depth.get(name).map(|d| d + 1).unwrap_or_default();
                 named_depth.insert(name.to_string(), d);
@@ -51,6 +55,8 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
                 )
             }
         } else {
+            // if this is the top level outlet
+
             if let Some(name) = cx.props.name {
                 let mut named_depth = BTreeMap::new();
                 named_depth.insert(name.to_string(), 0);
@@ -74,12 +80,9 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
         cx.provide_context(new_ctx);
         depth
     });
-    let depth = match cx.props.depth {
-        Some(x) => x,
-        None => *depth,
-    };
+    let depth = cx.props.depth.unwrap_or(*depth);
 
-    // get router state and register for updates
+    // hook up to router
     let router = match sub_to_router(&cx) {
         Some(r) => r,
         None => {
@@ -100,11 +103,10 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     };
 
     // render component or nothing
-    match X {
-        Some(X) => {
-            let X = *X;
-            cx.render(rsx! { X {} })
-        }
-        None => cx.render(rsx! { Fragment { } }),
+    if let Some(X) = X {
+        let X = *X;
+        cx.render(rsx! { X {} })
+    } else {
+        cx.render(rsx! { Fragment { } })
     }
 }

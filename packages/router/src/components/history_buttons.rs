@@ -14,15 +14,17 @@ pub struct HistoryButtonProps<'a> {
 
 /// A button that acts like a browsers back button.
 ///
-/// Needs a [Router](crate::components::Router) as an ancestor. If the rendered button is disabled,
-/// no prior history is available.
+/// Needs a [`Router`] as an ancestor. The button will disable itself if no prior history is
+/// available.
+///
+/// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     // hook up to router
     let router = match sub_to_router(&cx) {
         Some(x) => x,
         None => {
-            error!("`GoButton` can only be used as a descendent of a `Router`");
+            error!("`GoBackButton` can only be used as a descendent of a `Router`");
             return None;
         }
     };
@@ -43,16 +45,17 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 
 /// A button that acts like a browsers forward button.
 ///
-/// Needs a [Router](crate::components::Router) as an ancestor. If the button is disabled, no
-/// "future history" is available.
+/// Needs a [`Router`] as an ancestor. The button will disable itself if no "future history" is
+/// available.
+///
+/// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
-    // hook up to router
     // hook up to router
     let router = match sub_to_router(&cx) {
         Some(x) => x,
         None => {
-            error!("`GoButton` can only be used as a descendent of a `Router`");
+            error!("`GoForwardButton` can only be used as a descendent of a `Router`");
             return None;
         }
     };

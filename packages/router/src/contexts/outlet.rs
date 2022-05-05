@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-/// A context used by outlets to determine how deep they are.
+/// A context used by outlets to determine how deeply nested they are.
 #[derive(Clone)]
 pub(crate) struct OutletContext {
     /// The depth of the outlet providing the context.

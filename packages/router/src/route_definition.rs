@@ -1,5 +1,3 @@
-//! Several data types for defining what component to render for which path.
-
 use std::collections::BTreeMap;
 
 use dioxus_core::Component;
@@ -7,6 +5,31 @@ use dioxus_core::Component;
 use crate::navigation::NavigationTarget;
 
 /// A collection of routes for a single path segment.
+///
+/// A segment refers to the value between two `/` in the path. For example `/blog/1` contains two
+/// segments: `["blog", "1"]`.
+///
+/// # What route is active when?
+/// - The `index` is active if the path ended before this segment. For example, the `index` of the
+///   root segment is active, if the path is `/`.
+/// - A `fixed` route is active, if its path (the [`String`]) matches the current segment _exactly_.
+///   For example, a route matching `"blog"` is active when the path is `/blog`.
+/// - The `dynamic` route is active, if no `fixed` route is active.
+///
+/// # `index` vs. fixed route with empty path
+/// At first glance it may seem that the `index` route and a fixed route with an empty may be the
+/// same. However, this is not the case.
+///
+/// The index route is active when the current segment is not specified by the path. This means that
+/// the `index` of the root segment is only active when the path is `/`.
+///
+/// A `fixed` route with an empty path is active when the current segment is empty. This means that
+/// such a route on the root segment is active when the path starts with `//`.
+///
+/// # Note on `fixed` routes
+/// When checking if the `fixed` route matches the current segment, no url en- or decoding is
+/// performed. If your `fixed` route contains character that needs to be encoded, you have to encode
+/// it in the path.
 #[derive(Clone)]
 pub struct Segment {
     /// The index route is rendered if the [`Segment`] is the first segment to be not specified by
@@ -28,17 +51,17 @@ impl Default for Segment {
     }
 }
 
-/// A definition of a static route.
+/// A static route.
 #[derive(Clone)]
 pub struct Route {
     /// The name of the route.
     ///
-    /// Can be used for name-based navigation. See [NtName].
+    /// Can be used for name-based navigation. See [`NtName`].
     ///
-    /// Make sure that the name is unique among the routes passed to a
-    /// [Router](crate::components::Router).
+    /// Make sure that the name is unique among the routes passed to a [`Router`].
     ///
-    /// [NtName]: crate::navigation::NavigationTarget::NtName
+    /// [`NtName`]: crate::navigation::NavigationTarget::NtName
+    /// [`Router`]: crate::components::Router
     pub name: Option<&'static str>,
     /// The content to render if the route is matched.
     pub content: RouteContent,
@@ -56,27 +79,27 @@ impl Default for Route {
     }
 }
 
-/// A dynamic route definition.
+/// A dynamic route.
 #[derive(Clone)]
 pub enum DynamicRoute {
     /// Indicates the absence of an actual dynamic route.
     DrNone,
-    /// A dynamic route that treats the actual value of its segment as a parameter.
+    /// A dynamic route that treats the value of its segment as a parameter.
     ///
-    /// The value will be accessible to components via [use_route].
+    /// The value will be accessible to components via [`use_route`].
     ///
-    /// [use_route]: crate::hooks::use_route
+    /// [`use_route`]: crate::hooks::use_route
     DrParameter {
         /// The name of the route.
         ///
-        /// Can be used for name-based navigation. See [NtName].
+        /// Can be used for name-based navigation. See [`NtName`].
         ///
-        /// Make sure that the name is unique among the routes passed to a
-        /// [Router](crate::components::Router).
+        /// Make sure that the name is unique among the routes passed to a [`Router`].
         ///
-        /// [NtName]: crate::navigation::NavigationTarget::NtName
+        /// [`NtName`]: crate::navigation::NavigationTarget::NtName
+        /// [`Router`]: crate::components::Router
         name: Option<&'static str>,
-        /// The key that the segments value will be accessible under.
+        /// The key for the value of the segment.
         key: &'static str,
         /// The content to render if the route is matched.
         content: RouteContent,
@@ -93,7 +116,7 @@ impl Default for DynamicRoute {
     }
 }
 
-/// The actual content of a [`Route`] or [`DynamicRoute`].
+/// The content of a [`Route`] or [`DynamicRoute`].
 #[derive(Clone)]
 pub enum RouteContent {
     /// Indicates the absence of content.
@@ -145,7 +168,7 @@ impl RouteContent {
         None
     }
 
-    /// Returns `true` if the route content is [`RcNone`].
+    /// Returns [`true`] if the route content is [`RcNone`].
     ///
     /// [`RcNone`]: RouteContent::RcNone
     #[must_use]

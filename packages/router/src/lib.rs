@@ -1,6 +1,11 @@
-#![deny(missing_docs)]
-
 //! A router for dioxus.
+//!
+//! You are reading the API documentation, which describes the elements of the public API. If you
+//! are more interested in a usage-oriented documentation see the [router book].
+//!
+//! [router book]: https://dioxuslabs.com/router/guide
+
+#![deny(missing_docs)]
 
 /// All components of the router.
 pub mod components {
@@ -28,18 +33,9 @@ mod contexts {
     pub(crate) use router::*;
 }
 
-/// When the router was given an [`NtExternal`] navigation target and the [`HistoryProvider`]
-/// doesn't support external navigation targets, this is the path the router will navigate to.
-///
-/// The external url will be provided as a query string parameter named `url`.
-///
-/// [`HistoryProvider`]: history::HistoryProvider
-/// [`NtExternal`]: navigation::NavigationTarget::NtExternal
-pub const EXTERNAL_NAVIGATION_FAILURE_PATH: &'static str =
-    "dioxus-router-external-navigation-failure";
-
 mod helpers;
 
+/// Types relating to the navigation history.
 pub mod history;
 
 /// All hooks of the router.
@@ -51,13 +47,20 @@ pub mod hooks {
     pub use use_route::*;
 }
 
-/// When the router was given an [`NtName`] navigation target and no route with the provided path is
-/// known, this is the path the router will navigate to.
+/// Types relating to navigation.
+pub mod navigation;
+
+/// Fallback path for failed external navigation. See [`NtExternal`].
+///
+/// [`NtExternal`]: navigation::NavigationTarget::NtExternal
+pub const PATH_FOR_EXTERNAL_NAVIGATION_FAILURE: &'static str =
+    "dioxus-router-external-navigation-failure";
+
+/// Fallback path for failed named navigation. See [`NtName`].
 ///
 /// [`NtName`]: navigation::NavigationTarget::NtName
-pub const NAMED_NAVIGATION_FAILURE_PATH: &'static str = "dioxus-router-named-navigation-failure";
-
-pub mod navigation;
+pub const PATH_FOR_NAMED_NAVIGATION_FAILURE: &'static str =
+    "dioxus-router-named-navigation-failure";
 
 /// Reexports of commonly used elements.
 pub mod prelude {
@@ -65,11 +68,13 @@ pub mod prelude {
     pub use crate::hooks::*;
     pub use crate::navigation::{NavigationTarget::*, Query::*, *};
     pub use crate::route_definition::{DynamicRoute::*, RouteContent::*, *};
-    pub use crate::state::*;
+    pub use crate::state::RouterState;
 }
 
+/// Types to tell the router what to render.
 pub mod route_definition;
 
 mod service;
 
+/// Types providing access to the internal state of the router.
 pub mod state;
