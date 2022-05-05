@@ -26,10 +26,10 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
     cx.use_hook(|_| {
         let router = cx.consume_context::<RouterContext>()?;
 
-        router
+        let _ = router
             .tx
             .unbounded_send(crate::service::RouterMessage::Subscribe(id.clone()))
-            .unwrap();
+            .ok();
 
         Some(router)
     })

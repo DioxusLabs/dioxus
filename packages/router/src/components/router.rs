@@ -25,6 +25,9 @@ pub struct RouterProps<'a> {
     pub fallback: RouteContent,
     /// A function that constructs a history provider.
     pub history: Option<Box<dyn Fn() -> Box<dyn HistoryProvider>>>,
+    /// If `true`, the router will perform the initial routing and then become inactive.
+    #[props(default)]
+    pub init_only: bool,
     /// A path that the router navigates to if a named navigation doesn't result in a path.
     pub named_navigation_fallback_path: Option<String>,
     /// The routes the router should work on.
@@ -64,7 +67,11 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.provide_context(context);
 
         // run service
-        cx.spawn(async move { service.run().await });
+        if cx.props.init_only {
+            service.initial_routing();
+        } else {
+            cx.spawn(async move { service.run().await });
+        }
     });
 
     cx.render(rsx!(&cx.props.children))

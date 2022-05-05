@@ -122,6 +122,12 @@ impl RouterService {
         )
     }
 
+    /// Perform one initial routing.
+    pub(crate) fn initial_routing(&mut self) {
+        self.update_routing();
+        self.update_subscribers();
+    }
+
     /// The routers event loop.
     pub(crate) async fn run(&mut self) {
         // Trigger initial routing. Subscribers rendering before this happens will be updated when
