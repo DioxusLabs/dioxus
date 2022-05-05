@@ -2,6 +2,7 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
 
+pub(crate) mod arbitrary_value;
 pub(crate) mod diff;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
@@ -13,6 +14,7 @@ pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
+    pub use crate::arbitrary_value::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
