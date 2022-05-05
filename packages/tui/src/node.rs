@@ -2,7 +2,7 @@ use crate::focus::Focus;
 use crate::layout::StretchLayout;
 use crate::style_attributes::StyleModifier;
 use dioxus_native_core::{real_dom::RealDom, state::*};
-use dioxus_native_core_macro::State;
+use dioxus_native_core_macro::{sorted_str_slice, State};
 
 pub(crate) type Dom = RealDom<NodeState>;
 pub(crate) type Node = dioxus_native_core::real_dom::Node<NodeState>;
@@ -52,7 +52,11 @@ impl NodeDepState for PreventDefault {
     type DepState = ();
 
     const NODE_MASK: dioxus_native_core::node_ref::NodeMask =
-        dioxus_native_core::node_ref::NodeMask::NONE;
+        dioxus_native_core::node_ref::NodeMask::new_with_attrs(
+            dioxus_native_core::node_ref::AttributeMask::Static(&sorted_str_slice!([
+                "dioxus-prevent-default"
+            ])),
+        );
 
     fn reduce(
         &mut self,
