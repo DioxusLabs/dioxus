@@ -19,25 +19,37 @@ fn app(cx: Scope) -> Element {
             flex_direction: "column",
 
             Input{
+                oninput: |data: FormData| if &data.value == "good"{
+                    bg_green.set(true);
+                },
                 r#type: "checkbox",
+                value: "good",
                 height: "1px",
                 width: "3px",
             }
             Input{
                 oninput: |data: FormData| if &data.value == "good"{
                     bg_green.set(true);
-                }
-                else{
-                    bg_green.set(false);
                 },
                 height: "1px",
                 width: "30px",
-                size: "10",
+                size: "4",
             }
             Input{
-                r#type: "slider",
+                oninput: |data: FormData| if &data.value == "10"{
+                    bg_green.set(true);
+                },
+                r#type: "range",
                 min: "20",
                 max: "80",
+            }
+            Input{
+                onclick: |_: FormData| bg_green.set(false),
+                r#type: "button",
+                value: "reset",
+                height: "1px",
+                width: "30px",
+                size: "10",
             }
         }
     })

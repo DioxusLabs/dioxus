@@ -6,7 +6,8 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 
-use crate::widgets::checkbox::CheckBoxInput;
+use crate::widgets::button::Button;
+use crate::widgets::checkbox::CheckBox;
 use crate::widgets::slider::Slider;
 use crate::widgets::textbox::TextInput;
 
@@ -14,6 +15,7 @@ use crate::widgets::textbox::TextInput;
 pub struct InputProps<'a> {
     r#type: Option<&'static str>,
     oninput: Option<EventHandler<'a, FormData>>,
+    onclick: Option<EventHandler<'a, FormData>>,
     value: Option<&'a str>,
     size: Option<&'a str>,
     width: Option<&'a str>,
@@ -27,7 +29,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
     cx.render(match cx.props.r#type {
         Some("checkbox") => {
             rsx! {
-                CheckBoxInput{
+                CheckBox{
                     raw_oninput: cx.props.oninput.as_ref(),
                     value: cx.props.value,
                     width: cx.props.width,
@@ -35,7 +37,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                 }
             }
         }
-        Some("slider") => {
+        Some("range") => {
             rsx! {
                 Slider{
                     raw_oninput: cx.props.oninput.as_ref(),
@@ -44,6 +46,16 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                     height: cx.props.height,
                     max: cx.props.max,
                     min: cx.props.min,
+                }
+            }
+        }
+        Some("button") => {
+            rsx! {
+                Button{
+                    raw_onclick: cx.props.onclick.as_ref(),
+                    value: cx.props.value,
+                    width: cx.props.width,
+                    height: cx.props.height,
                 }
             }
         }

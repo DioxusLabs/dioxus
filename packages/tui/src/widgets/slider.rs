@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use dioxus_core as dioxus;
 use dioxus_core::VNode;
 use dioxus_core::*;
@@ -27,7 +29,6 @@ pub(crate) struct SliderProps<'a> {
 pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
     let value_state = use_state(&cx, || 0.0);
     let value: Option<f32> = cx.props.value.and_then(|v| v.parse().ok());
-    let state = use_state(&cx, || false);
     let width = cx.props.width.unwrap_or("1px");
     let height = cx.props.width.unwrap_or("1px");
     let min = cx.props.min.and_then(|v| v.parse().ok()).unwrap_or(0.0);
@@ -52,9 +53,21 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                 match event.key_code {
                     KeyCode::LeftArrow => {
                         value_state.set((current_value - size / 10.0).max(min).min(max));
+                        if let Some(oninput) = cx.props.raw_oninput{
+                            oninput.call(FormData{
+                                value: value_state.get().to_string(),
+                                values: HashMap::new(),
+                            });
+                        }
                     }
                     KeyCode::RightArrow => {
                         value_state.set((current_value + size / 10.0).max(min).min(max));
+                        if let Some(oninput) = cx.props.raw_oninput{
+                            oninput.call(FormData{
+                                value: value_state.get().to_string(),
+                                values: HashMap::new(),
+                            });
+                        }
                     }
                     _ => ()
                 }

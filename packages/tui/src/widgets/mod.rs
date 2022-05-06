@@ -1,3 +1,4 @@
+mod button;
 mod checkbox;
 mod input;
 mod slider;

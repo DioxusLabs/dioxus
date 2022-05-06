@@ -9,9 +9,9 @@ use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 
 #[derive(Props)]
-pub(crate) struct CheckBoxProps<'a> {
+pub(crate) struct ButtonProps<'a> {
     #[props(!optional)]
-    raw_oninput: Option<&'a EventHandler<'a, FormData>>,
+    raw_onclick: Option<&'a EventHandler<'a, FormData>>,
     #[props(!optional)]
     value: Option<&'a str>,
     #[props(!optional)]
@@ -21,26 +21,15 @@ pub(crate) struct CheckBoxProps<'a> {
 }
 
 #[allow(non_snake_case)]
-pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
+pub(crate) fn Button<'a>(cx: Scope<'a, ButtonProps>) -> Element<'a> {
     let state = use_state(&cx, || false);
     let width = cx.props.width.unwrap_or("1px");
     let height = cx.props.width.unwrap_or("1px");
 
     let single_char = width == "1px" && height == "1px";
-    let text = if single_char {
-        if *state.get() {
-            "☑"
-        } else {
-            "☐"
-        }
-    } else {
-        if *state.get() {
-            "✓"
-        } else {
-            " "
-        }
-    };
+    let text = if let Some(v) = cx.props.value { v } else { "" };
     let border_style = if single_char { "none" } else { "solid" };
+    let text = if single_char { "☐" } else { text };
     cx.render(rsx! {
         div{
             width: "{width}",
@@ -48,18 +37,9 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
             border_style: "{border_style}",
             onclick: |_| {
                 let new_state = !state.get();
-                if let Some(callback) = cx.props.raw_oninput{
+                if let Some(callback) = cx.props.raw_onclick{
                     callback.call(FormData{
-                        value: if let Some(value) = &cx.props.value {
-                            if new_state {
-                                value.to_string()
-                            }
-                            else {
-                                String::new()
-                            }
-                        } else{
-                            "on".to_string()
-                        },
+                        value: text.to_string(),
                         values: HashMap::new(),
                     });
                 }
