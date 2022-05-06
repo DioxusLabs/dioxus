@@ -15,10 +15,10 @@
 
 mod elements;
 mod events;
+pub mod geometry;
 mod global_attributes;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
-mod geometry;
 
 pub use elements::*;
 pub use events::*;
