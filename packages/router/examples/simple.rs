@@ -9,39 +9,20 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        dynamic: DrNone,
-        fixed: vec![
-            (
-                String::from("apple"),
-                Route {
-                    content: RcComponent(Apple),
-                    ..Default::default()
-                },
-            ),
-            (
-                String::from("potato"),
-                Route {
-                    name: Some("potato"),
-                    content: RcComponent(Potato),
-                    ..Default::default()
-                },
-            ),
-            (
-                String::from("earth_apple"),
-                Route {
-                    name: Some("earth apple"),
-                    content: RcRedirect(NtName("potato", vec![], QNone)),
-                    ..Default::default()
-                },
-            ),
-        ],
+    let routes = use_segment(&cx, || {
+        Segment::default()
+            .index(RcComponent(Home))
+            .fixed("apple", Route::new(RcComponent(Apple)))
+            .fixed("potato", Route::new(RcComponent(Potato)).name("potato"))
+            .fixed(
+                "earth_apple",
+                Route::new(RcRedirect(NtName("potato", vec![], QNone))).name("earth apple"),
+            )
     });
 
     cx.render(rsx! {
         Router {
-            routes: routes,
+            routes: routes.clone(),
             Outlet { }
         }
     })

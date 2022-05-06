@@ -9,52 +9,30 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        dynamic: DrNone,
-        fixed: vec![
-            (
-                String::from("blog"),
-                Route {
-                    name: None,
-                    content: RcComponent(Blog),
-                    sub: Some(Segment {
-                        index: RcComponent(BlogWelcome),
-                        dynamic: DrParameter {
-                            name: Some("blog_post"),
-                            key: "blog_id",
-                            content: RcComponent(BlogPost),
-                            sub: None,
-                        },
-                        fixed: vec![],
-                    }),
-                },
-            ),
-            (
-                String::from("raspberry"),
-                Route {
-                    name: Some("raspberry"),
-                    content: RcMulti(RaspberryPage, vec![("other", StrawberryPage)]),
-                    sub: None,
-                },
-            ),
-            (
-                String::from("the_best_berry"),
-                Route {
-                    name: Some("best_berry"),
-                    content: RcRedirect(NtName("raspberry", vec![], QNone)),
-                    sub: None,
-                },
-            ),
-            (
-                String::from(PATH_FOR_NAMED_NAVIGATION_FAILURE),
-                Route {
-                    name: None,
-                    content: RcComponent(NamedNavigationFallback),
-                    sub: None,
-                },
-            ),
-        ],
+    let routes = use_segment(&cx, || {
+        Segment::default()
+            .index(RcComponent(Home))
+            .fixed(
+                "blog",
+                Route::new(RcComponent(Blog)).sub(
+                    Segment::default().index(RcComponent(BlogWelcome)).dynamic(
+                        DynamicRoute::parameter("blog_id", RcComponent(BlogPost)).name("blog_post"),
+                    ),
+                ),
+            )
+            .fixed(
+                "raspberry",
+                Route::new(RcMulti(RaspberryPage, vec![("other", StrawberryPage)]))
+                    .name("raspberry"),
+            )
+            .fixed(
+                "the_best_berry",
+                Route::new(RcRedirect(NtName("raspberry", vec![], QNone))).name("best_berry"),
+            )
+            .fixed(
+                PATH_FOR_NAMED_NAVIGATION_FAILURE,
+                Route::new(RcComponent(NamedNavigationFallback)),
+            )
     });
 
     cx.render(rsx! {
@@ -72,7 +50,7 @@ fn app(cx: Scope) -> Element {
         }
         Router {
             active_class: "active",
-            routes: routes,
+            routes: routes.clone(),
             header {
                 Link {
                     target: NtName("root_index", vec![], QNone)

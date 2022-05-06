@@ -36,16 +36,10 @@ impl PartialEq for AppProps {
 }
 
 fn App<'a>(cx: Scope<AppProps>) -> Element {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        fixed: vec![(
-            String::from("other"),
-            Route {
-                content: RcComponent(Other),
-                ..Default::default()
-            },
-        )],
-        ..Default::default()
+    let routes = use_segment(&cx, || {
+        Segment::default()
+            .index(RcComponent(Home))
+            .fixed("other", Route::new(RcComponent(Other)))
     });
     let history = cx.use_hook(|_| {
         let history = cx.props.history.clone();
@@ -60,7 +54,7 @@ fn App<'a>(cx: Scope<AppProps>) -> Element {
         Router {
             init_only: true,
             history: history,
-            routes: routes,
+            routes: routes.clone(),
             nav { "navbar" }
             Outlet {}
         }

@@ -45,6 +45,9 @@ pub mod hooks {
 
     mod use_route;
     pub use use_route::*;
+
+    mod use_segment;
+    pub use use_segment::*;
 }
 
 /// Types relating to navigation.
@@ -67,12 +70,24 @@ pub mod prelude {
     pub use crate::components::*;
     pub use crate::hooks::*;
     pub use crate::navigation::{NavigationTarget::*, Query::*, *};
-    pub use crate::route_definition::{DynamicRoute::*, RouteContent::*, *};
+    pub use crate::route_definition::{RouteContent::*, *};
     pub use crate::state::RouterState;
 }
 
 /// Types to tell the router what to render.
-pub mod route_definition;
+pub mod route_definition {
+    mod content;
+    pub use content::*;
+
+    mod dynamic;
+    pub use dynamic::*;
+
+    mod route;
+    pub use route::*;
+
+    mod segment;
+    pub use segment::*;
+}
 
 mod service;
 

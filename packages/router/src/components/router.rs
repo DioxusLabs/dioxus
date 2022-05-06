@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -45,7 +47,7 @@ pub struct RouterProps<'a> {
     #[props(default)]
     pub init_only: bool,
     /// The routes the router should work on.
-    pub routes: &'a Segment,
+    pub routes: Arc<Segment>,
 }
 
 /// The base component on which the entire router system builds.

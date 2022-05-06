@@ -59,7 +59,7 @@ pub(crate) struct RouterService {
     global_fallback: RouteContent,
     history: Box<dyn HistoryProvider>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
-    routes: Segment,
+    routes: Arc<Segment>,
     rx: UnboundedReceiver<RouterMessage>,
     state: Arc<RwLock<RouterState>>,
     subscribers: Vec<Weak<ScopeId>>,
@@ -72,7 +72,7 @@ impl RouterService {
     /// The returned [`RouterService`] and [`RouterContext`] are linked with each other.
     #[must_use]
     pub(crate) fn new(
-        routes: Segment,
+        routes: Arc<Segment>,
         update: Arc<dyn Fn(ScopeId)>,
         active_class: Option<String>,
         global_fallback: RouteContent,
@@ -312,7 +312,7 @@ fn construct_named_targets(
         }
     }
 
-    if let DynamicRoute::DrParameter {
+    if let DynamicRoute::Parameter {
         name,
         key,
         content: _,
@@ -353,7 +353,7 @@ fn match_segment(
     global_fallback: &RouteContent,
 ) -> Option<NavigationTarget> {
     // check static paths
-    if let Some((_, route)) = segment.fixed.iter().find(|(p, _)| p == path[0]) {
+    if let Some(route) = segment.fixed.get(path[0]) {
         if let Some(name) = &route.name {
             names.insert(name);
         }
@@ -379,7 +379,7 @@ fn match_segment(
         }
     } else {
         match &segment.dynamic {
-            DynamicRoute::DrNone => {
+            DynamicRoute::None => {
                 if !global_fallback.is_rc_none() {
                     components.0.clear();
                     components.1.clear();
@@ -388,7 +388,7 @@ fn match_segment(
                     return global_fallback.add_to_list(components);
                 }
             }
-            DynamicRoute::DrParameter {
+            DynamicRoute::Parameter {
                 name,
                 key,
                 content,
@@ -429,7 +429,7 @@ fn match_segment(
                     return global_fallback.add_to_list(components);
                 }
             }
-            DynamicRoute::DrFallback(content) => {
+            DynamicRoute::Fallback(content) => {
                 if path.len() > 1 && !global_fallback.is_rc_none() {
                     components.0.clear();
                     components.1.clear();
