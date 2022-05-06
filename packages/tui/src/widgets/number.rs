@@ -2,6 +2,7 @@ use dioxus_core as dioxus;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
+use dioxus_elements::KeyCode;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
@@ -9,7 +10,7 @@ use dioxus_native_core::utils::cursor::Cursor;
 use std::collections::HashMap;
 
 #[derive(Props)]
-pub(crate) struct TextBoxProps<'a> {
+pub(crate) struct NumbericInputProps<'a> {
     #[props(!optional)]
     raw_oninput: Option<&'a EventHandler<'a, FormData>>,
     #[props(!optional)]
@@ -22,7 +23,7 @@ pub(crate) struct TextBoxProps<'a> {
     height: Option<&'a str>,
 }
 #[allow(non_snake_case)]
-pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
+pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a> {
     let text_ref = use_ref(&cx, || {
         if let Some(intial_text) = cx.props.value {
             intial_text.to_string()
@@ -78,18 +79,51 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 width: "{width}",
                 height: "{height}",
                 border_style: "{border}",
+                display: "flex",
+                flex_direction: "row",
                 align_items: "left",
 
                 // prevent tabing out of the textbox
                 prevent_default: "onkeydown",
                 onkeydown: move |k| {
-                    let mut text = text_ref.write();
-                    cursor.write().handle_input(&*k, &mut text, max_len);
-                    if let Some(input_handler) = &cx.props.raw_oninput{
-                        input_handler.call(FormData{
-                            value: text.clone(),
-                            values: HashMap::new(),
-                        });
+                    if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period) || k.key.chars().all(|c| c.is_numeric()) {
+                        let mut text = text_ref.write();
+                        cursor.write().handle_input(&*k, &mut text, max_len);
+                        if let Some(input_handler) = &cx.props.raw_oninput{
+                            input_handler.call(FormData{
+                                value: text.clone(),
+                                values: HashMap::new(),
+                            });
+                        }
+                    }
+                    else{
+                        match k.key_code {
+                            KeyCode::UpArrow =>{
+                                let mut text = text_ref.write();
+                                if let Ok(value) = text.parse::<f64>(){
+                                    *text = (value + 1.0).to_string();
+                                }
+                                if let Some(input_handler) = &cx.props.raw_oninput{
+                                    input_handler.call(FormData{
+                                        value: text.clone(),
+                                        values: HashMap::new(),
+                                    });
+                                }
+                            }
+                            KeyCode::DownArrow =>{
+                                let mut text = text_ref.write();
+                                if let Ok(value) = text.parse::<f64>(){
+                                    *text = (value - 1.0).to_string();
+                                }
+                                if let Some(input_handler) = &cx.props.raw_oninput{
+                                    input_handler.call(FormData{
+                                        value: text.clone(),
+                                        values: HashMap::new(),
+                                    });
+                                }
+                            }
+                            _ => ()
+                        }
                     }
                 },
 

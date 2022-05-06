@@ -44,6 +44,12 @@ fn app(cx: Scope) -> Element {
                 max: "80",
             }
             Input{
+                oninput: |data: FormData| if &data.value == "10"{
+                    bg_green.set(true);
+                },
+                r#type: "number",
+            }
+            Input{
                 onclick: |_: FormData| bg_green.set(false),
                 r#type: "button",
                 value: "reset",
