@@ -80,8 +80,6 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 border_style: "{border}",
                 align_items: "left",
 
-                // prevent tabing out of the textbox
-                prevent_default: "onkeydown",
                 onkeydown: move |k| {
                     let mut text = text_ref.write();
                     cursor.write().handle_input(&*k, &mut text, max_len);

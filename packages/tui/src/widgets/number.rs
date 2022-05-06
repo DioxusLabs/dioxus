@@ -95,8 +95,6 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 flex_direction: "row",
                 align_items: "left",
 
-                // prevent tabing out of the textbox
-                prevent_default: "onkeydown",
                 onkeydown: move |k| {
                     if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period) || k.key.chars().all(|c| c.is_numeric()) {
                         let mut text = text_ref.write();
