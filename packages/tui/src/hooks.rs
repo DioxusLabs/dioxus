@@ -7,13 +7,14 @@ use fxhash::{FxHashMap, FxHashSet};
 use dioxus_html::{on::*, KeyCode};
 use std::{
     any::Any,
-    cell::RefCell,
+    cell::{RefCell, RefMut},
     rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
 use stretch2::{prelude::Layout, Stretch};
 
+use crate::FocusState;
 use crate::{Dom, Node};
 
 // a wrapper around the input state for easier access
@@ -30,22 +31,22 @@ use crate::{Dom, Node};
 
 //     pub fn mouse(&self) -> Option<MouseData> {
 //         let data = (**self.0).borrow();
-//         data.mouse.as_ref().map(|m| m.clone())
+//         mouse.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn wheel(&self) -> Option<WheelData> {
 //         let data = (**self.0).borrow();
-//         data.wheel.as_ref().map(|w| w.clone())
+//         wheel.as_ref().map(|w| w.clone())
 //     }
 
 //     pub fn screen(&self) -> Option<(u16, u16)> {
 //         let data = (**self.0).borrow();
-//         data.screen.as_ref().map(|m| m.clone())
+//         screen.as_ref().map(|m| m.clone())
 //     }
 
 //     pub fn last_key_pressed(&self) -> Option<KeyboardData> {
 //         let data = (**self.0).borrow();
-//         data.last_key_pressed
+//         last_key_pressed
 //             .as_ref()
 //             .map(|k| &k.0.clone())
 //     }
@@ -78,6 +79,7 @@ pub struct InnerInputState {
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
     screen: Option<(u16, u16)>,
+    pub(crate) focus_state: FocusState,
     // subscribers: Vec<Rc<dyn Fn() + 'static>>,
 }
 
@@ -89,6 +91,7 @@ impl InnerInputState {
             last_key_pressed: None,
             screen: None,
             // subscribers: Vec::new(),
+            focus_state: FocusState::default(),
         }
     }
 
@@ -96,54 +99,56 @@ impl InnerInputState {
     fn apply_event(&mut self, evt: &mut EventCore) {
         match evt.1 {
             // limitations: only two buttons may be held at once
-            EventData::Mouse(ref mut m) => match &mut self.mouse {
-                Some(state) => {
-                    let mut buttons = state.0.buttons;
-                    state.0 = m.clone();
-                    match evt.0 {
-                        // this code only runs when there are no buttons down
-                        "mouseup" => {
-                            buttons = 0;
-                            state.1 = Vec::new();
-                        }
-                        "mousedown" => {
-                            if state.1.contains(&m.buttons) {
-                                // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
-                                if state.1.len() > 1 {
-                                    evt.0 = "mouseup";
-                                    state.1 = vec![m.buttons];
-                                }
-                                // otherwise some other button was pressed. In testing it was consistantly this mapping
-                                else {
-                                    match m.buttons {
-                                        0x01 => state.1.push(0x02),
-                                        0x02 => state.1.push(0x01),
-                                        0x04 => state.1.push(0x01),
-                                        _ => (),
-                                    }
-                                }
-                            } else {
-                                state.1.push(m.buttons);
+            EventData::Mouse(ref mut m) => {
+                match &mut self.mouse {
+                    Some(state) => {
+                        let mut buttons = state.0.buttons;
+                        state.0 = m.clone();
+                        match evt.0 {
+                            // this code only runs when there are no buttons down
+                            "mouseup" => {
+                                buttons = 0;
+                                state.1 = Vec::new();
                             }
+                            "mousedown" => {
+                                if state.1.contains(&m.buttons) {
+                                    // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
+                                    if state.1.len() > 1 {
+                                        evt.0 = "mouseup";
+                                        state.1 = vec![m.buttons];
+                                    }
+                                    // otherwise some other button was pressed. In testing it was consistantly this mapping
+                                    else {
+                                        match m.buttons {
+                                            0x01 => state.1.push(0x02),
+                                            0x02 => state.1.push(0x01),
+                                            0x04 => state.1.push(0x01),
+                                            _ => (),
+                                        }
+                                    }
+                                } else {
+                                    state.1.push(m.buttons);
+                                }
 
-                            buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
+                                buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
+                            }
+                            _ => (),
                         }
-                        _ => (),
+                        state.0.buttons = buttons;
+                        m.buttons = buttons;
                     }
-                    state.0.buttons = buttons;
-                    m.buttons = buttons;
+                    None => {
+                        self.mouse = Some((
+                            m.clone(),
+                            if m.buttons == 0 {
+                                Vec::new()
+                            } else {
+                                vec![m.buttons]
+                            },
+                        ));
+                    }
                 }
-                None => {
-                    self.mouse = Some((
-                        m.clone(),
-                        if m.buttons == 0 {
-                            Vec::new()
-                        } else {
-                            vec![m.buttons]
-                        },
-                    ));
-                }
-            },
+            }
             EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
@@ -161,7 +166,7 @@ impl InnerInputState {
 
     fn update(
         &mut self,
-        evts: &mut [EventCore],
+        evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
         dom: &mut Dom,
@@ -170,11 +175,33 @@ impl InnerInputState {
 
         self.wheel = None;
 
+        let old_focus = self.focus_state.last_focused_id;
+
+        evts.retain(|e| match &e.1 {
+            EventData::Keyboard(k) => match k.key_code {
+                KeyCode::Tab => !self.focus_state.progress(dom, !k.shift_key),
+                _ => true,
+            },
+            _ => true,
+        });
+
         for e in evts.iter_mut() {
             self.apply_event(e);
         }
 
         self.resolve_mouse_events(previous_mouse, resolved_events, layout, dom);
+
+        if old_focus != self.focus_state.last_focused_id {
+            if let Some(id) = self.focus_state.last_focused_id {
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name: "focus",
+                    element: Some(id),
+                    data: Arc::new(FocusData {}),
+                });
+            }
+        }
 
         // for s in &self.subscribers {
         //     s();
@@ -182,7 +209,7 @@ impl InnerInputState {
     }
 
     fn resolve_mouse_events(
-        &self,
+        &mut self,
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
@@ -311,14 +338,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // mousedown
+            // mousedown
+            if clicked {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && clicked {
+                    if currently_contains {
                         try_create_event(
                             "mousedown",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -331,14 +358,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // mouseup
+            // mouseup
+            if released {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseup") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released {
+                    if currently_contains {
                         try_create_event(
                             "mouseup",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -351,14 +378,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // click
+            // click
+            if released && mouse_data.button == 0 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("click") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released && mouse_data.button == 0 {
+                    if currently_contains {
                         try_create_event(
                             "click",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -371,14 +398,14 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // contextmenu
+            // contextmenu
+            if released && mouse_data.button == 2 {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("contextmenu") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released && mouse_data.button == 2 {
+                    if currently_contains {
                         try_create_event(
                             "contextmenu",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -391,15 +418,15 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // wheel
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("wheel") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+            // wheel
+            if let Some(w) = wheel_data {
+                if wheel_delta != 0.0 {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("wheel") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if let Some(w) = wheel_data {
-                        if currently_contains && wheel_delta != 0.0 {
+                        if currently_contains {
                             try_create_event(
                                 "wheel",
                                 Arc::new(w.clone()),
@@ -458,6 +485,22 @@ impl InnerInputState {
                     }
                 }
             }
+
+            // update focus
+            if released {
+                let mut focus_id = None;
+                dom.traverse_depth_first(|node| {
+                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let currently_contains = layout_contains_point(node_layout, new_pos);
+
+                    if currently_contains && node.state.focus.level.focusable() {
+                        focus_id = Some(node.id);
+                    }
+                });
+                if let Some(id) = focus_id {
+                    self.focus_state.set_focus(dom, id);
+                }
+            }
         }
     }
 
@@ -502,6 +545,11 @@ impl RinkInputHandler {
         )
     }
 
+    pub(crate) fn prune(&self, mutations: &dioxus_core::Mutations, rdom: &Dom) {
+        self.state.borrow_mut().focus_state.prune(mutations, rdom);
+    }
+
+    // returns a list of events and if a event will force a rerender
     pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
@@ -535,7 +583,6 @@ impl RinkInputHandler {
             })
             .map(|evt| (evt.0, evt.1.into_any()));
 
-        // todo: currently resolves events in all nodes, but once the focus system is added it should filter by focus
         let mut hm: FxHashMap<&'static str, Vec<Arc<dyn Any + Send + Sync>>> = FxHashMap::default();
         for (event, data) in events {
             if let Some(v) = hm.get_mut(event) {
@@ -547,18 +594,24 @@ impl RinkInputHandler {
         for (event, datas) in hm {
             for node in dom.get_listening_sorted(event) {
                 for data in &datas {
-                    resolved_events.push(UserEvent {
-                        scope_id: None,
-                        priority: EventPriority::Medium,
-                        name: event,
-                        element: Some(node.id),
-                        data: data.clone(),
-                    });
+                    if node.state.focused {
+                        resolved_events.push(UserEvent {
+                            scope_id: None,
+                            priority: EventPriority::Medium,
+                            name: event,
+                            element: Some(node.id),
+                            data: data.clone(),
+                        });
+                    }
                 }
             }
         }
 
         resolved_events
+    }
+
+    pub(crate) fn state(&self) -> RefMut<InnerInputState> {
+        self.state.borrow_mut()
     }
 }
 
@@ -750,7 +803,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
                 12 => KeyCode::F12,
                 _ => return None,
             },
-            TermKeyCode::BackTab => return None,
+            TermKeyCode::BackTab => KeyCode::Tab,
             TermKeyCode::Null => return None,
             _ => return None,
         };

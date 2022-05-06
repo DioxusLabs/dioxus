@@ -57,7 +57,7 @@ impl<T: RinkWidget> WidgetWithContext<T> {
 
 impl<T: RinkWidget> Widget for WidgetWithContext<T> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        self.widget.render(area, RinkBuffer::new(buf, self.config))
+        self.widget.render(area, RinkBuffer::new(buf, self.config));
     }
 }
 
