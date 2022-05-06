@@ -48,6 +48,7 @@ fn app(cx: Scope) -> Element {
                     bg_green.set(true);
                 },
                 r#type: "number",
+                size: "4",
             }
             Input{
                 onclick: |_: FormData| bg_green.set(false),

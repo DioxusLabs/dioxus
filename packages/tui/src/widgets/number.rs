@@ -1,4 +1,5 @@
 use dioxus_core as dioxus;
+use dioxus_core::prelude::fc_to_builder;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
@@ -8,6 +9,8 @@ use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 use dioxus_native_core::utils::cursor::Cursor;
 use std::collections::HashMap;
+
+use crate::widgets::Input;
 
 #[derive(Props)]
 pub(crate) struct NumbericInputProps<'a> {
@@ -73,6 +76,15 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
         "solid"
     };
 
+    let update = |text: String| {
+        if let Some(input_handler) = &cx.props.raw_oninput {
+            input_handler.call(FormData {
+                value: text,
+                values: HashMap::new(),
+            });
+        }
+    };
+
     cx.render({
         rsx! {
             div{
@@ -89,12 +101,6 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period) || k.key.chars().all(|c| c.is_numeric()) {
                         let mut text = text_ref.write();
                         cursor.write().handle_input(&*k, &mut text, max_len);
-                        if let Some(input_handler) = &cx.props.raw_oninput{
-                            input_handler.call(FormData{
-                                value: text.clone(),
-                                values: HashMap::new(),
-                            });
-                        }
                     }
                     else{
                         match k.key_code {
@@ -103,24 +109,14 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                                 if let Ok(value) = text.parse::<f64>(){
                                     *text = (value + 1.0).to_string();
                                 }
-                                if let Some(input_handler) = &cx.props.raw_oninput{
-                                    input_handler.call(FormData{
-                                        value: text.clone(),
-                                        values: HashMap::new(),
-                                    });
-                                }
+                                update(text.clone());
                             }
                             KeyCode::DownArrow =>{
                                 let mut text = text_ref.write();
                                 if let Ok(value) = text.parse::<f64>(){
                                     *text = (value - 1.0).to_string();
                                 }
-                                if let Some(input_handler) = &cx.props.raw_oninput{
-                                    input_handler.call(FormData{
-                                        value: text.clone(),
-                                        values: HashMap::new(),
-                                    });
-                                }
+                                update(text.clone());
                             }
                             _ => ()
                         }
@@ -136,6 +132,34 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 }
 
                 "{text_after_second_cursor}"
+
+                div{
+                    background_color: "rgba(255, 255, 255, 50%)",
+                    color: "black",
+                    Input{
+                        r#type: "button",
+                        onclick: move |_| {
+                            let mut text = text_ref.write();
+                            if let Ok(value) = text.parse::<f64>(){
+                                *text = (value - 1.0).to_string();
+                            }
+                            update(text.clone());
+                        }
+                        value: "<",
+                    }
+                    " "
+                    Input{
+                        r#type: "button",
+                        onclick: move |_| {
+                            let mut text = text_ref.write();
+                            if let Ok(value) = text.parse::<f64>(){
+                                *text = (value + 1.0).to_string();
+                            }
+                            update(text.clone());
+                        }
+                        value: ">",
+                    }
+                }
             }
         }
     })
