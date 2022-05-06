@@ -43,6 +43,11 @@ fn app(cx: Scope) -> Element {
                 buttons.set(evt.data.buttons);
                 mouse_clicked.set(true);
             },
+            onmousemove: move |evt: MouseEvent| {
+                mouse.set((evt.data.screen_x, evt.data.screen_y));
+                buttons.set(evt.data.buttons);
+                count.set(count + 1);
+            },
             onmouseup: move |evt: MouseEvent| {
                 buttons.set(evt.data.buttons);
                 mouse_clicked.set(false);

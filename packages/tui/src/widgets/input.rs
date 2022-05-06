@@ -23,6 +23,7 @@ pub struct InputProps<'a> {
     height: Option<&'a str>,
     min: Option<&'a str>,
     max: Option<&'a str>,
+    step: Option<&'a str>,
 }
 
 #[allow(non_snake_case)]
@@ -47,6 +48,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                     height: cx.props.height,
                     max: cx.props.max,
                     min: cx.props.min,
+                    step: cx.props.step,
                 }
             }
         }
@@ -63,7 +65,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
         Some("number") => {
             rsx! {
                 NumbericInput{
-                    raw_oninput: cx.props.onclick.as_ref(),
+                    raw_oninput: cx.props.oninput.as_ref(),
                     value: cx.props.value,
                     size: cx.props.size,
                     width: cx.props.width,

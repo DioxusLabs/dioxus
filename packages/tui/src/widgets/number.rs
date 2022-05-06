@@ -101,21 +101,18 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period) || k.key.chars().all(|c| c.is_numeric()) {
                         let mut text = text_ref.write();
                         cursor.write().handle_input(&*k, &mut text, max_len);
+                        update(text.clone());
                     }
                     else{
                         match k.key_code {
                             KeyCode::UpArrow =>{
                                 let mut text = text_ref.write();
-                                if let Ok(value) = text.parse::<f64>(){
-                                    *text = (value + 1.0).to_string();
-                                }
+                                *text = (text.parse::<f64>().unwrap_or(0.0) + 1.0).to_string();
                                 update(text.clone());
                             }
                             KeyCode::DownArrow =>{
                                 let mut text = text_ref.write();
-                                if let Ok(value) = text.parse::<f64>(){
-                                    *text = (value - 1.0).to_string();
-                                }
+                                *text = (text.parse::<f64>().unwrap_or(0.0) - 1.0).to_string();
                                 update(text.clone());
                             }
                             _ => ()
