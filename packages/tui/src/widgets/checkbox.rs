@@ -4,6 +4,7 @@ use dioxus_core as dioxus;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
+use dioxus_elements::KeyCode;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
@@ -24,7 +25,7 @@ pub(crate) struct CheckBoxProps<'a> {
 pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
     let state = use_state(&cx, || false);
     let width = cx.props.width.unwrap_or("1px");
-    let height = cx.props.width.unwrap_or("1px");
+    let height = cx.props.height.unwrap_or("1px");
 
     let single_char = width == "1px" && height == "1px";
     let text = if single_char {
@@ -41,29 +42,36 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
         }
     };
     let border_style = if single_char { "none" } else { "solid" };
+    let update = move || {
+        let new_state = !state.get();
+        if let Some(callback) = cx.props.raw_oninput {
+            callback.call(FormData {
+                value: if let Some(value) = &cx.props.value {
+                    if new_state {
+                        value.to_string()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    "on".to_string()
+                },
+                values: HashMap::new(),
+            });
+        }
+        state.set(new_state);
+    };
     cx.render(rsx! {
         div{
             width: "{width}",
             height: "{height}",
             border_style: "{border_style}",
-            onclick: |_| {
-                let new_state = !state.get();
-                if let Some(callback) = cx.props.raw_oninput{
-                    callback.call(FormData{
-                        value: if let Some(value) = &cx.props.value {
-                            if new_state {
-                                value.to_string()
-                            }
-                            else {
-                                String::new()
-                            }
-                        } else{
-                            "on".to_string()
-                        },
-                        values: HashMap::new(),
-                    });
+            onclick: move |_| {
+                update();
+            },
+            onkeydown: move |evt| {
+                if !evt.repeat && matches!(evt.key_code, KeyCode::Space | KeyCode::Enter) {
+                    update();
                 }
-                state.set(new_state);
             },
             "{text}"
         }
