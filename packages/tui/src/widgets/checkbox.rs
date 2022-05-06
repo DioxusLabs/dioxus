@@ -15,8 +15,6 @@ pub(crate) struct CheckBoxInputProps<'a> {
     #[props(!optional)]
     value: Option<&'a str>,
     #[props(!optional)]
-    size: Option<&'a str>,
-    #[props(!optional)]
     width: Option<&'a str>,
     #[props(!optional)]
     height: Option<&'a str>,
