@@ -50,13 +50,6 @@ impl Component {
             invalid_component_path!(path);
         }
 
-        // if matches!(
-        //     path.segments.last().unwrap().arguments,
-        //     PathArguments::AngleBracketed(_)
-        // ) {
-        //     proc_macro_error::abort!(path, "path: {}", path.to_token_stream().to_string());
-        // }
-
         Ok(())
     }
 }
