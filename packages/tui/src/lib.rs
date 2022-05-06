@@ -14,16 +14,18 @@ use futures::{
     pin_mut, StreamExt,
 };
 use layout::StretchLayout;
+use query::Query;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use stretch2::{prelude::Size, Stretch};
+use stretch2::Stretch;
 use style_attributes::StyleModifier;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
 mod hooks;
 mod layout;
+pub mod query;
 mod render;
 mod style;
 mod style_attributes;
@@ -31,6 +33,8 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
+pub use stretch2::geometry::{Point, Size};
+pub use stretch2::result::Layout;
 
 type Dom = RealDom<NodeState>;
 type Node = dioxus_native_core::real_dom::Node<NodeState>;
@@ -71,7 +75,6 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
             let tick_rate = Duration::from_millis(1000);
             loop {
                 if crossterm::event::poll(tick_rate).unwrap() {
-                    // if crossterm::event::poll(timeout).unwrap() {
                     let evt = crossterm::event::read().unwrap();
                     if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
                         break;
@@ -82,16 +85,23 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     }
 
     let cx = dom.base_scope();
+    let rdom = Rc::new(RefCell::new(RealDom::new()));
+    let stretch = Rc::new(RefCell::new(Stretch::new()));
     cx.provide_root_context(state);
     cx.provide_root_context(TuiContext { tx: event_tx_clone });
+    cx.provide_root_context(Query {
+        rdom: rdom.clone(),
+        stretch: stretch.clone(),
+    });
 
-    let mut rdom: Dom = RealDom::new();
-    let mutations = dom.rebuild();
-    let to_update = rdom.apply_mutations(vec![mutations]);
-    let stretch = Rc::new(RefCell::new(Stretch::new()));
-    let mut any_map = AnyMap::new();
-    any_map.insert(stretch.clone());
-    let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+    {
+        let mut rdom = rdom.borrow_mut();
+        let mutations = dom.rebuild();
+        let to_update = rdom.apply_mutations(vec![mutations]);
+        let mut any_map = AnyMap::new();
+        any_map.insert(stretch.clone());
+        let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+    }
 
     render_vdom(
         &mut dom,
@@ -110,7 +120,7 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut rdom: Dom,
+    rdom: Rc<RefCell<Dom>>,
     stretch: Rc<RefCell<Stretch>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
@@ -163,12 +173,14 @@ fn render_vdom(
                     }
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
+                            let rdom = rdom.borrow();
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
                             let root = &rdom[0];
                             render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
                         })?;
                     } else {
+                        let rdom = rdom.borrow();
                         resize(
                             Rect {
                                 x: 0,
@@ -216,10 +228,14 @@ fn render_vdom(
                 }
 
                 {
-                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
+                    let evts = {
+                        let mut rdom = rdom.borrow_mut();
+                        handler.get_events(&stretch.borrow(), &mut rdom)
+                    };
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
+                    let mut rdom = rdom.borrow_mut();
                     let mutations = vdom.work_with_deadline(|| false);
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
