@@ -242,23 +242,25 @@ impl InnerInputState {
 
             {
                 // mousemove
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("mousemove") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
-                        .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                if old_pos != Some(new_pos) {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("mousemove") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let previously_contained = old_pos
+                            .filter(|pos| layout_contains_point(node_layout, *pos))
+                            .is_some();
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && previously_contained {
-                        try_create_event(
-                            "mousemove",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
-                            &mut will_bubble,
-                            resolved_events,
-                            node,
-                            dom,
-                        );
+                        if currently_contains && previously_contained {
+                            try_create_event(
+                                "mousemove",
+                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                dom,
+                            );
+                        }
                     }
                 }
             }
