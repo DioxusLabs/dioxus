@@ -20,6 +20,12 @@ impl<T> PossiblyUninitalized<T> {
             _ => panic!(),
         }
     }
+    pub fn ok(self) -> Option<T> {
+        match self {
+            Self::Initialized(i) => Some(i),
+            _ => None,
+        }
+    }
 }
 impl<T> Default for PossiblyUninitalized<T> {
     fn default() -> Self {
