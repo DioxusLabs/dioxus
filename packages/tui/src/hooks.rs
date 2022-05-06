@@ -94,6 +94,7 @@ impl InnerInputState {
 
     // stores current input state and transforms events based on that state
     fn apply_event(&mut self, evt: &mut EventCore) {
+        #[allow(deprecated)]
         match evt.1 {
             // limitations: only two buttons may be held at once
             EventData::Mouse(ref mut m) => match &mut self.mouse {
@@ -606,6 +607,7 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                 // The `offset`, `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
                 // todo?
                 // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
+                #[allow(deprecated)]
                 EventData::Mouse(MouseData {
                     alt_key: alt,
                     button: button_state,

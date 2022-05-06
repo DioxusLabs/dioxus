@@ -3,6 +3,7 @@ use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
 
 pub mod on {
+    use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
     use std::collections::HashMap;
 
     use super::*;
@@ -498,8 +499,10 @@ pub mod on {
     #[derive(Debug, Clone)]
     pub struct MouseData {
         /// True if the alt key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub alt_key: bool,
         /// The button number that was pressed (if applicable) when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use trigger_button() instead")]
         pub button: i16,
         /// Indicates which buttons are pressed on the mouse (or other input device) when a mouse event is triggered.
         ///
@@ -510,38 +513,186 @@ pub mod on {
         /// - 4: Auxiliary button (usually the mouse wheel button or middle button)
         /// - 8: 4th button (typically the "Browser Back" button)
         /// - 16 : 5th button (typically the "Browser Forward" button)
+        #[deprecated(since = "0.3.0", note = "use held_buttons() instead")]
         pub buttons: u16,
         /// The horizontal coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
         ///
         /// For example, clicking on the left edge of the viewport will always result in a mouse event with a clientX value of 0, regardless of whether the page is scrolled horizontally.
+        #[deprecated(since = "0.3.0", note = "use client_coordinates() instead")]
         pub client_x: i32,
         /// The vertical coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
         ///
         /// For example, clicking on the top edge of the viewport will always result in a mouse event with a clientY value of 0, regardless of whether the page is scrolled vertically.
+        #[deprecated(since = "0.3.0", note = "use client_coordinates() instead")]
         pub client_y: i32,
         /// True if the control key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub ctrl_key: bool,
         /// True if the meta key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub meta_key: bool,
         /// The offset in the X coordinate of the mouse pointer between that event and the padding edge of the target node.
+        #[deprecated(since = "0.3.0", note = "use element_coordinates() instead")]
         pub offset_x: i32,
         /// The offset in the Y coordinate of the mouse pointer between that event and the padding edge of the target node.
+        #[deprecated(since = "0.3.0", note = "use element_coordinates() instead")]
         pub offset_y: i32,
         /// The X (horizontal) coordinate (in pixels) of the mouse, relative to the left edge of the entire document. This includes any portion of the document not currently visible.
         ///
         /// Being based on the edge of the document as it is, this property takes into account any horizontal scrolling of the page. For example, if the page is scrolled such that 200 pixels of the left side of the document are scrolled out of view, and the mouse is clicked 100 pixels inward from the left edge of the view, the value returned by pageX will be 300.
+        #[deprecated(since = "0.3.0", note = "use page_coordinates() instead")]
         pub page_x: i32,
         /// The Y (vertical) coordinate in pixels of the event relative to the whole document.
         ///
         /// See `page_x`.
+        #[deprecated(since = "0.3.0", note = "use page_coordinates() instead")]
         pub page_y: i32,
         /// The X coordinate of the mouse pointer in global (screen) coordinates.
+        #[deprecated(since = "0.3.0", note = "use screen_coordinates() instead")]
         pub screen_x: i32,
         /// The Y coordinate of the mouse pointer in global (screen) coordinates.
+        #[deprecated(since = "0.3.0", note = "use screen_coordinates() instead")]
         pub screen_y: i32,
         /// True if the shift key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub shift_key: bool,
         // fn get_modifier_state(&self, key_code: &str) -> bool;
+    }
+
+    impl MouseData {
+        /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
+        //
+        // For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
+        pub fn client_coordinates(&self) -> ClientPoint {
+            #[allow(deprecated)]
+            ClientPoint::new(self.client_x.into(), self.client_y.into())
+        }
+
+        /// The event's coordinates relative to the padding edge of the target element
+        ///
+        /// For example, clicking in the top left corner of an element will result in element coordinates (0., 0.)
+        pub fn element_coordinates(&self) -> ElementPoint {
+            #[allow(deprecated)]
+            ElementPoint::new(self.offset_x.into(), self.offset_y.into())
+        }
+
+        /// The event's coordinates relative to the entire document. This includes any portion of the document not currently visible.
+        ///
+        /// For example, if the page is scrolled 200 pixels to the right and 300 pixels down, clicking in the top left corner of the viewport would result in page coordinates (200., 300.)
+        pub fn page_coordinates(&self) -> PagePoint {
+            #[allow(deprecated)]
+            PagePoint::new(self.page_x.into(), self.page_y.into())
+        }
+
+        /// The event's coordinates relative to the entire screen. This takes into account the window's offset.
+        pub fn screen_coordinates(&self) -> ScreenPoint {
+            #[allow(deprecated)]
+            ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+        }
+
+        /// The set of modifier keys which were pressed when the event occurred
+        pub fn modifiers(&self) -> ModifierSet {
+            #[allow(deprecated)]
+            ModifierSet {
+                has_alt: self.alt_key,
+                has_ctrl: self.ctrl_key,
+                has_meta: self.meta_key,
+                has_shift: self.shift_key,
+            }
+        }
+
+        /// The set of mouse buttons which were held when the event occurred.
+        pub fn held_buttons(&self) -> MouseButtonSet {
+            #[allow(deprecated)]
+            MouseButtonSet {
+                has_primary: self.buttons & 0b1 != 0,
+                has_secondary: self.buttons & 0b10 != 0,
+                has_auxiliary: self.buttons & 0b100 != 0,
+                has_fourth: self.buttons & 0b1000 != 0,
+                has_fifth: self.buttons & 0b10000 != 0,
+            }
+        }
+
+        /// The mouse button that triggered the event
+        ///
+        // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
+        /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
+        pub fn trigger_button(&self) -> MouseButton {
+            #[allow(deprecated)]
+            let button_code = self.button;
+
+            match button_code {
+                0 => MouseButton::Primary,
+                // not a typo; auxiliary and secondary are swapped unlike in the `buttons` field.
+                // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button
+                1 => MouseButton::Auxiliary,
+                2 => MouseButton::Secondary,
+                3 => MouseButton::Fourth,
+                4 => MouseButton::Fifth,
+                other => MouseButton::Other(other),
+            }
+        }
+    }
+
+    pub struct ModifierSet {
+        has_alt: bool,
+        has_ctrl: bool,
+        has_meta: bool,
+        has_shift: bool,
+    }
+
+    impl ModifierSet {
+        pub fn has_alt(&self) -> bool {
+            self.has_alt
+        }
+        pub fn has_ctrl(&self) -> bool {
+            self.has_ctrl
+        }
+        pub fn has_meta(&self) -> bool {
+            self.has_meta
+        }
+        pub fn has_shift(&self) -> bool {
+            self.has_shift
+        }
+
+        pub fn is_empty(&self) -> bool {
+            !(self.has_alt || self.has_ctrl || self.has_meta || self.has_shift)
+        }
+    }
+
+    pub struct MouseButtonSet {
+        has_primary: bool,
+        has_secondary: bool,
+        has_auxiliary: bool,
+        has_fourth: bool,
+        has_fifth: bool,
+    }
+
+    impl MouseButtonSet {
+        pub fn has_primary(&self) -> bool {
+            self.has_primary
+        }
+        pub fn has_secondary(&self) -> bool {
+            self.has_secondary
+        }
+        pub fn has_auxiliary(&self) -> bool {
+            self.has_auxiliary
+        }
+        pub fn has_fourth(&self) -> bool {
+            self.has_fourth
+        }
+        pub fn has_fifth(&self) -> bool {
+            self.has_fifth
+        }
+    }
+
+    pub enum MouseButton {
+        Primary,
+        Secondary,
+        Auxiliary,
+        Fourth,
+        Fifth,
+        Other(i16),
     }
 
     pub type PointerEvent = UiEvent<PointerData>;
