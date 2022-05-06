@@ -561,8 +561,8 @@ pub mod on {
 
     impl MouseData {
         /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
-        //
-        // For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
+        ///
+        /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
         pub fn client_coordinates(&self) -> ClientPoint {
             #[allow(deprecated)]
             ClientPoint::new(self.client_x.into(), self.client_y.into())
@@ -634,6 +634,9 @@ pub mod on {
         }
     }
 
+    /// A set of modifier keys
+    #[derive(Debug, Clone)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     pub struct ModifierSet {
         has_alt: bool,
         has_ctrl: bool,
@@ -642,24 +645,33 @@ pub mod on {
     }
 
     impl ModifierSet {
+        /// Whether the set includes the alt key
         pub fn has_alt(&self) -> bool {
             self.has_alt
         }
+        /// Whether the set includes the control key
         pub fn has_ctrl(&self) -> bool {
             self.has_ctrl
         }
+        /// Whether the set includes the meta (windows/command) key
+
         pub fn has_meta(&self) -> bool {
             self.has_meta
         }
+        /// Whether the set includes the shift key
         pub fn has_shift(&self) -> bool {
             self.has_shift
         }
 
+        /// True if the set contains no keys
         pub fn is_empty(&self) -> bool {
             !(self.has_alt || self.has_ctrl || self.has_meta || self.has_shift)
         }
     }
 
+    /// A set of mouse buttons
+    #[derive(Debug, Clone)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     pub struct MouseButtonSet {
         has_primary: bool,
         has_secondary: bool,
@@ -669,29 +681,43 @@ pub mod on {
     }
 
     impl MouseButtonSet {
+        /// Whether the set includes the primary button (typically the left button)
         pub fn has_primary(&self) -> bool {
             self.has_primary
         }
+        /// Whether the set includes the secondary button (typically the right button)
         pub fn has_secondary(&self) -> bool {
             self.has_secondary
         }
+        /// Whether the set includes the auxiliary button (typically the middle button)
         pub fn has_auxiliary(&self) -> bool {
             self.has_auxiliary
         }
+        /// Whether the set includes the fourth button (typically the "Browser Back" button)
         pub fn has_fourth(&self) -> bool {
             self.has_fourth
         }
+        /// Whether the set includes the fifth button (typically the "Browser Forward" button)
         pub fn has_fifth(&self) -> bool {
             self.has_fifth
         }
     }
 
+    /// A mouse button type (such as Primary/Secondary)
+    #[derive(Debug, Clone)]
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     pub enum MouseButton {
+        /// Primary button (typically the left button)
         Primary,
+        /// Secondary button (typically the right button)
         Secondary,
+        /// Auxiliary button (typically the middle button)
         Auxiliary,
+        /// Fourth button (typically the "Browser Back" button)
         Fourth,
+        /// Fifth button (typically the "Browser Forward" button)
         Fifth,
+        /// A button with an unknown code
         Other(i16),
     }
 
