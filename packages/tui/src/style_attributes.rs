@@ -78,8 +78,10 @@ impl ParentDepState for StyleModifier {
         }
 
         // gather up all the styles from the attribute list
-        for &Attribute { name, value, .. } in node.attributes() {
-            apply_style_attributes(name, value, &mut new);
+        for Attribute { name, value, .. } in node.attributes() {
+            if let Some(text) = value.as_text() {
+                apply_style_attributes(name, text, &mut new);
+            }
         }
 
         // keep the text styling from the parent element
