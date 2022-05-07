@@ -19,6 +19,7 @@ pub struct InputProps<'a> {
     onclick: Option<EventHandler<'a, FormData>>,
     value: Option<&'a str>,
     size: Option<&'a str>,
+    maxlength: Option<&'a str>,
     width: Option<&'a str>,
     height: Option<&'a str>,
     min: Option<&'a str>,
@@ -68,6 +69,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                     raw_oninput: cx.props.oninput.as_ref(),
                     value: cx.props.value,
                     size: cx.props.size,
+                    max_length: cx.props.maxlength,
                     width: cx.props.width,
                     height: cx.props.height,
                 }
@@ -79,6 +81,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                     raw_oninput: cx.props.oninput.as_ref(),
                     value: cx.props.value,
                     size: cx.props.size,
+                    max_length: cx.props.maxlength,
                     width: cx.props.width,
                     height: cx.props.height,
                 }

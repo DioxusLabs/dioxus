@@ -7,7 +7,7 @@ use dioxus_elements::KeyCode;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
-use dioxus_native_core::utils::cursor::Cursor;
+use dioxus_native_core::utils::cursor::{Cursor, Pos};
 use std::collections::HashMap;
 
 use crate::widgets::Input;
@@ -20,6 +20,8 @@ pub(crate) struct NumbericInputProps<'a> {
     value: Option<&'a str>,
     #[props(!optional)]
     size: Option<&'a str>,
+    #[props(!optional)]
+    max_length: Option<&'a str>,
     #[props(!optional)]
     width: Option<&'a str>,
     #[props(!optional)]
@@ -52,12 +54,18 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
 
     let max_len = cx
         .props
-        .size
+        .max_length
         .as_ref()
         .and_then(|s| s.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let width = cx.props.width.unwrap_or("10px");
+    let width = cx
+        .props
+        .width
+        .map(|s| s.to_string())
+        // px is the same as em in tui
+        .or(cx.props.size.map(|s| s.to_string() + "px"))
+        .unwrap_or("10px".to_string());
     let height = cx.props.height.unwrap_or("3px");
 
     // don't draw a border unless there is enough space
@@ -107,7 +115,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 align_items: "left",
 
                 onkeydown: move |k| {
-                    if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period) || k.key.chars().all(|c| c.is_numeric()) {
+                    if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period | KeyCode::Dash) || k.key.chars().all(|c| c.is_numeric()) {
                         let mut text = text_ref.write();
                         cursor.write().handle_input(&*k, &mut text, max_len);
                         update(text.clone());

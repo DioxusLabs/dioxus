@@ -2,6 +2,7 @@ use dioxus_core as dioxus;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
+use dioxus_elements::KeyCode;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
@@ -16,6 +17,8 @@ pub(crate) struct TextBoxProps<'a> {
     value: Option<&'a str>,
     #[props(!optional)]
     size: Option<&'a str>,
+    #[props(!optional)]
+    max_length: Option<&'a str>,
     #[props(!optional)]
     width: Option<&'a str>,
     #[props(!optional)]
@@ -48,12 +51,18 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
 
     let max_len = cx
         .props
-        .size
+        .max_length
         .as_ref()
         .and_then(|s| s.parse().ok())
         .unwrap_or(usize::MAX);
 
-    let width = cx.props.width.unwrap_or("10px");
+    let width = cx
+        .props
+        .width
+        .map(|s| s.to_string())
+        // px is the same as em in tui
+        .or(cx.props.size.map(|s| s.to_string() + "px"))
+        .unwrap_or("10px".to_string());
     let height = cx.props.height.unwrap_or("3px");
 
     // don't draw a border unless there is enough space
@@ -82,6 +91,9 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 align_items: "left",
 
                 onkeydown: move |k| {
+                    if k.key_code == KeyCode::Enter {
+                        return;
+                    }
                     let mut text = text_ref.write();
                     cursor.write().handle_input(&*k, &mut text, max_len);
                     if let Some(input_handler) = &cx.props.raw_oninput{
