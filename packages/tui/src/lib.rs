@@ -118,7 +118,7 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
+            let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
             let mut updated = true;
 
             loop {
@@ -221,7 +221,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = AnyMap::new();
                     any_map.insert(stretch.clone());
-                    let _to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
+                    to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
                 }
             }
 
