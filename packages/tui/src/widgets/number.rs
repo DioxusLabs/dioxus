@@ -1,3 +1,4 @@
+use crossterm::{execute, cursor::MoveTo};
 use dioxus_core as dioxus;
 use dioxus_core::prelude::fc_to_builder;
 use dioxus_core::VNode;
@@ -8,7 +9,9 @@ use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 use dioxus_native_core::utils::cursor::{Cursor, Pos};
-use std::collections::HashMap;
+use stretch2::geometry::Point;
+use std::{collections::HashMap, io::stdout};
+use crate::Query;
 
 use crate::widgets::Input;
 
@@ -29,6 +32,9 @@ pub(crate) struct NumbericInputProps<'a> {
 }
 #[allow(non_snake_case)]
 pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a> {
+    let tui_query: Query = cx.consume_context().unwrap();
+    let tui_query_clone = tui_query.clone();
+
     let text_ref = use_ref(&cx, || {
         if let Some(intial_text) = cx.props.value {
             intial_text.to_string()
@@ -47,9 +53,9 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
         text_after_first_cursor.split_at(end_highlight - start_highlight);
 
     let text_highlighted = if text_highlighted.is_empty() {
-        String::new()
+        ""
     } else {
-        text_highlighted.to_string() + "|"
+        text_highlighted
     };
 
     let max_len = cx
@@ -119,6 +125,20 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                         let mut text = text_ref.write();
                         cursor.write().handle_input(&*k, &mut text, max_len);
                         update(text.clone());
+
+                        let node = tui_query.get(cx.root_node().mounted_id());
+                        let Point{ x, y } = node.pos().unwrap();
+    
+                        let Pos { col, row } = cursor.read().start;
+                        let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
+                        if let Ok(pos) = crossterm::cursor::position() {
+                            if pos != (x, y){
+                                execute!(stdout(), MoveTo(x, y)).unwrap();
+                            }
+                        }
+                        else{
+                            execute!(stdout(), MoveTo(x, y)).unwrap();
+                        }
                     }
                     else{
                         match k.key_code {
@@ -139,9 +159,8 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                             new.col -= 1;
                             new.row -= 1;
                         }
-                        let mut cursor = cursor.write();
-                        if new != cursor.start {
-                            cursor.end = Some(new);
+                        if new != cursor.read().start {
+                            cursor.write().end = Some(new);
                         }
                     }
                 },
@@ -151,8 +170,22 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                         new.col -= 1;
                         new.row -= 1;
                     }
+                    new.realize_col(&text_ref.read());
                     cursor.set(Cursor::from_start(new));
                     dragging.set(true);
+                    let node = tui_query_clone.get(cx.root_node().mounted_id());
+                    let Point{ x, y } = node.pos().unwrap();
+                    
+                    let Pos { col, row } = cursor.read().start;
+                    let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
+                    if let Ok(pos) = crossterm::cursor::position() {
+                        if pos != (x, y){
+                            execute!(stdout(), MoveTo(x, y)).unwrap();
+                        }
+                    }
+                    else{
+                        execute!(stdout(), MoveTo(x, y)).unwrap();
+                    }
                 },
                 onmouseup: move |_| {
                     dragging.set(false);
@@ -163,11 +196,14 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 onmouseenter: move |_| {
                     dragging.set(false);
                 },
+                onfocusout: |_| {
+                    execute!(stdout(), MoveTo(0, 1000)).unwrap();
+                },
 
-                "{text_before_first_cursor}|"
+                "{text_before_first_cursor}"
 
                 span{
-                    background_color: "rgba(100, 100, 100, 50%)",
+                    background_color: "rgba(255, 255, 255, 50%)",
 
                     "{text_highlighted}"
                 }

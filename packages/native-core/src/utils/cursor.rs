@@ -78,7 +78,7 @@ impl Pos {
     }
 
     // the column can be more than the line length, cap it
-    fn realize_col(&mut self, rope: &str) {
+    pub fn realize_col(&mut self, rope: &str) {
         self.col = self.col(rope);
     }
 }

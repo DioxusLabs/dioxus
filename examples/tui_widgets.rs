@@ -33,7 +33,7 @@ fn app(cx: Scope) -> Element {
                 },
                 height: "3px",
                 width: "13px",
-                size: "11",
+                maxlength: "11",
             }
             Input{
                 oninput: |data: FormData| if &data.value == "10"{
@@ -48,7 +48,7 @@ fn app(cx: Scope) -> Element {
                     bg_green.set(true);
                 },
                 r#type: "number",
-                size: "4",
+                maxlength: "4",
             }
             Input{
                 onclick: |_: FormData| bg_green.set(false),
@@ -56,7 +56,6 @@ fn app(cx: Scope) -> Element {
                 value: "reset",
                 height: "3px",
                 width: "7px",
-                size: "10",
             }
         }
     })

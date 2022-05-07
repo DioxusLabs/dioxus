@@ -1,6 +1,7 @@
 use anyhow::Result;
 use anymap::AnyMap;
 use crossterm::{
+    cursor::{MoveTo, RestorePosition, SavePosition, Show},
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -16,7 +17,7 @@ use futures::{
 use query::Query;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{io, time::Duration};
+use std::time::Duration;
 use stretch2::Stretch;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
@@ -34,6 +35,7 @@ mod widget;
 pub mod widgets;
 
 pub use config::*;
+pub use crossterm;
 pub use hooks::*;
 pub use stretch2::geometry::{Point, Size};
 pub use stretch2::result::Layout;
@@ -123,8 +125,14 @@ fn render_vdom(
             let mut terminal = (!cfg.headless).then(|| {
                 enable_raw_mode().unwrap();
                 let mut stdout = std::io::stdout();
-                execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
-                let backend = CrosstermBackend::new(io::stdout());
+                execute!(
+                    stdout,
+                    EnterAlternateScreen,
+                    EnableMouseCapture,
+                    MoveTo(0, 1000)
+                )
+                .unwrap();
+                let backend = CrosstermBackend::new(stdout);
                 Terminal::new(backend).unwrap()
             });
             if let Some(terminal) = &mut terminal {
@@ -164,6 +172,7 @@ fn render_vdom(
                             .unwrap();
                     }
                     if let Some(terminal) = &mut terminal {
+                        execute!(terminal.backend_mut(), SavePosition).unwrap();
                         terminal.draw(|frame| {
                             let rdom = rdom.borrow();
                             // size is guaranteed to not change when rendering
@@ -171,6 +180,7 @@ fn render_vdom(
                             let root = &rdom[0];
                             render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
                         })?;
+                        execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
                     } else {
                         let rdom = rdom.borrow();
                         resize(
@@ -251,7 +261,6 @@ fn render_vdom(
                     LeaveAlternateScreen,
                     DisableMouseCapture
                 )?;
-                terminal.show_cursor()?;
             }
 
             Ok(())
