@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pos {
-    col: usize,
-    row: usize,
+    pub col: usize,
+    pub row: usize,
 }
 
 impl Pos {

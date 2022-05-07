@@ -28,12 +28,12 @@ fn app(cx: Scope) -> Element {
                 width: "3px",
             }
             Input{
-                oninput: |data: FormData| if &data.value == "good"{
+                oninput: |data: FormData| if &data.value == "hello world"{
                     bg_green.set(true);
                 },
                 height: "3px",
-                width: "6px",
-                size: "4",
+                width: "13px",
+                size: "11",
             }
             Input{
                 oninput: |data: FormData| if &data.value == "10"{

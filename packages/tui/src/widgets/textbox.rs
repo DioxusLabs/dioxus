@@ -5,7 +5,7 @@ use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
-use dioxus_native_core::utils::cursor::Cursor;
+use dioxus_native_core::utils::cursor::{Cursor, Pos};
 use std::collections::HashMap;
 
 #[derive(Props)]
@@ -31,6 +31,7 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
         }
     });
     let cursor = use_ref(&cx, || Cursor::default());
+    let dragging = use_state(&cx, || false);
 
     let text = text_ref.read().clone();
     let start_highlight = cursor.read().first().idx(&text);
@@ -89,6 +90,38 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                             values: HashMap::new(),
                         });
                     }
+                },
+
+                onmousemove: move |evt| {
+                    if *dragging.get() {
+                        let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
+                        if border != "none" {
+                            new.col -= 1;
+                            new.row -= 1;
+                        }
+                        let mut cursor = cursor.write();
+                        if new != cursor.start {
+                            cursor.end = Some(new);
+                        }
+                    }
+                },
+                onmousedown: move |evt| {
+                    let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
+                    if border != "none" {
+                        new.col -= 1;
+                        new.row -= 1;
+                    }
+                    cursor.set(Cursor::from_start(new));
+                    dragging.set(true);
+                },
+                onmouseup: move |_| {
+                    dragging.set(false);
+                },
+                onmouseleave: move |_| {
+                    dragging.set(false);
+                },
+                onmouseenter: move |_| {
+                    dragging.set(false);
                 },
 
                 "{text_before_first_cursor}|"
