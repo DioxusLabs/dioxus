@@ -357,13 +357,13 @@ impl InnerInputState {
 
             {
                 // click
-                if mouse_data.button == 0 {
+                if mouse_data.button == 0 && released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("click") {
                         let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                         let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                        if currently_contains && released {
+                        if currently_contains {
                             try_create_event(
                                 "click",
                                 Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -379,13 +379,13 @@ impl InnerInputState {
 
             {
                 // contextmenu
-                if mouse_data.button == 2 {
+                if mouse_data.button == 2 && released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("contextmenu") {
                         let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                         let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                        if currently_contains && released {
+                        if currently_contains {
                             try_create_event(
                                 "contextmenu",
                                 Arc::new(prepare_mouse_data(mouse_data, node_layout)),
