@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState, AttributeValue},
+    innerlude::{AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -356,7 +356,6 @@ pub struct Attribute<'a> {
     /// Used in Dioxus to denote "style" tags and other attribute groups.
     pub namespace: Option<&'static str>,
 }
-
 
 /// An event listener.
 /// IE onclick, onkeydown, etc
