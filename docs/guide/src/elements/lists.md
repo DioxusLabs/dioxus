@@ -102,7 +102,7 @@ For keen Rustaceans: notice how we don't actually call `collect` on the name lis
 
 ## Keeping list items in order with `key`
 
-The examples above demonstrate the power of iterators in `rsx!` but all share the same issue: if your array items move (e.g. due to sorting), get inserted, or get deleted, Dioxus has no way of knowing what happened. This can cause Elements to be unnecessarily removed, changed and rebuilt when all that was needed was to change their position – this is inneficient.
+The examples above demonstrate the power of iterators in `rsx!` but all share the same issue: if your array items move (e.g. due to sorting), get inserted, or get deleted, Dioxus has no way of knowing what happened. This can cause Elements to be unnecessarily removed, changed and rebuilt when all that was needed was to change their position – this is inefficient.
 
 To solve this problem, each item in the list must be **uniquely identifiable**. You can achieve this by giving it a unique, fixed "key". In Dioxus, a key is a string that identifies an item among others in the list.
 
