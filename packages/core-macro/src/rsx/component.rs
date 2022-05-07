@@ -141,7 +141,7 @@ impl ToTokens for Component {
             }
             None => {
                 let mut toks = match prop_gen_args {
-                    Some(gen_args) => quote! { fc_to_builder::#gen_args(#name) },
+                    Some(gen_args) => quote! { fc_to_builder #gen_args(#name) },
                     None => quote! { fc_to_builder(#name) },
                 };
                 for field in &self.body {

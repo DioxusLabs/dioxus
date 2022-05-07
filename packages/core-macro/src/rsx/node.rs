@@ -65,10 +65,10 @@ impl Parse for BodyNode {
             // ::component ()
             // crate::component{}
             // crate::component()
-            // Input<'_, String> {}
-            // crate::Input<'_, i32> {}
+            // Input::<InputProps<'_, i32> {}
+            // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) || body_stream.peek(token::Paren) {
-                // this syntax is not allowd:
+                // NOTE: this syntax is not allowd:
                 // Div () -> comp
                 if path.segments.len() == 1 && body_stream.peek(token::Paren) {
                     let com_ident = &path.segments.iter().next().unwrap().ident;
