@@ -24,15 +24,15 @@ fn app(cx: Scope) -> Element {
                 },
                 r#type: "checkbox",
                 value: "good",
-                height: "1px",
+                height: "3px",
                 width: "3px",
             }
             Input{
                 oninput: |data: FormData| if &data.value == "good"{
                     bg_green.set(true);
                 },
-                height: "1px",
-                width: "30px",
+                height: "3px",
+                width: "6px",
                 size: "4",
             }
             Input{
@@ -54,8 +54,8 @@ fn app(cx: Scope) -> Element {
                 onclick: |_: FormData| bg_green.set(false),
                 r#type: "button",
                 value: "reset",
-                height: "1px",
-                width: "30px",
+                height: "3px",
+                width: "7px",
                 size: "10",
             }
         }

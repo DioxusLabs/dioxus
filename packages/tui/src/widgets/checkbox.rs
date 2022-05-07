@@ -41,7 +41,11 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
             " "
         }
     };
-    let border_style = if single_char { "none" } else { "solid" };
+    let border_style = if width == "1px" || height == "1px" {
+        "none"
+    } else {
+        "solid"
+    };
     let update = move || {
         let new_state = !state.get();
         if let Some(callback) = cx.props.raw_oninput {

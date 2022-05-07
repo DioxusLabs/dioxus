@@ -27,7 +27,7 @@ pub(crate) fn Button<'a>(cx: Scope<'a, ButtonProps>) -> Element<'a> {
     let width = cx.props.width.unwrap_or("1px");
     let height = cx.props.height.unwrap_or("1px");
 
-    let single_char = width == "1px" && height == "1px";
+    let single_char = width == "1px" || height == "1px";
     let text = if let Some(v) = cx.props.value { v } else { "" };
     let border_style = if single_char { "none" } else { "solid" };
     let update = || {

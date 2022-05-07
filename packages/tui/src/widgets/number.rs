@@ -84,6 +84,16 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
             });
         }
     };
+    let increase = move || {
+        let mut text = text_ref.write();
+        *text = (text.parse::<f64>().unwrap_or(0.0) + 1.0).to_string();
+        update(text.clone());
+    };
+    let decrease = move || {
+        let mut text = text_ref.write();
+        *text = (text.parse::<f64>().unwrap_or(0.0) - 1.0).to_string();
+        update(text.clone());
+    };
 
     cx.render({
         rsx! {
@@ -104,14 +114,10 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     else{
                         match k.key_code {
                             KeyCode::UpArrow =>{
-                                let mut text = text_ref.write();
-                                *text = (text.parse::<f64>().unwrap_or(0.0) + 1.0).to_string();
-                                update(text.clone());
+                                increase();
                             }
                             KeyCode::DownArrow =>{
-                                let mut text = text_ref.write();
-                                *text = (text.parse::<f64>().unwrap_or(0.0) - 1.0).to_string();
-                                update(text.clone());
+                                decrease();
                             }
                             _ => ()
                         }
@@ -134,11 +140,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     Input{
                         r#type: "button",
                         onclick: move |_| {
-                            let mut text = text_ref.write();
-                            if let Ok(value) = text.parse::<f64>(){
-                                *text = (value - 1.0).to_string();
-                            }
-                            update(text.clone());
+                            decrease();
                         }
                         value: "<",
                     }
@@ -146,11 +148,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                     Input{
                         r#type: "button",
                         onclick: move |_| {
-                            let mut text = text_ref.write();
-                            if let Ok(value) = text.parse::<f64>(){
-                                *text = (value + 1.0).to_string();
-                            }
-                            update(text.clone());
+                            increase();
                         }
                         value: ">",
                     }
