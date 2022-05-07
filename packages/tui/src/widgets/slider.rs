@@ -75,11 +75,11 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                 match event.key_code {
                     KeyCode::LeftArrow => {
                         value_state.set((current_value - step).max(min).min(max));
-                        update(value_state.get().to_string());
+                        update(value_state.current().to_string());
                     }
                     KeyCode::RightArrow => {
                         value_state.set((current_value + step).max(min).min(max));
-                        update(value_state.get().to_string());
+                        update(value_state.current().to_string());
                     }
                     _ => ()
                 }
@@ -90,7 +90,7 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                     let node = tui_query.get(cx.root_node().mounted_id());
                     let width = node.size().unwrap().width;
                     value_state.set(min + size*(mouse.offset_x as f32) / width as f32);
-                    update(value_state.get().to_string());
+                    update(value_state.current().to_string());
                 }
             },
             div{
