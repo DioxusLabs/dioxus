@@ -376,83 +376,92 @@ impl InnerInputState {
                 }
             }
 
-            // mouseup
-            if released {
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("mouseup") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
-
-                    if currently_contains {
-                        try_create_event(
-                            "mouseup",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
-                            &mut will_bubble,
-                            resolved_events,
-                            node,
-                            dom,
-                        );
-                    }
-                }
-            }
-
-            // click
-            if released && mouse_data.button == 0 {
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("click") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
-
-                    if currently_contains {
-                        try_create_event(
-                            "click",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
-                            &mut will_bubble,
-                            resolved_events,
-                            node,
-                            dom,
-                        );
-                    }
-                }
-            }
-
-            // contextmenu
-            if released && mouse_data.button == 2 {
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("contextmenu") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
-
-                    if currently_contains {
-                        try_create_event(
-                            "contextmenu",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
-                            &mut will_bubble,
-                            resolved_events,
-                            node,
-                            dom,
-                        );
-                    }
-                }
-            }
-
-            // wheel
-            if let Some(w) = wheel_data {
-                if wheel_delta != 0.0 {
+            {
+                // mouseup
+                if released {
                     let mut will_bubble = FxHashSet::default();
-                    for node in dom.get_listening_sorted("wheel") {
+                    for node in dom.get_listening_sorted("mouseup") {
                         let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                         let currently_contains = layout_contains_point(node_layout, new_pos);
 
                         if currently_contains {
                             try_create_event(
-                                "wheel",
-                                Arc::new(w.clone()),
+                                "mouseup",
+                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
                                 dom,
                             );
+                        }
+                    }
+                }
+            }
+
+            {
+                // click
+                if mouse_data.button == 0 && released {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("click") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
+
+                        if currently_contains {
+                            try_create_event(
+                                "click",
+                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                dom,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // contextmenu
+                if mouse_data.button == 2 && released {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("contextmenu") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
+
+                        if currently_contains {
+                            try_create_event(
+                                "contextmenu",
+                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                dom,
+                            );
+                        }
+                    }
+                }
+            }
+
+            {
+                // wheel
+                if let Some(w) = wheel_data {
+                    if wheel_delta != 0.0 {
+                        let mut will_bubble = FxHashSet::default();
+                        for node in dom.get_listening_sorted("wheel") {
+                            let node_layout =
+                                layout.layout(node.state.layout.node.unwrap()).unwrap();
+                            let currently_contains = layout_contains_point(node_layout, new_pos);
+
+                            if currently_contains {
+                                try_create_event(
+                                    "wheel",
+                                    Arc::new(w.clone()),
+                                    &mut will_bubble,
+                                    resolved_events,
+                                    node,
+                                    dom,
+                                );
+                            }
                         }
                     }
                 }
