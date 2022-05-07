@@ -320,7 +320,7 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && clicked {
+                    if currently_contains {
                         try_create_event(
                             "mousedown",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
