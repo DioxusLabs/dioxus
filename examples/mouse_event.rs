@@ -49,8 +49,8 @@ fn app(cx: Scope) -> Element {
             div {"Page coordinates: {page_coordinates}"},
             div {"Screen coordinates: {screen_coordinates}"},
             div {"Element coordinates: {element_coordinates}"},
-            div {"{buttons}"},
-            div {"{modifiers}"},
+            div {"Buttons: {buttons}"},
+            div {"Modifiers: {modifiers}"},
         }
     ))
 }
