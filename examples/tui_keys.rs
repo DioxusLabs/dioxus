@@ -1,5 +1,7 @@
 use dioxus::events::WheelEvent;
 use dioxus::prelude::*;
+use dioxus_html::geometry::ScreenPoint;
+use dioxus_html::input::MouseButtonSet;
 use dioxus_html::on::{KeyboardEvent, MouseEvent};
 use dioxus_html::KeyCode;
 
@@ -9,9 +11,9 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let key = use_state(&cx, || "".to_string());
-    let mouse = use_state(&cx, || (0, 0));
+    let mouse = use_state(&cx, || ScreenPoint::zero());
     let count = use_state(&cx, || 0);
-    let buttons = use_state(&cx, || 0);
+    let buttons = use_state(&cx, || MouseButtonSet::empty());
     let mouse_clicked = use_state(&cx, || false);
 
     cx.render(rsx! {
@@ -36,21 +38,21 @@ fn app(cx: Scope) -> Element {
                 count.set(count + evt.data.delta_y as i64);
             },
             ondrag: move |evt: MouseEvent| {
-                mouse.set((evt.data.screen_x, evt.data.screen_y));
+                mouse.set(evt.data.screen_coordinates());
             },
             onmousedown: move |evt: MouseEvent| {
-                mouse.set((evt.data.screen_x, evt.data.screen_y));
-                buttons.set(evt.data.buttons);
+                mouse.set(evt.data.screen_coordinates());
+                buttons.set(evt.data.held_buttons());
                 mouse_clicked.set(true);
             },
             onmouseup: move |evt: MouseEvent| {
-                buttons.set(evt.data.buttons);
+                buttons.set(evt.data.held_buttons());
                 mouse_clicked.set(false);
             },
 
             "count: {count:?}",
             "key: {key}",
-            "mouse buttons: {buttons:b}",
+            "mouse buttons: {buttons:?}",
             "mouse pos: {mouse:?}",
             "mouse button pressed: {mouse_clicked}"
         }
