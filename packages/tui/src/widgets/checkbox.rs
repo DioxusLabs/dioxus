@@ -19,11 +19,13 @@ pub(crate) struct CheckBoxProps<'a> {
     width: Option<&'a str>,
     #[props(!optional)]
     height: Option<&'a str>,
+    #[props(!optional)]
+    checked: Option<&'a str>,
 }
 
 #[allow(non_snake_case)]
 pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
-    let state = use_state(&cx, || false);
+    let state = use_state(&cx, || cx.props.checked.filter(|&c| c == "true").is_some());
     let width = cx.props.width.unwrap_or("1px");
     let height = cx.props.height.unwrap_or("1px");
 

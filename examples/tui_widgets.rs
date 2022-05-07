@@ -29,6 +29,7 @@ fn app(cx: Scope) -> Element {
                 value: "good",
                 height: "3px",
                 width: "3px",
+                checked: "true",
             }
             Input{
                 oninput: |data: FormData| if &data.value == "hello world"{

@@ -26,6 +26,7 @@ pub struct InputProps<'a> {
     min: Option<&'a str>,
     max: Option<&'a str>,
     step: Option<&'a str>,
+    checked: Option<&'a str>,
 }
 
 #[allow(non_snake_case)]
@@ -38,6 +39,7 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
                     value: cx.props.value,
                     width: cx.props.width,
                     height: cx.props.height,
+                    checked: cx.props.checked,
                 }
             }
         }
