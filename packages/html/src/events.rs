@@ -9,7 +9,6 @@ pub mod on {
     use crate::input::{
         decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
     };
-    use enumset::EnumSet;
     use keyboard_types::Modifiers;
     use std::collections::HashMap;
 
@@ -570,9 +569,12 @@ pub mod on {
     }
 
     impl MouseData {
+        /// Construct MouseData with the specified properties
+        ///
+        /// Note: the current implementation truncates coordinates. In the future, when we change the internal representation, it may also support a fractional part.
         pub fn new(
             coordinates: Coordinates,
-            trigger_button: MouseButton,
+            trigger_button: Option<MouseButton>,
             held_buttons: MouseButtonSet,
             modifiers: Modifiers,
         ) -> Self {
@@ -593,7 +595,7 @@ pub mod on {
                 meta_key,
                 shift_key,
 
-                button: trigger_button.into_web_code(),
+                button: trigger_button.map_or(0, |b| b.into_web_code()),
                 buttons: encode_mouse_button_set(held_buttons),
 
                 client_x,
@@ -670,9 +672,9 @@ pub mod on {
         ///
         // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
         /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
-        pub fn trigger_button(&self) -> MouseButton {
+        pub fn trigger_button(&self) -> Option<MouseButton> {
             #[allow(deprecated)]
-            MouseButton::from_web_code(self.button)
+            Some(MouseButton::from_web_code(self.button))
         }
     }
 

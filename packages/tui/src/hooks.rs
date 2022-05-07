@@ -4,6 +4,10 @@ use crossterm::event::{
 use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
+use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use dioxus_html::input::keyboard_types::Modifiers;
+use dioxus_html::input::MouseButton as DioxusMouseButton;
+use dioxus_html::input::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::{on::*, KeyCode};
 use std::{
     any::Any,
@@ -588,40 +592,45 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
             let ctrl = m.modifiers.contains(KeyModifiers::CONTROL);
             let meta = false;
 
-            let get_mouse_data = |b| {
-                let buttons = match b {
-                    None => 0,
-                    Some(MouseButton::Left) => 1,
-                    Some(MouseButton::Right) => 2,
-                    Some(MouseButton::Middle) => 4,
+            let get_mouse_data = |crossterm_button: Option<MouseButton>| {
+                let button = crossterm_button.map(|b| match b {
+                    MouseButton::Left => DioxusMouseButton::Primary,
+                    MouseButton::Right => DioxusMouseButton::Secondary,
+                    MouseButton::Middle => DioxusMouseButton::Auxiliary,
+                });
+
+                let button_set = match button {
+                    None => DioxusMouseButtons::empty(),
+                    Some(button) => DioxusMouseButtons::only(button),
                 };
-                let button_state = match b {
-                    None => 0,
-                    Some(MouseButton::Left) => 0,
-                    Some(MouseButton::Middle) => 1,
-                    Some(MouseButton::Right) => 2,
-                };
+
                 // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
 
                 // The `offset`, `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
                 // todo?
                 // But then, MDN defines them in terms of pixels, yet crossterm provides only row/column, and it might not be possible to get pixels. So we can't get 100% consistency anyway.
-                EventData::Mouse(MouseData {
-                    alt_key: alt,
-                    button: button_state,
-                    buttons,
-                    client_x: x,
-                    client_y: y,
-                    ctrl_key: ctrl,
-                    meta_key: meta,
-                    offset_x: x,
-                    offset_y: y,
-                    page_x: x,
-                    page_y: y,
-                    screen_x: x,
-                    screen_y: y,
-                    shift_key: shift,
-                })
+                let coordinates = Coordinates::new(
+                    ScreenPoint::new(x, y),
+                    ClientPoint::new(x, y),
+                    ElementPoint::new(x, y),
+                    PagePoint::new(x, y),
+                );
+
+                let mut modifiers = Modifiers::empty();
+                if shift {
+                    modifiers.insert(Modifiers::SHIFT);
+                }
+                if ctrl {
+                    modifiers.insert(Modifiers::CONTROL);
+                }
+                if meta {
+                    modifiers.insert(Modifiers::META);
+                }
+                if alt {
+                    modifiers.insert(Modifiers::ALT);
+                }
+
+                EventData::Mouse(MouseData::new(coordinates, button, button_set, modifiers))
             };
 
             let get_wheel_data = |up| {
