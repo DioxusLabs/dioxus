@@ -200,6 +200,22 @@ impl InnerInputState {
                     element: Some(id),
                     data: Arc::new(FocusData {}),
                 });
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name: "focusin",
+                    element: Some(id),
+                    data: Arc::new(FocusData {}),
+                });
+            }
+            if let Some(id) = old_focus {
+                resolved_events.push(UserEvent {
+                    scope_id: None,
+                    priority: EventPriority::Medium,
+                    name: "focusout",
+                    element: Some(id),
+                    data: Arc::new(FocusData {}),
+                });
             }
         }
 
