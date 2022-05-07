@@ -1,8 +1,11 @@
 use std::fmt::Formatter;
 
+/// Possible values for an attribute
 // trying to keep values at 3 bytes
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
 #[derive(Clone, Debug, PartialEq)]
+#[allow(missing_docs)]
 pub enum AttributeValue<'a> {
     Text(&'a str),
     Float32(f32),
@@ -25,6 +28,8 @@ pub enum AttributeValue<'a> {
     Any(ArbitraryAttributeValue<'a>),
 }
 
+// todo
+#[allow(missing_docs)]
 impl<'a> AttributeValue<'a> {
     pub fn is_truthy(&self) -> bool {
         match self {
@@ -112,6 +117,8 @@ impl<'de, 'a> serde::Deserialize<'de> for ArbitraryAttributeValue<'a> {
     }
 }
 
+// todo
+#[allow(missing_docs)]
 impl<'a> AttributeValue<'a> {
     pub fn as_text(&self) -> Option<&'a str> {
         match self {
