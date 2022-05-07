@@ -17,10 +17,13 @@ fn app(cx: Scope) -> Element {
             width: "100%",
             background_color: "{color}",
             flex_direction: "column",
+            align_items: "center",
 
             Input{
                 oninput: |data: FormData| if &data.value == "good"{
                     bg_green.set(true);
+                } else{
+                    bg_green.set(false);
                 },
                 r#type: "checkbox",
                 value: "good",
@@ -30,22 +33,32 @@ fn app(cx: Scope) -> Element {
             Input{
                 oninput: |data: FormData| if &data.value == "hello world"{
                     bg_green.set(true);
+                } else{
+                    bg_green.set(false);
                 },
                 height: "3px",
                 width: "13px",
                 maxlength: "11",
             }
             Input{
-                oninput: |data: FormData| if &data.value == "10"{
-                    bg_green.set(true);
+                oninput: |data: FormData| {
+                    if (data.value.parse::<f32>().unwrap() - 40.0).abs() < 5.0 {
+                        bg_green.set(true);
+                    } else{
+                        bg_green.set(false);
+                    }
                 },
                 r#type: "range",
                 min: "20",
                 max: "80",
             }
             Input{
-                oninput: |data: FormData| if &data.value == "10"{
-                    bg_green.set(true);
+                oninput: |data: FormData| {
+                    if data.value == "10"{
+                        bg_green.set(true);
+                    } else{
+                        bg_green.set(false);
+                    }
                 },
                 r#type: "number",
                 maxlength: "4",

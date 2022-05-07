@@ -116,9 +116,6 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                 width: "{width}",
                 height: "{height}",
                 border_style: "{border}",
-                display: "flex",
-                flex_direction: "row",
-                align_items: "left",
 
                 onkeydown: move |k| {
                     if matches!(k.key_code, KeyCode::LeftArrow | KeyCode::RightArrow | KeyCode::Backspace | KeyCode::Period | KeyCode::Dash) || k.key.chars().all(|c| c.is_numeric()) {
@@ -160,7 +157,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
                         }
                         // textboxs are only one line tall
                         new.row = 0;
-                        
+
                         if new != cursor.read().start {
                             cursor.write().end = Some(new);
                         }
