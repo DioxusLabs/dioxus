@@ -1,20 +1,28 @@
+//! Geometry primitives for representing e.g. mouse events
+
+/// A re-export of euclid, which we use for geometry primitives
 pub use euclid;
+
 use euclid::*;
 
 /// Coordinate space relative to the screen
 pub struct ScreenSpace;
+/// A point in ScreenSpace
 pub type ScreenPoint = Point2D<f64, ScreenSpace>;
 
 /// Coordinate space relative to the viewport
 pub struct ClientSpace;
+/// A point in ClientSpace
 pub type ClientPoint = Point2D<f64, ClientSpace>;
 
 /// Coordinate space relative to an element
 pub struct ElementSpace;
+/// A point in ElementSpace
 pub type ElementPoint = Point2D<f64, ElementSpace>;
 
 /// Coordinate space relative to the page
 pub struct PageSpace;
+/// A point in PageSpace
 pub type PagePoint = Point2D<f64, PageSpace>;
 
 /// Coordinates of a point in the app's interface

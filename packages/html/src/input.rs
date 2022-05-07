@@ -1,18 +1,8 @@
+//! Data structures representing user input, such as modifier keys and mouse buttons
 use enumset::{EnumSet, EnumSetType};
 
-// note: EnumSetType also derives Copy and Clone for some reason
-/// A modifier key, such as Alt or Ctrl
-#[derive(EnumSetType, Debug)]
-pub enum Modifier {
-    Alt,
-    Ctrl,
-    /// The meta key (windows key, or command key)
-    Meta,
-    Shift,
-}
-
-/// A set of modifier keys
-pub type ModifierSet = EnumSet<Modifier>;
+/// A re-export of keyboard_types
+pub use keyboard_types;
 
 /// A mouse button type (such as Primary/Secondary)
 // note: EnumSetType also derives Copy and Clone for some reason

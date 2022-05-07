@@ -3,9 +3,12 @@ use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
 
 pub mod on {
+    //! Input events and associated data
+
     use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
-    use crate::input::{Modifier, ModifierSet, MouseButton, MouseButtonSet};
+    use crate::input::{MouseButton, MouseButtonSet};
     use enumset::EnumSet;
+    use keyboard_types::Modifiers;
     use std::collections::HashMap;
 
     use super::*;
@@ -593,26 +596,26 @@ pub mod on {
         }
 
         /// The set of modifier keys which were pressed when the event occurred
-        pub fn modifiers(&self) -> ModifierSet {
-            let mut set = EnumSet::empty();
+        pub fn modifiers(&self) -> Modifiers {
+            let mut modifiers = Modifiers::empty();
 
             #[allow(deprecated)]
             {
                 if self.alt_key {
-                    set |= Modifier::Alt;
+                    modifiers.insert(Modifiers::ALT);
                 }
                 if self.ctrl_key {
-                    set |= Modifier::Ctrl;
+                    modifiers.insert(Modifiers::CONTROL);
                 }
                 if self.meta_key {
-                    set |= Modifier::Meta;
+                    modifiers.insert(Modifiers::META);
                 }
                 if self.shift_key {
-                    set |= Modifier::Shift;
+                    modifiers.insert(Modifiers::SHIFT);
                 }
             }
 
-            set
+            modifiers
         }
 
         /// The set of mouse buttons which were held when the event occurred.
