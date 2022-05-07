@@ -2,6 +2,7 @@ use std::fmt::Formatter;
 
 // trying to keep values at 3 bytes
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
 #[derive(Clone, Debug, PartialEq)]
 pub enum AttributeValue<'a> {
     Text(&'a str),
