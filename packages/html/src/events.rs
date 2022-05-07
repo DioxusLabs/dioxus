@@ -5,8 +5,10 @@ use dioxus_core::*;
 pub mod on {
     //! Input events and associated data
 
-    use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
-    use crate::input::{MouseButton, MouseButtonSet};
+    use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+    use crate::input::{
+        decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
+    };
     use enumset::EnumSet;
     use keyboard_types::Modifiers;
     use std::collections::HashMap;
@@ -502,6 +504,9 @@ pub mod on {
     pub type MouseEvent = UiEvent<MouseData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Clone)]
+    /// Data associated with a mouse event
+    ///
+    /// Do not use the deprecated fields; they may change or become private in the future.
     pub struct MouseData {
         /// True if the alt key was down when the mouse event was fired.
         #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
@@ -565,6 +570,43 @@ pub mod on {
     }
 
     impl MouseData {
+        pub fn new(
+            coordinates: Coordinates,
+            trigger_button: MouseButton,
+            held_buttons: MouseButtonSet,
+            modifiers: Modifiers,
+        ) -> Self {
+            let alt_key = modifiers.contains(Modifiers::ALT);
+            let ctrl_key = modifiers.contains(Modifiers::CONTROL);
+            let meta_key = modifiers.contains(Modifiers::META);
+            let shift_key = modifiers.contains(Modifiers::SHIFT);
+
+            let [client_x, client_y]: [i32; 2] = coordinates.client().cast().into();
+            let [offset_x, offset_y]: [i32; 2] = coordinates.element().cast().into();
+            let [page_x, page_y]: [i32; 2] = coordinates.page().cast().into();
+            let [screen_x, screen_y]: [i32; 2] = coordinates.screen().cast().into();
+
+            #[allow(deprecated)]
+            Self {
+                alt_key,
+                ctrl_key,
+                meta_key,
+                shift_key,
+
+                button: trigger_button.into_web_code(),
+                buttons: encode_mouse_button_set(held_buttons),
+
+                client_x,
+                client_y,
+                offset_x,
+                offset_y,
+                page_x,
+                page_y,
+                screen_x,
+                screen_y,
+            }
+        }
+
         /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
         ///
         /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
@@ -620,31 +662,8 @@ pub mod on {
 
         /// The set of mouse buttons which were held when the event occurred.
         pub fn held_buttons(&self) -> MouseButtonSet {
-            let mut set = EnumSet::empty();
-
-            // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
             #[allow(deprecated)]
-            {
-                if self.buttons & 0b1 != 0 {
-                    set |= MouseButton::Primary;
-                }
-                if self.buttons & 0b10 != 0 {
-                    set |= MouseButton::Secondary;
-                }
-                if self.buttons & 0b100 != 0 {
-                    set |= MouseButton::Auxiliary;
-                }
-                if self.buttons & 0b1000 != 0 {
-                    set |= MouseButton::Fourth;
-                }
-                if self.buttons & 0b10000 != 0 {
-                    set |= MouseButton::Fifth;
-                }
-                if self.buttons & (!0b11111) != 0 {
-                    set |= MouseButton::Unknown;
-                }
-            }
-            set
+            decode_mouse_button_set(self.buttons)
         }
 
         /// The mouse button that triggered the event

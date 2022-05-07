@@ -41,7 +41,80 @@ impl MouseButton {
             _ => MouseButton::Unknown,
         }
     }
+
+    /// Converts MouseButton into the corresponding button code
+    ///
+    /// MouseButton::Unknown will get mapped to -1
+    pub fn into_web_code(self) -> i16 {
+        match self {
+            MouseButton::Primary => 0,
+            // not a typo; auxiliary and secondary are swapped unlike in the `buttons` field.
+            // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button
+            MouseButton::Auxiliary => 1,
+            MouseButton::Secondary => 2,
+            MouseButton::Fourth => 3,
+            MouseButton::Fifth => 4,
+            MouseButton::Unknown => -1,
+        }
+    }
 }
 
 /// A set of mouse buttons
 pub type MouseButtonSet = EnumSet<MouseButton>;
+
+pub fn decode_mouse_button_set(code: u16) -> MouseButtonSet {
+    let mut set = EnumSet::empty();
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
+    #[allow(deprecated)]
+    {
+        if code & 0b1 != 0 {
+            set |= MouseButton::Primary;
+        }
+        if code & 0b10 != 0 {
+            set |= MouseButton::Secondary;
+        }
+        if code & 0b100 != 0 {
+            set |= MouseButton::Auxiliary;
+        }
+        if code & 0b1000 != 0 {
+            set |= MouseButton::Fourth;
+        }
+        if code & 0b10000 != 0 {
+            set |= MouseButton::Fifth;
+        }
+        if code & (!0b11111) != 0 {
+            set |= MouseButton::Unknown;
+        }
+    }
+
+    set
+}
+
+pub fn encode_mouse_button_set(set: MouseButtonSet) -> u16 {
+    let mut code = 0;
+
+    // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
+    {
+        if set.contains(MouseButton::Primary) {
+            code |= 0b1;
+        }
+        if set.contains(MouseButton::Secondary) {
+            code |= 0b10;
+        }
+        if set.contains(MouseButton::Auxiliary) {
+            code |= 0b100;
+        }
+        if set.contains(MouseButton::Fourth) {
+            code |= 0b1000;
+        }
+        if set.contains(MouseButton::Fifth) {
+            code |= 0b10000;
+        }
+        if set.contains(MouseButton::Unknown) {
+            code |= 0b100000;
+        }
+    }
+
+    code
+}
