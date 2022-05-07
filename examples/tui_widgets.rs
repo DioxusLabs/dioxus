@@ -78,7 +78,7 @@ fn app(cx: Scope) -> Element {
                 maxlength: "11",
             }
             Input{
-                onclick: |_: FormData| bg_green.set(false),
+                onclick: |_: FormData| bg_green.set(true),
                 r#type: "button",
                 value: "green",
                 height: "3px",
