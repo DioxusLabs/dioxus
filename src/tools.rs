@@ -13,10 +13,11 @@ use tokio::io::AsyncWriteExt;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tool {
     Binaryen,
+    Sass,
 }
 
 pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen"]
+    vec!["binaryen", "sass"]
 }
 
 pub fn app_path() -> PathBuf {
@@ -60,6 +61,7 @@ impl Tool {
     pub fn name(&self) -> &str {
         match self {
             Self::Binaryen => "binaryen",
+            Self::Sass => "sass",
         }
     }
 
@@ -67,6 +69,7 @@ impl Tool {
     pub fn bin_path(&self) -> &str {
         match self {
             Self::Binaryen => "bin",
+            Self::Sass => ".",
         }
     }
 
@@ -74,6 +77,17 @@ impl Tool {
     pub fn target_platform(&self) -> &str {
         match self {
             Self::Binaryen => {
+                if cfg!(target_os = "windows") {
+                    "windows"
+                } else if cfg!(target_os = "macos") {
+                    "macos"
+                } else if cfg!(target_os = "linux") {
+                    "linux"
+                } else {
+                    panic!("unsupported platformm");
+                }
+            }
+            Self::Sass => {
                 if cfg!(target_os = "windows") {
                     "windows"
                 } else if cfg!(target_os = "macos") {
@@ -96,6 +110,12 @@ impl Tool {
                     target = self.target_platform()
                 )
             }
+            Self::Sass => {
+                format!(
+                    "https://github.com/sass/dart-sass/releases/download/1.51.0/dart-sass-1.51.0-{target}-x64.tar.gz",
+                    target = self.target_platform()
+                )
+            }
         }
     }
 
@@ -103,6 +123,13 @@ impl Tool {
     pub fn extension(&self) -> &str {
         match self {
             Self::Binaryen => "tar.gz",
+            Self::Sass => {
+                if cfg!(target_os = "windows") {
+                    "zip"
+                } else {
+                    "tar.ge"
+                }
+            },
         }
     }
 
@@ -168,6 +195,9 @@ impl Tool {
                 } else {
                     command.to_string()
                 }
+            }
+            Tool::Sass => {
+                command.to_string()
             }
         };
 

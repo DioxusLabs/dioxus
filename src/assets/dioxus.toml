@@ -43,3 +43,6 @@ script = []
 # use binaryen.wasm-opt for output Wasm file
 # binaryen just will trigger in `web` platform
 binaryen = { wasm_opt = true }
+
+# use sass auto will auto check sass file and build it.
+sass = { auto = true }
