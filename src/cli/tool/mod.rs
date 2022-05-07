@@ -20,9 +20,9 @@ impl Tool {
             Tool::List {} => {
                 for item in tools::tool_list() {
                     if tools::Tool::from_str(item).unwrap().is_installed() {
-                        println!("{item} [installed]");
+                        println!("- {item} [installed]");
                     } else {
-                        println!("{item}");
+                        println!("- {item}");
                     }
                 }
             }

@@ -53,6 +53,7 @@ impl Tool {
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
             "binaryen" => Some(Self::Binaryen),
+            "sass" => Some(Self::Sass),
             _ => None,
         }
     }
@@ -128,7 +129,7 @@ impl Tool {
                 if cfg!(target_os = "windows") {
                     "zip"
                 } else {
-                    "tar.ge"
+                    "tar.gz"
                 }
             }
         }
@@ -159,7 +160,7 @@ impl Tool {
             let chunk = chunk_res.context("error reading chunk from download")?;
             let _ = file.write(chunk.as_ref()).await;
         }
-
+        // log::info!("temp file path: {:?}", temp_out);
         Ok(temp_out)
     }
 
@@ -170,10 +171,8 @@ impl Tool {
 
         let dir_name = if self == &Tool::Binaryen {
             "binaryen-version_105"
-        } else if self == &Tool::Sass {
-            "sass-version-1_51"
         } else {
-            ""
+            "dart-sass"
         };
 
         if self.extension() == "tar.gz" {
@@ -181,10 +180,11 @@ impl Tool {
             let tar = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(tar);
             archive.unpack(&tool_path)?;
-            // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
             std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
         } else if self.extension() == "zip" {
             // decompress the `zip` file
+            extract_zip(&temp_path, &tool_path)?;
+            std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
         }
 
         Ok(())
