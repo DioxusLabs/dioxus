@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
     }
 
     fn get_brightness(m: Arc<MouseData>) -> i32 {
-        let b: i32 = m.buttons.count_ones().try_into().unwrap();
+        let b: i32 = m.held_buttons().len().try_into().unwrap();
         127 * b
     }
 

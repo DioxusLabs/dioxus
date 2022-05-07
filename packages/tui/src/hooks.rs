@@ -6,8 +6,8 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use dioxus_html::input::keyboard_types::Modifiers;
-use dioxus_html::input::MouseButton as DioxusMouseButton;
 use dioxus_html::input::MouseButtonSet as DioxusMouseButtons;
+use dioxus_html::input::{MouseButton as DioxusMouseButton, MouseButtonSet};
 use dioxus_html::{on::*, KeyCode};
 use std::{
     any::Any,
@@ -79,7 +79,7 @@ impl EventData {
 const MAX_REPEAT_TIME: Duration = Duration::from_millis(100);
 
 pub struct InnerInputState {
-    mouse: Option<(MouseData, Vec<u16>)>,
+    mouse: Option<MouseData>,
     wheel: Option<WheelData>,
     last_key_pressed: Option<(KeyboardData, Instant)>,
     screen: Option<(u16, u16)>,
@@ -101,54 +101,38 @@ impl InnerInputState {
     fn apply_event(&mut self, evt: &mut EventCore) {
         match evt.1 {
             // limitations: only two buttons may be held at once
-            EventData::Mouse(ref mut m) => match &mut self.mouse {
-                Some(state) => {
-                    let mut buttons = state.0.buttons;
-                    state.0 = m.clone();
-                    match evt.0 {
-                        // this code only runs when there are no buttons down
-                        "mouseup" => {
-                            buttons = 0;
-                            state.1 = Vec::new();
-                        }
-                        "mousedown" => {
-                            if state.1.contains(&m.buttons) {
-                                // if we already pressed a button and there is another button released the button crossterm sends is the button remaining
-                                if state.1.len() > 1 {
-                                    evt.0 = "mouseup";
-                                    state.1 = vec![m.buttons];
-                                }
-                                // otherwise some other button was pressed. In testing it was consistantly this mapping
-                                else {
-                                    match m.buttons {
-                                        0x01 => state.1.push(0x02),
-                                        0x02 => state.1.push(0x01),
-                                        0x04 => state.1.push(0x01),
-                                        _ => (),
-                                    }
-                                }
-                            } else {
-                                state.1.push(m.buttons);
-                            }
+            EventData::Mouse(ref mut m) => {
+                let mut held_buttons = match &self.mouse {
+                    Some(previous_data) => previous_data.held_buttons(),
+                    None => MouseButtonSet::empty(),
+                };
 
-                            buttons = state.1.iter().copied().reduce(|a, b| a | b).unwrap();
-                        }
-                        _ => (),
+                match evt.0 {
+                    "mousedown" => {
+                        held_buttons.insert(
+                            m.trigger_button()
+                                .expect("No trigger button for mousedown event"),
+                        );
                     }
-                    state.0.buttons = buttons;
-                    m.buttons = buttons;
+                    "mouseup" => {
+                        held_buttons.remove(
+                            m.trigger_button()
+                                .expect("No trigger button for mouseup event"),
+                        );
+                    }
+                    _ => {}
                 }
-                None => {
-                    self.mouse = Some((
-                        m.clone(),
-                        if m.buttons == 0 {
-                            Vec::new()
-                        } else {
-                            vec![m.buttons]
-                        },
-                    ));
-                }
-            },
+
+                let new_mouse_data = MouseData::new(
+                    m.coordinates(),
+                    m.trigger_button(),
+                    held_buttons,
+                    m.modifiers(),
+                );
+
+                self.mouse = Some(new_mouse_data.clone());
+                *m = new_mouse_data;
+            }
             EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
@@ -171,7 +155,7 @@ impl InnerInputState {
         layout: &Stretch,
         dom: &mut Dom,
     ) {
-        let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
+        let previous_mouse = self.mouse.clone();
 
         self.wheel = None;
 
@@ -188,7 +172,7 @@ impl InnerInputState {
 
     fn resolve_mouse_events(
         &self,
-        previous_mouse: Option<(MouseData, Vec<u16>)>,
+        previous_mouse: Option<MouseData>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
         dom: &mut Dom,
@@ -248,19 +232,16 @@ impl InnerInputState {
             )
         }
 
-        if let Some(mouse) = &self.mouse {
-            let new_pos = (mouse.0.screen_x, mouse.0.screen_y);
-            let old_pos = previous_mouse
-                .as_ref()
-                .map(|m| (m.0.screen_x, m.0.screen_y));
+        if let Some(mouse_data) = &self.mouse {
+            let new_pos = (mouse_data.screen_x, mouse_data.screen_y);
+            let old_pos = previous_mouse.as_ref().map(|m| (m.screen_x, m.screen_y));
             // the a mouse button is pressed if a button was not down and is now down
             let pressed =
-                (mouse.0.buttons & !previous_mouse.as_ref().map(|m| m.0.buttons).unwrap_or(0)) > 0;
+                (mouse_data.buttons & !previous_mouse.as_ref().map(|m| m.buttons).unwrap_or(0)) > 0;
             // the a mouse button is pressed if a button was down and is now not down
             let released =
-                (!mouse.0.buttons & previous_mouse.map(|m| m.0.buttons).unwrap_or(0)) > 0;
+                (!mouse_data.buttons & previous_mouse.map(|m| m.buttons).unwrap_or(0)) > 0;
             let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
-            let mouse_data = &mouse.0;
             let wheel_data = &self.wheel;
 
             {
@@ -603,11 +584,6 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                     MouseButton::Middle => DioxusMouseButton::Auxiliary,
                 });
 
-                let button_set = match button {
-                    None => DioxusMouseButtons::empty(),
-                    Some(button) => DioxusMouseButtons::only(button),
-                };
-
                 // from https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent
 
                 // The `page` and `screen` coordinates are inconsistent with the MDN definition, as they are relative to the viewport (client), not the target element/page/screen, respectively.
@@ -635,7 +611,13 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
                     modifiers.insert(Modifiers::ALT);
                 }
 
-                EventData::Mouse(MouseData::new(coordinates, button, button_set, modifiers))
+                // held mouse buttons get set later by maintaining state, as crossterm does not provide them
+                EventData::Mouse(MouseData::new(
+                    coordinates,
+                    button,
+                    DioxusMouseButtons::empty(),
+                    modifiers,
+                ))
             };
 
             let get_wheel_data = |up| {

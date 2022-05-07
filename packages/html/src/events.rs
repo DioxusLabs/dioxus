@@ -639,6 +639,15 @@ pub mod on {
             ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
         }
 
+        pub fn coordinates(&self) -> Coordinates {
+            Coordinates::new(
+                self.screen_coordinates(),
+                self.client_coordinates(),
+                self.element_coordinates(),
+                self.page_coordinates(),
+            )
+        }
+
         /// The set of modifier keys which were pressed when the event occurred
         pub fn modifiers(&self) -> Modifiers {
             let mut modifiers = Modifiers::empty();
