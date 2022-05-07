@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, File},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
 };
 
@@ -112,8 +112,9 @@ impl Tool {
             }
             Self::Sass => {
                 format!(
-                    "https://github.com/sass/dart-sass/releases/download/1.51.0/dart-sass-1.51.0-{target}-x64.tar.gz",
-                    target = self.target_platform()
+                    "https://github.com/sass/dart-sass/releases/download/1.51.0/dart-sass-1.51.0-{target}-x64.{extension}",
+                    target = self.target_platform(),
+                    extension = self.extension()
                 )
             }
         }
@@ -129,7 +130,7 @@ impl Tool {
                 } else {
                     "tar.ge"
                 }
-            },
+            }
         }
     }
 
@@ -169,6 +170,8 @@ impl Tool {
 
         let dir_name = if self == &Tool::Binaryen {
             "binaryen-version_105"
+        } else if self == &Tool::Sass {
+            "sass-version-1_51"
         } else {
             ""
         };
@@ -180,6 +183,8 @@ impl Tool {
             archive.unpack(&tool_path)?;
             // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
             std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
+        } else if self.extension() == "zip" {
+            // decompress the `zip` file
         }
 
         Ok(())
@@ -196,9 +201,7 @@ impl Tool {
                     command.to_string()
                 }
             }
-            Tool::Sass => {
-                command.to_string()
-            }
+            Tool::Sass => command.to_string(),
         };
 
         if !bin_path.join(&command_file).is_file() {
@@ -214,4 +217,33 @@ impl Tool {
             .output()?;
         Ok(output.stdout)
     }
+}
+
+fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+    let zip_file = std::fs::File::open(&file)?;
+    let mut zip = zip::ZipArchive::new(zip_file)?;
+
+    if !target.exists() {
+        let _ = std::fs::create_dir_all(target)?;
+    }
+    
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i)?;
+        if file.is_dir() {
+            // dir
+            let target = target.join(Path::new(&file.name().replace('\\', "")));
+            let _ = std::fs::create_dir_all(target)?;
+        } else {
+            // file
+            let file_path = target.join(Path::new(file.name()));
+            let mut target_file = if !file_path.exists() {
+                std::fs::File::create(file_path)?
+            } else {
+                std::fs::File::open(file_path)?
+            };
+            let _num = std::io::copy(&mut file, &mut target_file)?;
+        }
+    }
+
+    Ok(())
 }
