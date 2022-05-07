@@ -33,13 +33,18 @@ impl Parse for BodyNode {
             // this is an Element if path match of:
             // - one ident
             // - followed by `{`
-            // - all chars lowercase
+            // - 1st char is lowercase
             //
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
                 if body_stream.peek(token::Brace)
-                    && ident.to_string().chars().all(char::is_lowercase)
+                    && ident
+                        .to_string()
+                        .chars()
+                        .next()
+                        .unwrap()
+                        .is_ascii_lowercase()
                 {
                     return Ok(BodyNode::Element(stream.parse::<Element>()?));
                 }
