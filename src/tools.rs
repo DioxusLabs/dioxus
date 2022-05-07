@@ -201,7 +201,13 @@ impl Tool {
                     command.to_string()
                 }
             }
-            Tool::Sass => command.to_string(),
+            Tool::Sass => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.bat", command)
+                } else {
+                    command.to_string()
+                }
+            },
         };
 
         if !bin_path.join(&command_file).is_file() {

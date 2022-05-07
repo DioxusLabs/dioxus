@@ -45,4 +45,16 @@ script = []
 binaryen = { wasm_opt = true }
 
 # use sass auto will auto check sass file and build it.
-sass = { auto = true }
+[application.tools.sass]
+
+version = "1.51.0"
+
+# if auto = true, we will check style array, and translate all sass file to css.
+auto = true
+
+# or you can specify some sass file -> css file
+files = [
+    # some sass file path
+    # this file will translate to `/css/test.css`
+    "/css/test.sass"
+]

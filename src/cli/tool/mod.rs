@@ -27,7 +27,11 @@ impl Tool {
                 }
             }
             Tool::AppPath {} => {
-                println!("{}", tools::tools_path().to_str().unwrap());
+                if let Some(v) =  tools::tools_path().to_str() {
+                    println!("{}", v);
+                } else {
+                    log::error!("Tools path get failed.");
+                }
             }
             Tool::Add { name } => {
                 let tool_list = tools::tool_list();
@@ -58,7 +62,6 @@ impl Tool {
                 log::info!("Tool {name} install successfully!");
             }
         }
-
         Ok(())
     }
 }
