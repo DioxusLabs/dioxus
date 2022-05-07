@@ -53,7 +53,7 @@ fn app(cx: Scope) -> Element {
             Input{
                 onclick: |_: FormData| bg_green.set(false),
                 r#type: "button",
-                value: "reset",
+                value: "green",
                 height: "3px",
                 width: "7px",
             }

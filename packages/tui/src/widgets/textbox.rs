@@ -128,9 +128,11 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                     if *dragging.get() {
                         let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
                         if border != "none" {
-                            new.col -= 1;
-                            new.row -= 1;
+                            new.col = new.col.saturating_sub(1);
                         }
+                        // textboxs are only one line tall
+                        new.row = 0;
+
                         if new != cursor.read().start {
                             cursor.write().end = Some(new);
                         }
@@ -139,9 +141,11 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 onmousedown: move |evt| {
                     let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
                     if border != "none" {
-                        new.col -= 1;
-                        new.row -= 1;
+                        new.col = new.col.saturating_sub(1);
                     }
+                    // textboxs are only one line tall
+                    new.row = 0;
+                    
                     new.realize_col(&text_ref.read());
                     cursor.set(Cursor::from_start(new));
                     dragging.set(true);
