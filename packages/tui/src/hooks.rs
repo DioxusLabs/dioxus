@@ -4,6 +4,7 @@ use crossterm::event::{
 use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
+use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
 use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use dioxus_html::input::keyboard_types::Modifiers;
 use dioxus_html::input::MouseButtonSet as DioxusMouseButtons;
@@ -16,7 +17,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use stretch2::geometry::Point;
+use stretch2::geometry::{Point, Size};
 use stretch2::{prelude::Layout, Stretch};
 
 use crate::{Dom, Node};
@@ -177,11 +178,12 @@ impl InnerInputState {
         layout: &Stretch,
         dom: &mut Dom,
     ) {
-        fn layout_contains_point(layout: &Layout, point: (i32, i32)) -> bool {
-            layout.location.x as i32 <= point.0
-                && layout.location.x as i32 + layout.size.width as i32 >= point.0
-                && layout.location.y as i32 <= point.1
-                && layout.location.y as i32 + layout.size.height as i32 >= point.1
+        fn layout_contains_point(layout: &Layout, point: ScreenPoint) -> bool {
+            let Point { x, y } = layout.location;
+            let Size { width, height } = layout.size;
+
+            let layout_rect = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
+            layout_rect.contains(point.cast())
         }
 
         fn try_create_event(
@@ -233,14 +235,19 @@ impl InnerInputState {
         }
 
         if let Some(mouse_data) = &self.mouse {
-            let new_pos = (mouse_data.screen_x, mouse_data.screen_y);
-            let old_pos = previous_mouse.as_ref().map(|m| (m.screen_x, m.screen_y));
-            // the a mouse button is pressed if a button was not down and is now down
-            let pressed =
-                (mouse_data.buttons & !previous_mouse.as_ref().map(|m| m.buttons).unwrap_or(0)) > 0;
-            // the a mouse button is pressed if a button was down and is now not down
-            let released =
-                (!mouse_data.buttons & previous_mouse.map(|m| m.buttons).unwrap_or(0)) > 0;
+            let new_pos = mouse_data.screen_coordinates();
+            let old_pos = previous_mouse.as_ref().map(|m| m.screen_coordinates());
+
+            // a mouse button is pressed if a button was not down and is now down
+            let previous_buttons = previous_mouse
+                .map_or(MouseButtonSet::empty(), |previous_data| {
+                    previous_data.held_buttons()
+                });
+            let was_pressed = !(mouse_data.held_buttons() - previous_buttons).is_empty();
+
+            // a mouse button is released if a button was down and is now not down
+            let was_released = !(previous_buttons - mouse_data.held_buttons()).is_empty();
+
             let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
             let wheel_data = &self.wheel;
 
@@ -316,7 +323,7 @@ impl InnerInputState {
             }
 
             // mousedown
-            if pressed {
+            if was_pressed {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
@@ -342,7 +349,7 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released {
+                    if currently_contains && was_released {
                         try_create_event(
                             "mouseup",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -362,7 +369,10 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released && mouse_data.button == 0 {
+                    if currently_contains
+                        && was_released
+                        && mouse_data.trigger_button() == Some(DioxusMouseButton::Primary)
+                    {
                         try_create_event(
                             "click",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
@@ -382,7 +392,10 @@ impl InnerInputState {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && released && mouse_data.button == 2 {
+                    if currently_contains
+                        && was_released
+                        && mouse_data.trigger_button() == Some(DioxusMouseButton::Secondary)
+                    {
                         try_create_event(
                             "contextmenu",
                             Arc::new(prepare_mouse_data(mouse_data, node_layout)),
