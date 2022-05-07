@@ -57,6 +57,7 @@ impl Parse for BodyNode {
             //
             // example
             // Div {}
+            // Div ()
             // ::Div {}
             // crate::Div {}
             // component()
@@ -67,13 +68,6 @@ impl Parse for BodyNode {
             // Input::<InputProps<'_, i32> {}
             // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) || body_stream.peek(token::Paren) {
-                // NOTE: this syntax is not allowd:
-                // Div () -> comp
-                if path.segments.len() == 1 && body_stream.peek(token::Paren) {
-                    let com_ident = &path.segments.iter().next().unwrap().ident;
-                    component_ident_cannot_use_paren!(path, com_ident);
-                }
-
                 Component::validate_component_path(&path)?;
 
                 return Ok(BodyNode::Component(stream.parse()?));

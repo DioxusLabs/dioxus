@@ -24,16 +24,6 @@ macro_rules! component_path_cannot_have_arguments {
     };
 }
 
-macro_rules! component_ident_cannot_use_paren {
-    ($span:expr, $com_name:ident) => {
-        proc_macro_error::abort!(
-            $span,
-            "Invalid component syntax";
-            help = "try replace {} (..) to {} {{..}}", $com_name, $com_name;
-        )
-    };
-}
-
 macro_rules! invalid_component_path {
     ($span:expr) => {
         proc_macro_error::abort!($span, "Invalid component path syntax")
