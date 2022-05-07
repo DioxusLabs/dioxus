@@ -67,7 +67,7 @@ impl NodeDepState for PreventDefault {
         let new = match node
             .attributes()
             .find(|a| a.name == "dioxus-prevent-default")
-            .map(|a| a.value)
+            .and_then(|a| a.value.as_text())
         {
             Some("onfocus") => PreventDefault::Focus,
             Some("onkeypress") => PreventDefault::KeyPress,

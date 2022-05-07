@@ -71,7 +71,11 @@ impl NodeDepState for Focus {
     fn reduce(&mut self, node: NodeView<'_>, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
         let new = Focus {
             level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
-                if let Ok(index) = a.value.parse::<i32>() {
+                if let Some(index) = a
+                    .value
+                    .as_int32()
+                    .or(a.value.as_text().and_then(|v| v.parse::<i32>().ok()))
+                {
                     match index.cmp(&0) {
                         Ordering::Less => FocusLevel::Unfocusable,
                         Ordering::Equal => FocusLevel::Focusable,
