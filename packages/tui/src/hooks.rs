@@ -232,33 +232,37 @@ impl InnerInputState {
             let old_pos = previous_mouse
                 .as_ref()
                 .map(|m| (m.0.screen_x, m.0.screen_y));
-            let clicked =
-                (!mouse.0.buttons & previous_mouse.as_ref().map(|m| m.0.buttons).unwrap_or(0)) > 0;
+            // the a mouse button is pressed if a button was not down and is now down
+            let pressed =
+                (mouse.0.buttons & !previous_mouse.as_ref().map(|m| m.0.buttons).unwrap_or(0)) > 0;
+            // the a mouse button is pressed if a button was down and is now not down
             let released =
-                (mouse.0.buttons & !previous_mouse.map(|m| m.0.buttons).unwrap_or(0)) > 0;
+                (!mouse.0.buttons & previous_mouse.map(|m| m.0.buttons).unwrap_or(0)) > 0;
             let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
             let mouse_data = &mouse.0;
             let wheel_data = &self.wheel;
 
             {
                 // mousemove
-                let mut will_bubble = FxHashSet::default();
-                for node in dom.get_listening_sorted("mousemove") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
-                        .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                if old_pos != Some(new_pos) {
+                    let mut will_bubble = FxHashSet::default();
+                    for node in dom.get_listening_sorted("mousemove") {
+                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let previously_contained = old_pos
+                            .filter(|pos| layout_contains_point(node_layout, *pos))
+                            .is_some();
+                        let currently_contains = layout_contains_point(node_layout, new_pos);
 
-                    if currently_contains && previously_contained {
-                        try_create_event(
-                            "mousemove",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
-                            &mut will_bubble,
-                            resolved_events,
-                            node,
-                            dom,
-                        );
+                        if currently_contains && previously_contained {
+                            try_create_event(
+                                "mousemove",
+                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                &mut will_bubble,
+                                resolved_events,
+                                node,
+                                dom,
+                            );
+                        }
                     }
                 }
             }
@@ -309,8 +313,8 @@ impl InnerInputState {
                 }
             }
 
-            {
-                // mousedown
+            // mousedown
+            if pressed {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
