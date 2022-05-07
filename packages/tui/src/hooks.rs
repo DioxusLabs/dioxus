@@ -16,6 +16,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
+use stretch2::geometry::Point;
 use stretch2::{prelude::Layout, Stretch};
 
 use crate::{Dom, Node};
@@ -225,10 +226,26 @@ impl InnerInputState {
         }
 
         fn prepare_mouse_data(mouse_data: &MouseData, layout: &Layout) -> MouseData {
-            let mut data = mouse_data.clone();
-            data.offset_x = data.client_x - layout.location.x as i32;
-            data.offset_y = data.client_y - layout.location.y as i32;
-            data
+            let Point { x, y } = layout.location;
+            let node_origin = ClientPoint::new(x.into(), y.into());
+
+            let new_client_coordinates = (mouse_data.client_coordinates() - node_origin)
+                .to_point()
+                .cast_unit();
+
+            let coordinates = Coordinates::new(
+                mouse_data.screen_coordinates(),
+                mouse_data.client_coordinates(),
+                new_client_coordinates,
+                mouse_data.page_coordinates(),
+            );
+
+            MouseData::new(
+                coordinates,
+                mouse_data.trigger_button(),
+                mouse_data.held_buttons(),
+                mouse_data.modifiers(),
+            )
         }
 
         if let Some(mouse) = &self.mouse {
