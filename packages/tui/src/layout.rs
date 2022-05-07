@@ -79,9 +79,11 @@ impl ChildDepState for StretchLayout {
             }
         } else {
             // gather up all the styles from the attribute list
-            for &Attribute { name, value, .. } in node.attributes() {
-                assert!(SORTED_LAYOUT_ATTRS.binary_search(&name).is_ok());
-                apply_layout_attributes(name, value, &mut style);
+            for Attribute { name, value, .. } in node.attributes() {
+                assert!(SORTED_LAYOUT_ATTRS.binary_search(name).is_ok());
+                if let Some(text) = value.as_text() {
+                    apply_layout_attributes(name, text, &mut style);
+                }
             }
 
             // the root node fills the entire area
