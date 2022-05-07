@@ -64,6 +64,19 @@ fn app(cx: Scope) -> Element {
                 maxlength: "4",
             }
             Input{
+                oninput: |data: FormData| {
+                    if data.value == "hello world"{
+                        bg_green.set(true);
+                    } else{
+                        bg_green.set(false);
+                    }
+                },
+                r#type: "password",
+                width: "13px",
+                height: "3px",
+                maxlength: "11",
+            }
+            Input{
                 onclick: |_: FormData| bg_green.set(false),
                 r#type: "button",
                 value: "green",

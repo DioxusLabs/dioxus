@@ -9,6 +9,7 @@ use dioxus_html::on::FormData;
 use crate::widgets::button::Button;
 use crate::widgets::checkbox::CheckBox;
 use crate::widgets::number::NumbericInput;
+use crate::widgets::password::Password;
 use crate::widgets::slider::Slider;
 use crate::widgets::textbox::TextBox;
 
@@ -66,6 +67,18 @@ pub fn Input<'a>(cx: Scope<'a, InputProps<'a>>) -> Element<'a> {
         Some("number") => {
             rsx! {
                 NumbericInput{
+                    raw_oninput: cx.props.oninput.as_ref(),
+                    value: cx.props.value,
+                    size: cx.props.size,
+                    max_length: cx.props.maxlength,
+                    width: cx.props.width,
+                    height: cx.props.height,
+                }
+            }
+        }
+        Some("password") => {
+            rsx! {
+                Password{
                     raw_oninput: cx.props.oninput.as_ref(),
                     value: cx.props.value,
                     size: cx.props.size,

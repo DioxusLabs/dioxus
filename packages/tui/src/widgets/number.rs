@@ -52,12 +52,6 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
     let (text_highlighted, text_after_second_cursor) =
         text_after_first_cursor.split_at(end_highlight - start_highlight);
 
-    let text_highlighted = if text_highlighted.is_empty() {
-        ""
-    } else {
-        text_highlighted
-    };
-
     let max_len = cx
         .props
         .max_length

@@ -13,7 +13,7 @@ use std::{collections::HashMap, io::stdout};
 use crate::Query;
 
 #[derive(Props)]
-pub(crate) struct TextBoxProps<'a> {
+pub(crate) struct PasswordProps<'a> {
     #[props(!optional)]
     raw_oninput: Option<&'a EventHandler<'a, FormData>>,
     #[props(!optional)]
@@ -28,7 +28,7 @@ pub(crate) struct TextBoxProps<'a> {
     height: Option<&'a str>,
 }
 #[allow(non_snake_case)]
-pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
+pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
     let tui_query: Query = cx.consume_context().unwrap();
     let tui_query_clone = tui_query.clone();
 
@@ -48,6 +48,10 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
     let (text_before_first_cursor, text_after_first_cursor) = text.split_at(start_highlight);
     let (text_highlighted, text_after_second_cursor) =
         text_after_first_cursor.split_at(end_highlight - start_highlight);
+
+    let text_before_first_cursor = ".".repeat(text_before_first_cursor.len());
+    let text_highlighted = ".".repeat(text_highlighted.len());
+    let text_after_second_cursor = ".".repeat(text_after_second_cursor.len());
 
     let max_len = cx
         .props
