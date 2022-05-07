@@ -1,9 +1,11 @@
 use bumpalo::boxed::Box as BumpBox;
 use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
+use enumset::EnumSetType;
 
 pub mod on {
-    use crate::geometry::{ClientPoint, ElementPoint, PagePoint, ScreenPoint};
+    use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+    use enumset::EnumSet;
     use std::collections::HashMap;
 
     use super::*;
@@ -592,25 +594,54 @@ pub mod on {
 
         /// The set of modifier keys which were pressed when the event occurred
         pub fn modifiers(&self) -> ModifierSet {
+            let mut set = EnumSet::empty();
+
             #[allow(deprecated)]
-            ModifierSet {
-                has_alt: self.alt_key,
-                has_ctrl: self.ctrl_key,
-                has_meta: self.meta_key,
-                has_shift: self.shift_key,
+            {
+                if self.alt_key {
+                    set |= Modifier::Alt;
+                }
+                if self.ctrl_key {
+                    set |= Modifier::Ctrl;
+                }
+                if self.meta_key {
+                    set |= Modifier::Meta;
+                }
+                if self.shift_key {
+                    set |= Modifier::Shift;
+                }
             }
+
+            set
         }
 
         /// The set of mouse buttons which were held when the event occurred.
         pub fn held_buttons(&self) -> MouseButtonSet {
+            let mut set = EnumSet::empty();
+
+            // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/buttons
             #[allow(deprecated)]
-            MouseButtonSet {
-                has_primary: self.buttons & 0b1 != 0,
-                has_secondary: self.buttons & 0b10 != 0,
-                has_auxiliary: self.buttons & 0b100 != 0,
-                has_fourth: self.buttons & 0b1000 != 0,
-                has_fifth: self.buttons & 0b10000 != 0,
+            {
+                if self.buttons & 0b1 != 0 {
+                    set |= MouseButton::Primary;
+                }
+                if self.buttons & 0b10 != 0 {
+                    set |= MouseButton::Secondary;
+                }
+                if self.buttons & 0b100 != 0 {
+                    set |= MouseButton::Auxiliary;
+                }
+                if self.buttons & 0b1000 != 0 {
+                    set |= MouseButton::Fourth;
+                }
+                if self.buttons & 0b10000 != 0 {
+                    set |= MouseButton::Fifth;
+                }
+                if self.buttons & (!0b11111) != 0 {
+                    set |= MouseButton::Unknown;
+                }
             }
+            set
         }
 
         /// The mouse button that triggered the event
@@ -619,92 +650,24 @@ pub mod on {
         /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
         pub fn trigger_button(&self) -> MouseButton {
             #[allow(deprecated)]
-            let button_code = self.button;
-
-            match button_code {
-                0 => MouseButton::Primary,
-                // not a typo; auxiliary and secondary are swapped unlike in the `buttons` field.
-                // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button
-                1 => MouseButton::Auxiliary,
-                2 => MouseButton::Secondary,
-                3 => MouseButton::Fourth,
-                4 => MouseButton::Fifth,
-                other => MouseButton::Other(other),
-            }
+            MouseButton::from_web_code(self.button)
         }
     }
 
-    /// A set of modifier keys
-    #[derive(Debug, Clone)]
-    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    pub struct ModifierSet {
-        has_alt: bool,
-        has_ctrl: bool,
-        has_meta: bool,
-        has_shift: bool,
+    // note: EnumSetType also derives Copy and Clone for some reason
+    #[derive(EnumSetType, Debug)]
+    pub enum Modifier {
+        Alt,
+        Ctrl,
+        Meta,
+        Shift,
     }
 
-    impl ModifierSet {
-        /// Whether the set includes the alt key
-        pub fn has_alt(&self) -> bool {
-            self.has_alt
-        }
-        /// Whether the set includes the control key
-        pub fn has_ctrl(&self) -> bool {
-            self.has_ctrl
-        }
-        /// Whether the set includes the meta (windows/command) key
-
-        pub fn has_meta(&self) -> bool {
-            self.has_meta
-        }
-        /// Whether the set includes the shift key
-        pub fn has_shift(&self) -> bool {
-            self.has_shift
-        }
-
-        /// True if the set contains no keys
-        pub fn is_empty(&self) -> bool {
-            !(self.has_alt || self.has_ctrl || self.has_meta || self.has_shift)
-        }
-    }
-
-    /// A set of mouse buttons
-    #[derive(Debug, Clone)]
-    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    pub struct MouseButtonSet {
-        has_primary: bool,
-        has_secondary: bool,
-        has_auxiliary: bool,
-        has_fourth: bool,
-        has_fifth: bool,
-    }
-
-    impl MouseButtonSet {
-        /// Whether the set includes the primary button (typically the left button)
-        pub fn has_primary(&self) -> bool {
-            self.has_primary
-        }
-        /// Whether the set includes the secondary button (typically the right button)
-        pub fn has_secondary(&self) -> bool {
-            self.has_secondary
-        }
-        /// Whether the set includes the auxiliary button (typically the middle button)
-        pub fn has_auxiliary(&self) -> bool {
-            self.has_auxiliary
-        }
-        /// Whether the set includes the fourth button (typically the "Browser Back" button)
-        pub fn has_fourth(&self) -> bool {
-            self.has_fourth
-        }
-        /// Whether the set includes the fifth button (typically the "Browser Forward" button)
-        pub fn has_fifth(&self) -> bool {
-            self.has_fifth
-        }
-    }
+    pub type ModifierSet = EnumSet<Modifier>;
 
     /// A mouse button type (such as Primary/Secondary)
-    #[derive(Debug, Clone)]
+    // note: EnumSetType also derives Copy and Clone for some reason
+    #[derive(EnumSetType, Debug)]
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     pub enum MouseButton {
         /// Primary button (typically the left button)
@@ -718,8 +681,30 @@ pub mod on {
         /// Fifth button (typically the "Browser Forward" button)
         Fifth,
         /// A button with an unknown code
-        Other(i16),
+        Unknown,
     }
+
+    impl MouseButton {
+        /// Constructs a MouseButton for the specified button code
+        ///
+        /// E.g. 0 => Primary; 1 => Auxiliary
+        ///
+        /// Unknown codes get mapped to MouseButton::Unknown.
+        pub fn from_web_code(code: i16) -> Self {
+            match code {
+                0 => MouseButton::Primary,
+                // not a typo; auxiliary and secondary are swapped unlike in the `buttons` field.
+                // https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent/button
+                1 => MouseButton::Auxiliary,
+                2 => MouseButton::Secondary,
+                3 => MouseButton::Fourth,
+                4 => MouseButton::Fifth,
+                _ => MouseButton::Unknown,
+            }
+        }
+    }
+
+    pub type MouseButtonSet = EnumSet<MouseButton>;
 
     pub type PointerEvent = UiEvent<PointerData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]

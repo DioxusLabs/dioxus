@@ -16,6 +16,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2.79", optional = true }
 euclid = "0.22.7"
+enumset = "1.0.11"
 
 [dependencies.web-sys]
 optional = true
