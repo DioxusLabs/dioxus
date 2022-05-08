@@ -1,35 +1,51 @@
-use crate::event::{CustomUserEvent, WebKeyboardEvent};
+use crate::{
+    context::BevyDesktopContext,
+    event::{CustomUserEvent, WebKeyboardEvent},
+};
 use bevy::{
     ecs::world::WorldCell,
     math::IVec2,
     utils::HashMap,
-    window::{Window, WindowDescriptor, WindowId},
+    window::{Window as BevyWindow, WindowDescriptor, WindowId},
 };
-use dioxus_core::SchedulerMsg;
+use dioxus_core::{Component as DioxusComponent, SchedulerMsg, VirtualDom};
 use dioxus_desktop::{
     cfg::DesktopConfig,
-    controller::DesktopController,
     desktop_context::{UserEvent, UserWindowEvent},
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
-        event_loop::EventLoop,
+        event_loop::{ControlFlow, EventLoop},
         window::{Window as TaoWindow, WindowId as TaoWindowId},
     },
     wry::webview::{WebView, WebViewBuilder},
 };
+use futures_channel::mpsc;
+use futures_intrusive::channel::shared::{Receiver, Sender};
 use raw_window_handle::HasRawWindowHandle;
-use std::fmt::{self, Debug};
+use std::{
+    fmt::{self, Debug},
+    sync::{atomic::AtomicBool, Arc, Mutex},
+};
+use tokio::runtime::Runtime;
 
 #[derive(Default)]
 pub struct DioxusWindows {
-    windows: HashMap<TaoWindowId, WebView>,
+    windows: HashMap<TaoWindowId, Window>,
     window_id_to_tao: HashMap<WindowId, TaoWindowId>,
     tao_to_window_id: HashMap<TaoWindowId, WindowId>,
     // Some winit functions, such as `set_window_icon` can only be used from the main thread. If
     // they are used in another thread, the app will hang. This marker ensures `WinitWindows` is
     // only ever accessed with bevy's non-send functions and in NonSend systems.
     _not_send_sync: core::marker::PhantomData<*const ()>,
+
+    quit_app_on_close: bool,
+}
+
+impl DioxusWindows {
+    pub fn get_one(&mut self) -> Option<&mut Window> {
+        self.windows.values_mut().next()
+    }
 }
 
 impl Debug for DioxusWindows {
@@ -42,27 +58,119 @@ impl Debug for DioxusWindows {
     }
 }
 
+pub struct Window {
+    pub webview: WebView,
+    dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
+    is_ready: Arc<AtomicBool>,
+    edit_queue: Arc<Mutex<Vec<String>>>,
+}
+
+impl Window {
+    fn new(
+        webview: WebView,
+        dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
+        is_ready: Arc<AtomicBool>,
+        edit_queue: Arc<Mutex<Vec<String>>>,
+    ) -> Self {
+        Self {
+            webview,
+            dom_tx,
+            is_ready,
+            edit_queue,
+        }
+    }
+
+    pub fn try_load_ready_webview(&mut self) {
+        if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut queue = self.edit_queue.lock().unwrap();
+
+            for edit in queue.drain(..) {
+                self.webview
+                    .evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
+                    .unwrap();
+            }
+        }
+    }
+}
+
 impl DioxusWindows {
-    pub fn create_window<CoreCommand>(
+    pub fn create<CoreCommand, UICommand, Props>(
         &mut self,
         world: &WorldCell,
         window_id: WindowId,
         window_descriptor: &WindowDescriptor,
-    ) -> Window
+    ) -> BevyWindow
     where
-        CoreCommand: 'static + Debug,
+        CoreCommand: 'static + Send + Sync + Clone + Debug,
+        UICommand: 'static + Send + Sync + Clone,
+        Props: 'static + Send + Sync + Copy,
     {
         let event_loop = world
             .get_non_send_mut::<EventLoop<UserEvent<CustomUserEvent<CoreCommand>>>>()
-            .expect("Insert EventLoop as non send resource");
+            .unwrap();
         let proxy = event_loop.create_proxy();
-        let mut desktop = world
-            .get_non_send_mut::<DesktopController>()
-            .expect("Insert DesktopController as non send resource");
+        let core_tx = world.get_resource::<Sender<CoreCommand>>().unwrap();
+        let ui_rx = world.get_resource::<Receiver<UICommand>>().unwrap();
+
+        // Spawn VirtualDOM
+        let edit_queue = Arc::new(Mutex::new(Vec::new()));
+        let (dom_tx, dom_rx) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
+        let root = world
+            .get_resource::<DioxusComponent<Props>>()
+            .unwrap()
+            .clone();
+        let props = world.get_resource::<Props>().unwrap().clone();
+        let context =
+            BevyDesktopContext::<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>::new(
+                proxy.clone(),
+                (core_tx.clone(), ui_rx.clone()),
+            );
+
+        let edit_queue_clone = edit_queue.clone();
+        let dom_tx_clone = dom_tx.clone();
+        let proxy_clone = proxy.clone();
+
+        std::thread::spawn(move || {
+            Runtime::new().unwrap().block_on(async move {
+                let mut dom =
+                    VirtualDom::new_with_props_and_scheduler(root, props, (dom_tx_clone, dom_rx));
+
+                dom.base_scope().provide_context(context.clone());
+
+                let edits = dom.rebuild();
+
+                edit_queue_clone
+                    .lock()
+                    .unwrap()
+                    .push(serde_json::to_string(&edits.edits).unwrap());
+
+                // Make sure the window is ready for any new updates
+                proxy_clone
+                    .send_event(UserEvent::WindowEvent(UserWindowEvent::Update))
+                    .expect("Failed to send UserWindowEvent::Update");
+
+                loop {
+                    dom.wait_for_work().await;
+
+                    let muts = dom.work_with_deadline(|| false);
+
+                    for edit in muts {
+                        edit_queue_clone
+                            .lock()
+                            .unwrap()
+                            .push(serde_json::to_string(&edit.edits).unwrap());
+                    }
+
+                    let _ = proxy_clone.send_event(UserEvent::WindowEvent(UserWindowEvent::Update));
+                }
+            });
+        });
+
         let mut config = world.get_non_send_mut::<DesktopConfig>().unwrap();
+
         let window = config.window.clone().build(&event_loop).unwrap();
         let tao_window_id = window.id();
-        let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
+        let is_ready = Arc::new(AtomicBool::new(false));
 
         let file_handler = config.file_drop_handler.take();
 
@@ -79,6 +187,8 @@ impl DioxusWindows {
         let scale_factor = window.scale_factor();
         let raw_window_handle = window.raw_window_handle();
 
+        let dom_tx_clone = dom_tx.clone();
+        let is_ready_clone = is_ready.clone();
         let mut webview = WebViewBuilder::new(window)
             .unwrap()
             .with_transparent(config.window.window.transparent)
@@ -89,7 +199,9 @@ impl DioxusWindows {
                     .map(|message| match message.method() {
                         "user_event" => {
                             let event = trigger_from_serialized(message.params());
-                            sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                            dom_tx_clone
+                                .unbounded_send(SchedulerMsg::Event(event))
+                                .unwrap();
                         }
                         "keyboard_event" => {
                             let event = WebKeyboardEvent::from_value(message.params());
@@ -98,10 +210,9 @@ impl DioxusWindows {
                                     event.to_input(),
                                 )))
                                 .unwrap();
-                            println!("{}", event.key());
                         }
                         "initialize" => {
-                            is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                            is_ready_clone.store(true, std::sync::atomic::Ordering::Relaxed);
                             let _ =
                                 proxy.send_event(UserEvent::WindowEvent(UserWindowEvent::Update));
                         }
@@ -159,11 +270,12 @@ impl DioxusWindows {
             webview = webview.with_dev_tool(true);
         }
 
-        desktop
-            .webviews
-            .insert(tao_window_id, webview.build().unwrap());
+        self.windows.insert(
+            tao_window_id,
+            Window::new(webview.build().unwrap(), dom_tx, is_ready, edit_queue),
+        );
 
-        Window::new(
+        BevyWindow::new(
             window_id,
             window_descriptor,
             inner_size.width,
@@ -172,5 +284,20 @@ impl DioxusWindows {
             position,
             raw_window_handle,
         )
+    }
+
+    pub fn remove(&mut self, tao_id: &TaoWindowId, control_flow: &mut ControlFlow) {
+        let window_id = self.tao_to_window_id.remove(&tao_id).unwrap();
+        self.window_id_to_tao.remove(&window_id);
+        self.windows.remove(&tao_id);
+
+        if self.windows.is_empty() && self.quit_app_on_close {
+            *control_flow = ControlFlow::Exit;
+        }
+    }
+
+    pub fn resize(&mut self, tao_id: &TaoWindowId) {
+        let window = self.windows.get_mut(&tao_id).unwrap();
+        window.webview.resize().unwrap();
     }
 }

@@ -6,7 +6,7 @@ use std::fmt::Debug;
 pub struct BevyDesktopContext<
     CustomUserEvent: Debug + 'static,
     CoreCommand: Debug + 'static + Clone,
-    UICommand: 'static,
+    UICommand: 'static + Clone,
 > {
     proxy: ProxyType<CustomUserEvent>,
     channel: (Sender<CoreCommand>, Receiver<UICommand>),
@@ -29,6 +29,7 @@ impl<CustomUserEvent, CoreCommand, UICommand>
 where
     CustomUserEvent: Debug,
     CoreCommand: Debug + Clone,
+    UICommand: Clone,
 {
     pub fn new(
         proxy: ProxyType<CustomUserEvent>,

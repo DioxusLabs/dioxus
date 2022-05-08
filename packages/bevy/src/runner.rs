@@ -1,15 +1,15 @@
-use crate::event::CustomUserEvent;
+use crate::{event::CustomUserEvent, window::DioxusWindows};
 use bevy::{
     app::{App, AppExit},
     ecs::event::{Events, ManualEventReader},
     input::keyboard::KeyboardInput,
 };
 use dioxus_desktop::{
-    controller::DesktopController,
-    desktop_context::{user_window_event_handler, UserEvent},
+    desktop_context::{UserEvent, UserWindowEvent::*},
     tao::{
         event::{Event, StartCause, WindowEvent},
         event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
+        window::Fullscreen as WryFullscreen,
     },
 };
 use futures_intrusive::channel::shared::Receiver;
@@ -62,31 +62,71 @@ where
                     *control_flow = ControlFlow::Exit;
                 }
             }
-            let mut desktop = app
+
+            let mut windows = app
                 .world
-                .get_non_send_resource_mut::<DesktopController>()
-                .expect("Insert DesktopController as non send resource");
+                .get_non_send_resource_mut::<DioxusWindows>()
+                .expect("Insert DioxusWindows as non send resource");
 
             match window_event {
                 Event::NewEvents(StartCause::Init) => {}
-
                 Event::WindowEvent {
                     event, window_id, ..
                 } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
-
+                    WindowEvent::Destroyed { .. } => windows.remove(&window_id, control_flow),
                     WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                        if let Some(view) = desktop.webviews.get_mut(&window_id) {
-                            let _ = view.resize();
-                        }
+                        windows.resize(&window_id);
                     }
                     _ => {}
                 },
-
                 Event::UserEvent(user_event) => match user_event {
-                    UserEvent::WindowEvent(e) => {
-                        user_window_event_handler(e, &mut desktop, control_flow);
+                    UserEvent::WindowEvent(user_window_event) => {
+                        // currently dioxus-desktop supports a single window only,
+                        // so we can grab the only webview from the map;
+                        let window = windows.get_one().unwrap();
+                        let webview = &window.webview;
+                        let tao_window = webview.window();
+
+                        match user_window_event {
+                            Update => window.try_load_ready_webview(),
+                            CloseWindow => *control_flow = ControlFlow::Exit,
+                            DragWindow => {
+                                // if the drag_window has any errors, we don't do anything
+                                tao_window
+                                    .fullscreen()
+                                    .is_none()
+                                    .then(|| tao_window.drag_window());
+                            }
+                            Visible(state) => tao_window.set_visible(state),
+                            Minimize(state) => tao_window.set_minimized(state),
+                            Maximize(state) => tao_window.set_maximized(state),
+                            MaximizeToggle => tao_window.set_maximized(!tao_window.is_maximized()),
+                            Fullscreen(state) => {
+                                if let Some(handle) = tao_window.current_monitor() {
+                                    tao_window.set_fullscreen(
+                                        state.then(|| WryFullscreen::Borderless(Some(handle))),
+                                    );
+                                }
+                            }
+                            FocusWindow => tao_window.set_focus(),
+                            Resizable(state) => tao_window.set_resizable(state),
+                            AlwaysOnTop(state) => tao_window.set_always_on_top(state),
+
+                            CursorVisible(state) => tao_window.set_cursor_visible(state),
+                            CursorGrab(state) => {
+                                let _ = tao_window.set_cursor_grab(state);
+                            }
+
+                            SetTitle(content) => tao_window.set_title(&content),
+                            SetDecorations(state) => tao_window.set_decorations(state),
+
+                            DevTool => webview.devtool(),
+
+                            Eval(code) => webview
+                                .evaluate_script(code.as_str())
+                                .expect("eval shouldn't panic"),
+                        };
                     }
                     UserEvent::CustomEvent(e) => {
                         match e {
