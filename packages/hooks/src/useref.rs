@@ -24,7 +24,7 @@ use std::{
 /// val.write().insert(1, "hello".to_string());
 /// ```
 ///
-/// You can avoid this defualt behavior with `write_silent`
+/// You can avoid this default behavior with `write_silent`
 ///
 /// ```
 /// // with `write_silent`, the component will not be re-rendered
