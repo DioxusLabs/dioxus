@@ -57,6 +57,4 @@ pub mod prelude {
 
     #[cfg(feature = "bevy")]
     pub use bevy_dioxus::prelude::*;
-    #[cfg(feature = "bevy")]
-    pub use dioxus_desktop::desktop_context::WindowController;
 }

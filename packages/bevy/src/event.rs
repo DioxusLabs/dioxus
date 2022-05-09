@@ -6,12 +6,6 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_repr::*;
 
-#[derive(Debug, Clone)]
-pub enum CustomUserEvent<CoreCommand> {
-    CoreCommand(CoreCommand),
-    KeyboardInput(KeyboardInput),
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum WebKeyboardEvent {

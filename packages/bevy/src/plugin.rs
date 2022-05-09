@@ -1,4 +1,4 @@
-use crate::{event::CustomUserEvent, runner::runner, window::DioxusWindows};
+use crate::{context::UserEvent, runner::runner, window::DioxusWindows};
 use bevy::{
     app::prelude::*,
     ecs::{event::Events, prelude::*},
@@ -7,7 +7,7 @@ use bevy::{
     window::{CreateWindow, WindowCreated, WindowPlugin, Windows},
 };
 use dioxus_core::Component as DioxusComponent;
-use dioxus_desktop::{cfg::DesktopConfig, desktop_context::UserEvent, tao::event_loop::EventLoop};
+use dioxus_desktop::{cfg::DesktopConfig, tao::event_loop::EventLoop};
 use futures_intrusive::channel::shared::{channel, Sender};
 use std::{fmt::Debug, marker::PhantomData};
 use tokio::runtime::Runtime;
@@ -22,7 +22,7 @@ pub struct DioxusDesktopPlugin<CoreCommand, UICommand, Props = ()> {
 impl<CoreCommand, UICommand, Props> Plugin for DioxusDesktopPlugin<CoreCommand, UICommand, Props>
 where
     CoreCommand: 'static + Send + Sync + Clone + Debug,
-    UICommand: 'static + Send + Sync + Clone,
+    UICommand: 'static + Send + Sync + Clone + Debug,
     Props: 'static + Send + Sync + Copy,
 {
     fn build(&self, app: &mut App) {
@@ -35,7 +35,7 @@ where
             .remove_non_send_resource::<DesktopConfig>()
             .unwrap_or_default();
 
-        let event_loop = EventLoop::<UserEvent<CustomUserEvent<CoreCommand>>>::with_user_event();
+        let event_loop = EventLoop::<UserEvent<CoreCommand>>::with_user_event();
 
         app.add_plugin(InputPlugin)
             .add_plugin(WindowPlugin::default())
@@ -83,7 +83,7 @@ where
 fn handle_initial_window_events<CoreCommand, UICommand, Props>(world: &mut World)
 where
     CoreCommand: 'static + Send + Sync + Clone + Debug,
-    UICommand: 'static + Send + Sync + Clone,
+    UICommand: 'static + Send + Sync + Clone + Debug,
     Props: 'static + Send + Sync + Copy,
 {
     let world = world.cell();

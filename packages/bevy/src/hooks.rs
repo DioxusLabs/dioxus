@@ -1,22 +1,20 @@
-use crate::{context::BevyDesktopContext, event::CustomUserEvent};
+use crate::context::DesktopContext;
 use dioxus_core::*;
-// use dioxus_hooks::{use_future, UseFuture, UseFutureDep};
 use std::fmt::Debug;
 
 pub fn use_bevy_window<CoreCommand, UICommand>(
     cx: &ScopeState,
-) -> &BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>
+) -> &DesktopContext<CoreCommand, UICommand>
 where
     CoreCommand: Debug + Clone,
     UICommand: Clone + 'static,
 {
-    cx.use_hook(|_| {
-        cx.consume_context::<BevyDesktopContext<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>>()
-    })
-    .as_ref()
-    .unwrap()
+    cx.use_hook(|_| cx.consume_context::<DesktopContext<CoreCommand, UICommand>>())
+        .as_ref()
+        .unwrap()
 }
 
+// TODO
 // pub fn use_bevy_listener<CoreCommand, UICommand, D, F>(
 //     cx: &ScopeState,
 //     deps: D,

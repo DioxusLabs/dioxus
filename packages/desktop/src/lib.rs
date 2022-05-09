@@ -4,20 +4,20 @@
 // TODO:  #![deny(missing_docs)]
 
 pub mod cfg;
-pub mod controller;
+mod controller;
 pub mod desktop_context;
 mod escape;
 pub mod events;
 pub mod protocol;
 
-pub use desktop_context::{/* todo: use_eval, */ use_window, DesktopContext};
-use desktop_context::{UserEvent, UserWindowEvent};
+use desktop_context::UserWindowEvent;
+pub use desktop_context::{use_eval, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
 pub use cfg::DesktopConfig;
-pub use controller::DesktopController;
+use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
 use tao::{
@@ -106,14 +106,9 @@ pub fn launch_with_props<P: 'static + Send>(
     builder(&mut cfg);
 
     let event_loop = EventLoop::with_user_event();
-    let proxy = event_loop.create_proxy();
 
-    let mut desktop = DesktopController::new_on_tokio::<P, DesktopContext<()>, ()>(
-        root,
-        props,
-        event_loop.create_proxy(),
-        DesktopContext::new(proxy.clone()),
-    );
+    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+    let proxy = event_loop.create_proxy();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -148,9 +143,7 @@ pub fn launch_with_props<P: 'static + Send>(
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                                    let _ = proxy.send_event(UserEvent::WindowEvent(
-                                        UserWindowEvent::Update,
-                                    ));
+                                    let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
                                     let data = message.params();
@@ -220,17 +213,13 @@ pub fn launch_with_props<P: 'static + Send>(
                         let _ = view.resize();
                     }
                 }
+
                 _ => {}
             },
 
-            Event::UserEvent(user_event) => match user_event {
-                UserEvent::WindowEvent(e) => {
-                    desktop_context::user_window_event_handler(e, &mut desktop, control_flow);
-                }
-                UserEvent::CustomEvent(_e) => {
-                    todo!("accept custom handler");
-                }
-            },
+            Event::UserEvent(user_event) => {
+                desktop_context::handler(user_event, &mut desktop, control_flow)
+            }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
             Event::Suspended => {}

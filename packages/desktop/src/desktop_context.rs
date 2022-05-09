@@ -1,23 +1,18 @@
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
-use std::fmt::Debug;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::window::Fullscreen as WryFullscreen;
 
 use UserWindowEvent::*;
 
-pub type ProxyType<T> = EventLoopProxy<UserEvent<T>>;
+pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
-pub fn use_window(cx: &ScopeState) -> &dyn WindowController<()> {
-    use_custom_window::<()>(cx)
-}
-
-pub fn use_custom_window<T: Debug + Clone + 'static>(cx: &ScopeState) -> &dyn WindowController<T> {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext<T>>())
+pub fn use_window(cx: &ScopeState) -> &DesktopContext {
+    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
         .as_ref()
-        .expect("Cannot find DesktopContext with Controller")
+        .unwrap()
 }
 
 /// An imperative interface to the current window.
@@ -33,21 +28,15 @@ pub fn use_custom_window<T: Debug + Clone + 'static>(cx: &ScopeState) -> &dyn Wi
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
-pub struct DesktopContext<T: Debug + Clone + 'static> {
-    proxy: ProxyType<T>,
+pub struct DesktopContext {
+    /// The wry/tao proxy to the current window
+    pub proxy: ProxyType,
 }
 
-impl<T> WindowController<T> for DesktopContext<T>
-where
-    T: Debug + Clone,
-{
-    fn get_proxy(&self) -> ProxyType<T> {
-        self.proxy.clone()
+impl DesktopContext {
+    pub(crate) fn new(proxy: ProxyType) -> Self {
+        Self { proxy }
     }
-}
-
-pub trait WindowController<T: Debug + 'static> {
-    fn get_proxy(&self) -> ProxyType<T>;
 
     /// trigger the drag-window event
     ///
@@ -57,129 +46,84 @@ pub trait WindowController<T: Debug + 'static> {
     /// ```rust
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
-    fn drag(&self) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(DragWindow));
+    pub fn drag(&self) {
+        let _ = self.proxy.send_event(DragWindow);
     }
 
     /// set window minimize state
-    fn set_minimized(&self, minimized: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(Minimize(minimized)));
+    pub fn set_minimized(&self, minimized: bool) {
+        let _ = self.proxy.send_event(Minimize(minimized));
     }
 
     /// set window maximize state
-    fn set_maximized(&self, maximized: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(Maximize(maximized)));
+    pub fn set_maximized(&self, maximized: bool) {
+        let _ = self.proxy.send_event(Maximize(maximized));
     }
 
     /// toggle window maximize state
-    fn toggle_maximized(&self) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(MaximizeToggle));
+    pub fn toggle_maximized(&self) {
+        let _ = self.proxy.send_event(MaximizeToggle);
     }
 
     /// set window visible or not
-    fn set_visible(&self, visible: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(Visible(visible)));
+    pub fn set_visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(Visible(visible));
     }
 
     /// close window
-    fn close(&self) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(CloseWindow));
+    pub fn close(&self) {
+        let _ = self.proxy.send_event(CloseWindow);
     }
 
     /// set window to focus
-    fn focus(&self) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(FocusWindow));
+    pub fn focus(&self) {
+        let _ = self.proxy.send_event(FocusWindow);
     }
 
     /// change window to fullscreen
-    fn set_fullscreen(&self, fullscreen: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(Fullscreen(fullscreen)));
+    pub fn set_fullscreen(&self, fullscreen: bool) {
+        let _ = self.proxy.send_event(Fullscreen(fullscreen));
     }
 
     /// set resizable state
-    fn set_resizable(&self, resizable: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(Resizable(resizable)));
+    pub fn set_resizable(&self, resizable: bool) {
+        let _ = self.proxy.send_event(Resizable(resizable));
     }
 
     /// set the window always on top
-    fn set_always_on_top(&self, top: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(AlwaysOnTop(top)));
+    pub fn set_always_on_top(&self, top: bool) {
+        let _ = self.proxy.send_event(AlwaysOnTop(top));
     }
 
     /// set cursor visible or not
-    fn set_cursor_visible(&self, visible: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(CursorVisible(visible)));
+    pub fn set_cursor_visible(&self, visible: bool) {
+        let _ = self.proxy.send_event(CursorVisible(visible));
     }
 
     /// set cursor grab
-    fn set_cursor_grab(&self, grab: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(CursorGrab(grab)));
+    pub fn set_cursor_grab(&self, grab: bool) {
+        let _ = self.proxy.send_event(CursorGrab(grab));
     }
 
     /// set window title
-    fn set_title(&self, title: &str) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(SetTitle(String::from(title))));
+    pub fn set_title(&self, title: &str) {
+        let _ = self.proxy.send_event(SetTitle(String::from(title)));
     }
 
     /// change window to borderless
-    fn set_decorations(&self, decoration: bool) {
-        let _ = self
-            .get_proxy()
-            .send_event(UserEvent::WindowEvent(SetDecorations(decoration)));
+    pub fn set_decorations(&self, decoration: bool) {
+        let _ = self.proxy.send_event(SetDecorations(decoration));
     }
 
     /// opens DevTool window
-    fn devtool(&self) {
-        let _ = self.get_proxy().send_event(UserEvent::WindowEvent(DevTool));
-    }
-}
-
-impl<T> DesktopContext<T>
-where
-    T: Debug + Clone,
-{
-    pub fn new(proxy: ProxyType<T>) -> Self {
-        Self { proxy }
+    pub fn devtool(&self) {
+        let _ = self.proxy.send_event(DevTool);
     }
 
     /// run (evaluate) a script in the WebView context
     pub fn eval(&self, script: impl std::string::ToString) {
-        let _ = self
-            .proxy
-            .send_event(UserEvent::WindowEvent(Eval(script.to_string())));
+        let _ = self.proxy.send_event(Eval(script.to_string()));
     }
-}
-
-#[derive(Debug)]
-pub enum UserEvent<T: Debug = ()> {
-    WindowEvent(UserWindowEvent),
-    CustomEvent(T),
 }
 
 #[derive(Debug)]
@@ -209,8 +153,8 @@ pub enum UserWindowEvent {
     Eval(String),
 }
 
-pub fn user_window_event_handler(
-    user_window_event: UserWindowEvent,
+pub(super) fn handler(
+    user_event: UserWindowEvent,
     desktop: &mut DesktopController,
     control_flow: &mut ControlFlow,
 ) {
@@ -219,7 +163,7 @@ pub fn user_window_event_handler(
     let webview = desktop.webviews.values().next().unwrap();
     let window = webview.window();
 
-    match user_window_event {
+    match user_event {
         Update => desktop.try_load_ready_webviews(),
         CloseWindow => *control_flow = ControlFlow::Exit,
         DragWindow => {
@@ -247,7 +191,7 @@ pub fn user_window_event_handler(
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
 
-        DevTool => webview.devtool(),
+        DevTool => {}
 
         Eval(code) => webview
             .evaluate_script(code.as_str())
@@ -255,9 +199,9 @@ pub fn user_window_event_handler(
     }
 }
 
-// TODO: /// Get a closure that executes any JavaScript in the WebView context.
-// pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-//     let desktop = use_window(&cx).clone();
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
+    let desktop = use_window(cx).clone();
 
-//     cx.use_hook(|_| move |script| desktop.eval(script))
-// }
+    cx.use_hook(|_| move |script| desktop.eval(script))
+}

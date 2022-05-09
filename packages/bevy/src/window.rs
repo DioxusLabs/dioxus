@@ -1,6 +1,6 @@
 use crate::{
-    context::BevyDesktopContext,
-    event::{CustomUserEvent, WebKeyboardEvent},
+    context::{DesktopContext, UserEvent},
+    event::WebKeyboardEvent,
 };
 use bevy::{
     ecs::world::WorldCell,
@@ -11,7 +11,7 @@ use bevy::{
 use dioxus_core::{Component as DioxusComponent, SchedulerMsg, VirtualDom};
 use dioxus_desktop::{
     cfg::DesktopConfig,
-    desktop_context::{UserEvent, UserWindowEvent},
+    desktop_context::UserWindowEvent,
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
@@ -54,6 +54,7 @@ impl Debug for DioxusWindows {
             .field("windonw keys", &self.windows.keys())
             .field("window_id_to_tao", &self.window_id_to_tao)
             .field("tao_to_window_id", &self.tao_to_window_id)
+            .field("quit_app_on_close", &self.quit_app_on_close)
             .finish()
     }
 }
@@ -102,11 +103,11 @@ impl DioxusWindows {
     ) -> BevyWindow
     where
         CoreCommand: 'static + Send + Sync + Clone + Debug,
-        UICommand: 'static + Send + Sync + Clone,
+        UICommand: 'static + Send + Sync + Clone + Debug,
         Props: 'static + Send + Sync + Copy,
     {
         let event_loop = world
-            .get_non_send_mut::<EventLoop<UserEvent<CustomUserEvent<CoreCommand>>>>()
+            .get_non_send_mut::<EventLoop<UserEvent<CoreCommand>>>()
             .unwrap();
         let proxy = event_loop.create_proxy();
         let core_tx = world.get_resource::<Sender<CoreCommand>>().unwrap();
@@ -120,11 +121,10 @@ impl DioxusWindows {
             .unwrap()
             .clone();
         let props = world.get_resource::<Props>().unwrap().clone();
-        let context =
-            BevyDesktopContext::<CustomUserEvent<CoreCommand>, CoreCommand, UICommand>::new(
-                proxy.clone(),
-                (core_tx.clone(), ui_rx.clone()),
-            );
+        let context = DesktopContext::<CoreCommand, UICommand>::new(
+            proxy.clone(),
+            (core_tx.clone(), ui_rx.clone()),
+        );
 
         let edit_queue_clone = edit_queue.clone();
         let dom_tx_clone = dom_tx.clone();
@@ -206,9 +206,7 @@ impl DioxusWindows {
                         "keyboard_event" => {
                             let event = WebKeyboardEvent::from_value(message.params());
                             proxy
-                                .send_event(UserEvent::CustomEvent(CustomUserEvent::KeyboardInput(
-                                    event.to_input(),
-                                )))
+                                .send_event(UserEvent::KeyboardInput(event.to_input()))
                                 .unwrap();
                         }
                         "initialize" => {

@@ -1,11 +1,12 @@
-use crate::{event::CustomUserEvent, window::DioxusWindows};
+use crate::{context::UserEvent, window::DioxusWindows};
 use bevy::{
     app::{App, AppExit},
     ecs::event::{Events, ManualEventReader},
     input::keyboard::KeyboardInput,
+    window::ReceivedCharacter,
 };
 use dioxus_desktop::{
-    desktop_context::{UserEvent, UserWindowEvent::*},
+    desktop_context::UserWindowEvent::*,
     tao::{
         event::{Event, StartCause, WindowEvent},
         event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
@@ -23,7 +24,7 @@ where
 {
     let event_loop = app
         .world
-        .remove_non_send_resource::<EventLoop<UserEvent<CustomUserEvent<CoreCommand>>>>()
+        .remove_non_send_resource::<EventLoop<UserEvent<CoreCommand>>>()
         .expect("Insert EventLoop as non send resource");
 
     let core_rx = app
@@ -41,14 +42,14 @@ where
         while let Some(cmd) = core_rx.receive().await {
             proxy
                 .clone()
-                .send_event(UserEvent::CustomEvent(CustomUserEvent::CoreCommand(cmd)))
+                .send_event(UserEvent::CoreCommand(cmd))
                 .unwrap();
         }
     });
 
     event_loop.run(
-        move |window_event: Event<UserEvent<CustomUserEvent<CoreCommand>>>,
-              _event_loop: &EventLoopWindowTarget<UserEvent<CustomUserEvent<CoreCommand>>>,
+        move |window_event: Event<UserEvent<CoreCommand>>,
+              _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
 
@@ -128,24 +129,31 @@ where
                                 .expect("eval shouldn't panic"),
                         };
                     }
-                    UserEvent::CustomEvent(e) => {
-                        match e {
-                            CustomUserEvent::CoreCommand(cmd) => {
-                                let mut events = app
-                                    .world
-                                    .get_resource_mut::<Events<CoreCommand>>()
-                                    .expect("Provide CoreCommand event to bevy");
-                                events.send(cmd);
-                                app.update();
-                            }
-                            CustomUserEvent::KeyboardInput(input) => {
-                                let mut events = app
-                                    .world
-                                    .get_resource_mut::<Events<KeyboardInput>>()
-                                    .unwrap();
-                                events.send(input);
-                            }
-                        };
+                    UserEvent::CoreCommand(cmd) => {
+                        let mut events = app
+                            .world
+                            .get_resource_mut::<Events<CoreCommand>>()
+                            .expect("Provide CoreCommand event to bevy");
+                        events.send(cmd);
+
+                        app.update();
+                    }
+                    UserEvent::KeyboardInput(input) => {
+                        let mut events = app
+                            .world
+                            .get_resource_mut::<Events<KeyboardInput>>()
+                            .unwrap();
+                        events.send(input);
+
+                        app.update();
+                    }
+                    UserEvent::ReceivedCharacter(c) => {
+                        let mut events = app
+                            .world
+                            .get_resource_mut::<Events<ReceivedCharacter>>()
+                            .unwrap();
+                        events.send(c);
+
                         app.update();
                     }
                 },
