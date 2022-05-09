@@ -191,7 +191,7 @@ pub(super) fn handler(
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
 
-        DevTool => {}
+        DevTool => webview.devtool(),
 
         Eval(code) => webview
             .evaluate_script(code.as_str())
@@ -201,7 +201,7 @@ pub(super) fn handler(
 
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-    let desktop = use_window(cx).clone();
+    let desktop = use_window(&cx).clone();
 
     cx.use_hook(|_| move |script| desktop.eval(script))
 }

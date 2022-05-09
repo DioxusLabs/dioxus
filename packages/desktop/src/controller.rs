@@ -11,7 +11,7 @@ use wry::{
     webview::WebView,
 };
 
-pub struct DesktopController {
+pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
@@ -22,7 +22,7 @@ pub struct DesktopController {
 impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
-    pub fn new_on_tokio<P: Send + 'static>(
+    pub(super) fn new_on_tokio<P: Send + 'static>(
         root: Component<P>,
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
