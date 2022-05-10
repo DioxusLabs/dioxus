@@ -30,7 +30,6 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ..
     } = config;
 
-
     // start to build the assets
     build_assets(config)?;
 
@@ -359,20 +358,21 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                 // if the sass open auto, we need auto-check the assets dir.
                 let asset_dir = config.asset_dir.clone();
                 if asset_dir.is_dir() {
-                    for entry in walkdir::WalkDir::new(asset_dir)
+                    for entry in walkdir::WalkDir::new(&asset_dir)
                         .into_iter()
                         .filter_map(|e| e.ok())
                     {
                         let temp = entry.path();
                         if temp.is_file() {
-                            let suffix = temp.file_name().unwrap().to_str().unwrap();
-                            let suffix = suffix.split('.').collect::<Vec<&str>>();
-                            let suffix: &str = suffix.last().unwrap();
+                            let suffix = temp.extension().unwrap().to_str().unwrap();
                             if suffix == "scss" {
                                 // if file suffix is `scss` we need transform it.
-                                let temp_stem = temp.file_stem().unwrap().to_str().unwrap();
-                                let target_path =
-                                    temp.parent().unwrap().join(format!("{}.css", temp_stem));
+                                let out_file =
+                                    format!("{}.css", temp.file_stem().unwrap().to_str().unwrap());
+                                let target_path = config
+                                    .out_dir
+                                    .join(temp.strip_prefix(&asset_dir).unwrap().parent().unwrap())
+                                    .join(out_file);
                                 sass.call(
                                     "sass",
                                     vec![temp.to_str().unwrap(), target_path.to_str().unwrap()],
