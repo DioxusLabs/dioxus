@@ -365,9 +365,9 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                 "--source-map"
             };
 
-            if tab.contains_key("files") {
-                if tab.get("files").unwrap().is_str() {
-                    let file = tab.get("files").unwrap().as_str().unwrap().trim();
+            if tab.contains_key("input") {
+                if tab.get("input").unwrap().is_str() {
+                    let file = tab.get("input").unwrap().as_str().unwrap().trim();
 
                     if file == "*" {
                         // if the sass open auto, we need auto-check the assets dir.
@@ -428,9 +428,9 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                             )?;
                         }
                     }
-                } else if tab.get("files").unwrap().is_array() {
+                } else if tab.get("input").unwrap().is_array() {
                     // check files list.
-                    let list = tab.get("files").unwrap().as_array().unwrap();
+                    let list = tab.get("input").unwrap().as_array().unwrap();
                     for i in list {
                         if i.is_str() {
                             let path = i.as_str().unwrap();

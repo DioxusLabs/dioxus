@@ -48,13 +48,13 @@ binaryen = { wasm_opt = true }
 [application.tools.sass]
 
 # auto will check the assets dirs, and auto to transform all scss file to css file.
-auto = true
+input = "*"
 
 # or you can specify some scss file -> css file
-files = [
-    # some sass file path
-    # this file will translate to `/css/test.css`
-    "/css/test.scss"
-]
+# input = [
+#     # some sass file path
+#     # this file will translate to `/css/test.css`
+#     "/css/test.scss"
+# ]
 
 source_map = true
