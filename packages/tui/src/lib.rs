@@ -17,7 +17,7 @@ use layout::StretchLayout;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use stretch2::{prelude::Size, Stretch};
+use stretch2::{geometry::Point, prelude::Size, Stretch};
 use style_attributes::StyleModifier;
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
@@ -166,7 +166,14 @@ fn render_vdom(
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
                             let root = &rdom[0];
-                            render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
+                            render::render_vnode(
+                                frame,
+                                &stretch.borrow(),
+                                &rdom,
+                                root,
+                                cfg,
+                                Point::zero(),
+                            );
                         })?;
                     } else {
                         resize(
