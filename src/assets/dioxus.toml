@@ -47,8 +47,6 @@ binaryen = { wasm_opt = true }
 # use sass auto will auto check sass file and build it.
 [application.tools.sass]
 
-version = "1.51.0"
-
 # if auto = true, we will check style array, and translate all sass file to css.
 auto = true
 
@@ -56,5 +54,5 @@ auto = true
 files = [
     # some sass file path
     # this file will translate to `/css/test.css`
-    "/css/test.sass"
+    "/css/test.scss"
 ]

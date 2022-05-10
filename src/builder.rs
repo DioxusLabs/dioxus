@@ -1,6 +1,7 @@
 use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
+    tools::Tool,
     DioxusConfig,
 };
 use std::{
@@ -28,6 +29,10 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         dioxus_config,
         ..
     } = config;
+
+
+    // start to build the assets
+    build_assets(config)?;
 
     let t_start = std::time::Instant::now();
 
@@ -337,6 +342,49 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .unwrap_or_else(|| "dioxus | ⛺".into());
 
     html.replace("{app_title}", &title)
+}
+
+// this function will build some assets file
+// like sass tool resources
+fn build_assets(config: &CrateConfig) -> Result<()> {
+    let dioxus_config = &config.dioxus_config;
+    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+
+    // check sass tool state
+    let sass = Tool::Sass;
+    if sass.is_installed() && dioxus_tools.contains_key("sass") {
+        let sass_conf = dioxus_tools.get("sass").unwrap();
+        if let Some(tab) = sass_conf.as_table() {
+            if tab.contains_key("auto") && tab.get("auto").unwrap().as_bool().unwrap_or(false) {
+                // if the sass open auto, we need auto-check the assets dir.
+                let asset_dir = config.asset_dir.clone();
+                if asset_dir.is_dir() {
+                    for entry in walkdir::WalkDir::new(asset_dir)
+                        .into_iter()
+                        .filter_map(|e| e.ok())
+                    {
+                        let temp = entry.path();
+                        if temp.is_file() {
+                            let suffix = temp.file_name().unwrap().to_str().unwrap();
+                            let suffix = suffix.split('.').collect::<Vec<&str>>();
+                            let suffix: &str = suffix.last().unwrap();
+                            if suffix == "scss" {
+                                // if file suffix is `scss` we need transform it.
+                                let temp_stem = temp.file_stem().unwrap().to_str().unwrap();
+                                let target_path =
+                                    temp.parent().unwrap().join(format!("{}.css", temp_stem));
+                                sass.call(
+                                    "sass",
+                                    vec![temp.to_str().unwrap(), target_path.to_str().unwrap()],
+                                )?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // use binary_install::{Cache, Download};
