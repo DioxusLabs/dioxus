@@ -362,48 +362,54 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                     "--no-source-map"
                 }
             } else {
-                "--no-source-map"
+                "--source-map"
             };
 
-            if tab.contains_key("auto") && tab.get("auto").unwrap().as_bool().unwrap_or(false) {
-                // if the sass open auto, we need auto-check the assets dir.
-                let asset_dir = config.asset_dir.clone();
-                if asset_dir.is_dir() {
-                    for entry in walkdir::WalkDir::new(&asset_dir)
-                        .into_iter()
-                        .filter_map(|e| e.ok())
-                    {
-                        let temp = entry.path();
-                        if temp.is_file() {
-                            let suffix = temp.extension().unwrap().to_str().unwrap();
-                            if suffix == "scss" {
-                                // if file suffix is `scss` we need transform it.
-                                let out_file =
-                                    format!("{}.css", temp.file_stem().unwrap().to_str().unwrap());
-                                let target_path = config
-                                    .out_dir
-                                    .join(temp.strip_prefix(&asset_dir).unwrap().parent().unwrap())
-                                    .join(out_file);
-                                sass.call(
-                                    "sass",
-                                    vec![
-                                        temp.to_str().unwrap(),
-                                        target_path.to_str().unwrap(),
-                                        source_map,
-                                    ],
-                                )?;
+            if tab.contains_key("files") {
+                if tab.get("files").unwrap().is_str() {
+                    let file = tab.get("files").unwrap().as_str().unwrap().trim();
+
+                    if file == "*" {
+                        // if the sass open auto, we need auto-check the assets dir.
+                        let asset_dir = config.asset_dir.clone();
+                        if asset_dir.is_dir() {
+                            for entry in walkdir::WalkDir::new(&asset_dir)
+                                .into_iter()
+                                .filter_map(|e| e.ok())
+                            {
+                                let temp = entry.path();
+                                if temp.is_file() {
+                                    let suffix = temp.extension().unwrap().to_str().unwrap();
+                                    if suffix == "scss" {
+                                        // if file suffix is `scss` we need transform it.
+                                        let out_file = format!(
+                                            "{}.css",
+                                            temp.file_stem().unwrap().to_str().unwrap()
+                                        );
+                                        let target_path = config
+                                            .out_dir
+                                            .join(
+                                                temp.strip_prefix(&asset_dir)
+                                                    .unwrap()
+                                                    .parent()
+                                                    .unwrap(),
+                                            )
+                                            .join(out_file);
+                                        sass.call(
+                                            "sass",
+                                            vec![
+                                                temp.to_str().unwrap(),
+                                                target_path.to_str().unwrap(),
+                                                source_map,
+                                            ],
+                                        )?;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
-            } else if tab.contains_key("files") && tab.get("files").unwrap().is_array() {
-                // check files list.
-                let list = tab.get("files").unwrap().as_array().unwrap();
-                for i in list {
-                    if i.is_str() {
-                        let path = i.as_str().unwrap();
-                        let path = PathBuf::from(path);
-                        let path = config.asset_dir.join(path);
+                    } else {
+                        // just transform one file.
+                        let path = config.asset_dir.join(file);
                         if path.is_file() {
                             sass.call(
                                 "sass",
@@ -422,10 +428,39 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                             )?;
                         }
                     }
+                } else if tab.get("files").unwrap().is_array() {
+                    // check files list.
+                    let list = tab.get("files").unwrap().as_array().unwrap();
+                    for i in list {
+                        if i.is_str() {
+                            let path = i.as_str().unwrap();
+                            let path = PathBuf::from(path);
+                            let path = config.asset_dir.join(path);
+                            if path.is_file() {
+                                sass.call(
+                                    "sass",
+                                    vec![
+                                        path.to_str().unwrap(),
+                                        path.parent()
+                                            .unwrap()
+                                            .join(format!(
+                                                "{}.css",
+                                                path.file_stem().unwrap().to_str().unwrap()
+                                            ))
+                                            .to_str()
+                                            .unwrap(),
+                                        source_map,
+                                    ],
+                                )?;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
+    // SASS END
+
     Ok(())
 }
 
