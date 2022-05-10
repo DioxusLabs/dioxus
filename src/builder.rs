@@ -354,6 +354,17 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
     if sass.is_installed() && dioxus_tools.contains_key("sass") {
         let sass_conf = dioxus_tools.get("sass").unwrap();
         if let Some(tab) = sass_conf.as_table() {
+            let source_map = tab.contains_key("source_map");
+            let source_map = if source_map && tab.get("source_map").unwrap().is_bool() {
+                if tab.get("source_map").unwrap().as_bool().unwrap_or_default() {
+                    "--source-map"
+                } else {
+                    "--no-source-map"
+                }
+            } else {
+                "--no-source-map"
+            };
+
             if tab.contains_key("auto") && tab.get("auto").unwrap().as_bool().unwrap_or(false) {
                 // if the sass open auto, we need auto-check the assets dir.
                 let asset_dir = config.asset_dir.clone();
@@ -375,7 +386,11 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                                     .join(out_file);
                                 sass.call(
                                     "sass",
-                                    vec![temp.to_str().unwrap(), target_path.to_str().unwrap()],
+                                    vec![
+                                        temp.to_str().unwrap(),
+                                        target_path.to_str().unwrap(),
+                                        source_map,
+                                    ],
                                 )?;
                             }
                         }
@@ -394,10 +409,15 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                                 "sass",
                                 vec![
                                     path.to_str().unwrap(),
-                                    path.parent().unwrap().join(format!(
-                                        "{}.css",
-                                        path.file_stem().unwrap().to_str().unwrap()
-                                    )).to_str().unwrap(),
+                                    path.parent()
+                                        .unwrap()
+                                        .join(format!(
+                                            "{}.css",
+                                            path.file_stem().unwrap().to_str().unwrap()
+                                        ))
+                                        .to_str()
+                                        .unwrap(),
+                                    source_map,
                                 ],
                             )?;
                         }

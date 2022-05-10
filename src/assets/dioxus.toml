@@ -56,3 +56,5 @@ files = [
     # this file will translate to `/css/test.css`
     "/css/test.scss"
 ]
+
+source_map = true
