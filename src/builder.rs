@@ -381,6 +381,28 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                         }
                     }
                 }
+            } else if tab.contains_key("files") && tab.get("files").unwrap().is_array() {
+                // check files list.
+                let list = tab.get("files").unwrap().as_array().unwrap();
+                for i in list {
+                    if i.is_str() {
+                        let path = i.as_str().unwrap();
+                        let path = PathBuf::from(path);
+                        let path = config.asset_dir.join(path);
+                        if path.is_file() {
+                            sass.call(
+                                "sass",
+                                vec![
+                                    path.to_str().unwrap(),
+                                    path.parent().unwrap().join(format!(
+                                        "{}.css",
+                                        path.file_stem().unwrap().to_str().unwrap()
+                                    )).to_str().unwrap(),
+                                ],
+                            )?;
+                        }
+                    }
+                }
             }
         }
     }
