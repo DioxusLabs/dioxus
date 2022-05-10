@@ -207,7 +207,7 @@ impl Tool {
                 } else {
                     command.to_string()
                 }
-            },
+            }
         };
 
         if !bin_path.join(&command_file).is_file() {
@@ -232,7 +232,7 @@ fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     if !target.exists() {
         let _ = std::fs::create_dir_all(target)?;
     }
-    
+
     for i in 0..zip.len() {
         let mut file = zip.by_index(i)?;
         if file.is_dir() {

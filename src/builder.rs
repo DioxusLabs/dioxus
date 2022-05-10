@@ -409,7 +409,13 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                         }
                     } else {
                         // just transform one file.
-                        let path = config.asset_dir.join(file);
+                        let path = if &file[0..] == "/" {
+                            &file[1..file.len() - 1]
+                        } else {
+                            file
+                        };
+                        let path = PathBuf::from(path);
+                        let path = config.asset_dir.join(path);
                         if path.is_file() {
                             sass.call(
                                 "sass",
@@ -434,6 +440,11 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                     for i in list {
                         if i.is_str() {
                             let path = i.as_str().unwrap();
+                            let path = if &path[0..] == "/" {
+                                &path[1..path.len() - 1]
+                            } else {
+                                path
+                            };
                             let path = PathBuf::from(path);
                             let path = config.asset_dir.join(path);
                             if path.is_file() {
