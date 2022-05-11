@@ -120,6 +120,11 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
     }
 
+    /// launch print modal
+    pub fn print(&self) {
+        let _ = self.proxy.send_event(Print);
+    }
+
     /// opens DevTool window
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
@@ -155,6 +160,7 @@ pub enum UserWindowEvent {
 
     SetZoomLevel(f64),
 
+    Print,
     DevTool,
 
     Eval(String),
@@ -200,7 +206,13 @@ pub(super) fn handler(
 
         SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
 
-        DevTool => {}
+        Print => {
+            if let Err(e) = webview.print() {
+                // we can't panic this error.
+                log::warn!("Open print modal failed: {e}");
+            }
+        }
+        DevTool => webview.open_devtools(),
 
         Eval(code) => {
             if let Err(e) = webview.evaluate_script(code.as_str()) {
