@@ -443,7 +443,6 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                             .out_dir
                             .join(PathBuf::from(relative_path).parent().unwrap())
                             .join(out_file);
-                        println!("{:?} -- {:?}", target_path, path);
                         if path.is_file() {
                             let res = sass.call(
                                 "sass",
