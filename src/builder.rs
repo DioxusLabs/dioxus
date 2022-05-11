@@ -31,7 +31,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     } = config;
 
     // start to build the assets
-    build_assets(config)?;
+    let ignore_files = build_assets(config)?;
 
     let t_start = std::time::Instant::now();
 
@@ -156,6 +156,13 @@ pub fn build(config: &CrateConfig) -> Result<()> {
                     Ok(_) => {}
                     Err(_e) => {
                         log::warn!("Error copying dir: {}", _e);
+                    }
+                }
+                for ignore in &ignore_files {
+                    let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
+                    let ignore = config.out_dir.join(ignore);
+                    if ignore.is_file() {
+                        std::fs::remove_file(ignore)?;
                     }
                 }
             }
@@ -345,7 +352,11 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 
 // this function will build some assets file
 // like sass tool resources
-fn build_assets(config: &CrateConfig) -> Result<()> {
+// this function will return a array which file don't need copy to out_dir.
+fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
+
+    let mut result = vec![];
+
     let dioxus_config = &config.dioxus_config;
     let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
 
@@ -395,14 +406,17 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                                                     .unwrap(),
                                             )
                                             .join(out_file);
-                                        sass.call(
+                                        let res = sass.call(
                                             "sass",
                                             vec![
                                                 temp.to_str().unwrap(),
                                                 target_path.to_str().unwrap(),
                                                 source_map,
                                             ],
-                                        )?;
+                                        );
+                                        if res.is_ok() {
+                                            result.push(temp.to_path_buf());
+                                        }
                                     }
                                 }
                             }
@@ -417,7 +431,7 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                         let path = PathBuf::from(path);
                         let path = config.asset_dir.join(path);
                         if path.is_file() {
-                            sass.call(
+                            let res = sass.call(
                                 "sass",
                                 vec![
                                     path.to_str().unwrap(),
@@ -431,7 +445,10 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                                         .unwrap(),
                                     source_map,
                                 ],
-                            )?;
+                            );
+                            if res.is_ok() {
+                                result.push(path);
+                            }
                         }
                     }
                 } else if tab.get("input").unwrap().is_array() {
@@ -448,7 +465,7 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                             let path = PathBuf::from(path);
                             let path = config.asset_dir.join(path);
                             if path.is_file() {
-                                sass.call(
+                                let res = sass.call(
                                     "sass",
                                     vec![
                                         path.to_str().unwrap(),
@@ -462,7 +479,10 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
                                             .unwrap(),
                                         source_map,
                                     ],
-                                )?;
+                                );
+                                if res.is_ok() {
+                                    result.push(path);
+                                }
                             }
                         }
                     }
@@ -472,7 +492,7 @@ fn build_assets(config: &CrateConfig) -> Result<()> {
     }
     // SASS END
 
-    Ok(())
+    Ok(result)
 }
 
 // use binary_install::{Cache, Download};
