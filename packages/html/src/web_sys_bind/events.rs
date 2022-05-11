@@ -1,5 +1,5 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-use crate::input::{decode_mouse_button_set, MouseButton};
+use crate::input_data::{decode_mouse_button_set, MouseButton};
 use crate::on::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,

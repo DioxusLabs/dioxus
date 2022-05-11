@@ -6,7 +6,7 @@ pub mod on {
     //! Input events and associated data
 
     use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-    use crate::input::{
+    use crate::input_data::{
         decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
     };
     use keyboard_types::Modifiers;

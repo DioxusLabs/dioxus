@@ -6,9 +6,9 @@ use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
 use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-use dioxus_html::input::keyboard_types::Modifiers;
-use dioxus_html::input::MouseButtonSet as DioxusMouseButtons;
-use dioxus_html::input::{MouseButton as DioxusMouseButton, MouseButtonSet};
+use dioxus_html::input_data::keyboard_types::Modifiers;
+use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
+use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
 use dioxus_html::{on::*, KeyCode};
 use std::{
     any::Any,

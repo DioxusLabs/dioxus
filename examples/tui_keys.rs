@@ -1,7 +1,7 @@
 use dioxus::events::WheelEvent;
 use dioxus::prelude::*;
 use dioxus_html::geometry::ScreenPoint;
-use dioxus_html::input::MouseButtonSet;
+use dioxus_html::input_data::MouseButtonSet;
 use dioxus_html::on::{KeyboardEvent, MouseEvent};
 use dioxus_html::KeyCode;
 
