@@ -177,6 +177,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     log::info!("🚅 Running build [Desktop] command...");
 
+    let ignore_files = build_assets(config)?;
+
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&config.crate_dir)
         .arg("build")
@@ -259,6 +261,13 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
                         Ok(_) => {}
                         Err(e) => {
                             log::warn!("Error copying dir: {}", e);
+                        }
+                    }
+                    for ignore in &ignore_files {
+                        let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
+                        let ignore = config.out_dir.join(ignore);
+                        if ignore.is_file() {
+                            std::fs::remove_file(ignore)?;
                         }
                     }
                 }
