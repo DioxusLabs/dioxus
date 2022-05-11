@@ -399,8 +399,8 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                                 let temp = entry.path();
                                 if temp.is_file() {
                                     let suffix = temp.extension().unwrap().to_str().unwrap();
-                                    if suffix == "scss" {
-                                        // if file suffix is `scss` we need transform it.
+                                    if suffix == "scss" || suffix == "sass" {
+                                        // if file suffix is `scss` / `sass` we need transform it.
                                         let out_file = format!(
                                             "{}.css",
                                             temp.file_stem().unwrap().to_str().unwrap()
