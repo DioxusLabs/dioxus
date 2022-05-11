@@ -195,7 +195,8 @@ pub(super) fn handler(
 
         Eval(code) => {
             if let Err(e) = webview.evaluate_script(code.as_str()) {
-                log::error!("Eval script error: {e}");
+                // we can't panic this error.
+                log::warn!("Eval script error: {e}");
             }
         }
     }
