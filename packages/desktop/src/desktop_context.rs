@@ -193,9 +193,11 @@ pub(super) fn handler(
 
         DevTool => {}
 
-        Eval(code) => webview
-            .evaluate_script(code.as_str())
-            .expect("eval shouldn't panic"),
+        Eval(code) => {
+            if let Err(e) = webview.evaluate_script(code.as_str()) {
+                log::error!("Eval script error: {e}");
+            }
+        }
     }
 }
 
