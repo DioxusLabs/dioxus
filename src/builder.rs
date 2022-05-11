@@ -354,7 +354,6 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
 // like sass tool resources
 // this function will return a array which file don't need copy to out_dir.
 fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
-
     let mut result = vec![];
 
     let dioxus_config = &config.dioxus_config;
@@ -430,19 +429,23 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                         };
                         let path = PathBuf::from(path);
                         let path = config.asset_dir.join(path);
+                        let out_file =
+                            format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                        let target_path = config
+                            .out_dir
+                            .join(
+                                path.strip_prefix(&config.asset_dir)
+                                    .unwrap()
+                                    .parent()
+                                    .unwrap(),
+                            )
+                            .join(out_file);
                         if path.is_file() {
                             let res = sass.call(
                                 "sass",
                                 vec![
                                     path.to_str().unwrap(),
-                                    path.parent()
-                                        .unwrap()
-                                        .join(format!(
-                                            "{}.css",
-                                            path.file_stem().unwrap().to_str().unwrap()
-                                        ))
-                                        .to_str()
-                                        .unwrap(),
+                                    target_path.to_str().unwrap(),
                                     source_map,
                                 ],
                             );
@@ -464,19 +467,23 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                             };
                             let path = PathBuf::from(path);
                             let path = config.asset_dir.join(path);
+                            let out_file =
+                                format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                            let target_path = config
+                                .out_dir
+                                .join(
+                                    path.strip_prefix(&config.asset_dir)
+                                        .unwrap()
+                                        .parent()
+                                        .unwrap(),
+                                )
+                                .join(out_file);
                             if path.is_file() {
                                 let res = sass.call(
                                     "sass",
                                     vec![
                                         path.to_str().unwrap(),
-                                        path.parent()
-                                            .unwrap()
-                                            .join(format!(
-                                                "{}.css",
-                                                path.file_stem().unwrap().to_str().unwrap()
-                                            ))
-                                            .to_str()
-                                            .unwrap(),
+                                        target_path.to_str().unwrap(),
                                         source_map,
                                     ],
                                 );
