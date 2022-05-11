@@ -115,6 +115,11 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetDecorations(decoration));
     }
 
+    /// set window zoom level
+    pub fn set_zoom_level(&self, scale_factor: f64) {
+        let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
+    }
+
     /// opens DevTool window
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
@@ -147,6 +152,8 @@ pub enum UserWindowEvent {
 
     SetTitle(String),
     SetDecorations(bool),
+
+    SetZoomLevel(f64),
 
     DevTool,
 
@@ -190,6 +197,8 @@ pub(super) fn handler(
 
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
+
+        SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
 
         DevTool => {}
 
