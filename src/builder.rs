@@ -431,24 +431,19 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                         }
                     } else {
                         // just transform one file.
-                        let path = if &file[0..] == "/" {
-                            &file[1..file.len() - 1]
+                        let relative_path = if &file[0..1] == "/" {
+                            &file[1..file.len()]
                         } else {
                             file
                         };
-                        let path = PathBuf::from(path);
-                        let path = config.asset_dir.join(path);
+                        let path = config.asset_dir.join(relative_path);
                         let out_file =
                             format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
                         let target_path = config
                             .out_dir
-                            .join(
-                                path.strip_prefix(&config.asset_dir)
-                                    .unwrap()
-                                    .parent()
-                                    .unwrap(),
-                            )
+                            .join(PathBuf::from(relative_path).parent().unwrap())
                             .join(out_file);
+                        println!("{:?} -- {:?}", target_path, path);
                         if path.is_file() {
                             let res = sass.call(
                                 "sass",
@@ -460,6 +455,8 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                             );
                             if res.is_ok() {
                                 result.push(path);
+                            } else {
+                                log::error!("{:?}", res);
                             }
                         }
                     }
@@ -469,23 +466,17 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                     for i in list {
                         if i.is_str() {
                             let path = i.as_str().unwrap();
-                            let path = if &path[0..] == "/" {
-                                &path[1..path.len() - 1]
+                            let relative_path = if &path[0..1] == "/" {
+                                &path[1..path.len()]
                             } else {
                                 path
                             };
-                            let path = PathBuf::from(path);
-                            let path = config.asset_dir.join(path);
+                            let path = config.asset_dir.join(relative_path);
                             let out_file =
                                 format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
                             let target_path = config
                                 .out_dir
-                                .join(
-                                    path.strip_prefix(&config.asset_dir)
-                                        .unwrap()
-                                        .parent()
-                                        .unwrap(),
-                                )
+                                .join(PathBuf::from(relative_path).parent().unwrap())
                                 .join(out_file);
                             if path.is_file() {
                                 let res = sass.call(
