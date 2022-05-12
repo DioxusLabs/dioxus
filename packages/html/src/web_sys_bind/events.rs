@@ -1,11 +1,12 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-use crate::input_data::{decode_mouse_button_set, MouseButton};
+use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::on::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::KeyCode;
-use keyboard_types::Modifiers;
+use keyboard_types::{Code, Key, Modifiers};
+use std::convert::TryInto;
+use std::str::FromStr;
 use wasm_bindgen::JsCast;
 use web_sys::{
     AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
@@ -56,18 +57,32 @@ impl From<&CompositionEvent> for CompositionData {
 
 impl From<&KeyboardEvent> for KeyboardData {
     fn from(e: &KeyboardEvent) -> Self {
-        Self {
-            alt_key: e.alt_key(),
-            char_code: e.char_code(),
-            key: e.key(),
-            key_code: KeyCode::from_raw_code(e.key_code() as u8),
-            ctrl_key: e.ctrl_key(),
-            location: e.location() as usize,
-            meta_key: e.meta_key(),
-            repeat: e.repeat(),
-            shift_key: e.shift_key(),
-            which: e.which() as usize,
+        let mut modifiers = Modifiers::empty();
+
+        if e.alt_key() {
+            modifiers.insert(Modifiers::ALT);
         }
+        if e.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if e.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if e.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        Self::new(
+            Key::from_str(&e.key()).expect("could not parse key"),
+            Code::from_str(&e.code()).expect("could not parse code"),
+            decode_key_location(
+                e.location()
+                    .try_into()
+                    .expect("could not convert location to u32"),
+            ),
+            e.repeat(),
+            modifiers,
+        )
     }
 }
 
