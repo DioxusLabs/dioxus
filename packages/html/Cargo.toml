@@ -40,5 +40,5 @@ features = [
 
 [features]
 default = []
-serialize = ["serde", "serde_repr"]
+serialize = ["serde", "serde_repr", "euclid/serde"]
 wasm-bind = ["web-sys", "wasm-bindgen"]
