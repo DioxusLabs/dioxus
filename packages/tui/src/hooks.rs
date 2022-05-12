@@ -5,7 +5,9 @@ use dioxus_core::*;
 use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
-use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use dioxus_html::geometry::{
+    ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint, WheelDelta,
+};
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
@@ -248,7 +250,10 @@ impl InnerInputState {
             // a mouse button is released if a button was down and is now not down
             let was_released = !(previous_buttons - mouse_data.held_buttons()).is_empty();
 
-            let wheel_delta = self.wheel.as_ref().map_or(0.0, |w| w.delta_y);
+            let was_scrolled = self
+                .wheel
+                .as_ref()
+                .map_or(false, |data| !data.delta().is_zero());
             let wheel_data = &self.wheel;
 
             {
@@ -412,7 +417,7 @@ impl InnerInputState {
             {
                 // wheel
                 if let Some(w) = wheel_data {
-                    if wheel_delta != 0.0 {
+                    if was_scrolled {
                         let mut will_bubble = FxHashSet::default();
                         for node in dom.get_listening_sorted("wheel") {
                             let node_layout =
@@ -638,13 +643,8 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
             };
 
             let get_wheel_data = |up| {
-                // from https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent
-                EventData::Wheel(WheelData {
-                    delta_mode: 0x01,
-                    delta_x: 0.0,
-                    delta_y: if up { -1.0 } else { 1.0 },
-                    delta_z: 0.0,
-                })
+                let y = if up { -1.0 } else { 1.0 };
+                EventData::Wheel(WheelData::new(WheelDelta::lines(0., y, 0.)))
             };
 
             match m.kind {
