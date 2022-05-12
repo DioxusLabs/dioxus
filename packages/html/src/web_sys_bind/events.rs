@@ -1,8 +1,11 @@
+use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use crate::input_data::{decode_mouse_button_set, MouseButton};
 use crate::on::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
 use crate::KeyCode;
+use keyboard_types::Modifiers;
 use wasm_bindgen::JsCast;
 use web_sys::{
     AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
@@ -71,22 +74,32 @@ impl From<&KeyboardEvent> for KeyboardData {
 
 impl From<&MouseEvent> for MouseData {
     fn from(e: &MouseEvent) -> Self {
-        Self {
-            alt_key: e.alt_key(),
-            button: e.button(),
-            buttons: e.buttons(),
-            client_x: e.client_x(),
-            client_y: e.client_y(),
-            ctrl_key: e.ctrl_key(),
-            meta_key: e.meta_key(),
-            offset_x: e.offset_x(),
-            offset_y: e.offset_y(),
-            screen_x: e.screen_x(),
-            screen_y: e.screen_y(),
-            shift_key: e.shift_key(),
-            page_x: e.page_x(),
-            page_y: e.page_y(),
+        let mut modifiers = Modifiers::empty();
+
+        if e.alt_key() {
+            modifiers.insert(Modifiers::ALT);
         }
+        if e.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if e.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if e.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        MouseData::new(
+            Coordinates::new(
+                ScreenPoint::new(e.screen_x().into(), e.screen_y().into()),
+                ClientPoint::new(e.client_x().into(), e.client_y().into()),
+                ElementPoint::new(e.offset_x().into(), e.offset_y().into()),
+                PagePoint::new(e.page_x().into(), e.page_y().into()),
+            ),
+            Some(MouseButton::from_web_code(e.button().into())),
+            decode_mouse_button_set(e.buttons()),
+            modifiers,
+        )
     }
 }
 
