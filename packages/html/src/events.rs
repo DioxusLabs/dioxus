@@ -755,6 +755,7 @@ pub mod on {
     }
 
     impl WheelData {
+        /// Construct a new WheelData with the specified wheel movement delta
         pub fn new(delta: WheelDelta) -> Self {
             let (delta_mode, vector) = match delta {
                 WheelDelta::Pixels(v) => (0, v.cast_unit::<UnknownUnit>()),
@@ -771,6 +772,7 @@ pub mod on {
             }
         }
 
+        /// Construct from the attributes of the web wheel event
         pub fn from_web_attributes(
             delta_mode: u32,
             delta_x: f64,
@@ -786,6 +788,7 @@ pub mod on {
             }
         }
 
+        /// The amount of wheel movement
         #[allow(deprecated)]
         pub fn delta(&self) -> WheelDelta {
             let x = self.delta_x;

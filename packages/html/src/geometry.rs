@@ -48,6 +48,7 @@ pub type PagesVector = Vector3D<f64, Pages>;
 ///
 /// This may be expressed in Pixels, Lines or Pages
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum WheelDelta {
     /// Movement in Pixels
     Pixels(PixelsVector),
@@ -73,10 +74,18 @@ impl WheelDelta {
         WheelDelta::Pages(PagesVector::new(x, y, z))
     }
 
+    /// Returns true iff there is no wheel movement
+    ///
+    /// i.e. the x, y and z delta is zero (disregards units)
     pub fn is_zero(&self) -> bool {
         self.strip_units() == Vector3D::new(0., 0., 0.)
     }
 
+    /// A Vector3D proportional to the amount scrolled
+    ///
+    /// Note that this disregards the 3 possible units: this could be expressed in terms of pixels, lines, or pages.
+    ///
+    /// In most cases, to properly handle scrolling, you should handle all 3 possible enum variants instead of stripping units. Otherwise, if you assume that the units will always be pixels, the user may experience some unexpectedly slow scrolling if their mouse/OS sends values expressed in lines or pages.
     pub fn strip_units(&self) -> Vector3D<f64, UnknownUnit> {
         match self {
             WheelDelta::Pixels(v) => v.cast_unit(),
