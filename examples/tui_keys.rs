@@ -1,6 +1,7 @@
 use dioxus::events::WheelEvent;
 use dioxus::prelude::*;
 use dioxus_html::geometry::ScreenPoint;
+use dioxus_html::input_data::keyboard_types::Code;
 use dioxus_html::input_data::MouseButtonSet;
 use dioxus_html::on::{KeyboardEvent, MouseEvent};
 use dioxus_html::KeyCode;
@@ -16,6 +17,21 @@ fn app(cx: Scope) -> Element {
     let buttons = use_state(&cx, || MouseButtonSet::empty());
     let mouse_clicked = use_state(&cx, || false);
 
+    let key_down_handler = move |evt: KeyboardEvent| {
+        match evt.data.code() {
+            Code::ArrowLeft => count.set(count + 1),
+            Code::ArrowRight => count.set(count - 1),
+            Code::ArrowUp => count.set(count + 10),
+            Code::ArrowDown => count.set(count - 10),
+            _ => {}
+        }
+        key.set(format!(
+            "{:?} repeating: {:?}",
+            evt.key(),
+            evt.is_auto_repeating()
+        ));
+    };
+
     cx.render(rsx! {
         div {
             width: "100%",
@@ -24,16 +40,7 @@ fn app(cx: Scope) -> Element {
             justify_content: "center",
             align_items: "center",
             flex_direction: "column",
-            onkeydown: move |evt: KeyboardEvent| {
-                match evt.data.key_code {
-                    KeyCode::LeftArrow => count.set(count + 1),
-                    KeyCode::RightArrow => count.set(count - 1),
-                    KeyCode::UpArrow => count.set(count + 10),
-                    KeyCode::DownArrow => count.set(count - 10),
-                    _ => {},
-                }
-                key.set(format!("{:?} repeating: {:?}", evt.key, evt.repeat));
-            },
+            onkeydown: key_down_handler,
             onwheel: move |evt: WheelEvent| {
                 count.set(count + evt.data.delta().strip_units().y as i64);
             },

@@ -14,7 +14,6 @@ pub mod on {
         MouseButton, MouseButtonSet,
     };
     use euclid::UnknownUnit;
-    use keyboard_types::Key::Alt;
     use keyboard_types::{Code, Key, Location, Modifiers};
     use std::collections::HashMap;
     use std::convert::TryInto;
@@ -908,7 +907,6 @@ pub mod on {
 )]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
-#[deprecated(since = "0.3.0", note = "use keyboard_types::Code instead")]
 pub enum KeyCode {
     // That key has no keycode, = 0
     // break, = 3

@@ -11,8 +11,7 @@ use dioxus_html::geometry::{
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
-use dioxus_html::{on::*, KeyCode};
-use std::str::FromStr;
+use dioxus_html::on::*;
 use std::{
     any::Any,
     cell::RefCell,
@@ -140,14 +139,18 @@ impl InnerInputState {
             EventData::Wheel(ref w) => self.wheel = Some(w.clone()),
             EventData::Screen(ref s) => self.screen = Some(*s),
             EventData::Keyboard(ref mut k) => {
-                let repeat = self
+                let is_repeating = self
                     .last_key_pressed
                     .as_ref()
-                    .filter(|k2| k2.0.key == k.key && k2.1.elapsed() < MAX_REPEAT_TIME)
+                    // heuristic for guessing which presses are auto-repeating. not necessarily accurate
+                    .filter(|k2| k2.0.key() == k.key() && k2.1.elapsed() < MAX_REPEAT_TIME)
                     .is_some();
-                k.repeat = repeat;
-                let new = k.clone();
-                self.last_key_pressed = Some((new, Instant::now()));
+                if is_repeating {
+                    let new = k.clone();
+                    self.last_key_pressed = Some((new, Instant::now()));
+
+                    *k = KeyboardData::new(k.key(), k.code(), k.location(), true, k.modifiers());
+                }
             }
         }
     }
