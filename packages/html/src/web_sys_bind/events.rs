@@ -62,7 +62,6 @@ impl From<&KeyboardEvent> for KeyboardData {
             key: e.key(),
             key_code: KeyCode::from_raw_code(e.key_code() as u8),
             ctrl_key: e.ctrl_key(),
-            locale: "not implemented".to_string(),
             location: e.location() as usize,
             meta_key: e.meta_key(),
             repeat: e.repeat(),

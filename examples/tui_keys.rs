@@ -4,7 +4,6 @@ use dioxus_html::geometry::ScreenPoint;
 use dioxus_html::input_data::keyboard_types::Code;
 use dioxus_html::input_data::MouseButtonSet;
 use dioxus_html::on::{KeyboardEvent, MouseEvent};
-use dioxus_html::KeyCode;
 
 fn main() {
     dioxus::tui::launch(app);
