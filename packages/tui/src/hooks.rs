@@ -8,10 +8,11 @@ use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
 use dioxus_html::geometry::{
     ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint, WheelDelta,
 };
-use dioxus_html::input_data::keyboard_types::Modifiers;
+use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
 use dioxus_html::{on::*, KeyCode};
+use std::str::FromStr;
 use std::{
     any::Any,
     cell::RefCell,
@@ -663,142 +664,221 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
 }
 
 fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
-    let (code, key_str);
-    if let TermKeyCode::Char(c) = event.code {
-        code = match c {
-            'A'..='Z' | 'a'..='z' => match c.to_ascii_uppercase() {
-                'A' => KeyCode::A,
-                'B' => KeyCode::B,
-                'C' => KeyCode::C,
-                'D' => KeyCode::D,
-                'E' => KeyCode::E,
-                'F' => KeyCode::F,
-                'G' => KeyCode::G,
-                'H' => KeyCode::H,
-                'I' => KeyCode::I,
-                'J' => KeyCode::J,
-                'K' => KeyCode::K,
-                'L' => KeyCode::L,
-                'M' => KeyCode::M,
-                'N' => KeyCode::N,
-                'O' => KeyCode::O,
-                'P' => KeyCode::P,
-                'Q' => KeyCode::Q,
-                'R' => KeyCode::R,
-                'S' => KeyCode::S,
-                'T' => KeyCode::T,
-                'U' => KeyCode::U,
-                'V' => KeyCode::V,
-                'W' => KeyCode::W,
-                'X' => KeyCode::X,
-                'Y' => KeyCode::Y,
-                'Z' => KeyCode::Z,
-                _ => return None,
-            },
-            ' ' => KeyCode::Space,
-            '[' => KeyCode::OpenBracket,
-            '{' => KeyCode::OpenBracket,
-            ']' => KeyCode::CloseBraket,
-            '}' => KeyCode::CloseBraket,
-            ';' => KeyCode::Semicolon,
-            ':' => KeyCode::Semicolon,
-            ',' => KeyCode::Comma,
-            '<' => KeyCode::Comma,
-            '.' => KeyCode::Period,
-            '>' => KeyCode::Period,
-            '1' => KeyCode::Num1,
-            '2' => KeyCode::Num2,
-            '3' => KeyCode::Num3,
-            '4' => KeyCode::Num4,
-            '5' => KeyCode::Num5,
-            '6' => KeyCode::Num6,
-            '7' => KeyCode::Num7,
-            '8' => KeyCode::Num8,
-            '9' => KeyCode::Num9,
-            '0' => KeyCode::Num0,
-            '!' => KeyCode::Num1,
-            '@' => KeyCode::Num2,
-            '#' => KeyCode::Num3,
-            '$' => KeyCode::Num4,
-            '%' => KeyCode::Num5,
-            '^' => KeyCode::Num6,
-            '&' => KeyCode::Num7,
-            '*' => KeyCode::Num8,
-            '(' => KeyCode::Num9,
-            ')' => KeyCode::Num0,
-            // numpad charicter are ambiguous to tui
-            // '*' => KeyCode::Multiply,
-            // '/' => KeyCode::Divide,
-            // '-' => KeyCode::Subtract,
-            // '+' => KeyCode::Add,
-            '+' => KeyCode::EqualSign,
-            '-' => KeyCode::Dash,
-            '_' => KeyCode::Dash,
-            '\'' => KeyCode::SingleQuote,
-            '"' => KeyCode::SingleQuote,
-            '\\' => KeyCode::BackSlash,
-            '|' => KeyCode::BackSlash,
-            '/' => KeyCode::ForwardSlash,
-            '?' => KeyCode::ForwardSlash,
-            '=' => KeyCode::EqualSign,
-            '`' => KeyCode::GraveAccent,
-            '~' => KeyCode::GraveAccent,
-            _ => return None,
-        };
-        key_str = c.to_string();
-    } else {
-        code = match event.code {
-            TermKeyCode::Esc => KeyCode::Escape,
-            TermKeyCode::Backspace => KeyCode::Backspace,
-            TermKeyCode::Enter => KeyCode::Enter,
-            TermKeyCode::Left => KeyCode::LeftArrow,
-            TermKeyCode::Right => KeyCode::RightArrow,
-            TermKeyCode::Up => KeyCode::UpArrow,
-            TermKeyCode::Down => KeyCode::DownArrow,
-            TermKeyCode::Home => KeyCode::Home,
-            TermKeyCode::End => KeyCode::End,
-            TermKeyCode::PageUp => KeyCode::PageUp,
-            TermKeyCode::PageDown => KeyCode::PageDown,
-            TermKeyCode::Tab => KeyCode::Tab,
-            TermKeyCode::Delete => KeyCode::Delete,
-            TermKeyCode::Insert => KeyCode::Insert,
-            TermKeyCode::F(fn_num) => match fn_num {
-                1 => KeyCode::F1,
-                2 => KeyCode::F2,
-                3 => KeyCode::F3,
-                4 => KeyCode::F4,
-                5 => KeyCode::F5,
-                6 => KeyCode::F6,
-                7 => KeyCode::F7,
-                8 => KeyCode::F8,
-                9 => KeyCode::F9,
-                10 => KeyCode::F10,
-                11 => KeyCode::F11,
-                12 => KeyCode::F12,
-                _ => return None,
-            },
-            TermKeyCode::BackTab => return None,
-            TermKeyCode::Null => return None,
-            _ => return None,
-        };
-        key_str = if let KeyCode::BackSlash = code {
-            "\\".to_string()
-        } else {
-            format!("{code:?}")
+    let key = key_from_crossterm_key_code(event.code);
+    // crossterm does not provide code. we make a guess as to which key might have been pressed
+    // this is probably garbage if the user has a custom keyboard layout
+    let code = guess_code_from_crossterm_key_code(event.code)?;
+    let modifiers = modifiers_from_crossterm_modifiers(event.modifiers);
+
+    Some(EventData::Keyboard(KeyboardData::new(
+        key,
+        code,
+        Location::Standard,
+        false,
+        modifiers,
+    )))
+}
+
+/// The crossterm key_code nicely represents the meaning of the key and we can mostly convert it without any issues
+///
+/// Exceptions:
+/// BackTab and Null are converted to Key::Unidentified
+fn key_from_crossterm_key_code(key_code: TermKeyCode) -> Key {
+    match key_code {
+        TermKeyCode::Backspace => Key::Backspace,
+        TermKeyCode::Enter => Key::Enter,
+        TermKeyCode::Left => Key::ArrowLeft,
+        TermKeyCode::Right => Key::ArrowRight,
+        TermKeyCode::Up => Key::ArrowUp,
+        TermKeyCode::Down => Key::ArrowDown,
+        TermKeyCode::Home => Key::Home,
+        TermKeyCode::End => Key::End,
+        TermKeyCode::PageUp => Key::PageUp,
+        TermKeyCode::PageDown => Key::PageDown,
+        TermKeyCode::Tab => Key::Tab,
+        // ? no corresponding Key
+        TermKeyCode::BackTab => Key::Unidentified,
+        TermKeyCode::Delete => Key::Delete,
+        TermKeyCode::Insert => Key::Insert,
+        TermKeyCode::F(1) => Key::F1,
+        TermKeyCode::F(2) => Key::F2,
+        TermKeyCode::F(3) => Key::F3,
+        TermKeyCode::F(4) => Key::F4,
+        TermKeyCode::F(5) => Key::F5,
+        TermKeyCode::F(6) => Key::F6,
+        TermKeyCode::F(7) => Key::F7,
+        TermKeyCode::F(8) => Key::F8,
+        TermKeyCode::F(9) => Key::F9,
+        TermKeyCode::F(10) => Key::F10,
+        TermKeyCode::F(11) => Key::F11,
+        TermKeyCode::F(12) => Key::F12,
+        TermKeyCode::F(13) => Key::F13,
+        TermKeyCode::F(14) => Key::F14,
+        TermKeyCode::F(15) => Key::F15,
+        TermKeyCode::F(16) => Key::F16,
+        TermKeyCode::F(17) => Key::F17,
+        TermKeyCode::F(18) => Key::F18,
+        TermKeyCode::F(19) => Key::F19,
+        TermKeyCode::F(20) => Key::F20,
+        TermKeyCode::F(21) => Key::F21,
+        TermKeyCode::F(22) => Key::F22,
+        TermKeyCode::F(23) => Key::F23,
+        TermKeyCode::F(24) => Key::F24,
+        TermKeyCode::F(other) => {
+            panic!("Unexpected function key: {other:?}")
         }
+        TermKeyCode::Char(c) => Key::Character(c.to_string()),
+        TermKeyCode::Null => Key::Unidentified,
+        TermKeyCode::Esc => Key::Escape,
+    }
+}
+
+// Crossterm does not provide a way to get the `code` (physical key on keyboard)
+// So we make a guess based on their `key_code`, but this is probably going to break on anything other than a very standard european keyboard
+// It may look fine, but it's a horrible hack.
+fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
+    let code = match key_code {
+        TermKeyCode::Backspace => Code::Backspace,
+        TermKeyCode::Enter => Code::Enter,
+        TermKeyCode::Left => Code::ArrowLeft,
+        TermKeyCode::Right => Code::ArrowRight,
+        TermKeyCode::Up => Code::ArrowUp,
+        TermKeyCode::Down => Code::ArrowDown,
+        TermKeyCode::Home => Code::Home,
+        TermKeyCode::End => Code::End,
+        TermKeyCode::PageUp => Code::PageUp,
+        TermKeyCode::PageDown => Code::PageDown,
+        TermKeyCode::Tab => Code::Tab,
+        // ? no corresponding Code
+        TermKeyCode::BackTab => Code::Tab,
+        TermKeyCode::Delete => Code::Delete,
+        TermKeyCode::Insert => Code::Insert,
+        TermKeyCode::F(1) => Code::F1,
+        TermKeyCode::F(2) => Code::F2,
+        TermKeyCode::F(3) => Code::F3,
+        TermKeyCode::F(4) => Code::F4,
+        TermKeyCode::F(5) => Code::F5,
+        TermKeyCode::F(6) => Code::F6,
+        TermKeyCode::F(7) => Code::F7,
+        TermKeyCode::F(8) => Code::F8,
+        TermKeyCode::F(9) => Code::F9,
+        TermKeyCode::F(10) => Code::F10,
+        TermKeyCode::F(11) => Code::F11,
+        TermKeyCode::F(12) => Code::F12,
+        TermKeyCode::F(13) => Code::F13,
+        TermKeyCode::F(14) => Code::F14,
+        TermKeyCode::F(15) => Code::F15,
+        TermKeyCode::F(16) => Code::F16,
+        TermKeyCode::F(17) => Code::F17,
+        TermKeyCode::F(18) => Code::F18,
+        TermKeyCode::F(19) => Code::F19,
+        TermKeyCode::F(20) => Code::F20,
+        TermKeyCode::F(21) => Code::F21,
+        TermKeyCode::F(22) => Code::F22,
+        TermKeyCode::F(23) => Code::F23,
+        TermKeyCode::F(24) => Code::F24,
+        TermKeyCode::F(other) => {
+            panic!("Unexpected function key: {other:?}")
+        }
+        // this is a horrible way for crossterm to represent keys but we have to deal with it
+        TermKeyCode::Char(c) => match c {
+            'A'..='Z' | 'a'..='z' => match c.to_ascii_uppercase() {
+                'A' => Code::KeyA,
+                'B' => Code::KeyB,
+                'C' => Code::KeyC,
+                'D' => Code::KeyD,
+                'E' => Code::KeyE,
+                'F' => Code::KeyF,
+                'G' => Code::KeyG,
+                'H' => Code::KeyH,
+                'I' => Code::KeyI,
+                'J' => Code::KeyJ,
+                'K' => Code::KeyK,
+                'L' => Code::KeyL,
+                'M' => Code::KeyM,
+                'N' => Code::KeyN,
+                'O' => Code::KeyO,
+                'P' => Code::KeyP,
+                'Q' => Code::KeyQ,
+                'R' => Code::KeyR,
+                'S' => Code::KeyS,
+                'T' => Code::KeyT,
+                'U' => Code::KeyU,
+                'V' => Code::KeyV,
+                'W' => Code::KeyW,
+                'X' => Code::KeyX,
+                'Y' => Code::KeyY,
+                'Z' => Code::KeyZ,
+                _ => unreachable!(),
+            },
+            ' ' => Code::Space,
+            '[' | '{' => Code::BracketLeft,
+            ']' | '}' => Code::BracketRight,
+            ';' => Code::Semicolon,
+            ':' => Code::Semicolon,
+            ',' => Code::Comma,
+            '<' => Code::Comma,
+            '.' => Code::Period,
+            '>' => Code::Period,
+            '1' => Code::Digit1,
+            '2' => Code::Digit2,
+            '3' => Code::Digit3,
+            '4' => Code::Digit4,
+            '5' => Code::Digit5,
+            '6' => Code::Digit6,
+            '7' => Code::Digit7,
+            '8' => Code::Digit8,
+            '9' => Code::Digit9,
+            '0' => Code::Digit0,
+            '!' => Code::Digit1,
+            '@' => Code::Digit2,
+            '#' => Code::Digit3,
+            '$' => Code::Digit4,
+            '%' => Code::Digit5,
+            '^' => Code::Digit6,
+            '&' => Code::Digit7,
+            '*' => Code::Digit8,
+            '(' => Code::Digit9,
+            ')' => Code::Digit0,
+            // numpad charicter are ambiguous to tui
+            // '*' => Code::Multiply,
+            // '/' => Code::Divide,
+            // '-' => Code::Subtract,
+            // '+' => Code::Add,
+            '+' => Code::Equal,
+            '-' | '_' => Code::Minus,
+            '\'' => Code::Quote,
+            '"' => Code::Quote,
+            '\\' => Code::Backslash,
+            '|' => Code::Backslash,
+            '/' => Code::Slash,
+            '?' => Code::Slash,
+            '=' => Code::Equal,
+            '`' => Code::Backquote,
+            '~' => Code::Backquote,
+            _ => return None,
+        },
+        TermKeyCode::Null => return None,
+        TermKeyCode::Esc => Code::Escape,
     };
-    // from https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent
-    Some(EventData::Keyboard(KeyboardData {
-        char_code: code.raw_code(),
-        key: key_str,
-        key_code: code,
-        alt_key: event.modifiers.contains(KeyModifiers::ALT),
-        ctrl_key: event.modifiers.contains(KeyModifiers::CONTROL),
-        meta_key: false,
-        shift_key: event.modifiers.contains(KeyModifiers::SHIFT),
-        locale: Default::default(),
-        location: 0x00,
-        repeat: Default::default(),
-        which: Default::default(),
-    }))
+
+    Some(code)
+}
+
+fn modifiers_from_crossterm_modifiers(src: KeyModifiers) -> Modifiers {
+    let mut modifiers = Modifiers::empty();
+
+    if src.contains(KeyModifiers::SHIFT) {
+        modifiers.insert(Modifiers::SHIFT);
+    }
+
+    if src.contains(KeyModifiers::ALT) {
+        modifiers.insert(Modifiers::ALT);
+    }
+
+    if src.contains(KeyModifiers::CONTROL) {
+        modifiers.insert(Modifiers::CONTROL);
+    }
+
+    modifiers
 }

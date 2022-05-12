@@ -10,11 +10,15 @@ pub mod on {
         ScreenPoint, WheelDelta,
     };
     use crate::input_data::{
-        decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
+        decode_key_location, decode_mouse_button_set, encode_key_location, encode_mouse_button_set,
+        MouseButton, MouseButtonSet,
     };
     use euclid::UnknownUnit;
-    use keyboard_types::Modifiers;
+    use keyboard_types::Key::Alt;
+    use keyboard_types::{Code, Key, Location, Modifiers};
     use std::collections::HashMap;
+    use std::convert::TryInto;
+    use std::str::FromStr;
 
     use super::*;
     macro_rules! event_directory {
@@ -425,69 +429,128 @@ pub mod on {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Clone)]
     pub struct KeyboardData {
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use key() instead."
+        )]
         pub char_code: u32,
 
         /// Identify which "key" was entered.
-        ///
-        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
-        /// The key isn't an enum because there are just so many context-dependent keys.
-        ///
-        /// A full list on which keys to use is available at:
-        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
-        ///
-        /// # Example
-        ///
-        /// ```rust, ignore
-        /// match event.key().as_str() {
-        ///     "Esc" | "Escape" => {}
-        ///     "ArrowDown" => {}
-        ///     "ArrowLeft" => {}
-        ///      _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(since = "0.3.0", note = "use key() instead")]
         pub key: String,
 
         /// Get the key code as an enum Variant.
-        ///
-        /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
-        /// To match on unicode sequences, use the [`KeyboardEvent::key`] method - this will return a string identifier instead of a limited enum.
-        ///
-        ///
-        /// ## Example
-        ///
-        /// ```rust, ignore
-        /// use dioxus::KeyCode;
-        /// match event.key_code() {
-        ///     KeyCode::Escape => {}
-        ///     KeyCode::LeftArrow => {}
-        ///     KeyCode::RightArrow => {}
-        ///     _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use code() instead."
+        )]
         pub key_code: KeyCode,
 
+        /// the physical key on the keyboard
+        code: Code,
+
         /// Indicate if the `alt` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub alt_key: bool,
 
         /// Indicate if the `ctrl` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub ctrl_key: bool,
 
         /// Indicate if the `meta` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub meta_key: bool,
 
         /// Indicate if the `shift` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub shift_key: bool,
 
-        pub locale: String,
-
+        #[deprecated(since = "0.3.0", note = "use location() instead")]
         pub location: usize,
 
+        #[deprecated(since = "0.3.0", note = "use is_auto_repeating() instead")]
         pub repeat: bool,
 
+        #[deprecated(since = "0.3.0", note = "use code() or key() instead")]
         pub which: usize,
-        // get_modifier_state: bool,
+    }
+
+    impl KeyboardData {
+        pub fn new(
+            key: Key,
+            code: Code,
+            location: Location,
+            is_auto_repeating: bool,
+            modifiers: Modifiers,
+        ) -> Self {
+            #[allow(deprecated)]
+            KeyboardData {
+                char_code: key.legacy_charcode(),
+                key: key.to_string(),
+                key_code: KeyCode::from_raw_code(
+                    key.legacy_keycode()
+                        .try_into()
+                        .expect("could not convert keycode to u8"),
+                ),
+                code,
+                alt_key: modifiers.contains(Modifiers::ALT),
+                ctrl_key: modifiers.contains(Modifiers::CONTROL),
+                meta_key: modifiers.contains(Modifiers::META),
+                shift_key: modifiers.contains(Modifiers::SHIFT),
+                location: encode_key_location(location),
+                repeat: is_auto_repeating,
+                which: key
+                    .legacy_charcode()
+                    .try_into()
+                    .expect("could not convert charcode to usize"),
+            }
+        }
+
+        /// The value of the key pressed by the user, taking into consideration the state of modifier keys such as Shift as well as the keyboard locale and layout.
+        pub fn key(&self) -> Key {
+            #[allow(deprecated)]
+            FromStr::from_str(&self.key).expect("could not parse")
+        }
+
+        /// A physical key on the keyboard (as opposed to the character generated by pressing the key). In other words, this property returns a value that isn't altered by keyboard layout or the state of the modifier keys.
+        pub fn code(&self) -> Code {
+            self.code
+        }
+
+        /// The set of modifier keys which were pressed when the event occurred
+        pub fn modifiers(&self) -> Modifiers {
+            let mut modifiers = Modifiers::empty();
+
+            #[allow(deprecated)]
+            {
+                if self.alt_key {
+                    modifiers.insert(Modifiers::ALT);
+                }
+                if self.ctrl_key {
+                    modifiers.insert(Modifiers::CONTROL);
+                }
+                if self.meta_key {
+                    modifiers.insert(Modifiers::META);
+                }
+                if self.shift_key {
+                    modifiers.insert(Modifiers::SHIFT);
+                }
+            }
+
+            modifiers
+        }
+
+        /// The location of the key on the keyboard or other input device.
+        pub fn location(&self) -> Location {
+            #[allow(deprecated)]
+            decode_key_location(self.location)
+        }
+
+        /// `true` iff the key is being held down such that it is automatically repeating.
+        pub fn is_auto_repeating(&self) -> bool {
+            #[allow(deprecated)]
+            self.repeat
+        }
     }
 
     pub type FocusEvent = UiEvent<FocusData>;
@@ -845,6 +908,7 @@ pub mod on {
 )]
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[repr(u8)]
+#[deprecated(since = "0.3.0", note = "use keyboard_types::Code instead")]
 pub enum KeyCode {
     // That key has no keycode, = 0
     // break, = 3

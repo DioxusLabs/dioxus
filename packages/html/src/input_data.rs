@@ -3,6 +3,7 @@ use enumset::{EnumSet, EnumSetType};
 
 /// A re-export of keyboard_types
 pub use keyboard_types;
+use keyboard_types::Location;
 
 /// A mouse button type (such as Primary/Secondary)
 // note: EnumSetType also derives Copy and Clone for some reason
@@ -117,4 +118,26 @@ pub fn encode_mouse_button_set(set: MouseButtonSet) -> u16 {
     }
 
     code
+}
+
+pub fn decode_key_location(code: usize) -> Location {
+    match code {
+        0 => Location::Standard,
+        1 => Location::Left,
+        2 => Location::Right,
+        3 => Location::Numpad,
+        // keyboard_types doesn't yet support mobile/joystick locations
+        4 | 5 => Location::Standard,
+        // unknown location; Standard seems better than panicking
+        _ => Location::Standard,
+    }
+}
+
+pub fn encode_key_location(location: Location) -> usize {
+    match location {
+        Location::Standard => 0,
+        Location::Left => 1,
+        Location::Right => 2,
+        Location::Numpad => 3,
+    }
 }
