@@ -9,14 +9,14 @@ fn app(cx: Scope) -> Element {
     let window = use_window(&cx);
 
     let level = use_state(&cx, || 1.0);
-
-    window.set_zoom_level(*level.get());
     cx.render(rsx! {
         input {
             r#type: "number",
             value: "{level}",
             oninput: |e| {
-                level.set(e.value.parse::<f64>().unwrap_or_default())
+                let num = e.value.parse::<f64>().unwrap_or(1.0);
+                level.set(num);
+                window.set_zoom_level(num);
             }
         }
     })
