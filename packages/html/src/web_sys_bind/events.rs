@@ -146,12 +146,7 @@ impl From<&PointerEvent> for PointerData {
 
 impl From<&WheelEvent> for WheelData {
     fn from(e: &WheelEvent) -> Self {
-        Self {
-            delta_x: e.delta_x(),
-            delta_y: e.delta_y(),
-            delta_z: e.delta_z(),
-            delta_mode: e.delta_mode(),
-        }
+        WheelData::from_web_attributes(e.delta_mode(), e.delta_x(), e.delta_y(), e.delta_z())
     }
 }
 

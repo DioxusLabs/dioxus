@@ -35,7 +35,7 @@ fn app(cx: Scope) -> Element {
                 key.set(format!("{:?} repeating: {:?}", evt.key, evt.repeat));
             },
             onwheel: move |evt: WheelEvent| {
-                count.set(count + evt.data.delta_y as i64);
+                count.set(count + evt.data.delta().strip_units().y as i64);
             },
             ondrag: move |evt: MouseEvent| {
                 mouse.set(evt.data.screen_coordinates());
