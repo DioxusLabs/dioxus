@@ -16,7 +16,7 @@ pub use wry;
 pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
-pub use cfg::DesktopConfig;
+use cfg::DesktopConfig;
 use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;

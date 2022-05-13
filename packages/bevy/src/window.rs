@@ -16,7 +16,7 @@ use dioxus_desktop::{
     protocol,
     tao::{
         event_loop::{ControlFlow, EventLoop},
-        window::{Window as TaoWindow, WindowId as TaoWindowId},
+        window::{Window as TaoWindow, WindowBuilder, WindowId as TaoWindowId},
     },
     wry::webview::{WebView, WebViewBuilder},
 };
@@ -168,7 +168,9 @@ impl DioxusWindows {
 
         let mut config = world.get_non_send_mut::<DesktopConfig>().unwrap();
 
-        let window = config.window.clone().build(&event_loop).unwrap();
+        let window_builder = WindowBuilder::new().with_title(&window_descriptor.title);
+
+        let window = window_builder.build(&event_loop).unwrap();
         let tao_window_id = window.id();
         let is_ready = Arc::new(AtomicBool::new(false));
 

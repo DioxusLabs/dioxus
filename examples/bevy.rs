@@ -3,7 +3,7 @@ use bevy::{
     ecs::event::{EventReader, EventWriter},
     input::keyboard::KeyboardInput,
     log::{info, LogPlugin},
-    window::ReceivedCharacter,
+    window::{ReceivedCharacter, WindowDescriptor},
 };
 use dioxus::prelude::*;
 
@@ -20,12 +20,12 @@ enum UICommand {
 }
 
 fn main() {
-    let mut config = DesktopConfig::default().with_default_icon();
-    config.with_window(|w| w.with_title("Bevy Dioxus Plugin Demo"));
-
     App::new()
+        .insert_resource(WindowDescriptor {
+            title: "Bevy Dioxus Plugin Demo".to_string(),
+            ..Default::default()
+        })
         .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
-        .insert_non_send_resource(config)
         .add_plugin(LogPlugin)
         .add_system(handle_core_command)
         .add_system(send_keyboard_input)
