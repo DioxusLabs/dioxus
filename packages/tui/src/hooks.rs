@@ -213,7 +213,7 @@ impl InnerInputState {
     }
 
     fn resolve_mouse_events(
-        &self,
+        &mut self,
         previous_mouse: Option<MouseData>,
         resolved_events: &mut Vec<UserEvent>,
         layout: &Stretch,
@@ -259,8 +259,13 @@ impl InnerInputState {
             let new_client_coordinates = (mouse_data.client_coordinates() - node_origin)
                 .to_point()
                 .cast_unit();
+
+            let coordinates = Coordinates::new(
+                mouse_data.screen_coordinates(),
+                mouse_data.client_coordinates(),
                 new_client_coordinates,
                 mouse_data.page_coordinates(),
+            );
 
             MouseData::new(
                 coordinates,
@@ -517,7 +522,7 @@ impl InnerInputState {
             }
 
             // update focus
-            if released {
+            if was_released {
                 let mut focus_id = None;
                 dom.traverse_depth_first(|node| {
                     let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
