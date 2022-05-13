@@ -6,7 +6,7 @@ use dioxus_desktop::{
 use futures_intrusive::channel::shared::{Receiver, Sender};
 use std::fmt::Debug;
 
-type ProxyType<CoreCommand> = EventLoopProxy<UserEvent<CoreCommand>>;
+pub type ProxyType<CoreCommand> = EventLoopProxy<UserEvent<CoreCommand>>;
 
 #[derive(Debug)]
 pub enum UserEvent<CoreCommand: Debug> {

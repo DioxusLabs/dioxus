@@ -48,7 +48,7 @@ where
     });
 
     event_loop.run(
-        move |window_event: Event<UserEvent<CoreCommand>>,
+        move |event: Event<UserEvent<CoreCommand>>,
               _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
@@ -69,7 +69,7 @@ where
                 .get_non_send_resource_mut::<DioxusWindows>()
                 .expect("Insert DioxusWindows as non send resource");
 
-            match window_event {
+            match event {
                 Event::NewEvents(StartCause::Init) => {}
                 Event::WindowEvent {
                     event, window_id, ..
@@ -78,9 +78,6 @@ where
                     WindowEvent::Destroyed { .. } => windows.remove(&window_id, control_flow),
                     WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
                         windows.resize(&window_id);
-                    }
-                    WindowEvent::ReceivedImeText(c) => {
-                        println!("ReceivedImeText: {}", c);
                     }
                     _ => {}
                 },

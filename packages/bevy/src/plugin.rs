@@ -54,7 +54,34 @@ where
             .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
             .insert_non_send_resource(event_loop);
 
-        handle_initial_window_events::<CoreCommand, UICommand, Props>(&mut app.world);
+        Self::handle_initial_window_events(&mut app.world);
+    }
+}
+
+impl<CoreCommand, UICommand, Props> DioxusDesktopPlugin<CoreCommand, UICommand, Props> {
+    fn handle_initial_window_events(world: &mut World)
+    where
+        CoreCommand: 'static + Send + Sync + Clone + Debug,
+        UICommand: 'static + Send + Sync + Clone + Debug,
+        Props: 'static + Send + Sync + Copy,
+    {
+        let world = world.cell();
+        let mut dioxus_windows = world.get_non_send_mut::<DioxusWindows>().unwrap();
+        let mut bevy_windows = world.get_resource_mut::<Windows>().unwrap();
+        let mut create_window_events = world.get_resource_mut::<Events<CreateWindow>>().unwrap();
+        let mut window_created_events = world.get_resource_mut::<Events<WindowCreated>>().unwrap();
+
+        for create_window_event in create_window_events.drain() {
+            let window = dioxus_windows.create::<CoreCommand, UICommand, Props>(
+                &world,
+                create_window_event.id,
+                &create_window_event.descriptor,
+            );
+            bevy_windows.add(window);
+            window_created_events.send(WindowCreated {
+                id: create_window_event.id,
+            });
+        }
     }
 }
 
@@ -77,30 +104,5 @@ where
         if let Err(_) = tx.try_send(e.clone()) {
             error!("Failed to send UICommand");
         };
-    }
-}
-
-fn handle_initial_window_events<CoreCommand, UICommand, Props>(world: &mut World)
-where
-    CoreCommand: 'static + Send + Sync + Clone + Debug,
-    UICommand: 'static + Send + Sync + Clone + Debug,
-    Props: 'static + Send + Sync + Copy,
-{
-    let world = world.cell();
-    let mut winit_windows = world.get_non_send_mut::<DioxusWindows>().unwrap();
-    let mut windows = world.get_resource_mut::<Windows>().unwrap();
-    let mut create_window_events = world.get_resource_mut::<Events<CreateWindow>>().unwrap();
-    let mut window_created_events = world.get_resource_mut::<Events<WindowCreated>>().unwrap();
-
-    for create_window_event in create_window_events.drain() {
-        let window = winit_windows.create::<CoreCommand, UICommand, Props>(
-            &world,
-            create_window_event.id,
-            &create_window_event.descriptor,
-        );
-        windows.add(window);
-        window_created_events.send(WindowCreated {
-            id: create_window_event.id,
-        });
     }
 }
