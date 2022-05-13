@@ -205,9 +205,7 @@ impl DioxusWindows {
                         }
                         "keyboard_event" => {
                             let event = WebKeyboardEvent::from_value(message.params());
-                            proxy
-                                .send_event(UserEvent::KeyboardInput(event.to_input()))
-                                .unwrap();
+                            proxy.send_event(UserEvent::KeyboardEvent(event)).unwrap();
                         }
                         "initialize" => {
                             is_ready_clone.store(true, std::sync::atomic::Ordering::Relaxed);

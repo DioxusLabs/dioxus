@@ -1,6 +1,9 @@
-use bevy::input::{
-    keyboard::{KeyCode, KeyboardInput},
-    ElementState,
+use bevy::{
+    input::{
+        keyboard::{KeyCode, KeyboardInput},
+        ElementState,
+    },
+    window::{ReceivedCharacter, WindowId},
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -50,6 +53,21 @@ impl WebKeyboardEvent {
                 key_code: Self::try_parse_key(key, location),
                 state: ElementState::Released,
             },
+        }
+    }
+
+    pub fn try_to_char(&self) -> Option<ReceivedCharacter> {
+        let id = WindowId::primary();
+        println!("key: {}", self.key());
+
+        match self.key() {
+            "Enter" => Some(ReceivedCharacter { id, char: '\r' }),
+            "Backspace" => Some(ReceivedCharacter { id, char: '\u{7f}' }),
+            key if key.len() > 1 => None,
+            _ => Some(ReceivedCharacter {
+                id,
+                char: self.key().chars().next().unwrap(),
+            }),
         }
     }
 

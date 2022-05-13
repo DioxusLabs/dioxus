@@ -3,6 +3,7 @@ use bevy::{
     ecs::event::{EventReader, EventWriter},
     input::keyboard::KeyboardInput,
     log::{info, LogPlugin},
+    window::ReceivedCharacter,
 };
 use dioxus::prelude::*;
 
@@ -28,6 +29,7 @@ fn main() {
         .add_plugin(LogPlugin)
         .add_system(handle_core_command)
         .add_system(send_keyboard_input)
+        .add_system(log_keyboard_event)
         .run();
 }
 
@@ -48,9 +50,20 @@ fn handle_core_command(
 
 fn send_keyboard_input(mut events: EventReader<KeyboardInput>, mut event: EventWriter<UICommand>) {
     for input in events.iter() {
-        info!("🧠 {:?}", input.clone());
-
         event.send(UICommand::KeyboardInput(input.clone()));
+    }
+}
+
+fn log_keyboard_event(
+    mut keyboard_input_events: EventReader<KeyboardInput>,
+    mut received_character_events: EventReader<ReceivedCharacter>,
+) {
+    for input in keyboard_input_events.iter() {
+        info!("🧠 {:?}", input.clone());
+    }
+
+    for received_char in received_character_events.iter() {
+        info!("🧠 {:?}", received_char.clone());
     }
 }
 

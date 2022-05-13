@@ -79,6 +79,9 @@ where
                     WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
                         windows.resize(&window_id);
                     }
+                    WindowEvent::ReceivedImeText(c) => {
+                        println!("ReceivedImeText: {}", c);
+                    }
                     _ => {}
                 },
                 Event::UserEvent(user_event) => match user_event {
@@ -138,21 +141,23 @@ where
 
                         app.update();
                     }
-                    UserEvent::KeyboardInput(input) => {
-                        let mut events = app
+                    UserEvent::KeyboardEvent(event) => {
+                        let mut keyboard_input_events = app
                             .world
                             .get_resource_mut::<Events<KeyboardInput>>()
                             .unwrap();
-                        events.send(input);
+                        keyboard_input_events.send(event.to_input());
 
-                        app.update();
-                    }
-                    UserEvent::ReceivedCharacter(c) => {
-                        let mut events = app
-                            .world
-                            .get_resource_mut::<Events<ReceivedCharacter>>()
-                            .unwrap();
-                        events.send(c);
+                        match event.try_to_char() {
+                            Some(c) => {
+                                let mut received_character_events = app
+                                    .world
+                                    .get_resource_mut::<Events<ReceivedCharacter>>()
+                                    .unwrap();
+                                received_character_events.send(c);
+                            }
+                            None => {}
+                        }
 
                         app.update();
                     }

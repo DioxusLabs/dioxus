@@ -1,4 +1,4 @@
-use bevy::{input::keyboard::KeyboardInput, window::ReceivedCharacter};
+use crate::event::WebKeyboardEvent;
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::{self, *},
     tao::event_loop::EventLoopProxy,
@@ -12,8 +12,7 @@ type ProxyType<CoreCommand> = EventLoopProxy<UserEvent<CoreCommand>>;
 pub enum UserEvent<CoreCommand: Debug> {
     WindowEvent(UserWindowEvent),
     CoreCommand(CoreCommand),
-    KeyboardInput(KeyboardInput),
-    ReceivedCharacter(ReceivedCharacter),
+    KeyboardEvent(WebKeyboardEvent),
 }
 
 #[derive(Clone)]
