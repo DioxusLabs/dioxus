@@ -5,6 +5,8 @@ mod plugin;
 mod runner;
 mod window;
 
+pub use dioxus_desktop::cfg::DesktopConfig;
+
 pub mod prelude {
-    pub use crate::{hooks::*, plugin::DioxusDesktopPlugin};
+    pub use crate::{hooks::*, plugin::DioxusDesktopPlugin, DesktopConfig};
 }
