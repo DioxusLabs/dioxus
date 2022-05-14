@@ -130,6 +130,10 @@ where
                             window_close_requested_events
                                 .send(WindowCloseRequested { id: window_id });
                         }
+                        // KeyboardInput isn't emitted. probably webview interrupts window underneath
+                        // WindowEvent::KeyboardInput { event, .. } => {
+                        //     println!("event: {:?}", event);
+                        // }
                         // WindowEvent::Destroyed { .. } => {
                         //     windows.remove(&tao_window_id, control_flow)
                         // }
