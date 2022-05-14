@@ -12,7 +12,7 @@ feature is active, this also imports the components and Types we need for the
 router
 
 We also need an actual page to route to! Add a homepage component:
-```rust
+```rust,ignore
 #[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -31,7 +31,7 @@ a `Router` component.
 
 Before we can add the `Router` we need to describe our routes in a type it can
 understand:
-```rust
+```rust,ignore
 fn app(cx: Scope) -> Element {
     // this is new
     let routes = cx.use_hook(|_| Segment {
@@ -48,7 +48,7 @@ fn app(cx: Scope) -> Element {
 ```
 
 Now we can replace the `p { "Hello, wasm!" }` with our router:
-```rust
+```rust,ignore
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
         index: RcComponent(Home),
@@ -65,7 +65,7 @@ fn app(cx: Scope) -> Element {
 
 At last, we need to tell the router where to render the component for the active
 route:
-```rust
+```rust,ignore
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
         index: RcComponent(Home),
@@ -92,7 +92,7 @@ the URL path is `/`.
 In our example Dioxus Router doesn't render anything. Many sites also have a
 "404" page for when a URL path leads to nowhere. Dioxus Router can do this too!
 Create a new `PageNotFound` component.
-```rust
+```rust,ignore
 #[allow(non_snake_case)]
 fn PageNotFound(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -103,7 +103,7 @@ fn PageNotFound(cx: Scope) -> Element {
 ```
 
 Now to tell Dioxus Router to render our new component when no route exists.
-```rust
+```rust,ignore
 fn app(cx: Scope) -> Element {
     let routes = cx.use_hook(|_| Segment {
         index: RcComponent(Home),

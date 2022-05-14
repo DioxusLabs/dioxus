@@ -5,7 +5,7 @@ Before we start utilizing Dioxus Router, we need to initialize a Dioxus web appl
 If you haven't already, make sure you install the
 [dioxus-cli](https://dioxuslabs.com/nightly/cli/) build tool and the rust
 `wasm32-unknown-unknown` target:
-```
+```sh
 $ cargo install dioxus-cli
     ...
 $ rustup target add wasm32-unkown-unknown
@@ -14,7 +14,7 @@ $ rustup target add wasm32-unkown-unknown
 
 ### Creating the Project
 First, create a new cargo binary project:
-```
+```sh
 cargo new --bin dioxus-blog
 ```
 
@@ -49,7 +49,7 @@ with the ID of `main` in the root of your body element. This is essentially a
 handle to where Dioxus will render your components.
 
 Now move to `src/main.rs` and replace its contents with:
-```rust
+```rust,ignore
 use dioxus::prelude::*;
 
 fn main() {
@@ -68,7 +68,7 @@ fn app(cx: Scope) -> Element {
 
 Our project is now setup! To make sure everything is running correctly, in the
 root of your project run:
-```
+```sh
 dioxus serve --platform web
 ```
 Then head to [http://localhost:8080](http://localhost:8080) in your browser, and

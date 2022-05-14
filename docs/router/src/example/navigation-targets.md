@@ -17,7 +17,7 @@ navigation targets:
 
 ## External navigation
 If we need a link to an external page we can do it like this:
-```rust
+```rust,ignore
 import dioxus::prelude::*;
 
 #[accept(non_snake_case)]

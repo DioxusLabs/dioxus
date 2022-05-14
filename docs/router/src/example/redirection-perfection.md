@@ -13,7 +13,7 @@ As a simple example, let's say you want user to still land on your blog, even
 if they used the path `/myblog`.
 
 All we need to do is update our route definition in our app component:
-```rust
+```rust,ignore
 let routes = cx.use_hook(|_| Segment {
     index: RcComponent(Home),
     fixed: vec![
