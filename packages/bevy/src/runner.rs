@@ -152,10 +152,14 @@ where
                         app.update();
                     }
                 },
-                Event::Resumed => {}
-                Event::Suspended => {}
                 Event::LoopDestroyed => {}
                 Event::RedrawRequested(_id) => {}
+                Event::Suspended => {
+                    tao_state.active = false;
+                }
+                Event::Resumed => {
+                    tao_state.active = true;
+                }
                 Event::MainEventsCleared => {
                     handle_create_window_events::<CoreCommand, UICommand, Props>(&mut app.world);
                     let dioxus_settings = app.world.resource::<DioxusSettings>();
