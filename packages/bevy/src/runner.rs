@@ -9,14 +9,15 @@ use bevy::{
         event::{Events, ManualEventReader},
         world::World,
     },
-    input::keyboard::KeyboardInput,
+    input::{keyboard::KeyboardInput, mouse::MouseMotion},
+    math::Vec2,
     utils::Instant,
     window::{CreateWindow, ReceivedCharacter, RequestRedraw, WindowCreated, Windows},
 };
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::*,
     tao::{
-        event::{Event, StartCause, WindowEvent},
+        event::{DeviceEvent, Event, StartCause, WindowEvent},
         event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
         window::Fullscreen as WryFullscreen,
     },
@@ -152,8 +153,15 @@ where
                         app.update();
                     }
                 },
-                Event::LoopDestroyed => {}
-                Event::RedrawRequested(_id) => {}
+                Event::DeviceEvent {
+                    event: DeviceEvent::MouseMotion { delta, .. },
+                    ..
+                } => {
+                    let mut mouse_motion_events = app.world.resource_mut::<Events<MouseMotion>>();
+                    mouse_motion_events.send(MouseMotion {
+                        delta: Vec2::new(delta.0 as f32, delta.1 as f32),
+                    });
+                }
                 Event::Suspended => {
                     tao_state.active = false;
                 }
