@@ -15,7 +15,7 @@ use bevy::{
     utils::Instant,
     window::{
         CreateWindow, ReceivedCharacter, RequestRedraw, WindowCloseRequested, WindowCreated,
-        Windows,
+        WindowResized, Windows,
     },
 };
 use dioxus_desktop::{
@@ -104,7 +104,7 @@ where
                             return;
                         };
 
-                    let _window = if let Some(window) = windows.get_mut(window_id) {
+                    let window = if let Some(window) = windows.get_mut(window_id) {
                         window
                     } else {
                         info!("Skipped event for closed window: {:?}", window_id);
@@ -113,6 +113,16 @@ where
                     tao_state.low_power_event = true;
 
                     match event {
+                        WindowEvent::Resized(size) => {
+                            window.update_actual_size_from_backend(size.width, size.height);
+                            let mut resize_events =
+                                world.get_resource_mut::<Events<WindowResized>>().unwrap();
+                            resize_events.send(WindowResized {
+                                id: window_id,
+                                width: window.width(),
+                                height: window.height(),
+                            });
+                        }
                         WindowEvent::CloseRequested => {
                             let mut window_close_requested_events = world
                                 .get_resource_mut::<Events<WindowCloseRequested>>()
@@ -120,12 +130,9 @@ where
                             window_close_requested_events
                                 .send(WindowCloseRequested { id: window_id });
                         }
-                        WindowEvent::Destroyed { .. } => {
-                            // windows.remove(&tao_window_id, control_flow)
-                        }
-                        WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                            // windows.resize(&tao_window_id);
-                        }
+                        // WindowEvent::Destroyed { .. } => {
+                        //     windows.remove(&tao_window_id, control_flow)
+                        // }
                         _ => {}
                     }
                 }
