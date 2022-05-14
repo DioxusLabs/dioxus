@@ -1,6 +1,6 @@
 use crate::{
     context::UserEvent,
-    event::VirtualDomUpdated,
+    event::{VirtualDomUpdated, WindowDragged},
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -270,13 +270,11 @@ where
                                     world.get_resource_mut::<Events<AppExit>>().unwrap();
                                 events.send(AppExit);
                             }
-                            // DragWindow => {
-                            //     // if the drag_window has any errors, we don't do anything
-                            //     tao_window
-                            //         .fullscreen()
-                            //         .is_none()
-                            //         .then(|| tao_window.drag_window());
-                            // }
+                            DragWindow => {
+                                let mut events =
+                                    world.get_resource_mut::<Events<WindowDragged>>().unwrap();
+                                events.send(WindowDragged { window_id });
+                            }
                             // Visible(state) => tao_window.set_visible(state),
                             // Minimize(state) => tao_window.set_minimized(state),
                             // Maximize(state) => tao_window.set_maximized(state),

@@ -14,6 +14,11 @@ pub struct VirtualDomUpdated {
     pub window_id: WindowId,
 }
 
+#[derive(Debug, Clone)]
+pub struct WindowDragged {
+    pub window_id: WindowId,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum WebKeyboardEvent {

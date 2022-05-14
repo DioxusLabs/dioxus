@@ -43,6 +43,12 @@ pub struct DioxusWindows {
 }
 
 impl DioxusWindows {
+    pub fn get(&mut self, id: WindowId) -> Option<&Window> {
+        self.window_id_to_tao
+            .get(&id)
+            .and_then(|id| self.windows.get(id))
+    }
+
     pub fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> {
         self.window_id_to_tao
             .get(&id)
@@ -85,6 +91,10 @@ impl Window {
             is_ready,
             edit_queue,
         }
+    }
+
+    pub fn tao_window(&self) -> &TaoWindow {
+        &self.webview.window()
     }
 
     pub fn try_load_ready_webview(&mut self) {

@@ -1,5 +1,8 @@
 use crate::{
-    context::UserEvent, event::VirtualDomUpdated, runner::runner, setting::DioxusSettings,
+    context::UserEvent,
+    event::{VirtualDomUpdated, WindowDragged},
+    runner::runner,
+    setting::DioxusSettings,
     window::DioxusWindows,
 };
 use bevy::{
@@ -49,6 +52,7 @@ where
             .add_event::<CoreCommand>()
             .add_event::<UICommand>()
             .add_event::<VirtualDomUpdated>()
+            .add_event::<WindowDragged>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
@@ -62,7 +66,8 @@ where
             .set_runner(|app| runner::<CoreCommand, UICommand, Props>(app))
             .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
             .insert_non_send_resource(event_loop)
-            .add_system(handle_virtual_dom_updated);
+            .add_system(handle_virtual_dom_updated)
+            .add_system(handle_window_dragged);
 
         Self::handle_initial_window_events(&mut app.world);
     }
@@ -124,5 +129,20 @@ fn handle_virtual_dom_updated(
     for e in events.iter() {
         let window = windows.get_mut(e.window_id).unwrap();
         window.try_load_ready_webview();
+    }
+}
+
+fn handle_window_dragged(
+    mut events: EventReader<WindowDragged>,
+    mut windows: NonSendMut<DioxusWindows>,
+) {
+    for e in events.iter() {
+        let window = windows.get(e.window_id).unwrap();
+        let tao_window = window.tao_window();
+
+        tao_window
+            .fullscreen()
+            .is_none()
+            .then(|| tao_window.drag_window());
     }
 }
