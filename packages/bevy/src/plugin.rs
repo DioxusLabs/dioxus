@@ -1,4 +1,7 @@
-use crate::{context::UserEvent, runner::runner, setting::DioxusSettings, window::DioxusWindows};
+use crate::{
+    context::UserEvent, event::VirtualDomUpdated, runner::runner, setting::DioxusSettings,
+    window::DioxusWindows,
+};
 use bevy::{
     app::prelude::*,
     ecs::{event::Events, prelude::*},
@@ -45,6 +48,7 @@ where
             .add_plugin(WindowPlugin::default())
             .add_event::<CoreCommand>()
             .add_event::<UICommand>()
+            .add_event::<VirtualDomUpdated>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
@@ -57,7 +61,8 @@ where
             .init_non_send_resource::<DioxusWindows>()
             .set_runner(|app| runner::<CoreCommand, UICommand, Props>(app))
             .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
-            .insert_non_send_resource(event_loop);
+            .insert_non_send_resource(event_loop)
+            .add_system(handle_virtual_dom_updated);
 
         Self::handle_initial_window_events(&mut app.world);
     }
@@ -109,5 +114,15 @@ where
         if let Err(_) = tx.try_send(e.clone()) {
             error!("Failed to send UICommand");
         };
+    }
+}
+
+fn handle_virtual_dom_updated(
+    mut events: EventReader<VirtualDomUpdated>,
+    mut windows: NonSendMut<DioxusWindows>,
+) {
+    for e in events.iter() {
+        let window = windows.get_mut(e.window_id).unwrap();
+        window.try_load_ready_webview();
     }
 }

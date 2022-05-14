@@ -43,15 +43,11 @@ pub struct DioxusWindows {
 }
 
 impl DioxusWindows {
-    pub fn get_one(&mut self) -> Option<&mut Window> {
-        self.windows.values_mut().next()
+    pub fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> {
+        self.window_id_to_tao
+            .get(&id)
+            .and_then(|id| self.windows.get_mut(id))
     }
-
-    // pub fn get_webview(&self, id: WindowId) -> Option<&WebView> {
-    //     self.window_id_to_tao
-    //         .get(&id)
-    //         .and_then(|id| self.windows.get(id).and_then(|w| Some(&w.webview)))
-    // }
 
     pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
         self.tao_to_window_id.get(&id).cloned()

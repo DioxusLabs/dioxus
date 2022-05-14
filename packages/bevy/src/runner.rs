@@ -1,5 +1,6 @@
 use crate::{
     context::UserEvent,
+    event::VirtualDomUpdated,
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -16,7 +17,7 @@ use bevy::{
     window::{
         CreateWindow, FileDragAndDrop, ReceivedCharacter, RequestRedraw,
         WindowBackendScaleFactorChanged, WindowCloseRequested, WindowCreated, WindowFocused,
-        WindowMoved, WindowResized, WindowScaleFactorChanged, Windows,
+        WindowId, WindowMoved, WindowResized, WindowScaleFactorChanged, Windows,
     },
 };
 use dioxus_desktop::{
@@ -254,58 +255,56 @@ where
                 }
                 Event::UserEvent(user_event) => match user_event {
                     UserEvent::WindowEvent(user_window_event) => {
-                        // currently dioxus-desktop supports a single window only,
-                        // so we can grab the only webview from the map;
-                        let window = windows.get_one().unwrap();
-                        let webview = &window.webview;
-                        let tao_window = webview.window();
+                        let world = app.world.cell();
+                        let window_id = WindowId::primary();
 
                         match user_window_event {
-                            Update => window.try_load_ready_webview(),
-                            CloseWindow => *control_flow = ControlFlow::Exit,
-                            DragWindow => {
-                                // if the drag_window has any errors, we don't do anything
-                                tao_window
-                                    .fullscreen()
-                                    .is_none()
-                                    .then(|| tao_window.drag_window());
+                            Update => {
+                                let mut events = world
+                                    .get_resource_mut::<Events<VirtualDomUpdated>>()
+                                    .unwrap();
+                                events.send(VirtualDomUpdated { window_id });
                             }
-                            Visible(state) => tao_window.set_visible(state),
-                            Minimize(state) => tao_window.set_minimized(state),
-                            Maximize(state) => tao_window.set_maximized(state),
-                            MaximizeToggle => tao_window.set_maximized(!tao_window.is_maximized()),
-                            Fullscreen(state) => {
-                                if let Some(handle) = tao_window.current_monitor() {
-                                    tao_window.set_fullscreen(
-                                        state.then(|| WryFullscreen::Borderless(Some(handle))),
-                                    );
-                                }
-                            }
-                            FocusWindow => tao_window.set_focus(),
-                            Resizable(state) => tao_window.set_resizable(state),
-                            AlwaysOnTop(state) => tao_window.set_always_on_top(state),
-
-                            CursorVisible(state) => tao_window.set_cursor_visible(state),
-                            CursorGrab(state) => {
-                                let _ = tao_window.set_cursor_grab(state);
-                            }
-
-                            SetTitle(content) => tao_window.set_title(&content),
-                            SetDecorations(state) => tao_window.set_decorations(state),
-
-                            SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
-
-                            Print => {
-                                if let Err(e) = webview.print() {
-                                    // we can't panic this error.
-                                    log::warn!("Open print modal failed: {e}");
-                                }
-                            }
-                            DevTool => webview.open_devtools(),
-
-                            Eval(code) => webview
-                                .evaluate_script(code.as_str())
-                                .expect("eval shouldn't panic"),
+                            // CloseWindow => *control_flow = ControlFlow::Exit,
+                            // DragWindow => {
+                            //     // if the drag_window has any errors, we don't do anything
+                            //     tao_window
+                            //         .fullscreen()
+                            //         .is_none()
+                            //         .then(|| tao_window.drag_window());
+                            // }
+                            // Visible(state) => tao_window.set_visible(state),
+                            // Minimize(state) => tao_window.set_minimized(state),
+                            // Maximize(state) => tao_window.set_maximized(state),
+                            // MaximizeToggle => tao_window.set_maximized(!tao_window.is_maximized()),
+                            // Fullscreen(state) => {
+                            //     if let Some(handle) = tao_window.current_monitor() {
+                            //         tao_window.set_fullscreen(
+                            //             state.then(|| WryFullscreen::Borderless(Some(handle))),
+                            //         );
+                            //     }
+                            // }
+                            // FocusWindow => tao_window.set_focus(),
+                            // Resizable(state) => tao_window.set_resizable(state),
+                            // AlwaysOnTop(state) => tao_window.set_always_on_top(state),
+                            // CursorVisible(state) => tao_window.set_cursor_visible(state),
+                            // CursorGrab(state) => {
+                            //     let _ = tao_window.set_cursor_grab(state);
+                            // }
+                            // SetTitle(content) => tao_window.set_title(&content),
+                            // SetDecorations(state) => tao_window.set_decorations(state),
+                            // SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
+                            // Print => {
+                            //     if let Err(e) = webview.print() {
+                            //         // we can't panic this error.
+                            //         log::warn!("Open print modal failed: {e}");
+                            //     }
+                            // }
+                            // DevTool => webview.open_devtools(),
+                            // Eval(code) => webview
+                            //     .evaluate_script(code.as_str())
+                            //     .expect("eval shouldn't panic"),
+                            _ => {}
                         };
                     }
                     UserEvent::CoreCommand(cmd) => {

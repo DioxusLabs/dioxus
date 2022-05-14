@@ -9,7 +9,12 @@ use serde::Deserialize;
 use serde_json::Value;
 use serde_repr::*;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone)]
+pub struct VirtualDomUpdated {
+    pub window_id: WindowId,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum WebKeyboardEvent {
     #[serde(rename = "keydown")]
@@ -259,7 +264,7 @@ impl WebKeyboardEvent {
     }
 }
 
-#[derive(Deserialize_repr, Debug)]
+#[derive(Deserialize_repr, Debug, Clone)]
 #[repr(u8)]
 pub enum Location {
     Standard,
