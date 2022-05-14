@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-html"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
@@ -11,10 +11,34 @@ documentation = "https://docs.rs/dioxus"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.0" }
+dioxus-core = { path = "../core", version = "^0.2.1" }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
+wasm-bindgen = { version = "0.2.79", optional = true }
+euclid = "0.22.7"
+enumset = "1.0.11"
+keyboard-types = "0.6.2"
+
+[dependencies.web-sys]
+optional = true
+version = "0.3.56"
+features = [
+    "TouchEvent",
+    "MouseEvent",
+    "InputEvent",
+    "ClipboardEvent",
+    "KeyboardEvent",
+    "TouchEvent",
+    "WheelEvent",
+    "AnimationEvent",
+    "TransitionEvent",
+    "PointerEvent",
+    "FocusEvent",
+    "CompositionEvent",
+    "ClipboardEvent",
+]
 
 [features]
 default = []
 serialize = ["serde", "serde_repr"]
+wasm-bind = ["web-sys", "wasm-bindgen"]

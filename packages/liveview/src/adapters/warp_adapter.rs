@@ -8,11 +8,28 @@ use warp::ws::{Message, WebSocket};
 
 impl crate::Liveview {
     pub async fn upgrade(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
-        connect(ws, self.pool.clone(), app).await;
+        connect(ws, self.pool.clone(), app, ()).await;
+    }
+    pub async fn upgrade_with_props<T>(
+        &self,
+        ws: warp::ws::WebSocket,
+        app: fn(Scope<T>) -> Element,
+        props: T,
+    ) where
+        T: Send + Sync + 'static,
+    {
+        connect(ws, self.pool.clone(), app, props).await;
     }
 }
 
-pub async fn connect(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Element) {
+pub async fn connect<T>(
+    ws: WebSocket,
+    pool: LocalPoolHandle,
+    app: fn(Scope<T>) -> Element,
+    props: T,
+) where
+    T: Send + Sync + 'static,
+{
     // Use a counter to assign a new unique ID for this user.
 
     // Split the socket into a sender and receive of messages.
@@ -25,7 +42,7 @@ pub async fn connect(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Ele
     let mut event_rx = UnboundedReceiverStream::new(event_rx);
 
     let vdom_fut = pool.spawn_pinned(move || async move {
-        let mut vdom = VirtualDom::new(app);
+        let mut vdom = VirtualDom::new_with_props(app, props);
 
         let edits = vdom.rebuild();
 
@@ -65,8 +82,10 @@ pub async fn connect(ws: WebSocket, pool: LocalPoolHandle, app: fn(Scope) -> Ele
             Either::Left((l, _)) => {
                 if let Some(Ok(msg)) = l {
                     if let Ok(Some(msg)) = msg.to_str().map(events::parse_ipc_message) {
-                        let user_event = events::trigger_from_serialized(msg.params);
-                        event_tx.send(user_event).unwrap();
+                        if msg.method == "user_event" {
+                            let user_event = events::trigger_from_serialized(msg.params);
+                            event_tx.send(user_event).unwrap();
+                        }
                     } else {
                         break;
                     }

@@ -31,14 +31,13 @@ pub struct Liveview {
 }
 
 impl Liveview {
-    pub fn body(&self) -> String {
+    pub fn body(&self, header: &str) -> String {
         format!(
             r#"
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Dioxus app</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    {header}
   </head>
   <body>
     <div id="main"></div>

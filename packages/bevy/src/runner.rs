@@ -134,7 +134,15 @@ where
                             SetTitle(content) => tao_window.set_title(&content),
                             SetDecorations(state) => tao_window.set_decorations(state),
 
-                            DevTool => webview.devtool(),
+                            SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
+
+                            Print => {
+                                if let Err(e) = webview.print() {
+                                    // we can't panic this error.
+                                    log::warn!("Open print modal failed: {e}");
+                                }
+                            }
+                            DevTool => webview.open_devtools(),
 
                             Eval(code) => webview
                                 .evaluate_script(code.as_str())

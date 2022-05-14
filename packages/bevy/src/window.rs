@@ -349,7 +349,9 @@ impl DioxusWindows {
         let is_ready = Arc::new(AtomicBool::new(false));
 
         let file_drop_handler = config.file_drop_handler.take();
+        let custom_head = config.custom_head.clone();
         let resource_dir = config.resource_dir.clone();
+        let index_file = config.custom_index.clone();
         let is_ready_clone = is_ready.clone();
 
         let mut webview = WebViewBuilder::new(tao_window)
@@ -392,7 +394,12 @@ impl DioxusWindows {
                     })
             })
             .with_custom_protocol(String::from("dioxus"), move |r| {
-                protocol::desktop_handler(r, resource_dir.clone())
+                protocol::desktop_handler(
+                    r,
+                    resource_dir.clone(),
+                    custom_head.clone(),
+                    index_file.clone(),
+                )
             })
             .with_file_drop_handler(move |window, evet| {
                 file_drop_handler
@@ -424,7 +431,7 @@ impl DioxusWindows {
             )
         } else {
             // in debug, we are okay with the reload menu showing and dev tool
-            webview = webview.with_dev_tool(true);
+            webview = webview.with_devtools(true);
         }
 
         (webview.build().unwrap(), is_ready)

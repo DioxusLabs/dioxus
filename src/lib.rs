@@ -6,10 +6,10 @@ pub mod hooks {
     #[cfg(feature = "hooks")]
     pub use dioxus_hooks::*;
 
-    #[cfg(all(target = "wasm", feature = "web"))]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     pub use dioxus_web::use_eval;
 
-    #[cfg(all(not(target = "wasm"), feature = "desktop"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
     pub use dioxus_desktop::use_eval;
 }
 
@@ -30,6 +30,11 @@ pub use dioxus_desktop as desktop;
 
 #[cfg(feature = "tui")]
 pub use dioxus_tui as tui;
+
+#[cfg(feature = "native-core")]
+pub use dioxus_native_core as native_core;
+#[cfg(feature = "native-core")]
+pub use dioxus_native_core_macro as native_core_macro;
 
 #[cfg(feature = "fermi")]
 pub use fermi;

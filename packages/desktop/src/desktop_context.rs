@@ -115,6 +115,16 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetDecorations(decoration));
     }
 
+    /// set window zoom level
+    pub fn set_zoom_level(&self, scale_factor: f64) {
+        let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
+    }
+
+    /// launch print modal
+    pub fn print(&self) {
+        let _ = self.proxy.send_event(Print);
+    }
+
     /// opens DevTool window
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
@@ -148,6 +158,9 @@ pub enum UserWindowEvent {
     SetTitle(String),
     SetDecorations(bool),
 
+    SetZoomLevel(f64),
+
+    Print,
     DevTool,
 
     Eval(String),
@@ -191,17 +204,28 @@ pub(super) fn handler(
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
 
-        DevTool => webview.devtool(),
+        SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
 
-        Eval(code) => webview
-            .evaluate_script(code.as_str())
-            .expect("eval shouldn't panic"),
+        Print => {
+            if let Err(e) = webview.print() {
+                // we can't panic this error.
+                log::warn!("Open print modal failed: {e}");
+            }
+        }
+        DevTool => webview.open_devtools(),
+
+        Eval(code) => {
+            if let Err(e) = webview.evaluate_script(code.as_str()) {
+                // we can't panic this error.
+                log::warn!("Eval script error: {e}");
+            }
+        }
     }
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-    let desktop = use_window(&cx).clone();
+    let desktop = use_window(cx).clone();
 
     cx.use_hook(|_| move |script| desktop.eval(script))
 }
