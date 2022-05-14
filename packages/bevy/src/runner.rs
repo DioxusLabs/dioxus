@@ -134,6 +134,9 @@ where
                         // WindowEvent::KeyboardInput { event, .. } => {
                         //     println!("event: {:?}", event);
                         // }
+                        // CursorMoved isn't emitted
+                        // WindowEvent::CursorMoved { position, .. } => {}
+                        //
                         // WindowEvent::Destroyed { .. } => {
                         //     windows.remove(&tao_window_id, control_flow)
                         // }
