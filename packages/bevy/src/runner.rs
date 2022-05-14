@@ -1,9 +1,14 @@
-use crate::{context::UserEvent, window::DioxusWindows};
+use crate::{
+    context::UserEvent,
+    setting::{DioxusSettings, UpdateMode},
+    window::DioxusWindows,
+};
 use bevy::{
     app::{App, AppExit},
     ecs::event::{Events, ManualEventReader},
     input::keyboard::KeyboardInput,
-    window::ReceivedCharacter,
+    utils::Instant,
+    window::{ReceivedCharacter, RequestRedraw, Windows},
 };
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::*,
@@ -25,18 +30,15 @@ where
     let event_loop = app
         .world
         .remove_non_send_resource::<EventLoop<UserEvent<CoreCommand>>>()
-        .expect("Insert EventLoop as non send resource");
-
+        .unwrap();
     let core_rx = app
         .world
         .remove_resource::<Receiver<CoreCommand>>()
-        .expect("Failed to retrieve CoreCommand receiver resource");
-
-    let runtime = app
-        .world
-        .get_resource::<Runtime>()
-        .expect("Failed to retrieve async runtime");
+        .unwrap();
+    let runtime = app.world.get_resource::<Runtime>().unwrap();
     let proxy = event_loop.create_proxy();
+
+    let mut tao_state = TaoPersistentState::default();
 
     runtime.spawn(async move {
         while let Some(cmd) = core_rx.receive().await {
@@ -52,17 +54,6 @@ where
               _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
             *control_flow = ControlFlow::Wait;
-
-            let mut app_exit_event_reader = ManualEventReader::<AppExit>::default();
-            if let Some(app_exit_events) = app.world.get_resource_mut::<Events<AppExit>>() {
-                if app_exit_event_reader
-                    .iter(&app_exit_events)
-                    .next_back()
-                    .is_some()
-                {
-                    *control_flow = ControlFlow::Exit;
-                }
-            }
 
             let mut windows = app
                 .world
@@ -164,8 +155,66 @@ where
                 Event::Suspended => {}
                 Event::LoopDestroyed => {}
                 Event::RedrawRequested(_id) => {}
+                Event::RedrawEventsCleared => {
+                    {
+                        let dioxus_settings = app.world.resource::<DioxusSettings>();
+                        let windows = app.world.non_send_resource::<Windows>();
+                        let focused = windows.iter().any(|w| w.is_focused());
+                        let now = Instant::now();
+                        use UpdateMode::*;
+                        *control_flow = match dioxus_settings.update_mode(focused) {
+                            Continuous => ControlFlow::Poll,
+                            Reactive { max_wait } | ReactiveLowPower { max_wait } => {
+                                ControlFlow::WaitUntil(now + *max_wait)
+                            }
+                        };
+                    }
+                    let mut redraw = false;
+                    if let Some(app_redraw_events) =
+                        app.world.get_resource::<Events<RequestRedraw>>()
+                    {
+                        let mut redraw_event_reader = ManualEventReader::<RequestRedraw>::default();
+                        if redraw_event_reader.iter(app_redraw_events).last().is_some() {
+                            *control_flow = ControlFlow::Poll;
+                            redraw = true;
+                        }
+                    }
+
+                    if let Some(app_exit_events) = app.world.get_resource::<Events<AppExit>>() {
+                        let mut app_exit_event_reader = ManualEventReader::<AppExit>::default();
+                        if app_exit_event_reader.iter(app_exit_events).last().is_some() {
+                            *control_flow = ControlFlow::Exit;
+                        }
+                    }
+                    tao_state.redraw_request_sent = redraw;
+                }
                 _ => {}
             }
         },
     );
+}
+
+/// Stores state that must persist between frames.
+struct TaoPersistentState {
+    /// Tracks whether or not the application is active or suspended.
+    active: bool,
+    /// Tracks whether or not an event has occurred this frame that would trigger an update in low
+    /// power mode. Should be reset at the end of every frame.
+    low_power_event: bool,
+    /// Tracks whether the event loop was started this frame because of a redraw request.
+    redraw_request_sent: bool,
+    /// Tracks if the event loop was started this frame because of a `WaitUntil` timeout.
+    timeout_reached: bool,
+    last_update: Instant,
+}
+impl Default for TaoPersistentState {
+    fn default() -> Self {
+        Self {
+            active: true,
+            low_power_event: false,
+            redraw_request_sent: false,
+            timeout_reached: false,
+            last_update: Instant::now(),
+        }
+    }
 }

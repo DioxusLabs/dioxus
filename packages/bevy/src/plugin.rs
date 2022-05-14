@@ -1,4 +1,4 @@
-use crate::{context::UserEvent, runner::runner, window::DioxusWindows};
+use crate::{context::UserEvent, runner::runner, setting::DioxusSettings, window::DioxusWindows};
 use bevy::{
     app::prelude::*,
     ecs::{event::Events, prelude::*},
@@ -34,6 +34,10 @@ where
             .world
             .remove_non_send_resource::<DesktopConfig>()
             .unwrap_or_default();
+        let settings = app
+            .world
+            .remove_non_send_resource::<DioxusSettings>()
+            .unwrap_or_default();
 
         let event_loop = EventLoop::<UserEvent<CoreCommand>>::with_user_event();
 
@@ -48,6 +52,7 @@ where
             .insert_resource(runtime)
             .insert_resource(self.root)
             .insert_resource(self.props)
+            .insert_resource(settings)
             .insert_non_send_resource(config)
             .init_non_send_resource::<DioxusWindows>()
             .set_runner(|app| runner::<CoreCommand, UICommand>(app))

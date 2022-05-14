@@ -3,7 +3,7 @@ use bevy::{
     ecs::event::{EventReader, EventWriter},
     input::keyboard::KeyboardInput,
     log::{info, LogPlugin},
-    window::{ReceivedCharacter, WindowDescriptor, WindowMode},
+    window::{ReceivedCharacter, WindowDescriptor},
 };
 use dioxus::prelude::*;
 
@@ -23,7 +23,6 @@ fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
             title: "Bevy Dioxus Plugin Demo".to_string(),
-            mode: WindowMode::BorderlessFullscreen,
             ..Default::default()
         })
         .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
