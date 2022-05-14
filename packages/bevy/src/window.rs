@@ -6,7 +6,7 @@ use bevy::{
     ecs::world::WorldCell,
     math::IVec2,
     utils::HashMap,
-    window::{Window as BevyWindow, WindowDescriptor, WindowId},
+    window::{Window as BevyWindow, WindowDescriptor, WindowId, WindowMode},
 };
 use dioxus_core::{Component as DioxusComponent, SchedulerMsg, VirtualDom};
 use dioxus_desktop::{
@@ -15,8 +15,10 @@ use dioxus_desktop::{
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
     tao::{
+        dpi::{LogicalPosition, LogicalSize},
         event_loop::{ControlFlow, EventLoop},
-        window::{Window as TaoWindow, WindowBuilder, WindowId as TaoWindowId},
+        monitor::{MonitorHandle, VideoMode},
+        window::{Fullscreen, Window as TaoWindow, WindowBuilder, WindowId as TaoWindowId},
     },
     wry::webview::{WebView, WebViewBuilder},
 };
@@ -111,26 +113,13 @@ impl DioxusWindows {
             .get_non_send_mut::<EventLoop<UserEvent<CoreCommand>>>()
             .unwrap();
         let proxy = event_loop.create_proxy();
-        let (dom_tx, edit_queue) =
-            Self::spawn_virtual_dom::<CoreCommand, UICommand, Props>(world, proxy.clone());
 
-        let tao_window = WindowBuilder::new()
-            .with_title(&window_descriptor.title)
-            .build(&event_loop)
-            .unwrap();
+        let tao_window = Self::create_tao_window::<CoreCommand>(&event_loop, &window_descriptor);
         let tao_window_id = tao_window.id();
 
-        self.window_id_to_tao.insert(window_id, tao_window_id);
-        self.tao_to_window_id.insert(tao_window_id, window_id);
-
-        let position = tao_window
-            .outer_position()
-            .ok()
-            .map(|position| IVec2::new(position.x, position.y));
-        let inner_size = tao_window.inner_size();
-        let scale_factor = tao_window.scale_factor();
-        let raw_window_handle = tao_window.raw_window_handle();
-
+        let bevy_window = Self::create_bevy_window(window_id, &tao_window, &window_descriptor);
+        let (dom_tx, edit_queue) =
+            Self::spawn_virtual_dom::<CoreCommand, UICommand, Props>(world, proxy.clone());
         let (webview, is_ready) =
             Self::create_webview(world, window_descriptor, tao_window, proxy, dom_tx.clone());
 
@@ -138,16 +127,10 @@ impl DioxusWindows {
             tao_window_id,
             Window::new(webview, dom_tx, is_ready, edit_queue),
         );
+        self.window_id_to_tao.insert(window_id, tao_window_id);
+        self.tao_to_window_id.insert(tao_window_id, window_id);
 
-        BevyWindow::new(
-            window_id,
-            window_descriptor,
-            inner_size.width,
-            inner_size.height,
-            scale_factor,
-            position,
-            raw_window_handle,
-        )
+        bevy_window
     }
 
     pub fn remove(&mut self, tao_id: &TaoWindowId, control_flow: &mut ControlFlow) {
@@ -163,6 +146,128 @@ impl DioxusWindows {
     pub fn resize(&mut self, tao_id: &TaoWindowId) {
         let window = self.windows.get_mut(&tao_id).unwrap();
         window.webview.resize().unwrap();
+    }
+
+    fn create_tao_window<CoreCommand>(
+        event_loop: &EventLoop<UserEvent<CoreCommand>>,
+        window_descriptor: &WindowDescriptor,
+    ) -> TaoWindow
+    where
+        CoreCommand: Debug,
+    {
+        let mut tao_window_builder = WindowBuilder::new().with_title(&window_descriptor.title);
+
+        tao_window_builder = match window_descriptor.mode {
+            WindowMode::BorderlessFullscreen => tao_window_builder
+                .with_fullscreen(Some(Fullscreen::Borderless(event_loop.primary_monitor()))),
+            WindowMode::Fullscreen => {
+                tao_window_builder.with_fullscreen(Some(Fullscreen::Exclusive(
+                    Self::get_best_videomode(&event_loop.primary_monitor().unwrap()),
+                )))
+            }
+            WindowMode::SizedFullscreen => tao_window_builder.with_fullscreen(Some(
+                Fullscreen::Exclusive(Self::get_fitting_videomode(
+                    &event_loop.primary_monitor().unwrap(),
+                    window_descriptor.width as u32,
+                    window_descriptor.height as u32,
+                )),
+            )),
+            _ => {
+                let WindowDescriptor {
+                    width,
+                    height,
+                    position,
+                    scale_factor_override,
+                    ..
+                } = window_descriptor;
+
+                if let Some(position) = position {
+                    if let Some(sf) = scale_factor_override {
+                        tao_window_builder = tao_window_builder.with_position(
+                            LogicalPosition::new(position[0] as f64, position[1] as f64)
+                                .to_physical::<f64>(*sf),
+                        );
+                    } else {
+                        tao_window_builder = tao_window_builder.with_position(
+                            LogicalPosition::new(position[0] as f64, position[1] as f64),
+                        );
+                    }
+                }
+                if let Some(sf) = scale_factor_override {
+                    tao_window_builder
+                        .with_inner_size(LogicalSize::new(*width, *height).to_physical::<f64>(*sf))
+                } else {
+                    tao_window_builder.with_inner_size(LogicalSize::new(*width, *height))
+                }
+            }
+            .with_resizable(window_descriptor.resizable)
+            .with_decorations(window_descriptor.decorations)
+            .with_transparent(window_descriptor.transparent),
+        };
+
+        tao_window_builder.build(&event_loop).unwrap()
+    }
+
+    fn create_bevy_window(
+        window_id: WindowId,
+        tao_window: &TaoWindow,
+        window_descriptor: &WindowDescriptor,
+    ) -> BevyWindow {
+        BevyWindow::new(
+            window_id,
+            window_descriptor,
+            tao_window.inner_size().width,
+            tao_window.inner_size().height,
+            tao_window.scale_factor(),
+            tao_window
+                .outer_position()
+                .ok()
+                .map(|position| IVec2::new(position.x, position.y)),
+            tao_window.raw_window_handle(),
+        )
+    }
+
+    fn get_fitting_videomode(monitor: &MonitorHandle, width: u32, height: u32) -> VideoMode {
+        let mut modes = monitor.video_modes().collect::<Vec<_>>();
+
+        fn abs_diff(a: u32, b: u32) -> u32 {
+            if a > b {
+                return a - b;
+            }
+            b - a
+        }
+
+        modes.sort_by(|a, b| {
+            use std::cmp::Ordering::*;
+            match abs_diff(a.size().width, width).cmp(&abs_diff(b.size().width, width)) {
+                Equal => {
+                    match abs_diff(a.size().height, height).cmp(&abs_diff(b.size().height, height))
+                    {
+                        Equal => b.refresh_rate().cmp(&a.refresh_rate()),
+                        default => default,
+                    }
+                }
+                default => default,
+            }
+        });
+
+        modes.first().unwrap().clone()
+    }
+
+    fn get_best_videomode(monitor: &MonitorHandle) -> VideoMode {
+        let mut modes = monitor.video_modes().collect::<Vec<_>>();
+        modes.sort_by(|a, b| {
+            use std::cmp::Ordering::*;
+            match b.size().width.cmp(&a.size().width) {
+                Equal => match b.size().height.cmp(&a.size().height) {
+                    Equal => b.refresh_rate().cmp(&a.refresh_rate()),
+                    default => default,
+                },
+                default => default,
+            }
+        });
+
+        modes.first().unwrap().clone()
     }
 
     fn spawn_virtual_dom<CoreCommand, UICommand, Props>(
