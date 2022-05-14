@@ -54,9 +54,12 @@ pub(crate) fn construct_named_path(
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
     // find path layout
+    #[allow(unreachable_code)]
     let segments = match targets.get(name) {
         Some(x) => x,
         None => {
+            #[cfg(debug_assertions)]
+            panic!(r#"no route for name "{name}""#);
             error!(r#"no route for name "{name}""#);
             return None;
         }
