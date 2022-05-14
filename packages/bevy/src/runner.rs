@@ -64,7 +64,23 @@ where
                 .expect("Insert DioxusWindows as non send resource");
 
             match event {
-                Event::NewEvents(StartCause::Init) => {}
+                Event::NewEvents(start) => {
+                    let dioxus_settings = app.world.resource::<DioxusSettings>();
+                    let windows = app.world.resource::<Windows>();
+                    let focused = windows.iter().any(|w| w.is_focused());
+                    let auto_timeout_reached =
+                        matches!(start, StartCause::ResumeTimeReached { .. });
+                    let now = Instant::now();
+                    let manual_timeout_reached = match dioxus_settings.update_mode(focused) {
+                        UpdateMode::Continuous => false,
+                        UpdateMode::Reactive { max_wait }
+                        | UpdateMode::ReactiveLowPower { max_wait } => {
+                            now.duration_since(tao_state.last_update) >= *max_wait
+                        }
+                    };
+                    tao_state.low_power_event = false;
+                    tao_state.timeout_reached = auto_timeout_reached || manual_timeout_reached;
+                }
                 Event::WindowEvent {
                     event, window_id, ..
                 } => match event {
