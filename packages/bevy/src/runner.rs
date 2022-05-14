@@ -265,7 +265,11 @@ where
                                     .unwrap();
                                 events.send(VirtualDomUpdated { window_id });
                             }
-                            // CloseWindow => *control_flow = ControlFlow::Exit,
+                            CloseWindow => {
+                                let mut events =
+                                    world.get_resource_mut::<Events<AppExit>>().unwrap();
+                                events.send(AppExit);
+                            }
                             // DragWindow => {
                             //     // if the drag_window has any errors, we don't do anything
                             //     tao_window
@@ -313,8 +317,6 @@ where
                             .get_resource_mut::<Events<CoreCommand>>()
                             .expect("Provide CoreCommand event to bevy");
                         events.send(cmd);
-
-                        app.update();
                     }
                     UserEvent::KeyboardEvent(event) => {
                         let mut keyboard_input_events = app
@@ -333,8 +335,6 @@ where
                             }
                             None => {}
                         }
-
-                        app.update();
                     }
                 },
                 Event::DeviceEvent {

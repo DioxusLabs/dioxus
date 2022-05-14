@@ -1,5 +1,5 @@
 use bevy::{
-    app::{App, AppExit},
+    app::App,
     ecs::event::{EventReader, EventWriter},
     input::keyboard::KeyboardInput,
     log::{info, LogPlugin},
@@ -10,7 +10,6 @@ use dioxus::prelude::*;
 #[derive(Debug, Clone)]
 enum CoreCommand {
     Test,
-    Quit,
 }
 
 #[derive(Debug, Clone)]
@@ -33,16 +32,11 @@ fn main() {
         .run();
 }
 
-fn handle_core_command(
-    mut events: EventReader<CoreCommand>,
-    mut exit: EventWriter<AppExit>,
-    mut ui: EventWriter<UICommand>,
-) {
+fn handle_core_command(mut events: EventReader<CoreCommand>, mut ui: EventWriter<UICommand>) {
     for cmd in events.iter() {
         info!("🧠 {:?}", cmd);
 
         match cmd {
-            CoreCommand::Quit => exit.send(AppExit),
             CoreCommand::Test => ui.send(UICommand::Test),
         }
     }
@@ -99,8 +93,8 @@ fn app(cx: Scope) -> Element {
                     "Test",
                 }
                 button {
-                    onclick: |_e| window.send(CoreCommand::Quit),
-                    "Quit",
+                    onclick: |_e| window.close(),
+                    "Close",
                 }
                 button {
                     onclick: move |_| window.set_minimized(true),
