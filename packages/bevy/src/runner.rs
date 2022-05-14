@@ -441,16 +441,10 @@ where
     }
 }
 
-/// Stores state that must persist between frames.
 struct TaoPersistentState {
-    /// Tracks whether or not the application is active or suspended.
     active: bool,
-    /// Tracks whether or not an event has occurred this frame that would trigger an update in low
-    /// power mode. Should be reset at the end of every frame.
     low_power_event: bool,
-    /// Tracks whether the event loop was started this frame because of a redraw request.
     redraw_request_sent: bool,
-    /// Tracks if the event loop was started this frame because of a `WaitUntil` timeout.
     timeout_reached: bool,
     last_update: Instant,
 }
