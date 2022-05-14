@@ -10,9 +10,13 @@ use bevy::{
         world::World,
     },
     input::{keyboard::KeyboardInput, mouse::MouseMotion},
+    log::{info, warn},
     math::Vec2,
     utils::Instant,
-    window::{CreateWindow, ReceivedCharacter, RequestRedraw, WindowCreated, Windows},
+    window::{
+        CreateWindow, ReceivedCharacter, RequestRedraw, WindowCloseRequested, WindowCreated,
+        Windows,
+    },
 };
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::*,
@@ -85,14 +89,46 @@ where
                     event,
                     window_id: tao_window_id,
                     ..
-                } => match event {
-                    WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Destroyed { .. } => windows.remove(&tao_window_id, control_flow),
-                    WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                        windows.resize(&tao_window_id);
+                } => {
+                    let world = app.world.cell();
+                    let dioxus_windows = world.get_non_send_mut::<DioxusWindows>().unwrap();
+                    let mut windows = world.get_resource_mut::<Windows>().unwrap();
+                    let window_id =
+                        if let Some(window_id) = dioxus_windows.get_window_id(tao_window_id) {
+                            window_id
+                        } else {
+                            warn!(
+                                "Skipped event for unknown winit Window Id {:?}",
+                                tao_window_id
+                            );
+                            return;
+                        };
+
+                    let _window = if let Some(window) = windows.get_mut(window_id) {
+                        window
+                    } else {
+                        info!("Skipped event for closed window: {:?}", window_id);
+                        return;
+                    };
+                    tao_state.low_power_event = true;
+
+                    match event {
+                        WindowEvent::CloseRequested => {
+                            let mut window_close_requested_events = world
+                                .get_resource_mut::<Events<WindowCloseRequested>>()
+                                .unwrap();
+                            window_close_requested_events
+                                .send(WindowCloseRequested { id: window_id });
+                        }
+                        WindowEvent::Destroyed { .. } => {
+                            // windows.remove(&tao_window_id, control_flow)
+                        }
+                        WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
+                            // windows.resize(&tao_window_id);
+                        }
+                        _ => {}
                     }
-                    _ => {}
-                },
+                }
                 Event::UserEvent(user_event) => match user_event {
                     UserEvent::WindowEvent(user_window_event) => {
                         // currently dioxus-desktop supports a single window only,

@@ -49,6 +49,10 @@ impl DioxusWindows {
     pub fn get_one(&mut self) -> Option<&mut Window> {
         self.windows.values_mut().next()
     }
+
+    pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
+        self.tao_to_window_id.get(&id).cloned()
+    }
 }
 
 impl Debug for DioxusWindows {
