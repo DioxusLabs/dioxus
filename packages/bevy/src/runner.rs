@@ -82,12 +82,14 @@ where
                     tao_state.timeout_reached = auto_timeout_reached || manual_timeout_reached;
                 }
                 Event::WindowEvent {
-                    event, window_id, ..
+                    event,
+                    window_id: tao_window_id,
+                    ..
                 } => match event {
                     WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                    WindowEvent::Destroyed { .. } => windows.remove(&window_id, control_flow),
+                    WindowEvent::Destroyed { .. } => windows.remove(&tao_window_id, control_flow),
                     WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                        windows.resize(&window_id);
+                        windows.resize(&tao_window_id);
                     }
                     _ => {}
                 },
