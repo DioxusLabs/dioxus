@@ -55,7 +55,7 @@ where
             .insert_resource(settings)
             .insert_non_send_resource(config)
             .init_non_send_resource::<DioxusWindows>()
-            .set_runner(|app| runner::<CoreCommand, UICommand>(app))
+            .set_runner(|app| runner::<CoreCommand, UICommand, Props>(app))
             .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
             .insert_non_send_resource(event_loop);
 

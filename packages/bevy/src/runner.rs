@@ -5,10 +5,13 @@ use crate::{
 };
 use bevy::{
     app::{App, AppExit},
-    ecs::event::{Events, ManualEventReader},
+    ecs::{
+        event::{Events, ManualEventReader},
+        world::World,
+    },
     input::keyboard::KeyboardInput,
     utils::Instant,
-    window::{ReceivedCharacter, RequestRedraw, Windows},
+    window::{CreateWindow, ReceivedCharacter, RequestRedraw, WindowCreated, Windows},
 };
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::*,
@@ -22,10 +25,11 @@ use futures_intrusive::channel::shared::Receiver;
 use std::fmt::Debug;
 use tokio::runtime::Runtime;
 
-pub fn runner<CoreCommand, UICommand>(mut app: App)
+pub fn runner<CoreCommand, UICommand, Props>(mut app: App)
 where
-    CoreCommand: 'static + Send + Sync + Debug,
-    UICommand: 'static,
+    CoreCommand: 'static + Send + Sync + Clone + Debug,
+    UICommand: 'static + Send + Sync + Clone + Debug,
+    Props: 'static + Send + Sync + Copy,
 {
     let event_loop = app
         .world
@@ -53,8 +57,6 @@ where
         move |event: Event<UserEvent<CoreCommand>>,
               _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
-            *control_flow = ControlFlow::Wait;
-
             let mut windows = app
                 .world
                 .get_non_send_resource_mut::<DioxusWindows>()
@@ -150,11 +152,33 @@ where
                         app.update();
                     }
                 },
-                Event::MainEventsCleared => {}
                 Event::Resumed => {}
                 Event::Suspended => {}
                 Event::LoopDestroyed => {}
                 Event::RedrawRequested(_id) => {}
+                Event::MainEventsCleared => {
+                    handle_create_window_events::<CoreCommand, UICommand, Props>(&mut app.world);
+                    let dioxus_settings = app.world.resource::<DioxusSettings>();
+                    let update = if tao_state.active {
+                        let windows = app.world.resource::<Windows>();
+                        let focused = windows.iter().any(|w| w.is_focused());
+                        match dioxus_settings.update_mode(focused) {
+                            UpdateMode::Continuous | UpdateMode::Reactive { .. } => true,
+                            UpdateMode::ReactiveLowPower { .. } => {
+                                tao_state.low_power_event
+                                    || tao_state.redraw_request_sent
+                                    || tao_state.timeout_reached
+                            }
+                        }
+                    } else {
+                        false
+                    };
+
+                    if update {
+                        tao_state.last_update = Instant::now();
+                        app.update();
+                    }
+                }
                 Event::RedrawEventsCleared => {
                     {
                         let dioxus_settings = app.world.resource::<DioxusSettings>();
@@ -192,6 +216,32 @@ where
             }
         },
     );
+}
+
+fn handle_create_window_events<CoreCommand, UICommand, Props>(world: &mut World)
+where
+    CoreCommand: 'static + Send + Sync + Clone + Debug,
+    UICommand: 'static + Send + Sync + Clone + Debug,
+    Props: 'static + Send + Sync + Copy,
+{
+    let world = world.cell();
+    let mut dioxus_windows = world.get_non_send_mut::<DioxusWindows>().unwrap();
+    let mut windows = world.get_resource_mut::<Windows>().unwrap();
+    let create_window_events = world.get_resource::<Events<CreateWindow>>().unwrap();
+    let mut create_window_events_reader = ManualEventReader::<CreateWindow>::default();
+    let mut window_created_events = world.get_resource_mut::<Events<WindowCreated>>().unwrap();
+
+    for create_window_event in create_window_events_reader.iter(&create_window_events) {
+        let window = dioxus_windows.create::<CoreCommand, UICommand, Props>(
+            &world,
+            create_window_event.id,
+            &create_window_event.descriptor,
+        );
+        windows.add(window);
+        window_created_events.send(WindowCreated {
+            id: create_window_event.id,
+        });
+    }
 }
 
 /// Stores state that must persist between frames.
