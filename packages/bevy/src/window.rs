@@ -16,7 +16,7 @@ use dioxus_desktop::{
     protocol,
     tao::{
         dpi::{LogicalPosition, LogicalSize},
-        event_loop::{ControlFlow, EventLoop},
+        event_loop::EventLoop,
         monitor::{MonitorHandle, VideoMode},
         window::{Fullscreen, Window as TaoWindow, WindowBuilder, WindowId as TaoWindowId},
     },
@@ -37,9 +37,6 @@ pub struct DioxusWindows {
     windows: HashMap<TaoWindowId, Window>,
     window_id_to_tao: HashMap<WindowId, TaoWindowId>,
     tao_to_window_id: HashMap<TaoWindowId, WindowId>,
-    // Some winit functions, such as `set_window_icon` can only be used from the main thread. If
-    // they are used in another thread, the app will hang. This marker ensures `WinitWindows` is
-    // only ever accessed with bevy's non-send functions and in NonSend systems.
     _not_send_sync: PhantomData<*const ()>,
 
     quit_app_on_close: bool,
@@ -49,6 +46,12 @@ impl DioxusWindows {
     pub fn get_one(&mut self) -> Option<&mut Window> {
         self.windows.values_mut().next()
     }
+
+    // pub fn get_webview(&self, id: WindowId) -> Option<&WebView> {
+    //     self.window_id_to_tao
+    //         .get(&id)
+    //         .and_then(|id| self.windows.get(id).and_then(|w| Some(&w.webview)))
+    // }
 
     pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
         self.tao_to_window_id.get(&id).cloned()
@@ -135,21 +138,6 @@ impl DioxusWindows {
         self.tao_to_window_id.insert(tao_window_id, window_id);
 
         bevy_window
-    }
-
-    pub fn remove(&mut self, tao_id: &TaoWindowId, control_flow: &mut ControlFlow) {
-        let window_id = self.tao_to_window_id.remove(&tao_id).unwrap();
-        self.window_id_to_tao.remove(&window_id);
-        self.windows.remove(&tao_id);
-
-        if self.windows.is_empty() && self.quit_app_on_close {
-            *control_flow = ControlFlow::Exit;
-        }
-    }
-
-    pub fn resize(&mut self, tao_id: &TaoWindowId) {
-        let window = self.windows.get_mut(&tao_id).unwrap();
-        window.webview.resize().unwrap();
     }
 
     fn create_tao_window<CoreCommand>(

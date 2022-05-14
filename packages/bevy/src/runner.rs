@@ -11,16 +11,18 @@ use bevy::{
     },
     input::{keyboard::KeyboardInput, mouse::MouseMotion},
     log::{info, warn},
-    math::Vec2,
+    math::{ivec2, Vec2},
     utils::Instant,
     window::{
-        CreateWindow, ReceivedCharacter, RequestRedraw, WindowCloseRequested, WindowCreated,
-        WindowResized, Windows,
+        CreateWindow, FileDragAndDrop, ReceivedCharacter, RequestRedraw,
+        WindowBackendScaleFactorChanged, WindowCloseRequested, WindowCreated, WindowFocused,
+        WindowMoved, WindowResized, WindowScaleFactorChanged, Windows,
     },
 };
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::*,
     tao::{
+        dpi::LogicalSize,
         event::{DeviceEvent, Event, StartCause, WindowEvent},
         event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
         window::Fullscreen as WryFullscreen,
@@ -130,16 +132,123 @@ where
                             window_close_requested_events
                                 .send(WindowCloseRequested { id: window_id });
                         }
-                        // KeyboardInput isn't emitted. probably webview interrupts window underneath
+                        // No event emitted. probably webview interrupts window underneath
                         // WindowEvent::KeyboardInput { event, .. } => {
                         //     println!("event: {:?}", event);
                         // }
-                        // CursorMoved isn't emitted
-                        // WindowEvent::CursorMoved { position, .. } => {}
-                        //
-                        // WindowEvent::Destroyed { .. } => {
-                        //     windows.remove(&tao_window_id, control_flow)
+                        // WindowEvent::CursorMoved { device_id, .. } => {
+                        //     println!("device_id: {:?}", device_id);
                         // }
+                        // WindowEvent::CursorEntered { device_id } => {
+                        //     println!("device_id: {:?}", device_id);
+                        // }
+                        // WindowEvent::CursorLeft { device_id } => {
+                        //     println!("device_id: {:?}", device_id);
+                        // }
+                        // WindowEvent::MouseInput { device_id, .. } => {
+                        //     println!("device_id: {:?}", device_id);
+                        // }
+                        // WindowEvent::MouseWheel { device_id, .. } => {
+                        //     println!("device_id: {:?}", device_id);
+                        // }
+                        // WindowEvent::Touch(touch) => {
+                        //     println!("touch: {:?}", touch);
+                        // }
+                        // it doesn't event exist in tao or wry but in winit
+                        // WindowEvent::ReceivedCharacter(char) => {
+                        //     println!("char: {}", char);
+                        // }
+                        WindowEvent::ScaleFactorChanged {
+                            scale_factor,
+                            new_inner_size,
+                        } => {
+                            let mut backend_scale_factor_change_events = world
+                                .get_resource_mut::<Events<WindowBackendScaleFactorChanged>>()
+                                .unwrap();
+                            backend_scale_factor_change_events.send(
+                                WindowBackendScaleFactorChanged {
+                                    id: window_id,
+                                    scale_factor,
+                                },
+                            );
+                            let prior_factor = window.scale_factor();
+                            window.update_scale_factor_from_backend(scale_factor);
+                            let new_factor = window.scale_factor();
+                            if let Some(forced_factor) = window.scale_factor_override() {
+                                *new_inner_size = LogicalSize::new(
+                                    window.requested_width(),
+                                    window.requested_height(),
+                                )
+                                .to_physical::<u32>(forced_factor);
+                            } else if approx::relative_ne!(new_factor, prior_factor) {
+                                let mut scale_factor_change_events = world
+                                    .get_resource_mut::<Events<WindowScaleFactorChanged>>()
+                                    .unwrap();
+
+                                scale_factor_change_events.send(WindowScaleFactorChanged {
+                                    id: window_id,
+                                    scale_factor,
+                                });
+                            }
+
+                            let new_logical_width = new_inner_size.width as f64 / new_factor;
+                            let new_logical_height = new_inner_size.height as f64 / new_factor;
+                            if approx::relative_ne!(window.width() as f64, new_logical_width)
+                                || approx::relative_ne!(window.height() as f64, new_logical_height)
+                            {
+                                let mut resize_events =
+                                    world.get_resource_mut::<Events<WindowResized>>().unwrap();
+                                resize_events.send(WindowResized {
+                                    id: window_id,
+                                    width: new_logical_width as f32,
+                                    height: new_logical_height as f32,
+                                });
+                            }
+                            window.update_actual_size_from_backend(
+                                new_inner_size.width,
+                                new_inner_size.height,
+                            );
+                        }
+                        WindowEvent::Focused(focused) => {
+                            window.update_focused_status_from_backend(focused);
+                            let mut focused_events =
+                                world.get_resource_mut::<Events<WindowFocused>>().unwrap();
+                            focused_events.send(WindowFocused {
+                                id: window_id,
+                                focused,
+                            });
+                        }
+                        WindowEvent::DroppedFile(path_buf) => {
+                            let mut events =
+                                world.get_resource_mut::<Events<FileDragAndDrop>>().unwrap();
+                            events.send(FileDragAndDrop::DroppedFile {
+                                id: window_id,
+                                path_buf,
+                            });
+                        }
+                        WindowEvent::HoveredFile(path_buf) => {
+                            let mut events =
+                                world.get_resource_mut::<Events<FileDragAndDrop>>().unwrap();
+                            events.send(FileDragAndDrop::HoveredFile {
+                                id: window_id,
+                                path_buf,
+                            });
+                        }
+                        WindowEvent::HoveredFileCancelled => {
+                            let mut events =
+                                world.get_resource_mut::<Events<FileDragAndDrop>>().unwrap();
+                            events.send(FileDragAndDrop::HoveredFileCancelled { id: window_id });
+                        }
+                        WindowEvent::Moved(position) => {
+                            let position = ivec2(position.x, position.y);
+                            window.update_actual_position_from_backend(position);
+                            let mut events =
+                                world.get_resource_mut::<Events<WindowMoved>>().unwrap();
+                            events.send(WindowMoved {
+                                id: window_id,
+                                position,
+                            });
+                        }
                         _ => {}
                     }
                 }
