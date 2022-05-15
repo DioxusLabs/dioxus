@@ -12,17 +12,17 @@ both `fixed` segments and inlining the required parameters.
 
 This has a few advantages over path-based navigation:
 - Links can be created without knowing the actual path. This allows us to easily
-  change paths later on without finding all references in our app. (We can also
-      localize the path, if we must.)
-- The router can find invalid links. In `debug` builds it will `panic!` and in
-  `release` builds it will log an error.
+  change paths later on without having to find all references in our app. (We
+  can also localize the path, if we must.)
+- The router can find invalid links.
 - The router will inline the dynamic parameters. It will take care of encoding
   them as well.
 
 > We will learn about what the router does when it encounters a non-existing
-> name or missing parameter in the chapter about [Navigation Failures][nf].
+> name or missing parameter in the chapter about
+> [Navigation Failures](../advanced/navigation-failures.md).
 
-## Giving a routes names
+## Giving names to routes
 ```rust
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -75,11 +75,10 @@ fn Other(cx: Scope) -> Element {
 ```
 
 When you look closely, you will notice that in addition to the name we give
-[`NtName`] two other parameter. The first of those is a `Vec` containing the
+[`NtName`] two other values. The first of those is a `Vec` containing the
 parameters to inline into the path. The second handles the query string.
 
-> We will learn more about [query strings][qs] in a later chapter.
+> We will learn more about [query strings](../advanced/query.md) in a later
+> chapter.
 
-[nf]: ../advanced/navigation-failures.md
 [`NtName`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtName
-[qs]: ../advanced/query.md

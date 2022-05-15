@@ -1,4 +1,5 @@
-# Dioxus Router: Guide
+# Introduction
+
 In this guide you'll learn to effectively use Dioxus Router whether you're
 building a small todo app or the next FAANG company. We will create a small
 website with a blog, homepage, and more!

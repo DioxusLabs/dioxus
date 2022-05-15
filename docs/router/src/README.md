@@ -10,22 +10,24 @@ enable the `router` feature in your `Cargo.toml` file:
 dioxus = { .., features = [.., "router"] }
 ```
 
-> If you are not familiar with Dioxus, check out the [Dioxus] book first.
+> If you are not familiar with Dioxus itself, check out the [Dioxus book][db]
+> first.
 
 This book is intended to get you up to speed with Dioxus Router. It is split
 into three sections:
-1. The [Basics] coverer everything you need to use the router.
-2. In [Advanced] you will learn about more in-depth concepts, that are not
+1. The _[Basics](./basics/adding-the-router.md)_ coverer everything you need to
+   use the router.
+2. In _Advanced_ you will learn about more in-depth concepts, that are not
    necessary for all use cases.
 3. If you prefer a learning-by-doing approach, you can check ouf the
-   [example project]. It guides you through creating a dioxus app and setting up
-   a router, and covers some basic concepts as well.
+   _[example project](./example/introduction.md)_. It guides you through
+   creating a dioxus app and setting up a router, and covers some basic concepts
+   as well.
 
 > Please note that this is not the only documentation for the Dioxus Router. You
-> can also check out the [API Docs].
+> can also check out the [API Docs][api].
 
-[Advanced]: /advanced/index.md
-[API Docs]: https://docs.rs/dioxus-router/
-[Basics]: /basics/index.md
-[Dioxus]: https://dioxuslabs.com/guide/
+[api]: https://docs.rs/dioxus-router/
+[Basics]: /basics/adding-the-router.md
+[db]: https://dioxuslabs.com/guide/
 [example project]: /example/index.md

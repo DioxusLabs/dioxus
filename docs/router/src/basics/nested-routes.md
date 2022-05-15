@@ -42,8 +42,8 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Defining a nested [`Segment`]
-We can now create a second [`Segment`] and pass it to the [`Route`].
-We now can nest a [`Segment`] within the [`Route`] we defined:
+We now can nest a second segment within the [`Route`] we defined. It contains
+routes for the nested components.
 ```rust
 # extern crate dioxus;
 # use dioxus::prelude::*;
@@ -77,6 +77,22 @@ fn App(cx: Scope) -> Element {
 # fn PrivacySettings(cx: Scope) -> Element { unimplemented!() }
 ```
 
+## [`Outlet`]s
+When using nested routes, we need to provide equally nested [`Outlet`]s. In the
+above example, we need to have an outlet in our `Settings` component.
 
+```rust
+# extern crate dioxus;
+# use dioxus::prelude::*;
+fn Settings(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Settings" }
+        Outlet { }
+    })
+}
+```
+
+[`Outlet`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Outlet.html
 [`Route`]: https://docs.rs/dioxus-router/latest/dioxus_router/route_definition/struct.Route.html
+[`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html
 [`Segment`]: https://docs.rs/dioxus-router/latest/dioxus_router/route_definition/struct.Segment.html
