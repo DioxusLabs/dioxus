@@ -1,7 +1,10 @@
 use crate::{
     context::UserEvent,
     converter,
-    event::{DomUpdated, DragWindow, UpdateDom, UpdateVisible, VisibleUpdated, WindowDragged},
+    event::{
+        DomUpdated, DragWindow, UpdateDom, UpdateVisible, VisibleUpdated, WindowDragged,
+        WindowMaximized, WindowMinimized,
+    },
     runner::runner,
     setting::DioxusSettings,
     window::DioxusWindows,
@@ -68,6 +71,8 @@ where
             .add_event::<WindowDragged>()
             .add_event::<UpdateVisible>()
             .add_event::<VisibleUpdated>()
+            .add_event::<WindowMinimized>()
+            .add_event::<WindowMaximized>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
@@ -84,10 +89,7 @@ where
             .add_system_to_stage(
                 CoreStage::PostUpdate,
                 change_window, /* TODO.label(ModifiesWindows) // is recentry introduced ( > 0.7 ) */
-            )
-            .add_system(handle_updated_dom)
-            .add_system(handle_drag_window)
-            .add_system(handle_update_visible);
+            );
 
         Self::handle_initial_window_events(&mut app.world);
     }
@@ -143,7 +145,7 @@ where
 }
 
 fn change_window(
-    mut dioxus_windows: NonSendMut<DioxusWindows>,
+    dioxus_windows: NonSend<DioxusWindows>,
     mut windows: ResMut<Windows>,
     mut window_dpi_changed_events: EventWriter<WindowScaleFactorChanged>,
     // mut window_close_events: EventWriter<WindowClosed>, // bevy > 0.7
@@ -275,51 +277,4 @@ fn change_window(
     //         window_close_events.send(WindowClosed { id });
     //     }
     // }
-}
-
-fn handle_updated_dom(
-    mut events: EventReader<UpdateDom>,
-    mut event: EventWriter<DomUpdated>,
-    mut windows: NonSendMut<DioxusWindows>,
-) {
-    for UpdateDom { id } in events.iter() {
-        let window = windows.get_mut(*id).unwrap();
-        window.try_load_ready_webview();
-
-        event.send(DomUpdated { id: *id });
-    }
-}
-
-fn handle_drag_window(
-    mut events: EventReader<DragWindow>,
-    mut event: EventWriter<WindowDragged>,
-    mut windows: NonSendMut<DioxusWindows>,
-) {
-    for e in events.iter() {
-        let window = windows.get(e.id).unwrap();
-        let tao_window = window.tao_window();
-
-        if tao_window.fullscreen().is_none() {
-            if let Ok(()) = tao_window.drag_window() {
-                event.send(WindowDragged { id: e.id });
-            }
-        }
-    }
-}
-
-fn handle_update_visible(
-    mut events: EventReader<UpdateVisible>,
-    mut event: EventWriter<VisibleUpdated>,
-    mut windows: NonSendMut<DioxusWindows>,
-) {
-    for e in events.iter() {
-        let window = windows.get(e.id).unwrap();
-        let tao_window = window.tao_window();
-
-        tao_window.set_visible(e.visible);
-        event.send(VisibleUpdated {
-            id: e.id,
-            visible: e.visible,
-        });
-    }
 }

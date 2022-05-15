@@ -1,6 +1,6 @@
 use crate::{
     context::UserEvent,
-    event::{DragWindow, UpdateDom, UpdateVisible},
+    event::{DomUpdated, VisibleUpdated, WindowDragged, WindowMaximized, WindowMinimized},
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -255,13 +255,21 @@ where
                 Event::UserEvent(user_event) => match user_event {
                     UserEvent::WindowEvent(user_window_event) => {
                         let world = app.world.cell();
+                        let mut windows = world.get_non_send_mut::<Windows>().unwrap();
+                        let window = windows.get_primary_mut().unwrap();
                         let id = WindowId::primary();
+
+                        let dioxus_windows = world.get_non_send::<DioxusWindows>().unwrap();
+                        let dioxus_window = dioxus_windows.get(id).unwrap();
+                        let tao_window = dioxus_windows.get_tao_window(id).unwrap();
 
                         match user_window_event {
                             UserWindowEvent::Update => {
                                 let mut events =
-                                    world.get_resource_mut::<Events<UpdateDom>>().unwrap();
-                                events.send(UpdateDom { id });
+                                    world.get_resource_mut::<Events<DomUpdated>>().unwrap();
+
+                                dioxus_window.try_load_ready_webview();
+                                events.send(DomUpdated { id });
                             }
                             UserWindowEvent::CloseWindow => {
                                 let mut events = world
@@ -271,22 +279,39 @@ where
                             }
                             UserWindowEvent::DragWindow => {
                                 let mut events =
-                                    world.get_resource_mut::<Events<DragWindow>>().unwrap();
-                                events.send(DragWindow { id });
+                                    world.get_resource_mut::<Events<WindowDragged>>().unwrap();
+
+                                if tao_window.fullscreen().is_none() {
+                                    if let Ok(()) = tao_window.drag_window() {
+                                        events.send(WindowDragged { id });
+                                    }
+                                }
+                                events.send(WindowDragged { id });
                             }
                             UserWindowEvent::Visible(visible) => {
                                 let mut events =
-                                    world.get_resource_mut::<Events<UpdateVisible>>().unwrap();
-                                events.send(UpdateVisible { id, visible });
+                                    world.get_resource_mut::<Events<VisibleUpdated>>().unwrap();
+
+                                tao_window.set_visible(visible);
+                                events.send(VisibleUpdated { id, visible });
                             }
-                            // UserWindowEvent::Minimize(minimize) => {
-                            //     let mut events =
-                            //         world.get_resource_mut::<Events<MinimizeWindow>>().unwrap();
-                            //     events.send(UpdateVisible { id, minimize });
-                            //     // tao_window.set_minimized(state);
-                            // }
-                            // Maximize(state) => tao_window.set_maximized(state),
-                            // MaximizeToggle => tao_window.set_maximized(!tao_window.is_maximized()),
+                            UserWindowEvent::Minimize(minimized) => {
+                                let mut events =
+                                    world.get_resource_mut::<Events<WindowMinimized>>().unwrap();
+
+                                window.set_minimized(minimized);
+                                events.send(WindowMinimized { id, minimized });
+                            }
+                            UserWindowEvent::Maximize(maximized) => {
+                                let mut events =
+                                    world.get_resource_mut::<Events<WindowMaximized>>().unwrap();
+
+                                window.set_maximized(maximized);
+                                events.send(WindowMaximized { id, maximized });
+                            }
+                            UserWindowEvent::MaximizeToggle => {
+                                tao_window.set_maximized(!tao_window.is_maximized())
+                            }
                             // Fullscreen(state) => {
                             //     if let Some(handle) = tao_window.current_monitor() {
                             //         tao_window.set_fullscreen(

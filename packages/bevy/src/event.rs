@@ -10,17 +10,7 @@ use serde_json::Value;
 use serde_repr::*;
 
 #[derive(Debug, Clone)]
-pub struct UpdateDom {
-    pub id: WindowId,
-}
-
-#[derive(Debug, Clone)]
 pub struct DomUpdated {
-    pub id: WindowId,
-}
-
-#[derive(Debug, Clone)]
-pub struct DragWindow {
     pub id: WindowId,
 }
 
@@ -30,40 +20,22 @@ pub struct WindowDragged {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpdateVisible {
-    pub id: WindowId,
-    pub visible: bool,
-}
-
-#[derive(Debug, Clone)]
 pub struct VisibleUpdated {
     pub id: WindowId,
     pub visible: bool,
 }
 
-// #[derive(Debug, Clone)]
-// pub struct UpdateMinimized {
-//     pub id: WindowId,
-//     pub minimized: bool,
-// }
+#[derive(Debug, Clone)]
+pub struct WindowMinimized {
+    pub id: WindowId,
+    pub minimized: bool,
+}
 
-// #[derive(Debug, Clone)]
-// pub struct MinimizedUpdated {
-//     pub id: WindowId,
-//     pub minimized: bool,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct UpdateMaximized {
-//     pub id: WindowId,
-//     pub maximized: bool,
-// }
-
-// #[derive(Debug, Clone)]
-// pub struct MaximizedUpdated {
-//     pub id: WindowId,
-//     pub maximized: bool,
-// }
+#[derive(Debug, Clone)]
+pub struct WindowMaximized {
+    pub id: WindowId,
+    pub maximized: bool,
+}
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]

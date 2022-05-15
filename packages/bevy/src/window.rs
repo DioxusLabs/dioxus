@@ -42,28 +42,6 @@ pub struct DioxusWindows {
     quit_app_on_close: bool,
 }
 
-impl DioxusWindows {
-    pub fn get(&mut self, id: WindowId) -> Option<&Window> {
-        self.window_id_to_tao
-            .get(&id)
-            .and_then(|id| self.windows.get(id))
-    }
-
-    pub fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> {
-        self.window_id_to_tao
-            .get(&id)
-            .and_then(|id| self.windows.get_mut(id))
-    }
-
-    pub fn get_tao_window(&mut self, id: WindowId) -> Option<&TaoWindow> {
-        self.get(id).and_then(|window| Some(window.tao_window()))
-    }
-
-    pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
-        self.tao_to_window_id.get(&id).cloned()
-    }
-}
-
 impl Debug for DioxusWindows {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("DioxusWindows")
@@ -76,6 +54,26 @@ impl Debug for DioxusWindows {
 }
 
 impl DioxusWindows {
+    pub fn get(&self, id: WindowId) -> Option<&Window> {
+        self.window_id_to_tao
+            .get(&id)
+            .and_then(|id| self.windows.get(id))
+    }
+
+    pub fn get_mut(&mut self, id: WindowId) -> Option<&mut Window> {
+        self.window_id_to_tao
+            .get(&id)
+            .and_then(|id| self.windows.get_mut(id))
+    }
+
+    pub fn get_tao_window(&self, id: WindowId) -> Option<&TaoWindow> {
+        self.get(id).and_then(|window| Some(window.tao_window()))
+    }
+
+    pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
+        self.tao_to_window_id.get(&id).cloned()
+    }
+
     pub fn create<CoreCommand, UICommand, Props>(
         &mut self,
         world: &WorldCell,
