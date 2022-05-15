@@ -37,6 +37,12 @@ pub struct WindowMaximized {
     pub maximized: bool,
 }
 
+#[derive(Debug, Clone)]
+pub struct MaximizedToggled {
+    pub id: WindowId,
+    pub maximized: bool,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type")]
 pub enum WebKeyboardEvent {

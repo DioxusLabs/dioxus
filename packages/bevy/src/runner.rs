@@ -1,6 +1,9 @@
 use crate::{
     context::UserEvent,
-    event::{DomUpdated, VisibleUpdated, WindowDragged, WindowMaximized, WindowMinimized},
+    event::{
+        DomUpdated, MaximizedToggled, VisibleUpdated, WindowDragged, WindowMaximized,
+        WindowMinimized,
+    },
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -310,7 +313,13 @@ where
                                 events.send(WindowMaximized { id, maximized });
                             }
                             UserWindowEvent::MaximizeToggle => {
-                                tao_window.set_maximized(!tao_window.is_maximized())
+                                let mut events = world
+                                    .get_resource_mut::<Events<MaximizedToggled>>()
+                                    .unwrap();
+
+                                let maximized = !tao_window.is_maximized();
+                                tao_window.set_maximized(maximized);
+                                events.send(MaximizedToggled { id, maximized });
                             }
                             // Fullscreen(state) => {
                             //     if let Some(handle) = tao_window.current_monitor() {

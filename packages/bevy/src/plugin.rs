@@ -2,8 +2,8 @@ use crate::{
     context::UserEvent,
     converter,
     event::{
-        DomUpdated, DragWindow, UpdateDom, UpdateVisible, VisibleUpdated, WindowDragged,
-        WindowMaximized, WindowMinimized,
+        DomUpdated, MaximizedToggled, VisibleUpdated, WindowDragged, WindowMaximized,
+        WindowMinimized,
     },
     runner::runner,
     setting::DioxusSettings,
@@ -65,14 +65,12 @@ where
             .add_plugin(WindowPlugin::default())
             .add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .add_event::<UpdateDom>()
             .add_event::<DomUpdated>()
-            .add_event::<DragWindow>()
             .add_event::<WindowDragged>()
-            .add_event::<UpdateVisible>()
             .add_event::<VisibleUpdated>()
             .add_event::<WindowMinimized>()
             .add_event::<WindowMaximized>()
+            .add_event::<MaximizedToggled>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
