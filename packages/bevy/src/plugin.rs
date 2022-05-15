@@ -10,10 +10,20 @@ use bevy::{
     ecs::{event::Events, prelude::*},
     input::InputPlugin,
     log::error,
-    window::{CreateWindow, WindowCreated, WindowPlugin, Windows},
+    window::{
+        CreateWindow, WindowCommand, WindowCreated, WindowMode, WindowPlugin,
+        WindowScaleFactorChanged, Windows,
+    },
 };
 use dioxus_core::Component as DioxusComponent;
-use dioxus_desktop::{cfg::DesktopConfig, tao::event_loop::EventLoop};
+use dioxus_desktop::{
+    cfg::DesktopConfig,
+    tao::{
+        dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
+        event_loop::EventLoop,
+        window::Fullscreen,
+    },
+};
 use futures_intrusive::channel::shared::{channel, Sender};
 use std::{fmt::Debug, marker::PhantomData};
 use tokio::runtime::Runtime;
@@ -72,7 +82,7 @@ where
             .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
             .add_system_to_stage(
                 CoreStage::PostUpdate,
-                change_window, /* TODO.label(ModifiesWindows) */
+                change_window, /* TODO.label(ModifiesWindows) // is recentry introduced ( > 0.7 ) */
             )
             .add_system(handle_updated_dom)
             .add_system(handle_drag_window)
@@ -129,6 +139,146 @@ where
             error!("Failed to send UICommand");
         };
     }
+}
+
+fn change_window(
+    mut dioxus_windows: NonSendMut<DioxusWindows>,
+    mut windows: ResMut<Windows>,
+    mut window_dpi_changed_events: EventWriter<WindowScaleFactorChanged>,
+    // mut window_close_events: EventWriter<WindowClosed>,
+) {
+    // let mut removed_windows = vec![];
+
+    for bevy_window in windows.iter_mut() {
+        let id = bevy_window.id();
+        for command in bevy_window.drain_commands() {
+            match command {
+                WindowCommand::SetWindowMode {
+                    mode,
+                    resolution: (width, height),
+                } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    match mode {
+                        WindowMode::BorderlessFullscreen => {
+                            window.set_fullscreen(Some(Fullscreen::Borderless(None)));
+                        }
+                        WindowMode::Fullscreen => {
+                            window.set_fullscreen(Some(Fullscreen::Exclusive(
+                                DioxusWindows::get_best_videomode(
+                                    &window.current_monitor().unwrap(),
+                                ),
+                            )));
+                        }
+                        WindowMode::SizedFullscreen => window.set_fullscreen(Some(
+                            Fullscreen::Exclusive(DioxusWindows::get_fitting_videomode(
+                                &window.current_monitor().unwrap(),
+                                width,
+                                height,
+                            )),
+                        )),
+                        WindowMode::Windowed => window.set_fullscreen(None),
+                    }
+                }
+                WindowCommand::SetTitle { title } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_title(&title);
+                }
+                WindowCommand::SetScaleFactor { scale_factor } => {
+                    window_dpi_changed_events.send(WindowScaleFactorChanged { id, scale_factor });
+                }
+                WindowCommand::SetResolution {
+                    logical_resolution: (width, height),
+                    scale_factor,
+                } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_inner_size(
+                        LogicalSize::new(width, height).to_physical::<f64>(scale_factor),
+                    );
+                }
+                WindowCommand::SetPresentMode { .. } => (),
+                WindowCommand::SetResizable { resizable } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_resizable(resizable);
+                }
+                WindowCommand::SetDecorations { decorations } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_decorations(decorations);
+                }
+                WindowCommand::SetCursorIcon { icon } => {
+                    // let window = dioxus_windows.get_tao_window(id).unwrap();
+                    // window.set_cursor_icon(converters::convert_cursor_icon(icon));
+                }
+                WindowCommand::SetCursorLockMode { locked } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window
+                        .set_cursor_grab(locked)
+                        .unwrap_or_else(|e| error!("Unable to un/grab cursor: {}", e));
+                }
+                WindowCommand::SetCursorVisibility { visible } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_cursor_visible(visible);
+                }
+                WindowCommand::SetCursorPosition { position } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    let inner_size = window.inner_size().to_logical::<f32>(window.scale_factor());
+                    window
+                        .set_cursor_position(LogicalPosition::new(
+                            position.x,
+                            inner_size.height - position.y,
+                        ))
+                        .unwrap_or_else(|e| error!("Unable to set cursor position: {}", e));
+                }
+                WindowCommand::SetMaximized { maximized } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_maximized(maximized);
+                }
+                WindowCommand::SetMinimized { minimized } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_minimized(minimized);
+                }
+                WindowCommand::SetPosition { position } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_outer_position(PhysicalPosition {
+                        x: position[0],
+                        y: position[1],
+                    });
+                }
+                WindowCommand::SetResizeConstraints { resize_constraints } => {
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    let constraints = resize_constraints.check_constraints();
+                    let min_inner_size = LogicalSize {
+                        width: constraints.min_width,
+                        height: constraints.min_height,
+                    };
+                    let max_inner_size = LogicalSize {
+                        width: constraints.max_width,
+                        height: constraints.max_height,
+                    };
+
+                    window.set_min_inner_size(Some(min_inner_size));
+                    if constraints.max_width.is_finite() && constraints.max_height.is_finite() {
+                        window.set_max_inner_size(Some(max_inner_size));
+                    }
+                } // WindowCommand::Close => {
+                  //     // Since we have borrowed `windows` to iterate through them, we can't remove the window from it.
+                  //     // Add the removal requests to a queue to solve this
+                  //     removed_windows.push(id);
+                  //     // No need to run any further commands - this drops the rest of the commands, although the `bevy_window::Window` will be dropped later anyway
+                  //     break;
+                  // }
+            }
+        }
+    }
+
+    // if !removed_windows.is_empty() {
+    //     for id in removed_windows {
+    //         // Close the OS window. (The `Drop` impl actually closes the window)
+    //         let _ = dioxus_windows.remove_window(id);
+    //         // Clean up our own data structures
+    //         windows.remove(id);
+    //         window_close_events.send(WindowClosed { id });
+    //     }
+    // }
 }
 
 fn handle_updated_dom(

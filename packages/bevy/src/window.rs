@@ -55,6 +55,10 @@ impl DioxusWindows {
             .and_then(|id| self.windows.get_mut(id))
     }
 
+    pub fn get_tao_window(&mut self, id: WindowId) -> Option<&TaoWindow> {
+        self.get(id).and_then(|window| Some(window.tao_window()))
+    }
+
     pub fn get_window_id(&self, id: TaoWindowId) -> Option<WindowId> {
         self.tao_to_window_id.get(&id).cloned()
     }
@@ -68,45 +72,6 @@ impl Debug for DioxusWindows {
             .field("tao_to_window_id", &self.tao_to_window_id)
             .field("quit_app_on_close", &self.quit_app_on_close)
             .finish()
-    }
-}
-
-pub struct Window {
-    pub webview: WebView,
-    pub dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
-    is_ready: Arc<AtomicBool>,
-    edit_queue: Arc<Mutex<Vec<String>>>,
-}
-
-impl Window {
-    fn new(
-        webview: WebView,
-        dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
-        is_ready: Arc<AtomicBool>,
-        edit_queue: Arc<Mutex<Vec<String>>>,
-    ) -> Self {
-        Self {
-            webview,
-            dom_tx,
-            is_ready,
-            edit_queue,
-        }
-    }
-
-    pub fn tao_window(&self) -> &TaoWindow {
-        &self.webview.window()
-    }
-
-    pub fn try_load_ready_webview(&mut self) {
-        if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
-            let mut queue = self.edit_queue.lock().unwrap();
-
-            for edit in queue.drain(..) {
-                self.webview
-                    .evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
-                    .unwrap();
-            }
-        }
     }
 }
 
@@ -144,6 +109,49 @@ impl DioxusWindows {
         self.tao_to_window_id.insert(tao_window_id, window_id);
 
         bevy_window
+    }
+
+    pub fn get_fitting_videomode(monitor: &MonitorHandle, width: u32, height: u32) -> VideoMode {
+        let mut modes = monitor.video_modes().collect::<Vec<_>>();
+
+        fn abs_diff(a: u32, b: u32) -> u32 {
+            if a > b {
+                return a - b;
+            }
+            b - a
+        }
+
+        modes.sort_by(|a, b| {
+            use std::cmp::Ordering::*;
+            match abs_diff(a.size().width, width).cmp(&abs_diff(b.size().width, width)) {
+                Equal => {
+                    match abs_diff(a.size().height, height).cmp(&abs_diff(b.size().height, height))
+                    {
+                        Equal => b.refresh_rate().cmp(&a.refresh_rate()),
+                        default => default,
+                    }
+                }
+                default => default,
+            }
+        });
+
+        modes.first().unwrap().clone()
+    }
+
+    pub fn get_best_videomode(monitor: &MonitorHandle) -> VideoMode {
+        let mut modes = monitor.video_modes().collect::<Vec<_>>();
+        modes.sort_by(|a, b| {
+            use std::cmp::Ordering::*;
+            match b.size().width.cmp(&a.size().width) {
+                Equal => match b.size().height.cmp(&a.size().height) {
+                    Equal => b.refresh_rate().cmp(&a.refresh_rate()),
+                    default => default,
+                },
+                default => default,
+            }
+        });
+
+        modes.first().unwrap().clone()
     }
 
     fn create_tao_window<CoreCommand>(
@@ -223,49 +231,6 @@ impl DioxusWindows {
                 .map(|position| IVec2::new(position.x, position.y)),
             tao_window.raw_window_handle(),
         )
-    }
-
-    fn get_fitting_videomode(monitor: &MonitorHandle, width: u32, height: u32) -> VideoMode {
-        let mut modes = monitor.video_modes().collect::<Vec<_>>();
-
-        fn abs_diff(a: u32, b: u32) -> u32 {
-            if a > b {
-                return a - b;
-            }
-            b - a
-        }
-
-        modes.sort_by(|a, b| {
-            use std::cmp::Ordering::*;
-            match abs_diff(a.size().width, width).cmp(&abs_diff(b.size().width, width)) {
-                Equal => {
-                    match abs_diff(a.size().height, height).cmp(&abs_diff(b.size().height, height))
-                    {
-                        Equal => b.refresh_rate().cmp(&a.refresh_rate()),
-                        default => default,
-                    }
-                }
-                default => default,
-            }
-        });
-
-        modes.first().unwrap().clone()
-    }
-
-    fn get_best_videomode(monitor: &MonitorHandle) -> VideoMode {
-        let mut modes = monitor.video_modes().collect::<Vec<_>>();
-        modes.sort_by(|a, b| {
-            use std::cmp::Ordering::*;
-            match b.size().width.cmp(&a.size().width) {
-                Equal => match b.size().height.cmp(&a.size().height) {
-                    Equal => b.refresh_rate().cmp(&a.refresh_rate()),
-                    default => default,
-                },
-                default => default,
-            }
-        });
-
-        modes.first().unwrap().clone()
     }
 
     fn spawn_virtual_dom<CoreCommand, UICommand, Props>(
@@ -433,5 +398,44 @@ impl DioxusWindows {
         }
 
         (webview.build().unwrap(), is_ready)
+    }
+}
+
+pub struct Window {
+    pub webview: WebView,
+    pub dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
+    is_ready: Arc<AtomicBool>,
+    edit_queue: Arc<Mutex<Vec<String>>>,
+}
+
+impl Window {
+    fn new(
+        webview: WebView,
+        dom_tx: mpsc::UnboundedSender<SchedulerMsg>,
+        is_ready: Arc<AtomicBool>,
+        edit_queue: Arc<Mutex<Vec<String>>>,
+    ) -> Self {
+        Self {
+            webview,
+            dom_tx,
+            is_ready,
+            edit_queue,
+        }
+    }
+
+    pub fn tao_window(&self) -> &TaoWindow {
+        &self.webview.window()
+    }
+
+    pub fn try_load_ready_webview(&mut self) {
+        if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
+            let mut queue = self.edit_queue.lock().unwrap();
+
+            for edit in queue.drain(..) {
+                self.webview
+                    .evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
+                    .unwrap();
+            }
+        }
     }
 }
