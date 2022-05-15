@@ -1,5 +1,6 @@
 use crate::{
     context::UserEvent,
+    converter,
     event::{DomUpdated, DragWindow, UpdateDom, UpdateVisible, VisibleUpdated, WindowDragged},
     runner::runner,
     setting::DioxusSettings,
@@ -145,7 +146,7 @@ fn change_window(
     mut dioxus_windows: NonSendMut<DioxusWindows>,
     mut windows: ResMut<Windows>,
     mut window_dpi_changed_events: EventWriter<WindowScaleFactorChanged>,
-    // mut window_close_events: EventWriter<WindowClosed>,
+    // mut window_close_events: EventWriter<WindowClosed>, // bevy > 0.7
 ) {
     // let mut removed_windows = vec![];
 
@@ -205,8 +206,8 @@ fn change_window(
                     window.set_decorations(decorations);
                 }
                 WindowCommand::SetCursorIcon { icon } => {
-                    // let window = dioxus_windows.get_tao_window(id).unwrap();
-                    // window.set_cursor_icon(converters::convert_cursor_icon(icon));
+                    let window = dioxus_windows.get_tao_window(id).unwrap();
+                    window.set_cursor_icon(converter::convert_cursor_icon(icon));
                 }
                 WindowCommand::SetCursorLockMode { locked } => {
                     let window = dioxus_windows.get_tao_window(id).unwrap();
@@ -260,10 +261,7 @@ fn change_window(
                         window.set_max_inner_size(Some(max_inner_size));
                     }
                 } // WindowCommand::Close => {
-                  //     // Since we have borrowed `windows` to iterate through them, we can't remove the window from it.
-                  //     // Add the removal requests to a queue to solve this
                   //     removed_windows.push(id);
-                  //     // No need to run any further commands - this drops the rest of the commands, although the `bevy_window::Window` will be dropped later anyway
                   //     break;
                   // }
             }
@@ -272,9 +270,7 @@ fn change_window(
 
     // if !removed_windows.is_empty() {
     //     for id in removed_windows {
-    //         // Close the OS window. (The `Drop` impl actually closes the window)
     //         let _ = dioxus_windows.remove_window(id);
-    //         // Clean up our own data structures
     //         windows.remove(id);
     //         window_close_events.send(WindowClosed { id });
     //     }

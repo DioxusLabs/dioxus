@@ -1,0 +1,42 @@
+use bevy::window::CursorIcon;
+use dioxus_desktop::tao::window::CursorIcon as TaoCursorIcon;
+
+pub fn convert_cursor_icon(cursor_icon: CursorIcon) -> TaoCursorIcon {
+    match cursor_icon {
+        CursorIcon::Default => TaoCursorIcon::Default,
+        CursorIcon::Crosshair => TaoCursorIcon::Crosshair,
+        CursorIcon::Hand => TaoCursorIcon::Hand,
+        CursorIcon::Arrow => TaoCursorIcon::Arrow,
+        CursorIcon::Move => TaoCursorIcon::Move,
+        CursorIcon::Text => TaoCursorIcon::Text,
+        CursorIcon::Wait => TaoCursorIcon::Wait,
+        CursorIcon::Help => TaoCursorIcon::Help,
+        CursorIcon::Progress => TaoCursorIcon::Progress,
+        CursorIcon::NotAllowed => TaoCursorIcon::NotAllowed,
+        CursorIcon::ContextMenu => TaoCursorIcon::ContextMenu,
+        CursorIcon::Cell => TaoCursorIcon::Cell,
+        CursorIcon::VerticalText => TaoCursorIcon::VerticalText,
+        CursorIcon::Alias => TaoCursorIcon::Alias,
+        CursorIcon::Copy => TaoCursorIcon::Copy,
+        CursorIcon::NoDrop => TaoCursorIcon::NoDrop,
+        CursorIcon::Grab => TaoCursorIcon::Grab,
+        CursorIcon::Grabbing => TaoCursorIcon::Grabbing,
+        CursorIcon::AllScroll => TaoCursorIcon::AllScroll,
+        CursorIcon::ZoomIn => TaoCursorIcon::ZoomIn,
+        CursorIcon::ZoomOut => TaoCursorIcon::ZoomOut,
+        CursorIcon::EResize => TaoCursorIcon::EResize,
+        CursorIcon::NResize => TaoCursorIcon::NResize,
+        CursorIcon::NeResize => TaoCursorIcon::NeResize,
+        CursorIcon::NwResize => TaoCursorIcon::NwResize,
+        CursorIcon::SResize => TaoCursorIcon::SResize,
+        CursorIcon::SeResize => TaoCursorIcon::SeResize,
+        CursorIcon::SwResize => TaoCursorIcon::SwResize,
+        CursorIcon::WResize => TaoCursorIcon::WResize,
+        CursorIcon::EwResize => TaoCursorIcon::EwResize,
+        CursorIcon::NsResize => TaoCursorIcon::NsResize,
+        CursorIcon::NeswResize => TaoCursorIcon::NeswResize,
+        CursorIcon::NwseResize => TaoCursorIcon::NwseResize,
+        CursorIcon::ColResize => TaoCursorIcon::ColResize,
+        CursorIcon::RowResize => TaoCursorIcon::RowResize,
+    }
+}
