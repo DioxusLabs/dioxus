@@ -1,14 +1,12 @@
-use std::{
-    cmp::Ordering,
-    fmt::Debug,
-    ops::{Add, AddAssign, Sub, SubAssign},
-};
+use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::VNode;
+use dioxus_core::ElementId;
+use fxhash::FxHashSet;
 
 use crate::element_borrowable::ElementBorrowable;
 use crate::node_ref::{NodeMask, NodeView};
+use crate::real_dom::RealDom;
 
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
     s_iter: impl Iterator<Item = T>,
@@ -49,13 +47,13 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 /// Called at most once per update.
 pub trait ChildDepState {
     type Ctx;
-    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
-    type DepState: ElementBorrowable;
+    /// This must be either a [ChildDepState], or [NodeDepState]
+    type DepState;
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        children: impl Iterator<Item = <Self::DepState as ElementBorrowable>::Borrowed<'a>>,
+        children: impl Iterator<Item = &'a Self::DepState>,
         ctx: &Self::Ctx,
     ) -> bool
     where
@@ -67,13 +65,13 @@ pub trait ChildDepState {
 /// Called at most once per update.
 pub trait ParentDepState {
     type Ctx;
-    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
-    type DepState: ElementBorrowable;
+    /// This must be either a [ParentDepState] or [NodeDepState]
+    type DepState;
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        parent: Option<<Self::DepState as ElementBorrowable>::Borrowed<'a>>,
+        parent: Option<&'a Self::DepState>,
         ctx: &Self::Ctx,
     ) -> bool;
 }
@@ -94,23 +92,13 @@ pub trait NodeDepState {
     ) -> bool;
 }
 
-#[derive(Debug)]
-pub struct StatesChanged {
-    pub node_dep: Vec<MemberId>,
-    pub parent_dep: Vec<MemberId>,
-    pub child_dep: Vec<MemberId>,
-}
-
 pub trait State: Default + Clone {
-    const SIZE: usize;
-
-    fn update_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
+    fn update<'a>(
+        dirty: &Vec<(usize, NodeMask)>,
+        rdom: &'a mut RealDom<Self>,
         vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,
-    ) -> Option<StatesChanged>;
+    ) -> FxHashSet<ElementId>;
 }
 
 // Todo: once GATs land we can model multable dependencies
@@ -120,7 +108,7 @@ impl ChildDepState for () {
     fn reduce<'a>(
         &mut self,
         _: NodeView,
-        _: impl Iterator<Item = Self::DepState>,
+        _: impl Iterator<Item = &'a Self::DepState>,
         _: &Self::Ctx,
     ) -> bool
     where
@@ -133,7 +121,7 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce(&mut self, _: NodeView, _: Option<Self::DepState>, _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView, _: Option<&'a Self::DepState>, _: &Self::Ctx) -> bool {
         false
     }
 }
@@ -143,34 +131,5 @@ impl NodeDepState for () {
     type DepState = ();
     fn reduce(&mut self, _: NodeView, _sibling: Self::DepState, _: &Self::Ctx) -> bool {
         false
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MemberId(pub usize);
-
-impl Sub<usize> for MemberId {
-    type Output = MemberId;
-    fn sub(self, rhs: usize) -> Self::Output {
-        MemberId(self.0 - rhs)
-    }
-}
-
-impl Add<usize> for MemberId {
-    type Output = MemberId;
-    fn add(self, rhs: usize) -> Self::Output {
-        MemberId(self.0 + rhs)
-    }
-}
-
-impl SubAssign<usize> for MemberId {
-    fn sub_assign(&mut self, rhs: usize) {
-        *self = *self - rhs;
-    }
-}
-
-impl AddAssign<usize> for MemberId {
-    fn add_assign(&mut self, rhs: usize) {
-        *self = *self + rhs;
     }
 }

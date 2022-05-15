@@ -2,11 +2,10 @@ extern crate proc_macro;
 
 mod sorted_slice;
 
-use dioxus_native_core::state::MemberId;
-use proc_macro::TokenStream;
-use quote::format_ident;
-use quote::{quote, ToTokens, __private::Span};
+use proc_macro::{Span, TokenStream};
+use quote::{quote, ToTokens};
 use sorted_slice::StrSlice;
+use syn::punctuated::Punctuated;
 use syn::{
     self,
     parse::{Parse, ParseStream, Result},
@@ -51,228 +50,70 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
     let strct = Struct::new(type_name.clone(), &fields);
     match StateStruct::parse(&fields, &strct) {
         Ok(state_strct) => {
-            let node_dep_state_fields = state_strct
+            let members: Vec<_> = state_strct
                 .state_members
                 .iter()
-                .filter(|f| f.dep_kind == DepKind::Node)
-                .map(|f| f.reduce_self());
-            let child_dep_state_fields = state_strct
-                .state_members
-                .iter()
-                .filter(|f| f.dep_kind == DepKind::Child)
-                .map(|f| f.reduce_self());
-            let parent_dep_state_fields = state_strct
-                .state_members
-                .iter()
-                .filter(|f| f.dep_kind == DepKind::Parent)
-                .map(|f| f.reduce_self());
-
-            let node_iter = state_strct
-                .state_members
-                .iter()
-                .filter(|m| m.dep_kind == DepKind::Node);
-            let node_ids = node_iter.clone().map(|m| m.member_id.0);
-            let node_ids_clone = node_ids.clone();
-            let node_types = node_iter.map(|f| &f.mem.ty);
-
-            let child_iter = state_strct
-                .state_members
-                .iter()
-                .filter(|m| m.dep_kind == DepKind::Child);
-            let child_ids = child_iter.clone().map(|m| m.member_id.0);
-            let child_ids_clone = child_ids.clone();
-            let child_types = child_iter.map(|f| &f.mem.ty);
-
-            let parent_iter = state_strct
-                .state_members
-                .iter()
-                .filter(|m| m.dep_kind == DepKind::Parent);
-            let parent_ids = parent_iter.clone().map(|m| m.member_id.0);
-            let parent_ids_clone = parent_ids.clone();
-            let parent_types = parent_iter.map(|f| &f.mem.ty);
-
-            let type_name_str = type_name.to_string();
-
-            let child_states = &state_strct.child_states;
-
-            let member_size = state_strct.state_members.len();
-
-            let child_state_ty = child_states.iter().map(|m| &m.ty);
-            let child_state_idents: Vec<_> = child_states.iter().map(|m| &m.ident).collect();
-            let sum_const_declarations = child_state_ty.clone().enumerate().map(|(i, ty)| {
-                let ident = format_ident!("__{}_SUM_{}", i, type_name.to_string());
-                let ident_minus = format_ident!("__{}_SUM_{}_minus", i, type_name.to_string());
-                if i == 0 {
-                    quote!(const #ident_minus: usize = #member_size + #ty::SIZE - 1;
-                    const #ident: usize = #member_size + #ty::SIZE;)
-                } else {
-                    let prev_ident = format_ident!("__{}_SUM_{}", i - 1, type_name.to_string());
-                    quote!(const #ident_minus: usize = #prev_ident + #ty::SIZE - 1;
-                    const #ident: usize = #prev_ident + #ty::SIZE;)
-                }
-            });
-            let sum_idents: Vec<_> = std::iter::once(quote!(#member_size))
-                .chain((0..child_states.len()).map(|i| {
-                    let ident = format_ident!("__{}_SUM_{}", i, type_name.to_string());
-                    quote!(#ident)
-                }))
+                .map(|m| &m.mem.ident)
                 .collect();
+            let member_types = state_strct.state_members.iter().map(|m| &m.mem.ty);
+            let resolve_members = state_strct
+                .state_members
+                .iter()
+                .map(|m| state_strct.resolve(&m));
 
-            let child_state_ranges: Vec<_> = (0..child_state_ty.len())
-                .map(|i| {
-                    let current = format_ident!("__{}_SUM_{}_minus", i, type_name.to_string());
-                    let previous = if i == 0 {
-                        quote!(#member_size)
-                    } else {
-                        let ident = format_ident!("__{}_SUM_{}", i - 1, type_name.to_string());
-                        quote!(#ident)
-                    };
-                    quote!(#previous..=#current)
-                })
-                .collect();
+            let child_types = state_strct.child_states.iter().map(|s| &s.ty);
 
             let gen = quote! {
-                #(
-                    #sum_const_declarations
-                )*
                 impl State for #type_name{
-                    const SIZE: usize = #member_size #( + #child_state_ty::SIZE)*;
-
-                    fn update_node_dep_state<'a>(
-                        &'a mut self,
-                        ty: dioxus_native_core::state::MemberId,
-                        node: &'a dioxus_core::VNode<'a>,
+                    fn update<'a>(
+                        dirty: &Vec<(usize, dioxus_native_core::node_ref::NodeMask)>,
+                        rdom: &'a mut dioxus_native_core::real_dom::RealDom<Self>,
                         vdom: &'a dioxus_core::VirtualDom,
                         ctx: &anymap::AnyMap,
-                    ) -> Option<dioxus_native_core::state::NodeStatesChanged>{
-                        use dioxus_native_core::state::NodeDepState as _;
-                        use dioxus_native_core::state::State as _;
-                        match ty.0{
-                            #(
-                                #node_ids => #node_dep_state_fields,
-                            )*
-                            #(
-                                #child_state_ranges => {
-                                    self.#child_state_idents.update_node_dep_state(
-                                        ty - #sum_idents,
-                                        node,
-                                        vdom,
-                                        ctx,
-                                    ).map(|mut changed|{
-                                        for id in &mut changed.node_dep{
-                                            *id += #sum_idents;
-                                        }
-                                        changed
-                                    })
-                                }
-                            )*
-                            _ => panic!("{:?} not in {}", ty, #type_name_str),
+                    ) -> fxhash::FxHashSet<dioxus_core::ElementId>{
+                        struct MembersDirty{
+                            #(#members: bool, )*
                         }
-                    }
 
-                    fn update_parent_dep_state<'a>(
-                        &'a mut self,
-                        ty: dioxus_native_core::state::MemberId,
-                        node: &'a dioxus_core::VNode<'a>,
-                        vdom: &'a dioxus_core::VirtualDom,
-                        parent: Option<&Self>,
-                        ctx: &anymap::AnyMap,
-                    ) -> Option<dioxus_native_core::state::ParentStatesChanged>{
-                        use dioxus_native_core::state::ParentDepState as _;
-                        match ty.0{
-                            #(
-                                #parent_ids => #parent_dep_state_fields,
-                            )*
-                            #(
-                                #child_state_ranges => {
-                                    self.#child_state_idents.update_parent_dep_state(
-                                        ty - #sum_idents,
-                                        node,
-                                        vdom,
-                                        parent.map(|p| &p.#child_state_idents),
-                                        ctx,
-                                    ).map(|mut changed|{
-                                        for id in &mut changed.node_dep{
-                                            *id += #sum_idents;
-                                        }
-                                        for id in &mut changed.parent_dep{
-                                            *id += #sum_idents;
-                                        }
-                                        changed
-                                    })
-                                }
-                            )*
-                            _ => panic!("{:?} not in {}", ty, #type_name_str),
+                        impl MembersDirty{
+                            fn new(&self) -> Self{
+                                Self{#(#members: false),*}
+                            }
+
+                            fn any(&self) -> bool{
+                                #(self.#members || )* false
+                            }
                         }
-                    }
 
-                    fn update_child_dep_state<'a>(
-                        &'a mut self,
-                        ty: dioxus_native_core::state::MemberId,
-                        node: &'a dioxus_core::VNode<'a>,
-                        vdom: &'a dioxus_core::VirtualDom,
-                        children: &Vec<&Self>,
-                        ctx: &anymap::AnyMap,
-                    ) -> Option<dioxus_native_core::state::ChildStatesChanged>{
-                        use dioxus_native_core::state::ChildDepState as _;
-                        match ty.0{
-                            #(
-                                #child_ids => #child_dep_state_fields,
-                            )*
-                            #(
-                                #child_state_ranges => {
-                                    self.#child_state_idents.update_child_dep_state(
-                                        ty - #sum_idents,
-                                        node,
-                                        vdom,
-                                        &children.iter().map(|p| &p.#child_state_idents).collect(),
-                                        ctx,
-                                    ).map(|mut changed|{
-                                        for id in &mut changed.node_dep{
-                                            *id += #sum_idents;
-                                        }
-                                        for id in &mut changed.child_dep{
-                                            *id += #sum_idents;
-                                        }
-                                        changed
-                                    })
-                                }
-                            )*
-                            _ => panic!("{:?} not in {}", ty, #type_name_str),
+                        let mut dirty_elements = fxhash::FxHashSet::default();
+                        // the states of any elements that are dirty
+                        let mut states = fxhash::FxHashMap::default();
+
+                        for (id, mask) in dirty {
+                            let members_dirty = MembersDirty{
+                                #(#members: #member_types::NODE_MASK.overlaps(mask),)*
+                            };
+                            if members_dirty.any(){
+                                states.insert(id, members_dirty);
+                            }
                         }
-                    }
 
-                    fn child_dep_types(&self, mask: &dioxus_native_core::node_ref::NodeMask) -> Vec<dioxus_native_core::state::MemberId>{
-                        let mut dep_types = Vec::new();
-                        #(if #child_types::NODE_MASK.overlaps(mask) {
-                            dep_types.push(dioxus_native_core::state::MemberId(#child_ids_clone));
-                        })*
                         #(
-                            dep_types.extend(self.#child_state_idents.child_dep_types(mask).into_iter().map(|id| id + #sum_idents));
+                            #resolve_members;
                         )*
-                        dep_types
-                    }
 
-                    fn parent_dep_types(&self, mask: &dioxus_native_core::node_ref::NodeMask) -> Vec<dioxus_native_core::state::MemberId>{
-                        let mut dep_types = Vec::new();
-                        #(if #parent_types::NODE_MASK.overlaps(mask) {
-                            dep_types.push(dioxus_native_core::state::MemberId(#parent_ids_clone));
-                        })*
                         #(
-                            dep_types.extend(self.#child_state_idents.parent_dep_types(mask).into_iter().map(|id| id + #sum_idents));
+                            dirty_elements.extend(
+                                #child_types::update(
+                                    dirty,
+                                    rdom,
+                                    vdom,
+                                    ctx,
+                                )
+                            );
                         )*
-                        dep_types
-                    }
 
-                    fn node_dep_types(&self, mask: &dioxus_native_core::node_ref::NodeMask) -> Vec<dioxus_native_core::state::MemberId>{
-                        let mut dep_types = Vec::new();
-                        #(if #node_types::NODE_MASK.overlaps(mask) {
-                            dep_types.push(dioxus_native_core::state::MemberId(#node_ids_clone));
-                        })*
-                        #(
-                            dep_types.extend(self.#child_state_idents.node_dep_types(mask).into_iter().map(|id| id + #sum_idents));
-                        )*
-                        dep_types
+                        dirty_elements
                     }
                 }
             };
@@ -280,6 +121,12 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
         }
         Err(e) => e.into_compile_error().into(),
     }
+}
+
+struct Depenadants<'a> {
+    node: Vec<&'a Member>,
+    child: Vec<&'a Member>,
+    parent: Vec<&'a Member>,
 }
 
 struct Struct {
@@ -302,7 +149,7 @@ struct StateStruct<'a> {
 impl<'a> StateStruct<'a> {
     fn parse(fields: &[&'a Field], strct: &'a Struct) -> Result<Self> {
         let mut parse_err = Ok(());
-        let state_members = strct
+        let mut unordered_state_members: Vec<_> = strct
             .members
             .iter()
             .zip(fields.iter())
@@ -312,7 +159,44 @@ impl<'a> StateStruct<'a> {
                     parse_err = Err(err);
                     None
                 }
-            });
+            })
+            .collect();
+        parse_err?;
+
+        let mut state_members = Vec::new();
+        while !unordered_state_members.is_empty() {
+            let mut resolved = false;
+            for i in 0..unordered_state_members.len() {
+                let mem = &mut unordered_state_members[i];
+                if mem.dep_mems.iter().all(|(dep, resolved)| {
+                    *resolved || (*dep == mem.mem && mem.dep_kind != DepKind::Node)
+                }) {
+                    let mem = unordered_state_members.remove(i);
+                    // mark any dependancy that depends on this member as resolved
+                    for member in unordered_state_members.iter_mut() {
+                        for (dep, resolved) in &mut member.dep_mems {
+                            *resolved |= *dep == mem.mem;
+                        }
+                    }
+                    state_members.push(mem);
+                    resolved = true;
+                    break;
+                }
+            }
+            if !resolved {
+                return Err(Error::new(
+                    strct.name.span(),
+                    format!(
+                        "{} has circular dependacy in {:?}",
+                        strct.name,
+                        unordered_state_members
+                            .iter()
+                            .map(|m| format!("{}", &m.mem.ident))
+                            .collect::<Vec<_>>()
+                    ),
+                ));
+            }
+        }
 
         let child_states = strct
             .members
@@ -328,177 +212,214 @@ impl<'a> StateStruct<'a> {
             })
             .map(|(m, _)| m);
 
-        #[derive(Debug, Clone)]
-        struct DepNode<'a> {
-            state_mem: StateMember<'a>,
-            depandants: Vec<DepNode<'a>>,
-        }
-        impl<'a> DepNode<'a> {
-            fn new(state_mem: StateMember<'a>) -> Self {
-                Self {
-                    state_mem,
-                    depandants: Vec::new(),
-                }
-            }
-
-            /// flattens the node in pre order
-            fn flatten(self) -> Vec<StateMember<'a>> {
-                let DepNode {
-                    state_mem,
-                    depandants,
-                } = self;
-                let mut flat = vec![state_mem];
-                for d in depandants {
-                    flat.append(&mut d.flatten());
-                }
-                flat
-            }
-
-            fn set_ids(&mut self, current_id: &mut usize) {
-                self.state_mem.member_id = dioxus_native_core::state::MemberId(*current_id);
-                // if the node depends on itself, we need to add the dependency seperately
-                if let Some(dep) = self.state_mem.dep_mem {
-                    if dep == self.state_mem.mem {
-                        self.state_mem
-                            .dependants
-                            .push((MemberId(*current_id), self.state_mem.dep_kind.clone()));
-                    }
-                }
-                *current_id += 1;
-                for d in &mut self.depandants {
-                    self.state_mem
-                        .dependants
-                        .push((MemberId(*current_id), d.state_mem.dep_kind.clone()));
-                    d.set_ids(current_id);
-                }
-            }
-
-            fn contains_member(&self, member: &Member) -> bool {
-                if self.state_mem.mem == member {
-                    true
-                } else {
-                    self.depandants.iter().any(|d| d.contains_member(member))
-                }
-            }
-
-            // check if there are any mixed child/parent dependancies
-            fn check(&self) -> Option<Error> {
-                self.kind().err()
-            }
-
-            fn kind(&self) -> Result<&DepKind> {
-                fn reduce_kind<'a>(dk1: &'a DepKind, dk2: &'a DepKind) -> Result<&'a DepKind> {
-                    match (dk1, dk2) {
-                        (DepKind::Child, DepKind::Parent) | (DepKind::Parent, DepKind::Child) => {
-                            Err(Error::new(
-                                Span::call_site(),
-                                "There is a ChildDepState that depends on a ParentDepState",
-                            ))
-                        }
-                        // node dep state takes the lowest priority
-                        (DepKind::Node, important) | (important, DepKind::Node) => Ok(important),
-                        // they are the same
-                        (fst, _) => Ok(fst),
-                    }
-                }
-                reduce_kind(
-                    self.depandants
-                        .iter()
-                        .try_fold(&DepKind::Node, |dk1, dk2| reduce_kind(dk1, dk2.kind()?))?,
-                    &self.state_mem.dep_kind,
-                )
-            }
-
-            fn insert_dependant(&mut self, other: DepNode<'a>) -> bool {
-                let dep = other.state_mem.dep_mem.unwrap();
-                if self.contains_member(dep) {
-                    if self.state_mem.mem == dep {
-                        self.depandants.push(other);
-                        true
-                    } else {
-                        self.depandants
-                            .iter_mut()
-                            .find(|d| d.contains_member(dep))
-                            .unwrap()
-                            .insert_dependant(other)
-                    }
-                } else {
-                    false
-                }
-            }
-        }
-
         // members need to be sorted so that members are updated after the members they depend on
-        let mut roots: Vec<DepNode> = vec![];
-        for m in state_members {
-            if let Some(dep) = m.dep_mem {
-                let root_depends_on = roots
-                    .iter()
-                    .filter_map(|m| m.state_mem.dep_mem)
-                    .any(|d| m.mem == d);
+        Ok(Self {
+            state_members,
+            child_states: child_states.collect(),
+        })
+    }
 
-                if let Some(r) = roots.iter_mut().find(|r| r.contains_member(dep)) {
-                    let new = DepNode::new(m);
-                    if root_depends_on {
-                        return Err(Error::new(
-                            new.state_mem.mem.ident.span(),
-                            format!("{} has a circular dependancy", new.state_mem.mem.ident),
-                        ));
+    fn get_depenadants(&self, mem: &Member) -> Depenadants {
+        let mut dependants = Depenadants {
+            node: Vec::new(),
+            child: Vec::new(),
+            parent: Vec::new(),
+        };
+        for member in &self.state_members {
+            for (dep, _) in &member.dep_mems {
+                if *dep == mem {
+                    match member.dep_kind {
+                        DepKind::Node => dependants.node.push(&member.mem),
+                        DepKind::Child => dependants.child.push(&member.mem),
+                        DepKind::Parent => dependants.parent.push(&member.mem),
                     }
-                    // return Err(Error::new(new.state_mem.mem.ident.span(), "stuff"));
-                    r.insert_dependant(new);
-                    continue;
                 }
             }
-            let mut new = DepNode::new(m);
-            let mut i = 0;
-            while i < roots.len() {
-                if roots[i].state_mem.dep_mem == Some(new.state_mem.mem) {
-                    let child = roots.remove(i);
-                    new.insert_dependant(child);
-                } else {
-                    i += 1;
-                }
-            }
-            roots.push(new);
         }
-        parse_err?;
-        let mut current_id = 0;
-        for r in &mut roots {
-            r.set_ids(&mut current_id);
-        }
-        if let Some(err) = roots.iter().find_map(DepNode::check) {
-            Err(err)
-        } else {
-            let state_members: Vec<_> = roots
-                .into_iter()
-                .flat_map(|r| r.flatten().into_iter())
-                .collect();
+        dependants
+    }
 
-            Ok(Self {
-                state_members,
-                child_states: child_states.collect(),
-            })
+    fn update_dependants(&self, mem: &Member) -> impl ToTokens {
+        let dep = self.get_depenadants(mem);
+        let update_child_dependants = if dep.child.is_empty() {
+            quote!()
+        } else {
+            let update: Vec<_> = dep
+                .child
+                .iter()
+                .map(|d| {
+                    let ident = &d.ident;
+                    let insert = if *d == mem {
+                        quote! {
+                            resolution_order
+                                .binary_search_by_key(&rnode.id, |id| rdom[*id].height)
+                                .unwrap();
+                        }
+                    } else {
+                        quote! {}
+                    };
+                    quote! {
+                        dirty.#ident = true;
+                        #insert
+                    }
+                })
+                .collect();
+            quote! {
+                if let Some(parent_id) = rnode.parent {
+                    if let Some(dirty) = states.get(parent_id) {
+                        #(#update)*
+                    }
+                    else{
+                        let mut dirty = MembersDirty::new();
+                        #(#update)*
+                        states.insert(&parent_id.0, dirty);
+                    }
+                }
+            }
+        };
+        let node_dependants: Vec<_> = dep.node.iter().map(|d| &d.ident).collect();
+        let update_node_dependants = quote! {#(members_dirty.#node_dependants = true;)*};
+        let update_parent_dependants = if dep.parent.is_empty() {
+            quote!()
+        } else {
+            let update: Vec<_> = dep
+                .parent
+                .iter()
+                .map(|d| {
+                    let ident = &d.ident;
+                    let insert = if *d == mem {
+                        quote! {
+                            resolution_order
+                                .binary_search_by_key(&rnode.id, |id| rdom[*id].height)
+                                .unwrap();
+                        }
+                    } else {
+                        quote! {}
+                    };
+                    quote! {
+                        dirty.#ident = true;
+                        #insert
+                    }
+                })
+                .collect();
+            quote! {
+                if let dioxus_native_core::real_dom::Node::Element{children, ..} = rnode {
+                    for child in children {
+                        let child_id = child.id;
+                        if let Some(dirty) = states.get(child_id) {
+                            #(#update)*
+                        }
+                        else {
+                            let mut dirty = MembersDirty::new();
+                            #(#update)*
+                            states.insert(child_id, dirty);
+                        }
+                    }
+                }
+            }
+        };
+
+        quote! {
+            #update_child_dependants
+            #update_node_dependants
+            #update_parent_dependants
+        }
+    }
+
+    fn resolve(&self, mem: &StateMember) -> impl ToTokens {
+        let reduce_member = mem.reduce_self();
+        let update_dependant = self.update_dependants(&mem.mem);
+        let member = &mem.mem.ident;
+
+        match mem.dep_kind {
+            DepKind::Parent => {
+                quote! {
+                    // resolve parent dependant state
+                    let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
+                    resolution_order.sort_by_key(|id| {
+                        rdom[*id].height
+                    });
+                    let mut i = 0;
+                    while i < resolution_order.len(){
+                        let id = resolution_order[i];
+                        let vnode = vdom.get_element(id).unwrap();
+                        let members_dirty = states[id];
+                        let rnode = rdom[id];
+                        let current_state = &mut rnode.state;
+                        if members_dirty.#member && #reduce_member {
+                            #update_dependant
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            DepKind::Child => {
+                quote! {
+                    // resolve child dependant state
+                    let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
+                    resolution_order.sort_by_key(|id| {
+                        rdom[*id].height
+                    });
+                    resolution_order.reverse();
+                    let mut i = 0;
+                    while i < resolution_order.len(){
+                        let id = resolution_order[i];
+                        let vnode = vdom.get_element(id).unwrap();
+                        let members_dirty = states[id];
+                        let rnode = rdom[id];
+                        let current_state = &mut rnode.state;
+                        if members_dirty.#member && #reduce_member {
+                            #update_dependant
+                        }
+                        i += 1;
+                    }
+                }
+            }
+            DepKind::Node => {
+                quote! {
+                    // resolve node dependant state
+                    let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
+                    let mut i = 0;
+                    while i < resolution_order.len(){
+                        let id = resolution_order[i];
+                        let vnode = vdom.get_element(id).unwrap();
+                        let members_dirty = states[id];
+                        let rnode = rdom[id];
+                        let current_state = &mut rnode.state;
+                        if members_dirty.#member && #reduce_member {
+                            #update_dependant
+                        }
+                        i += 1;
+                    }
+                }
+            }
         }
     }
 }
 
 struct Dependancy {
     ctx_ty: Option<Type>,
-    dep: Option<Ident>,
+    deps: Vec<Ident>,
 }
 
 impl Parse for Dependancy {
     fn parse(input: ParseStream) -> Result<Self> {
-        let dep = input
-            .parse()
-            .ok()
-            .filter(|i: &Ident| format!("{}", i) != "NONE");
+        let deps = Punctuated::<Ident, Token![,]>::parse_terminated(input).ok();
+        let deps: Vec<_> = deps
+            .map(|deps| deps.into_iter().collect())
+            .or_else(|| {
+                input
+                    .parse::<Ident>()
+                    .ok()
+                    .filter(|i: &Ident| format!("{}", i) != "NONE")
+                    .map(|i| vec![i])
+            })
+            .unwrap_or_default();
         let comma: Option<Token![,]> = input.parse().ok();
         let ctx_ty = input.parse().ok();
         Ok(Self {
             ctx_ty: comma.and(ctx_ty),
-            dep,
+            deps,
         })
     }
 }
@@ -522,11 +443,9 @@ impl Member {
 struct StateMember<'a> {
     mem: &'a Member,
     dep_kind: DepKind,
-    dep_mem: Option<&'a Member>,
+    // the depenancy and if it is satified
+    dep_mems: Vec<(&'a Member, bool)>,
     ctx_ty: Option<Type>,
-    dependants: Vec<(dioxus_native_core::state::MemberId, DepKind)>,
-    // This is just the index of the final order of the struct it is used to communicate which parts need updated and what order to update them in.
-    member_id: dioxus_native_core::state::MemberId,
 }
 
 impl<'a> StateMember<'a> {
@@ -548,26 +467,26 @@ impl<'a> StateMember<'a> {
                 })?;
             match a.parse_args::<Dependancy>() {
                 Ok(dependancy) => {
-                    let dep_mem = if let Some(name) = &dependancy.dep {
-                        if let Some(found) = parent.members.iter().find(|m| &m.ident == name) {
-                            Some(found)
-                        } else {
-                            err = Err(Error::new(
-                                name.span(),
-                                format!("{} not found in {}", name, parent.name),
-                            ));
-                            None
-                        }
-                    } else {
-                        None
-                    };
+                    let dep_mems = dependancy
+                        .deps
+                        .iter()
+                        .filter_map(|name| {
+                            if let Some(found) = parent.members.iter().find(|m| &m.ident == name) {
+                                Some((found, false))
+                            } else {
+                                err = Err(Error::new(
+                                    name.span(),
+                                    format!("{} not found in {}", name, parent.name),
+                                ));
+                                None
+                            }
+                        })
+                        .collect();
                     Some(Self {
                         mem,
                         dep_kind,
-                        dep_mem,
+                        dep_mems,
                         ctx_ty: dependancy.ctx_ty,
-                        dependants: Vec::new(),
-                        member_id: dioxus_native_core::state::MemberId(0),
                     })
                 }
                 Err(e) => {
@@ -592,111 +511,33 @@ impl<'a> StateMember<'a> {
         } else {
             quote! {&()}
         };
-        let states_changed = {
-            let child_dep = self
-                .dependants
-                .iter()
-                .filter(|(_, kind)| kind == &DepKind::Child)
-                .map(|(id, _)| id.0);
-            let parent_dep = self
-                .dependants
-                .iter()
-                .filter(|(_, kind)| kind == &DepKind::Parent)
-                .map(|(id, _)| id.0);
-            let node_dep = self
-                .dependants
-                .iter()
-                .filter(|(_, kind)| kind == &DepKind::Node)
-                .map(|(id, _)| id.0);
-            match self.dep_kind {
-                DepKind::Node => {
-                    quote! {
-                        dioxus_native_core::state::NodeStatesChanged{
-                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
-                        }
-                    }
-                }
-                DepKind::Child => {
-                    quote! {
-                        dioxus_native_core::state::ChildStatesChanged{
-                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
-                            child_dep: vec![#(dioxus_native_core::state::MemberId(#child_dep), )*],
-                        }
-                    }
-                }
-                DepKind::Parent => {
-                    quote! {
-                        dioxus_native_core::state::ParentStatesChanged{
-                            node_dep: vec![#(dioxus_native_core::state::MemberId(#node_dep), )*],
-                            parent_dep: vec![#(dioxus_native_core::state::MemberId(#parent_dep), )*],
-                        }
-                    }
-                }
-            }
-        };
 
         let ty = &self.mem.ty;
         let node_view =
-            quote!(dioxus_native_core::node_ref::NodeView::new(node, #ty::NODE_MASK, vdom));
-        if let Some(dep_ident) = &self.dep_mem.map(|m| &m.ident) {
-            match self.dep_kind {
-                DepKind::Node => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, &self.#dep_ident, #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
-                DepKind::Child => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, children.iter().map(|s| &s.#dep_ident), #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
-                DepKind::Parent => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, parent.as_ref().map(|p| &p.#dep_ident), #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
+            quote!(dioxus_native_core::node_ref::NodeView::new(vnode, #ty::NODE_MASK, vdom));
+        let dep_idents = self.dep_mems.iter().map(|m| &m.0.ident);
+        match self.dep_kind {
+            DepKind::Node => {
+                quote!({
+                    current_state.#ident.reduce(#node_view, (#(&self.#dep_idents)*), #get_ctx)
+                })
             }
-        } else {
-            match self.dep_kind {
-                DepKind::Node => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, &(), #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
-                DepKind::Child => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, std::iter::empty(), #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
-                DepKind::Parent => {
-                    quote!({
-                        if self.#ident.reduce(#node_view, Some(&()), #get_ctx){
-                            Some(#states_changed)
-                        } else{
-                            None
-                        }
-                    })
-                }
+            DepKind::Child => {
+                quote!({
+                    let children = if let dioxus_native_core::real_dom::Node::Element{children, ..} = rnode {
+                        children
+                    }else{
+                        &Vec::new()
+                    };
+                    let children = children.iter().map(|id| &rdom[*id].state);
+                    current_state.#ident.reduce(#node_view, children.map(|c| (#(&c.#dep_idents)*)), #get_ctx)
+                })
+            }
+            DepKind::Parent => {
+                quote!({
+                    let parent = rnode.parent.and_then(|id| &rdom[*id].state);
+                    current_state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.#dep_idents)*)), #get_ctx)
+                })
             }
         }
     }
