@@ -1,7 +1,7 @@
 use crate::{
     context::UserEvent,
     event::{
-        DomUpdated, MaximizedToggled, VisibleUpdated, WindowDragged, WindowMaximized,
+        DomUpdated, MaximizeToggled, VisibleUpdated, WindowDragged, WindowMaximized,
         WindowMinimized,
     },
     setting::{DioxusSettings, UpdateMode},
@@ -262,14 +262,14 @@ where
                         let window = windows.get_primary_mut().unwrap();
                         let id = WindowId::primary();
 
-                        let dioxus_windows = world.get_non_send::<DioxusWindows>().unwrap();
-                        let dioxus_window = dioxus_windows.get(id).unwrap();
+                        let mut dioxus_windows = world.get_non_send_mut::<DioxusWindows>().unwrap();
                         let tao_window = dioxus_windows.get_tao_window(id).unwrap();
 
                         match user_window_event {
                             UserWindowEvent::Update => {
                                 let mut events =
                                     world.get_resource_mut::<Events<DomUpdated>>().unwrap();
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
 
                                 dioxus_window.try_load_ready_webview();
                                 events.send(DomUpdated { id });
@@ -313,13 +313,12 @@ where
                                 events.send(WindowMaximized { id, maximized });
                             }
                             UserWindowEvent::MaximizeToggle => {
-                                let mut events = world
-                                    .get_resource_mut::<Events<MaximizedToggled>>()
-                                    .unwrap();
+                                let mut events =
+                                    world.get_resource_mut::<Events<MaximizeToggled>>().unwrap();
 
                                 let maximized = !tao_window.is_maximized();
                                 tao_window.set_maximized(maximized);
-                                events.send(MaximizedToggled { id, maximized });
+                                events.send(MaximizeToggled { id, maximized });
                             }
                             // Fullscreen(state) => {
                             //     if let Some(handle) = tao_window.current_monitor() {

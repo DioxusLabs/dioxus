@@ -38,7 +38,7 @@ pub struct WindowMaximized {
 }
 
 #[derive(Debug, Clone)]
-pub struct MaximizedToggled {
+pub struct MaximizeToggled {
     pub id: WindowId,
     pub maximized: bool,
 }

@@ -2,7 +2,7 @@ use crate::{
     context::UserEvent,
     converter,
     event::{
-        DomUpdated, MaximizedToggled, VisibleUpdated, WindowDragged, WindowMaximized,
+        DomUpdated, MaximizeToggled, VisibleUpdated, WindowDragged, WindowMaximized,
         WindowMinimized,
     },
     runner::runner,
@@ -70,7 +70,7 @@ where
             .add_event::<VisibleUpdated>()
             .add_event::<WindowMinimized>()
             .add_event::<WindowMaximized>()
-            .add_event::<MaximizedToggled>()
+            .add_event::<MaximizeToggled>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
