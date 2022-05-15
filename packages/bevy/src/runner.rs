@@ -1,6 +1,6 @@
 use crate::{
     context::UserEvent,
-    event::{VirtualDomUpdated, WindowDragged},
+    event::{DragWindow, UpdateDom, UpdateVisible},
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -21,12 +21,11 @@ use bevy::{
     },
 };
 use dioxus_desktop::{
-    desktop_context::UserWindowEvent::*,
+    desktop_context::UserWindowEvent,
     tao::{
         dpi::LogicalSize,
         event::{DeviceEvent, Event, StartCause, WindowEvent},
         event_loop::{ControlFlow, EventLoop, EventLoopWindowTarget},
-        window::Fullscreen as WryFullscreen,
     },
 };
 use futures_intrusive::channel::shared::Receiver;
@@ -65,10 +64,10 @@ where
         move |event: Event<UserEvent<CoreCommand>>,
               _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
-            let mut windows = app
-                .world
-                .get_non_send_resource_mut::<DioxusWindows>()
-                .expect("Insert DioxusWindows as non send resource");
+            // let mut windows = app
+            //     .world
+            //     .get_non_send_resource_mut::<DioxusWindows>()
+            //     .expect("Insert DioxusWindows as non send resource");
 
             match event {
                 Event::NewEvents(start) => {
@@ -256,27 +255,36 @@ where
                 Event::UserEvent(user_event) => match user_event {
                     UserEvent::WindowEvent(user_window_event) => {
                         let world = app.world.cell();
-                        let window_id = WindowId::primary();
+                        let id = WindowId::primary();
 
                         match user_window_event {
-                            Update => {
+                            UserWindowEvent::Update => {
+                                let mut events =
+                                    world.get_resource_mut::<Events<UpdateDom>>().unwrap();
+                                events.send(UpdateDom { id });
+                            }
+                            UserWindowEvent::CloseWindow => {
                                 let mut events = world
-                                    .get_resource_mut::<Events<VirtualDomUpdated>>()
+                                    .get_resource_mut::<Events<WindowCloseRequested>>()
                                     .unwrap();
-                                events.send(VirtualDomUpdated { window_id });
+                                events.send(WindowCloseRequested { id });
                             }
-                            CloseWindow => {
+                            UserWindowEvent::DragWindow => {
                                 let mut events =
-                                    world.get_resource_mut::<Events<AppExit>>().unwrap();
-                                events.send(AppExit);
+                                    world.get_resource_mut::<Events<DragWindow>>().unwrap();
+                                events.send(DragWindow { id });
                             }
-                            DragWindow => {
+                            UserWindowEvent::Visible(visible) => {
                                 let mut events =
-                                    world.get_resource_mut::<Events<WindowDragged>>().unwrap();
-                                events.send(WindowDragged { window_id });
+                                    world.get_resource_mut::<Events<UpdateVisible>>().unwrap();
+                                events.send(UpdateVisible { id, visible });
                             }
-                            // Visible(state) => tao_window.set_visible(state),
-                            // Minimize(state) => tao_window.set_minimized(state),
+                            // UserWindowEvent::Minimize(minimize) => {
+                            //     let mut events =
+                            //         world.get_resource_mut::<Events<MinimizeWindow>>().unwrap();
+                            //     events.send(UpdateVisible { id, minimize });
+                            //     // tao_window.set_minimized(state);
+                            // }
                             // Maximize(state) => tao_window.set_maximized(state),
                             // MaximizeToggle => tao_window.set_maximized(!tao_window.is_maximized()),
                             // Fullscreen(state) => {
@@ -445,6 +453,7 @@ struct TaoPersistentState {
     timeout_reached: bool,
     last_update: Instant,
 }
+
 impl Default for TaoPersistentState {
     fn default() -> Self {
         Self {

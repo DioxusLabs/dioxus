@@ -1,6 +1,6 @@
 use crate::{
     context::UserEvent,
-    event::{VirtualDomUpdated, WindowDragged},
+    event::{DomUpdated, DragWindow, UpdateDom, UpdateVisible, VisibleUpdated, WindowDragged},
     runner::runner,
     setting::DioxusSettings,
     window::DioxusWindows,
@@ -51,8 +51,12 @@ where
             .add_plugin(WindowPlugin::default())
             .add_event::<CoreCommand>()
             .add_event::<UICommand>()
-            .add_event::<VirtualDomUpdated>()
+            .add_event::<UpdateDom>()
+            .add_event::<DomUpdated>()
+            .add_event::<DragWindow>()
             .add_event::<WindowDragged>()
+            .add_event::<UpdateVisible>()
+            .add_event::<VisibleUpdated>()
             .insert_resource(core_tx)
             .insert_resource(core_rx)
             .insert_resource(ui_tx)
@@ -64,10 +68,15 @@ where
             .insert_non_send_resource(config)
             .init_non_send_resource::<DioxusWindows>()
             .set_runner(|app| runner::<CoreCommand, UICommand, Props>(app))
-            .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
             .insert_non_send_resource(event_loop)
-            .add_system(handle_virtual_dom_updated)
-            .add_system(handle_window_dragged);
+            .add_system_to_stage(CoreStage::Last, send_ui_commands::<UICommand>)
+            .add_system_to_stage(
+                CoreStage::PostUpdate,
+                change_window, /* TODO.label(ModifiesWindows) */
+            )
+            .add_system(handle_updated_dom)
+            .add_system(handle_drag_window)
+            .add_system(handle_update_visible);
 
         Self::handle_initial_window_events(&mut app.world);
     }
@@ -122,27 +131,49 @@ where
     }
 }
 
-fn handle_virtual_dom_updated(
-    mut events: EventReader<VirtualDomUpdated>,
+fn handle_updated_dom(
+    mut events: EventReader<UpdateDom>,
+    mut event: EventWriter<DomUpdated>,
     mut windows: NonSendMut<DioxusWindows>,
 ) {
-    for e in events.iter() {
-        let window = windows.get_mut(e.window_id).unwrap();
+    for UpdateDom { id } in events.iter() {
+        let window = windows.get_mut(*id).unwrap();
         window.try_load_ready_webview();
+
+        event.send(DomUpdated { id: *id });
     }
 }
 
-fn handle_window_dragged(
-    mut events: EventReader<WindowDragged>,
+fn handle_drag_window(
+    mut events: EventReader<DragWindow>,
+    mut event: EventWriter<WindowDragged>,
     mut windows: NonSendMut<DioxusWindows>,
 ) {
     for e in events.iter() {
-        let window = windows.get(e.window_id).unwrap();
+        let window = windows.get(e.id).unwrap();
         let tao_window = window.tao_window();
 
-        tao_window
-            .fullscreen()
-            .is_none()
-            .then(|| tao_window.drag_window());
+        if tao_window.fullscreen().is_none() {
+            if let Ok(()) = tao_window.drag_window() {
+                event.send(WindowDragged { id: e.id });
+            }
+        }
+    }
+}
+
+fn handle_update_visible(
+    mut events: EventReader<UpdateVisible>,
+    mut event: EventWriter<VisibleUpdated>,
+    mut windows: NonSendMut<DioxusWindows>,
+) {
+    for e in events.iter() {
+        let window = windows.get(e.id).unwrap();
+        let tao_window = window.tao_window();
+
+        tao_window.set_visible(e.visible);
+        event.send(VisibleUpdated {
+            id: e.id,
+            visible: e.visible,
+        });
     }
 }
