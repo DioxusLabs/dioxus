@@ -1,6 +1,7 @@
 use crate::{
     context::{DesktopContext, ProxyType, UserEvent},
     event::WebKeyboardEvent,
+    setting::DioxusSettings,
 };
 use bevy::{
     ecs::world::WorldCell,
@@ -10,7 +11,6 @@ use bevy::{
 };
 use dioxus_core::{Component as DioxusComponent, SchedulerMsg, VirtualDom};
 use dioxus_desktop::{
-    cfg::DesktopConfig,
     desktop_context::UserWindowEvent,
     events::{parse_ipc_message, trigger_from_serialized},
     protocol,
@@ -337,14 +337,13 @@ impl DioxusWindows {
     where
         CoreCommand: 'static + Send + Sync + Clone + Debug,
     {
-        // TODO: warn user to use WindowDescriptor instead (e.g. title, icon, etc.)
-        let mut config = world.get_non_send_mut::<DesktopConfig>().unwrap();
+        let mut settings = world.get_non_send_mut::<DioxusSettings>().unwrap();
         let is_ready = Arc::new(AtomicBool::new(false));
 
-        let file_drop_handler = config.file_drop_handler.take();
-        let custom_head = config.custom_head.clone();
-        let resource_dir = config.resource_dir.clone();
-        let index_file = config.custom_index.clone();
+        let file_drop_handler = settings.file_drop_handler.take();
+        let custom_head = settings.custom_head.clone();
+        let resource_dir = settings.resource_dir.clone();
+        let index_file = settings.custom_index.clone();
         let is_ready_clone = is_ready.clone();
 
         let mut webview = WebViewBuilder::new(tao_window)
@@ -401,11 +400,11 @@ impl DioxusWindows {
                     .unwrap_or_default()
             });
 
-        for (name, handler) in config.protocols.drain(..) {
+        for (name, handler) in settings.protocols.drain(..) {
             webview = webview.with_custom_protocol(name, handler)
         }
 
-        if config.disable_context_menu {
+        if settings.disable_context_menu {
             // in release mode, we don't want to show the dev tool or reload menus
             webview = webview.with_initialization_script(
                 r#"

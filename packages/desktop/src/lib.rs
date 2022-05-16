@@ -3,7 +3,7 @@
 #![doc(html_favicon_url = "https://avatars.githubusercontent.com/u/79236386")]
 // TODO:  #![deny(missing_docs)]
 
-pub mod cfg;
+mod cfg;
 mod controller;
 pub mod desktop_context;
 mod escape;

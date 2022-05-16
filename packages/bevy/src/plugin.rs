@@ -17,13 +17,10 @@ use bevy::{
     },
 };
 use dioxus_core::Component as DioxusComponent;
-use dioxus_desktop::{
-    cfg::DesktopConfig,
-    tao::{
-        dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
-        event_loop::EventLoop,
-        window::Fullscreen,
-    },
+use dioxus_desktop::tao::{
+    dpi::{LogicalPosition, LogicalSize, PhysicalPosition},
+    event_loop::EventLoop,
+    window::Fullscreen,
 };
 use futures_intrusive::channel::shared::{channel, Sender};
 use std::{fmt::Debug, marker::PhantomData};
@@ -47,10 +44,6 @@ where
 
         let (core_tx, core_rx) = channel::<CoreCommand>(8);
         let (ui_tx, ui_rx) = channel::<UICommand>(8);
-        let config = app
-            .world
-            .remove_non_send_resource::<DesktopConfig>()
-            .unwrap_or_default();
         let settings = app
             .world
             .remove_non_send_resource::<DioxusSettings>()
@@ -74,8 +67,7 @@ where
             .insert_resource(runtime)
             .insert_resource(self.root)
             .insert_resource(self.props)
-            .insert_resource(settings)
-            .insert_non_send_resource(config)
+            .insert_non_send_resource(settings)
             .init_non_send_resource::<DioxusWindows>()
             .set_runner(|app| runner::<CoreCommand, UICommand, Props>(app))
             .insert_non_send_resource(event_loop)
