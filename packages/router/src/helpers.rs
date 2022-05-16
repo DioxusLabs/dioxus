@@ -108,3 +108,114 @@ pub(crate) fn construct_named_path(
 
     Some(path)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn named_path_fixed() {
+        assert_eq!(
+            Some(String::from("/test/nest/")),
+            construct_named_path("fixed", &[], &Query::QNone, &test_targets())
+        );
+    }
+
+    #[test]
+    fn named_path_parameters() {
+        assert_eq!(
+            Some(String::from("/test/value/")),
+            construct_named_path(
+                "parameter",
+                &vec![("para", String::from("value"))],
+                &Query::QNone,
+                &test_targets()
+            )
+        );
+    }
+
+    #[test]
+    fn named_path_root_index() {
+        assert_eq!(
+            Some(String::from("/")),
+            construct_named_path("root_index", &[], &Query::QNone, &test_targets())
+        );
+    }
+
+    #[test]
+    fn named_path_query_with_marker() {
+        assert_eq!(
+            Some(String::from("/test/nest/?query=works")),
+            construct_named_path(
+                "fixed",
+                &[],
+                &Query::QString(Some(String::from("?query=works"))),
+                &test_targets()
+            )
+        )
+    }
+
+    #[test]
+    fn named_path_query_without_marker() {
+        assert_eq!(
+            Some(String::from("/test/nest/?query=works")),
+            construct_named_path(
+                "fixed",
+                &[],
+                &Query::QString(Some(String::from("query=works"))),
+                &test_targets()
+            )
+        )
+    }
+
+    #[test]
+    fn named_path_query_as_vec() {
+        assert_eq!(
+            Some(String::from("/test/nest/?query=works")),
+            construct_named_path(
+                "fixed",
+                &[],
+                &Query::QVec(vec![(String::from("query"), String::from("works"))]),
+                &test_targets()
+            )
+        )
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn named_path_not_found_panic_in_debug() {
+        let _ = construct_named_path("invalid", &[], &Query::QNone, &test_targets());
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn named_path_not_found_none_in_release() {
+        assert_eq!(
+            None,
+            construct_named_path("invalid", &[], &Query::QNone, &test_targets())
+        );
+    }
+
+    fn test_targets() -> BTreeMap<&'static str, Vec<NamedNavigationSegment>> {
+        let mut targets = BTreeMap::new();
+
+        targets.insert(
+            "fixed",
+            vec![
+                NamedNavigationSegment::Fixed(String::from("test")),
+                NamedNavigationSegment::Fixed(String::from("nest")),
+            ],
+        );
+        targets.insert(
+            "parameter",
+            vec![
+                NamedNavigationSegment::Fixed(String::from("test")),
+                NamedNavigationSegment::Parameter("para"),
+            ],
+        );
+        targets.insert("root_index", vec![]);
+
+        targets
+    }
+}

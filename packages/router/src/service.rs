@@ -140,7 +140,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.push(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.push(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
+                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -158,7 +158,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.replace(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.replace(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
+                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -245,7 +245,7 @@ impl RouterService {
                     NavigationTarget::NtPath(p) => p,
                     NavigationTarget::NtName(name, vars, query_params) => {
                         construct_named_path(name, &vars, &query_params, &self.named_routes)
-                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
+                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"))
                     }
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
