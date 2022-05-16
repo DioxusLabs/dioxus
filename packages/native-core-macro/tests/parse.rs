@@ -16,12 +16,6 @@ struct CallCounterStatePart2 {
 }
 
 #[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart3 {
-    #[node_dep_state()]
-    node_counter: NodeDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
 struct CallCounterState {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
@@ -31,10 +25,8 @@ struct CallCounterState {
     parent_counter: ParentDepCallCounter,
     #[state]
     part1: CallCounterStatePart1,
-    #[node_dep_state()]
+    #[node_dep_state((parent_counter, child_counter))]
     node_counter: NodeDepCallCounter,
-    #[state]
-    part3: CallCounterStatePart3,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -58,9 +50,14 @@ impl ParentDepState for ParentDepCallCounter {
 struct NodeDepCallCounter(u32);
 impl NodeDepState for NodeDepCallCounter {
     type Ctx = ();
-    type DepState = ();
+    type DepState = (ParentDepCallCounter, ChildDepCallCounter);
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(&mut self, _node: NodeView, _sibling: Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(
+        &mut self,
+        _node: NodeView,
+        _sibling: (&ParentDepCallCounter, &ChildDepCallCounter),
+        _ctx: &Self::Ctx,
+    ) -> bool {
         self.0 += 1;
         true
     }

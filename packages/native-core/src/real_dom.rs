@@ -1,3 +1,4 @@
+use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
@@ -45,7 +46,7 @@ impl<S: State> RealDom<S> {
     }
 
     /// Updates the dom, up and down state and return a set of nodes that were updated pass this to update_state.
-    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<(usize, NodeMask)> {
+    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<(ElementId, NodeMask)> {
         let mut nodes_updated = Vec::new();
         for mutations in mutations_vec {
             for e in mutations.edits {
@@ -66,8 +67,9 @@ impl<S: State> RealDom<S> {
                             .drain(self.node_stack.len() - many as usize..)
                             .collect();
                         for ns in drained {
-                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
-                            nodes_updated.push((ns, NodeMask::ALL));
+                            let id = ElementId(ns);
+                            self.link_child(id, ElementId(target)).unwrap();
+                            nodes_updated.push((id, NodeMask::ALL));
                         }
                     }
                     ReplaceWith { root, m } => {
@@ -75,29 +77,32 @@ impl<S: State> RealDom<S> {
                         let target = root.parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..m as usize).collect();
                         for ns in drained {
-                            nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
+                            let id = ElementId(ns);
+                            nodes_updated.push((id, NodeMask::ALL));
+                            self.link_child(id, ElementId(target)).unwrap();
                         }
                     }
                     InsertAfter { root, n } => {
                         let target = self[ElementId(root as usize)].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
-                            nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
+                            let id = ElementId(ns);
+                            nodes_updated.push((id, NodeMask::ALL));
+                            self.link_child(id, ElementId(target)).unwrap();
                         }
                     }
                     InsertBefore { root, n } => {
                         let target = self[ElementId(root as usize)].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
-                            nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
+                            let id = ElementId(ns);
+                            nodes_updated.push((id, NodeMask::ALL));
+                            self.link_child(id, ElementId(target)).unwrap();
                         }
                     }
                     Remove { root } => {
                         if let Some(parent) = self[ElementId(root as usize)].parent {
-                            nodes_updated.push((parent.0, NodeMask::NONE));
+                            nodes_updated.push((parent, NodeMask::NONE));
                         }
                         self.remove(ElementId(root as usize)).unwrap();
                     }
@@ -146,26 +151,29 @@ impl<S: State> RealDom<S> {
                         scope: _,
                         root,
                     } => {
-                        nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
+                        let id = ElementId(root as usize);
+                        nodes_updated.push((id, NodeMask::new().with_listeners()));
                         if let Some(v) = self.nodes_listening.get_mut(event_name) {
-                            v.insert(ElementId(root as usize));
+                            v.insert(id);
                         } else {
                             let mut hs = FxHashSet::default();
-                            hs.insert(ElementId(root as usize));
+                            hs.insert(id);
                             self.nodes_listening.insert(event_name, hs);
                         }
                     }
                     RemoveEventListener { root, event } => {
-                        nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
+                        let id = ElementId(root as usize);
+                        nodes_updated.push((id, NodeMask::new().with_listeners()));
                         let v = self.nodes_listening.get_mut(event).unwrap();
-                        v.remove(&ElementId(root as usize));
+                        v.remove(&id);
                     }
                     SetText {
                         root,
                         text: new_text,
                     } => {
-                        let target = &mut self[ElementId(root as usize)];
-                        nodes_updated.push((root as usize, NodeMask::new().with_text()));
+                        let id = ElementId(root as usize);
+                        let target = &mut self[id];
+                        nodes_updated.push((id, NodeMask::new().with_text()));
                         match &mut target.node_type {
                             NodeType::Text { text } => {
                                 *text = new_text.to_string();
@@ -174,18 +182,16 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     SetAttribute { root, field, .. } => {
-                        nodes_updated.push((
-                            root as usize,
-                            NodeMask::new_with_attrs(AttributeMask::single(field)),
-                        ));
+                        let id = ElementId(root as usize);
+                        nodes_updated
+                            .push((id, NodeMask::new_with_attrs(AttributeMask::single(field))));
                     }
                     RemoveAttribute {
                         root, name: field, ..
                     } => {
-                        nodes_updated.push((
-                            root as usize,
-                            NodeMask::new_with_attrs(AttributeMask::single(field)),
-                        ));
+                        let id = ElementId(root as usize);
+                        nodes_updated
+                            .push((id, NodeMask::new_with_attrs(AttributeMask::single(field))));
                     }
                     PopRoot {} => {
                         self.node_stack.pop();
@@ -195,6 +201,20 @@ impl<S: State> RealDom<S> {
         }
 
         nodes_updated
+    }
+
+    pub fn update_state(
+        &mut self,
+        vdom: &VirtualDom,
+        nodes_updated: Vec<(ElementId, NodeMask)>,
+        ctx: AnyMap,
+    ) -> FxHashSet<ElementId> {
+        S::update(
+            &nodes_updated,
+            &mut self.map(|n| &n.state, |n| &mut n.state),
+            &vdom,
+            &ctx,
+        )
     }
 
     fn link_child(&mut self, child_id: ElementId, parent_id: ElementId) -> Option<()> {

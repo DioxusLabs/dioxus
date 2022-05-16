@@ -254,9 +254,13 @@ impl<'a> StateStruct<'a> {
                     let ident = &d.ident;
                     let insert = if *d == mem {
                         quote! {
-                            resolution_order
-                                .binary_search_by_key(&state_tree.height(id).unwrap(), |id| state_tree.height(*id).unwrap())
-                                .unwrap();
+                            if let Err(idx) = resolution_order
+                                .binary_search_by_key(&state_tree.height(parent_id).unwrap(), |id| state_tree.height(*id).unwrap()){
+                                resolution_order.insert(
+                                    idx,
+                                    parent_id,
+                                );
+                            }
                         }
                     } else {
                         quote! {}
@@ -292,9 +296,13 @@ impl<'a> StateStruct<'a> {
                     let ident = &d.ident;
                     let insert = if *d == mem {
                         quote! {
-                            resolution_order
-                                .binary_search_by_key(&state_tree.height(id).unwrap(), |id| state_tree.height(*id).unwrap())
-                                .unwrap();
+                            if let Err(idx) = resolution_order
+                                .binary_search_by_key(&state_tree.height(*child_id).unwrap(), |id| state_tree.height(*id).unwrap()){
+                                resolution_order.insert(
+                                    idx,
+                                    *child_id,
+                                );
+                            }
                         }
                     } else {
                         quote! {}
@@ -320,8 +328,8 @@ impl<'a> StateStruct<'a> {
         };
 
         quote! {
-            #update_child_dependants
             #update_node_dependants
+            #update_child_dependants
             #update_parent_dependants
         }
     }
@@ -343,7 +351,7 @@ impl<'a> StateStruct<'a> {
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = &states[&id];
+                        let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, parent) = state_tree.get_node_parent_mut(id);
                         let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
@@ -365,7 +373,7 @@ impl<'a> StateStruct<'a> {
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = &states[&id];
+                        let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, children) = state_tree.get_node_children_mut(id);
                         let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
@@ -383,7 +391,7 @@ impl<'a> StateStruct<'a> {
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = &states[&id];
+                        let members_dirty = states.get_mut(&id).unwrap();
                         let current_state = state_tree.get_mut(id).unwrap();
                         if members_dirty.#member && #reduce_member {
                             #update_dependant
@@ -396,7 +404,7 @@ impl<'a> StateStruct<'a> {
     }
 }
 
-fn try_parenthesized<T>(input: ParseStream) -> Result<ParseBuffer> {
+fn try_parenthesized(input: ParseStream) -> Result<ParseBuffer> {
     let inside;
     parenthesized!(inside in input);
     Ok(inside)
@@ -410,9 +418,9 @@ struct Dependancy {
 impl Parse for Dependancy {
     fn parse(input: ParseStream) -> Result<Self> {
         let deps: Option<Punctuated<Ident, Token![,]>> = {
-            try_parenthesized::<Punctuated<Ident, Token![,]>>(input)
+            try_parenthesized(input)
                 .ok()
-                .and_then(|_| input.parse_terminated(Ident::parse).ok())
+                .and_then(|inside| inside.parse_terminated(Ident::parse).ok())
         };
         let deps: Vec<_> = deps
             .map(|deps| deps.into_iter().collect())
@@ -528,7 +536,7 @@ impl<'a> StateMember<'a> {
         match self.dep_kind {
             DepKind::Node => {
                 quote!({
-                    current_state.#ident.reduce(#node_view, (#(&current_state.#dep_idents)*), #get_ctx)
+                    current_state.#ident.reduce(#node_view, (#(&current_state.#dep_idents,)*), #get_ctx)
                 })
             }
             DepKind::Child => {
