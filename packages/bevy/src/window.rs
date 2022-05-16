@@ -16,6 +16,7 @@ use dioxus_desktop::{
     protocol,
     tao::{
         dpi::{LogicalPosition, LogicalSize},
+        error::ExternalError,
         event_loop::EventLoop,
         monitor::{MonitorHandle, VideoMode},
         window::{Fullscreen, Window as TaoWindow, WindowBuilder, WindowId as TaoWindowId},
@@ -209,7 +210,38 @@ impl DioxusWindows {
             .with_transparent(window_descriptor.transparent),
         };
 
-        tao_window_builder.build(&event_loop).unwrap()
+        let constraints = window_descriptor.resize_constraints.check_constraints();
+        let min_inner_size = LogicalSize {
+            width: constraints.min_width,
+            height: constraints.min_height,
+        };
+        let max_inner_size = LogicalSize {
+            width: constraints.max_width,
+            height: constraints.max_height,
+        };
+
+        let tao_window_builder =
+            if constraints.max_width.is_finite() && constraints.max_height.is_finite() {
+                tao_window_builder
+                    .with_min_inner_size(min_inner_size)
+                    .with_max_inner_size(max_inner_size)
+            } else {
+                tao_window_builder.with_min_inner_size(min_inner_size)
+            };
+
+        let tao_window = tao_window_builder.build(&event_loop).unwrap();
+
+        if window_descriptor.cursor_locked {
+            match tao_window.set_cursor_grab(true) {
+                Ok(_) => {}
+                Err(ExternalError::NotSupported(_)) => {}
+                Err(err) => Err(err).unwrap(),
+            }
+        }
+
+        tao_window.set_cursor_visible(window_descriptor.cursor_visible);
+
+        tao_window
     }
 
     fn create_bevy_window(
