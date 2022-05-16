@@ -3,7 +3,7 @@ use crate::{
     converter,
     event::{DomUpdated, MaximizeToggled, WindowDragged, WindowMaximized, WindowMinimized},
     runner::runner,
-    setting::DioxusSettings,
+    setting::DioxusDesktopSettings,
     window::DioxusWindows,
 };
 use bevy::{
@@ -46,7 +46,7 @@ where
         let (ui_tx, ui_rx) = channel::<UICommand>(8);
         let settings = app
             .world
-            .remove_non_send_resource::<DioxusSettings>()
+            .remove_non_send_resource::<DioxusDesktopSettings>()
             .unwrap_or_default();
 
         let event_loop = EventLoop::<UserEvent<CoreCommand>>::with_user_event();

@@ -1,7 +1,7 @@
 use crate::{
     context::{DesktopContext, ProxyType, UserEvent},
     event::WebKeyboardEvent,
-    setting::DioxusSettings,
+    setting::DioxusDesktopSettings,
 };
 use bevy::{
     ecs::world::WorldCell,
@@ -337,7 +337,7 @@ impl DioxusWindows {
     where
         CoreCommand: 'static + Send + Sync + Clone + Debug,
     {
-        let mut settings = world.get_non_send_mut::<DioxusSettings>().unwrap();
+        let mut settings = world.get_non_send_mut::<DioxusDesktopSettings>().unwrap();
         let is_ready = Arc::new(AtomicBool::new(false));
 
         let file_drop_handler = settings.file_drop_handler.take();
