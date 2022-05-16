@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -5,7 +7,10 @@ use log::error;
 
 use crate::{
     helpers::{construct_named_path, sub_to_router},
-    navigation::NavigationTarget::{self, *},
+    navigation::{
+        NamedNavigationSegment,
+        NavigationTarget::{self, *},
+    },
     service::RouterMessage,
     PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
@@ -83,54 +88,15 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let tx = router.tx.clone();
 
     // generate href
-    let href = match target {
-        NtPath(path) => format!("{prefix}{path}", prefix = state.prefix,),
-        NtName(name, vars, query) => {
-            format!(
-                "{prefix}{path}",
-                prefix = state.prefix,
-                path = construct_named_path(name, vars, query, &router.named_routes)
-                    .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
-            )
-        }
-        NtExternal(href) => href.to_string(),
-    };
+    let href = generate_href(target, &state.prefix, &router.named_routes);
 
     // check if route is active
     let active_class = active_class
         .map(|ac| ac.to_string())
         .or(router.active_class.clone())
-        .map(|ac| {
-            match target {
-                NtPath(p) => {
-                    if *exact {
-                        if &state.path == p {
-                            return format!(" {ac}");
-                        } else {
-                            return String::new();
-                        }
-                    }
-
-                    if p.starts_with("/") && state.path.starts_with(p) {
-                        return format!(" {ac}");
-                    }
-
-                    if !state.path.ends_with("/") {
-                        if let Some(path) = state.path.split("/").last() {
-                            if p == path {
-                                return format!(" {ac}");
-                            }
-                        }
-                    }
-                }
-                NtName(n, _, _) => {
-                    if state.names.contains(n) {
-                        return format!(" {ac}");
-                    }
-                }
-                NtExternal(_) => {}
-            }
-            String::new()
+        .and_then(|ac| match state.is_active(target, *exact) {
+            true => Some(format!(" {ac}")),
+            false => None,
         })
         .unwrap_or_default();
 
@@ -150,13 +116,10 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     };
 
     // get rel attribute or apply default if external
-    let rel = rel
-        .or(if target.is_nt_external() {
-            Some("noopener noreferrer")
-        } else {
-            None
-        })
-        .unwrap_or("");
+    let rel = rel.unwrap_or(match target.is_nt_external() {
+        true => "noopener noreferrer",
+        false => "",
+    });
 
     cx.render(rsx! {
         a {
@@ -174,4 +137,97 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             children
         }
     })
+}
+
+fn generate_href(
+    target: &NavigationTarget,
+    prefix: &str,
+    targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+) -> String {
+    let href = match target {
+        NtPath(path) => path.to_string(),
+        NtName(name, parameters, query) => construct_named_path(name, parameters, query, targets)
+            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
+        NtExternal(href) => return href.to_string(),
+    };
+
+    format!("{prefix}{href}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::navigation::Query;
+
+    #[test]
+    fn href_path() {
+        let path = "/test";
+        let prefix = "/pre";
+        let target = NavigationTarget::NtPath(String::from(path));
+        let targets = BTreeMap::new();
+
+        assert_eq!(path, generate_href(&target, "", &targets));
+        assert_eq!(
+            format!("{prefix}{path}"),
+            generate_href(&target, prefix, &targets)
+        );
+    }
+
+    #[test]
+    fn href_name() {
+        let name = "test";
+        let prefix = "/pre";
+        let target = NavigationTarget::NtName(name, vec![], Query::QNone);
+        let targets = {
+            let mut t = BTreeMap::new();
+            t.insert(
+                name,
+                vec![
+                    NamedNavigationSegment::Fixed(String::from("test")),
+                    NamedNavigationSegment::Fixed(String::from("nest")),
+                ],
+            );
+            t
+        };
+
+        assert_eq!(
+            format!("{prefix}/test/nest/"),
+            generate_href(&target, prefix, &targets)
+        );
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn href_name_panic_in_debug() {
+        generate_href(
+            &NavigationTarget::NtName("invalid", vec![], Query::QNone),
+            "",
+            &BTreeMap::new(),
+        );
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn href_name_path_in_release() {
+        assert_eq!(
+            format!("/prefix/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"),
+            generate_href(
+                &NavigationTarget::NtName("invalid", vec![], Query::QNone),
+                "/prefix",
+                &BTreeMap::new(),
+            )
+        )
+    }
+
+    #[test]
+    fn href_external() {
+        let href = "test";
+        let prefix = "/pre";
+        let target = NavigationTarget::NtExternal(String::from(href));
+        let targets = BTreeMap::new();
+
+        assert_eq!(href, generate_href(&target, prefix, &targets));
+    }
 }

@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
@@ -31,57 +29,6 @@ pub struct OutletProps {
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
-    // get own depth and communicate to lower outlets
-    let depth = cx.use_hook(|_| {
-        let (depth, new_ctx) = if let Some(OutletContext {
-            depth,
-            mut named_depth,
-        }) = cx.consume_context::<OutletContext>()
-        {
-            // if a parent outlet exists
-
-            if let Some(name) = cx.props.name {
-                let d = named_depth.get(name).map(|d| d + 1).unwrap_or_default();
-                named_depth.insert(name.to_string(), d);
-                (d, OutletContext { depth, named_depth })
-            } else {
-                let d = depth.map(|d| d + 1).unwrap_or_default();
-                (
-                    d,
-                    OutletContext {
-                        depth: Some(d),
-                        named_depth,
-                    },
-                )
-            }
-        } else {
-            // if this is the top level outlet
-
-            if let Some(name) = cx.props.name {
-                let mut named_depth = BTreeMap::new();
-                named_depth.insert(name.to_string(), 0);
-                (
-                    0,
-                    OutletContext {
-                        depth: None,
-                        named_depth,
-                    },
-                )
-            } else {
-                (
-                    0,
-                    OutletContext {
-                        depth: Some(0),
-                        named_depth: BTreeMap::new(),
-                    },
-                )
-            }
-        };
-        cx.provide_context(new_ctx);
-        depth
-    });
-    let depth = cx.props.depth.unwrap_or(*depth);
-
     // hook up to router
     let router = match sub_to_router(&cx) {
         Some(r) => r,
@@ -90,16 +37,32 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
             return None;
         }
     };
+    let state = router.state.read().unwrap();
+
+    // get own depth and communicate to nested outlets
+    let depth = cx.use_hook(|_| {
+        let (depth, new_ctx) = if let Some(mut ctx) = cx.consume_context::<OutletContext>() {
+            let depth = ctx.get_depth(cx.props.name);
+            ctx.set_depth(cx.props.name, depth);
+            (depth, ctx)
+        } else {
+            (0, OutletContext::new(cx.props.name))
+        };
+        cx.provide_context(new_ctx);
+        depth
+    });
+
+    // allow depth override
+    let depth = cx.props.depth.unwrap_or(*depth);
 
     // get the component to render
-    let state = router.state.read().unwrap();
-    let X = if let Some(name) = cx.props.name {
-        match state.components.1.get(name) {
-            Some(x) => x.get(depth),
-            None => None,
-        }
-    } else {
-        state.components.0.get(depth)
+    let X = match cx.props.name {
+        Some(name) => state
+            .components
+            .1
+            .get(name)
+            .and_then(|comps| comps.get(depth)),
+        None => state.components.0.get(depth),
     };
 
     // render component or nothing

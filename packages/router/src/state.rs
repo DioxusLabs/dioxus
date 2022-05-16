@@ -2,6 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use dioxus_core::Component;
 
+use crate::navigation::NavigationTarget;
+
 /// The current routing information.
 #[derive(Default)]
 pub struct RouterState {
@@ -34,6 +36,77 @@ pub struct RouterState {
 }
 
 impl RouterState {
+    /// Checks if the provided `target` is currently active.
+    ///
+    /// # [`NtPath`]
+    /// If the target is a path and `exact` is [`true`], the current path must match the `target`
+    /// path exactly.
+    ///
+    /// If `exact` is [`false`] and the `target` path is absolute (starts with `/`), the current
+    /// path must start with the `target` path.
+    ///
+    /// Otherwise, the last segment of the current path must match the `target` path.
+    ///
+    /// # [`NtName`]
+    /// The `target` name must be in the list of active names.
+    ///
+    /// If `exact` is [`true`], all `target` parameters must be matched by current parameters. The
+    /// `target` is still active, even if the current parameters are more than the `target`
+    /// parameters.
+    ///
+    /// The query is ignored.
+    ///
+    /// # [`NtExternal`]
+    /// Always [`false`].
+    ///
+    /// [`NtPath`]: crate::navigation::NavigationTarget::NtPath
+    /// [`NtName`]: crate::navigation::NavigationTarget::NtName
+    /// [`NtExternal`]: crate::navigation::NavigationTarget::NtExternal
+    #[must_use]
+    pub fn is_active(&self, target: &NavigationTarget, exact: bool) -> bool {
+        match target {
+            NavigationTarget::NtPath(path) => {
+                if exact {
+                    return &self.path == path;
+                }
+
+                // absolute path
+                if path.starts_with("/") {
+                    return self.path.starts_with(path);
+                }
+
+                // relative path
+                if let Some(segment) = self.path.split("/").last() {
+                    return segment == path;
+                }
+
+                false
+            }
+            NavigationTarget::NtName(name, vars, _) => {
+                if !self.names.contains(name) {
+                    return false;
+                }
+
+                // ensure specified vars match when exact
+                if exact {
+                    for (k, v) in vars {
+                        match self.parameters.get(k) {
+                            Some(val) => {
+                                if val != v {
+                                    return false;
+                                }
+                            }
+                            None => return false,
+                        }
+                    }
+                }
+
+                true
+            }
+            NavigationTarget::NtExternal(_) => false,
+        }
+    }
+
     /// Get the query parameters as a [`BTreeMap`].
     #[must_use]
     pub fn query_params(&self) -> Option<BTreeMap<String, String>> {
@@ -41,6 +114,121 @@ impl RouterState {
             serde_urlencoded::from_str(query).ok()
         } else {
             None
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::navigation::Query;
+
+    #[test]
+    fn is_active_external() {
+        let state = test_state();
+
+        assert!(!state.is_active(&NavigationTarget::NtExternal(String::from("test")), false));
+        assert!(!state.is_active(&NavigationTarget::NtExternal(String::from("test")), true));
+    }
+
+    #[test]
+    fn is_active_path_absolute() {
+        let state = test_state();
+
+        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test")), false));
+        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test/nest")), false));
+        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("/invalid")), false));
+    }
+
+    #[test]
+    fn is_active_path_exact() {
+        let state = test_state();
+
+        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test/nest")), true));
+        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("test/nest")), true));
+    }
+
+    #[test]
+    fn is_active_path_relative() {
+        let state = test_state();
+
+        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("test")), false));
+        assert!(state.is_active(&NavigationTarget::NtPath(String::from("nest")), false));
+    }
+
+    #[test]
+    fn is_active_name() {
+        let state = test_state();
+
+        assert!(state.is_active(
+            &NavigationTarget::NtName("test", vec![], Query::QNone),
+            false
+        ));
+        assert!(state.is_active(
+            &NavigationTarget::NtName("nest", vec![], Query::QNone),
+            false
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::NtName("invalid", vec![], Query::QNone),
+            false
+        ));
+    }
+
+    #[test]
+    fn is_active_name_exact() {
+        let state = test_state();
+
+        assert!(state.is_active(
+            &NavigationTarget::NtName("test", vec![("test", String::from("test"))], Query::QNone),
+            true
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::NtName(
+                "invalid",
+                vec![("test", String::from("test"))],
+                Query::QNone
+            ),
+            true
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::NtName(
+                "test",
+                vec![("invalid", String::from("test"))],
+                Query::QNone
+            ),
+            true
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::NtName(
+                "test",
+                vec![("test", String::from("invalid"))],
+                Query::QNone
+            ),
+            true
+        ));
+    }
+
+    fn test_state() -> RouterState {
+        RouterState {
+            can_external: false,
+            can_go_back: false,
+            can_go_forward: false,
+            components: (vec![], BTreeMap::new()),
+            names: {
+                let mut names = BTreeSet::new();
+                names.insert("test");
+                names.insert("nest");
+                names
+            },
+            path: String::from("/test/nest"),
+            prefix: String::from(""),
+            query: None,
+            parameters: {
+                let mut parameters = BTreeMap::new();
+                parameters.insert("test", String::from("test"));
+                parameters
+            },
         }
     }
 }

@@ -67,10 +67,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         };
 
         // create history provider
-        let history = match &cx.props.history {
-            Some(x) => Some(x()),
-            None => None,
-        };
+        let history = cx.props.history.map(|x| x());
 
         // create router service and inject context
         let (mut service, context) = RouterService::new(
