@@ -5,6 +5,8 @@ mod sorted_slice;
 use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use sorted_slice::StrSlice;
+use syn::parenthesized;
+use syn::parse::ParseBuffer;
 use syn::punctuated::Punctuated;
 use syn::{
     self,
@@ -394,6 +396,12 @@ impl<'a> StateStruct<'a> {
     }
 }
 
+fn try_parenthesized<T>(input: ParseStream) -> Result<ParseBuffer> {
+    let inside;
+    parenthesized!(inside in input);
+    Ok(inside)
+}
+
 struct Dependancy {
     ctx_ty: Option<Type>,
     deps: Vec<Ident>,
@@ -401,7 +409,11 @@ struct Dependancy {
 
 impl Parse for Dependancy {
     fn parse(input: ParseStream) -> Result<Self> {
-        let deps = Punctuated::<Ident, Token![,]>::parse_terminated(input).ok();
+        let deps: Option<Punctuated<Ident, Token![,]>> = {
+            try_parenthesized::<Punctuated<Ident, Token![,]>>(input)
+                .ok()
+                .and_then(|_| input.parse_terminated(Ident::parse).ok())
+        };
         let deps: Vec<_> = deps
             .map(|deps| deps.into_iter().collect())
             .or_else(|| {
@@ -516,7 +528,7 @@ impl<'a> StateMember<'a> {
         match self.dep_kind {
             DepKind::Node => {
                 quote!({
-                    current_state.#ident.reduce(#node_view, (#(&self.#dep_idents)*), #get_ctx)
+                    current_state.#ident.reduce(#node_view, (#(&current_state.#dep_idents)*), #get_ctx)
                 })
             }
             DepKind::Child => {
