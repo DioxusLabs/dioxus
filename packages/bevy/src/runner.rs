@@ -64,11 +64,6 @@ where
         move |event: Event<UserEvent<CoreCommand>>,
               _event_loop: &EventLoopWindowTarget<UserEvent<CoreCommand>>,
               control_flow: &mut ControlFlow| {
-            // let mut windows = app
-            //     .world
-            //     .get_non_send_resource_mut::<DioxusWindows>()
-            //     .expect("Insert DioxusWindows as non send resource");
-
             match event {
                 Event::NewEvents(start) => {
                     let dioxus_settings = app.world.non_send_resource::<DioxusSettings>();
