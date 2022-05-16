@@ -342,8 +342,8 @@ where
                             UserWindowEvent::SetTitle(title) => {
                                 tao_window.set_title(&title);
                             }
-                            UserWindowEvent::SetDecorations(state) => {
-                                tao_window.set_decorations(state);
+                            UserWindowEvent::SetDecorations(decorations) => {
+                                tao_window.set_decorations(decorations);
                             }
                             UserWindowEvent::SetZoomLevel(scale_factor) => {
                                 let dioxus_window = dioxus_windows.get_mut(id).unwrap();
@@ -352,7 +352,6 @@ where
                             UserWindowEvent::Print => {
                                 let dioxus_window = dioxus_windows.get_mut(id).unwrap();
                                 if let Err(e) = dioxus_window.webview.print() {
-                                    // we can't panic this error.
                                     log::warn!("Open print modal failed: {e}");
                                 }
                             }
