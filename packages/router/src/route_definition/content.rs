@@ -72,3 +72,68 @@ impl Default for RouteContent {
         Self::RcNone
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use dioxus_core::{Element, Scope};
+
+    use super::*;
+
+    #[test]
+    fn add_to_list_rc_none() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let content = RouteContent::RcNone;
+
+        let res = content.add_to_list(&mut components);
+
+        assert!(res.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+    }
+
+    #[test]
+    fn add_to_list_rc_component() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let content = RouteContent::RcComponent(TestComponent);
+
+        let res = content.add_to_list(&mut components);
+
+        assert!(res.is_none());
+        assert_eq!(components.0.len(), 1);
+        // TODO: check if contained component is the correct one
+        assert!(components.1.is_empty());
+    }
+
+    #[test]
+    fn add_to_list_rc_multi() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let content = RouteContent::RcMulti(TestComponent, vec![("test", TestComponent)]);
+
+        let res = content.add_to_list(&mut components);
+
+        assert!(res.is_none());
+        assert_eq!(components.0.len(), 1);
+        // TODO: check if contained component is the correct one
+        assert_eq!(components.1.len(), 1);
+        assert!(components.1.contains_key("test"));
+        // TODO: check if contained component is the correct one
+    }
+
+    #[test]
+    fn add_to_list_rc_redirect() {
+        let nt = NavigationTarget::NtPath(String::from("test"));
+        let mut components = (Vec::new(), BTreeMap::new());
+        let content = RouteContent::RcRedirect(nt.clone());
+
+        let res = content.add_to_list(&mut components);
+
+        assert!(res.is_some());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+    }
+
+    #[allow(non_snake_case)]
+    fn TestComponent(_: Scope) -> Element {
+        unimplemented!()
+    }
+}

@@ -56,3 +56,68 @@ impl Route {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[cfg(not(debug_assertions))]
+    use crate::route_definition::DynamicRoute;
+
+    use super::*;
+
+    #[test]
+    fn name() {
+        let r = Route::new(RouteContent::RcNone).name("test");
+
+        assert_eq!(r.name, Some("test"));
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn name_panic_in_debug() {
+        Route::new(RouteContent::RcNone).name("test").name("test2");
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn name_override_in_release() {
+        let p = Route::new(RouteContent::RcNone).name("test").name("test2");
+
+        assert_eq!(p.name, Some("test2"));
+    }
+
+    #[test]
+    fn nested() {
+        let r = Route::new(RouteContent::RcNone).nested(Segment::new());
+
+        assert!(r.nested.is_some());
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn nested_panic_in_debug() {
+        Route::new(RouteContent::RcNone)
+            .nested(Segment::new())
+            .nested(Segment::new());
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn nested_override_in_release() {
+        let p = Route::new(RouteContent::RcNone)
+            .nested(Segment::new())
+            .nested(Segment::new().fallback(RouteContent::RcNone));
+
+        let is_correct_nested = if let Some(nest) = p.nested {
+            if let DynamicRoute::Fallback(RouteContent::RcNone) = nest.dynamic {
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+        assert!(is_correct_nested);
+    }
+}

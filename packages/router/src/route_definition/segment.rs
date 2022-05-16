@@ -89,6 +89,11 @@ impl Segment {
         self
     }
 
+    /// Create a new [`Segment`].
+    pub fn new() -> Self {
+        Default::default()
+    }
+
     /// Add a _parameter_ route.
     ///
     /// The _parameter_ route is active if:
@@ -108,5 +113,151 @@ impl Segment {
 
         self.dynamic = DynamicRoute::Parameter(parameter);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dioxus_core::{Element, Scope};
+
+    #[test]
+    fn fallback() {
+        let s = Segment::new().fallback(RouteContent::RcNone);
+
+        let fallback_is_correct = match s.dynamic {
+            DynamicRoute::Fallback(RouteContent::RcNone) => true,
+            _ => false,
+        };
+        assert!(fallback_is_correct);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn fallback_panic_in_debug() {
+        Segment::new()
+            .fallback(RouteContent::RcNone)
+            .fallback(RouteContent::RcNone);
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn fallback_override_in_release() {
+        let s = Segment::new()
+            .fallback(RouteContent::RcComponent(TestComponent))
+            .fallback(RouteContent::RcNone);
+
+        let fallback_is_correct = match s.dynamic {
+            DynamicRoute::Fallback(RouteContent::RcNone) => true,
+            _ => false,
+        };
+        assert!(fallback_is_correct);
+    }
+
+    #[test]
+    fn fixed() {
+        let s = Segment::new().fixed("test", Route::new(RouteContent::RcNone));
+
+        assert_eq!(s.fixed.len(), 1);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn fixed_panic_in_debug() {
+        Segment::new()
+            .fixed("test", Route::new(RouteContent::RcNone))
+            .fixed("test", Route::new(RouteContent::RcNone));
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn fixed_override_in_release() {
+        let s = Segment::new()
+            .fixed("test", Route::new(RouteContent::RcComponent(TestComponent)))
+            .fixed("test", Route::new(RouteContent::RcNone));
+
+        assert_eq!(s.fixed.len(), 1);
+        let r = &s.fixed["test"];
+        assert!(r.content.is_rc_none());
+        assert!(r.name.is_none());
+        assert!(r.nested.is_none());
+    }
+
+    #[test]
+    fn index() {
+        let s = Segment::new().index(RouteContent::RcComponent(TestComponent));
+
+        assert!(!s.index.is_rc_none());
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn index_panic_in_debug() {
+        Segment::new()
+            .index(RouteContent::RcComponent(TestComponent))
+            .index(RouteContent::RcNone);
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn index_override_in_release() {
+        let s = Segment::new()
+            .index(RouteContent::RcComponent(TestComponent))
+            .index(RouteContent::RcNone);
+
+        assert!(s.index.is_rc_none());
+    }
+
+    #[test]
+    fn matching() {
+        let regex = Regex::new("").unwrap();
+        let s = Segment::new().matching(regex, ParameterRoute::new("", RouteContent::RcNone));
+
+        assert_eq!(s.matching.len(), 1);
+    }
+
+    #[test]
+    fn parameter() {
+        let s = Segment::new().parameter(ParameterRoute::new("", RouteContent::RcNone));
+
+        let parameter_is_correct = match s.dynamic {
+            DynamicRoute::Parameter(_) => true,
+            _ => false,
+        };
+        assert!(parameter_is_correct);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn parameter_panic_in_debug() {
+        Segment::new()
+            .parameter(ParameterRoute::new("", RouteContent::RcNone))
+            .parameter(ParameterRoute::new("", RouteContent::RcNone));
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn parameter_override_in_release() {
+        let s = Segment::new()
+            .parameter(ParameterRoute::new(
+                "",
+                RouteContent::RcComponent(TestComponent),
+            ))
+            .parameter(ParameterRoute::new("", RouteContent::RcNone));
+
+        let fallback_is_correct = match s.dynamic {
+            DynamicRoute::Parameter(p) => p.content.is_rc_none(),
+            _ => false,
+        };
+        assert!(fallback_is_correct);
+    }
+
+    #[allow(non_snake_case)]
+    fn TestComponent(_: Scope) -> Element {
+        unimplemented!()
     }
 }
