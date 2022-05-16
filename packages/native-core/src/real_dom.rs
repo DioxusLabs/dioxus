@@ -5,6 +5,7 @@ use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
 
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
+use crate::traversable::Traversable;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -13,7 +14,7 @@ use crate::state::State;
 pub struct RealDom<S: State> {
     root: usize,
     nodes: Vec<Option<Node<S>>>,
-    nodes_listening: FxHashMap<&'static str, FxHashSet<usize>>,
+    nodes_listening: FxHashMap<&'static str, FxHashSet<ElementId>>,
     node_stack: smallvec::SmallVec<[usize; 10]>,
 }
 
@@ -65,40 +66,40 @@ impl<S: State> RealDom<S> {
                             .drain(self.node_stack.len() - many as usize..)
                             .collect();
                         for ns in drained {
-                            self.link_child(ns, target).unwrap();
+                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
                             nodes_updated.push((ns, NodeMask::ALL));
                         }
                     }
                     ReplaceWith { root, m } => {
-                        let root = self.remove(root as usize).unwrap();
+                        let root = self.remove(ElementId(root as usize)).unwrap();
                         let target = root.parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..m as usize).collect();
                         for ns in drained {
                             nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ns, target).unwrap();
+                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
                         }
                     }
                     InsertAfter { root, n } => {
-                        let target = self[root as usize].parent.unwrap().0;
+                        let target = self[ElementId(root as usize)].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
                             nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ns, target).unwrap();
+                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
                         }
                     }
                     InsertBefore { root, n } => {
-                        let target = self[root as usize].parent.unwrap().0;
+                        let target = self[ElementId(root as usize)].parent.unwrap().0;
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for ns in drained {
                             nodes_updated.push((ns, NodeMask::ALL));
-                            self.link_child(ns, target).unwrap();
+                            self.link_child(ElementId(ns), ElementId(target)).unwrap();
                         }
                     }
                     Remove { root } => {
-                        if let Some(parent) = self[root as usize].parent {
+                        if let Some(parent) = self[ElementId(root as usize)].parent {
                             nodes_updated.push((parent.0, NodeMask::NONE));
                         }
-                        self.remove(root as usize).unwrap();
+                        self.remove(ElementId(root as usize)).unwrap();
                     }
                     CreateTextNode { root, text } => {
                         let n = Node::new(
@@ -147,23 +148,23 @@ impl<S: State> RealDom<S> {
                     } => {
                         nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
                         if let Some(v) = self.nodes_listening.get_mut(event_name) {
-                            v.insert(root as usize);
+                            v.insert(ElementId(root as usize));
                         } else {
                             let mut hs = FxHashSet::default();
-                            hs.insert(root as usize);
+                            hs.insert(ElementId(root as usize));
                             self.nodes_listening.insert(event_name, hs);
                         }
                     }
                     RemoveEventListener { root, event } => {
                         nodes_updated.push((root as usize, NodeMask::new().with_listeners()));
                         let v = self.nodes_listening.get_mut(event).unwrap();
-                        v.remove(&(root as usize));
+                        v.remove(&ElementId(root as usize));
                     }
                     SetText {
                         root,
                         text: new_text,
                     } => {
-                        let target = &mut self[root as usize];
+                        let target = &mut self[ElementId(root as usize)];
                         nodes_updated.push((root as usize, NodeMask::new().with_text()));
                         match &mut target.node_type {
                             NodeType::Text { text } => {
@@ -196,46 +197,46 @@ impl<S: State> RealDom<S> {
         nodes_updated
     }
 
-    fn link_child(&mut self, child_id: usize, parent_id: usize) -> Option<()> {
+    fn link_child(&mut self, child_id: ElementId, parent_id: ElementId) -> Option<()> {
         debug_assert_ne!(child_id, parent_id);
         let parent = &mut self[parent_id];
-        parent.add_child(ElementId(child_id));
+        parent.add_child(child_id);
         let parent_height = parent.height + 1;
-        self[child_id].set_parent(ElementId(parent_id));
+        self[child_id].set_parent(parent_id);
         self.increase_height(child_id, parent_height);
         Some(())
     }
 
-    fn increase_height(&mut self, id: usize, amount: u16) {
+    fn increase_height(&mut self, id: ElementId, amount: u16) {
         let n = &mut self[id];
         n.height += amount;
         if let NodeType::Element { children, .. } = &n.node_type {
             for c in children.clone() {
-                self.increase_height(c.0, amount);
+                self.increase_height(c, amount);
             }
         }
     }
 
     // remove a node and it's children from the dom.
-    fn remove(&mut self, id: usize) -> Option<Node<S>> {
+    fn remove(&mut self, id: ElementId) -> Option<Node<S>> {
         // We do not need to remove the node from the parent's children list for children.
-        fn inner<S: State>(dom: &mut RealDom<S>, id: usize) -> Option<Node<S>> {
-            let mut node = dom.nodes[id as usize].take()?;
+        fn inner<S: State>(dom: &mut RealDom<S>, id: ElementId) -> Option<Node<S>> {
+            let mut node = dom.nodes[id.0].take()?;
             if let NodeType::Element { children, .. } = &mut node.node_type {
                 for c in children {
-                    inner(dom, c.0)?;
+                    inner(dom, *c)?;
                 }
             }
             Some(node)
         }
-        let mut node = self.nodes[id as usize].take()?;
+        let mut node = self.nodes[id.0].take()?;
         if let Some(parent) = node.parent {
             let parent = &mut self[parent];
-            parent.remove_child(ElementId(id));
+            parent.remove_child(id);
         }
         if let NodeType::Element { children, .. } = &mut node.node_type {
             for c in children {
-                inner(self, c.0)?;
+                inner(self, *c)?;
             }
         }
         Some(node)
@@ -249,14 +250,6 @@ impl<S: State> RealDom<S> {
             self.nodes.extend((0..1 + id - current_len).map(|_| None));
         }
         self.nodes[id] = Some(node);
-    }
-
-    pub fn get(&self, id: usize) -> Option<&Node<S>> {
-        self.nodes.get(id)?.as_ref()
-    }
-
-    pub fn get_mut(&mut self, id: usize) -> Option<&mut Node<S>> {
-        self.nodes.get_mut(id)?.as_mut()
     }
 
     // this is safe because no node will have itself as a child
@@ -388,7 +381,7 @@ impl<S: State> RealDom<S> {
                 }
             }
         }
-        if let NodeType::Element { children, .. } = &self[self.root].node_type {
+        if let NodeType::Element { children, .. } = &self[ElementId(self.root)].node_type {
             for c in children {
                 inner(self, *c, &mut f);
             }
@@ -407,7 +400,7 @@ impl<S: State> RealDom<S> {
             }
         }
         let root = self.root;
-        if let NodeType::Element { children, .. } = &mut self[root].node_type {
+        if let NodeType::Element { children, .. } = &mut self[ElementId(root)].node_type {
             for c in children.clone() {
                 inner(self, c, &mut f);
             }
@@ -415,30 +408,17 @@ impl<S: State> RealDom<S> {
     }
 }
 
-impl<S: State> Index<usize> for RealDom<S> {
-    type Output = Node<S>;
-
-    fn index(&self, idx: usize) -> &Self::Output {
-        self.get(idx).expect("Node does not exist")
-    }
-}
-
 impl<S: State> Index<ElementId> for RealDom<S> {
     type Output = Node<S>;
 
     fn index(&self, idx: ElementId) -> &Self::Output {
-        &self[idx.0]
+        self.get(idx).unwrap()
     }
 }
 
-impl<S: State> IndexMut<usize> for RealDom<S> {
-    fn index_mut(&mut self, idx: usize) -> &mut Self::Output {
-        self.get_mut(idx).expect("Node does not exist")
-    }
-}
 impl<S: State> IndexMut<ElementId> for RealDom<S> {
     fn index_mut(&mut self, idx: ElementId) -> &mut Self::Output {
-        &mut self[idx.0]
+        self.get_mut(idx).unwrap()
     }
 }
 
@@ -500,5 +480,37 @@ impl<S: State> Node<S> {
 
     fn set_parent(&mut self, parent: ElementId) {
         self.parent = Some(parent);
+    }
+}
+
+impl<T: State> Traversable for RealDom<T> {
+    type Id = ElementId;
+    type Node = Node<T>;
+
+    fn height(&self, id: Self::Id) -> Option<u16> {
+        Some(<Self as Traversable>::get(self, id)?.height)
+    }
+
+    fn get(&self, id: Self::Id) -> Option<&Self::Node> {
+        self.nodes.get(id.0)?.as_ref()
+    }
+
+    fn get_mut(&mut self, id: Self::Id) -> Option<&mut Self::Node> {
+        self.nodes.get_mut(id.0)?.as_mut()
+    }
+
+    fn children<'a>(&'a self, id: Self::Id) -> &'a [Self::Id] {
+        if let Some(node) = <Self as Traversable>::get(self, id) {
+            match &node.node_type {
+                NodeType::Element { children, .. } => children,
+                _ => &[],
+            }
+        } else {
+            &[]
+        }
+    }
+
+    fn parent(&self, id: Self::Id) -> Option<Self::Id> {
+        <Self as Traversable>::get(self, id).and_then(|n| n.parent)
     }
 }
