@@ -1,10 +1,3 @@
-use dioxus_core::ElementId;
-
-use crate::{
-    real_dom::{Node, NodeType, RealDom},
-    state::State,
-};
-
 pub trait Traversable {
     type Id: Copy;
     type Node;
@@ -32,6 +25,7 @@ pub trait Traversable {
         }
     }
 
+    // this is safe because no node will have itself as it's parent
     fn get_node_parent_mut(
         &mut self,
         id: Self::Id,
@@ -44,6 +38,7 @@ pub trait Traversable {
         unsafe { (node.map(|n| &mut *n), parent.map(|n| &mut *n)) }
     }
 
+    // this is safe because no node will have itself as a child
     fn get_node_children_mut(
         &mut self,
         id: Self::Id,

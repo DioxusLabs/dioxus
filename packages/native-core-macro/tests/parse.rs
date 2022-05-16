@@ -1,15 +1,14 @@
-use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
 use dioxus_native_core_macro::State;
 
 #[derive(Debug, Clone, Default, State)]
+// #[derive(Debug, Clone, Default)]
 struct CallCounterStatePart1 {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
 }
-
 #[derive(Debug, Clone, Default, State)]
 struct CallCounterStatePart2 {
     #[parent_dep_state(parent_counter)]
@@ -32,30 +31,10 @@ struct CallCounterState {
     parent_counter: ParentDepCallCounter,
     #[state]
     part1: CallCounterStatePart1,
-    #[state]
-    part3: CallCounterStatePart3,
     #[node_dep_state()]
     node_counter: NodeDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default)]
-struct ChildDepCallCounter(u32);
-impl ChildDepState for ChildDepCallCounter {
-    type Ctx = ();
-    type DepState = Self;
-    const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce<'a>(
-        &mut self,
-        _: NodeView,
-        _: impl Iterator<Item = &'a Self::DepState>,
-        _: &Self::Ctx,
-    ) -> bool
-    where
-        Self::DepState: 'a,
-    {
-        self.0 += 1;
-        true
-    }
+    #[state]
+    part3: CallCounterStatePart3,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -87,7 +66,26 @@ impl NodeDepState for NodeDepCallCounter {
     }
 }
 
-// #[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, Default)]
+struct ChildDepCallCounter(u32);
+impl ChildDepState for ChildDepCallCounter {
+    type Ctx = ();
+    type DepState = Self;
+    const NODE_MASK: NodeMask = NodeMask::ALL;
+    fn reduce<'a>(
+        &mut self,
+        _: NodeView,
+        _: impl Iterator<Item = &'a Self::DepState>,
+        _: &Self::Ctx,
+    ) -> bool
+    where
+        Self::DepState: 'a,
+    {
+        self.0 += 1;
+        true
+    }
+}
+#[derive(Debug, Clone, PartialEq, Default)]
 struct BubbledUpStateTester(Option<String>, Vec<Box<BubbledUpStateTester>>);
 impl ChildDepState for BubbledUpStateTester {
     type Ctx = u32;
@@ -105,7 +103,7 @@ impl ChildDepState for BubbledUpStateTester {
         assert_eq!(*ctx, 42);
         *self = BubbledUpStateTester(
             node.tag().map(|s| s.to_string()),
-            children.into_iter().map(|c| Box::new(*c.clone())).collect(),
+            children.into_iter().map(|c| Box::new(c.clone())).collect(),
         );
         true
     }

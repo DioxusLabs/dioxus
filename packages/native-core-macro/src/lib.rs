@@ -2,7 +2,7 @@ extern crate proc_macro;
 
 mod sorted_slice;
 
-use proc_macro::{Span, TokenStream};
+use proc_macro::TokenStream;
 use quote::{quote, ToTokens};
 use sorted_slice::StrSlice;
 use syn::punctuated::Punctuated;
@@ -62,12 +62,13 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 .map(|m| state_strct.resolve(&m));
 
             let child_types = state_strct.child_states.iter().map(|s| &s.ty);
+            let child_members = state_strct.child_states.iter().map(|s| &s.ident);
 
             let gen = quote! {
-                impl State for #type_name{
-                    fn update<'a>(
-                        dirty: &Vec<(usize, dioxus_native_core::node_ref::NodeMask)>,
-                        rdom: &'a mut dioxus_native_core::real_dom::RealDom<Self>,
+                impl State for #type_name {
+                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = ElementId>>(
+                        dirty: &Vec<(ElementId, dioxus_native_core::node_ref::NodeMask)>,
+                        state_tree: &'a mut T,
                         vdom: &'a dioxus_core::VirtualDom,
                         ctx: &anymap::AnyMap,
                     ) -> fxhash::FxHashSet<dioxus_core::ElementId>{
@@ -76,7 +77,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         }
 
                         impl MembersDirty{
-                            fn new(&self) -> Self{
+                            fn new() -> Self{
                                 Self{#(#members: false),*}
                             }
 
@@ -94,7 +95,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                                 #(#members: #member_types::NODE_MASK.overlaps(mask),)*
                             };
                             if members_dirty.any(){
-                                states.insert(id, members_dirty);
+                                states.insert(*id, members_dirty);
                             }
                         }
 
@@ -104,9 +105,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
                         #(
                             dirty_elements.extend(
-                                #child_types::update(
+                                <#child_types as dioxus_native_core::state::State>::update(
                                     dirty,
-                                    rdom,
+                                    &mut state_tree.map(|n| &n.#child_members, |n| &mut n.#child_members),
                                     vdom,
                                     ctx,
                                 )
@@ -252,7 +253,7 @@ impl<'a> StateStruct<'a> {
                     let insert = if *d == mem {
                         quote! {
                             resolution_order
-                                .binary_search_by_key(&rnode.id, |id| rdom[*id].height)
+                                .binary_search_by_key(&state_tree.height(id).unwrap(), |id| state_tree.height(*id).unwrap())
                                 .unwrap();
                         }
                     } else {
@@ -265,14 +266,14 @@ impl<'a> StateStruct<'a> {
                 })
                 .collect();
             quote! {
-                if let Some(parent_id) = rnode.parent {
-                    if let Some(dirty) = states.get(parent_id) {
+                if let Some(parent_id) = state_tree.parent(id) {
+                    if let Some(dirty) = states.get_mut(&parent_id) {
                         #(#update)*
                     }
                     else{
                         let mut dirty = MembersDirty::new();
                         #(#update)*
-                        states.insert(&parent_id.0, dirty);
+                        states.insert(parent_id, dirty);
                     }
                 }
             }
@@ -290,7 +291,7 @@ impl<'a> StateStruct<'a> {
                     let insert = if *d == mem {
                         quote! {
                             resolution_order
-                                .binary_search_by_key(&rnode.id, |id| rdom[*id].height)
+                                .binary_search_by_key(&state_tree.height(id).unwrap(), |id| state_tree.height(*id).unwrap())
                                 .unwrap();
                         }
                     } else {
@@ -303,17 +304,14 @@ impl<'a> StateStruct<'a> {
                 })
                 .collect();
             quote! {
-                if let dioxus_native_core::real_dom::Node::Element{children, ..} = rnode {
-                    for child in children {
-                        let child_id = child.id;
-                        if let Some(dirty) = states.get(child_id) {
-                            #(#update)*
-                        }
-                        else {
-                            let mut dirty = MembersDirty::new();
-                            #(#update)*
-                            states.insert(child_id, dirty);
-                        }
+                for child_id in state_tree.children(id) {
+                    if let Some(dirty) = states.get_mut(&child_id) {
+                        #(#update)*
+                    }
+                    else {
+                        let mut dirty = MembersDirty::new();
+                        #(#update)*
+                        states.insert(*child_id, dirty);
                     }
                 }
             }
@@ -337,15 +335,15 @@ impl<'a> StateStruct<'a> {
                     // resolve parent dependant state
                     let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
                     resolution_order.sort_by_key(|id| {
-                        rdom[*id].height
+                        state_tree.height(*id).unwrap()
                     });
                     let mut i = 0;
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = states[id];
-                        let rnode = rdom[id];
-                        let current_state = &mut rnode.state;
+                        let members_dirty = &states[&id];
+                        let (current_state, parent) = state_tree.get_node_parent_mut(id);
+                        let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
                             #update_dependant
                         }
@@ -358,16 +356,16 @@ impl<'a> StateStruct<'a> {
                     // resolve child dependant state
                     let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
                     resolution_order.sort_by_key(|id| {
-                        rdom[*id].height
+                        state_tree.height(*id).unwrap()
                     });
                     resolution_order.reverse();
                     let mut i = 0;
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = states[id];
-                        let rnode = rdom[id];
-                        let current_state = &mut rnode.state;
+                        let members_dirty = &states[&id];
+                        let (current_state, children) = state_tree.get_node_children_mut(id);
+                        let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
                             #update_dependant
                         }
@@ -383,9 +381,8 @@ impl<'a> StateStruct<'a> {
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
                         let vnode = vdom.get_element(id).unwrap();
-                        let members_dirty = states[id];
-                        let rnode = rdom[id];
-                        let current_state = &mut rnode.state;
+                        let members_dirty = &states[&id];
+                        let current_state = state_tree.get_mut(id).unwrap();
                         if members_dirty.#member && #reduce_member {
                             #update_dependant
                         }
@@ -524,18 +521,11 @@ impl<'a> StateMember<'a> {
             }
             DepKind::Child => {
                 quote!({
-                    let children = if let dioxus_native_core::real_dom::Node::Element{children, ..} = rnode {
-                        children
-                    }else{
-                        &Vec::new()
-                    };
-                    let children = children.iter().map(|id| &rdom[*id].state);
-                    current_state.#ident.reduce(#node_view, children.map(|c| (#(&c.#dep_idents)*)), #get_ctx)
+                    current_state.#ident.reduce(#node_view, children.iter().map(|c| (#(&c.#dep_idents)*)), #get_ctx)
                 })
             }
             DepKind::Parent => {
                 quote!({
-                    let parent = rnode.parent.and_then(|id| &rdom[*id].state);
                     current_state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.#dep_idents)*)), #get_ctx)
                 })
             }

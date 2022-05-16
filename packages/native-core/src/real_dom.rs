@@ -252,54 +252,6 @@ impl<S: State> RealDom<S> {
         self.nodes[id] = Some(node);
     }
 
-    // this is safe because no node will have itself as a child
-    pub fn get_node_children_mut(
-        &mut self,
-        id: usize,
-    ) -> Option<(&mut Node<S>, Vec<&mut Node<S>>)> {
-        let ptr = self.nodes.as_mut_ptr();
-        unsafe {
-            if id >= self.nodes.len() {
-                None
-            } else {
-                let node = &mut *ptr.add(id);
-                if let Some(node) = node.as_mut() {
-                    let children = match &node.node_type {
-                        NodeType::Element { children, .. } => children
-                            .iter()
-                            .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap())
-                            .collect(),
-                        _ => Vec::new(),
-                    };
-                    Some((node, children))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    // this is safe because no node will have itself as a parent
-    pub fn get_node_parent_mut(
-        &mut self,
-        id: usize,
-    ) -> Option<(&mut Node<S>, Option<&mut Node<S>>)> {
-        let ptr = self.nodes.as_mut_ptr();
-        unsafe {
-            let node = &mut *ptr.add(id);
-            if id >= self.nodes.len() {
-                None
-            } else if let Some(node) = node.as_mut() {
-                let parent = node
-                    .parent
-                    .map(|id| (&mut *ptr.add(id.0)).as_mut().unwrap());
-                Some((node, parent))
-            } else {
-                None
-            }
-        }
-    }
-
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();

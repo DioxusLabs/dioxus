@@ -6,7 +6,7 @@ use fxhash::FxHashSet;
 
 use crate::element_borrowable::ElementBorrowable;
 use crate::node_ref::{NodeMask, NodeView};
-use crate::real_dom::RealDom;
+use crate::traversable::Traversable;
 
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
     s_iter: impl Iterator<Item = T>,
@@ -93,9 +93,9 @@ pub trait NodeDepState {
 }
 
 pub trait State: Default + Clone {
-    fn update<'a>(
-        dirty: &Vec<(usize, NodeMask)>,
-        rdom: &'a mut RealDom<Self>,
+    fn update<'a, T: Traversable<Node = Self, Id = ElementId>>(
+        dirty: &Vec<(ElementId, NodeMask)>,
+        state_tree: &'a mut T,
         vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,
     ) -> FxHashSet<ElementId>;
