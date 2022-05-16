@@ -80,7 +80,10 @@ pub mod route_definition {
     pub use content::*;
 
     mod dynamic;
-    pub use dynamic::*;
+    pub(crate) use dynamic::*;
+
+    mod parameter;
+    pub use parameter::*;
 
     mod route;
     pub use route::*;

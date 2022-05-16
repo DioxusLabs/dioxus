@@ -14,10 +14,12 @@ fn app(cx: Scope) -> Element {
             .index(RcComponent(Home))
             .fixed(
                 "blog",
-                Route::new(RcComponent(Blog)).sub(
-                    Segment::default().index(RcComponent(BlogWelcome)).dynamic(
-                        DynamicRoute::parameter("blog_id", RcComponent(BlogPost)).name("blog_post"),
-                    ),
+                Route::new(RcComponent(Blog)).nested(
+                    Segment::default()
+                        .index(RcComponent(BlogWelcome))
+                        .parameter(
+                            ParameterRoute::new("blog_id", RcComponent(BlogPost)).name("blog_post"),
+                        ),
                 ),
             )
             .fixed(

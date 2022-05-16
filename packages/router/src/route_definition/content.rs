@@ -4,19 +4,16 @@ use dioxus_core::Component;
 
 use crate::navigation::NavigationTarget;
 
-/// The content of a [`Route`] or [`DynamicRoute`].
+/// The content of a [`Route`] or [`ParameterRoute`].
 ///
 /// [`Route`]: super::Route
-/// [`DynamicRoute`]: super::DynamicRoute
+/// [`ParameterRoute`]: super::ParameterRoute
 #[derive(Clone)]
 pub enum RouteContent {
-    /// Indicates the absence of content.
+    /// Indicates the absence of actual content.
     ///
-    /// When used for an `index` it marks that no index content exists.
-    ///
-    /// When used for a `fixed` or `dynamic` no components will be rendered. If a nested route is
-    /// matched its content will be rendered in the outlet where this segments content would be
-    /// rendered.
+    /// Can be used to make a route transparent and have its nested routes be nested one level less
+    /// deep.
     RcNone,
     /// A single component.
     RcComponent(Component),
@@ -36,6 +33,7 @@ pub enum RouteContent {
 }
 
 impl RouteContent {
+    /// Add the contained content to `components` or return a redirect.
     #[must_use]
     pub(crate) fn add_to_list(
         &self,

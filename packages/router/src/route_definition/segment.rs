@@ -1,59 +1,52 @@
 use std::collections::BTreeMap;
 
 use log::error;
+use regex::Regex;
 
-use super::{DynamicRoute, Route, RouteContent};
+use super::{DynamicRoute, ParameterRoute, Route, RouteContent};
 
 /// A collection of routes for a single path segment.
 ///
 /// A segment refers to the value between two `/` in the path. For example `/blog/1` contains two
 /// segments: `["blog", "1"]`.
 ///
-/// # What route is active when?
-/// - The `index` is active if the path ended before this segment. For example, the `index` of the
-///   root segment is active, if the path is `/`.
-/// - A `fixed` route is active, if its path (the [`String`]) matches the current segment _exactly_.
-///   For example, a route matching `"blog"` is active when the path is `/blog`.
-/// - The `dynamic` route is active, if no `fixed` route is active.
-///
-/// # `index` vs. fixed route with empty path
-/// At first glance it may seem that the `index` route and a fixed route with an empty may be the
-/// same. However, this is not the case.
-///
-/// The index route is active when the current segment is not specified by the path. This means that
-/// the `index` of the root segment is only active when the path is `/`.
-///
-/// A `fixed` route with an empty path is active when the current segment is empty. This means that
-/// such a route on the root segment is active when the path starts with `//`.
-///
-/// # Note on `fixed` routes
-/// When checking if the `fixed` route matches the current segment, no url en- or decoding is
-/// performed. If your `fixed` route contains character that needs to be encoded, you have to encode
-/// it in the path.
+/// # Note on _fixed_ and _matching_ routes
+/// When checking if a _fixed_ or _matching_ route is active, no url en- or decoding is preformed.
+/// If your _fixed_ or _matching_ route contains characters that need to be encoded, you have to
+/// encode them in the value/regex as well.
 #[derive(Clone, Default)]
 pub struct Segment {
     pub(crate) dynamic: DynamicRoute,
     pub(crate) fixed: BTreeMap<String, Route>,
     pub(crate) index: RouteContent,
+    pub(crate) matching: Vec<(Regex, ParameterRoute)>,
 }
 
 impl Segment {
-    /// Add a dynamic route.
+    /// Add a _fallback_ route.
+    ///
+    /// The _fallback_ route is active if:
+    /// - no _fixed_ route is
+    /// - no _matching_ route is
+    ///
+    /// Mutually exclusive with a _parameter_ route.
     ///
     /// # Panic
-    /// If a dynamic route was already set, but only in debug builds.
-    pub fn dynamic(mut self, dynamic_route: DynamicRoute) -> Self {
+    /// If a parameter route or fallback was already set, but only in debug builds.
+    pub fn fallback(mut self, content: RouteContent) -> Self {
         if !self.dynamic.is_none() {
-            error!("dynamic route already set, later prevails");
+            error!("fallback or parameter route already set, later prevails");
             #[cfg(debug_assertions)]
-            panic!("dynamic route already set");
+            panic!("fallback or parameter route already set");
         }
 
-        self.dynamic = dynamic_route;
+        self.dynamic = DynamicRoute::Fallback(content);
         self
     }
 
-    /// Add a new fixed route.
+    /// Add a _fixed_ route.
+    ///
+    /// A _fixed_ route is active, if it matches the path segment _exactly_.
     ///
     /// # Panic
     /// If a fixed route with the same `path` was already added, but only in debug builds.
@@ -67,7 +60,11 @@ impl Segment {
         self
     }
 
-    /// Add an index route.
+    /// Add an _index_ route.
+    ///
+    /// The _index_ route is active if the [`Segment`] is the first to be not specified by the path.
+    /// For example if the path is `/`, no segment is specified and the _index_ route of the root
+    /// segment is active.
     ///
     /// # Panic
     /// If an index route was already set, but only in debug builds.
@@ -79,6 +76,37 @@ impl Segment {
         }
 
         self.index = content;
+        self
+    }
+
+    /// Add a _matching_ parameter route.
+    ///
+    /// A _matching_ route is active if:
+    /// - no _fixed_ route is
+    /// - the segment matches the provided `regex`
+    pub fn matching(mut self, regex: Regex, content: ParameterRoute) -> Self {
+        self.matching.push((regex, content));
+        self
+    }
+
+    /// Add a _parameter_ route.
+    ///
+    /// The _parameter_ route is active if:
+    /// - no _fixed_ route is
+    /// - no _matching_ route is
+    ///
+    /// Mutually exclusive with a _fallback_ route.
+    ///
+    /// # Panic
+    /// If a parameter route or fallback was already set, but only in debug builds.
+    pub fn parameter(mut self, parameter: ParameterRoute) -> Self {
+        if !self.dynamic.is_none() {
+            error!("fallback or parameter route already set, later prevails");
+            #[cfg(debug_assertions)]
+            panic!("fallback or parameter route already set");
+        }
+
+        self.dynamic = DynamicRoute::Parameter(parameter);
         self
     }
 }

@@ -2,20 +2,22 @@ use log::error;
 
 use super::{RouteContent, Segment};
 
-/// A static route.
+/// A route that treats its actual value as a parameter.
 #[derive(Clone)]
-pub struct Route {
-    pub(crate) content: RouteContent,
+pub struct ParameterRoute {
     pub(crate) name: Option<&'static str>,
-    pub(crate) nested: Option<Segment>,
+    pub(crate) key: &'static str,
+    pub(crate) content: RouteContent,
+    pub(crate) nested: Option<Box<Segment>>,
 }
 
-impl Route {
-    /// Create a new [`Route`] with the provided `content`.
-    pub fn new(content: RouteContent) -> Self {
+impl ParameterRoute {
+    /// Create a new [`ParameterRoute`] with the provided `key` and `content`.
+    pub fn new(key: &'static str, content: RouteContent) -> Self {
         Self {
             content,
             name: Default::default(),
+            key,
             nested: Default::default(),
         }
     }
@@ -47,12 +49,12 @@ impl Route {
     /// If a nested segment was already present, but only in debug builds.
     pub fn nested(mut self, nested: Segment) -> Self {
         if self.nested.is_some() {
-            error!(r#"sub already set, later prevails"#);
+            error!("sub already set, later prevails");
             #[cfg(debug_assertions)]
-            panic!(r#"sub already set"#)
+            panic!("sub already set");
         }
 
-        self.nested = Some(nested);
+        self.nested = Some(Box::new(nested));
         self
     }
 }

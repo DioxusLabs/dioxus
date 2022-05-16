@@ -18,7 +18,7 @@ use crate::{
     helpers::construct_named_path,
     history::HistoryProvider,
     navigation::{NamedNavigationSegment, NavigationTarget},
-    route_definition::{DynamicRoute, RouteContent, Segment},
+    route_definition::{DynamicRoute, ParameterRoute, RouteContent, Segment},
     state::RouterState,
     PATH_FOR_EXTERNAL_NAVIGATION_FAILURE, PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
@@ -186,7 +186,7 @@ impl RouterService {
 
     /// Update the current state of the router.
     fn update_routing(&mut self) {
-        // prepare varibles
+        // prepare variables
         let mut state = self.state.write().unwrap();
         let RouterState {
             can_external,
@@ -295,11 +295,10 @@ fn construct_named_targets(
     named: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) {
     for (path, route) in &segment.fixed {
-        // prepare new ancestors
         let mut ancestors = ancestors.clone();
         ancestors.push(NamedNavigationSegment::Fixed(path.to_string()));
 
-        if let Some(seg) = &route.sub {
+        if let Some(seg) = &route.nested {
             construct_named_targets(seg, &ancestors, named);
         }
 
@@ -312,17 +311,43 @@ fn construct_named_targets(
         }
     }
 
-    if let DynamicRoute::Parameter {
-        name,
-        key,
-        content: _,
-        sub,
-    } = &segment.dynamic
+    for (
+        _,
+        ParameterRoute {
+            name,
+            key,
+            content: _,
+            nested,
+        },
+    ) in &segment.matching
     {
         let mut ancestors = ancestors.clone();
         ancestors.push(NamedNavigationSegment::Parameter(key));
 
-        if let Some(seg) = sub {
+        if let Some(seg) = nested {
+            construct_named_targets(seg, &ancestors, named);
+        }
+
+        if let Some(name) = name {
+            if named.insert(name, ancestors).is_some() {
+                error!(r#"route names must be unique; duplicate name: "{name}""#);
+                #[cfg(debug_assertions)]
+                panic!(r#"duplicate route name: "{name}""#)
+            }
+        }
+    }
+
+    if let DynamicRoute::Parameter(ParameterRoute {
+        name,
+        key,
+        content: _,
+        nested,
+    }) = &segment.dynamic
+    {
+        let mut ancestors = ancestors.clone();
+        ancestors.push(NamedNavigationSegment::Parameter(key));
+
+        if let Some(seg) = nested {
             construct_named_targets(seg, &ancestors, named);
         }
 
@@ -336,13 +361,9 @@ fn construct_named_targets(
     }
 }
 
-/// Match the first `path` segment with the `segment`.
+/// Takes in a `segment` and finds the active routes based on the first `path` value.
 ///
-/// Populates `components`, `names` and `vars` with the values found while matching.
-///
-/// If `path` contains more segments than specified by `segment`, `names` and `vars` will be empty
-/// and `components` will only contain the `global_fallback`. This only applies if `components` is
-/// not [`RouteContent::RcNone`].
+/// Populates `components`, `names` and `vars` with values found while finding all active routes.
 #[must_use]
 fn match_segment(
     path: &[&str],
@@ -352,96 +373,89 @@ fn match_segment(
     vars: &mut BTreeMap<&'static str, String>,
     global_fallback: &RouteContent,
 ) -> Option<NavigationTarget> {
-    // check static paths
-    if let Some(route) = segment.fixed.get(path[0]) {
-        if let Some(name) = &route.name {
-            names.insert(name);
-        }
+    let mut found_route = false;
+    let mut prohibit_global_fallback = false;
 
-        if let Some(target) = route.content.add_to_list(components) {
+    // routing info
+    let content = RouteContent::default();
+    let mut content = &content;
+    let mut name = None;
+    let mut nested = None;
+    let mut key = None;
+
+    // extract data
+    if let Some(route) = segment.fixed.get(path[0]) {
+        found_route = true;
+        content = &route.content;
+        name = route.name;
+        nested = route.nested.as_ref();
+    } else if let Some((_, route)) = segment
+        .matching
+        .iter()
+        .find(|(regex, _)| regex.is_match(path[0]))
+    {
+        found_route = true;
+        content = &route.content;
+        key = Some(route.key);
+        name = route.name;
+        nested = route.nested.as_ref().map(|b| b.as_ref());
+    } else if let DynamicRoute::Parameter(route) = &segment.dynamic {
+        found_route = true;
+        content = &route.content;
+        key = Some(route.key);
+        name = route.name;
+        nested = route.nested.as_ref().map(|b| b.as_ref());
+    } else if let DynamicRoute::Fallback(fb_content) = &segment.dynamic {
+        found_route = true;
+        prohibit_global_fallback = true;
+        content = fb_content;
+    }
+
+    // content and name
+    if let Some(target) = content.add_to_list(components) {
+        return Some(target);
+    }
+    if let Some(name) = name {
+        names.insert(name);
+    }
+
+    // handle parameter
+    if let Some(key) = key {
+        if let Ok(val) = decode(path[0]) {
+            vars.insert(key, val.into_owned());
+        } else {
+            error!(
+                r#"failed to decode parameter value: "{path}""#,
+                path = path[0]
+            )
+        }
+    }
+
+    // index route
+    if path.len() == 1 && nested.is_some() {
+        if let Some(target) = nested.unwrap().index.add_to_list(components) {
             return Some(target);
         }
-
-        if let Some(sub) = &route.sub {
-            if path.len() == 1 {
-                if let Some(target) = sub.index.add_to_list(components) {
-                    return Some(target);
-                }
-            } else if path.len() > 1 {
-                return match_segment(&path[1..], sub, components, names, vars, global_fallback);
-            }
-        } else if path.len() > 1 && !global_fallback.is_rc_none() {
-            components.0.clear();
-            components.1.clear();
-            names.clear();
-            vars.clear();
-            return global_fallback.add_to_list(components);
-        }
-    } else {
-        match &segment.dynamic {
-            DynamicRoute::None => {
-                if !global_fallback.is_rc_none() {
-                    components.0.clear();
-                    components.1.clear();
-                    names.clear();
-                    vars.clear();
-                    return global_fallback.add_to_list(components);
-                }
-            }
-            DynamicRoute::Parameter {
-                name,
-                key,
-                content,
-                sub,
-            } => {
-                if let Some(name) = name {
-                    names.insert(name);
-                }
-
-                if let Some(target) = content.add_to_list(components) {
-                    return Some(target);
-                }
-
-                if let Ok(val) = decode(path[0]) {
-                    vars.insert(key, val.into_owned());
-                }
-
-                if let Some(sub) = sub.as_deref() {
-                    if path.len() == 1 {
-                        if let Some(target) = sub.index.add_to_list(components) {
-                            return Some(target);
-                        }
-                    } else if path.len() > 1 {
-                        return match_segment(
-                            &path[1..],
-                            sub,
-                            components,
-                            names,
-                            vars,
-                            global_fallback,
-                        );
-                    }
-                } else if path.len() > 1 && !global_fallback.is_rc_none() {
-                    components.0.clear();
-                    components.1.clear();
-                    names.clear();
-                    vars.clear();
-                    return global_fallback.add_to_list(components);
-                }
-            }
-            DynamicRoute::Fallback(content) => {
-                if path.len() > 1 && !global_fallback.is_rc_none() {
-                    components.0.clear();
-                    components.1.clear();
-                    names.clear();
-                    vars.clear();
-                    return global_fallback.add_to_list(components);
-                } else {
-                    return content.add_to_list(components);
-                }
-            }
-        }
-    };
+    }
+    // nested routes
+    else if path.len() > 1 && nested.is_some() {
+        return match_segment(
+            &path[1..],
+            nested.unwrap(),
+            components,
+            names,
+            vars,
+            global_fallback,
+        );
+    }
+    // handle too specific path AND no route found
+    else if (path.len() > 1 && !prohibit_global_fallback) || !found_route {
+        components.0.clear();
+        components.1.clear();
+        names.clear();
+        vars.clear();
+        return global_fallback.add_to_list(components);
+    }
 
     None
 }

@@ -12,10 +12,16 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.2.1", default-features = false }
-dioxus-html = { path = "../html", version = "^0.2.1", default-features = false }
 dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
+dioxus-html = { path = "../html", version = "^0.2.1", default-features = false }
 futures-channel = "0.3.21"
+futures-util = "0.3.21"
+log = "0.4.14"
+regex = "1.5.5"
+serde = { version = "1", features = ["derive"] }
+serde_urlencoded = { version = "0.7.1" }
 url = { version = "2.2.2", default-features = false }
+urlencoding = "2.1.0"
 
 # for wasm
 web-sys = { version = "0.3", features = [
@@ -33,11 +39,6 @@ web-sys = { version = "0.3", features = [
 wasm-bindgen = { version = "0.2.80", optional = true, features = ["serde-serialize"] }
 js-sys = { version = "0.3", optional = true }
 gloo-events = { version = "0.1.1", optional = true }
-log = "0.4.14"
-futures-util = "0.3.21"
-serde = { version = "1", features = ["derive"] }
-serde_urlencoded = { version = "0.7.1" }
-urlencoding = "2.1.0"
 
 [features]
 default = []
