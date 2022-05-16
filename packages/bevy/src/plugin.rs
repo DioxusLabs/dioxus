@@ -1,10 +1,7 @@
 use crate::{
     context::UserEvent,
     converter,
-    event::{
-        DomUpdated, MaximizeToggled, VisibleUpdated, WindowDragged, WindowMaximized,
-        WindowMinimized,
-    },
+    event::{DomUpdated, MaximizeToggled, WindowDragged, WindowMaximized, WindowMinimized},
     runner::runner,
     setting::DioxusSettings,
     window::DioxusWindows,
@@ -67,7 +64,6 @@ where
             .add_event::<UICommand>()
             .add_event::<DomUpdated>()
             .add_event::<WindowDragged>()
-            .add_event::<VisibleUpdated>()
             .add_event::<WindowMinimized>()
             .add_event::<WindowMaximized>()
             .add_event::<MaximizeToggled>()

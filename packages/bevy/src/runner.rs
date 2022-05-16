@@ -1,9 +1,6 @@
 use crate::{
     context::UserEvent,
-    event::{
-        DomUpdated, MaximizeToggled, VisibleUpdated, WindowDragged, WindowMaximized,
-        WindowMinimized,
-    },
+    event::{DomUpdated, MaximizeToggled, WindowDragged, WindowMaximized, WindowMinimized},
     setting::{DioxusSettings, UpdateMode},
     window::DioxusWindows,
 };
@@ -20,7 +17,7 @@ use bevy::{
     window::{
         CreateWindow, FileDragAndDrop, ReceivedCharacter, RequestRedraw,
         WindowBackendScaleFactorChanged, WindowCloseRequested, WindowCreated, WindowFocused,
-        WindowId, WindowMoved, WindowResized, WindowScaleFactorChanged, Windows,
+        WindowId, WindowMode, WindowMoved, WindowResized, WindowScaleFactorChanged, Windows,
     },
 };
 use dioxus_desktop::{
@@ -267,11 +264,11 @@ where
 
                         match user_window_event {
                             UserWindowEvent::Update => {
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
+                                dioxus_window.try_load_ready_webview();
+
                                 let mut events =
                                     world.get_resource_mut::<Events<DomUpdated>>().unwrap();
-                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
-
-                                dioxus_window.try_load_ready_webview();
                                 events.send(DomUpdated { id });
                             }
                             UserWindowEvent::CloseWindow => {
@@ -281,73 +278,95 @@ where
                                 events.send(WindowCloseRequested { id });
                             }
                             UserWindowEvent::DragWindow => {
-                                let mut events =
-                                    world.get_resource_mut::<Events<WindowDragged>>().unwrap();
-
                                 if tao_window.fullscreen().is_none() {
                                     if let Ok(()) = tao_window.drag_window() {
+                                        let mut events = world
+                                            .get_resource_mut::<Events<WindowDragged>>()
+                                            .unwrap();
+
                                         events.send(WindowDragged { id });
                                     }
                                 }
-                                events.send(WindowDragged { id });
                             }
                             UserWindowEvent::Visible(visible) => {
-                                let mut events =
-                                    world.get_resource_mut::<Events<VisibleUpdated>>().unwrap();
-
                                 tao_window.set_visible(visible);
-                                events.send(VisibleUpdated { id, visible });
                             }
                             UserWindowEvent::Minimize(minimized) => {
+                                window.set_minimized(minimized);
+
                                 let mut events =
                                     world.get_resource_mut::<Events<WindowMinimized>>().unwrap();
-
-                                window.set_minimized(minimized);
                                 events.send(WindowMinimized { id, minimized });
                             }
                             UserWindowEvent::Maximize(maximized) => {
+                                window.set_maximized(maximized);
+
                                 let mut events =
                                     world.get_resource_mut::<Events<WindowMaximized>>().unwrap();
-
-                                window.set_maximized(maximized);
                                 events.send(WindowMaximized { id, maximized });
                             }
                             UserWindowEvent::MaximizeToggle => {
-                                let mut events =
-                                    world.get_resource_mut::<Events<MaximizeToggled>>().unwrap();
-
                                 let maximized = !tao_window.is_maximized();
                                 tao_window.set_maximized(maximized);
+
+                                let mut events =
+                                    world.get_resource_mut::<Events<MaximizeToggled>>().unwrap();
                                 events.send(MaximizeToggled { id, maximized });
                             }
-                            // Fullscreen(state) => {
-                            //     if let Some(handle) = tao_window.current_monitor() {
-                            //         tao_window.set_fullscreen(
-                            //             state.then(|| WryFullscreen::Borderless(Some(handle))),
-                            //         );
-                            //     }
-                            // }
-                            // FocusWindow => tao_window.set_focus(),
-                            // Resizable(state) => tao_window.set_resizable(state),
-                            // AlwaysOnTop(state) => tao_window.set_always_on_top(state),
-                            // CursorVisible(state) => tao_window.set_cursor_visible(state),
-                            // CursorGrab(state) => {
-                            //     let _ = tao_window.set_cursor_grab(state);
-                            // }
-                            // SetTitle(content) => tao_window.set_title(&content),
-                            // SetDecorations(state) => tao_window.set_decorations(state),
-                            // SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
-                            // Print => {
-                            //     if let Err(e) = webview.print() {
-                            //         // we can't panic this error.
-                            //         log::warn!("Open print modal failed: {e}");
-                            //     }
-                            // }
-                            // DevTool => webview.open_devtools(),
-                            // Eval(code) => webview
-                            //     .evaluate_script(code.as_str())
-                            //     .expect("eval shouldn't panic"),
-                            _ => {}
+                            UserWindowEvent::Fullscreen(_fullscreen) => {
+                                let mode = match window.mode() {
+                                    WindowMode::Windowed => WindowMode::Fullscreen,
+                                    _ => WindowMode::Windowed,
+                                };
+                                window.set_mode(mode);
+                            }
+                            UserWindowEvent::FocusWindow => {
+                                window.update_focused_status_from_backend(true);
+
+                                let mut events =
+                                    world.get_resource_mut::<Events<WindowFocused>>().unwrap();
+                                events.send(WindowFocused { id, focused: true });
+                            }
+                            UserWindowEvent::Resizable(resizable) => {
+                                window.set_resizable(resizable);
+                            }
+                            UserWindowEvent::AlwaysOnTop(allways_on_top) => {
+                                tao_window.set_always_on_top(allways_on_top);
+                            }
+                            UserWindowEvent::CursorVisible(visible) => {
+                                tao_window.set_cursor_visible(visible);
+                            }
+                            UserWindowEvent::CursorGrab(grab) => {
+                                let _ = tao_window.set_cursor_grab(grab);
+                            }
+                            UserWindowEvent::SetTitle(title) => {
+                                tao_window.set_title(&title);
+                            }
+                            UserWindowEvent::SetDecorations(state) => {
+                                tao_window.set_decorations(state);
+                            }
+                            UserWindowEvent::SetZoomLevel(scale_factor) => {
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
+                                dioxus_window.webview.zoom(scale_factor);
+                            }
+                            UserWindowEvent::Print => {
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
+                                if let Err(e) = dioxus_window.webview.print() {
+                                    // we can't panic this error.
+                                    log::warn!("Open print modal failed: {e}");
+                                }
+                            }
+                            UserWindowEvent::DevTool => {
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
+                                dioxus_window.webview.open_devtools();
+                            }
+                            UserWindowEvent::Eval(code) => {
+                                let dioxus_window = dioxus_windows.get_mut(id).unwrap();
+                                dioxus_window
+                                    .webview
+                                    .evaluate_script(code.as_str())
+                                    .expect("eval shouldn't panic");
+                            }
                         };
                     }
                     UserEvent::CoreCommand(cmd) => {

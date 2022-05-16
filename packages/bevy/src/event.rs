@@ -20,12 +20,6 @@ pub struct WindowDragged {
 }
 
 #[derive(Debug, Clone)]
-pub struct VisibleUpdated {
-    pub id: WindowId,
-    pub visible: bool,
-}
-
-#[derive(Debug, Clone)]
 pub struct WindowMinimized {
     pub id: WindowId,
     pub minimized: bool,
