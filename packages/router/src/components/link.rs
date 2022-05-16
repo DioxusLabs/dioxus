@@ -99,7 +99,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     // check if route is active
     let active_class = active_class
         .map(|ac| ac.to_string())
-        .or(router.active_class.clone())
+        .or_else(|| router.active_class.clone())
         .and_then(|ac| match state.is_active(target, *exact) {
             true => Some(format!(" {ac}")),
             false => None,
@@ -133,7 +133,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             prevent_default: "{prevent_default}",
             onclick: move |_| {
                 if is_router_navigation {
-                    tx.unbounded_send(RouterMessage::Push(target.clone().into())).ok();
+                    tx.unbounded_send(RouterMessage::Push(target.clone())).ok();
                 }
             },
             class: "{class}",

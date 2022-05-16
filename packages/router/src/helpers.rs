@@ -20,7 +20,8 @@ use crate::{
 ///
 /// [`Router`]: crate::components::router
 #[must_use]
-pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterContext> {
+#[allow(clippy::mut_from_ref)]
+pub(crate) fn sub_to_router(cx: &ScopeState) -> &mut Option<RouterContext> {
     let id = cx.use_hook(|_| Arc::new(cx.scope_id()));
 
     cx.use_hook(|_| {
@@ -92,7 +93,7 @@ pub(crate) fn construct_named_path(
     match query {
         Query::QNone | Query::QString(None) => {}
         Query::QString(Some(qs)) => {
-            if qs.starts_with("?") {
+            if qs.starts_with('?') {
                 path = format!("{path}{qs}")
             } else {
                 path = format!("{path}?{qs}")

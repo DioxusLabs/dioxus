@@ -71,12 +71,12 @@ impl RouterState {
                 }
 
                 // absolute path
-                if path.starts_with("/") {
+                if path.starts_with('/') {
                     return self.path.starts_with(path);
                 }
 
                 // relative path
-                if let Some(segment) = self.path.split("/").last() {
+                if let Some(segment) = self.path.split('/').last() {
                     return segment == path;
                 }
 

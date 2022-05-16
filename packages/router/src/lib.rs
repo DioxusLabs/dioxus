@@ -56,14 +56,12 @@ pub mod navigation;
 /// Fallback path for failed external navigation. See [`NtExternal`].
 ///
 /// [`NtExternal`]: navigation::NavigationTarget::NtExternal
-pub const PATH_FOR_EXTERNAL_NAVIGATION_FAILURE: &'static str =
-    "dioxus-router-external-navigation-failure";
+pub const PATH_FOR_EXTERNAL_NAVIGATION_FAILURE: &str = "dioxus-router-external-navigation-failure";
 
 /// Fallback path for failed named navigation. See [`NtName`].
 ///
 /// [`NtName`]: navigation::NavigationTarget::NtName
-pub const PATH_FOR_NAMED_NAVIGATION_FAILURE: &'static str =
-    "dioxus-router-named-navigation-failure";
+pub const PATH_FOR_NAMED_NAVIGATION_FAILURE: &str = "dioxus-router-named-navigation-failure";
 
 /// Reexports of commonly used elements.
 pub mod prelude {

@@ -14,14 +14,9 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 /// [`Router`]: crate::components::Router
 #[must_use]
 pub fn use_navigate(cx: &ScopeState) -> Option<Navigator> {
-    let router = cx.use_hook(|_| {
-        let router = cx.consume_context::<RouterContext>();
-
-        // use_navigate only allows to trigger changes and therefore doesn't need to subscribe to
-        // updates
-
-        router
-    });
+    // use_navigate doesn't provide access to router state and therefore doesn't need to subscribe
+    // for updates
+    let router = cx.use_hook(|_| cx.consume_context::<RouterContext>());
 
     match router {
         Some(router) => Some(Navigator {

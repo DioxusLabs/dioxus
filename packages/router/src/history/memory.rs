@@ -20,7 +20,7 @@ impl Default for MemoryHistoryProvider {
 }
 
 impl HistoryProvider for MemoryHistoryProvider {
-    fn current_path<'a>(&'a self) -> String {
+    fn current_path(&self) -> String {
         self.current.path().to_string()
     }
 

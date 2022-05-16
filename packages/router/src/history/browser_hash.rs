@@ -58,7 +58,7 @@ impl HistoryProvider for BrowserHashHistoryProvider {
             p = format!("/{p}");
         }
 
-        if let Some(url) = Url::parse(&format!("dioxus://index.html{p}")).ok() {
+        if let Ok(url) = Url::parse(&format!("dioxus://index.html{p}")) {
             url.path().to_string()
         } else {
             String::from("/")
@@ -84,7 +84,7 @@ impl HistoryProvider for BrowserHashHistoryProvider {
             p = format!("/{p}");
         }
 
-        if let Some(url) = Url::parse(&format!("dioxus://index.html{p}")).ok() {
+        if let Ok(url) = Url::parse(&format!("dioxus://index.html{p}")) {
             url.query().map(|q| q.to_string())
         } else {
             None
@@ -127,15 +127,19 @@ impl HistoryProvider for BrowserHashHistoryProvider {
             _ => return,
         };
 
-        if let Ok(_) = self.history.push_state_with_url(
-            &JsValue::from_serde(&ScrollPosition {
-                x: self.body.scroll_left(),
-                y: self.body.scroll_top(),
-            })
-            .unwrap(),
-            "",
-            Some(&hash),
-        ) {
+        if self
+            .history
+            .push_state_with_url(
+                &JsValue::from_serde(&ScrollPosition {
+                    x: self.body.scroll_left(),
+                    y: self.body.scroll_top(),
+                })
+                .unwrap(),
+                "",
+                Some(&hash),
+            )
+            .is_ok()
+        {
             self.body.set_scroll_top(0);
             self.body.set_scroll_left(0);
         }
@@ -165,15 +169,19 @@ impl HistoryProvider for BrowserHashHistoryProvider {
             _ => return,
         };
 
-        if let Ok(_) = self.history.replace_state_with_url(
-            &JsValue::from_serde(&ScrollPosition {
-                x: self.body.scroll_left(),
-                y: self.body.scroll_top(),
-            })
-            .unwrap(),
-            "",
-            Some(&hash),
-        ) {
+        if self
+            .history
+            .replace_state_with_url(
+                &JsValue::from_serde(&ScrollPosition {
+                    x: self.body.scroll_left(),
+                    y: self.body.scroll_top(),
+                })
+                .unwrap(),
+                "",
+                Some(&hash),
+            )
+            .is_ok()
+        {
             self.body.set_scroll_top(0);
             self.body.set_scroll_left(0);
         };

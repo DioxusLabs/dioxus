@@ -78,7 +78,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
             }
         }
 
-        if !p.starts_with("/") {
+        if !p.starts_with('/') {
             p = format!("/{p}");
         }
 
@@ -100,7 +100,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
             .search()
             .expect("location can provide query");
 
-        if q.starts_with("?") {
+        if q.starts_with('?') {
             q.remove(0);
         }
 
@@ -128,7 +128,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
 
     fn push(&mut self, path: String) {
         let path = if let Some(pre) = &self.prefix {
-            if !path.starts_with("/") {
+            if !path.starts_with('/') {
                 format!("{pre}{path}")
             } else {
                 path
@@ -137,15 +137,19 @@ impl HistoryProvider for BrowserPathHistoryProvider {
             path
         };
 
-        if let Ok(_) = self.history.push_state_with_url(
-            &JsValue::from_serde(&ScrollPosition {
-                x: self.body.scroll_left(),
-                y: self.body.scroll_top(),
-            })
-            .unwrap(),
-            "",
-            Some(&path),
-        ) {
+        if self
+            .history
+            .push_state_with_url(
+                &JsValue::from_serde(&ScrollPosition {
+                    x: self.body.scroll_left(),
+                    y: self.body.scroll_top(),
+                })
+                .unwrap(),
+                "",
+                Some(&path),
+            )
+            .is_ok()
+        {
             self.body.set_scroll_top(0);
             self.body.set_scroll_left(0);
         }
@@ -153,7 +157,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
 
     fn replace(&mut self, path: String) {
         let path = if let Some(pre) = &self.prefix {
-            if !path.starts_with("/") {
+            if !path.starts_with('/') {
                 format!("{pre}{path}")
             } else {
                 path
@@ -162,15 +166,19 @@ impl HistoryProvider for BrowserPathHistoryProvider {
             path
         };
 
-        if let Ok(_) = self.history.replace_state_with_url(
-            &JsValue::from_serde(&ScrollPosition {
-                x: self.body.scroll_left(),
-                y: self.body.scroll_top(),
-            })
-            .unwrap(),
-            "",
-            Some(&path),
-        ) {
+        if self
+            .history
+            .replace_state_with_url(
+                &JsValue::from_serde(&ScrollPosition {
+                    x: self.body.scroll_left(),
+                    y: self.body.scroll_top(),
+                })
+                .unwrap(),
+                "",
+                Some(&path),
+            )
+            .is_ok()
+        {
             self.body.set_scroll_top(0);
             self.body.set_scroll_left(0);
         };

@@ -98,9 +98,10 @@ impl RouterService {
 
         // initiate the history provider
         #[cfg(not(feature = "web"))]
-        let mut history = history.unwrap_or(Box::new(MemoryHistoryProvider::default()));
+        let mut history = history.unwrap_or_else(|| Box::new(MemoryHistoryProvider::default()));
         #[cfg(feature = "web")]
-        let mut history = history.unwrap_or(Box::new(BrowserPathHistoryProvider::default()));
+        let mut history =
+            history.unwrap_or_else(|| Box::new(BrowserPathHistoryProvider::default()));
         history.foreign_navigation_handler(Arc::new(move || {
             tx.unbounded_send(RouterMessage::Update).ok();
         }));
@@ -139,7 +140,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.push(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.push(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
+                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -157,7 +158,7 @@ impl RouterService {
                     NavigationTarget::NtPath(path) => self.history.replace(path),
                     NavigationTarget::NtName(name, vars, query) => self.history.replace(
                         construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
+                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string()),
                     ),
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -217,13 +218,13 @@ impl RouterService {
             let mut path = path.clone();
             path.remove(0);
             let empty_root = path == "/";
-            if path.ends_with("/") {
+            if path.ends_with('/') {
                 path.remove(path.len() - 1);
             }
-            let segments: Vec<_> = path.split("/").collect();
+            let segments: Vec<_> = path.split('/').collect();
 
             // index on root
-            let next = if path.len() == 0 && !empty_root {
+            let next = if path.is_empty() && !empty_root {
                 names.insert("root_index");
                 self.routes.index.add_to_list(components)
             }
@@ -244,7 +245,7 @@ impl RouterService {
                     NavigationTarget::NtPath(p) => p,
                     NavigationTarget::NtName(name, vars, query_params) => {
                         construct_named_path(name, &vars, &query_params, &self.named_routes)
-                            .unwrap_or(PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
+                            .unwrap_or_else(|| PATH_FOR_NAMED_NAVIGATION_FAILURE.to_string())
                     }
                     NavigationTarget::NtExternal(url) => {
                         if self.history.can_external() {
@@ -294,11 +295,11 @@ impl RouterService {
 /// Traverse the provided `segment` and populate `named` with the named routes.
 fn construct_named_targets(
     segment: &Segment,
-    ancestors: &Vec<NamedNavigationSegment>,
+    ancestors: &[NamedNavigationSegment],
     named: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) {
     for (path, route) in &segment.fixed {
-        let mut ancestors = ancestors.clone();
+        let mut ancestors = Vec::from(ancestors);
         ancestors.push(NamedNavigationSegment::Fixed(path.to_string()));
 
         if let Some(seg) = &route.nested {
@@ -324,7 +325,7 @@ fn construct_named_targets(
         },
     ) in &segment.matching
     {
-        let mut ancestors = ancestors.clone();
+        let mut ancestors = Vec::from(ancestors);
         ancestors.push(NamedNavigationSegment::Parameter(key));
 
         if let Some(seg) = nested {
@@ -347,7 +348,7 @@ fn construct_named_targets(
         nested,
     }) = &segment.dynamic
     {
-        let mut ancestors = ancestors.clone();
+        let mut ancestors = Vec::from(ancestors);
         ancestors.push(NamedNavigationSegment::Parameter(key));
 
         if let Some(seg) = nested {
@@ -434,25 +435,30 @@ fn match_segment(
         }
     }
 
-    // index route
-    if path.len() == 1 && nested.is_some() {
-        if let Some(target) = nested.unwrap().index.add_to_list(components) {
-            return Some(target);
+    if let Some(nested) = nested {
+        // index route
+        if path.len() == 1 {
+            if let Some(target) = nested.index.add_to_list(components) {
+                return Some(target);
+            }
+        }
+        // nested routes
+        else {
+            return match_segment(
+                &path[1..],
+                nested,
+                components,
+                names,
+                parameters,
+                global_fallback,
+            );
         }
     }
-    // nested routes
-    else if path.len() > 1 && nested.is_some() {
-        return match_segment(
-            &path[1..],
-            nested.unwrap(),
-            components,
-            names,
-            parameters,
-            global_fallback,
-        );
-    }
-    // handle too specific path AND no route found
-    else if (path.len() > 1 && !prohibit_global_fallback) || !found_route {
+
+    // handle:
+    // 1. too specific paths unless the current route is a fallback route
+    // 2. the absence of an active route on the current segment
+    if (path.len() > 1 && !prohibit_global_fallback) || !found_route {
         components.0.clear();
         components.1.clear();
         names.clear();
