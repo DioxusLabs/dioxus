@@ -197,7 +197,7 @@ impl RouterService {
             path,
             prefix,
             query,
-            parameters: variables,
+            parameters,
         } = &mut *state;
 
         loop {
@@ -211,27 +211,30 @@ impl RouterService {
             *path = self.history.current_path();
             *prefix = self.history.current_prefix().to_string();
             *query = self.history.current_query();
-            variables.clear();
+            parameters.clear();
 
             // normalize and split path
             let mut path = path.clone();
             path.remove(0);
+            let empty_root = path == "/";
             if path.ends_with("/") {
                 path.remove(path.len() - 1);
             }
             let segments: Vec<_> = path.split("/").collect();
 
-            // handle index on root
-            let next = if path.len() == 0 {
+            // index on root
+            let next = if path.len() == 0 && !empty_root {
                 names.insert("root_index");
                 self.routes.index.add_to_list(components)
-            } else {
+            }
+            // all other cases
+            else {
                 match_segment(
                     &segments,
                     &self.routes,
                     components,
                     names,
-                    variables,
+                    parameters,
                     &self.global_fallback,
                 )
             };
@@ -370,7 +373,7 @@ fn match_segment(
     segment: &Segment,
     components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     names: &mut BTreeSet<&'static str>,
-    vars: &mut BTreeMap<&'static str, String>,
+    parameters: &mut BTreeMap<&'static str, String>,
     global_fallback: &RouteContent,
 ) -> Option<NavigationTarget> {
     let mut found_route = false;
@@ -422,7 +425,7 @@ fn match_segment(
     // handle parameter
     if let Some(key) = key {
         if let Ok(val) = decode(path[0]) {
-            vars.insert(key, val.into_owned());
+            parameters.insert(key, val.into_owned());
         } else {
             error!(
                 r#"failed to decode parameter value: "{path}""#,
@@ -444,7 +447,7 @@ fn match_segment(
             nested.unwrap(),
             components,
             names,
-            vars,
+            parameters,
             global_fallback,
         );
     }
@@ -453,7 +456,7 @@ fn match_segment(
         components.0.clear();
         components.1.clear();
         names.clear();
-        vars.clear();
+        parameters.clear();
         return global_fallback.add_to_list(components);
     }
 
