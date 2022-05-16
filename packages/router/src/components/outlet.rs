@@ -26,6 +26,9 @@ pub struct OutletProps {
 /// Each [`Outlet`] renders a single component. To render the components of nested routes simply
 /// provide nested [`Outlet`]s.
 ///
+/// # Panic
+/// When no [`Router`] is an ancestor, but only in debug builds.
+/// 
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
@@ -34,6 +37,9 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
         Some(r) => r,
         None => {
             error!("`Outlet` can only be used as a descendent of a `Router`");
+            #[cfg(debug_assertions)]
+            panic!("`Outlet` can only be used as a descendent of a `Router`");
+            #[cfg(not(debug_assertions))]
             return None;
         }
     };

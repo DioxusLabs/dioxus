@@ -45,7 +45,9 @@ pub(crate) fn sub_to_router<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterCont
 ///
 /// # Return values:
 /// - [`Some`] if the navigation was successful.
-/// - [`None`] if no target for the `name` was found, or a required parameter was not provided.
+/// - [`None`] if no target for the `name` was found, or a required parameter was not provided. Only
+///   in release builds.
+/// - [`panic!`] in debug builds, when the release build would return [`None`].
 #[must_use]
 pub(crate) fn construct_named_path(
     name: &'static str,
@@ -54,13 +56,13 @@ pub(crate) fn construct_named_path(
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
     // find path layout
-    #[allow(unreachable_code)]
     let segments = match targets.get(name) {
         Some(x) => x,
         None => {
+            error!(r#"no route for name "{name}""#);
             #[cfg(debug_assertions)]
             panic!(r#"no route for name "{name}""#);
-            error!(r#"no route for name "{name}""#);
+            #[cfg(not(debug_assertions))]
             return None;
         }
     };
@@ -74,7 +76,10 @@ pub(crate) fn construct_named_path(
                 let value = match parameters.iter().find(|(k, _)| k == key) {
                     Some((_, v)) => encode(v).into_owned(),
                     None => {
-                        error!(r#"no value for varible "{key}""#);
+                        error!(r#"no value for variable "{key}""#);
+                        #[cfg(debug_assertions)]
+                        panic!(r#"no value for variable "{key}""#);
+                        #[cfg(not(debug_assertions))]
                         return None;
                     }
                 };

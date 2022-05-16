@@ -61,6 +61,9 @@ pub struct LinkProps<'a> {
 /// A [`Link`] navigates to [`NtExternal`] targets independently, even if the [`HistoryProvider`]
 /// the [`Router`] uses cannot.
 ///
+/// # Panic
+/// When no [`Router`] is an ancestor, but only in debug builds.
+///
 /// [`HistoryProvider`]: crate::history::HistoryProvider
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
@@ -81,6 +84,9 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         Some(x) => x,
         None => {
             error!("`Link` can only be used as a descendent of a `Router`");
+            #[cfg(debug_assertions)]
+            panic!("`Link` can only be used as a descendent of a `Router`");
+            #[cfg(not(debug_assertions))]
             return None;
         }
     };

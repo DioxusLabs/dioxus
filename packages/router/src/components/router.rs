@@ -3,7 +3,7 @@ use std::sync::Arc;
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use log::warn;
+use log::error;
 
 use crate::{
     contexts::RouterContext,
@@ -57,12 +57,18 @@ pub struct RouterProps<'a> {
 ///
 /// [`Router`] components cannot be nested. If you nest multiple [`Router`]s, the inner [`Router`]
 /// will be inactive and ignored by all other components and hooks.
+///
+/// # Panic
+/// When an other [`Router`] is an ancestor, but only in debug builds.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     cx.use_hook(|_| {
         // make sure no router context exists
         if cx.consume_context::<RouterContext>().is_some() {
-            warn!("routers cannot be nested; inner router will be inactive");
+            error!("routers cannot be nested; inner router will be inactive");
+            #[cfg(debug_assertions)]
+            panic!("routers cannot be nested");
+            #[cfg(not(debug_assertions))]
             return;
         };
 

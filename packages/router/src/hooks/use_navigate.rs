@@ -7,7 +7,8 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 /// A hook that allows you to acquire a [`Navigator`] object.
 ///
 /// # Return values
-/// - [`None`], when the current component isn't a descendant of a [`Router`].
+/// - [`panic!`], when the calling component isn't a descendant of a [`Router`] in debug builds.
+/// - [`None`], when the calling component isn't a descendant of a [`Router`] in release builds.
 /// - Otherwise [`Some`].
 ///
 /// [`Router`]: crate::components::Router
@@ -28,6 +29,9 @@ pub fn use_navigate(cx: &ScopeState) -> Option<Navigator> {
         }),
         None => {
             error!("`use_navigate` can only be used in descendants of a `Router`");
+            #[cfg(debug_assertions)]
+            panic!("`use_navigate` can only be used in descendants of a `Router`");
+            #[cfg(not(debug_assertions))]
             None
         }
     }
