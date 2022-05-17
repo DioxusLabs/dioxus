@@ -386,6 +386,7 @@ impl<'a> StateStruct<'a> {
                         let (current_state, parent) = state_tree.get_node_parent_mut(id);
                         let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
+                            dirty_elements.insert(id);
                             #update_dependant
                         }
                         i += 1;
@@ -407,6 +408,7 @@ impl<'a> StateStruct<'a> {
                         let (current_state, children) = state_tree.get_node_children_mut(id);
                         let current_state = current_state.unwrap();
                         if members_dirty.#member && #reduce_member {
+                            dirty_elements.insert(id);
                             #update_dependant
                         }
                         i += 1;
@@ -424,6 +426,7 @@ impl<'a> StateStruct<'a> {
                         let members_dirty = states.get_mut(&id).unwrap();
                         let current_state = state_tree.get_mut(id).unwrap();
                         if members_dirty.#member && #reduce_member {
+                            dirty_elements.insert(id);
                             #update_dependant
                         }
                         i += 1;
