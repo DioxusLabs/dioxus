@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use gloo_events::EventListener;
+use log::error;
 use url::Url;
 use wasm_bindgen::JsValue;
 use web_sys::{History, HtmlElement, Window};
@@ -108,6 +109,11 @@ impl HistoryProvider for BrowserHashHistoryProvider {
     }
 
     fn push(&mut self, path: String) {
+        if path.starts_with("//") {
+            error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
+            return;
+        }
+
         let mut p = self.window.location().hash().unwrap_or_default();
 
         if p.starts_with('#') {
@@ -146,6 +152,11 @@ impl HistoryProvider for BrowserHashHistoryProvider {
     }
 
     fn replace(&mut self, path: String) {
+        if path.starts_with("//") {
+            error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
+            return;
+        }
+
         let mut p = self
             .window
             .location()

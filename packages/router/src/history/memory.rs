@@ -1,3 +1,4 @@
+use log::error;
 use url::Url;
 
 use super::HistoryProvider;
@@ -55,6 +56,11 @@ impl HistoryProvider for MemoryHistoryProvider {
     }
 
     fn push(&mut self, path: String) {
+        if path.starts_with("//") {
+            error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
+            return;
+        }
+
         let previous_path = self.current.to_string();
 
         if let Ok(url) = self.current.join(&path) {
@@ -65,6 +71,11 @@ impl HistoryProvider for MemoryHistoryProvider {
     }
 
     fn replace(&mut self, path: String) {
+        if path.starts_with("//") {
+            error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
+            return;
+        }
+
         if let Ok(url) = self.current.join(&path) {
             self.current = url;
         }
