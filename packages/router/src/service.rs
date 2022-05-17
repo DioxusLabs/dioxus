@@ -458,22 +458,22 @@ fn match_segment(
 #[cfg(test)]
 mod tests {
     use crate::route_definition::{ParameterRoute, Route};
+    use dioxus_core::{Element, Scope};
     use regex::Regex;
 
     use super::*;
 
     #[test]
     fn named_targets() {
-        let seg = test_segment();
         let mut targets = BTreeMap::new();
-        construct_named_targets(&seg, &[], &mut targets);
+        construct_named_targets(&prepare_segment(), &[], &mut targets);
 
         assert_eq!(targets.len(), 6);
-        assert_eq!(targets["r1-1"].len(), 1);
-        assert_eq!(targets["r2-1"].len(), 2);
-        assert_eq!(targets["r1-2"].len(), 1);
-        assert_eq!(targets["p1"].len(), 2);
-        assert_eq!(targets["p3"].len(), 2);
+        assert_eq!(targets["fixed"].len(), 1);
+        assert_eq!(targets["nested"].len(), 1);
+        assert_eq!(targets["nested2"].len(), 2);
+        assert_eq!(targets["match"].len(), 1);
+        assert_eq!(targets["parameter"].len(), 1);
         assert!(targets["root_index"].is_empty());
     }
 
@@ -481,64 +481,294 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic]
     fn named_targets_duplicate_panic_in_debug() {
-        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("r1-1"));
-        let mut targets = BTreeMap::new();
-        construct_named_targets(&seg, &[], &mut targets);
+        construct_named_targets(
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("nested2")),
+            &[],
+            &mut BTreeMap::new(),
+        );
     }
 
     #[test]
     #[cfg(not(debug_assertions))]
     fn named_targets_duplicate_override_in_release() {
-        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("r2-1"));
         let mut targets = BTreeMap::new();
-        construct_named_targets(&seg, &[], &mut targets);
+        construct_named_targets(
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("nested2")),
+            &[],
+            &mut targets,
+        );
 
-        assert_eq!(targets["r2-1"].len(), 1);
+        assert_eq!(targets["nested2"].len(), 1);
     }
 
     #[test]
     #[cfg(debug_assertions)]
     #[should_panic]
     fn named_targets_root_index_panic_in_debug() {
-        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index"));
-        let mut targets = BTreeMap::new();
-        construct_named_targets(&seg, &[], &mut targets);
+        construct_named_targets(
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index")),
+            &[],
+            &mut BTreeMap::new(),
+        );
     }
 
     #[test]
     #[cfg(not(debug_assertions))]
     fn named_targets_root_index_override_in_release() {
-        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index"));
         let mut targets = BTreeMap::new();
-        construct_named_targets(&seg, &[], &mut targets);
+        construct_named_targets(
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index")),
+            &[],
+            &mut targets,
+        );
 
-        assert_eq!(targets["root_index"].len(), 0);
+        assert!(targets["root_index"].is_empty());
     }
 
-    fn test_segment() -> Segment {
+    #[test]
+    fn match_segment_fixed() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["fixed"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("fixed"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
+    fn match_segment_index() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["nested"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert_eq!(components.0.len(), 2);
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("nested"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
+    fn match_segment_nested() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["nested", "second-layer"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert_eq!(components.0.len(), 3);
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 2);
+        assert!(names.contains("nested"));
+        assert!(names.contains("nested2"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
+    fn match_segment_matching() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["m1test"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("match"));
+        assert_eq!(parameters.len(), 1);
+        assert_eq!(parameters["m1-parameter"], "m1test");
+    }
+
+    #[test]
+    fn match_segment_parameter() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["test"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("parameter"));
+        assert_eq!(parameters.len(), 1);
+        assert_eq!(parameters["p-parameter"], "test");
+    }
+
+    #[test]
+    fn match_segment_redirect() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["nested", "redirect"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        let redirect_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
+            p == "redirect-path"
+        } else {
+            false
+        };
+        assert!(redirect_correct);
+
+        // when redirecting, the caller cleans up the values
+        assert_eq!(components.0.len(), 1);
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("nested"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
+    fn match_segment_fallback() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["nested", "invalid", "another"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        let fallback_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
+            p == "fallback"
+        } else {
+            false
+        };
+        assert!(fallback_correct);
+
+        // correctly matched values persist
+        assert_eq!(components.0.len(), 1);
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("nested"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
+    fn match_segment_global_fallback() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["fixed", "too-specific"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcRedirect(NavigationTarget::NtPath(String::from("global"))),
+        );
+
+        let fallback_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
+            p == "global"
+        } else {
+            false
+        };
+        assert!(fallback_correct);
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert!(names.is_empty());
+        assert!(parameters.is_empty());
+    }
+
+    fn prepare_segment() -> Segment {
         Segment::new()
+            .fixed("fixed", Route::new(RouteContent::RcNone).name("fixed"))
             .fixed(
-                "1-1",
-                Route::new(RouteContent::RcNone).name("r1-1").nested(
-                    Segment::new()
-                        .fixed("2-1", Route::new(RouteContent::RcNone).name("r2-1"))
-                        .fixed("2-2", Route::new(RouteContent::RcNone)),
-                ),
+                "nested",
+                Route::new(RouteContent::RcComponent(TestComponent))
+                    .name("nested")
+                    .nested(
+                        Segment::new()
+                            .index(RouteContent::RcComponent(TestComponent))
+                            .fixed(
+                                "second-layer",
+                                Route::new(RouteContent::RcComponent(TestComponent))
+                                    .name("nested2")
+                                    .nested(
+                                        Segment::new()
+                                            .index(RouteContent::RcComponent(TestComponent)),
+                                    ),
+                            )
+                            .fixed(
+                                "redirect",
+                                Route::new(RouteContent::RcRedirect(NavigationTarget::NtPath(
+                                    String::from("redirect-path"),
+                                ))),
+                            )
+                            .fallback(RouteContent::RcRedirect(NavigationTarget::NtPath(
+                                String::from("fallback"),
+                            ))),
+                    ),
             )
-            .fixed(
-                "1-2",
-                Route::new(RouteContent::RcNone).name("r1-2").nested(
-                    Segment::new()
-                        .matching(
-                            Regex::new("").unwrap(),
-                            ParameterRoute::new("para", RouteContent::RcNone).name("p1"),
-                        )
-                        .matching(
-                            Regex::new("").unwrap(),
-                            ParameterRoute::new("para2", RouteContent::RcNone),
-                        )
-                        .parameter(ParameterRoute::new("para3", RouteContent::RcNone).name("p3")),
-                ),
+            .matching(
+                Regex::new("^m1.*$").unwrap(),
+                ParameterRoute::new("m1-parameter", RouteContent::RcNone).name("match"),
             )
+            .parameter(ParameterRoute::new("p-parameter", RouteContent::RcNone).name("parameter"))
+    }
+
+    #[allow(non_snake_case)]
+    fn TestComponent(_: Scope) -> Element {
+        unimplemented!()
     }
 }
