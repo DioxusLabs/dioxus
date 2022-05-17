@@ -18,7 +18,7 @@ use crate::{
     helpers::construct_named_path,
     history::HistoryProvider,
     navigation::{NamedNavigationSegment, NavigationTarget},
-    route_definition::{DynamicRoute, ParameterRoute, RouteContent, Segment},
+    route_definition::{DynamicRoute, RouteContent, Segment},
     state::RouterState,
     PATH_FOR_EXTERNAL_NAVIGATION_FAILURE, PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
@@ -296,71 +296,57 @@ impl RouterService {
 fn construct_named_targets(
     segment: &Segment,
     ancestors: &[NamedNavigationSegment],
-    named: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+    targets: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) {
+    let mut add_named_target = |segment: NamedNavigationSegment,
+                                name: &Option<&'static str>,
+                                nested: Option<&Segment>| {
+        let mut ancestors = Vec::from(ancestors);
+        ancestors.push(segment);
+
+        if let Some(nested) = nested {
+            construct_named_targets(nested, &ancestors, targets);
+        }
+
+        if let Some(name) = name {
+            if targets.insert(name, ancestors).is_some() {
+                error!(r#"route names must be unique, later prevails; duplicate name: "{name}""#);
+                #[cfg(debug_assertions)]
+                panic!(r#"route names must be unique; duplicate name: "{name}""#);
+            }
+        }
+    };
+
     for (path, route) in &segment.fixed {
-        let mut ancestors = Vec::from(ancestors);
-        ancestors.push(NamedNavigationSegment::Fixed(path.to_string()));
-
-        if let Some(seg) = &route.nested {
-            construct_named_targets(seg, &ancestors, named);
-        }
-
-        if let Some(name) = route.name {
-            if named.insert(name, ancestors).is_some() {
-                error!(r#"route names must be unique; duplicate name: "{name}""#);
-                #[cfg(debug_assertions)]
-                panic!(r#"duplicate route name: "{name}""#)
-            };
-        }
+        add_named_target(
+            NamedNavigationSegment::Fixed(path.to_string()),
+            &route.name,
+            route.nested.as_ref(),
+        );
     }
 
-    for (
-        _,
-        ParameterRoute {
-            name,
-            key,
-            content: _,
-            nested,
-        },
-    ) in &segment.matching
-    {
-        let mut ancestors = Vec::from(ancestors);
-        ancestors.push(NamedNavigationSegment::Parameter(key));
-
-        if let Some(seg) = nested {
-            construct_named_targets(seg, &ancestors, named);
-        }
-
-        if let Some(name) = name {
-            if named.insert(name, ancestors).is_some() {
-                error!(r#"route names must be unique; duplicate name: "{name}""#);
-                #[cfg(debug_assertions)]
-                panic!(r#"duplicate route name: "{name}""#)
-            }
-        }
+    for (_, pr) in &segment.matching {
+        add_named_target(
+            NamedNavigationSegment::Parameter(pr.key),
+            &pr.name,
+            pr.nested.as_ref().map(|b| b.as_ref()),
+        );
     }
 
-    if let DynamicRoute::Parameter(ParameterRoute {
-        name,
-        key,
-        content: _,
-        nested,
-    }) = &segment.dynamic
-    {
-        let mut ancestors = Vec::from(ancestors);
-        ancestors.push(NamedNavigationSegment::Parameter(key));
+    if let DynamicRoute::Parameter(pr) = &segment.dynamic {
+        add_named_target(
+            NamedNavigationSegment::Parameter(pr.key),
+            &pr.name,
+            pr.nested.as_ref().map(|b| b.as_ref()),
+        );
+    }
 
-        if let Some(seg) = nested {
-            construct_named_targets(seg, &ancestors, named);
-        }
-
-        if let Some(name) = name {
-            if named.insert(name, ancestors).is_some() {
-                error!(r#"route names must be unique; duplicate name: "{name}""#);
-                #[cfg(debug_assertions)]
-                panic!(r#"duplicate route name: "{name}""#)
-            }
+    // add root_index
+    if ancestors.is_empty() {
+        if targets.insert("root_index", vec![]).is_some() {
+            error!(r#""root_index" is provided by router, custom is overwritten"#);
+            #[cfg(debug_assertions)]
+            panic!(r#""root_index" is provided by router"#);
         }
     }
 }
@@ -467,4 +453,92 @@ fn match_segment(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::route_definition::{ParameterRoute, Route};
+    use regex::Regex;
+
+    use super::*;
+
+    #[test]
+    fn named_targets() {
+        let seg = test_segment();
+        let mut targets = BTreeMap::new();
+        construct_named_targets(&seg, &[], &mut targets);
+
+        assert_eq!(targets.len(), 6);
+        assert_eq!(targets["r1-1"].len(), 1);
+        assert_eq!(targets["r2-1"].len(), 2);
+        assert_eq!(targets["r1-2"].len(), 1);
+        assert_eq!(targets["p1"].len(), 2);
+        assert_eq!(targets["p3"].len(), 2);
+        assert!(targets["root_index"].is_empty());
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn named_targets_duplicate_panic_in_debug() {
+        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("r1-1"));
+        let mut targets = BTreeMap::new();
+        construct_named_targets(&seg, &[], &mut targets);
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn named_targets_duplicate_override_in_release() {
+        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("r2-1"));
+        let mut targets = BTreeMap::new();
+        construct_named_targets(&seg, &[], &mut targets);
+
+        assert_eq!(targets["r2-1"].len(), 1);
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    #[should_panic]
+    fn named_targets_root_index_panic_in_debug() {
+        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index"));
+        let mut targets = BTreeMap::new();
+        construct_named_targets(&seg, &[], &mut targets);
+    }
+
+    #[test]
+    #[cfg(not(debug_assertions))]
+    fn named_targets_root_index_override_in_release() {
+        let seg = test_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index"));
+        let mut targets = BTreeMap::new();
+        construct_named_targets(&seg, &[], &mut targets);
+
+        assert_eq!(targets["root_index"].len(), 0);
+    }
+
+    fn test_segment() -> Segment {
+        Segment::new()
+            .fixed(
+                "1-1",
+                Route::new(RouteContent::RcNone).name("r1-1").nested(
+                    Segment::new()
+                        .fixed("2-1", Route::new(RouteContent::RcNone).name("r2-1"))
+                        .fixed("2-2", Route::new(RouteContent::RcNone)),
+                ),
+            )
+            .fixed(
+                "1-2",
+                Route::new(RouteContent::RcNone).name("r1-2").nested(
+                    Segment::new()
+                        .matching(
+                            Regex::new("").unwrap(),
+                            ParameterRoute::new("para", RouteContent::RcNone).name("p1"),
+                        )
+                        .matching(
+                            Regex::new("").unwrap(),
+                            ParameterRoute::new("para2", RouteContent::RcNone),
+                        )
+                        .parameter(ParameterRoute::new("para3", RouteContent::RcNone).name("p3")),
+                ),
+            )
+    }
 }
