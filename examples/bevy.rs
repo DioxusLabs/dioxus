@@ -1,11 +1,18 @@
 use bevy::{
     app::App,
-    ecs::event::{EventReader, EventWriter},
-    input::keyboard::KeyboardInput,
+    core::CorePlugin,
+    ecs::{
+        component::Component,
+        event::{EventReader, EventWriter},
+        query::With,
+        system::{Commands, Query},
+    },
+    input::keyboard::{KeyCode, KeyboardInput},
     log::{info, LogPlugin},
-    window::{ReceivedCharacter, WindowDescriptor},
+    window::{ReceivedCharacter, WindowCloseRequested, WindowDescriptor, WindowId},
 };
 use dioxus::prelude::*;
+use leafwing_input_manager::prelude::*;
 
 #[derive(Debug, Clone)]
 enum CoreCommand {
@@ -18,6 +25,14 @@ enum UICommand {
     KeyboardInput(KeyboardInput),
 }
 
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug)]
+enum Action {
+    CloseWindow,
+}
+
+#[derive(Component)]
+struct User;
+
 fn main() {
     App::new()
         .insert_resource(WindowDescriptor {
@@ -26,9 +41,13 @@ fn main() {
         })
         .add_plugin(DioxusDesktopPlugin::<CoreCommand, UICommand>::new(app, ()))
         .add_plugin(LogPlugin)
-        .add_system(handle_core_command)
         .add_system(send_keyboard_input)
+        .add_system(handle_core_command)
+        .add_plugin(CorePlugin)
+        .add_plugin(InputManagerPlugin::<Action>::default())
         .add_system(log_keyboard_event)
+        .add_startup_system(spawn_user)
+        .add_system(close_window)
         .run();
 }
 
@@ -87,18 +106,27 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! (
         div {
             div {
-                h1 { "Bevy Dioxus Plugin Example" },
-                button {
-                    onclick: |_e| window.send(CoreCommand::Test),
-                    "Test",
+                h1 { "Bevy Dioxus Plugin Example" }
+                div {
+                    p {"Test CoreCommand chanel"}
+                    button {
+                        onclick: |_e| window.send(CoreCommand::Test),
+                        "Test",
+                    }
                 }
-                button {
-                    onclick: |_e| window.close(),
-                    "Close",
+                div {
+                    p {"Close Window (press Esc or Ctrl + c)"}
+                    button {
+                        onclick: |_e| window.close(),
+                        "Close",
+                    }
                 }
-                button {
-                    onclick: move |_| window.set_minimized(true),
-                    "Minimize"
+                div {
+                    p { "Minimize Window" }
+                    button {
+                        onclick: move |_| window.set_minimized(true),
+                        "Minimize"
+                    }
                 }
             }
 
@@ -122,4 +150,30 @@ fn app(cx: Scope) -> Element {
             )))
         }
     ))
+}
+
+fn spawn_user(mut commands: Commands) {
+    let mut input_map = InputMap::new([(Action::CloseWindow, KeyCode::Escape)]);
+    input_map.insert_chord(Action::CloseWindow, [KeyCode::LControl, KeyCode::C]);
+    input_map.insert_chord(Action::CloseWindow, [KeyCode::RControl, KeyCode::C]);
+
+    commands
+        .spawn()
+        .insert(User)
+        .insert_bundle(InputManagerBundle::<Action> {
+            action_state: ActionState::default(),
+            input_map,
+        });
+}
+
+fn close_window(
+    query: Query<&ActionState<Action>, With<User>>,
+    mut events: EventWriter<WindowCloseRequested>,
+) {
+    let action_state = query.single();
+    if action_state.just_pressed(Action::CloseWindow) {
+        events.send(WindowCloseRequested {
+            id: WindowId::primary(),
+        });
+    }
 }

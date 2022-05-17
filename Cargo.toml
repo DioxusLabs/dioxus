@@ -37,6 +37,7 @@ dioxus-native-core-macro = { path = "./packages/native-core-macro", version = "^
 
 bevy_dioxus = { path = "./packages/bevy", optional = true }
 bevy = { version = "0.7", default-features = false, optional = true }
+leafwing-input-manager = { version = "0.3", default-features = false, optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]
@@ -51,7 +52,7 @@ router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
 native-core = ["dioxus-native-core", "dioxus-native-core-macro"]
-bevy-plugin = ["bevy_dioxus", "bevy"]
+bevy-plugin = ["bevy_dioxus", "bevy", "leafwing-input-manager"]
 
 [workspace]
 members = [

@@ -1,6 +1,6 @@
 use crate::{
     context::{DesktopContext, ProxyType, UserEvent},
-    event::WebKeyboardEvent,
+    event::KeyboardEvent,
     setting::DioxusDesktopSettings,
 };
 use bevy::{
@@ -359,7 +359,7 @@ impl DioxusWindows {
                             dom_tx.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                         }
                         "keyboard_event" => {
-                            let event = WebKeyboardEvent::from_value(message.params());
+                            let event = KeyboardEvent::from_value(message.params());
                             proxy.send_event(UserEvent::KeyboardEvent(event)).unwrap();
                         }
                         "initialize" => {

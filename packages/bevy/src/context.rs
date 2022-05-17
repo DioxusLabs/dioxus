@@ -1,4 +1,4 @@
-use crate::event::WebKeyboardEvent;
+use crate::event::KeyboardEvent;
 use dioxus_desktop::{
     desktop_context::UserWindowEvent::{self, *},
     tao::event_loop::EventLoopProxy,
@@ -12,7 +12,7 @@ pub type ProxyType<CoreCommand> = EventLoopProxy<UserEvent<CoreCommand>>;
 pub enum UserEvent<CoreCommand: Debug> {
     WindowEvent(UserWindowEvent),
     CoreCommand(CoreCommand),
-    KeyboardEvent(WebKeyboardEvent),
+    KeyboardEvent(KeyboardEvent),
 }
 
 #[derive(Clone)]
