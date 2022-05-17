@@ -240,65 +240,6 @@ fn state_initial() {
 }
 
 #[test]
-fn state_reduce_initally_called_minimally() {
-    #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
-            div{
-                div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        })
-    }
-
-    let vdom = VirtualDom::new(Base);
-
-    let mutations = vdom.create_vnodes(rsx! {
-        div {
-            div{
-                div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        }
-    });
-
-    let mut dom: RealDom<CallCounterState> = RealDom::new();
-
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    println!("{:?}", nodes_updated);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
-
-    dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part1.child_counter.0, 1);
-        assert_eq!(n.state.child_counter.0, 1);
-        assert_eq!(n.state.part2.parent_counter.0, 1);
-        assert_eq!(n.state.parent_counter.0, 1);
-        assert_eq!(n.state.part3.node_counter.0, 1);
-        assert_eq!(n.state.node_counter.0, 1);
-    });
-}
-
-#[test]
 fn state_reduce_parent_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
