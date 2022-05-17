@@ -39,7 +39,6 @@ type Node = dioxus_native_core::real_dom::Node<NodeState>;
 struct NodeState {
     #[child_dep_state(layout, RefCell<Stretch>)]
     layout: StretchLayout,
-    // depends on attributes, the C component of it's parent and a u8 context
     #[parent_dep_state(style)]
     style: StyleModifier,
 }
