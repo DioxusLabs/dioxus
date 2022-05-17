@@ -78,8 +78,10 @@ impl ParentDepState for StyleModifier {
         }
 
         // gather up all the styles from the attribute list
-        for &Attribute { name, value, .. } in node.attributes() {
-            apply_style_attributes(name, value, &mut new);
+        for Attribute { name, value, .. } in node.attributes() {
+            if let Some(text) = value.as_text() {
+                apply_style_attributes(name, text, &mut new);
+            }
         }
 
         // keep the text styling from the parent element
@@ -734,8 +736,6 @@ const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
     "border-bottom-width",
     "border-collapse",
     "border-color",
-    "            ",
-    "        ",
     "border-image",
     "border-image-outset",
     "border-image-repeat",
@@ -747,7 +747,6 @@ const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
     "border-left-style",
     "border-left-width",
     "border-radius",
-    "        ",
     "border-right",
     "border-right-color",
     "border-right-style",
@@ -761,7 +760,6 @@ const SORTED_STYLE_ATTRS: &[&str] = &sorted_str_slice!([
     "border-top-style",
     "border-top-width",
     "border-width",
-    "           ",
     "animation",
     "animation-delay",
     "animation-direction",

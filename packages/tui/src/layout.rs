@@ -36,9 +36,11 @@ pub(crate) struct StretchLayout {
 impl ChildDepState for StretchLayout {
     type Ctx = Rc<RefCell<Stretch>>;
     type DepState = Self;
-    // todo: update mask
+    // use tag to force this to be called when a node is built
     const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS)).with_text();
+        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS))
+            .with_text()
+            .with_tag();
 
     /// Setup the layout
     fn reduce<'a>(
@@ -73,12 +75,15 @@ impl ChildDepState for StretchLayout {
             } else {
                 self.node =
                     PossiblyUninitalized::Initialized(stretch.new_node(style, &[]).unwrap());
+                changed = true;
             }
         } else {
             // gather up all the styles from the attribute list
-            for &Attribute { name, value, .. } in node.attributes() {
-                assert!(SORTED_LAYOUT_ATTRS.binary_search(&name).is_ok());
-                apply_layout_attributes(name, value, &mut style);
+            for Attribute { name, value, .. } in node.attributes() {
+                assert!(SORTED_LAYOUT_ATTRS.binary_search(name).is_ok());
+                if let Some(text) = value.as_text() {
+                    apply_layout_attributes(name, text, &mut style);
+                }
             }
 
             // the root node fills the entire area
@@ -104,6 +109,7 @@ impl ChildDepState for StretchLayout {
                 self.node = PossiblyUninitalized::Initialized(
                     stretch.new_node(style, &child_layout).unwrap(),
                 );
+                changed = true;
             }
         }
         if self.style != style {

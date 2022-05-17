@@ -5,13 +5,17 @@ edition = "2021"
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
+description = "Build natively rendered apps with Dioxus"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.0" }
-dioxus-html = { path = "../html", version = "^0.2.0" }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.0" }
+dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-html = { path = "../html", version = "^0.2.1" }
+dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 
-stretch2 = { git = "https://github.com/DioxusLabs/stretch" }
+stretch2 = "0.4.2"
 smallvec = "1.6"
 fxhash = "0.2"
 anymap = "0.12.1"

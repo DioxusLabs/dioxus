@@ -21,9 +21,9 @@ impl Config {
         }
     }
 
-    pub fn with_ctrl_c_quit(self) -> Self {
+    pub fn without_ctrl_c_quit(self) -> Self {
         Self {
-            ctrl_c_quit: true,
+            ctrl_c_quit: false,
             ..self
         }
     }

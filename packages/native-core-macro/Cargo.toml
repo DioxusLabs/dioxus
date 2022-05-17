@@ -2,6 +2,13 @@
 name = "dioxus-native-core-macro"
 version = "0.2.0"
 edition = "2021"
+description = "Build natively rendered apps with Dioxus"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
+
 
 [lib]
 proc-macro = true
@@ -10,12 +17,12 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0.11", features = ["extra-traits"] }
 quote = "1.0"
-dioxus-native-core = { path = "../native-core" }
+dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 
 [dev-dependencies]
-dioxus-core = { path = "../core", version = "^0.2.0" }
-dioxus-html = { path = "../html", version = "^0.2.0" }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.0" }
+dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-html = { path = "../html", version = "^0.2.1" }
+dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 
 smallvec = "1.6"
 fxhash = "0.2"

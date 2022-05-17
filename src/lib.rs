@@ -6,10 +6,10 @@ pub mod hooks {
     #[cfg(feature = "hooks")]
     pub use dioxus_hooks::*;
 
-    #[cfg(all(target = "wasm", feature = "web"))]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     pub use dioxus_web::use_eval;
 
-    #[cfg(all(not(target = "wasm"), feature = "desktop"))]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "desktop"))]
     pub use dioxus_desktop::use_eval;
 }
 

@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
@@ -11,10 +11,10 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.0" }
-dioxus-html = { path = "../html", version = "^0.2.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0", features = [
-    "web",
+dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
+dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
+    "web"
 ] }
 
 js-sys = "0.3.56"
