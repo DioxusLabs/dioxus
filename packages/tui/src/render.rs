@@ -73,7 +73,7 @@ pub(crate) fn render_vnode(
             }
 
             for c in children {
-                render_vnode(frame, layout, rdom, &rdom[c.0], cfg);
+                render_vnode(frame, layout, rdom, &rdom[*c], cfg);
             }
         }
         NodeType::Placeholder => unreachable!(),

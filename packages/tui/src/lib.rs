@@ -91,7 +91,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let stretch = Rc::new(RefCell::new(Stretch::new()));
     let mut any_map = AnyMap::new();
     any_map.insert(stretch.clone());
-    let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+    let _to_rerender = rdom.update_state(&dom, to_update, any_map);
 
     render_vdom(
         &mut dom,
@@ -149,7 +149,7 @@ fn render_vdom(
                     fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
-                        let root_node = rdom[0].state.layout.node.unwrap();
+                        let root_node = rdom[ElementId(0)].state.layout.node.unwrap();
 
                         stretch
                             .compute_layout(
@@ -165,7 +165,7 @@ fn render_vdom(
                         terminal.draw(|frame| {
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
-                            let root = &rdom[0];
+                            let root = &rdom[ElementId(0)];
                             render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
                         })?;
                     } else {
@@ -226,7 +226,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = AnyMap::new();
                     any_map.insert(stretch.clone());
-                    let _to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
+                    let _to_rerender = rdom.update_state(vdom, to_update, any_map);
                 }
             }
 
