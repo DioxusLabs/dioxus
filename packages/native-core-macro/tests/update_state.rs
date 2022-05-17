@@ -31,14 +31,14 @@ struct CallCounterStatePart3 {
 struct CallCounterState {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
-    #[state]
-    part2: CallCounterStatePart2,
+    // #[state]
+    // part2: CallCounterStatePart2,
     #[parent_dep_state(parent_counter)]
     parent_counter: ParentDepCallCounter,
-    #[state]
-    part1: CallCounterStatePart1,
-    #[state]
-    part3: CallCounterStatePart3,
+    // #[state]
+    // part1: CallCounterStatePart1,
+    // #[state]
+    // part3: CallCounterStatePart3,
     #[node_dep_state()]
     node_counter: NodeDepCallCounter,
 }
@@ -51,13 +51,14 @@ impl ChildDepState for ChildDepCallCounter {
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce<'a>(
         &mut self,
-        _: NodeView,
+        node: NodeView,
         _: impl Iterator<Item = &'a Self::DepState>,
         _: &Self::Ctx,
     ) -> bool
     where
         Self::DepState: 'a,
     {
+        println!("{self:?} {:?}: {} {:?}", node.tag(), node.id(), node.text());
         self.0 += 1;
         true
     }
@@ -283,14 +284,15 @@ fn state_reduce_initally_called_minimally() {
     let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
+    println!("{:?}", nodes_updated);
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part1.child_counter.0, 1);
+        // assert_eq!(n.state.part1.child_counter.0, 1);
         assert_eq!(n.state.child_counter.0, 1);
-        assert_eq!(n.state.part2.parent_counter.0, 1);
+        // assert_eq!(n.state.part2.parent_counter.0, 1);
         assert_eq!(n.state.parent_counter.0, 1);
-        assert_eq!(n.state.part3.node_counter.0, 1);
+        // assert_eq!(n.state.part3.node_counter.0, 1);
         assert_eq!(n.state.node_counter.0, 1);
     });
 }
@@ -357,7 +359,7 @@ fn state_reduce_parent_called_minimally_on_update() {
     let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part2.parent_counter.0, 2);
+        // assert_eq!(n.state.part2.parent_counter.0, 2);
         assert_eq!(n.state.parent_counter.0, 2);
     });
 }
@@ -427,10 +429,10 @@ fn state_reduce_child_called_minimally_on_update() {
 
     dom.traverse_depth_first(|n| {
         println!("{:?}", n);
-        assert_eq!(
-            n.state.part1.child_counter.0,
-            if n.id.0 > 4 { 1 } else { 2 }
-        );
+        // assert_eq!(
+        //     n.state.part1.child_counter.0,
+        //     if n.id.0 > 4 { 1 } else { 2 }
+        // );
         assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
     });
 }

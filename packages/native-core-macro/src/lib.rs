@@ -74,16 +74,43 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         vdom: &'a dioxus_core::VirtualDom,
                         ctx: &anymap::AnyMap,
                     ) -> fxhash::FxHashSet<dioxus_core::ElementId>{
-                        struct MembersDirty{
+                        #[derive(Eq, PartialEq)]
+                        struct HeightOrdering {
+                            height: u16,
+                            id: dioxus_core::ElementId,
+                        }
+
+                        impl HeightOrdering {
+                            fn new(height: u16, id: dioxus_core::ElementId) -> Self {
+                                HeightOrdering {
+                                    height,
+                                    id,
+                                }
+                            }
+                        }
+
+                        impl Ord for HeightOrdering {
+                            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                                self.height.cmp(&other.height).then(self.id.0.cmp(&other.id.0))
+                            }
+                        }
+
+                        impl PartialOrd for HeightOrdering {
+                            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                                Some(self.cmp(&other))
+                            }
+                        }
+
+                        struct MembersDirty {
                             #(#members: bool, )*
                         }
 
-                        impl MembersDirty{
-                            fn new() -> Self{
-                                Self{#(#members: false),*}
+                        impl MembersDirty {
+                            fn new() -> Self {
+                                Self {#(#members: false),*}
                             }
 
-                            fn any(&self) -> bool{
+                            fn any(&self) -> bool {
                                 #(self.#members || )* false
                             }
                         }
@@ -93,7 +120,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         let mut states = fxhash::FxHashMap::default();
 
                         for (id, mask) in dirty {
-                            let members_dirty = MembersDirty{
+                            let members_dirty = MembersDirty {
                                 #(#members: #member_types::NODE_MASK.overlaps(mask),)*
                             };
                             if members_dirty.any(){
@@ -247,36 +274,39 @@ impl<'a> StateStruct<'a> {
         let update_child_dependants = if dep.child.is_empty() {
             quote!()
         } else {
+            let insert = dep.child.iter().map(|d|{
+                if *d == mem {
+                    quote! {
+                        let seeking = HeightOrdering::new(state_tree.height(parent_id).unwrap(), parent_id);
+                        if let Err(idx) = resolution_order
+                            .binary_search_by(|ordering| ordering.cmp(&seeking).reverse()){
+                            resolution_order.insert(
+                                idx,
+                                seeking,
+                            );
+                        }
+                    }
+                } else {
+                    quote! {}
+                }
+            });
             let update: Vec<_> = dep
                 .child
                 .iter()
                 .map(|d| {
                     let ident = &d.ident;
-                    let insert = if *d == mem {
-                        quote! {
-                            if let Err(idx) = resolution_order
-                                .binary_search_by_key(&state_tree.height(parent_id).unwrap(), |id| state_tree.height(*id).unwrap()){
-                                resolution_order.insert(
-                                    idx,
-                                    parent_id,
-                                );
-                            }
-                        }
-                    } else {
-                        quote! {}
-                    };
                     quote! {
                         dirty.#ident = true;
-                        #insert
                     }
                 })
                 .collect();
             quote! {
                 if let Some(parent_id) = state_tree.parent(id) {
+                    #(#insert)*
                     if let Some(dirty) = states.get_mut(&parent_id) {
                         #(#update)*
                     }
-                    else{
+                    else {
                         let mut dirty = MembersDirty::new();
                         #(#update)*
                         states.insert(parent_id, dirty);
@@ -289,32 +319,35 @@ impl<'a> StateStruct<'a> {
         let update_parent_dependants = if dep.parent.is_empty() {
             quote!()
         } else {
+            let insert = dep.parent.iter().map(|d| {
+                if *d == mem {
+                    quote! {
+                        let seeking = HeightOrdering::new(state_tree.height(*child_id).unwrap(), *child_id);
+                        if let Err(idx) = resolution_order
+                            .binary_search(&seeking){
+                            resolution_order.insert(
+                                idx,
+                                seeking,
+                            );
+                        }
+                    }
+                } else {
+                    quote! {}
+                }
+            });
             let update: Vec<_> = dep
                 .parent
                 .iter()
                 .map(|d| {
                     let ident = &d.ident;
-                    let insert = if *d == mem {
-                        quote! {
-                            if let Err(idx) = resolution_order
-                                .binary_search_by_key(&state_tree.height(*child_id).unwrap(), |id| state_tree.height(*id).unwrap()){
-                                resolution_order.insert(
-                                    idx,
-                                    *child_id,
-                                );
-                            }
-                        }
-                    } else {
-                        quote! {}
-                    };
                     quote! {
                         dirty.#ident = true;
-                        #insert
                     }
                 })
                 .collect();
             quote! {
                 for child_id in state_tree.children(id) {
+                    #(#insert)*
                     if let Some(dirty) = states.get_mut(&child_id) {
                         #(#update)*
                     }
@@ -343,13 +376,11 @@ impl<'a> StateStruct<'a> {
             DepKind::Parent => {
                 quote! {
                     // resolve parent dependant state
-                    let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
-                    resolution_order.sort_by_key(|id| {
-                        state_tree.height(*id).unwrap()
-                    });
+                    let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
+                    resolution_order.sort();
                     let mut i = 0;
                     while i < resolution_order.len(){
-                        let id = resolution_order[i];
+                        let id = resolution_order[i].id;
                         let vnode = vdom.get_element(id).unwrap();
                         let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, parent) = state_tree.get_node_parent_mut(id);
@@ -364,14 +395,13 @@ impl<'a> StateStruct<'a> {
             DepKind::Child => {
                 quote! {
                     // resolve child dependant state
-                    let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
-                    resolution_order.sort_by_key(|id| {
-                        state_tree.height(*id).unwrap()
+                    let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
+                    resolution_order.sort_by(|height_ordering1, height_ordering2| {
+                        height_ordering1.cmp(&height_ordering2).reverse()
                     });
-                    resolution_order.reverse();
                     let mut i = 0;
                     while i < resolution_order.len(){
-                        let id = resolution_order[i];
+                        let id = resolution_order[i].id;
                         let vnode = vdom.get_element(id).unwrap();
                         let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, children) = state_tree.get_node_children_mut(id);
