@@ -126,6 +126,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                             if members_dirty.any(){
                                 states.insert(*id, members_dirty);
                             }
+                            dirty_elements.insert(*id);
                         }
 
                         #(
