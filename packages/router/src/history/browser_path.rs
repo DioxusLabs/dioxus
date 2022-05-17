@@ -134,7 +134,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
         }
 
         let path = if let Some(pre) = &self.prefix {
-            if !path.starts_with('/') {
+            if path.starts_with('/') {
                 format!("{pre}{path}")
             } else {
                 path
@@ -168,7 +168,7 @@ impl HistoryProvider for BrowserPathHistoryProvider {
         }
 
         let path = if let Some(pre) = &self.prefix {
-            if !path.starts_with('/') {
+            if path.starts_with('/') {
                 format!("{pre}{path}")
             } else {
                 path
