@@ -664,6 +664,7 @@ fn get_event(evt: TermEvent) -> Option<(&'static str, EventData)> {
 
 fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
     let (code, key_str);
+    let mut shift_key = event.modifiers.contains(KeyModifiers::SHIFT);
     if let TermKeyCode::Char(c) = event.code {
         code = match c {
             'A'..='Z' | 'a'..='z' => match c.to_ascii_uppercase() {
@@ -777,7 +778,11 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
                 12 => KeyCode::F12,
                 _ => return None,
             },
-            TermKeyCode::BackTab => return None,
+            // backtab is Shift + Tab
+            TermKeyCode::BackTab => {
+                shift_key = true;
+                KeyCode::Tab
+            }
             TermKeyCode::Null => return None,
             _ => return None,
         };
@@ -795,7 +800,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
         alt_key: event.modifiers.contains(KeyModifiers::ALT),
         ctrl_key: event.modifiers.contains(KeyModifiers::CONTROL),
         meta_key: false,
-        shift_key: event.modifiers.contains(KeyModifiers::SHIFT),
+        shift_key,
         locale: Default::default(),
         location: 0x00,
         repeat: Default::default(),
