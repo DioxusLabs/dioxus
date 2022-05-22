@@ -2,6 +2,7 @@ use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
 use dioxus_core::ElementId;
+use dioxus_html::{GlobalAttributes, SvgAttributes};
 use fxhash::FxHashSet;
 
 use crate::element_borrowable::ElementBorrowable;
@@ -79,6 +80,51 @@ pub trait ParentDepState {
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
 /// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
 /// Called at most once per update.
+/// NodeDepState is the only state that can accept multable dependancies, but only from the current node.
+/// ```rust
+/// impl NodeDepState for Layout {
+///     type Ctx = LayoutCache;
+///     type DepState = (TextWrap, ChildLayout);
+///     const NODE_MASK: NodeMask =
+///         NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!([
+///             "width", "height"
+///         ])))
+///         .with_text();
+///     fn reduce<'a>(
+///         &mut self,
+///         node: NodeView,
+///         siblings: (&TextWrap, &ChildLayout),
+///         ctx: &Self::Ctx,
+///     ) -> bool {
+///         let old = self.clone();
+///         let (text_wrap, child_layout) = siblings;
+///         if TextWrap::Wrap == text_wrap {
+///             if let Some(text) = node.text() {
+///                 let lines = text_wrap.get_lines(text);
+///                 self.width = lines.max_by(|l| l.len());
+///                 self.height = lines.len();
+///                 return old != self;
+///             }
+///         }
+///         let mut width = child_layout.width;
+///         let mut height = child_layout.width;
+///         for attr in node.attributes() {
+///             match attr.name {
+///                 "width" => {
+///                     width = attr.value.as_text().unwrap().parse().unwrap();
+///                 }
+///                 "height" => {
+///                     height = attr.value.as_text().unwrap().parse().unwrap();
+///                 }
+///                 _ => unreachable!(),
+///             }
+///         }
+///         self.width = width;
+///         self.height = height;
+///         old != self
+///     }
+/// }
+/// ```
 pub trait NodeDepState {
     type Ctx;
     /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
@@ -92,6 +138,7 @@ pub trait NodeDepState {
     ) -> bool;
 }
 
+/// Do not implement this trait. It is only meant to be derived and used through [RealDom].
 pub trait State: Default + Clone {
     fn update<'a, T: Traversable<Node = Self, Id = ElementId>>(
         dirty: &Vec<(ElementId, NodeMask)>,

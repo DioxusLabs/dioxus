@@ -244,11 +244,11 @@ You've probably noticed that many elements in the `rsx!` macros support on-hover
 
 # Native Core
 
-Renderers take a lot of work. If you are creating a renderer in rust, native core provides some utilites to implement a renderer. It provides an abstraction over DomEdits and handles layout for you.
+If you are creating a renderer in rust, native core provides some utilites to implement a renderer. It provides an abstraction over DomEdits and handles layout for you.
 
 ## RealDom
 
-The `RealDom` is a higher level abstraction over updating the Dom. It updates with `DomEdits` and provides a way to lazily update the state of nodes based on what attributes change.
+The `RealDom` is a higher level abstraction over updating the Dom. It updates with `DomEdits` and provides a way to incrementally update the state of nodes based on what attributes change.
 
 ### Example
 
@@ -304,7 +304,7 @@ flowchart TB
     end
 ```
 
-To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct.
+To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to discribe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
 
 ```rust
 use dioxus_native_core::node_ref::*;
