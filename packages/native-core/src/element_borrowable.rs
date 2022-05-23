@@ -1,27 +1,20 @@
+/// A helper trait to associate a borrowed tuple with a tuple of borrowed elements.
 pub trait ElementBorrowable {
     type Borrowed<'a>
     where
         Self: 'a;
-    fn borrow_elements<'a>(&'a self) -> Self::Borrowed<'a>;
 }
 
 impl ElementBorrowable for () {
     type Borrowed<'a> = ()
     where
         Self: 'a;
-    fn borrow_elements<'a>(&'a self) -> Self::Borrowed<'a> {
-        ()
-    }
 }
 
 macro_rules! impl_element_borrowable {
     ( $( ($x:tt, $i:ident) ),+ ) => {
         impl< $($x),+ > ElementBorrowable for ($($x,)+) {
             type Borrowed<'a> = ($(&'a $x,)+) where Self: 'a;
-            fn borrow_elements<'a>(&'a self) -> Self::Borrowed<'a>{
-                let ($($i,)+) = self;
-                ($($i,)+)
-            }
         }
     };
 }

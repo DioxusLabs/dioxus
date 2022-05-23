@@ -2,7 +2,6 @@ use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
 use dioxus_core::ElementId;
-use dioxus_html::{GlobalAttributes, SvgAttributes};
 use fxhash::FxHashSet;
 
 use crate::element_borrowable::ElementBorrowable;
@@ -44,7 +43,7 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 }
 
 /// This state is derived from children. For example a node's size could be derived from the size of children.
-/// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
+/// Called when the current node's node properties are modified, a child's [ChildDepState] is modified or a child is removed.
 /// Called at most once per update.
 pub trait ChildDepState {
     type Ctx;
@@ -62,7 +61,7 @@ pub trait ChildDepState {
 }
 
 /// This state that is passed down to children. For example text properties (`<b>` `<i>` `<u>`) would be passed to children.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
 /// Called at most once per update.
 pub trait ParentDepState {
     type Ctx;
@@ -78,7 +77,7 @@ pub trait ParentDepState {
 }
 
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
 /// Called at most once per update.
 /// NodeDepState is the only state that can accept multiple dependancies, but only from the current node.
 /// ```rust
@@ -138,8 +137,9 @@ pub trait NodeDepState {
     ) -> bool;
 }
 
-/// Do not implement this trait. It is only meant to be derived and used through [RealDom].
+/// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
 pub trait State: Default + Clone {
+    #[doc(hidden)]
     fn update<'a, T: Traversable<Node = Self, Id = ElementId>>(
         dirty: &Vec<(ElementId, NodeMask)>,
         state_tree: &'a mut T,
