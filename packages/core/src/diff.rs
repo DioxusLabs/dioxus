@@ -9,7 +9,7 @@
 //! ## Notice:
 //!
 //! The inspiration and code for this module was originally taken from Dodrio (@fitzgen) and then modified to support
-//! Components, Fragments, Suspense, SubTree memoization, incremental diffing, cancellation, pausing, priority
+//! Components, Fragments, Suspense, `SubTree` memoization, incremental diffing, cancellation, pausing, priority
 //! scheduling, and additional batching operations.
 //!
 //! ## Implementation Details:
@@ -20,7 +20,7 @@
 //! We don't necessarily require that DOM changes happen instantly during the diffing process, so the implementor may choose
 //! to batch nodes if it is more performant for their application. The element IDs are indices into the internal element
 //! array. The expectation is that implementors will use the ID as an index into a Vec of real nodes, allowing for passive
-//! garbage collection as the [crate::VirtualDom] replaces old nodes.
+//! garbage collection as the [`crate::VirtualDom`] replaces old nodes.
 //!
 //! When new vnodes are created through `cx.render`, they won't know which real node they correspond to. During diffing,
 //! we always make sure to copy over the ID. If we don't do this properly, the [`ElementId`] will be populated incorrectly
@@ -30,7 +30,7 @@
 //! --------------------
 //! Fragments (nodes without a parent) are supported through a combination of "replace with" and anchor vnodes. Fragments
 //! can be particularly challenging when they are empty, so the anchor node lets us "reserve" a spot for the empty
-//! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the [crate::innerlude::NodeFactory] - it is
+//! fragment to be replaced with when it is no longer empty. This is guaranteed by logic in the [`crate::innerlude::NodeFactory`] - it is
 //! impossible to craft a fragment with 0 elements - they must always have at least a single placeholder element. Adding
 //! "dummy" nodes _is_ inefficient, but it makes our diffing algorithm faster and the implementation is completely up to
 //! the platform.
@@ -44,13 +44,13 @@
 //! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
 //! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
 //! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
-//! Due to the frequent calls to [crate::virtual_dom::VirtualDom::work_with_deadline] we can get the pure "fetch-as-you-render" behavior of React Fiber.
+//! Due to the frequent calls to [`crate::virtual_dom::VirtualDom::work_with_deadline`] we can get the pure "fetch-as-you-render" behavior of React Fiber.
 //!
 //! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
 //! DOM, but as a placeholder.
 //!
 //! Right now, the "suspense" queue is intertwined with hooks. In the future, we should allow any future to drive attributes
-//! and contents, without the need for a use_suspense hook. In the interim, this is the quickest way to get Suspense working.
+//! and contents, without the need for a `use_suspense` hook. In the interim, this is the quickest way to get Suspense working.
 //!
 //! ## Subtree Memoization
 //! -----------------------
