@@ -80,7 +80,7 @@ pub trait ParentDepState {
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
 /// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
 /// Called at most once per update.
-/// NodeDepState is the only state that can accept multable dependancies, but only from the current node.
+/// NodeDepState is the only state that can accept multiple dependancies, but only from the current node.
 /// ```rust
 /// impl NodeDepState for Layout {
 ///     type Ctx = LayoutCache;
