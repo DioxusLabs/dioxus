@@ -178,7 +178,7 @@ fn virtual_event_from_websys_event(
             })
         }
         "keydown" | "keypress" | "keyup" => Arc::new(KeyboardData::from(event)),
-        "focus" | "blur" => Arc::new(FocusData {}),
+        "focus" | "blur" | "focusout" | "focusin" => Arc::new(FocusData {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
@@ -258,9 +258,9 @@ fn virtual_event_from_websys_event(
 
             Arc::new(FormData { value, values })
         }
-        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
-        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
+        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
+        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(MouseData::from(event))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
