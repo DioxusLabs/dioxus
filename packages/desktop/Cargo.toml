@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-desktop"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for a remote webview instance"
@@ -12,15 +12,15 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.0", features = ["serialize"] }
-dioxus-html = { path = "../html", features = ["serialize"], version = "^0.2.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.0" }
+dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
+dioxus-html = { path = "../html", features = ["serialize"], version = "^0.2.1" }
+dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1" }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 log = "0.4.14"
-wry = { version = "0.13.1" }
+wry = { version = "0.16.0" }
 futures-channel = "0.3.21"
 tokio = { version = "1.16.1", features = [
     "sync",
@@ -28,7 +28,7 @@ tokio = { version = "1.16.1", features = [
     "rt",
     "time",
 ], optional = true, default-features = false }
-webbrowser = "0.6.0"
+webbrowser = "0.7.1"
 mime_guess = "2.0.3"
 dunce = "1.0.2"
 
@@ -38,13 +38,9 @@ core-foundation = "0.9.3"
 [features]
 default = ["tokio_runtime"]
 tokio_runtime = ["tokio"]
-
-devtool = ["wry/devtool"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
-
 tray = ["wry/tray"]
-ayatana = ["wry/ayatana"]
 
 
 [dev-dependencies]

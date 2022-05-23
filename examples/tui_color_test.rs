@@ -3,9 +3,7 @@ use dioxus::prelude::*;
 fn main() {
     dioxus::tui::launch_cfg(
         app,
-        dioxus::tui::Config {
-            rendering_mode: dioxus::tui::RenderingMode::Ansi,
-        },
+        dioxus::tui::Config::default().with_rendering_mode(dioxus::tui::RenderingMode::Ansi),
     );
 }
 

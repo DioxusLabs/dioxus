@@ -1,12 +1,10 @@
-use crate::{use_atom_root, AtomId, AtomRoot, Readable, Writable};
+use crate::{AtomId, AtomRoot, Writable};
 use dioxus_core::{ScopeId, ScopeState};
 use std::{
-    cell::{RefCell, RefMut},
+    cell::RefMut,
     fmt::{Debug, Display},
-    marker::PhantomData,
     ops::{Add, Div, Mul, Not, Sub},
     rc::Rc,
-    sync::Arc,
 };
 
 /// Store state between component renders.
