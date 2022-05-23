@@ -305,6 +305,8 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "keypress" => "keypress",
         "keyup" => "keyup",
         "focus" => "focus",
+        "focusout" => "focusout",
+        "focusin" => "focusin",
         "blur" => "blur",
         "change" => "change",
         "input" => "input",
@@ -314,6 +316,7 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "click" => "click",
         "contextmenu" => "contextmenu",
         "doubleclick" => "doubleclick",
+        "dblclick" => "dblclick",
         "drag" => "drag",
         "dragend" => "dragend",
         "dragenter" => "dragenter",
@@ -374,8 +377,8 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "volumechange" => "volumechange",
         "waiting" => "waiting",
         "toggle" => "toggle",
-        _ => {
-            panic!("unsupported event type")
+        a => {
+            panic!("unsupported event type {:?}", a);
         }
     }
 }
