@@ -141,7 +141,7 @@ pub trait NodeDepState {
 pub trait State: Default + Clone {
     #[doc(hidden)]
     fn update<'a, T: Traversable<Node = Self, Id = ElementId>>(
-        dirty: &Vec<(ElementId, NodeMask)>,
+        dirty: &[(ElementId, NodeMask)],
         state_tree: &'a mut T,
         vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,

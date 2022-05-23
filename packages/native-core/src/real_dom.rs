@@ -212,7 +212,7 @@ impl<S: State> RealDom<S> {
         S::update(
             &nodes_updated,
             &mut self.map(|n| &n.state, |n| &mut n.state),
-            &vdom,
+            vdom,
             &ctx,
         )
     }
@@ -471,7 +471,7 @@ impl<T: State> Traversable for RealDom<T> {
         self.nodes.get_mut(id.0)?.as_mut()
     }
 
-    fn children<'a>(&'a self, id: Self::Id) -> &'a [Self::Id] {
+    fn children(&self, id: Self::Id) -> &[Self::Id] {
         if let Some(node) = <Self as Traversable>::get(self, id) {
             match &node.node_type {
                 NodeType::Element { children, .. } => children,

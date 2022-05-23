@@ -7,7 +7,7 @@ pub trait Traversable {
     fn get(&self, id: Self::Id) -> Option<&Self::Node>;
     fn get_mut(&mut self, id: Self::Id) -> Option<&mut Self::Node>;
 
-    fn children<'a>(&'a self, node: Self::Id) -> &'a [Self::Id];
+    fn children(&self, node: Self::Id) -> &[Self::Id];
     fn parent(&self, node: Self::Id) -> Option<Self::Id>;
 
     fn map<N, F: Fn(&Self::Node) -> &N, FMut: Fn(&mut Self::Node) -> &mut N>(
@@ -45,7 +45,8 @@ pub trait Traversable {
     ) -> (Option<&mut Self::Node>, Vec<&mut Self::Node>) {
         let node = self.get_mut(id).map(|n| n as *mut _);
         let mut children = Vec::new();
-        for id in self.children(id).to_vec() {
+        let children_indexes = self.children(id).to_vec();
+        for id in children_indexes {
             if let Some(n) = self.get_mut(id) {
                 children.push(unsafe { &mut *(n as *mut _) });
             }
@@ -89,7 +90,7 @@ impl<
         self.tree.get_mut(id).map(&self.f_mut)
     }
 
-    fn children<'b>(&'b self, id: Self::Id) -> &'b [Self::Id] {
+    fn children(&self, id: Self::Id) -> &[Self::Id] {
         self.tree.children(id)
     }
 
