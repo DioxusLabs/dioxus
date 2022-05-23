@@ -1,7 +1,6 @@
-//! Parse components into the VComponent VNode
+//! Parse components into the VNode::Component variant
 //! ==========================================
 //!
-//! This parsing path emerges from [`AmbiguousElement`] which supports validation of the vcomponent format.
 //! We can be reasonably sure that whatever enters this parsing path is in the right format.
 //! This feature must support
 //! - [x] Namespaced components
