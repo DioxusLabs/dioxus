@@ -1,16 +1,26 @@
-use crate::interperter::build;
-use dioxus_core::{LazyNodes, VNode};
-use dioxus_rsx::CallBody;
+use dioxus_core::{Component, Element, LazyNodes, Scope, VNode};
+use dioxus_hooks::*;
 use std::collections::HashMap;
 use std::panic::Location;
 use std::rc::Rc;
 use std::sync::{RwLock, RwLockReadGuard};
-use syn::{parse_str, Result};
+use syn::parse_str;
 
 mod attributes;
 pub mod captuered_context;
 mod elements;
 mod interperter;
+
+pub fn with_hot_reload(cx: Scope<Component>) -> Element {
+    use_state(&cx, || {
+        if cx.consume_context::<RsxTextIndex>().is_none() {
+            cx.provide_context(RsxTextIndex::default());
+        }
+    });
+    cx.render(LazyNodes::new(|node_factory| {
+        node_factory.component(*cx.props, (), None, "app")
+    }))
+}
 
 pub fn interpert_rsx<'a, 'b>(
     factory: dioxus_core::NodeFactory<'a>,

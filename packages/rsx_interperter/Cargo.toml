@@ -10,3 +10,4 @@ dioxus-rsx = { path = "../rsx" }
 dioxus-ssr = { path = "../ssr" }
 dioxus-core = { path = "../core" }
 dioxus-html = { path = "../html" }
+dioxus-hooks = { path = "../hooks"}

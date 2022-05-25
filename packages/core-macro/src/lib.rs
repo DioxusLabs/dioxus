@@ -191,15 +191,20 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 quote! {
                     {
                         let line_num = get_line_num();
-                        LazyNodes::new(|factory|{
+                        LazyNodes::new(move |factory|{
                             let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
                             let read = rsx_text_index.read();
-                            let text = read.get(line_num).unwrap();
-                            interpert_rsx(
-                                factory,
-                                &text,
-                                #captured
-                            )
+                            if let Some(text) = read.get(line_num){
+                                interpert_rsx(
+                                    factory,
+                                    &text,
+                                    #captured
+                                )
+                            }
+                            else{
+                                println!("rsx: line number {} not found", line_num);
+                                factory.static_text("")
+                            }
                         })
                     }
                 }

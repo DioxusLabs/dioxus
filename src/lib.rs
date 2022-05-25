@@ -57,6 +57,6 @@ pub mod prelude {
     #[cfg(feature = "hot_reload")]
     pub use dioxus_rsx_interperter::{
         captuered_context::{CapturedContext, IfmtArgs},
-        get_line_num, interpert_rsx, RsxTextIndex,
+        get_line_num, interpert_rsx, with_hot_reload, RsxTextIndex,
     };
 }

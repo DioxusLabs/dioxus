@@ -17,6 +17,7 @@ impl CapturedContextBuilder {
         self.attributes.extend(other.attributes);
         self.text.extend(other.text);
         self.components.extend(other.components);
+        self.iterators.extend(other.iterators);
     }
 
     pub fn from_call_body(body: CallBody) -> Self {
@@ -84,12 +85,12 @@ impl ToTokens for CapturedContextBuilder {
             .chain(text.iter().map(|fmt| fmt.named_args.iter()))
             .flatten()
             .collect();
-        let captured_names = captured.iter().map(|(n, _)| n);
+        let captured_names = captured.iter().map(|(n, _)| n.to_string());
         let captured_expr = captured.iter().map(|(_, e)| e);
         tokens.append_all(quote! {
             CapturedContext {
                 captured: IfmtArgs{
-                    named_args: &[#((#captured_names, #captured_expr)),*]
+                    named_args: vec![#((#captured_names, #captured_expr.to_string())),*]
                 },
                 components: vec![#(#components),*],
                 iterators: vec![#(#iterators),*],
@@ -114,7 +115,7 @@ pub struct CapturedContext<'a> {
 
 pub struct IfmtArgs {
     // live reload only supports named arguments
-    pub named_args: &'static [(&'static str, String)],
+    pub named_args: Vec<(&'static str, String)>,
 }
 
 enum IfmtSegment<'a> {
