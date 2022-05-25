@@ -85,6 +85,8 @@ pub mod prelude {
         fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
         LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode, VirtualDom,
     };
+    #[cfg(feature = "hot_reload")]
+    pub use dioxus_rsx_interperter::captuered_context::{CapturedContext, IfmtArgs};
 }
 
 pub mod exports {

@@ -1,8 +1,9 @@
 use proc_macro::TokenStream;
 use quote::ToTokens;
+use rsx::{BodyNode, Component, ContentField, ElementAttr, IfmtInput};
+use std::collections::HashMap;
 use syn::parse_macro_input;
 
-mod ifmt;
 mod inlineprops;
 mod props;
 
@@ -11,7 +12,7 @@ use dioxus_rsx as rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
-    use ifmt::*;
+    use rsx::*;
     let item = parse_macro_input!(input as IfmtInput);
     format_args_f_impl(item)
         .unwrap_or_else(|err| err.to_compile_error())
@@ -183,7 +184,17 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 pub fn rsx(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
-        Ok(stream) => stream.to_token_stream().into(),
+        Ok(body) => {
+            #[cfg(feature = "hot_reload")]
+            {
+                use dioxus_rsx_interperter::captuered_context::CapturedContextBuilder;
+
+                let captured = CapturedContextBuilder::from_call_body(body);
+                captured.to_token_stream().into()
+            }
+            #[cfg(not(feature = "hot_reload"))]
+            body.to_token_stream().into()
+        }
     }
 }
 

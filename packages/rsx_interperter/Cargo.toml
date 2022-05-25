@@ -1,0 +1,12 @@
+[package]
+name = "dioxus-rsx-interperter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"
+dioxus-rsx = { path = "../rsx" }
+dioxus-ssr = { path = "../ssr" }
+dioxus-core = { path = "../core" }
+dioxus-html = { path = "../html" }

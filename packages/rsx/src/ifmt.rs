@@ -140,9 +140,9 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
 pub struct IfmtInput {
-    format_literal: LitStr,
-    positional_args: Vec<Expr>,
-    named_args: Vec<(Ident, Expr)>,
+    pub format_literal: LitStr,
+    pub positional_args: Vec<Expr>,
+    pub named_args: Vec<(Ident, Expr)>,
 }
 
 impl Parse for IfmtInput {

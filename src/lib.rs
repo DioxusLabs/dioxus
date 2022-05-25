@@ -39,6 +39,8 @@ pub mod events {
     pub use dioxus_html::{on::*, KeyCode};
 }
 
+pub use dioxus_rsx as rsx;
+
 pub mod prelude {
     pub use crate::hooks::*;
     pub use dioxus_core::prelude::*;

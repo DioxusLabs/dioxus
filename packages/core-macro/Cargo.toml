@@ -20,8 +20,12 @@ proc-macro2 = { version = "1.0.6" }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }
 dioxus-rsx = {  path = "../rsx" }
+dioxus-rsx-interperter = { path = "../rsx_interperter", optional = true }
 
 # testing
 [dev-dependencies]
 rustversion = "1.0"
 trybuild = "1.0"
+
+[features]
+hot_reload = ["dioxus-rsx-interperter"]

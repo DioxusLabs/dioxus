@@ -28,6 +28,7 @@ dioxus-tui = { path = "./packages/tui", version = "^0.2.0", optional = true }
 
 dioxus-liveview = { path = "./packages/liveview", optional = true }
 dioxus-rsx = { path = "./packages/rsx", optional = true }
+dioxus-rsx-interperter = { path = "./packages/rsx_interperter", optional = true }
 dioxus-autofmt = { path = "./packages/autofmt", optional = true }
 
 [features]
@@ -44,6 +45,7 @@ router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
 autofmt = ["dioxus-autofmt"]
+hot_reload = ["dioxus-core-macro/hot_reload"]
 
 [workspace]
 members = [
@@ -61,6 +63,7 @@ members = [
     "packages/liveview",
     "packages/rsx",
     "packages/autofmt",
+    "packages/rsx_interperter",
 ]
 
 [dev-dependencies]
@@ -75,7 +78,8 @@ serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
 tokio = { version = "1.16.1", features = ["full"] }
 reqwest = { version = "0.11.9", features = ["json"] }
-dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi", "tui"] }
+# dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi", "tui"] }
+dioxus = { path = ".", features = ["desktop"] }
 fern = { version = "0.6.0", features = ["colored"] }
 criterion = "0.3.5"
 thiserror = "1.0.30"
