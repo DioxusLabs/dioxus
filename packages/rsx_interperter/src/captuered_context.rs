@@ -6,10 +6,10 @@ use syn::Expr;
 
 #[derive(Default)]
 pub struct CapturedContextBuilder {
-    attributes: HashMap<String, IfmtInput>,
-    text: Vec<IfmtInput>,
-    components: Vec<Component>,
-    iterators: Vec<Expr>,
+    pub attributes: HashMap<String, IfmtInput>,
+    pub text: Vec<IfmtInput>,
+    pub components: Vec<Component>,
+    pub iterators: Vec<Expr>,
 }
 
 impl CapturedContextBuilder {
@@ -89,7 +89,7 @@ impl ToTokens for CapturedContextBuilder {
         tokens.append_all(quote! {
             CapturedContext {
                 captured: IfmtArgs{
-                    named_args: &'static [#((#captured_names, #captured_expr)),*]
+                    named_args: &[#((#captured_names, #captured_expr)),*]
                 },
                 components: vec![#(#components),*],
                 iterators: vec![#(#iterators),*],
@@ -105,11 +105,11 @@ struct CapturedComponentBuilder {
 
 pub struct CapturedContext<'a> {
     // map of the attribute name to the formated value
-    captured: IfmtArgs,
+    pub captured: IfmtArgs,
     // the only thing we can update in component is the children
-    components: Vec<VNode<'a>>,
+    pub components: Vec<VNode<'a>>,
     // we can't reasonably interpert iterators, so they are staticly inserted
-    iterators: Vec<VNode<'a>>,
+    pub iterators: Vec<VNode<'a>>,
 }
 
 pub struct IfmtArgs {

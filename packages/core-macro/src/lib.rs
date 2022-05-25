@@ -1,7 +1,5 @@
 use proc_macro::TokenStream;
-use quote::ToTokens;
-use rsx::{BodyNode, Component, ContentField, ElementAttr, IfmtInput};
-use std::collections::HashMap;
+use quote::{quote, ToTokens};
 use syn::parse_macro_input;
 
 mod inlineprops;
@@ -190,7 +188,22 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 use dioxus_rsx_interperter::captuered_context::CapturedContextBuilder;
 
                 let captured = CapturedContextBuilder::from_call_body(body);
-                captured.to_token_stream().into()
+                quote! {
+                    {
+                        let line_num = get_line_num();
+                        LazyNodes::new(|factory|{
+                            let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
+                            let read = rsx_text_index.read();
+                            let text = read.get(line_num).unwrap();
+                            interpert_rsx(
+                                factory,
+                                &text,
+                                #captured
+                            )
+                        })
+                    }
+                }
+                .into()
             }
             #[cfg(not(feature = "hot_reload"))]
             body.to_token_stream().into()

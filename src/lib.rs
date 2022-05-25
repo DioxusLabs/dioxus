@@ -53,4 +53,10 @@ pub mod prelude {
 
     #[cfg(feature = "fermi")]
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
+
+    #[cfg(feature = "hot_reload")]
+    pub use dioxus_rsx_interperter::{
+        captuered_context::{CapturedContext, IfmtArgs},
+        get_line_num, interpert_rsx, RsxTextIndex,
+    };
 }
