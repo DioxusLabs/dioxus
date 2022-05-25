@@ -9,125 +9,16 @@ use proc_macro2::TokenStream;
 
 pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let IfmtInput {
-        mut format_literal,
-        mut positional_args,
-        mut named_args,
+        format_literal,
+        positional_args,
+        named_args,
     } = input;
-
-    let s = format_literal.value();
-    let out_format_literal = &mut String::with_capacity(s.len());
-
-    let mut iterator = s.char_indices().peekable();
-    while let Some((i, c)) = iterator.next() {
-        out_format_literal.push(c);
-        if c != '{' {
-            continue;
-        }
-        // encountered `{`, let's see if it was `{{`
-        if let Some(&(_, '{')) = iterator.peek() {
-            let _ = iterator.next();
-            out_format_literal.push('{');
-            continue;
-        }
-        let (end, colon_or_closing_brace) =
-            iterator
-                .find(|&(_, c)| c == '}' || c == ':')
-                .expect(concat!(
-                    "Invalid format string literal\n",
-                    "note: if you intended to print `{`, ",
-                    "you can escape it using `{{`",
-                ));
-        // We use defer to ensure all the `continue`s append the closing char.
-        let mut out_format_literal = defer(&mut *out_format_literal, |it| {
-            it.push(colon_or_closing_brace)
-        });
-        let out_format_literal: &mut String = *out_format_literal;
-        let mut arg = s[i + 1..end].trim();
-        if let Some("=") = arg.get(arg.len().saturating_sub(1)..) {
-            assert_eq!(
-                out_format_literal.pop(), // Remove the opening brace
-                Some('{'),
-            );
-            arg = &arg[..arg.len() - 1];
-            out_format_literal.push_str(arg);
-            out_format_literal.push_str(" = {");
-        }
-        if arg.is_empty() {
-            continue;
-        }
-
-        enum Segment {
-            Ident(Ident),
-            LitInt(LitInt),
-        }
-        let segments: Vec<Segment> = {
-            impl Parse for Segment {
-                fn parse(input: ParseStream<'_>) -> Result<Self> {
-                    let lookahead = input.lookahead1();
-                    if lookahead.peek(Ident) {
-                        input.parse().map(Segment::Ident)
-                    } else if lookahead.peek(LitInt) {
-                        input.parse().map(Segment::LitInt)
-                    } else {
-                        Err(lookahead.error())
-                    }
-                }
-            }
-            match ::syn::parse::Parser::parse_str(
-                Punctuated::<Segment, Token![.]>::parse_separated_nonempty,
-                arg,
-            ) {
-                Ok(segments) => segments.into_iter().collect(),
-                Err(err) => return Err(err),
-            }
-        };
-        match segments.len() {
-            0 => unreachable!("`parse_separated_nonempty` returned empty"),
-            1 => {
-                out_format_literal.push_str(arg);
-                match { segments }.pop().unwrap() {
-                    Segment::LitInt(_) => {
-                        // found something like `{0}`, let `format_args!`
-                        // handle it.
-                        continue;
-                    }
-                    Segment::Ident(ident) => {
-                        // if `ident = ...` is not yet among the extra args
-                        if named_args.iter().all(|(it, _)| *it != ident) {
-                            named_args.push((
-                                ident.clone(),
-                                parse_quote!(#ident), // Expr
-                            ));
-                        }
-                    }
-                }
-            }
-            _ => {
-                ::std::fmt::Write::write_fmt(
-                    out_format_literal,
-                    format_args!("{}", positional_args.len()),
-                )
-                .expect("`usize` or `char` Display impl cannot panic");
-                let segments: Punctuated<TokenStream, Token![.]> = segments
-                    .into_iter()
-                    .map(|it| match it {
-                        Segment::Ident(ident) => ident.into_token_stream(),
-                        Segment::LitInt(literal) => literal.into_token_stream(),
-                    })
-                    .collect();
-                positional_args.push(parse_quote! {
-                    #segments
-                })
-            }
-        }
-    }
 
     let named_args = named_args.into_iter().map(|(ident, expr)| {
         quote! {
             #ident = #expr
         }
     });
-    format_literal = LitStr::new(out_format_literal, format_literal.span());
 
     Ok(quote! {
         format_args!(
@@ -139,14 +30,138 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
+#[derive(Debug)]
 pub struct IfmtInput {
     pub format_literal: LitStr,
     pub positional_args: Vec<Expr>,
     pub named_args: Vec<(Ident, Expr)>,
 }
 
-impl Parse for IfmtInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+impl IfmtInput {
+    fn parse_segments(self) -> Result<Self> {
+        let IfmtInput {
+            mut format_literal,
+            mut positional_args,
+            mut named_args,
+        } = self;
+
+        let s = format_literal.value();
+        let out_format_literal = &mut String::with_capacity(s.len());
+
+        let mut iterator = s.char_indices().peekable();
+        while let Some((i, c)) = iterator.next() {
+            out_format_literal.push(c);
+            if c != '{' {
+                continue;
+            }
+            // encountered `{`, let's see if it was `{{`
+            if let Some(&(_, '{')) = iterator.peek() {
+                let _ = iterator.next();
+                out_format_literal.push('{');
+                continue;
+            }
+            let (end, colon_or_closing_brace) = iterator
+                .find(|&(_, c)| c == '}' || c == ':')
+                .expect(concat!(
+                    "Invalid format string literal\n",
+                    "note: if you intended to print `{`, ",
+                    "you can escape it using `{{`",
+                ));
+            // We use defer to ensure all the `continue`s append the closing char.
+            let mut out_format_literal = defer(&mut *out_format_literal, |it| {
+                it.push(colon_or_closing_brace)
+            });
+            let out_format_literal: &mut String = *out_format_literal;
+            let mut arg = s[i + 1..end].trim();
+            if let Some("=") = arg.get(arg.len().saturating_sub(1)..) {
+                assert_eq!(
+                    out_format_literal.pop(), // Remove the opening brace
+                    Some('{'),
+                );
+                arg = &arg[..arg.len() - 1];
+                out_format_literal.push_str(arg);
+                out_format_literal.push_str(" = {");
+            }
+            if arg.is_empty() {
+                continue;
+            }
+
+            #[derive(Debug)]
+            enum Segment {
+                Ident(Ident),
+                LitInt(LitInt),
+            }
+            let segments: Vec<Segment> = {
+                impl Parse for Segment {
+                    fn parse(input: ParseStream<'_>) -> Result<Self> {
+                        let lookahead = input.lookahead1();
+                        if lookahead.peek(Ident) {
+                            input.parse().map(Segment::Ident)
+                        } else if lookahead.peek(LitInt) {
+                            input.parse().map(Segment::LitInt)
+                        } else {
+                            Err(lookahead.error())
+                        }
+                    }
+                }
+                match ::syn::parse::Parser::parse_str(
+                    Punctuated::<Segment, Token![.]>::parse_separated_nonempty,
+                    arg,
+                ) {
+                    Ok(segments) => segments.into_iter().collect(),
+                    Err(err) => return Err(err),
+                }
+            };
+            match segments.len() {
+                0 => unreachable!("`parse_separated_nonempty` returned empty"),
+                1 => {
+                    out_format_literal.push_str(arg);
+                    match { segments }.pop().unwrap() {
+                        Segment::LitInt(_) => {
+                            // found something like `{0}`, let `format_args!`
+                            // handle it.
+                            continue;
+                        }
+                        Segment::Ident(ident) => {
+                            // if `ident = ...` is not yet among the extra args
+                            if named_args.iter().all(|(it, _)| *it != ident) {
+                                named_args.push((
+                                    ident.clone(),
+                                    parse_quote!(#ident), // Expr
+                                ));
+                            }
+                        }
+                    }
+                }
+                _ => {
+                    ::std::fmt::Write::write_fmt(
+                        out_format_literal,
+                        format_args!("{}", positional_args.len()),
+                    )
+                    .expect("`usize` or `char` Display impl cannot panic");
+                    let segments: Punctuated<TokenStream, Token![.]> = segments
+                        .into_iter()
+                        .map(|it| match it {
+                            Segment::Ident(ident) => ident.into_token_stream(),
+                            Segment::LitInt(literal) => literal.into_token_stream(),
+                        })
+                        .collect();
+                    positional_args.push(parse_quote! {
+                        #segments
+                    })
+                }
+            }
+        }
+        format_literal = LitStr::new(out_format_literal, format_literal.span());
+
+        Ok(Self {
+            format_literal,
+            positional_args,
+            named_args,
+        })
+    }
+
+    fn parse_positional_args(input: ParseStream) -> Result<Self> {
         let format_literal = input.parse()?;
         let mut positional_args = vec![];
         loop {
@@ -173,11 +188,18 @@ impl Parse for IfmtInput {
         })?
         .into_iter()
         .collect();
+
         Ok(Self {
             format_literal,
             positional_args,
             named_args,
         })
+    }
+}
+
+impl Parse for IfmtInput {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Self::parse_positional_args(input).and_then(|new| new.parse_segments())
     }
 }
 
