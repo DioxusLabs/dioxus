@@ -140,7 +140,7 @@ mod tests {
             Some(String::from("/")),
             construct_named_path("root_index", &[], &Query::QNone, &test_targets())
         );
-    }#[test]
+    }
 
     #[test]
     fn named_path_query_with_marker() {
