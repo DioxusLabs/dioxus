@@ -1,11 +1,8 @@
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
-use dioxus_router::{prelude::*, PATH_FOR_NAMED_NAVIGATION_FAILURE};
+use dioxus::{prelude::*, router::PATH_FOR_NAMED_NAVIGATION_FAILURE};
 
 fn main() {
     env_logger::init();
-    dioxus_desktop::launch(app);
+    dioxus::desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

@@ -24,6 +24,9 @@ url = { version = "2.2.2", default-features = false }
 urlencoding = "2.1.0"
 
 # for wasm
+gloo-events = { version = "0.1.1", optional = true }
+js-sys = { version = "0.3", optional = true }
+wasm-bindgen = { version = "0.2.80", optional = true, features = ["serde-serialize"] }
 web-sys = { version = "0.3", features = [
     "Attr",
     "Document",
@@ -37,31 +40,18 @@ web-sys = { version = "0.3", features = [
     "Location",
     "ScrollRestoration"
 ], optional = true }
-wasm-bindgen = { version = "0.2.80", optional = true, features = ["serde-serialize"] }
-js-sys = { version = "0.3", optional = true }
-gloo-events = { version = "0.1.1", optional = true }
 
 [features]
 default = []
-web = ["web-sys", "gloo-events", "js-sys", "wasm-bindgen"]
+web = ["gloo-events", "js-sys", "wasm-bindgen", "web-sys"]
 wasm_test = []
 
 [dev-dependencies]
-console_error_panic_hook = "0.1.7"
-dioxus-desktop = { path = "../desktop" }
-dioxus-web = { path = "../web" }
+dioxus = {path = "../..", features = ["desktop", "router", "ssr"]}
 env_logger = "0.9.0"
-log = "0.4.14"
-wasm-logger = "0.2.0"
-wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
-dioxus-ssr = { path = "../ssr" }
-
-dioxus-router = { path = ".", default-features = false }
+wasm-bindgen-test = "0.3"
+wasm-logger = "0.2.0"
 
 [target.wasm32-unknown-unknown.dev-dependencies]
-dioxus-router = { path = ".", features = ["web"] }
-
-[dev-dependencies.web-sys]
-version = "0.3"
-features = ["Document"]
+dioxus = { path = "../..", features = ["web"] }

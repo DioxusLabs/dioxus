@@ -1,25 +1,23 @@
 #![allow(non_snake_case)]
 
-use dioxus_core::{self as dioxus, prelude::*};
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
-use dioxus_router::{
-    history::{
+use dioxus::{
+    prelude::*,
+    router::history::{
         ControlledHistoryProvider, HistoryController, HistoryProvider, MemoryHistoryProvider,
     },
-    prelude::*,
 };
 
 #[test]
 fn generates_without_error() {
-    let (mut c, history) = HistoryController::new(Box::new(MemoryHistoryProvider::default()));
+    let (mut controller, history) =
+        HistoryController::new(Box::new(MemoryHistoryProvider::default()));
 
-    c.replace(String::from("/other"));
+    controller.replace(String::from("/other"));
 
     let mut app = VirtualDom::new_with_props(App, AppProps { history });
     app.rebuild();
 
-    let out = dioxus_ssr::render_vdom(&app);
+    let out = dioxus::ssr::render_vdom(&app);
 
     assert_eq!(out, "<nav>navbar</nav><h1>Other</h1>");
 }

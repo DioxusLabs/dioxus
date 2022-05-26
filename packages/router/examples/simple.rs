@@ -1,11 +1,8 @@
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
-use dioxus_router::prelude::*;
+use dioxus::prelude::*;
 
 fn main() {
     env_logger::init();
-    dioxus_desktop::launch(app);
+    dioxus::desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
