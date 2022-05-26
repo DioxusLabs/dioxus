@@ -77,9 +77,9 @@ pub(crate) fn construct_named_path(
                 let value = match parameters.iter().find(|(k, _)| k == key) {
                     Some((_, v)) => encode(v).into_owned(),
                     None => {
-                        error!(r#"no value for variable "{key}""#);
+                        error!(r#"no value for parameter "{key}", no constructed route"#);
                         #[cfg(debug_assertions)]
-                        panic!(r#"no value for variable "{key}""#);
+                        panic!(r#"no value for parameter "{key}""#);
                         #[cfg(not(debug_assertions))]
                         return None;
                     }
@@ -140,7 +140,7 @@ mod tests {
             Some(String::from("/")),
             construct_named_path("root_index", &[], &Query::QNone, &test_targets())
         );
-    }
+    }#[test]
 
     #[test]
     fn named_path_query_with_marker() {
@@ -194,6 +194,22 @@ mod tests {
         assert_eq!(
             None,
             construct_named_path("invalid", &[], &Query::QNone, &test_targets())
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic = r#"no value for parameter "para""#]
+    fn named_path_missing_parameter_panic_in_debug() {
+        let _ = construct_named_path("parameter", &[], &Query::QNone, &test_targets());
+    }
+
+    #[cfg(not(debug_assertions))]
+    #[test]
+    fn named_path_missing_parameter_none_in_release() {
+        assert_eq!(
+            None,
+            construct_named_path("parameter", &[], &Query::QNone, &test_targets())
         );
     }
 
