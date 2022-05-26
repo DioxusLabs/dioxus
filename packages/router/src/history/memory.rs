@@ -10,6 +10,15 @@ pub struct MemoryHistoryProvider {
     future: Vec<String>,
 }
 
+impl MemoryHistoryProvider {
+    /// Create a new [`MemoryHistoryProvider`] and immediately push `path`.
+    pub fn with_first(path: String) -> Box<Self> {
+        let mut h = Self::default();
+        h.push(path);
+        Box::new(h)
+    }
+}
+
 impl Default for MemoryHistoryProvider {
     fn default() -> Self {
         Self {
