@@ -28,7 +28,7 @@ pub struct OutletProps {
 ///
 /// # Panic
 /// When no [`Router`] is an ancestor, but only in debug builds.
-/// 
+///
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
@@ -36,14 +36,14 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let router = match sub_to_router(&cx) {
         Some(r) => r,
         None => {
-            error!("`Outlet` can only be used as a descendent of a `Router`");
+            error!("`Outlet` can only be used as a descendent of a `Router`, will be inactive");
             #[cfg(debug_assertions)]
             panic!("`Outlet` can only be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]
             return None;
         }
     };
-    let state = router.state.read().unwrap();
+    let state = router.state.read().expect("router lock poison");
 
     // get own depth and communicate to nested outlets
     let depth = cx.use_hook(|_| {

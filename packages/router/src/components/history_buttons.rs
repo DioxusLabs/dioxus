@@ -27,7 +27,9 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let router = match sub_to_router(&cx) {
         Some(x) => x,
         None => {
-            error!("`GoBackButton` can only be used as a descendent of a `Router`");
+            error!(
+                "`GoBackButton` can only be used as a descendent of a `Router`, will be inactive"
+            );
             #[cfg(debug_assertions)]
             panic!("`GoBackButton` can only be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]
@@ -64,7 +66,9 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let router = match sub_to_router(&cx) {
         Some(x) => x,
         None => {
-            error!("`GoForwardButton` can only be used as a descendent of a `Router`");
+            error!(
+                "`GoForwardButton` can only be used as a descendent of a `Router`, will be inactive"
+            );
             #[cfg(debug_assertions)]
             panic!("`GoForwardButton` can only be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]

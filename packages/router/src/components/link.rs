@@ -83,7 +83,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let router = match sub_to_router(&cx) {
         Some(x) => x,
         None => {
-            error!("`Link` can only be used as a descendent of a `Router`");
+            error!("`Link` can only be used as a descendent of a `Router`, will be inactive");
             #[cfg(debug_assertions)]
             panic!("`Link` can only be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]

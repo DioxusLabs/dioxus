@@ -65,9 +65,9 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     cx.use_hook(|_| {
         // make sure no router context exists
         if cx.consume_context::<RouterContext>().is_some() {
-            error!("routers cannot be nested; inner router will be inactive");
+            error!("`Router` can not be used as a descendent of a `Router`, inner will be ignored");
             #[cfg(debug_assertions)]
-            panic!("routers cannot be nested");
+            panic!("`Router` can not be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]
             return;
         };
