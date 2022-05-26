@@ -49,9 +49,9 @@ impl ParameterRoute {
     /// If a nested segment was already present, but only in debug builds.
     pub fn nested(mut self, nested: Segment) -> Self {
         if self.nested.is_some() {
-            error!("sub already set, later prevails");
+            error!("nested already set, later prevails");
             #[cfg(debug_assertions)]
-            panic!("sub already set");
+            panic!("nested already set");
         }
 
         self.nested = Some(Box::new(nested));
@@ -73,17 +73,17 @@ mod tests {
         assert_eq!(r.name, Some("test"));
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = r#"name already set: "test" to "test2""#]
     fn name_panic_in_debug() {
         ParameterRoute::new("", RouteContent::RcNone)
             .name("test")
             .name("test2");
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn name_override_in_release() {
         let p = ParameterRoute::new("", RouteContent::RcNone)
             .name("test")
@@ -99,17 +99,17 @@ mod tests {
         assert!(r.nested.is_some());
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = "nested already set"]
     fn nested_panic_in_debug() {
         ParameterRoute::new("", RouteContent::RcNone)
             .nested(Segment::new())
             .nested(Segment::new());
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn nested_override_in_release() {
         let p = ParameterRoute::new("", RouteContent::RcNone)
             .nested(Segment::new())

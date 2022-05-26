@@ -477,9 +477,9 @@ mod tests {
         assert!(targets["root_index"].is_empty());
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = r#"route names must be unique; duplicate name: "nested2""#]
     fn named_targets_duplicate_panic_in_debug() {
         construct_named_targets(
             &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("nested2")),
@@ -488,8 +488,8 @@ mod tests {
         );
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn named_targets_duplicate_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
@@ -501,9 +501,9 @@ mod tests {
         assert_eq!(targets["nested2"].len(), 1);
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = r#""root_index" is provided by router"#]
     fn named_targets_root_index_panic_in_debug() {
         construct_named_targets(
             &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index")),
@@ -512,8 +512,8 @@ mod tests {
         );
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn named_targets_root_index_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(

@@ -201,9 +201,9 @@ mod tests {
         );
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic] // message is checked by `construct_named_path`
     fn href_name_panic_in_debug() {
         generate_href(
             &NavigationTarget::NtName("invalid", vec![], Query::QNone),
@@ -212,8 +212,8 @@ mod tests {
         );
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn href_name_path_in_release() {
         assert_eq!(
             format!("/prefix/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"),

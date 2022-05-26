@@ -97,7 +97,7 @@ fn with_name() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic]
+#[should_panic = "`Outlet` can only be used as a descendent of a `Router`"]
 fn without_router_panic_in_debug() {
     render(OutletWithoutRouter);
 }

@@ -21,7 +21,7 @@ fn go_forward_button_with_router() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic]
+#[should_panic = "`GoForwardButton` can only be used as a descendent of a `Router`"]
 fn go_forward_button_without_router_panic_in_debug() {
     render(GoForwardButtonWithoutRouter);
 }

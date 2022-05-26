@@ -18,7 +18,7 @@ fn non_nested_router() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic]
+#[should_panic = "`Router` can not be used as a descendent of a `Router`"]
 fn nested_routers_panic_in_debug() {
     render(NestedRouters);
 }

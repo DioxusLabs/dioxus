@@ -265,7 +265,7 @@ fn with_external_target_and_rel() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic]
+#[should_panic = "`Link` can only be used as a descendent of a `Router`"]
 fn without_router_panic_in_debug() {
     render(LinkWithoutRouter);
 }

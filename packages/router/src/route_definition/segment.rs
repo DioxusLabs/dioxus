@@ -132,17 +132,17 @@ mod tests {
         assert!(fallback_is_correct);
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = "fallback or parameter route already set"]
     fn fallback_panic_in_debug() {
         Segment::new()
             .fallback(RouteContent::RcNone)
             .fallback(RouteContent::RcNone);
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn fallback_override_in_release() {
         let s = Segment::new()
             .fallback(RouteContent::RcComponent(TestComponent))
@@ -162,17 +162,17 @@ mod tests {
         assert_eq!(s.fixed.len(), 1);
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = r#"two fixed routes with identical path: "test""#]
     fn fixed_panic_in_debug() {
         Segment::new()
             .fixed("test", Route::new(RouteContent::RcNone))
             .fixed("test", Route::new(RouteContent::RcNone));
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn fixed_override_in_release() {
         let s = Segment::new()
             .fixed("test", Route::new(RouteContent::RcComponent(TestComponent)))
@@ -192,17 +192,17 @@ mod tests {
         assert!(!s.index.is_rc_none());
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = "index route already set"]
     fn index_panic_in_debug() {
         Segment::new()
             .index(RouteContent::RcComponent(TestComponent))
             .index(RouteContent::RcNone);
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn index_override_in_release() {
         let s = Segment::new()
             .index(RouteContent::RcComponent(TestComponent))
@@ -230,17 +230,17 @@ mod tests {
         assert!(parameter_is_correct);
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = "fallback or parameter route already set"]
     fn parameter_panic_in_debug() {
         Segment::new()
             .parameter(ParameterRoute::new("", RouteContent::RcNone))
             .parameter(ParameterRoute::new("", RouteContent::RcNone));
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn parameter_override_in_release() {
         let s = Segment::new()
             .parameter(ParameterRoute::new(

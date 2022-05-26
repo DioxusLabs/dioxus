@@ -181,15 +181,15 @@ mod tests {
         )
     }
 
-    #[test]
     #[cfg(debug_assertions)]
-    #[should_panic]
+    #[test]
+    #[should_panic = r#"no route for name "invalid""#]
     fn named_path_not_found_panic_in_debug() {
         let _ = construct_named_path("invalid", &[], &Query::QNone, &test_targets());
     }
 
-    #[test]
     #[cfg(not(debug_assertions))]
+    #[test]
     fn named_path_not_found_none_in_release() {
         assert_eq!(
             None,
