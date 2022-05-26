@@ -47,12 +47,13 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
 
     // get own depth and communicate to nested outlets
     let depth = cx.use_hook(|_| {
-        let (depth, new_ctx) = if let Some(mut ctx) = cx.consume_context::<OutletContext>() {
-            let depth = ctx.get_depth(cx.props.name);
-            ctx.set_depth(cx.props.name, depth);
-            (depth, ctx)
-        } else {
-            (0, OutletContext::new(cx.props.name))
+        let (depth, new_ctx) = match cx.consume_context::<OutletContext>() {
+            Some(mut ctx) => {
+                let depth = ctx.get_depth(cx.props.name);
+                ctx.set_depth(cx.props.name, depth);
+                (depth, ctx)
+            }
+            None => (0, OutletContext::new(cx.props.name)),
         };
         cx.provide_context(new_ctx);
         depth
@@ -62,20 +63,16 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let depth = cx.props.depth.unwrap_or(*depth);
 
     // get the component to render
+    let (unnamed, named) = &state.components;
     let X = match cx.props.name {
-        Some(name) => state
-            .components
-            .1
-            .get(name)
-            .and_then(|comps| comps.get(depth)),
-        None => state.components.0.get(depth),
-    };
+        None => unnamed.get(depth),
+        Some(name) => named.get(name).and_then(|comps| comps.get(depth)),
+    }
+    .map(|X| *X);
 
     // render component or nothing
-    if let Some(X) = X {
-        let X = *X;
-        cx.render(rsx! { X {} })
-    } else {
-        cx.render(rsx! { Fragment { } })
-    }
+    cx.render(match X {
+        Some(X) => rsx! { X {} },
+        None => rsx! { Fragment {} },
+    })
 }

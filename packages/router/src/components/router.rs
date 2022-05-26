@@ -62,6 +62,15 @@ pub struct RouterProps<'a> {
 /// When an other [`Router`] is an ancestor, but only in debug builds.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
+    let RouterProps {
+        active_class,
+        children,
+        fallback,
+        history,
+        init_only,
+        routes,
+    } = cx.props;
+
     cx.use_hook(|_| {
         // make sure no router context exists
         if cx.consume_context::<RouterContext>().is_some() {
@@ -73,25 +82,25 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         };
 
         // create history provider
-        let history = cx.props.history.map(|x| x());
+        let history = history.map(|x| x());
 
         // create router service and inject context
         let (mut service, context) = RouterService::new(
-            cx.props.routes.clone(),
+            routes.clone(),
             cx.schedule_update_any(),
-            cx.props.active_class.map(|ac| ac.to_string()),
-            cx.props.fallback.clone(),
+            active_class.map(|ac| ac.to_string()),
+            fallback.clone(),
             history,
         );
         cx.provide_context(context);
 
         // run service
-        if cx.props.init_only {
+        if *init_only {
             service.single_routing();
         } else {
             cx.spawn(async move { service.run().await });
         }
     });
 
-    cx.render(rsx!(&cx.props.children))
+    cx.render(rsx!(children))
 }

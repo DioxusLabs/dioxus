@@ -100,10 +100,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let active_class = active_class
         .map(|ac| ac.to_string())
         .or_else(|| router.active_class.clone())
-        .and_then(|ac| match state.is_active(target, *exact) {
-            true => Some(format!(" {ac}")),
-            false => None,
-        })
+        .and_then(|ac| state.is_active(target, *exact).then(|| format!(" {ac}")))
         .unwrap_or_default();
 
     // prepare id, class and target for the `a` tag
@@ -115,14 +112,14 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     };
 
     // prepare prevented defaults
-    let is_router_navigation = !target.is_nt_external() && !new_tab;
+    let is_router_navigation = !(target.is_nt_external() || *new_tab);
     let prevent_default = match is_router_navigation {
         true => "onclick",
         false => "",
     };
 
     // get rel attribute or apply default if external
-    let rel = rel.unwrap_or(match target.is_nt_external() {
+    let rel = rel.unwrap_or_else(|| match target.is_nt_external() {
         true => "noopener noreferrer",
         false => "",
     });
@@ -197,6 +194,7 @@ mod tests {
             t
         };
 
+        assert_eq!(format!("/test/nest/"), generate_href(&target, "", &targets));
         assert_eq!(
             format!("{prefix}/test/nest/"),
             generate_href(&target, prefix, &targets)
@@ -234,6 +232,7 @@ mod tests {
         let target = NavigationTarget::NtExternal(String::from(href));
         let targets = BTreeMap::new();
 
+        assert_eq!(href, generate_href(&target, "", &targets));
         assert_eq!(href, generate_href(&target, prefix, &targets));
     }
 }
