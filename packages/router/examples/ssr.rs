@@ -1,5 +1,4 @@
-#[cfg(feature = "web")]
-compile_error!("SSR example relies on `tokio`, incompatible with `web` feature");
+#![cfg(not(feature = "web"))]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
