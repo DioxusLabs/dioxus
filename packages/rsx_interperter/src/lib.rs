@@ -1,5 +1,6 @@
 use dioxus_core::{Component, Element, LazyNodes, Scope, VNode};
 use dioxus_hooks::*;
+use interperter::build;
 use std::collections::HashMap;
 use std::panic::Location;
 use std::rc::Rc;
@@ -11,10 +12,18 @@ pub mod captuered_context;
 mod elements;
 mod interperter;
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct CodeLocation {
+    pub file: String,
+    pub line: u32,
+    pub column: u32,
+}
+
 pub fn with_hot_reload(cx: Scope<Component>) -> Element {
     use_state(&cx, || {
         if cx.consume_context::<RsxTextIndex>().is_none() {
-            cx.provide_context(RsxTextIndex::default());
+            let index = RsxTextIndex::default();
+            cx.provide_context(index);
         }
     });
     cx.render(LazyNodes::new(|node_factory| {
@@ -27,25 +36,30 @@ pub fn interpert_rsx<'a, 'b>(
     text: &str,
     context: captuered_context::CapturedContext,
 ) -> VNode<'a> {
-    panic!()
+    build(parse_str(text).unwrap(), context, &factory)
 }
 
 #[track_caller]
-pub fn get_line_num() -> &'static Location<'static> {
-    Location::caller()
+pub fn get_line_num() -> CodeLocation {
+    let location = Location::caller();
+    CodeLocation {
+        file: location.file().to_string(),
+        line: location.line(),
+        column: location.column(),
+    }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct RsxTextIndex {
-    hm: Rc<RwLock<HashMap<&'static Location<'static>, String>>>,
+    hm: Rc<RwLock<HashMap<CodeLocation, String>>>,
 }
 
 impl RsxTextIndex {
-    pub fn insert(&self, loc: &'static Location<'static>, text: String) {
+    pub fn insert(&self, loc: CodeLocation, text: String) {
         self.hm.write().unwrap().insert(loc, text);
     }
 
-    pub fn read(&self) -> RwLockReadGuard<HashMap<&'static Location<'static>, String>> {
+    pub fn read(&self) -> RwLockReadGuard<HashMap<CodeLocation, String>> {
         self.hm.read().unwrap()
     }
 }

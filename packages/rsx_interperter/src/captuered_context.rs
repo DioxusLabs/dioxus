@@ -38,13 +38,13 @@ impl CapturedContextBuilder {
                             (name.to_string(), value.to_token_stream())
                         }
                         ElementAttr::AttrExpression { name, value } => {
-                            (name.to_string(), value.to_token_stream())
+                            todo!()
                         }
                         ElementAttr::CustomAttrText { name, value } => {
                             (name.value(), value.to_token_stream())
                         }
                         ElementAttr::CustomAttrExpression { name, value } => {
-                            (name.value(), value.to_token_stream())
+                            todo!()
                         }
                         _ => continue,
                     };
@@ -56,7 +56,6 @@ impl CapturedContextBuilder {
                 }
             }
             BodyNode::Component(comp) => {
-                let fn_name = comp.name.segments.last().unwrap().ident.to_string();
                 captured.components.push(comp);
             }
             BodyNode::Text(t) => {
@@ -105,8 +104,10 @@ struct CapturedComponentBuilder {
 }
 
 pub struct CapturedContext<'a> {
-    // map of the attribute name to the formated value
+    // map of the variable name to the formated value
     pub captured: IfmtArgs,
+    // // map of the attribute name and element path to the formated value
+    // pub captured_attribute_values: IfmtArgs,
     // the only thing we can update in component is the children
     pub components: Vec<VNode<'a>>,
     // we can't reasonably interpert iterators, so they are staticly inserted
@@ -116,23 +117,4 @@ pub struct CapturedContext<'a> {
 pub struct IfmtArgs {
     // live reload only supports named arguments
     pub named_args: Vec<(&'static str, String)>,
-}
-
-enum IfmtSegment<'a> {
-    Static(&'a str),
-    Dynamic(&'a str),
-}
-
-enum RsxNode<'a> {
-    Element {
-        name: String,
-        attributes: Vec<(String, IfmtSegment<'a>)>,
-        children: Vec<RsxNode<'a>>,
-    },
-    Text {
-        text: Vec<IfmtSegment<'a>>,
-    },
-    Component {
-        children: Vec<RsxNode<'a>>,
-    },
 }

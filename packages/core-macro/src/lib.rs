@@ -180,6 +180,8 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 #[proc_macro_error::proc_macro_error]
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
+    #[cfg(feature = "hot_reload")]
+    let rsx_text = s.to_string();
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => {
@@ -191,10 +193,16 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 quote! {
                     {
                         let line_num = get_line_num();
+                        let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
+                        use_state(&cx, || {
+                            rsx_text_index.insert(
+                                line_num.clone(),
+                                #rsx_text.to_string(),
+                            );
+                        });
                         LazyNodes::new(move |factory|{
-                            let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
                             let read = rsx_text_index.read();
-                            if let Some(text) = read.get(line_num){
+                            if let Some(text) = read.get(&line_num){
                                 interpert_rsx(
                                     factory,
                                     &text,
@@ -202,7 +210,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                 )
                             }
                             else{
-                                println!("rsx: line number {} not found", line_num);
+                                println!("rsx: line number {:?} not found", line_num);
                                 factory.static_text("")
                             }
                         })
