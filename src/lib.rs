@@ -52,8 +52,6 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "router")]
-    pub use dioxus_router as router;
-    #[cfg(feature = "router")]
     pub use dioxus_router::prelude::*;
 
     #[cfg(feature = "fermi")]
