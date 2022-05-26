@@ -34,7 +34,8 @@ web-sys = { version = "0.3", features = [
     "Url",
     "UrlSearchParams",
     "Window",
-    "Location"
+    "Location",
+    "ScrollRestoration"
 ], optional = true }
 wasm-bindgen = { version = "0.2.80", optional = true, features = ["serde-serialize"] }
 js-sys = { version = "0.3", optional = true }

@@ -89,8 +89,27 @@ pub trait HistoryProvider {
     fn external(&self, url: String) {}
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[cfg(feature = "web")]
+#[derive(Default, serde::Deserialize, serde::Serialize)]
 struct ScrollPosition {
-    x: i32,
-    y: i32,
+    x: f64,
+    y: f64,
+}
+
+/// Replace the current history entry with an equivalent one, but with an updated scroll position.
+#[cfg(feature = "web")]
+fn update_history_with_scroll(window: &web_sys::Window, history: &web_sys::History) {
+    use log::error;
+
+    // get position
+    let position = wasm_bindgen::JsValue::from_serde(&ScrollPosition {
+        x: window.scroll_x().unwrap_or_default(),
+        y: window.scroll_y().unwrap_or_default(),
+    })
+    .unwrap();
+
+    // replace in history
+    if let Err(e) = history.replace_state(&position, "") {
+        error!("failed to update scroll position in history: {e:?}");
+    }
 }

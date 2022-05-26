@@ -3,9 +3,9 @@ use std::sync::Arc;
 use gloo_events::EventListener;
 use log::error;
 use wasm_bindgen::JsValue;
-use web_sys::{History, HtmlElement, Window};
+use web_sys::{History, ScrollRestoration, Window};
 
-use super::{HistoryProvider, ScrollPosition};
+use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 
 /// A [`HistoryProvider`] that uses the [History API] and [Location API] to integrate with the
 /// browser.
@@ -24,9 +24,9 @@ use super::{HistoryProvider, ScrollPosition};
 /// present in the current URL. If the router is rendered and a navigation is caused, the prefix
 /// will be introduced to the URL.
 pub struct BrowserPathHistoryProvider {
-    body: HtmlElement,
     history: History,
-    listener: Option<EventListener>,
+    listener_navigation: Option<EventListener>,
+    _listener_scroll: EventListener,
     prefix: Option<String>,
     window: Window,
 }
@@ -44,15 +44,28 @@ impl BrowserPathHistoryProvider {
 
 impl Default for BrowserPathHistoryProvider {
     fn default() -> Self {
-        let window = web_sys::window().unwrap();
-        let body = window.document().unwrap().body().unwrap();
-        let history = window.history().unwrap();
+        let window = web_sys::window().expect("access to window");
+        let history = window.history().expect("access to history");
+
+        if let Err(e) = history.set_scroll_restoration(ScrollRestoration::Manual) {
+            error!("failed to change to manual scroll restoration: {e:?}");
+        }
+
+        let listener_scroll = {
+            let inner_window = window.clone();
+            let history = history.clone();
+            EventListener::new(
+                &window.document().expect("access to document"),
+                "scroll",
+                move |_| update_history_with_scroll(&inner_window, &history),
+            )
+        };
 
         Self {
-            body,
             history,
-            listener: Default::default(),
-            prefix: Default::default(),
+            listener_navigation: None,
+            _listener_scroll: listener_scroll,
+            prefix: None,
             window,
         }
     }
@@ -60,139 +73,110 @@ impl Default for BrowserPathHistoryProvider {
 
 impl HistoryProvider for BrowserPathHistoryProvider {
     fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
-        // recreate event listener
-        self.listener = Some(EventListener::new(&self.window, "popstate", move |_| {
-            callback()
+        let history = self.history.clone();
+        let window = self.window.clone();
+
+        // replace listener
+        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+            // tell router to update
+            callback();
+
+            // update scroll position
+            let ScrollPosition { x, y } = history
+                .state()
+                .map(|state| state.into_serde().unwrap_or_default())
+                .unwrap_or_default();
+            // TODO: find way to scroll when new outlets are updated
+            window.scroll_to_with_x_and_y(x, y);
         }));
     }
 
     fn current_path(&self) -> String {
-        let mut p = self
-            .window
-            .location()
-            .pathname()
-            .expect("location can provide path");
+        let mut path = self.window.location().pathname().unwrap_or_default();
 
-        if let Some(pre) = &self.prefix {
-            if p.starts_with(pre) {
-                p = p.split_at(pre.len()).1.to_string();
+        // strip prefix if present
+        if let Some(prefix) = &self.prefix {
+            if path.starts_with(prefix) {
+                path = path.split_at(prefix.len()).1.to_string();
             }
         }
 
-        if !p.starts_with('/') {
-            p = format!("/{p}");
+        // ensure path starts with /
+        if !path.starts_with('/') {
+            path = format!("/{path}");
         }
 
-        p
+        path
     }
 
     fn current_prefix(&self) -> String {
-        if let Some(pre) = &self.prefix {
-            pre.clone()
-        } else {
-            String::new()
-        }
+        self.prefix.clone().unwrap_or_default()
     }
 
     fn current_query(&self) -> Option<String> {
-        let mut q = self
-            .window
-            .location()
-            .search()
-            .expect("location can provide query");
+        let mut query = self.window.location().search().ok()?;
 
-        if q.starts_with('?') {
-            q.remove(0);
+        // remove ? from start of query
+        if query.starts_with('?') {
+            query.remove(0);
         }
 
-        match q.is_empty() {
-            false => Some(q),
+        match query.is_empty() {
+            false => Some(query),
             true => None,
         }
     }
 
     fn go_back(&mut self) {
-        self.history.back().ok();
-
-        let ScrollPosition { x, y } = self.history.state().unwrap().into_serde().unwrap();
-        self.body.set_scroll_top(y);
-        self.body.set_scroll_left(x);
+        if let Err(e) = self.history.back() {
+            error!("failed to navigate back: {e:?}");
+        }
     }
 
     fn go_forward(&mut self) {
-        self.history.forward().ok();
-
-        let ScrollPosition { x, y } = self.history.state().unwrap().into_serde().unwrap();
-        self.body.set_scroll_top(y);
-        self.body.set_scroll_left(x);
+        if let Err(e) = self.history.forward() {
+            error!("failed to navigate forward: {e:?}")
+        }
     }
 
-    fn push(&mut self, path: String) {
+    fn push(&mut self, mut path: String) {
         if path.starts_with("//") {
             error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
             return;
         }
 
-        let path = if let Some(pre) = &self.prefix {
-            if path.starts_with('/') {
-                format!("{pre}{path}")
-            } else {
-                path
-            }
-        } else {
-            path
-        };
+        if let (Some(prefix), true) = (&self.prefix, path.starts_with('/')) {
+            path = format!("{prefix}{path}");
+        }
 
-        if self
-            .history
-            .push_state_with_url(
-                &JsValue::from_serde(&ScrollPosition {
-                    x: self.body.scroll_left(),
-                    y: self.body.scroll_top(),
-                })
-                .unwrap(),
-                "",
-                Some(&path),
-            )
-            .is_ok()
-        {
-            self.body.set_scroll_top(0);
-            self.body.set_scroll_left(0);
+        match self.history.push_state_with_url(
+            &JsValue::from_serde(&ScrollPosition::default()).unwrap(),
+            "",
+            Some(&path),
+        ) {
+            Ok(_) => self.window.scroll_to_with_x_and_y(0.0, 0.0),
+            Err(e) => error!("failed to push state: {e:?}"),
         }
     }
 
-    fn replace(&mut self, path: String) {
+    fn replace(&mut self, mut path: String) {
         if path.starts_with("//") {
             error!(r#"cannot navigate to paths starting with "//", path: {path}"#);
             return;
         }
 
-        let path = if let Some(pre) = &self.prefix {
-            if path.starts_with('/') {
-                format!("{pre}{path}")
-            } else {
-                path
-            }
-        } else {
-            path
-        };
+        if let (Some(prefix), true) = (&self.prefix, path.starts_with('/')) {
+            path = format!("{prefix}{path}");
+        }
 
-        if self
-            .history
-            .replace_state_with_url(
-                &JsValue::from_serde(&ScrollPosition {
-                    x: self.body.scroll_left(),
-                    y: self.body.scroll_top(),
-                })
-                .unwrap(),
-                "",
-                Some(&path),
-            )
-            .is_ok()
-        {
-            self.body.set_scroll_top(0);
-            self.body.set_scroll_left(0);
-        };
+        match self.history.replace_state_with_url(
+            &JsValue::from_serde(&ScrollPosition::default()).unwrap(),
+            "",
+            Some(&path),
+        ) {
+            Ok(_) => self.window.scroll_to_with_x_and_y(0.0, 0.0),
+            Err(e) => error!("failed to replace state: {e:?}"),
+        }
     }
 
     fn can_external(&self) -> bool {
@@ -200,6 +184,8 @@ impl HistoryProvider for BrowserPathHistoryProvider {
     }
 
     fn external(&self, url: String) {
-        self.window.location().set_href(&url).ok();
+        if let Err(e) = self.window.location().set_href(&url) {
+            error!("failed to navigate to external href: {e:?}");
+        }
     }
 }
