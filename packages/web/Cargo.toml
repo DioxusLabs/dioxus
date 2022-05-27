@@ -11,7 +11,7 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
     "web"
