@@ -38,7 +38,7 @@ fn app(cx: Scope) -> Element {
                         if rsx_code.get().is_none() {
                             let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
                             let read = rsx_text_index.read();
-                            rsx_code.set(Some(read.get(&line_num).unwrap().clone()));
+                            rsx_code.set(Some(read.get(&__line_num).unwrap().clone()));
                         }
                         (*rsx_code.current()).clone().unwrap()
                     },
@@ -53,7 +53,7 @@ fn app(cx: Scope) -> Element {
                     onclick: move |_|{
                         if let Some(code) = rsx_code.get(){
                             let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
-                            rsx_text_index.insert(line_num.clone(), code.clone());
+                            rsx_text_index.insert(__line_num.clone(), code.clone());
                         }
                     },
                     "submit"
