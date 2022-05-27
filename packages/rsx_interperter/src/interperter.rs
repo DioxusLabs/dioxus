@@ -203,14 +203,29 @@ fn build_node<'a>(
             }
             let tag = bump.alloc(el.name.to_string());
             if let Some((tag, ns)) = element_to_static_str(tag) {
-                Some(factory.raw_element(
-                    tag,
-                    ns,
-                    listeners,
-                    attributes.as_slice(),
-                    children.as_slice(),
-                    None,
-                ))
+                match el.key {
+                    None => Some(factory.raw_element(
+                        tag,
+                        ns,
+                        listeners,
+                        attributes.as_slice(),
+                        children.as_slice(),
+                        None,
+                    )),
+                    Some(lit) => {
+                        let ifmt: InterperedIfmt = lit.value().parse().unwrap();
+                        let key = bump.alloc(ifmt.resolve(&ctx.captured));
+
+                        Some(factory.raw_element(
+                            tag,
+                            ns,
+                            listeners,
+                            attributes.as_slice(),
+                            children.as_slice(),
+                            Some(format_args!("{}", key)),
+                        ))
+                    }
+                }
             } else {
                 None
             }
