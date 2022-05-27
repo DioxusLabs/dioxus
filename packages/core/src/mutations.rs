@@ -167,8 +167,9 @@ pub enum DomEdit<'bump> {
         field: &'static str,
 
         /// The value of the attribute.
-        value: &'bump str,
+        value: AttributeValue<'bump>,
 
+        // value: &'bump str,
         /// The (optional) namespace of the attribute.
         /// For instance, "style" is in the "style" namespace.
         ns: Option<&'bump str>,
@@ -286,7 +287,7 @@ impl<'a> Mutations<'a> {
         self.edits.push(SetText { text, root });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute, root: u64) {
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: u64) {
         let Attribute {
             name,
             value,
@@ -296,7 +297,7 @@ impl<'a> Mutations<'a> {
 
         self.edits.push(SetAttribute {
             field: name,
-            value,
+            value: value.clone(),
             ns: *namespace,
             root,
         });
