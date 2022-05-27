@@ -1,7 +1,7 @@
 use dioxus_core::VNode;
 use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr, IfmtInput};
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 use syn::Expr;
 
 #[derive(Default)]
@@ -10,6 +10,7 @@ pub struct CapturedContextBuilder {
     pub text: Vec<IfmtInput>,
     pub components: Vec<Component>,
     pub iterators: Vec<Expr>,
+    pub captured_expressions: Vec<Expr>,
 }
 
 impl CapturedContextBuilder {
@@ -18,6 +19,7 @@ impl CapturedContextBuilder {
         self.text.extend(other.text);
         self.components.extend(other.components);
         self.iterators.extend(other.iterators);
+        self.captured_expressions.extend(other.captured_expressions);
     }
 
     pub fn from_call_body(body: CallBody) -> Self {
@@ -33,23 +35,25 @@ impl CapturedContextBuilder {
         match node {
             BodyNode::Element(el) => {
                 for attr in el.attributes {
-                    let (name, value_tokens) = match attr.attr {
+                    match attr.attr {
                         ElementAttr::AttrText { name, value } => {
-                            (name.to_string(), value.to_token_stream())
+                            let (name, value_tokens) = (name.to_string(), value.to_token_stream());
+                            let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
+                            captured.attributes.insert(name, formated);
                         }
                         ElementAttr::AttrExpression { name, value } => {
-                            todo!()
+                            captured.captured_expressions.push(value);
                         }
                         ElementAttr::CustomAttrText { name, value } => {
-                            (name.value(), value.to_token_stream())
+                            let (name, value_tokens) = (name.value(), value.to_token_stream());
+                            let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
+                            captured.attributes.insert(name, formated);
                         }
                         ElementAttr::CustomAttrExpression { name, value } => {
-                            todo!()
+                            captured.captured_expressions.push(value);
                         }
-                        _ => continue,
-                    };
-                    let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
-                    captured.attributes.insert(name, formated);
+                        _ => (),
+                    }
                 }
                 for child in el.children {
                     captured.extend(Self::find_captured(child));
@@ -77,6 +81,7 @@ impl ToTokens for CapturedContextBuilder {
             text,
             components,
             iterators,
+            captured_expressions,
         } = self;
         let captured: Vec<_> = attributes
             .iter()
@@ -86,6 +91,9 @@ impl ToTokens for CapturedContextBuilder {
             .collect();
         let captured_names = captured.iter().map(|(n, _)| n.to_string());
         let captured_expr = captured.iter().map(|(_, e)| e);
+        let captured_attr_expressions_text = captured_expressions
+            .iter()
+            .map(|e| format!("{}", e.to_token_stream()));
         tokens.append_all(quote! {
             CapturedContext {
                 captured: IfmtArgs{
@@ -93,14 +101,10 @@ impl ToTokens for CapturedContextBuilder {
                 },
                 components: vec![#(#components),*],
                 iterators: vec![#(#iterators),*],
+                expressions: vec![#((#captured_attr_expressions_text, #captured_expressions.to_string())),*],
             }
         })
     }
-}
-
-struct CapturedComponentBuilder {
-    name: syn::Path,
-    function: String,
 }
 
 pub struct CapturedContext<'a> {
@@ -112,6 +116,8 @@ pub struct CapturedContext<'a> {
     pub components: Vec<VNode<'a>>,
     // we can't reasonably interpert iterators, so they are staticly inserted
     pub iterators: Vec<VNode<'a>>,
+    // map expression to the value resulting from the expression
+    pub expressions: Vec<(&'static str, String)>,
 }
 
 pub struct IfmtArgs {

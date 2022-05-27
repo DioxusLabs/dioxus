@@ -19,6 +19,9 @@ fn app(cx: Scope) -> Element {
     });
 
     cx.render(rsx! {
-        h1 { "High-Five counter: {count}" }
+        h1 {
+            x: count,
+            "High-Five counter: {count}"
+        }
     })
 }

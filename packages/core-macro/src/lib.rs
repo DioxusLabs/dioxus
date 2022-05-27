@@ -194,6 +194,8 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                     {
                         let line_num = get_line_num();
                         let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
+                        // only the insert the rsx text once
+                        // todo: rsx could be conditionally rendered which would brake this
                         use_state(&cx, || {
                             rsx_text_index.insert(
                                 line_num.clone(),
@@ -210,8 +212,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                 )
                             }
                             else{
-                                println!("rsx: line number {:?} not found", line_num);
-                                factory.static_text("")
+                                panic!("rsx: line number {:?} not found", line_num);
                             }
                         })
                     }

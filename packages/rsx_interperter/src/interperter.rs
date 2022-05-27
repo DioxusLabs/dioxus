@@ -1,8 +1,7 @@
 use dioxus_core::{Attribute, NodeFactory, VNode};
-use dioxus_rsx::{BodyNode, CallBody, ElementAttr, IfmtInput};
+use dioxus_rsx::{BodyNode, CallBody, ElementAttr};
 use quote::ToTokens;
 use std::str::FromStr;
-use syn::parse2;
 
 use crate::attributes::attrbute_to_static_str;
 use crate::captuered_context::{CapturedContext, IfmtArgs};
@@ -108,41 +107,66 @@ fn build_node<'a>(
         BodyNode::Element(el) => {
             let attributes: &mut Vec<Attribute> = bump.alloc(Vec::new());
             for attr in el.attributes {
-                let result: Option<(String, InterperedIfmt)> = match attr.attr {
-                    ElementAttr::AttrText { name, value } => {
-                        Some((name.to_string(), value.value().parse().unwrap()))
+                match attr.attr {
+                    ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
+                        let (name, value): (String, InterperedIfmt) = match attr.attr {
+                            ElementAttr::AttrText { name, value } => {
+                                (name.to_string(), value.value().parse().unwrap())
+                            }
+                            ElementAttr::CustomAttrText { name, value } => {
+                                (name.value(), value.value().parse().unwrap())
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        if let Some((name, namespace)) = attrbute_to_static_str(&name) {
+                            let value = bump.alloc(value.resolve(&ctx.captured));
+                            attributes.push(Attribute {
+                                name,
+                                value,
+                                is_static: true,
+                                is_volatile: false,
+                                namespace,
+                            });
+                        } else {
+                            return None;
+                        }
                     }
 
-                    ElementAttr::AttrExpression { name, value } => {
-                        todo!()
+                    ElementAttr::AttrExpression { .. }
+                    | ElementAttr::CustomAttrExpression { .. } => {
+                        let (name, value) = match attr.attr {
+                            ElementAttr::AttrExpression { name, value } => {
+                                (name.to_string(), value)
+                            }
+                            ElementAttr::CustomAttrExpression { name, value } => {
+                                (name.value(), value)
+                            }
+
+                            _ => unreachable!(),
+                        };
+                        let formatted_expr = format!("{}", value.to_token_stream());
+                        if let Some((_, resulting_value)) =
+                            ctx.expressions.iter().find(|(n, _)| *n == formatted_expr)
+                        {
+                            if let Some((name, namespace)) = attrbute_to_static_str(&name) {
+                                let value = bump.alloc(resulting_value.clone());
+                                attributes.push(Attribute {
+                                    name,
+                                    value,
+                                    is_static: true,
+                                    is_volatile: false,
+                                    namespace,
+                                });
+                            }
+                        } else {
+                            panic!("could not resolve expression {}", formatted_expr);
+                        }
                     }
-
-                    ElementAttr::CustomAttrText { name, value } => {
-                        Some((name.value(), value.value().parse().unwrap()))
-                    }
-
-                    ElementAttr::CustomAttrExpression { name, value } => {
-                        todo!()
-                    }
-
-                    ElementAttr::EventTokens { .. } => None,
-
-                    ElementAttr::Meta(_) => None,
+                    // Path(ExprPath { attrs: [], qself: None, path: Path { leading_colon: None, segments: [PathSegment { ident: Ident { ident: \"count\", span: #0 bytes(497..502) }, arguments: None }] } })
+                    // Path(ExprPath { attrs: [], qself: None, path: Path { leading_colon: None, segments: [PathSegment { ident: Ident(count), arguments: None }] } })
+                    _ => (),
                 };
-                if let Some((name, value)) = result {
-                    if let Some((name, namespace)) = attrbute_to_static_str(&name) {
-                        let value = bump.alloc(value.resolve(&ctx.captured));
-                        attributes.push(Attribute {
-                            name,
-                            value,
-                            is_static: true,
-                            is_volatile: false,
-                            namespace,
-                        })
-                    } else {
-                        return None;
-                    }
-                }
             }
             let children = bump.alloc(Vec::new());
             for (i, child) in el.children.into_iter().enumerate() {
