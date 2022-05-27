@@ -1,7 +1,7 @@
 use dioxus_core::VNode;
 use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr, IfmtInput};
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::{any::Any, collections::HashMap};
+use std::collections::HashMap;
 use syn::Expr;
 
 #[derive(Default)]
@@ -41,7 +41,7 @@ impl CapturedContextBuilder {
                             let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
                             captured.attributes.insert(name, formated);
                         }
-                        ElementAttr::AttrExpression { name, value } => {
+                        ElementAttr::AttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
                         }
                         ElementAttr::CustomAttrText { name, value } => {
@@ -49,7 +49,7 @@ impl CapturedContextBuilder {
                             let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
                             captured.attributes.insert(name, formated);
                         }
-                        ElementAttr::CustomAttrExpression { name, value } => {
+                        ElementAttr::CustomAttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
                         }
                         _ => (),

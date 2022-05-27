@@ -1,7 +1,7 @@
 use dioxus_core::{Attribute, NodeFactory, VNode};
 use dioxus_rsx::{BodyNode, CallBody, ElementAttr};
-use quote::ToTokens;
 use std::str::FromStr;
+use syn::{parse_str, Expr};
 
 use crate::attributes::attrbute_to_static_str;
 use crate::captuered_context::{CapturedContext, IfmtArgs};
@@ -145,9 +145,10 @@ fn build_node<'a>(
 
                             _ => unreachable!(),
                         };
-                        let formatted_expr = format!("{}", value.to_token_stream());
-                        if let Some((_, resulting_value)) =
-                            ctx.expressions.iter().find(|(n, _)| *n == formatted_expr)
+                        if let Some((_, resulting_value)) = ctx
+                            .expressions
+                            .iter()
+                            .find(|(n, _)| parse_str::<Expr>(*n).unwrap() == value)
                         {
                             if let Some((name, namespace)) = attrbute_to_static_str(&name) {
                                 let value = bump.alloc(resulting_value.clone());
@@ -160,7 +161,7 @@ fn build_node<'a>(
                                 });
                             }
                         } else {
-                            panic!("could not resolve expression {}", formatted_expr);
+                            panic!("could not resolve expression {:?}", value);
                         }
                     }
                     // Path(ExprPath { attrs: [], qself: None, path: Path { leading_colon: None, segments: [PathSegment { ident: Ident { ident: \"count\", span: #0 bytes(497..502) }, arguments: None }] } })

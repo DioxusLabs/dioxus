@@ -20,7 +20,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         h1 {
-            x: count,
+            width: format!("{}px", count),
             "High-Five counter: {count}"
         }
     })
