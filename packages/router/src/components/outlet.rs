@@ -68,7 +68,7 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
         None => unnamed.get(depth),
         Some(name) => named.get(name).and_then(|comps| comps.get(depth)),
     }
-    .map(|X| *X);
+    .copied();
 
     // render component or nothing
     cx.render(match X {

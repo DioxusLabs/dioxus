@@ -342,12 +342,10 @@ fn construct_named_targets(
     }
 
     // add root_index
-    if ancestors.is_empty() {
-        if targets.insert("root_index", vec![]).is_some() {
-            error!(r#""root_index" is provided by router, custom is overwritten"#);
-            #[cfg(debug_assertions)]
-            panic!(r#""root_index" is provided by router"#);
-        }
+    if ancestors.is_empty() && targets.insert("root_index", vec![]).is_some() {
+        error!(r#""root_index" is provided by router, custom is overwritten"#);
+        #[cfg(debug_assertions)]
+        panic!(r#""root_index" is provided by router"#);
     }
 }
 

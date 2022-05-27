@@ -106,8 +106,7 @@ impl HistoryProvider for BrowserHashHistoryProvider {
 
     fn current_query(&self) -> Option<String> {
         self.url()
-            .map(|url| url.query().map(|query| query.to_string()))
-            .flatten()
+            .and_then(|url| url.query().map(|query| query.to_string()))
     }
 
     fn go_back(&mut self) {
