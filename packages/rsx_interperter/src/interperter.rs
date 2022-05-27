@@ -1,5 +1,5 @@
 use dioxus_core::{Attribute, NodeFactory, VNode};
-use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr};
+use dioxus_rsx::{BodyNode, CallBody, ElementAttr};
 use quote::ToTokens;
 use std::str::FromStr;
 use syn::{parse2, parse_str, Expr};
@@ -111,10 +111,10 @@ fn build_node<'a>(
         }
         BodyNode::Element(el) => {
             let attributes: &mut Vec<Attribute> = bump.alloc(Vec::new());
-            for attr in el.attributes {
-                match attr.attr {
+            for attr in &el.attributes {
+                match &attr.attr {
                     ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
-                        let (name, value): (String, InterperedIfmt) = match attr.attr {
+                        let (name, value): (String, InterperedIfmt) = match &attr.attr {
                             ElementAttr::AttrText { name, value } => {
                                 (name.to_string(), value.value().parse().unwrap())
                             }
@@ -140,7 +140,7 @@ fn build_node<'a>(
 
                     ElementAttr::AttrExpression { .. }
                     | ElementAttr::CustomAttrExpression { .. } => {
-                        let (name, value) = match attr.attr {
+                        let (name, value) = match &attr.attr {
                             ElementAttr::AttrExpression { name, value } => {
                                 (name.to_string(), value)
                             }
@@ -153,7 +153,7 @@ fn build_node<'a>(
                         if let Some((_, resulting_value)) = ctx
                             .expressions
                             .iter()
-                            .find(|(n, _)| parse_str::<Expr>(*n).unwrap() == value)
+                            .find(|(n, _)| parse_str::<Expr>(*n).unwrap() == *value)
                         {
                             if let Some((name, namespace)) = attrbute_to_static_str(&name) {
                                 let value = bump.alloc(resulting_value.clone());
@@ -169,8 +169,6 @@ fn build_node<'a>(
                             panic!("could not resolve expression {:?}", value);
                         }
                     }
-                    // Path(ExprPath { attrs: [], qself: None, path: Path { leading_colon: None, segments: [PathSegment { ident: Ident { ident: \"count\", span: #0 bytes(497..502) }, arguments: None }] } })
-                    // Path(ExprPath { attrs: [], qself: None, path: Path { leading_colon: None, segments: [PathSegment { ident: Ident(count), arguments: None }] } })
                     _ => (),
                 };
             }
@@ -181,12 +179,35 @@ fn build_node<'a>(
                     children.push(node);
                 }
             }
+            let listeners = bump.alloc(Vec::new());
+            for attr in el.attributes {
+                match attr.attr {
+                    ElementAttr::EventTokens { .. } => {
+                        let expr: Expr = parse2(attr.to_token_stream()).unwrap();
+                        if let Some(idx) = ctx
+                            .listeners
+                            .iter()
+                            .position(|(code, _)| parse_str::<Expr>(*code).unwrap() == expr)
+                        {
+                            let (_, listener) = ctx.listeners.remove(idx);
+                            listeners.push(listener)
+                        } else {
+                            panic!(
+                                "could not resolve listener {:?} \n in: {:#?}",
+                                expr.to_token_stream().to_string(),
+                                ctx.listeners.iter().map(|(s, _)| s).collect::<Vec<_>>()
+                            );
+                        }
+                    }
+                    _ => (),
+                }
+            }
             let tag = bump.alloc(el.name.to_string());
             if let Some((tag, ns)) = element_to_static_str(tag) {
                 Some(factory.raw_element(
                     tag,
                     ns,
-                    &[],
+                    listeners,
                     attributes.as_slice(),
                     children.as_slice(),
                     Some(format_args!("{}", key)),

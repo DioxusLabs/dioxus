@@ -1,5 +1,5 @@
-use dioxus_core::VNode;
-use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr, IfmtInput};
+use dioxus_core::{Listener, VNode};
+use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr, ElementAttrNamed, IfmtInput};
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::collections::HashMap;
 use syn::Expr;
@@ -11,6 +11,7 @@ pub struct CapturedContextBuilder {
     pub components: Vec<Component>,
     pub iterators: Vec<Expr>,
     pub captured_expressions: Vec<Expr>,
+    pub listeners: Vec<ElementAttrNamed>,
 }
 
 impl CapturedContextBuilder {
@@ -19,6 +20,7 @@ impl CapturedContextBuilder {
         self.text.extend(other.text);
         self.components.extend(other.components);
         self.iterators.extend(other.iterators);
+        self.listeners.extend(other.listeners);
         self.captured_expressions.extend(other.captured_expressions);
     }
 
@@ -52,6 +54,7 @@ impl CapturedContextBuilder {
                         ElementAttr::CustomAttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
                         }
+                        ElementAttr::EventTokens { .. } => captured.listeners.push(attr),
                         _ => (),
                     }
                 }
@@ -82,11 +85,14 @@ impl ToTokens for CapturedContextBuilder {
             components,
             iterators,
             captured_expressions,
+            listeners,
         } = self;
+        let listeners_str = listeners
+            .iter()
+            .map(|comp| comp.to_token_stream().to_string());
         let compontents_str = components
             .iter()
             .map(|comp| comp.to_token_stream().to_string());
-        let components = components.iter().map(|comp| comp);
         let iterators_str = iterators
             .iter()
             .map(|expr| expr.to_token_stream().to_string());
@@ -109,6 +115,7 @@ impl ToTokens for CapturedContextBuilder {
                 components: vec![#((#compontents_str, #components)),*],
                 iterators: vec![#((#iterators_str, #iterators)),*],
                 expressions: vec![#((#captured_attr_expressions_text, #captured_expressions.to_string())),*],
+                listeners: vec![#((#listeners_str, #listeners)),*],
             }
         })
     }
@@ -125,6 +132,8 @@ pub struct CapturedContext<'a> {
     pub iterators: Vec<(&'static str, VNode<'a>)>,
     // map expression to the value resulting from the expression
     pub expressions: Vec<(&'static str, String)>,
+    // map listener code to the resulting listener
+    pub listeners: Vec<(&'static str, Listener<'a>)>,
 }
 
 pub struct IfmtArgs {

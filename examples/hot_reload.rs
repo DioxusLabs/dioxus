@@ -6,24 +6,31 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let count = use_state(&cx, || 170);
 
     use_future(&cx, (), move |_| {
         let mut count = count.clone();
         async move {
             loop {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+                tokio::time::sleep(Duration::from_millis(1000)).await;
                 count += 1;
             }
         }
     });
 
     cx.render(rsx! {
-        h1 {
+        div {
             width: format!("{}px", count),
+            background_color: "#999999",
+            onclick: move |_| {
+                count.modify(|count| *count + 1);
+            },
             "High-Five counter: {count}",
             Comp{
                 color: "#083289"
+            }
+            Comp{
+                color: "green"
             }
         }
     })
