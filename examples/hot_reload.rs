@@ -34,7 +34,6 @@ fn app(cx: Scope) -> Element {
                 height: "50%",
                 textarea {
                     width: "90%",
-                    key: "1",
                     value: {
                         if rsx_code.get().is_none() {
                             let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
