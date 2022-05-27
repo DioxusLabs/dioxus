@@ -1,4 +1,4 @@
-use dioxus_core::{Attribute, NodeFactory, VNode};
+use dioxus_core::{Attribute, AttributeValue, NodeFactory, VNode};
 use dioxus_rsx::{BodyNode, CallBody, ElementAttr};
 use quote::ToTokens;
 use std::str::FromStr;
@@ -127,7 +127,7 @@ fn build_node<'a>(
                             let value = bump.alloc(value.resolve(&ctx.captured));
                             attributes.push(Attribute {
                                 name,
-                                value,
+                                value: AttributeValue::Text(value),
                                 is_static: true,
                                 is_volatile: false,
                                 namespace,
@@ -158,7 +158,7 @@ fn build_node<'a>(
                                 let value = bump.alloc(resulting_value.clone());
                                 attributes.push(Attribute {
                                     name,
-                                    value,
+                                    value: AttributeValue::Text(value),
                                     is_static: true,
                                     is_volatile: false,
                                     namespace,
