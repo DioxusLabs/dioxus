@@ -26,7 +26,7 @@
 // main thread.
 //
 // React solves this problem by breaking up the rendering process into a "diff" phase and a "render" phase. In Dioxus,
-// the diff phase is non-blocking, using "yield_now" to allow the browser to process other events. When the diff phase
+// the diff phase is non-blocking, using "work_with_deadline" to allow the browser to process other events. When the diff phase
 // is  finally complete, the VirtualDOM will return a set of "Mutations" for this crate to apply.
 //
 // Here, we schedule the "diff" phase during the browser's idle period, achieved by calling RequestIdleCallback and then
