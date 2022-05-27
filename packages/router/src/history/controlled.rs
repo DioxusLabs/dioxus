@@ -88,7 +88,9 @@ impl HistoryProvider for ControlledHistoryProvider {
 
         core.changed = true;
         core.external = Some(url.clone());
-        core.history.external(url);
+        if core.history.can_external() {
+            core.history.external(url);
+        }
     }
 }
 
@@ -229,7 +231,9 @@ impl HistoryProvider for HistoryController {
 
         core.changed = false;
         core.external = Some(url.clone());
-        core.history.external(url);
+        if core.history.can_external() {
+            core.history.external(url);
+        }
 
         if let Some(callback) = &core.callback {
             callback()
