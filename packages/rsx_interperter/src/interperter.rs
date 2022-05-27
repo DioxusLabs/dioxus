@@ -1,7 +1,8 @@
 use dioxus_core::{Attribute, NodeFactory, VNode};
-use dioxus_rsx::{BodyNode, CallBody, ElementAttr};
+use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr};
+use quote::ToTokens;
 use std::str::FromStr;
-use syn::{parse_str, Expr};
+use syn::{parse2, parse_str, Expr};
 
 use crate::attributes::attrbute_to_static_str;
 use crate::captuered_context::{CapturedContext, IfmtArgs};
@@ -83,17 +84,21 @@ impl FromStr for InterperedIfmt {
     }
 }
 
-pub fn build<'a>(rsx: CallBody, ctx: CapturedContext, factory: &NodeFactory<'a>) -> VNode<'a> {
+pub fn build<'a>(
+    rsx: CallBody,
+    mut ctx: CapturedContext<'a>,
+    factory: &NodeFactory<'a>,
+) -> VNode<'a> {
     let children_built = factory.bump().alloc(Vec::new());
     for (i, child) in rsx.roots.into_iter().enumerate() {
-        children_built.push(build_node(child, &ctx, factory, i.to_string().as_str()));
+        children_built.push(build_node(child, &mut ctx, factory, i.to_string().as_str()));
     }
     factory.fragment_from_iter(children_built.iter())
 }
 
 fn build_node<'a>(
     node: BodyNode,
-    ctx: &CapturedContext,
+    ctx: &mut CapturedContext<'a>,
     factory: &NodeFactory<'a>,
     key: &str,
 ) -> Option<VNode<'a>> {
@@ -190,7 +195,19 @@ fn build_node<'a>(
                 None
             }
         }
-        BodyNode::Component(_) => todo!(),
+        BodyNode::Component(comp) => {
+            let expr: Expr = parse2(comp.to_token_stream()).unwrap();
+            if let Some(idx) = ctx
+                .components
+                .iter()
+                .position(|(code, _)| parse_str::<Expr>(*code).unwrap() == expr)
+            {
+                let (_, vnode) = ctx.components.remove(idx);
+                Some(vnode)
+            } else {
+                panic!("could not resolve component {:?}", comp.name);
+            }
+        }
         BodyNode::RawExpr(_) => todo!(),
         BodyNode::Meta(_) => todo!(),
     }

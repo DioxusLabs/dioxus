@@ -10,6 +10,7 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
+#[derive(PartialEq, Eq)]
 pub struct Element {
     pub name: Ident,
     pub key: Option<LitStr>,
@@ -189,6 +190,7 @@ impl ToTokens for Element {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
     AttrText {
@@ -225,6 +227,7 @@ pub enum ElementAttr {
     Meta(String),
 }
 
+#[derive(PartialEq, Eq)]
 pub struct ElementAttrNamed {
     pub el_name: Ident,
     pub attr: ElementAttr,

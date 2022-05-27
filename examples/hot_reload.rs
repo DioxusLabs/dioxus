@@ -21,7 +21,24 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 {
             width: format!("{}px", count),
-            "High-Five counter: {count}"
+            "High-Five counter: {count}",
+            Comp{
+                color: "#083289"
+            }
+        }
+    })
+}
+
+#[derive(PartialEq, Props)]
+struct CompProps {
+    color: &'static str,
+}
+
+fn Comp(cx: Scope<CompProps>) -> Element {
+    cx.render(rsx! {
+        h1 {
+            color: cx.props.color,
+            "Hello, from a component!"
         }
     })
 }

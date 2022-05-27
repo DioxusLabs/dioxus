@@ -22,6 +22,7 @@ use syn::{
     token, Expr, Ident, LitStr, Result, Token,
 };
 
+#[derive(PartialEq, Eq)]
 pub struct Component {
     pub name: syn::Path,
     pub body: Vec<ComponentField>,
@@ -149,11 +150,13 @@ impl ToTokens for Component {
 }
 
 // the struct's fields info
+#[derive(PartialEq, Eq)]
 pub struct ComponentField {
     pub name: Ident,
     pub content: ContentField,
 }
 
+#[derive(PartialEq, Eq)]
 pub enum ContentField {
     ManExpr(Expr),
     Formatted(LitStr),

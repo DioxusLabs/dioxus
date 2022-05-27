@@ -202,11 +202,11 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                 #rsx_text.to_string(),
                             );
                         });
-                        LazyNodes::new(move |factory|{
+                        LazyNodes::new(move |__cx|{
                             let read = rsx_text_index.read();
                             if let Some(text) = read.get(&line_num){
                                 interpert_rsx(
-                                    factory,
+                                    __cx,
                                     &text,
                                     #captured
                                 )

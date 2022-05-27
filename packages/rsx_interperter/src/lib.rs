@@ -34,7 +34,7 @@ pub fn with_hot_reload(cx: Scope<Component>) -> Element {
 pub fn interpert_rsx<'a, 'b>(
     factory: dioxus_core::NodeFactory<'a>,
     text: &str,
-    context: captuered_context::CapturedContext,
+    context: captuered_context::CapturedContext<'a>,
 ) -> VNode<'a> {
     build(parse_str(text).unwrap(), context, &factory)
 }

@@ -83,6 +83,13 @@ impl ToTokens for CapturedContextBuilder {
             iterators,
             captured_expressions,
         } = self;
+        let compontents_str = components
+            .iter()
+            .map(|comp| comp.to_token_stream().to_string());
+        let components = components.iter().map(|comp| comp);
+        let iterators_str = iterators
+            .iter()
+            .map(|expr| expr.to_token_stream().to_string());
         let captured: Vec<_> = attributes
             .iter()
             .map(|(_, fmt)| fmt.named_args.iter())
@@ -99,8 +106,8 @@ impl ToTokens for CapturedContextBuilder {
                 captured: IfmtArgs{
                     named_args: vec![#((#captured_names, #captured_expr.to_string())),*]
                 },
-                components: vec![#(#components),*],
-                iterators: vec![#(#iterators),*],
+                components: vec![#((#compontents_str, #components)),*],
+                iterators: vec![#((#iterators_str, #iterators)),*],
                 expressions: vec![#((#captured_attr_expressions_text, #captured_expressions.to_string())),*],
             }
         })
@@ -113,9 +120,9 @@ pub struct CapturedContext<'a> {
     // // map of the attribute name and element path to the formated value
     // pub captured_attribute_values: IfmtArgs,
     // the only thing we can update in component is the children
-    pub components: Vec<VNode<'a>>,
+    pub components: Vec<(&'static str, VNode<'a>)>,
     // we can't reasonably interpert iterators, so they are staticly inserted
-    pub iterators: Vec<VNode<'a>>,
+    pub iterators: Vec<(&'static str, VNode<'a>)>,
     // map expression to the value resulting from the expression
     pub expressions: Vec<(&'static str, String)>,
 }
