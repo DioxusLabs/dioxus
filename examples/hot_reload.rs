@@ -23,9 +23,11 @@ fn app(cx: Scope) -> Element {
             width: format!("{}px", count),
             background_color: "#999999",
             onclick: move |_| {
-                count.modify(|count| *count + 1);
+                count.modify(|count| *count + 10);
             },
-            "High-Five counter: {count}",
+            p{
+                "High-Five counter: {count}",
+            }
             Comp{
                 color: "#083289"
             }

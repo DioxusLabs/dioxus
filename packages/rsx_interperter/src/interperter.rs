@@ -210,7 +210,7 @@ fn build_node<'a>(
                     listeners,
                     attributes.as_slice(),
                     children.as_slice(),
-                    Some(format_args!("{}", key)),
+                    None,
                 ))
             } else {
                 None
