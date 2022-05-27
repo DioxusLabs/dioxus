@@ -9,7 +9,7 @@ pub struct CapturedContextBuilder {
     pub attributes: HashMap<String, IfmtInput>,
     pub text: Vec<IfmtInput>,
     pub components: Vec<Component>,
-    pub iterators: Vec<Expr>,
+    pub iterators: Vec<BodyNode>,
     pub captured_expressions: Vec<Expr>,
     pub listeners: Vec<ElementAttrNamed>,
 }
@@ -70,7 +70,7 @@ impl CapturedContextBuilder {
                 let formated: IfmtInput = syn::parse2(tokens).unwrap();
                 captured.text.push(formated);
             }
-            BodyNode::RawExpr(expr) => captured.iterators.push(expr),
+            BodyNode::RawExpr(_) => captured.iterators.push(node),
             BodyNode::Meta(_) => (),
         }
         captured
@@ -93,9 +93,10 @@ impl ToTokens for CapturedContextBuilder {
         let compontents_str = components
             .iter()
             .map(|comp| comp.to_token_stream().to_string());
-        let iterators_str = iterators
-            .iter()
-            .map(|expr| expr.to_token_stream().to_string());
+        let iterators_str = iterators.iter().map(|node| match node {
+            BodyNode::RawExpr(expr) => expr.to_token_stream().to_string(),
+            _ => unreachable!(),
+        });
         let captured: Vec<_> = attributes
             .iter()
             .map(|(_, fmt)| fmt.named_args.iter())

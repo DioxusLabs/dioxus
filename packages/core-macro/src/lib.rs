@@ -195,24 +195,26 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                         let line_num = get_line_num();
                         let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
                         // only the insert the rsx text once
-                        // todo: rsx could be conditionally rendered which would brake this
-                        use_state(&cx, || {
+                        if !rsx_text_index.read().contains_key(&line_num){
                             rsx_text_index.insert(
                                 line_num.clone(),
                                 #rsx_text.to_string(),
                             );
-                        });
+                        }
                         LazyNodes::new(move |__cx|{
-                            let read = rsx_text_index.read();
-                            if let Some(text) = read.get(&line_num){
+                            if let Some(text) = {
+                                let read = rsx_text_index.read();
+                                // clone prevents deadlock on nested rsx calls
+                                read.get(&line_num).cloned()
+                            } {
                                 interpert_rsx(
                                     __cx,
                                     &text,
                                     #captured
                                 )
                             }
-                            else{
-                                panic!("rsx: line number {:?} not found", line_num);
+                            else {
+                                panic!("rsx: line number {:?} not found in rsx index", line_num);
                             }
                         })
                     }

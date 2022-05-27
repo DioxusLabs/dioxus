@@ -90,8 +90,8 @@ pub fn build<'a>(
     factory: &NodeFactory<'a>,
 ) -> VNode<'a> {
     let children_built = factory.bump().alloc(Vec::new());
-    for (i, child) in rsx.roots.into_iter().enumerate() {
-        children_built.push(build_node(child, &mut ctx, factory, i.to_string().as_str()));
+    for child in rsx.roots {
+        children_built.push(build_node(child, &mut ctx, factory));
     }
     factory.fragment_from_iter(children_built.iter())
 }
@@ -100,7 +100,6 @@ fn build_node<'a>(
     node: BodyNode,
     ctx: &mut CapturedContext<'a>,
     factory: &NodeFactory<'a>,
-    key: &str,
 ) -> Option<VNode<'a>> {
     let bump = factory.bump();
     match node {
@@ -173,8 +172,8 @@ fn build_node<'a>(
                 };
             }
             let children = bump.alloc(Vec::new());
-            for (i, child) in el.children.into_iter().enumerate() {
-                let node = build_node(child, ctx, factory, i.to_string().as_str());
+            for child in el.children {
+                let node = build_node(child, ctx, factory);
                 if let Some(node) = node {
                     children.push(node);
                 }
@@ -229,7 +228,22 @@ fn build_node<'a>(
                 panic!("could not resolve component {:?}", comp.name);
             }
         }
-        BodyNode::RawExpr(_) => todo!(),
+        BodyNode::RawExpr(iterator) => {
+            if let Some(idx) = ctx
+                .iterators
+                .iter()
+                .position(|(code, _)| parse_str::<Expr>(*code).unwrap() == iterator)
+            {
+                let (_, vnode) = ctx.iterators.remove(idx);
+                Some(vnode)
+            } else {
+                panic!(
+                    "could not resolve iterator {} \n fron {:?}",
+                    iterator.to_token_stream(),
+                    ctx.iterators.iter().map(|(s, _)| s).collect::<Vec<_>>()
+                );
+            }
+        }
         BodyNode::Meta(_) => todo!(),
     }
 }

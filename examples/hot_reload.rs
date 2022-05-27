@@ -34,6 +34,11 @@ fn app(cx: Scope) -> Element {
             Comp{
                 color: "green"
             }
+            {
+                (0..10).map(|i| {
+                    cx.render(rsx!{p{"{i}"}})
+                })
+            }
         }
     })
 }
