@@ -1,10 +1,11 @@
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
+#[cfg(feature = "to_tokens")]
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
-    Expr, Ident, LitStr, Result, Token,
+    Error, Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
@@ -65,7 +66,7 @@ impl Parse for Element {
                 }
 
                 if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident);
+                    missing_trailing_comma!(ident.span());
                 }
                 continue;
             }
@@ -123,7 +124,7 @@ impl Parse for Element {
 
                 // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident);
+                    missing_trailing_comma!(ident.span());
                 }
                 continue;
             }
@@ -158,6 +159,7 @@ impl Parse for Element {
     }
 }
 
+#[cfg(feature = "to_tokens")]
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
@@ -193,38 +195,21 @@ impl ToTokens for Element {
 #[derive(PartialEq, Eq)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
-    AttrText {
-        name: Ident,
-        value: LitStr,
-    },
+    AttrText { name: Ident, value: LitStr },
 
     /// attribute: true,
-    AttrExpression {
-        name: Ident,
-        value: Expr,
-    },
+    AttrExpression { name: Ident, value: Expr },
 
     /// "attribute": "value {}"
-    CustomAttrText {
-        name: LitStr,
-        value: LitStr,
-    },
+    CustomAttrText { name: LitStr, value: LitStr },
 
     /// "attribute": true,
-    CustomAttrExpression {
-        name: LitStr,
-        value: Expr,
-    },
+    CustomAttrExpression { name: LitStr, value: Expr },
 
     // /// onclick: move |_| {}
     // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
-    EventTokens {
-        name: Ident,
-        tokens: Expr,
-    },
-
-    Meta(String),
+    EventTokens { name: Ident, tokens: Expr },
 }
 
 #[derive(PartialEq, Eq)]
@@ -233,6 +218,7 @@ pub struct ElementAttrNamed {
     pub attr: ElementAttr,
 }
 
+#[cfg(feature = "to_tokens")]
 impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ElementAttrNamed { el_name, attr } = self;
@@ -267,10 +253,6 @@ impl ToTokens for ElementAttrNamed {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)
                 }
-            }
-
-            ElementAttr::Meta(_) => {
-                todo!("meta attributes not supported yet");
             }
         });
     }

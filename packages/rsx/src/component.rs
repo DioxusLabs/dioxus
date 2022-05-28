@@ -14,11 +14,12 @@
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
+#[cfg(feature = "to_tokens")]
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, Expr, Ident, LitStr, Result, Token,
+    token, Error, Expr, Ident, LitStr, Result, Token,
 };
 
 #[derive(PartialEq, Eq)]
@@ -72,6 +73,7 @@ impl Parse for Component {
     }
 }
 
+#[cfg(feature = "to_tokens")]
 impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;

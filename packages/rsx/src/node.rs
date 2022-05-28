@@ -1,6 +1,7 @@
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
+#[cfg(feature = "to_tokens")]
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
@@ -21,7 +22,6 @@ pub enum BodyNode {
     Component(Component),
     Text(LitStr),
     RawExpr(Expr),
-    Meta(String),
 }
 
 impl BodyNode {
@@ -79,6 +79,7 @@ impl Parse for BodyNode {
     }
 }
 
+#[cfg(feature = "to_tokens")]
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
@@ -90,7 +91,6 @@ impl ToTokens for BodyNode {
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
-            BodyNode::Meta(_) => {}
         }
     }
 }

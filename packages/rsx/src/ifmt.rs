@@ -1,3 +1,4 @@
+#[cfg(feature = "to_tokens")]
 use ::quote::{quote, ToTokens};
 use ::std::ops::Not;
 use ::syn::{
@@ -7,6 +8,7 @@ use ::syn::{
 };
 use proc_macro2::TokenStream;
 
+#[cfg(feature = "to_tokens")]
 pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let IfmtInput {
         format_literal,

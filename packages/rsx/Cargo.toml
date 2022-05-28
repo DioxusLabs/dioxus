@@ -6,7 +6,10 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-proc-macro2 = { version = "1.0.6" }
-proc-macro-error = "1"
-quote = "1.0"
-syn = { version = "1.0.11", features = ["full", "extra-traits"] }
+proc-macro2 = { version = "1.0" }
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+quote = { version = "1.0", optional = true }
+
+[features]
+default = ["to_tokens"]
+to_tokens = ["quote"]

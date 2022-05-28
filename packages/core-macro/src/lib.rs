@@ -177,7 +177,6 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 ///     todo!()
 /// }
 /// ```
-#[proc_macro_error::proc_macro_error]
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
     #[cfg(feature = "hot_reload")]
