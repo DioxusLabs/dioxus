@@ -259,6 +259,5 @@ fn build_node<'a>(
                 );
             }
         }
-        BodyNode::Meta(_) => todo!(),
     }
 }

@@ -55,7 +55,6 @@ impl CapturedContextBuilder {
                             captured.captured_expressions.push(value);
                         }
                         ElementAttr::EventTokens { .. } => captured.listeners.push(attr),
-                        _ => (),
                     }
                 }
                 for child in el.children {
@@ -71,7 +70,6 @@ impl CapturedContextBuilder {
                 captured.text.push(formated);
             }
             BodyNode::RawExpr(_) => captured.iterators.push(node),
-            BodyNode::Meta(_) => (),
         }
         captured
     }
@@ -97,14 +95,27 @@ impl ToTokens for CapturedContextBuilder {
             BodyNode::RawExpr(expr) => expr.to_token_stream().to_string(),
             _ => unreachable!(),
         });
-        let captured: Vec<_> = attributes
+        let captured_named: Vec<_> = attributes
             .iter()
             .map(|(_, fmt)| fmt.named_args.iter())
             .chain(text.iter().map(|fmt| fmt.named_args.iter()))
             .flatten()
             .collect();
-        let captured_names = captured.iter().map(|(n, _)| n.to_string());
-        let captured_expr = captured.iter().map(|(_, e)| e);
+        let captured_expr: Vec<_> = attributes
+            .iter()
+            .map(|(_, fmt)| fmt.positional_args.iter())
+            .chain(text.iter().map(|fmt| fmt.positional_args.iter()))
+            .flatten()
+            .collect();
+        let captured_names = captured_named.iter().map(|(n, _)| n.to_string()).chain(
+            captured_expr
+                .iter()
+                .map(|expr| expr.to_token_stream().to_string()),
+        );
+        let captured_expr = captured_named
+            .iter()
+            .map(|(_, e)| e)
+            .chain(captured_expr.iter().map(|expr| *expr));
         let captured_attr_expressions_text = captured_expressions
             .iter()
             .map(|e| format!("{}", e.to_token_stream()));
