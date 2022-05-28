@@ -50,6 +50,11 @@ pub struct WebHistory {
 }
 
 impl WebHistory {
+    /// Create a new [`WebHistory`].
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
+    }
+
     /// Create a new [`WebHistory`] with a prefix.
     #[must_use]
     pub fn with_prefix(prefix: String) -> Box<Self> {

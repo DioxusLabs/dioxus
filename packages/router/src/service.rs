@@ -90,7 +90,7 @@ impl RouterService {
         let named_routes = Arc::new(named_routes);
 
         // create state and context
-        let state = Arc::new(RwLock::new(RouterState::default()));
+        let state = Arc::new(RwLock::new(RouterState::new()));
         let context = RouterContext {
             active_class,
             tx: tx.clone(),

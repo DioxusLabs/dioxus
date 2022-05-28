@@ -46,6 +46,11 @@ pub struct WebHashHistory {
 }
 
 impl WebHashHistory {
+    /// Create a new [`WebHashHistory`].
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
+    }
+
     /// Get the current url from the hash.
     fn url(&self) -> Option<Url> {
         let mut path = self.window.location().hash().ok()?;

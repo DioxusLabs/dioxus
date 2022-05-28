@@ -8,7 +8,6 @@ use dioxus_core::Component;
 use crate::navigation::NavigationTarget;
 
 /// The current routing information.
-#[derive(Default)]
 pub struct RouterState {
     /// Whether the service can handle external navigation targets.
     pub can_external: bool,
@@ -43,6 +42,20 @@ pub struct RouterState {
 }
 
 impl RouterState {
+    pub(crate) fn new() -> Self {
+        Self {
+            can_external: Default::default(),
+            can_go_back: Default::default(),
+            can_go_forward: Default::default(),
+            components: Default::default(),
+            names: Default::default(),
+            path: Default::default(),
+            prefix: Default::default(),
+            query: Default::default(),
+            parameters: Default::default(),
+        }
+    }
+
     /// Checks if the provided `target` is currently active.
     ///
     /// # [`NtPath`](crate::navigation::NavigationTarget::NtPath)

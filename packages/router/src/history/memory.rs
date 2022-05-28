@@ -12,6 +12,11 @@ pub struct MemoryHistory {
 }
 
 impl MemoryHistory {
+    /// Create a new [`MemoryHistory`].
+    pub fn new() -> Box<Self> {
+        Box::new(Self::default())
+    }
+
     /// Create a new [`MemoryHistory`] and immediately push `path`.
     pub fn with_first(path: String) -> Box<Self> {
         let mut h = Self::default();
