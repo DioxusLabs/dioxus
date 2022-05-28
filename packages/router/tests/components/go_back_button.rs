@@ -29,7 +29,7 @@ fn go_back_button_without_router_panic_in_debug() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn go_back_button_without_router_ignore_in_release() {
-    render(GoBackButtonWithoutRouter);
+    assert_eq!("<!--placeholder-->", render(GoBackButtonWithoutRouter));
 }
 
 #[allow(non_snake_case)]

@@ -26,7 +26,7 @@ fn nested_routers_panic_in_debug() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn nested_routes_ignore_in_release() {
-    render(NestedRouters);
+    assert_eq!("<!--placeholder-->", render(NestedRouters));
 }
 
 #[allow(non_snake_case)]

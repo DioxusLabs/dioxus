@@ -128,7 +128,7 @@ fn without_router_panic_in_debug() {
 #[cfg(not(debug_assertions))]
 #[test]
 fn without_router_ignore_in_release() {
-    render(OutletWithoutRouter);
+    assert_eq!("<!--placeholder-->", render(OutletWithoutRouter));
 }
 
 #[allow(non_snake_case)]
