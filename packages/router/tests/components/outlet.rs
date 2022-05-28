@@ -5,7 +5,7 @@ use crate::{render, test_routes};
 
 #[test]
 fn index() {
-    assert_eq!("<p>test1</p>", render(App));
+    assert_eq!("<p>0: index</p>", render(App));
 
     #[allow(non_snake_case)]
     fn App(cx: Scope) -> Element {
@@ -21,7 +21,7 @@ fn index() {
 
 #[test]
 fn route() {
-    assert_eq!("<p>test2</p><p>test3</p>", render(App));
+    assert_eq!("<p>0: test</p><p>1: index</p>", render(App));
 
     #[allow(non_snake_case)]
     fn App(cx: Scope) -> Element {
@@ -39,7 +39,10 @@ fn route() {
 
 #[test]
 fn nested_route() {
-    assert_eq!("<p>test2</p><p>test4</p>", render(App));
+    assert_eq!(
+        "<p>0: test</p><p>1: nest</p><!--placeholder-->",
+        render(App)
+    );
 
     #[allow(non_snake_case)]
     fn App(cx: Scope) -> Element {
@@ -57,7 +60,7 @@ fn nested_route() {
 
 #[test]
 fn with_depth() {
-    assert_eq!("<p>test3</p>", render(App));
+    assert_eq!("<p>1: index</p>", render(App));
 
     #[allow(non_snake_case)]
     fn App(cx: Scope) -> Element {
@@ -76,8 +79,28 @@ fn with_depth() {
 }
 
 #[test]
+fn with_depth_inheritance() {
+    assert_eq!("<p>1: nest</p><p>2: double-nest</p>", render(App));
+
+    #[allow(non_snake_case)]
+    fn App(cx: Scope) -> Element {
+        cx.render(rsx! {
+            Router{
+                routes: test_routes(&cx),
+                init_only: true,
+                history: &|| MemoryHistoryProvider::with_first(String::from("/test/nest/double-nest")),
+
+                Outlet {
+                    depth: 1
+                }
+            }
+        })
+    }
+}
+
+#[test]
 fn with_name() {
-    assert_eq!("<p>test5</p>", render(App));
+    assert_eq!("<p>1: index, other</p>", render(App));
 
     #[allow(non_snake_case)]
     fn App(cx: Scope) -> Element {

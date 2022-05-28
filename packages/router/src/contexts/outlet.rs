@@ -10,21 +10,15 @@ pub(crate) struct OutletContext {
 }
 
 impl OutletContext {
-    /// Create a new [`OutletContext`] and set the depth for `name` to 0.
-    pub(crate) fn new(name: Option<&str>) -> Self {
-        let mut new = Self::default();
-        new.set_depth(name, 0);
-        new
-    }
-
     /// Get the depth for an [`Outlet`] consuming the [`OutletContext`].
     ///
     /// [`Outlet`]: crate::components::Outlet
     pub(crate) fn get_depth(&self, name: Option<&str>) -> usize {
         match name {
-            None => self.depth.map_or(0, |d| d + 1),
-            Some(name) => self.named_depth.get(name).map_or(0, |d| d + 1),
+            None => self.depth.map(|d| d + 1),
+            Some(name) => self.named_depth.get(name).map(|d| d + 1),
         }
+        .unwrap_or_default()
     }
 
     /// Set the depth of the [`Outlet`] providing the [`OutletContext`].
@@ -43,23 +37,6 @@ impl OutletContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn new_named() {
-        let new = OutletContext::new(Some("test"));
-
-        assert_eq!(None, new.depth);
-        assert_eq!(1, new.named_depth.len());
-        assert_eq!(0, new.named_depth["test"]);
-    }
-
-    #[test]
-    fn new_nameless() {
-        let new = OutletContext::new(None);
-
-        assert_eq!(Some(0), new.depth);
-        assert!(new.named_depth.is_empty());
-    }
 
     #[test]
     fn get_depth() {

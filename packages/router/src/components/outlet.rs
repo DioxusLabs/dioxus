@@ -11,7 +11,7 @@ pub struct OutletProps {
     /// Override the [`Outlet`]s nesting depth.
     ///
     /// By default the [`Outlet`] will find its own depth. This allows you to override that depth.
-    /// Nested [`Outlet`]s are not aware of this override and will use their actual depth.
+    /// Nested [`Outlet`]s will respect this override and calculate their depth based on it.
     ///
     /// Be very careful when using this prop. It is __extremely__ easy to unknowingly create an
     /// unterminated recursion with it.
@@ -51,6 +51,8 @@ pub struct OutletProps {
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Outlet(cx: Scope<OutletProps>) -> Element {
+    let OutletProps { depth, name } = &cx.props;
+
     // hook up to router
     let router = match sub_to_router(&cx) {
         Some(r) => r,
@@ -66,26 +68,21 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
 
     // get own depth and communicate to nested outlets
     let depth = cx.use_hook(|_| {
-        let (depth, new_ctx) = match cx.consume_context::<OutletContext>() {
-            Some(mut ctx) => {
-                let depth = ctx.get_depth(cx.props.name);
-                ctx.set_depth(cx.props.name, depth);
-                (depth, ctx)
-            }
-            None => (0, OutletContext::new(cx.props.name)),
-        };
-        cx.provide_context(new_ctx);
+        let mut ctx = cx.consume_context::<OutletContext>().unwrap_or_default();
+
+        // allow depth override
+        let depth = depth.unwrap_or_else(|| ctx.get_depth(name.clone()));
+        ctx.set_depth(name.clone(), depth);
+
+        cx.provide_context(ctx);
         depth
     });
-
-    // allow depth override
-    let depth = cx.props.depth.unwrap_or(*depth);
 
     // get the component to render
     let (unnamed, named) = &state.components;
     let X = match cx.props.name {
-        None => unnamed.get(depth),
-        Some(name) => named.get(name).and_then(|comps| comps.get(depth)),
+        None => unnamed.get(*depth),
+        Some(name) => named.get(name).and_then(|comps| comps.get(*depth)),
     }
     .copied();
 

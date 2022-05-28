@@ -11,53 +11,68 @@ fn render(component: Component) -> String {
 
 fn test_routes(cx: &Scope) -> Arc<Segment> {
     use_segment(&cx, || {
-        Segment::new().index(RcComponent(TestComponent1)).fixed(
+        Segment::new().index(RcComponent(TestComponent_0)).fixed(
             "test",
-            Route::new(RcMulti(TestComponent2, vec![("other", TestComponent5)]))
-                .name("test")
-                .nested(
-                    Segment::new()
-                        .index(RcComponent(TestComponent3))
-                        .fixed("nest", Route::new(RcComponent(TestComponent4))),
+            Route::new(RcMulti(
+                TestComponent_1,
+                vec![("other", TestComponent_1_0_other)],
+            ))
+            .name("test")
+            .nested(
+                Segment::new().index(RcComponent(TestComponent_1_0)).fixed(
+                    "nest",
+                    Route::new(RcComponent(TestComponent_1_1)).nested(
+                        Segment::new()
+                            .fixed("double-nest", Route::new(RcComponent(TestComponent_1_1_0))),
+                    ),
                 ),
+            ),
         )
     })
     .clone()
 }
 
 #[allow(non_snake_case)]
-fn TestComponent1(cx: Scope) -> Element {
+fn TestComponent_0(cx: Scope) -> Element {
     cx.render(rsx! {
-        p { "test1" }
+        p { "0: index" }
     })
 }
 
 #[allow(non_snake_case)]
-fn TestComponent2(cx: Scope) -> Element {
+fn TestComponent_1(cx: Scope) -> Element {
     cx.render(rsx! {
-        p { "test2" }
+        p { "0: test" }
         Outlet { }
     })
 }
 
 #[allow(non_snake_case)]
-fn TestComponent3(cx: Scope) -> Element {
+fn TestComponent_1_0(cx: Scope) -> Element {
     cx.render(rsx! {
-        p { "test3" }
+        p { "1: index" }
     })
 }
 
 #[allow(non_snake_case)]
-fn TestComponent4(cx: Scope) -> Element {
+fn TestComponent_1_0_other(cx: Scope) -> Element {
     cx.render(rsx! {
-        p { "test4" }
+        p { "1: index, other" }
     })
 }
 
 #[allow(non_snake_case)]
-fn TestComponent5(cx: Scope) -> Element {
+fn TestComponent_1_1(cx: Scope) -> Element {
     cx.render(rsx! {
-        p { "test5" }
+        p { "1: nest" }
+        Outlet { }
+    })
+}
+
+#[allow(non_snake_case)]
+fn TestComponent_1_1_0(cx: Scope) -> Element {
+    cx.render(rsx! {
+        p { "2: double-nest" }
     })
 }
 
