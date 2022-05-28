@@ -89,3 +89,54 @@ impl Navigator {
         self.tx.unbounded_send(RouterMessage::Replace(target)).ok();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use futures_channel::mpsc::{unbounded, UnboundedReceiver};
+
+    use super::*;
+    use NavigationTarget::NtPath;
+
+    #[test]
+    fn go_back() {
+        let (n, mut rx) = prepare();
+        n.go_back();
+
+        assert!(matches!(rx.try_next(), Ok(Some(RouterMessage::GoBack))));
+    }
+
+    #[test]
+    fn go_forward() {
+        let (n, mut rx) = prepare();
+        n.go_forward();
+
+        assert!(matches!(rx.try_next(), Ok(Some(RouterMessage::GoForward))));
+    }
+
+    #[test]
+    fn push() {
+        let (n, mut rx) = prepare();
+        n.push(NtPath(String::from("path")));
+
+        assert!(matches!(
+            rx.try_next(),
+            Ok(Some(RouterMessage::Push(NtPath(_))))
+        ));
+    }
+
+    #[test]
+    fn replace() {
+        let (n, mut rx) = prepare();
+        n.replace(NtPath(String::from("path")));
+
+        assert!(matches!(
+            rx.try_next(),
+            Ok(Some(RouterMessage::Replace(NtPath(_))))
+        ));
+    }
+
+    fn prepare() -> (Navigator, UnboundedReceiver<RouterMessage>) {
+        let (tx, rx) = unbounded();
+        (Navigator { tx }, rx)
+    }
+}
