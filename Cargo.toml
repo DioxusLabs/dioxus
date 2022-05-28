@@ -9,7 +9,7 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.56.0"
+rust-version = "1.60.0"
 
 [dependencies]
 dioxus-core = { path = "./packages/core", version = "^0.2.1" }
@@ -44,7 +44,7 @@ macro = ["dioxus-core-macro", "dioxus-rsx"]
 hooks = ["dioxus-hooks"]
 html = ["dioxus-html"]
 ssr = ["dioxus-ssr"]
-web = ["dioxus-web", "dioxus-router/web"]
+web = ["dioxus-web", "dioxus-router?/web"]
 desktop = ["dioxus-desktop"]
 router = ["dioxus-router"]
 tui = ["dioxus-tui"]
@@ -85,7 +85,8 @@ serde_json = "1.0.79"
 rand = { version = "0.8.4", features = ["small_rng"] }
 tokio = { version = "1.16.1", features = ["full"] }
 reqwest = { version = "0.11.9", features = ["json"] }
-dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi", "tui"] }
+# dioxus = { path = ".", features = ["desktop", "ssr", "router", "fermi", "tui"] }
+dioxus = { path = ".", features = ["desktop"] }
 fern = { version = "0.6.0", features = ["colored"] }
 criterion = "0.3.5"
 thiserror = "1.0.30"
