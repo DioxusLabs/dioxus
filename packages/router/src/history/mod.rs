@@ -1,14 +1,14 @@
 use std::{fmt::Debug, sync::Arc};
 
 #[cfg(feature = "web")]
-mod browser_hash;
+mod web_hash;
 #[cfg(feature = "web")]
-pub use browser_hash::*;
+pub use web_hash::*;
 
 #[cfg(feature = "web")]
-mod browser_path;
+mod web;
 #[cfg(feature = "web")]
-pub use browser_path::*;
+pub use web::*;
 
 mod controlled;
 pub use controlled::*;
