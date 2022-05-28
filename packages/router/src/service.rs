@@ -9,10 +9,10 @@ use futures_util::StreamExt;
 use log::{error, warn};
 use urlencoding::{decode, encode};
 
-#[cfg(all(feature = "web", target_family = "wasm"))]
-use crate::history::BrowserPathHistoryProvider;
 #[cfg(not(all(feature = "web", target_family = "wasm")))]
-use crate::history::MemoryHistoryProvider;
+use crate::history::MemoryHistory;
+#[cfg(all(feature = "web", target_family = "wasm"))]
+use crate::history::WebHistory;
 use crate::{
     contexts::RouterContext,
     helpers::construct_named_path,
@@ -98,7 +98,7 @@ impl RouterService {
 
         // initiate the history provider
         #[cfg(not(all(feature = "web", target_family = "wasm")))]
-        let mut history = history.unwrap_or_else(|| Box::new(MemoryHistoryProvider::default()));
+        let mut history = history.unwrap_or_else(|| Box::new(MemoryHistory::default()));
         #[cfg(all(feature = "web", target_family = "wasm"))]
         let mut history =
             history.unwrap_or_else(|| Box::new(BrowserPathHistoryProvider::default()));

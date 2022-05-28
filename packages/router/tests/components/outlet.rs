@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::history::MemoryHistoryProvider;
+use dioxus_router::history::MemoryHistory;
 
 use crate::{render, test_routes};
 
@@ -29,7 +29,7 @@ fn route() {
             Router {
                 routes: test_routes(&cx),
                 init_only: true,
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test")),
+                history: &|| MemoryHistory::with_first(String::from("/test")),
 
                 Outlet {}
             }
@@ -50,7 +50,7 @@ fn nested_route() {
             Router {
                 routes: test_routes(&cx),
                 init_only: true,
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test/nest")),
+                history: &|| MemoryHistory::with_first(String::from("/test/nest")),
 
                 Outlet {}
             }
@@ -68,7 +68,7 @@ fn with_depth() {
             Router{
                 routes: test_routes(&cx),
                 init_only: true,
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test")),
+                history: &|| MemoryHistory::with_first(String::from("/test")),
 
                 Outlet {
                     depth: 1
@@ -88,7 +88,7 @@ fn with_depth_inheritance() {
             Router{
                 routes: test_routes(&cx),
                 init_only: true,
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test/nest/double-nest")),
+                history: &|| MemoryHistory::with_first(String::from("/test/nest/double-nest")),
 
                 Outlet {
                     depth: 1
@@ -108,7 +108,7 @@ fn with_name() {
             Router {
                 routes: test_routes(&cx),
                 init_only: true,
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test")),
+                history: &|| MemoryHistory::with_first(String::from("/test")),
 
                 Outlet {
                     name: "other"

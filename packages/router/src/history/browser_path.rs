@@ -40,7 +40,7 @@ use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 /// [Location]: https://developer.mozilla.org/en-US/docs/Web/API/Location
-pub struct BrowserPathHistoryProvider {
+pub struct WebHistory {
     history: History,
     listener_navigation: Option<EventListener>,
     _listener_scroll: EventListener,
@@ -48,8 +48,8 @@ pub struct BrowserPathHistoryProvider {
     window: Window,
 }
 
-impl BrowserPathHistoryProvider {
-    /// Create a new [`BrowserPathHistoryProvider`] with a prefix.
+impl WebHistory {
+    /// Create a new [`WebHistory`] with a prefix.
     #[must_use]
     pub fn with_prefix(prefix: String) -> Box<Self> {
         Box::new(Self {
@@ -59,7 +59,7 @@ impl BrowserPathHistoryProvider {
     }
 }
 
-impl Default for BrowserPathHistoryProvider {
+impl Default for WebHistory {
     fn default() -> Self {
         let window = web_sys::window().expect("access to window");
         let history = window.history().expect("access to history");
@@ -88,7 +88,7 @@ impl Default for BrowserPathHistoryProvider {
     }
 }
 
-impl HistoryProvider for BrowserPathHistoryProvider {
+impl HistoryProvider for WebHistory {
     fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         let history = self.history.clone();
         let window = self.window.clone();

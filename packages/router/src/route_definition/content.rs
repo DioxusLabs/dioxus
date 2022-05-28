@@ -24,11 +24,11 @@ pub enum RouteContent {
     /// Redirects are performed as a _replace_ operation. This means that the original path won't be
     /// part of the history.
     ///
-    /// Be careful to not create an infinite loop. While certain [HistoryProvider]s may stop after a
-    /// threshold is reached, others (like [MemoryHistoryProvider]) will not.
+    /// Be careful to not create an infinite loop. While certain [`HistoryProvider`]s may stop after
+    ///  a threshold is reached, others (like [`MemoryHistory`]) will not.
     ///
-    /// [HistoryProvider]: crate::history::HistoryProvider
-    /// [MemoryHistoryProvider]: crate::history::MemoryHistoryProvider
+    /// [`HistoryProvider`]: crate::history::HistoryProvider
+    /// [`MemoryHistory`]: crate::history::MemoryHistory
     RcRedirect(NavigationTarget),
 }
 

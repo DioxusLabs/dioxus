@@ -37,14 +37,14 @@ use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 /// [Location.hash]: https://developer.mozilla.org/en-US/docs/Web/API/Location/hash
-pub struct BrowserHashHistoryProvider {
+pub struct WebHashHistory {
     history: History,
     listener_navigation: Option<EventListener>,
     _listener_scroll: EventListener,
     window: Window,
 }
 
-impl BrowserHashHistoryProvider {
+impl WebHashHistory {
     /// Get the current url from the hash.
     fn url(&self) -> Option<Url> {
         let mut path = self.window.location().hash().ok()?;
@@ -67,7 +67,7 @@ impl BrowserHashHistoryProvider {
     }
 }
 
-impl Default for BrowserHashHistoryProvider {
+impl Default for WebHashHistory {
     fn default() -> Self {
         let window = web_sys::window().unwrap();
         let history = window.history().unwrap();
@@ -96,7 +96,7 @@ impl Default for BrowserHashHistoryProvider {
     }
 }
 
-impl HistoryProvider for BrowserHashHistoryProvider {
+impl HistoryProvider for WebHashHistory {
     fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         let history = self.history.clone();
         let window = self.window.clone();

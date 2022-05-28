@@ -7,7 +7,6 @@
 //! # Example
 //! ```rust
 //! use dioxus::prelude::*;
-//! # use dioxus::router::history::MemoryHistoryProvider;
 //!
 //! fn App(cx: Scope) -> Element {
 //!     // declare the routes of the app

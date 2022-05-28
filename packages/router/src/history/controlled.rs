@@ -16,11 +16,11 @@ struct ControlledHistoryCore {
 ///
 /// [`Router`]: crate::components::Router
 #[derive(Clone)]
-pub struct ControlledHistoryProvider {
+pub struct ControlledHistory {
     core: Arc<Mutex<ControlledHistoryCore>>,
 }
 
-impl HistoryProvider for ControlledHistoryProvider {
+impl HistoryProvider for ControlledHistory {
     fn foreign_navigation_handler(&mut self, callback: Arc<dyn Fn() + Send + Sync>) {
         let mut core = self.core.lock().unwrap();
         core.callback = Some(callback.clone());
@@ -94,7 +94,7 @@ impl HistoryProvider for ControlledHistoryProvider {
     }
 }
 
-/// A [`HistoryProvider`] that controls a [`ControlledHistoryProvider`].
+/// A [`HistoryProvider`] that controls a [`ControlledHistory`].
 ///
 /// This can be used to control a [`Router`] from outside the VDOM. For more information, look at
 /// the `ssr` example.
@@ -110,10 +110,9 @@ impl HistoryProvider for ControlledHistoryProvider {
 /// navigated to. This is always reset when triggering a navigation from the outside.
 ///
 /// If the internal [`HistoryProvider`] doesn't support external navigation targets (e.g. the
-/// [`MemoryHistoryProvider`]), application developers can handle the external navigation. The
-/// router may render an incomplete page if this is not done.
+/// [`MemoryHistory`](crate::history::MemoryHistory)), application developers can handle the external navigation. The router may
+/// render an incomplete page if this is not done.
 ///
-/// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider
 /// [`Router`]: crate::components::Router
 #[derive(Clone)]
 pub struct HistoryController {
@@ -121,9 +120,9 @@ pub struct HistoryController {
 }
 
 impl HistoryController {
-    /// Create a new [`HistoryController`] and a linked [`ControlledHistoryProvider`].
+    /// Create a new [`HistoryController`] and a linked [`ControlledHistory`].
     #[must_use]
-    pub fn new(internal: Box<dyn HistoryProvider>) -> (Self, ControlledHistoryProvider) {
+    pub fn new(internal: Box<dyn HistoryProvider>) -> (Self, ControlledHistory) {
         let core = Arc::new(Mutex::new(ControlledHistoryCore {
             callback: None,
             changed: false,
@@ -131,10 +130,7 @@ impl HistoryController {
             history: internal,
         }));
 
-        (
-            Self { core: core.clone() },
-            ControlledHistoryProvider { core },
-        )
+        (Self { core: core.clone() }, ControlledHistory { core })
     }
 
     /// Get the external URL the router has navigated to.
@@ -145,7 +141,7 @@ impl HistoryController {
         self.core.lock().unwrap().external.clone()
     }
 
-    /// Check if the linked [`ControlledHistoryProvider`] has triggered a navigation since the last
+    /// Check if the linked [`ControlledHistory`] has triggered a navigation since the last
     /// navigation triggered by the [`HistoryController`].
     #[must_use]
     pub fn has_redirected(&self) -> bool {

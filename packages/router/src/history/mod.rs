@@ -19,12 +19,12 @@ pub use memory::*;
 /// A trait that lets the router access the navigation history.
 ///
 /// Provided implementations:
-/// - [`MemoryHistoryProvider`] implements a history entirely in memory.
-/// - [`BrowserPathHistoryProvider`] hooks up to the browsers history and URL.
-/// - [`BrowserHashHistoryProvider`] hooks up to the browsers history, but stores the actual path
+/// - [`MemoryHistory`] implements a history entirely in memory.
+/// - [`WebHistory`] hooks up to the browsers history and URL.
+/// - [`WebHashHistory`] hooks up to the browsers history, but stores the actual path
 ///   and query in the fragment of the browsers URL.
-/// - [`HistoryController`] and [`ControlledHistoryProvider`] share an other [`HistoryProvider`]
-///   internally. The [`HistoryController`] can be used to control the router from outside the VDOM.
+/// - [`HistoryController`] and [`ControlledHistory`] share an other [`HistoryProvider`] internally.
+///   The [`HistoryController`] can be used to control the router from outside the VDOM.
 pub trait HistoryProvider {
     /// Provides the [`HistoryProvider`] with a way to trigger a routing update.
     ///

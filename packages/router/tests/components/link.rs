@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::history::MemoryHistoryProvider;
+use dioxus_router::history::MemoryHistory;
 
 use crate::{render, test_routes, ADDRESS};
 
@@ -139,7 +139,7 @@ fn with_class_and_exact_active() {
                 routes: test_routes(&cx),
                 init_only: true,
                 active_class: "active",
-                history: &|| MemoryHistoryProvider::with_first(String::from("/test/")),
+                history: &|| MemoryHistory::with_first(String::from("/test/")),
 
                 Link {
                     target: NtPath(String::from("/")),

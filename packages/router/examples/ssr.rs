@@ -4,9 +4,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use dioxus::{
     prelude::*,
-    router::history::{
-        ControlledHistoryProvider, HistoryController, HistoryProvider, MemoryHistoryProvider,
-    },
+    router::history::{ControlledHistory, HistoryController, HistoryProvider, MemoryHistory},
 };
 use hyper::{
     header::{LOCATION, REFERRER_POLICY},
@@ -23,7 +21,7 @@ async fn main() {
         Ok::<_, Error>(service_fn(|request| async move {
             // prepare a controlled history
             let (mut controller, history) =
-                HistoryController::new(Box::new(MemoryHistoryProvider::default()));
+                HistoryController::new(Box::new(MemoryHistory::default()));
 
             // set request path
             let path = request
@@ -86,7 +84,7 @@ async fn main() {
 
 #[derive(Props)]
 struct AppProps {
-    history: ControlledHistoryProvider,
+    history: ControlledHistory,
 }
 
 impl PartialEq for AppProps {

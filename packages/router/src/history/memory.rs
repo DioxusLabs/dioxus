@@ -4,14 +4,14 @@ use url::Url;
 use super::HistoryProvider;
 
 /// A [`HistoryProvider`] that stores all information in memory.
-pub struct MemoryHistoryProvider {
+pub struct MemoryHistory {
     current: Url,
     past: Vec<String>,
     future: Vec<String>,
 }
 
-impl MemoryHistoryProvider {
-    /// Create a new [`MemoryHistoryProvider`] and immediately push `path`.
+impl MemoryHistory {
+    /// Create a new [`MemoryHistory`] and immediately push `path`.
     pub fn with_first(path: String) -> Box<Self> {
         let mut h = Self::default();
         h.push(path);
@@ -19,7 +19,7 @@ impl MemoryHistoryProvider {
     }
 }
 
-impl Default for MemoryHistoryProvider {
+impl Default for MemoryHistory {
     fn default() -> Self {
         Self {
             current: Url::parse("dioxus://index.html/").unwrap(),
@@ -29,7 +29,7 @@ impl Default for MemoryHistoryProvider {
     }
 }
 
-impl HistoryProvider for MemoryHistoryProvider {
+impl HistoryProvider for MemoryHistory {
     fn current_path(&self) -> String {
         self.current.path().to_string()
     }
