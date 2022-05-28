@@ -83,3 +83,8 @@ mod components {
     mod outlet;
     mod router;
 }
+
+mod hooks {
+    mod use_navigate;
+    mod use_route;
+}
