@@ -73,7 +73,7 @@ impl Segment {
     ///   string), that route will be active.
     ///
     /// # URL decoding
-    /// The segments value will _not_ be decoded when checking if the _fixed_ route is active.
+    /// The segments value will be decoded when checking if the _fixed_ route is active.
     ///
     /// # Panic
     /// - If a _fixed_ route with the same `path` was already added, but only in debug builds.
@@ -135,7 +135,7 @@ impl Segment {
     /// `route`.
     ///
     /// # URL decoding
-    /// - The segments value will _not_ be decoded when checking if the _matching_ route is active.
+    /// - The segments value will be decoded when checking if the _matching_ route is active.
     /// - The segments value will be decoded when providing it as a parameter.
     ///
     /// # Example
@@ -168,7 +168,6 @@ impl Segment {
     /// A [`Segment`] can have __either__ a _parameter_ route or a _fallback_ route.
     ///
     /// # URL decoding
-    /// - The segments value will _not_ be decoded when checking if the _matching_ route is active.
     /// - The segments value will be decoded when providing it as a parameter.
     ///
     /// # Panic

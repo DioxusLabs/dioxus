@@ -6,7 +6,7 @@ use std::{
 use dioxus_core::{Component, ScopeId};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
-use log::error;
+use log::{error, warn};
 use urlencoding::{decode, encode};
 
 #[cfg(all(feature = "web", target_family = "wasm"))]
@@ -361,6 +361,14 @@ fn match_segment(
     parameters: &mut BTreeMap<&'static str, String>,
     global_fallback: &RouteContent,
 ) -> Option<NavigationTarget> {
+    let decoded_path = decode(path[0])
+        .map(|path| path.to_string())
+        .unwrap_or_else(|e| {
+            // I'm not sure if this case can happen
+            let path = path[0];
+            warn!(r#"failed to decode path parameter ("{path}"): {e}"#);
+            path.to_string()
+        });
     let mut found_route = false;
     let mut prohibit_global_fallback = false;
 
@@ -372,7 +380,7 @@ fn match_segment(
     let mut key = None;
 
     // extract data
-    if let Some(route) = segment.fixed.get(path[0]) {
+    if let Some(route) = segment.fixed.get(&decoded_path) {
         found_route = true;
         content = &route.content;
         name = route.name;
@@ -380,7 +388,7 @@ fn match_segment(
     } else if let Some((_, route)) = segment
         .matching
         .iter()
-        .find(|(regex, _)| regex.is_match(path[0]))
+        .find(|(regex, _)| regex.is_match(&decoded_path))
     {
         found_route = true;
         content = &route.content;
@@ -409,13 +417,8 @@ fn match_segment(
 
     // handle parameter
     if let Some(key) = key {
-        if let Ok(val) = decode(path[0]) {
-            parameters.insert(key, val.into_owned());
-        } else {
-            error!(
-                r#"failed to decode parameter value: "{path}""#,
-                path = path[0]
-            )
+        if parameters.insert(key, decoded_path).is_some() {
+            warn!(r#"encountered parameter with same name twice: {key}, later prevails"#);
         }
     }
 
@@ -466,7 +469,7 @@ mod tests {
         let mut targets = BTreeMap::new();
         construct_named_targets(&prepare_segment(), &[], &mut targets);
 
-        assert_eq!(targets.len(), 6);
+        assert_eq!(targets.len(), 7);
         assert_eq!(targets["fixed"].len(), 1);
         assert_eq!(targets["nested"].len(), 1);
         assert_eq!(targets["nested2"].len(), 2);
@@ -547,6 +550,29 @@ mod tests {
     }
 
     #[test]
+    fn match_segment_fixed_encoded() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["fixed-%C3%84%C3%96%C3%9C"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("fixed-encoded"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
     fn match_segment_index() {
         let mut components = (Vec::new(), BTreeMap::new());
         let mut names = BTreeSet::new();
@@ -615,6 +641,30 @@ mod tests {
         assert!(names.contains("match"));
         assert_eq!(parameters.len(), 1);
         assert_eq!(parameters["m1-parameter"], "m1test");
+    }
+
+    #[test]
+    fn match_segment_matching_encoded() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["m1%C3%84%C3%96%C3%9C"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        assert!(ret.is_none());
+        assert!(components.0.is_empty());
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("match"));
+        assert_eq!(parameters.len(), 1);
+        assert_eq!(parameters["m1-parameter"], "m1ÄÖÜ");
     }
 
     #[test]
@@ -730,6 +780,10 @@ mod tests {
     fn prepare_segment() -> Segment {
         Segment::new()
             .fixed("fixed", Route::new(RouteContent::RcNone).name("fixed"))
+            .fixed(
+                "fixed-ÄÖÜ",
+                Route::new(RouteContent::RcNone).name("fixed-encoded"),
+            )
             .fixed(
                 "nested",
                 Route::new(RouteContent::RcComponent(TestComponent))

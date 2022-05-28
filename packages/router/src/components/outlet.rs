@@ -71,8 +71,8 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
         let mut ctx = cx.consume_context::<OutletContext>().unwrap_or_default();
 
         // allow depth override
-        let depth = depth.unwrap_or_else(|| ctx.get_depth(name.clone()));
-        ctx.set_depth(name.clone(), depth);
+        let depth = depth.unwrap_or_else(|| ctx.get_depth(*name));
+        ctx.set_depth(*name, depth);
 
         cx.provide_context(ctx);
         depth
