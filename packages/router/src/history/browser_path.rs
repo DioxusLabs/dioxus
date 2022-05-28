@@ -7,11 +7,8 @@ use web_sys::{History, ScrollRestoration, Window};
 
 use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 
-/// A [`HistoryProvider`] that uses the [History API] and [Location API] to integrate with the
+/// A [`HistoryProvider`] that uses the [History API] and [Location] to integrate with the
 /// browser.
-///
-/// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
-/// [Location API]: https://developer.mozilla.org/en-US/docs/Web/API/Location
 ///
 /// # Prefix
 /// This [`HistoryProvider`] supports a prefix, which allows its use for web apps not located at the
@@ -23,6 +20,26 @@ use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 /// Application developers are responsible for unmounting the router or app when the prefix isn't
 /// present in the current URL. If the router is rendered and a navigation is caused, the prefix
 /// will be introduced to the URL.
+///
+/// # Example
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// use dioxus::router::history::BrowserPathHistoryProvider;
+/// fn App(cx: Scope) -> Element {
+///     let routes = use_segment(&cx, Segment::default);
+///
+///     cx.render(rsx! {
+///         Router {
+///             routes: routes.clone(),
+///             history: &|| BrowserPathHistoryProvider::with_prefix(String::from("/pre")),
+///             Outlet { }
+///         }
+///     })
+/// }
+/// ```
+///
+/// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
+/// [Location]: https://developer.mozilla.org/en-US/docs/Web/API/Location
 pub struct BrowserPathHistoryProvider {
     history: History,
     listener_navigation: Option<EventListener>,

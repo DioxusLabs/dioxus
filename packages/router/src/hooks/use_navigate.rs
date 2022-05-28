@@ -7,9 +7,27 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 /// A hook that allows you to acquire a [`Navigator`] object.
 ///
 /// # Return values
-/// - [`panic!`], when the calling component isn't a descendant of a [`Router`] in debug builds.
-/// - [`None`], when the calling component isn't a descendant of a [`Router`] in release builds.
+/// - [`None`], when the calling component is not nested within a [`Router`].
 /// - Otherwise [`Some`].
+///
+/// # Panic
+/// - When the calling component is not nested within a [`Router`], but only in debug builds.
+///
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// fn SomeComponent(cx: Scope) -> Element {
+///     let nav = use_navigate(&cx).expect("router as ancestor");
+///
+///     # let some_condition = true;
+///     if some_condition {
+///         nav.push(NtExternal(String::from("https://dioxuslabs.com/")));
+///     }
+///
+///     cx.render(rsx! {
+///         p { "content" }
+///     })
+/// }
+/// ```
 ///
 /// [`Router`]: crate::components::Router
 #[must_use]

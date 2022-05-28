@@ -11,9 +11,13 @@ pub struct RouterState {
     pub can_external: bool,
 
     /// Whether there is a prior path to go back to.
+    ///
+    /// This might be [`true`] even if there isn't.
     pub can_go_back: bool,
 
     /// Whether there is a later path to forward to.
+    ///
+    /// This might be [`true`] even if there isn't.
     pub can_go_forward: bool,
 
     /// The components specified by the active routes.
@@ -38,7 +42,7 @@ pub struct RouterState {
 impl RouterState {
     /// Checks if the provided `target` is currently active.
     ///
-    /// # [`NtPath`]
+    /// # [`NtPath`](crate::navigation::NavigationTarget::NtPath)
     /// If the target is a path and `exact` is [`true`], the current path must match the `target`
     /// path exactly.
     ///
@@ -47,7 +51,7 @@ impl RouterState {
     ///
     /// Otherwise, the last segment of the current path must match the `target` path.
     ///
-    /// # [`NtName`]
+    /// # [`NtName`](crate::navigation::NavigationTarget::NtName)
     /// The `target` name must be in the list of active names.
     ///
     /// If `exact` is [`true`], all `target` parameters must be matched by current parameters. The
@@ -56,12 +60,8 @@ impl RouterState {
     ///
     /// The query is ignored.
     ///
-    /// # [`NtExternal`]
+    /// # [`NtExternal`](crate::navigation::NavigationTarget::NtExternal)
     /// Always [`false`].
-    ///
-    /// [`NtPath`]: crate::navigation::NavigationTarget::NtPath
-    /// [`NtName`]: crate::navigation::NavigationTarget::NtName
-    /// [`NtExternal`]: crate::navigation::NavigationTarget::NtExternal
     #[must_use]
     pub fn is_active(&self, target: &NavigationTarget, exact: bool) -> bool {
         match target {

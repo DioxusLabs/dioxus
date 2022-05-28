@@ -17,49 +17,66 @@ use crate::{
 pub struct RouterProps<'a> {
     /// A class to apply to active [`Link`]s.
     ///
-    /// Can be overwritten on individual [`Link`]s via a prop with the same name.
+    /// Individual [`Link`]s can override this via a prop with the same name.
     ///
     /// [`Link`]: crate::components::Link
     pub active_class: Option<&'a str>,
     /// The components to render where the [`Router`] itself is.
     ///
-    /// Usually contains at least one [`Outlet`].
-    ///
-    /// [`Outlet`]: crate::components::Outlet
+    /// Usually contains at least one [`Outlet`](crate::components::Outlet).
     pub children: Element<'a>,
-    /// The global fallback content.
+    /// Fallback content.
     ///
-    /// This can be used to implement a 404 page.
+    /// The router will use this content when no other content is found. It can be used to implement
+    /// a 404 page.
     #[props(default)]
     pub fallback: RouteContent,
     /// A function that constructs a history provider.
     ///
-    /// If none is provided, a default is used. [`BrowserPathHistoryProvider`] when the `web`
-    /// feature is enabled, otherwise [`MemoryHistoryProvider`].
+    /// When [`None`], a default is used:
+    /// - [`BrowserPathHistoryProvider`] when the `web` feature is enabled
+    /// - [`MemoryHistoryProvider`] when it isn't
     ///
     /// [`BrowserPathHistoryProvider`]: crate::history::BrowserPathHistoryProvider
     /// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider
     pub history: Option<&'a dyn Fn() -> Box<dyn HistoryProvider>>,
-    /// If `true`, the router will perform the initial routing and then become inactive.
+    /// When [`true`], the router will route __only once__.
     ///
-    /// This behavior is useful for server side rendering. The router will not spawn any async
-    /// tasks.
+    /// Useful for server-side rendering, as the router will not rely on an async task.
     #[props(default)]
     pub init_only: bool,
-    /// The routes the router should work on.
+    /// The routes of the application.
     pub routes: Arc<Segment>,
 }
 
-/// The base component on which the entire router system builds.
+/// The base component that provides core functionality for the rest of the router.
 ///
-/// All other components provided by the router, as well as all hooks, can only be used as
-/// descendants of a [`Router`] component.
+/// All other components and hooks the router provides can only work as descendants of a [`Router`]
+/// component.
 ///
-/// [`Router`] components cannot be nested. If you nest multiple [`Router`]s, the inner [`Router`]
-/// will be inactive and ignored by all other components and hooks.
+/// The [`Router`] component cannot be nested within itself. Inner instances will be inactive and
+/// ignored.
 ///
 /// # Panic
-/// When an other [`Router`] is an ancestor, but only in debug builds.
+/// - When nested within itself, but only in debug builds.
+///
+/// # Example
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// fn App(cx: Scope) -> Element {
+///     let routes = use_segment(&cx, Segment::new);
+///
+///     cx.render(rsx! {
+///         Router {
+///             routes: routes.clone(),
+///             // other props
+///
+///             // content, at least one
+///             Outlet { }
+///         }
+///     })
+/// }
+/// ```
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let RouterProps {
@@ -81,7 +98,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             return;
         };
 
-        // create history provider
+        // create custom history provider
         let history = history.map(|x| x());
 
         // create router service and inject context
@@ -95,10 +112,9 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.provide_context(context);
 
         // run service
-        if *init_only {
-            service.single_routing();
-        } else {
-            cx.spawn(async move { service.run().await });
+        match init_only {
+            true => service.single_routing(),
+            false => cx.spawn(async move { service.run().await }),
         }
     });
 

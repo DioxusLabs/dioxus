@@ -18,53 +18,77 @@ use crate::{
 /// The properties for a [`Link`].
 #[derive(Props)]
 pub struct LinkProps<'a> {
-    /// A class to apply to the inner `a` tag when the link is active.
+    /// A class to apply to the generated HTML anchor when the `target` route is active.
     ///
     /// This overrides the `active_class` property of a [`Router`].
     ///
     /// [`Router`]: crate::components::Router
     pub active_class: Option<&'a str>,
-    /// The children to render within the [`Link`].
+    /// The children to render within the generated HTML anchor.
     pub children: Element<'a>,
-    /// The classes of the inner `a` tag.
+    /// The `class` attribute of the generated HTML anchor.
     ///
-    /// When the link is active and the `active_class` is appended at the end.
+    /// When the `target` route is active, `active_class` is appended at the end.
     pub class: Option<&'a str>,
-    /// Require the complete path to match exactly for the [`Link`] to be active.
-    ///
-    /// This only has an effect if `target` is [`NtPath`].
+    /// Require the _exact_ target route to be active, for the link to be active. See
+    /// [`RouterState::is_active`](crate::state::RouterState::is_active).
     #[props(default)]
     pub exact: bool,
-    /// The ID of the inner `a` tag.
+    /// The `id` attribute of the generated HTML anchor.
     pub id: Option<&'a str>,
-    /// Specify whether the link should be opened in a new tab.
+    /// When [`true`], the `target` will be opened in a new tab.
     #[props(default)]
     pub new_tab: bool,
-    /// The `rel` attribute of the inner `a` tag.
+    /// The `rel` attribute of the generated HTML anchor.
     ///
     /// Defaults to `"noreferrer noopener"` for [`NtExternal`] targets.
     pub rel: Option<&'a str>,
-    /// The navigation target. Corresponds to the `href` of an `a` tag.
+    /// The navigation target. Corresponds to the `href` of an HTML anchor.
     pub target: NavigationTarget,
 }
 
 /// A link to navigate to another route.
 ///
-/// Needs a [`Router`] as an ancestor.
+/// Only works as a descendent of a [`Router`] component, otherwise it is inactive.
 ///
-/// Unlike a regular `a` tag, a [`Link`] allows the router to handle the navigation and doesn't
+/// # Function
+/// Unlike a regular HTML anchor, a [`Link`] allows the router to handle the navigation and doesn't
 /// cause the browser to load a new page.
 ///
-/// However, in the background a [`Link`] still generates an `a` tag, which you can use for styling
+/// However, in the background a [`Link`] still generates an anchor, which you can use for styling
 /// as normal.
 ///
-/// A [`Link`] navigates to [`NtExternal`] targets independently, even if the [`HistoryProvider`]
-/// the [`Router`] uses cannot.
+/// # External targets
+/// When the [`Link`]s target is [`NtExternal`], the target is used as the `href` directly. This
+/// means that a [`Link`] can always navigate to [`NtExternal`].
+///
+/// __TODO:__ explain when this isn't the case
 ///
 /// # Panic
-/// When no [`Router`] is an ancestor, but only in debug builds.
+/// - When not nested within a [`Router`], but only in debug builds.
 ///
-/// [`HistoryProvider`]: crate::history::HistoryProvider
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// rsx! {
+///     // a link to a specific path
+///     Link {
+///         target: NtPath(String::from("/some/path")),
+///         "Go to path"
+///     }
+///     // a link to a route with a name
+///     Link {
+///         target: NtName("some_name", vec![], QNone),
+///         "Go to named target"
+///     }
+///     // a link to an external page
+///     Link {
+///         target: NtExternal(String::from("https://dioxuslabs.com/")),
+///         "Go to external page"
+///     }
+/// };
+/// ```
+///
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {

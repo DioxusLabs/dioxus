@@ -9,11 +9,6 @@ use super::{DynamicRoute, ParameterRoute, Route, RouteContent};
 ///
 /// A segment refers to the value between two `/` in the path. For example `/blog/1` contains two
 /// segments: `["blog", "1"]`.
-///
-/// # Note on _fixed_ and _matching_ routes
-/// When checking if a _fixed_ or _matching_ route is active, no url en- or decoding is preformed.
-/// If your _fixed_ or _matching_ route contains characters that need to be encoded, you have to
-/// encode them in the value/regex as well.
 #[derive(Clone, Default)]
 pub struct Segment {
     pub(crate) dynamic: DynamicRoute,
@@ -25,14 +20,36 @@ pub struct Segment {
 impl Segment {
     /// Add a _fallback_ route.
     ///
-    /// The _fallback_ route is active if:
-    /// - no _fixed_ route is
-    /// - no _matching_ route is
+    /// A _fallback_ route is similar to a _parameter_ route. It is active, if these conditions
+    /// apply:
+    /// 1. The [`Segment`] is specified by the path,
+    /// 2. no _fixed_ route is active,
+    /// 3. and no _matching_ route is active.
     ///
-    /// Mutually exclusive with a _parameter_ route.
+    /// The segments complete value will __not__ be provided as a parameter.
+    ///
+    /// A [`Segment`] can have __either__ a _fallback_ route or a _parameter_ route.
+    ///
+    /// # Interaction with a [`Router`] level `fallback`
+    /// The [`Router`] allows you to provide some _fallback_ content. That content will be active if
+    /// the router is unable to find an active route. Some examples:
+    /// - If the path is `/invalid`, but the root segment (the [`Segment`] passed to the [`Router`])
+    ///   has no active route.
+    /// - If the path is `/level1/level2/invalid` but the `level2` segment has no nested segment.
+    ///
+    /// A _fallback_ route inhibits that behavior. In the example above, if a _fallback_ route is
+    /// active on the `level2` segment, the [`Router`] fallback content will not be active.
     ///
     /// # Panic
-    /// If a parameter route or fallback was already set, but only in debug builds.
+    /// - If a _fallback_ route or _parameter_ route was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Segment::new().fallback(RcNone);
+    /// ```
+    ///
+    /// [`Router`]: crate::components::Router
     pub fn fallback(mut self, content: RouteContent) -> Self {
         if !self.dynamic.is_none() {
             error!("fallback or parameter route already set, later prevails");
@@ -46,10 +63,26 @@ impl Segment {
 
     /// Add a _fixed_ route.
     ///
-    /// A _fixed_ route is active, if it matches the path segment _exactly_.
+    /// A _fixed_ route acts like a static file or directory (with most web servers). It is active,
+    /// if its _path_ matches the segments value exactly. Some examples:
+    /// - If the path is `/`, no _fixed_ root is active.
+    /// - If the path is `/test` or `/test/`, and the root segment (the [`Segment`] passed to the
+    ///   [`Router`](crate::components::Router)) has a _fixed_ route with a `path` of `test`, that
+    ///   route will be active.
+    /// - If the path is `//`, and the root segment has a _fixed_ route with a `path` of `""` (empty
+    ///   string), that route will be active.
+    ///
+    /// # URL decoding
+    /// The segments value will _not_ be decoded when checking if the _fixed_ route is active.
     ///
     /// # Panic
-    /// If a fixed route with the same `path` was already added, but only in debug builds.
+    /// - If a _fixed_ route with the same `path` was already added, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Segment::new().fixed("path", Route::new(RcNone));
+    /// ```
     pub fn fixed(mut self, path: &str, route: Route) -> Self {
         if self.fixed.insert(path.to_string(), route).is_some() {
             error!(r#"two fixed routes with identical path: "{path}", later prevails"#);
@@ -62,12 +95,22 @@ impl Segment {
 
     /// Add an _index_ route.
     ///
-    /// The _index_ route is active if the [`Segment`] is the first to be not specified by the path.
-    /// For example if the path is `/`, no segment is specified and the _index_ route of the root
-    /// segment is active.
+    /// The _index_ route acts like an `index.html` (with most web servers). It is active, if the
+    /// [`Segment`] is the first to not be specified by the path. Some examples:
+    /// - If the path is `/`, no segment is specified. The _index_ route of the root segment (the
+    ///   [`Segment`] passed to the [`Router`](crate::components::Router)) is active.
+    /// - If the path is `/test` or `/test/`, one segment is specified. If the root segment has an
+    ///   active route, and that route has a nested [`Segment`], that [`Segment`]s _index_  route is
+    ///   active.
     ///
     /// # Panic
-    /// If an index route was already set, but only in debug builds.
+    /// - If an _index_ route was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Segment::new().index(RcNone);
+    /// ```
     pub fn index(mut self, content: RouteContent) -> Self {
         if !self.index.is_rc_none() {
             error!("index route already set, later prevails");
@@ -81,11 +124,28 @@ impl Segment {
 
     /// Add a _matching_ parameter route.
     ///
-    /// A _matching_ route is active if:
-    /// - no _fixed_ route is
-    /// - the segment matches the provided `regex`
-    pub fn matching(mut self, regex: Regex, content: ParameterRoute) -> Self {
-        self.matching.push((regex, content));
+    /// A _matching_ route allows the application to accept a dynamic value, that matches a provided
+    /// regular expression. A _matching_ parameter route is active if these conditions apply:
+    /// 1. The [`Segment`] is specified by the path,
+    /// 2. no _fixed_ route is active,
+    /// 3. no prior _matching_ route (in order of addition) is active,
+    /// 4. and the `regex` matches the segments value.
+    ///
+    /// The segments complete value will be provided as a parameter using the `key` specified in the
+    /// `route`.
+    ///
+    /// # URL decoding
+    /// - The segments value will _not_ be decoded when checking if the _matching_ route is active.
+    /// - The segments value will be decoded when providing it as a parameter.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// # use regex::Regex;
+    /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", RcNone));
+    /// ```
+    pub fn matching(mut self, regex: Regex, route: ParameterRoute) -> Self {
+        self.matching.push((regex, route));
         self
     }
 
@@ -96,22 +156,37 @@ impl Segment {
 
     /// Add a _parameter_ route.
     ///
-    /// The _parameter_ route is active if:
-    /// - no _fixed_ route is
-    /// - no _matching_ route is
+    /// A _parameter_ route is like a _matching_ route with an empty `regex`. It is active if these
+    /// conditions apply:
+    /// 1. The [`Segment`] is specified by the path,
+    /// 2. no _fixed_ route is active,
+    /// 3. and no _matching_ route is active.
     ///
-    /// Mutually exclusive with a _fallback_ route.
+    /// The segments complete value will be provided as a parameter using the `key` specified in the
+    /// `route`.
+    ///
+    /// A [`Segment`] can have __either__ a _parameter_ route or a _fallback_ route.
+    ///
+    /// # URL decoding
+    /// - The segments value will _not_ be decoded when checking if the _matching_ route is active.
+    /// - The segments value will be decoded when providing it as a parameter.
     ///
     /// # Panic
-    /// If a parameter route or fallback was already set, but only in debug builds.
-    pub fn parameter(mut self, parameter: ParameterRoute) -> Self {
+    /// - If a _parameter_ route or _fallback_ route was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Segment::new().parameter(ParameterRoute::new("key", RcNone));
+    /// ```
+    pub fn parameter(mut self, route: ParameterRoute) -> Self {
         if !self.dynamic.is_none() {
             error!("fallback or parameter route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("fallback or parameter route already set");
         }
 
-        self.dynamic = DynamicRoute::Parameter(parameter);
+        self.dynamic = DynamicRoute::Parameter(route);
         self
     }
 }

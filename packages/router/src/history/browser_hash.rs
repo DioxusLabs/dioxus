@@ -8,12 +8,35 @@ use web_sys::{History, ScrollRestoration, Window};
 
 use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 
-/// A [`HistoryProvider`] that stores the current path and query in the browsers URL fragment.
+/// A [`HistoryProvider`] that uses the [History API] and [Location.hash] to integrate with the
+/// browser.
 ///
-/// Uses the [History API] to integrate with the browsers history. Also stores the current scroll
-/// position and restores it when traversing the history.
+/// Early web apps used the [Location.hash] to store routing information. This was done because the
+/// [History API] didn't exist. While this implementation could have been written to not use it as
+/// well, this wasn't done, because in practice all browser that support WebAssembly also support
+/// the [History API].
+///
+///
+///
+/// # Example
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// use dioxus::router::history::BrowserHashHistoryProvider;
+/// fn App(cx: Scope) -> Element {
+///     let routes = use_segment(&cx, Segment::default);
+///
+///     cx.render(rsx! {
+///         Router {
+///             routes: routes.clone(),
+///             history: &|| Box::new(BrowserHashHistoryProvider::default()),
+///             Outlet { }
+///         }
+///     })
+/// }
+/// ```
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
+/// [Location.hash]: https://developer.mozilla.org/en-US/docs/Web/API/Location/hash
 pub struct BrowserHashHistoryProvider {
     history: History,
     listener_navigation: Option<EventListener>,

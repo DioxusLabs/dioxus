@@ -10,7 +10,7 @@ use crate::navigation::NavigationTarget;
 /// [`ParameterRoute`]: super::ParameterRoute
 #[derive(Clone)]
 pub enum RouteContent {
-    /// Indicates the absence of actual content.
+    /// No content.
     ///
     /// Can be used to make a route transparent and have its nested routes be nested one level less
     /// deep.

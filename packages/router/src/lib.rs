@@ -1,13 +1,58 @@
 //! A router for dioxus.
 //!
-//! You are reading the API documentation, which describes the elements of the public API. If you
-//! are more interested in a usage-oriented documentation see the [router book].
+//! You are reading the API documentation, which describes the entirety of the routers API. If you
+//! are looking for a guide-like documentation see the [router book].
+//!
+//!
+//! # Example
+//! ```rust
+//! use dioxus::prelude::*;
+//! # use dioxus::router::history::MemoryHistoryProvider;
+//!
+//! fn App(cx: Scope) -> Element {
+//!     // declare the routes of the app
+//!     let routes = use_segment(&cx, || {
+//!         Segment::new()
+//!             .index(RcComponent(Index)) // when the path is '/'
+//!             .fixed("other", Route::new(RcComponent(Other))) // when the path is `/other`
+//!     });
+//!
+//!     cx.render(rsx! {
+//!         // render the router and give it the routes
+//!         Router {
+//!             routes: routes.clone(),
+//!             # // needed for the test at the end
+//!             # init_only: true,
+//!             # // make test run with `web` feature
+//!             # history: &|| Box::new(MemoryHistoryProvider::default()),
+//!             // give the router a place to render the content
+//!             Outlet { }
+//!         }
+//!     })
+//! }
+//!
+//! fn Index(cx: Scope) -> Element {
+//!     cx.render(rsx! {
+//!         h1 { "Example" }
+//!     })
+//! }
+//!
+//! fn Other(cx: Scope) -> Element {
+//!     cx.render(rsx! {
+//!         p { "Some content" }
+//!     })
+//! }
+//! #
+//! # let mut vdom = VirtualDom::new(App);
+//! # vdom.rebuild();
+//! # assert_eq!("<h1>Example</h1>", dioxus::ssr::render_vdom(&vdom));
+//! ```
 //!
 //! [router book]: https://dioxuslabs.com/router/guide
 
 #![deny(missing_docs)]
 
-/// All components of the router.
+/// The components of the router.
 pub mod components {
     mod link;
     pub use link::*;
@@ -33,12 +78,13 @@ mod contexts {
     pub(crate) use router::*;
 }
 
+/// Helper functions used within the router.
 mod helpers;
 
-/// Types relating to the navigation history.
+/// Implementations of the navigation history.
 pub mod history;
 
-/// All hooks of the router.
+/// The hooks of the router.
 pub mod hooks {
     mod use_navigate;
     pub use use_navigate::*;
@@ -50,7 +96,7 @@ pub mod hooks {
     pub use use_segment::*;
 }
 
-/// Types relating to navigation.
+/// Navigation information.
 pub mod navigation;
 
 /// Fallback path for failed external navigation. See [`NtExternal`].
@@ -72,7 +118,7 @@ pub mod prelude {
     pub use crate::state::RouterState;
 }
 
-/// Types to tell the router what to render.
+/// Application-defined routing information.
 pub mod route_definition {
     mod content;
     pub use content::*;
@@ -90,7 +136,8 @@ pub mod route_definition {
     pub use segment::*;
 }
 
+/// The core of the router.
 mod service;
 
-/// Types providing access to the internal state of the router.
+/// Information about the current route.
 pub mod state;

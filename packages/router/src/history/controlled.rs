@@ -11,8 +11,8 @@ struct ControlledHistoryCore {
 
 /// A [`HistoryProvider`] that can be controlled by a [`HistoryController`].
 ///
-/// This can be used to control a [`Router`] from the outside by passing it in via the `history`
-/// prop.
+/// This can be used to control a [`Router`] from outside the VDOM. For more information, look at
+/// the `ssr` example.
 ///
 /// [`Router`]: crate::components::Router
 #[derive(Clone)]
@@ -96,8 +96,8 @@ impl HistoryProvider for ControlledHistoryProvider {
 
 /// A [`HistoryProvider`] that controls a [`ControlledHistoryProvider`].
 ///
-/// This can be used to control a [`Router`] from the outside by passing in a linked
-/// [`ControlledHistoryProvider`] via the `history` prop.
+/// This can be used to control a [`Router`] from outside the VDOM. For more information, look at
+/// the `ssr` example.
 ///
 /// The [`HistoryController`] also implements [`HistoryProvider`] and causes the router to update
 /// when the path is changed.
@@ -110,8 +110,8 @@ impl HistoryProvider for ControlledHistoryProvider {
 /// navigated to. This is always reset when triggering a navigation from the outside.
 ///
 /// If the internal [`HistoryProvider`] doesn't support external navigation targets (e.g. the
-/// [`MemoryHistoryProvider`]), application developers handle the external navigation. The router
-/// may render an incomplete page if this is not done.
+/// [`MemoryHistoryProvider`]), application developers can handle the external navigation. The
+/// router may render an incomplete page if this is not done.
 ///
 /// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider
 /// [`Router`]: crate::components::Router

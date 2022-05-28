@@ -12,6 +12,12 @@ pub struct Route {
 
 impl Route {
     /// Create a new [`Route`] with the provided `content`.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Route::new(RcNone);
+    /// ```
     pub fn new(content: RouteContent) -> Self {
         Self {
             content,
@@ -26,7 +32,13 @@ impl Route {
     /// the name is unique among the routes passed to the [`Router`].
     ///
     /// # Panic
-    /// If the name was already set, but only in debug builds.
+    /// - If the name was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Route::new(RcNone).name("name");
+    /// ```
     ///
     /// [`NtName`]: crate::navigation::NavigationTarget::NtName
     /// [`Router`]: crate::components::Router
@@ -44,7 +56,13 @@ impl Route {
     /// Add a nested segment.
     ///
     /// # Panic
-    /// If a nested segment was already present, but only in debug builds.
+    /// - If a nested segment was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// Route::new(RcNone).nested(Segment::default());
+    /// ```
     pub fn nested(mut self, nested: Segment) -> Self {
         if self.nested.is_some() {
             error!(r#"nested already set, later prevails"#);

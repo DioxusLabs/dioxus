@@ -5,7 +5,7 @@ use log::error;
 
 use crate::{helpers::sub_to_router, service::RouterMessage};
 
-/// The props for [`GoBackButton`] and [`GoForwardButton`].
+/// The props for a [`GoBackButton`] or a [`GoForwardButton`].
 #[derive(Props)]
 pub struct HistoryButtonProps<'a> {
     /// The children to render inside the button.
@@ -14,11 +14,20 @@ pub struct HistoryButtonProps<'a> {
 
 /// A button that acts like a browsers back button.
 ///
-/// Needs a [`Router`] as an ancestor. The button will disable itself if no prior history is
-/// available.
+/// Only works as a descendent of a [`Router`] component, otherwise it is inactive.
+///
+/// The button will disable itself if it is known, that no prior history is available.
 ///
 /// # Panic
-/// When no [`Router`] is an ancestor, but only in debug builds.
+/// - When not nested within a [`Router`], but only in debug builds.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// rsx! {
+///     GoBackButton { "Go back" }
+/// };
+/// ```
 ///
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]
@@ -53,11 +62,20 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 
 /// A button that acts like a browsers forward button.
 ///
-/// Needs a [`Router`] as an ancestor. The button will disable itself if no "future history" is
-/// available.
+/// Only works as a descendent of a [`Router`] component, otherwise it is inactive.
+///
+/// The button will disable itself if it is known, that no later history is available.
 ///
 /// # Panic
-/// When no [`Router`] is an ancestor, but only in debug builds.
+/// - When not nested within a [`Router`], but only in debug builds.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// rsx! {
+///     GoForwardButton { "Go forward" }
+/// };
+/// ```
 ///
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]

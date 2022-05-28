@@ -1,5 +1,8 @@
 use super::{ParameterRoute, RouteContent};
 
+/// A _fallback_ route or _parameter_ route.
+///
+/// Used internally by [`Segment`](crate::route_definition::Segment) to store either one.
 #[derive(Clone)]
 pub(crate) enum DynamicRoute {
     None,

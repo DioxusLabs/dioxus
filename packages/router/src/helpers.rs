@@ -46,9 +46,10 @@ pub(crate) fn sub_to_router(cx: &ScopeState) -> &mut Option<RouterContext> {
 ///
 /// # Return values:
 /// - [`Some`] if the navigation was successful.
-/// - [`None`] if no target for the `name` was found, or a required parameter was not provided. Only
-///   in release builds.
-/// - [`panic!`] in debug builds, when the release build would return [`None`].
+/// - [`None`] if no target for the `name` was found, or a required parameter was not provided.
+///
+/// # Panic
+/// - In debug builds, when the release build would return [`None`].
 #[must_use]
 pub(crate) fn construct_named_path(
     name: &'static str,

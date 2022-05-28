@@ -8,26 +8,45 @@ use crate::{contexts::OutletContext, helpers::sub_to_router};
 /// Properties for an [`Outlet`].
 #[derive(PartialEq, Props)]
 pub struct OutletProps {
-    /// Override the [`Outlet`]s depth.
+    /// Override the [`Outlet`]s nesting depth.
     ///
-    /// By default an outlets depth will increase with each nesting. This allows you to override
-    /// that depth. Descendants will ignore this override.
+    /// By default the [`Outlet`] will find its own depth. This allows you to override that depth.
+    /// Nested [`Outlet`]s are not aware of this override and will use their actual depth.
     ///
-    /// Be careful when using this option. It is very easy to create a recursive component with it.
+    /// Be very careful when using this prop. It is __extremely__ easy to unknowingly create an
+    /// unterminated recursion with it.
     pub depth: Option<usize>,
-    /// The name of the side_content to render. Will render main content if absent.
+    /// Set a side content name.
+    ///
+    /// By default an [`Outlet`] will only render main content. This will make it render side
+    /// content defined via [`RcMulti`](crate::route_definition::RouteContent::RcMulti).
     pub name: Option<&'static str>,
 }
 
-/// An outlet tells the router where to render the components corresponding to the current route.
+/// Renders the content of the current route.
 ///
-/// Needs a [`Router`] as an ancestor.
+/// Only works as a descendent of a [`Router`] component, otherwise it is inactive.
 ///
-/// Each [`Outlet`] renders a single component. To render the components of nested routes simply
-/// provide nested [`Outlet`]s.
+/// The [`Outlet`] is aware of how many [`Outlet`]s it is nested within. It will render the contents
+/// of the active route that is nested __exactly__ as deep.
 ///
 /// # Panic
-/// When no [`Router`] is an ancestor, but only in debug builds.
+/// - When not nested within a [`Router`], but only in debug builds.
+///
+/// # Example
+/// ```rust,no_run
+/// # use dioxus::prelude::*;
+/// fn App(cx: Scope) -> Element {
+///     let routes = use_segment(&cx, Segment::new);
+///
+///     cx.render(rsx! {
+///         Router {
+///             routes: routes.clone(),
+///             Outlet { }
+///         }
+///     })
+/// }
+/// ```
 ///
 /// [`Router`]: crate::components::Router
 #[allow(non_snake_case)]

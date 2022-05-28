@@ -16,14 +16,15 @@ pub use controlled::*;
 mod memory;
 pub use memory::*;
 
-#[allow(rustdoc::private_intra_doc_links)]
-/// Several operations used by the [router service].
+/// A trait that lets the router access the navigation history.
 ///
-/// **INFO:** The struct referenced in the summary of this trait isn't `pub`. To look at its
-/// documentation either look at the source code or build the documentation with
-/// `--document-private-items`.
-///
-/// [router service]: crate::service::RouterService
+/// Provided implementations:
+/// - [`MemoryHistoryProvider`] implements a history entirely in memory.
+/// - [`BrowserPathHistoryProvider`] hooks up to the browsers history and URL.
+/// - [`BrowserHashHistoryProvider`] hooks up to the browsers history, but stores the actual path
+///   and query in the fragment of the browsers URL.
+/// - [`HistoryController`] and [`ControlledHistoryProvider`] share an other [`HistoryProvider`]
+///   internally. The [`HistoryController`] can be used to control the router from outside the VDOM.
 pub trait HistoryProvider {
     /// Provides the [`HistoryProvider`] with a way to trigger a routing update.
     ///
@@ -84,11 +85,15 @@ pub trait HistoryProvider {
     }
     /// Go to an external target.
     ///
-    /// May be called even if [`HistoryProvider::can_external`] returns [`false`].
+    /// Only called if [`HistoryProvider::can_external`] returns [`true`].
     #[allow(unused)]
     fn external(&self, url: String) {}
 }
 
+/// The position the browser is scrolled to.
+///
+/// Used to restore it when navigating through history, by both [`BrowserPathHistoryProvider`] and
+/// [`BrowserHashHistoryProvider`].
 #[cfg(feature = "web")]
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 struct ScrollPosition {
@@ -97,6 +102,8 @@ struct ScrollPosition {
 }
 
 /// Replace the current history entry with an equivalent one, but with an updated scroll position.
+///
+/// Used by both [`BrowserPathHistoryProvider`] and [`BrowserHashHistoryProvider`].
 #[cfg(feature = "web")]
 fn update_history_with_scroll(window: &web_sys::Window, history: &web_sys::History) {
     use log::error;

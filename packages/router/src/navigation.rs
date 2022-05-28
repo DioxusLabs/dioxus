@@ -9,9 +9,7 @@ pub enum NavigationTarget {
     /// Navigate to the route with the corresponding name.
     ///
     /// If the router doesn't know the provided name, it will navigate to
-    /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`].
-    ///
-    /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`]: crate::PATH_FOR_NAMED_NAVIGATION_FAILURE
+    /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`](crate::PATH_FOR_NAMED_NAVIGATION_FAILURE).
     NtName(
         /// The name of the target route.
         &'static str,
@@ -25,12 +23,12 @@ pub enum NavigationTarget {
     /// Navigate to an external page.
     ///
     /// If the [`HistoryProvider`] used by the [`Router`] doesn't support [`NtExternal`], the router
-    /// will navigate to [`PATH_FOR_NAMED_NAVIGATION_FAILURE`]. The URL the [`NtExternal`] provided
-    /// will be provided in the query string as `url`.
+    /// will navigate to [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]. The URL the [`NtExternal`]
+    /// provided will be provided in the query string as `url`.
     ///
     /// [`HistoryProvider`]: crate::history::HistoryProvider
     /// [`NtExternal`]: NavigationTarget::NtExternal
-    /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`]: crate::PATH_FOR_NAMED_NAVIGATION_FAILURE
+    /// [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]: crate::PATH_FOR_EXTERNAL_NAVIGATION_FAILURE
     /// [`Router`]: crate::components::Router
     NtExternal(String),
 }

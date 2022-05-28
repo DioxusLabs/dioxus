@@ -13,6 +13,12 @@ pub struct ParameterRoute {
 
 impl ParameterRoute {
     /// Create a new [`ParameterRoute`] with the provided `key` and `content`.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// ParameterRoute::new("key", RcNone);
+    /// ```
     pub fn new(key: &'static str, content: RouteContent) -> Self {
         Self {
             content,
@@ -28,7 +34,13 @@ impl ParameterRoute {
     /// the name is unique among the routes passed to the [`Router`].
     ///
     /// # Panic
-    /// If the name was already set, but only in debug builds.
+    /// - If the name was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// ParameterRoute::new("key", RcNone).name("name");
+    /// ```
     ///
     /// [`NtName`]: crate::navigation::NavigationTarget::NtName
     /// [`Router`]: crate::components::Router
@@ -46,7 +58,13 @@ impl ParameterRoute {
     /// Add a nested segment.
     ///
     /// # Panic
-    /// If a nested segment was already present, but only in debug builds.
+    /// - If a nested segment was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus::prelude::*;
+    /// ParameterRoute::new("key", RcNone).nested(Segment::new());
+    /// ```
     pub fn nested(mut self, nested: Segment) -> Self {
         if self.nested.is_some() {
             error!("nested already set, later prevails");

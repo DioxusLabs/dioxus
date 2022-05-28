@@ -686,10 +686,9 @@ mod tests {
             &RouteContent::RcNone,
         );
 
-        let fallback_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
-            p == "fallback"
-        } else {
-            false
+        let fallback_correct = match ret {
+            Some(NavigationTarget::NtPath(p)) => p == "fallback",
+            _ => false,
         };
         assert!(fallback_correct);
 
