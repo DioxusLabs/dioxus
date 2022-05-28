@@ -2,6 +2,7 @@
 name = "dioxus-rsx"
 version = "0.0.0"
 edition = "2018"
+license = "MIT/Apache-2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
