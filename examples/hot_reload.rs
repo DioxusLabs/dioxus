@@ -1,23 +1,13 @@
 use dioxus::prelude::*;
-use std::time::Duration;
 
 fn main() {
-    dioxus::desktop::launch_with_props(with_hot_reload, app, |b| b);
+    dioxus::web::launch_with_props(with_hot_reload, app, |c| c);
 }
 
 fn app(cx: Scope) -> Element {
     let count = use_state(&cx, || 170);
     let rsx_code = use_state(&cx, || None);
-
-    use_future(&cx, (), move |_| {
-        let mut count = count.clone();
-        async move {
-            loop {
-                tokio::time::sleep(Duration::from_millis(1000)).await;
-                count += 1;
-            }
-        }
-    });
+    let re_render = cx.schedule_update();
 
     cx.render(rsx! {
         div {
@@ -54,6 +44,7 @@ fn app(cx: Scope) -> Element {
                         if let Some(code) = rsx_code.get(){
                             let rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
                             rsx_text_index.insert(__line_num.clone(), code.clone());
+                            re_render();
                         }
                     },
                     "submit"
@@ -65,7 +56,7 @@ fn app(cx: Scope) -> Element {
             }
 
             div {
-                width: format!("{}px", count),
+                width: "{count}px",
                 height: "10px",
                 background_color: "red",
             }
@@ -95,7 +86,7 @@ struct CompProps {
 fn Comp(cx: Scope<CompProps>) -> Element {
     cx.render(rsx! {
         h1 {
-            color: cx.props.color,
+            color: "{cx.props.color}",
             "Hello, from a component!"
         }
     })
