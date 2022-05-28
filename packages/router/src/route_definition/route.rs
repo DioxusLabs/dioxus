@@ -3,7 +3,7 @@ use log::error;
 use super::{RouteContent, Segment};
 
 /// A static route.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Route {
     pub(crate) content: RouteContent,
     pub(crate) name: Option<&'static str>,

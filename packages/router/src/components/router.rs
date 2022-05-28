@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 use dioxus_core::{self as dioxus, prelude::*};
 use dioxus_core_macro::*;
@@ -45,6 +45,20 @@ pub struct RouterProps<'a> {
     pub init_only: bool,
     /// The routes of the application.
     pub routes: Arc<Segment>,
+}
+
+// [`Fn() -> Box<dyn HistoryProvider>`] (in `history`) doesn't implement [`Debug`]
+impl Debug for RouterProps<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouterProps")
+            .field("active_class", &self.active_class)
+            .field("children", &self.children)
+            .field("fallback", &self.fallback)
+            .field("history", &self.history.is_some())
+            .field("init_only", &self.init_only)
+            .field("routes", &self.routes)
+            .finish()
+    }
 }
 
 /// The base component that provides core functionality for the rest of the router.

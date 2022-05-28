@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// The properties for a [`Link`].
-#[derive(Props)]
+#[derive(Debug, Props)]
 pub struct LinkProps<'a> {
     /// A class to apply to the generated HTML anchor when the `target` route is active.
     ///
@@ -166,6 +166,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     })
 }
 
+/// Generate a `href` for the `target`.
 fn generate_href(
     target: &NavigationTarget,
     prefix: &str,

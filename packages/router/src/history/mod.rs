@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{fmt::Debug, sync::Arc};
 
 #[cfg(feature = "web")]
 mod browser_hash;
@@ -25,7 +25,10 @@ pub use memory::*;
 ///   and query in the fragment of the browsers URL.
 /// - [`HistoryController`] and [`ControlledHistory`] share an other [`HistoryProvider`] internally.
 ///   The [`HistoryController`] can be used to control the router from outside the VDOM.
-pub trait HistoryProvider {
+pub trait HistoryProvider
+where
+    Self: Debug,
+{
     /// Provides the [`HistoryProvider`] with a way to trigger a routing update.
     ///
     /// Some [`HistoryProvider`]s may receive updates from outside the router and need to inform it
@@ -95,7 +98,7 @@ pub trait HistoryProvider {
 /// Used to restore it when navigating through history, by both [`BrowserPathHistoryProvider`] and
 /// [`BrowserHashHistoryProvider`].
 #[cfg(feature = "web")]
-#[derive(Default, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
 struct ScrollPosition {
     x: f64,
     y: f64,

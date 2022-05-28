@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
+};
 
 use dioxus_core::Component;
 
@@ -115,6 +118,22 @@ impl RouterState {
         } else {
             None
         }
+    }
+}
+
+// [`Component`] (in `components`) doesn't implement [`Debug`]
+impl Debug for RouterState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouterState")
+            .field("can_external", &self.can_external)
+            .field("can_go_back", &self.can_go_back)
+            .field("can_go_forward", &self.can_go_forward)
+            .field("names", &self.names)
+            .field("path", &self.path)
+            .field("prefix", &self.prefix)
+            .field("query", &self.query)
+            .field("parameters", &self.parameters)
+            .finish_non_exhaustive()
     }
 }
 

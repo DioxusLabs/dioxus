@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fmt::Debug};
 
 use dioxus_core::Component;
 
@@ -64,6 +64,18 @@ impl RouteContent {
     #[must_use]
     pub fn is_rc_none(&self) -> bool {
         matches!(self, Self::RcNone)
+    }
+}
+
+// [`Component`] (in [`RcComponent`] and [`RcMulti`]) doesn't implement [`Debug`]
+impl Debug for RouteContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::RcNone => write!(f, "RcNone"),
+            Self::RcComponent(_) => f.debug_tuple("RcComponent").finish(),
+            Self::RcMulti(_, _) => f.debug_tuple("RcMulti").finish(),
+            Self::RcRedirect(arg0) => f.debug_tuple("RcRedirect").field(arg0).finish(),
+        }
     }
 }
 

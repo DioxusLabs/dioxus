@@ -4,6 +4,7 @@ use url::Url;
 use super::HistoryProvider;
 
 /// A [`HistoryProvider`] that stores all information in memory.
+#[derive(Debug)]
 pub struct MemoryHistory {
     current: Url,
     past: Vec<String>,

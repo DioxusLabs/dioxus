@@ -6,7 +6,7 @@ use log::error;
 use crate::{helpers::sub_to_router, service::RouterMessage};
 
 /// The props for a [`GoBackButton`] or a [`GoForwardButton`].
-#[derive(Props)]
+#[derive(Debug, Props)]
 pub struct HistoryButtonProps<'a> {
     /// The children to render inside the button.
     pub children: Element<'a>,

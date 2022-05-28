@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Debug,
     sync::{Arc, RwLock, Weak},
 };
 
@@ -24,6 +25,7 @@ use crate::{
 };
 
 /// A set of messages that the [`RouterService`] can handle.
+#[derive(Debug)]
 pub(crate) enum RouterMessage {
     /// Go back a step in the navigation history.
     GoBack,
@@ -289,6 +291,21 @@ impl RouterService {
                 false
             }
         });
+    }
+}
+
+// [`ScopeId`] (in `update`) doesn't implement [`Debug`]
+impl Debug for RouterService {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RouterService")
+            .field("global_fallback", &self.global_fallback)
+            .field("history", &self.history)
+            .field("named_routes", &self.named_routes)
+            .field("routes", &self.routes)
+            .field("rx", &self.rx)
+            .field("state", &self.state)
+            .field("subscribers", &self.subscribers)
+            .finish_non_exhaustive()
     }
 }
 

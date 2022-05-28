@@ -9,7 +9,7 @@ use super::{DynamicRoute, ParameterRoute, Route, RouteContent};
 ///
 /// A segment refers to the value between two `/` in the path. For example `/blog/1` contains two
 /// segments: `["blog", "1"]`.
-#[derive(Clone, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Segment {
     pub(crate) dynamic: DynamicRoute,
     pub(crate) fixed: BTreeMap<String, Route>,

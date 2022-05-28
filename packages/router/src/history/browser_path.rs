@@ -40,6 +40,7 @@ use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 /// [Location]: https://developer.mozilla.org/en-US/docs/Web/API/Location
+#[derive(Debug)]
 pub struct WebHistory {
     history: History,
     listener_navigation: Option<EventListener>,

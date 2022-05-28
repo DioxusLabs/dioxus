@@ -54,6 +54,7 @@ pub fn use_navigate(cx: &ScopeState) -> Option<Navigator> {
 ///
 /// A [`Navigator`] is not guaranteed to be able to trigger navigation. For example, it will not be
 /// able to do so, when the [`Router`](crate::components::Router) is `init_only`.
+#[derive(Debug)]
 pub struct Navigator {
     tx: UnboundedSender<RouterMessage>,
 }

@@ -1,5 +1,5 @@
 /// A target for the router to navigate to.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum NavigationTarget {
     /// Navigate to the specified path.
     ///
@@ -44,7 +44,7 @@ impl NavigationTarget {
 }
 
 /// A query string.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Query {
     /// No query string.
     QNone,
@@ -55,7 +55,7 @@ pub enum Query {
 }
 
 /// A specific path segment. Used to construct a path during named navigation.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum NamedNavigationSegment {
     /// A fixed path.
     Fixed(String),

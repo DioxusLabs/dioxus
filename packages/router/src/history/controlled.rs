@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt::Debug,
+    sync::{Arc, Mutex},
+};
 
 use super::HistoryProvider;
 
@@ -9,13 +12,25 @@ struct ControlledHistoryCore {
     history: Box<dyn HistoryProvider>,
 }
 
+// [`Fn() + Send + Sync`] (in `callback`) doesn't implement [`Debug`]
+impl Debug for ControlledHistoryCore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ControlledHistoryCore")
+            .field("callback", &self.callback.is_some())
+            .field("changed", &self.changed)
+            .field("external", &self.external)
+            .field("history", &self.history)
+            .finish()
+    }
+}
+
 /// A [`HistoryProvider`] that can be controlled by a [`HistoryController`].
 ///
 /// This can be used to control a [`Router`] from outside the VDOM. For more information, look at
 /// the `ssr` example.
 ///
 /// [`Router`]: crate::components::Router
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ControlledHistory {
     core: Arc<Mutex<ControlledHistoryCore>>,
 }
@@ -114,7 +129,7 @@ impl HistoryProvider for ControlledHistory {
 /// render an incomplete page if this is not done.
 ///
 /// [`Router`]: crate::components::Router
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HistoryController {
     core: Arc<Mutex<ControlledHistoryCore>>,
 }

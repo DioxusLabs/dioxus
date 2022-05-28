@@ -10,7 +10,7 @@ use crate::{navigation::NamedNavigationSegment, service::RouterMessage, state::R
 /// A context providing read and write access to the [router service].
 ///
 /// [router service]: crate::service::RouterService
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) struct RouterContext {
     /// A class to apply to active links.
     pub(crate) active_class: Option<String>,
