@@ -1,4 +1,4 @@
-#![cfg(not(feature = "web"))]
+#![cfg(not(target_family = "wasm"))]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

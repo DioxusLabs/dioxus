@@ -48,12 +48,14 @@ wasm_test = []
 
 [dev-dependencies]
 dioxus = {path = "../..", features = ["desktop", "router", "ssr"]}
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
 env_logger = "0.9.0"
-gloo-utils = "0.1.2"
 hyper = { version = "0.14.18", features = ["full"] }
 tokio = { version = "1.18.2", features = ["full"] }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+dioxus = { path = "../..", features = ["web"] }
+gloo-utils = "0.1.2"
 wasm-bindgen-test = "0.3"
 wasm-logger = "0.2.0"
-
-[target.wasm32-unknown-unknown.dev-dependencies]
-dioxus = { path = "../..", features = ["web"] }

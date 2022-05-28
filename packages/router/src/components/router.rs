@@ -34,8 +34,9 @@ pub struct RouterProps<'a> {
     /// A function that constructs a history provider.
     ///
     /// When [`None`], a default is used:
-    /// - [`BrowserPathHistoryProvider`] when the `web` feature is enabled
-    /// - [`MemoryHistoryProvider`] when it isn't
+    /// - [`BrowserPathHistoryProvider`] when the `web` feature is enabled and the target family
+    ///   is `wasm`
+    /// - Otherwise [`MemoryHistoryProvider`].
     ///
     /// [`BrowserPathHistoryProvider`]: crate::history::BrowserPathHistoryProvider
     /// [`MemoryHistoryProvider`]: crate::history::MemoryHistoryProvider

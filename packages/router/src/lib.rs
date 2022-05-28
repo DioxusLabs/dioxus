@@ -23,8 +23,6 @@
 //!             routes: routes.clone(),
 //!             # // needed for the test at the end
 //!             # init_only: true,
-//!             # // make test run with `web` feature
-//!             # history: &|| Box::new(MemoryHistoryProvider::default()),
 //!             // give the router a place to render the content
 //!             Outlet { }
 //!         }
