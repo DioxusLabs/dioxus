@@ -1,5 +1,6 @@
 use dioxus_core::{Component, Element, LazyNodes, Scope, VNode};
 use dioxus_hooks::*;
+use error::Error;
 use interperter::build;
 use std::collections::HashMap;
 use std::panic::Location;
@@ -10,6 +11,7 @@ use syn::parse_str;
 mod attributes;
 pub mod captuered_context;
 mod elements;
+mod error;
 mod interperter;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -35,8 +37,12 @@ pub fn interpert_rsx<'a, 'b>(
     factory: dioxus_core::NodeFactory<'a>,
     text: &str,
     context: captuered_context::CapturedContext<'a>,
-) -> VNode<'a> {
-    build(parse_str(text).unwrap(), context, &factory)
+) -> Result<VNode<'a>, Error> {
+    build(
+        parse_str(text).map_err(|err| Error::ParseError(err))?,
+        context,
+        &factory,
+    )
 }
 
 #[track_caller]

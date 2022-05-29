@@ -5,7 +5,7 @@ edition = "2021"
 license = "MIT/Apache-2.0"
 
 [dependencies]
-syn = "1.0"
+syn = { version = "1.0", features = ["extra-traits"] }
 quote = "1.0"
 dioxus-rsx = { path = "../rsx", default-features = false }
 dioxus-ssr = { path = "../ssr" }

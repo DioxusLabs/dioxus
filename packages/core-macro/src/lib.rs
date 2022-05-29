@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::ToTokens;
 use syn::parse_macro_input;
 
 mod inlineprops;
@@ -189,7 +189,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 use dioxus_rsx_interperter::captuered_context::CapturedContextBuilder;
 
                 let captured = CapturedContextBuilder::from_call_body(body);
-                quote! {
+                quote::quote! {
                     {
                         let __line_num = get_line_num();
                         let __rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
@@ -206,11 +206,14 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                 // clone prevents deadlock on nested rsx calls
                                 read.get(&__line_num).cloned()
                             } {
-                                interpert_rsx(
+                                match interpert_rsx(
                                     __cx,
                                     &__text,
                                     #captured
-                                )
+                                ){
+                                    Ok(vnode) => vnode,
+                                    Err(err) => __cx.text(format_args!("{:?}", err))
+                                }
                             }
                             else {
                                 panic!("rsx: line number {:?} not found in rsx index", __line_num);
