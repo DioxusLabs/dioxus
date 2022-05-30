@@ -1,7 +1,6 @@
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
-#[cfg(feature = "to_tokens")]
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
@@ -159,7 +158,6 @@ impl Parse for Element {
     }
 }
 
-#[cfg(feature = "to_tokens")]
 impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
@@ -218,7 +216,6 @@ pub struct ElementAttrNamed {
     pub attr: ElementAttr,
 }
 
-#[cfg(feature = "to_tokens")]
 impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let ElementAttrNamed { el_name, attr } = self;

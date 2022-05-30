@@ -1,8 +1,10 @@
 use dioxus_core::{Listener, VNode};
-use dioxus_rsx::{BodyNode, CallBody, Component, ElementAttr, ElementAttrNamed, IfmtInput};
+use dioxus_rsx::{
+    BodyNode, CallBody, Component, ElementAttr, ElementAttrNamed, IfmtInput, Segment,
+};
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::collections::HashMap;
-use syn::Expr;
+use syn::{Expr, Result};
 
 #[derive(Default)]
 pub struct CapturedContextBuilder {
@@ -24,15 +26,15 @@ impl CapturedContextBuilder {
         self.captured_expressions.extend(other.captured_expressions);
     }
 
-    pub fn from_call_body(body: CallBody) -> Self {
+    pub fn from_call_body(body: CallBody) -> Result<Self> {
         let mut new = Self::default();
         for node in body.roots {
-            new.extend(Self::find_captured(node));
+            new.extend(Self::find_captured(node)?);
         }
-        new
+        Ok(new)
     }
 
-    fn find_captured(node: BodyNode) -> Self {
+    fn find_captured(node: BodyNode) -> Result<Self> {
         let mut captured = CapturedContextBuilder::default();
         match node {
             BodyNode::Element(el) => {
@@ -40,7 +42,7 @@ impl CapturedContextBuilder {
                     match attr.attr {
                         ElementAttr::AttrText { name, value } => {
                             let (name, value_tokens) = (name.to_string(), value.to_token_stream());
-                            let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
+                            let formated: IfmtInput = syn::parse2(value_tokens)?;
                             captured.attributes.insert(name, formated);
                         }
                         ElementAttr::AttrExpression { name: _, value } => {
@@ -48,7 +50,7 @@ impl CapturedContextBuilder {
                         }
                         ElementAttr::CustomAttrText { name, value } => {
                             let (name, value_tokens) = (name.value(), value.to_token_stream());
-                            let formated: IfmtInput = syn::parse2(value_tokens).unwrap();
+                            let formated: IfmtInput = syn::parse2(value_tokens)?;
                             captured.attributes.insert(name, formated);
                         }
                         ElementAttr::CustomAttrExpression { name: _, value } => {
@@ -58,7 +60,7 @@ impl CapturedContextBuilder {
                     }
                 }
                 for child in el.children {
-                    captured.extend(Self::find_captured(child));
+                    captured.extend(Self::find_captured(child)?);
                 }
             }
             BodyNode::Component(comp) => {
@@ -71,7 +73,7 @@ impl CapturedContextBuilder {
             }
             BodyNode::RawExpr(_) => captured.iterators.push(node),
         }
-        captured
+        Ok(captured)
     }
 }
 
@@ -95,34 +97,41 @@ impl ToTokens for CapturedContextBuilder {
             BodyNode::RawExpr(expr) => expr.to_token_stream().to_string(),
             _ => unreachable!(),
         });
-        let captured_named: Vec<_> = attributes
-            .iter()
-            .map(|(_, fmt)| fmt.named_args.iter())
-            .chain(text.iter().map(|fmt| fmt.named_args.iter()))
+        let captured: Vec<_> = attributes
+            .values()
+            .chain(text.iter())
+            .map(|input| input.segments.iter())
             .flatten()
+            .filter_map(|seg| match seg {
+                Segment::Formatted {
+                    format_args,
+                    segment,
+                } => {
+                    let expr = segment.to_token_stream();
+                    let as_string = expr.to_string();
+                    let format_expr = if format_args.is_empty() {
+                        "{".to_string() + format_args + "}"
+                    } else {
+                        "{".to_string() + ":" + format_args + "}"
+                    };
+                    Some(quote! {
+                        FormattedArg{
+                            expr: #as_string,
+                            format_args: #format_args,
+                            result: format!(#format_expr, #expr)
+                        }
+                    })
+                }
+                _ => None,
+            })
             .collect();
-        let captured_expr: Vec<_> = attributes
-            .iter()
-            .map(|(_, fmt)| fmt.positional_args.iter())
-            .chain(text.iter().map(|fmt| fmt.positional_args.iter()))
-            .flatten()
-            .collect();
-        let captured_names = captured_named.iter().map(|(n, _)| n.to_string()).chain(
-            captured_expr
-                .iter()
-                .map(|expr| expr.to_token_stream().to_string()),
-        );
-        let captured_expr = captured_named
-            .iter()
-            .map(|(_, e)| e)
-            .chain(captured_expr.iter().map(|expr| *expr));
         let captured_attr_expressions_text = captured_expressions
             .iter()
             .map(|e| format!("{}", e.to_token_stream()));
         tokens.append_all(quote! {
             CapturedContext {
                 captured: IfmtArgs{
-                    named_args: vec![#((#captured_names, #captured_expr.to_string())),*]
+                    named_args: vec![#(#captured),*]
                 },
                 components: vec![#((#compontents_str, #components)),*],
                 iterators: vec![#((#iterators_str, #iterators)),*],
@@ -149,6 +158,12 @@ pub struct CapturedContext<'a> {
 }
 
 pub struct IfmtArgs {
-    // live reload only supports named arguments
-    pub named_args: Vec<(&'static str, String)>,
+    // map expressions to the value string they produced
+    pub named_args: Vec<FormattedArg>,
+}
+
+pub struct FormattedArg {
+    pub expr: &'static str,
+    pub format_args: &'static str,
+    pub result: String,
 }

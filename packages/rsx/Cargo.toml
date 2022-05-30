@@ -9,8 +9,4 @@ license = "MIT/Apache-2.0"
 [dependencies]
 proc-macro2 = { version = "1.0" }
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-quote = { version = "1.0", optional = true }
-
-[features]
-default = ["to_tokens"]
-to_tokens = ["quote"]
+quote = { version = "1.0" }

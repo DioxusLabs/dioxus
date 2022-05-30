@@ -14,7 +14,7 @@ fn app(cx: Scope) -> Element {
             },
 
             p {
-                "High-Five counter: {count}",
+                "High-Five counter: {count.to_string():?}",
             }
 
             div {
@@ -43,33 +43,31 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-             display: "flex",
-             flex_direction: "row",
-             width: "100%",
-             height: "50%",
-             Editable{
-                current_code: submitted_rsx_code.get().clone(),
-             },
+            display: "flex",
+            flex_direction: "row",
+            width: "100%",
+            height: "50%",
+            Editable{
+               current_code: submitted_rsx_code.get().clone(),
+            },
 
-             textarea {
-                 width: "90%",
-                 value:
-                    rsx_code
-                 ,
-                 oninput: move |evt| {
-                     rsx_code.set(evt.value.clone());
-                 },
-             }
+            textarea {
+                width: "90%",
+                value: rsx_code,
+                oninput: move |evt| {
+                    rsx_code.set(evt.value.clone());
+                },
+            }
 
-             button {
-                 height: "100%",
-                 width: "10%",
-                 onclick: move |_|{
-                         submitted_rsx_code.set(Some(rsx_code.get().clone()));
-                 },
-                 "submit"
-             }
-         }
+            button {
+                height: "100%",
+                width: "10%",
+                onclick: move |_|{
+                   submitted_rsx_code.set(Some(rsx_code.get().clone()));
+                },
+                "submit"
+            }
+        }
     })
 }
 
@@ -86,7 +84,7 @@ fn Editable(cx: Scope<EditableProps>) -> Element {
         rsx_index.insert(
             CodeLocation {
                 file: r"examples\hot_reload.rs".to_string(),
-                line: 95,
+                line: 93,
                 column: 15,
             },
             code.clone(),
@@ -101,7 +99,7 @@ fn Editable(cx: Scope<EditableProps>) -> Element {
             },
 
             p {
-                "High-Five counter: {count}",
+                "High-Five counter: {count.to_string():?}",
             }
 
             div {
