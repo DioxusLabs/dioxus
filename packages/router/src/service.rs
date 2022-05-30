@@ -102,8 +102,7 @@ impl RouterService {
         #[cfg(not(all(feature = "web", target_family = "wasm")))]
         let mut history = history.unwrap_or_else(|| Box::new(MemoryHistory::default()));
         #[cfg(all(feature = "web", target_family = "wasm"))]
-        let mut history =
-            history.unwrap_or_else(|| Box::new(BrowserPathHistoryProvider::default()));
+        let mut history = history.unwrap_or_else(|| Box::new(WebHistory::default()));
         history.foreign_navigation_handler(Arc::new(move || {
             tx.unbounded_send(RouterMessage::Update).ok();
         }));
