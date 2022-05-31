@@ -213,7 +213,10 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                             #captured
                                         ){
                                             Ok(vnode) => vnode,
-                                            Err(_) => __cx.text(format_args!(""))
+                                            Err(err) => {
+                                                __rsx_text_index.report_error(err);
+                                                __cx.text(format_args!(""))
+                                            }
                                         }
                                     }
                                     else {
