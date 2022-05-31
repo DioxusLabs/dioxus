@@ -19,7 +19,7 @@ proc-macro2 = { version = "1.0" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 dioxus-rsx = {  path = "../rsx" }
-dioxus-rsx-interperter = { path = "../rsx_interperter", optional = true }
+dioxus-rsx-interpreter = { path = "../rsx_interpreter", optional = true }
 
 # testing
 [dev-dependencies]
@@ -28,4 +28,4 @@ trybuild = "1.0"
 
 [features]
 default = []
-hot_reload = ["dioxus-rsx-interperter"]
+hot_reload = ["dioxus-rsx-interpreter"]
