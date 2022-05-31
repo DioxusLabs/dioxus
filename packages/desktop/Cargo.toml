@@ -42,7 +42,6 @@ fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
 
-
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
 dioxus-hooks = { path = "../hooks" }

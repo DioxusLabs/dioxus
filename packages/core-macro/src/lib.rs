@@ -193,9 +193,9 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                         quote::quote! {
                             {
                                 let __line_num = get_line_num();
-                                let __rsx_text_index: RsxTextIndex = cx.consume_context().unwrap();
+                                let __rsx_text_index: RsxContext = cx.consume_context().expect("Hot reload is not avalable on this platform");
                                 // only the insert the rsx text once
-                                if !__rsx_text_index.read().contains_key(&__line_num){
+                                if !__rsx_text_index.read().hm.contains_key(&__line_num){
                                     __rsx_text_index.insert(
                                         __line_num.clone(),
                                         #rsx_text.to_string(),
@@ -205,7 +205,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                     if let Some(__text) = {
                                         let read = __rsx_text_index.read();
                                         // clone prevents deadlock on nested rsx calls
-                                        read.get(&__line_num).cloned()
+                                        read.hm.get(&__line_num).cloned()
                                     } {
                                         match interpert_rsx(
                                             __cx,
@@ -213,7 +213,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                                             #captured
                                         ){
                                             Ok(vnode) => vnode,
-                                            Err(err) => __cx.text(format_args!("{:?}", err))
+                                            Err(_) => __cx.text(format_args!(""))
                                         }
                                     }
                                     else {

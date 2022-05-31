@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_with_props(with_hot_reload, app, |c| c);
+    dioxus::desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -46,13 +46,14 @@ fn app(cx: Scope) -> Element {
             display: "flex",
             flex_direction: "row",
             width: "100%",
-            height: "50%",
+            height: "100%",
             Editable{
                current_code: submitted_rsx_code.get().clone(),
             },
 
             textarea {
-                width: "90%",
+                width: "50em",
+                height: "50em",
                 value: rsx_code,
                 oninput: move |evt| {
                     rsx_code.set(evt.value.clone());
@@ -80,11 +81,11 @@ struct EditableProps {
 fn Editable(cx: Scope<EditableProps>) -> Element {
     let count = use_state(&cx, || 170);
     if let Some(code) = cx.props.current_code.as_ref() {
-        let rsx_index: RsxTextIndex = cx.consume_context().unwrap();
+        let rsx_index: RsxContext = cx.consume_context().unwrap();
         rsx_index.insert(
             CodeLocation {
                 file: r"examples\hot_reload.rs".to_string(),
-                line: 93,
+                line: 94,
                 column: 15,
             },
             code.clone(),
