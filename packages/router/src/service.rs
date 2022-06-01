@@ -423,6 +423,13 @@ fn match_segment(
         content = fb_content;
     }
 
+    // check if path is too specific
+    if path.len() > 1 && nested.is_none() {
+        if let DynamicRoute::Fallback(content) = &segment.dynamic {
+            return content.add_to_list(components);
+        }
+    }
+
     // content and name
     if let Some(target) = content.add_to_list(components) {
         return Some(target);
@@ -767,6 +774,35 @@ mod tests {
     }
 
     #[test]
+    fn match_segment_fallback_too_specific() {
+        let mut components = (Vec::new(), BTreeMap::new());
+        let mut names = BTreeSet::new();
+        let mut parameters = BTreeMap::new();
+
+        let ret = match_segment(
+            &["nested", "empty", "another"],
+            &prepare_segment(),
+            &mut components,
+            &mut names,
+            &mut parameters,
+            &RouteContent::RcNone,
+        );
+
+        let fallback_correct = match ret {
+            Some(NavigationTarget::NtPath(p)) => p == "fallback",
+            _ => false,
+        };
+        assert!(fallback_correct);
+
+        // correctly matched values persist
+        assert_eq!(components.0.len(), 1);
+        assert!(components.1.is_empty());
+        assert_eq!(names.len(), 1);
+        assert!(names.contains("nested"));
+        assert!(parameters.is_empty());
+    }
+
+    #[test]
     fn match_segment_global_fallback() {
         let mut components = (Vec::new(), BTreeMap::new());
         let mut names = BTreeSet::new();
@@ -822,6 +858,7 @@ mod tests {
                                     String::from("redirect-path"),
                                 ))),
                             )
+                            .fixed("empty", Route::new(RouteContent::RcNone))
                             .fallback(RouteContent::RcRedirect(NavigationTarget::NtPath(
                                 String::from("fallback"),
                             ))),
