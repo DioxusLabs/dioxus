@@ -49,7 +49,7 @@ pub enum Query {
     /// No query string.
     QNone,
     /// The query string is the provided string.
-    QString(Option<String>),
+    QString(String),
     /// Construct a new query string from the provided key value pairs.
     QVec(Vec<(String, String)>),
 }

@@ -92,9 +92,11 @@ pub(crate) fn construct_named_path(
 
     // add query
     match query {
-        Query::QNone | Query::QString(None) => {}
-        Query::QString(Some(qs)) => {
-            if qs.starts_with('?') {
+        Query::QNone => {}
+        Query::QString(qs) => {
+            if qs.is_empty() {
+                // do nothing
+            } else if qs.starts_with('?') {
                 path = format!("{path}{qs}")
             } else {
                 path = format!("{path}?{qs}")
@@ -150,7 +152,7 @@ mod tests {
             construct_named_path(
                 "fixed",
                 &[],
-                &Query::QString(Some(String::from("?query=works"))),
+                &Query::QString(String::from("?query=works")),
                 &test_targets()
             )
         )
@@ -163,7 +165,7 @@ mod tests {
             construct_named_path(
                 "fixed",
                 &[],
-                &Query::QString(Some(String::from("query=works"))),
+                &Query::QString(String::from("query=works")),
                 &test_targets()
             )
         )
