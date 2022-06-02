@@ -1239,12 +1239,13 @@ Finally, call `.build()` to create the instance of `{name}`.
 
 /// Logic for declaratively injecting properties in custom components
 pub mod injection {
+    use std::{fmt, isize};
     use std::borrow::BorrowMut;
-    use std::collections::{HashMap, HashSet};
-    use std::fmt;
+    use std::collections::HashMap;
+    use std::fmt::{Display, Formatter, Write};
     #[cfg(debug_assertions)]
     use std::fmt::Debug;
-    use std::fmt::{Display, Formatter, Write};
+    use std::hash::{Hash, Hasher};
     use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
     use std::str::FromStr;
     use std::sync::{Mutex, Once};
@@ -1306,14 +1307,14 @@ pub mod injection {
                     },
                     selector,
                 )
-                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+                .map_err(|err| syn::Error::new(Span::call_site(), err))?;
             }
 
-            /*
-                        #[cfg(debug_assertions)]
-                        InjectedProperties::debug(component)
-                            .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
-            */
+/*
+            #[cfg(debug_assertions)]
+            InjectedProperties::debug(component)
+                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+*/
 
             Ok(())
         }
@@ -1394,6 +1395,7 @@ pub mod injection {
 
         /// Thread safe static singleton instance of `ComponentProperties`
         fn components<'a>() -> &'a Mutex<Self> {
+            // todo: this can be replaced with once_cell once it is stabilized in std library
             static mut INNER: Option<Mutex<InjectedProperties>> = None;
             static INIT: Once = Once::new();
 
@@ -1458,20 +1460,6 @@ pub mod injection {
             }
         }
 
-        /// Adds a new child leve;, creates a new segment trace; only used
-        /// to start new level, subsequent children need to use `Branch::sibling`
-        pub fn child<N: ToString>(&mut self, name: N) {
-            let mut counters = HashMap::default();
-
-            counters.insert(name.to_string(), 0);
-
-            self.segments.push(SegmentTrace {
-                current: name.to_string(),
-                ordinal: 0,
-                counters,
-            });
-        }
-
         /// Indicates no more siblings; used after last sibling is added
         pub fn last(&mut self) -> Result<(), String> {
             if self.segments.is_empty() {
@@ -1485,8 +1473,8 @@ pub mod injection {
             }
         }
 
-        /// Adds next sibling, updates trace info
-        pub fn sibling<N: ToString>(&mut self, name: N) -> Result<(), String> {
+        /// Adds next child, updates trace info
+        pub fn next_child<N: ToString>(&mut self, name: N) -> Result<(), String> {
             if self.segments.is_empty() {
                 Err(String::from(
                     "Branch is empty, start with a call to child first",
@@ -1506,6 +1494,20 @@ pub mod injection {
                 Ok(())
             }
         }
+
+        /// Adds a branches new level;, creates a new segment trace; only used
+        /// to start new level, subsequent children need to use `Branch::sibling`
+        pub fn new_branch<N: ToString>(&mut self, name: N) {
+            let mut counters = HashMap::default();
+
+            counters.insert(name.to_string(), 0);
+
+            self.segments.push(SegmentTrace {
+                current: name.to_string(),
+                ordinal: 0,
+                counters,
+            });
+        }
     }
 
     /// Trace information of a segment of a `Branch`
@@ -1514,8 +1516,10 @@ pub mod injection {
     struct SegmentTrace {
         /// Current element/component; this changes as the branch traverses through document
         current: String,
+
         /// Position in list of siblings; only applies to `SegmentTrace::current`
         ordinal: usize,
+
         /// Trace of counters by element/component; used to determine the position in the
         /// list of siblings relative only to a specific element/component,
         /// i.e. nth div, instead of the nth sibling which also needs to be a div
@@ -1533,8 +1537,9 @@ pub mod injection {
             *self.counters.get(self.current.as_str()).unwrap()
         }
     }
+
     /// Declarative selectors of custom properties
-    struct PropertySelectors(HashMap<Property, Selectors>);
+    pub struct PropertySelectors(HashMap<Property, Selectors>);
 
     impl Deref for PropertySelectors {
         type Target = HashMap<Property, Selectors>;
@@ -1558,7 +1563,8 @@ pub mod injection {
         }
     }
 
-    #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+    #[derive(Clone, Eq, PartialEq, Hash)]
+    #[cfg_attr(debug_assertions, derive(Debug))]
     pub enum Property {
         Attribute {
             name: String,
@@ -1581,9 +1587,9 @@ pub mod injection {
     }
 
     /// Declarative selectors
-    #[derive(Clone)]
+    #[derive(Clone, PartialEq)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    pub struct Selectors(HashMap<String, HashSet<Segments>>);
+    pub struct Selectors(pub(crate) HashMap<String, Vec<Segments>>);
 
     impl Selectors {
         #[inline]
@@ -1593,7 +1599,7 @@ pub mod injection {
         }
 
         /// Checks if a `Branch` matches any of the selector rules
-        fn matches(
+        pub(crate) fn matches(
             &self,
             branch: &Branch,
             total: usize,
@@ -1623,41 +1629,50 @@ pub mod injection {
 
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             // multiple selectors can be defined separated by a semicolon
-            let result = value
+            let selectors = value
                 .split(';')
-                .filter_map(|sel| {
-                    if sel.trim().is_empty() {
-                        None
+                .map(|selector| {
+                    let selector = selector.trim();
+
+                    if selector.is_empty() {
+                        Err(String::from(
+                            "Empty selector definition remove redundant ';'",
+                        ))
                     } else {
-                        Some(Selector::from_str(sel.trim()))
+                        Ok((Selector::from_str(selector), selector))
                     }
                 })
                 // an identifier key may represent multiple selectors, group them
-                .fold(Ok(Self::new()), |acc, next| match acc {
-                    Ok(mut acc) => match next {
-                        Ok(next) => {
-                            acc.0
+                .fold(Ok(HashMap::new()), |acc, next| {
+                    acc.and_then(|mut acc| {
+                        next.and_then(|(next, src)| {
+                            let next = next?;
+                            let entry = acc
                                 .entry(next.identifier.clone())
-                                .or_insert_with(HashSet::new)
-                                .insert(next.segments);
+                                .or_insert_with(Vec::new);
 
-                            Ok(acc)
-                        }
-                        Err(err) => Err(err),
-                    },
-                    err => err,
-                });
+                            if entry.iter().any(|segments| segments == &next.segments) {
+                                Err(format!("duplicate selector '{src}'"))
+                            } else {
+                                entry.push(next.segments);
 
-            if let Ok(ok_result) = &result {
-                if ok_result.0.is_empty() {
-                    Err(String::from(
-                        "selectors can not be empty, provide one or remove definition",
-                    ))
-                } else {
-                    result
-                }
+                                Ok(acc)
+                            }
+                        })
+                    })
+                })?;
+
+            if selectors.is_empty() {
+                Err(String::from(
+                    "selectors can not be empty, provide one or remove definition",
+                ))
             } else {
-                result
+                Ok(Self(
+                    selectors
+                        // .into_iter()
+                        // .map(|(key, segments)| (key, segments.into_iter().collect()))
+                        // .collect(),
+                ))
             }
         }
     }
@@ -1667,6 +1682,7 @@ pub mod injection {
     struct Selector {
         /// identifies selector rules; derived by striping out rules
         identifier: String,
+
         // rule for each segment of selector
         segments: Segments,
     }
@@ -1681,7 +1697,8 @@ pub mod injection {
                 .split('>')
                 .map(Segment::from_str)
                 .collect::<Result<Vec<_>, _>>()
-                .map_err(|err| format!("'{value}' exception parsing selector; {err}"))?;
+                .map_err(|err| format!("exception parsing selector '{value}'; {err}"))?;
+
             let identifier = segments
                 .iter()
                 .map(|seg| match seg {
@@ -1707,7 +1724,7 @@ pub mod injection {
     /// A collection of selector segment rules
     #[derive(Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    struct Segments(Vec<Segment>);
+    pub(crate) struct Segments(pub(crate) Vec<Segment>);
 
     impl Deref for Segments {
         type Target = Vec<Segment>;
@@ -1720,34 +1737,40 @@ pub mod injection {
     /// Identifies which position, absolute or relative, to use in a selector rule
     #[derive(Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    enum SelectorMode {
+    pub(crate) enum SelectorMode {
         /// Indicates the Nth rule should use the absolute position
         /// of a child, disregarding element/component types
-        NthChild,
+        Child,
+
         /// Indicates the Nth rule should use the relative position
         /// of an element/component within a list of only like types
-        NthTypeOf,
+        TypeOf,
     }
 
     /// Defines the rules for a segment
     #[derive(Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    enum Segment {
+    pub(crate) enum Segment {
         /// Identifies a component segment rule
         Component {
             /// name of component
             name: String,
+
             /// selection mode of segment
             mode: SelectorMode,
+
             /// selection rule of segment
             nth: Nth,
         },
+
         /// Identifies an element segment rule
         Element {
             /// name of element
             name: String,
+
             /// selection mode of segment
             mode: SelectorMode,
+
             /// selection rule of segment
             nth: Nth,
         },
@@ -1764,45 +1787,121 @@ pub mod injection {
                 return Err(String::from("Segment can not be empty"));
             }
 
-            // check if it is a component
-            let is_component = value.chars().next().unwrap().is_uppercase();
+            // try css parse first
+            if let Some((name, css)) = value.split_once(':') {
+                match CSSPseudo::from_str(css) {
+                    Ok(css) => return css_to_segment(name, css),
+                    // if err is blank, pass through and parse rusty
+                    Err(err) if !err.is_empty() => return Err(err),
+                    _ => {}
+                };
+            }
 
             // determine selection mode
-            let (mode, splitter) = if value.contains(':') {
-                (SelectorMode::NthChild, ':')
+            let (mode, splitter) = if value.contains('@') {
+                (SelectorMode::TypeOf, '@')
             } else {
-                (SelectorMode::NthTypeOf, '@')
+                (SelectorMode::Child, ':')
             };
 
-            Ok(match value.split_once(splitter) {
-                None if is_component => Self::Component {
-                    name: value.to_string(),
-                    mode,
-                    nth: Nth::All,
-                },
-                None => Self::Element {
-                    name: value.to_string(),
-                    mode,
-                    nth: Nth::All,
-                },
+            return Ok(match value.split_once(splitter) {
+                None => make_segment(value, mode, Nth::All)?,
                 Some((name, nth)) => {
-                    let nth = Nth::from_str(nth)?;
+                    let nth = Nth::from_str(nth, splitter)?;
 
-                    if is_component {
-                        Self::Component {
-                            name: name.to_string(),
-                            mode,
-                            nth,
-                        }
-                    } else {
-                        Self::Element {
-                            name: name.to_string(),
-                            mode,
-                            nth,
-                        }
-                    }
+                    make_segment(name, mode, nth)?
                 }
-            })
+            });
+        }
+    }
+
+    fn css_to_segment(name: &str, css: CSSPseudo) -> Result<Segment, String> {
+        match css {
+            CSSPseudo::Not(elements) => {
+                make_segment("", SelectorMode::Child, Nth::Not(elements.into()))
+            }
+
+            CSSPseudo::FirstChild => make_segment(name, SelectorMode::Child, Nth::First),
+
+            CSSPseudo::LastChild => make_segment(name, SelectorMode::Child, Nth::Last),
+
+            CSSPseudo::NthChild(nth) => {
+                make_segment(name, SelectorMode::Child, Nth::Nth(nth.into()))
+            }
+
+            CSSPseudo::EveryNthChild { frequency, offset } => {
+                make_segment(name, SelectorMode::Child, Nth::EveryN { frequency, offset })
+            }
+
+            CSSPseudo::NthEvenChild => make_segment(name, SelectorMode::Child, Nth::Even),
+
+            CSSPseudo::NthOddChild => make_segment(name, SelectorMode::Child, Nth::Odd),
+
+            CSSPseudo::NthLastChild(nth) => {
+                make_segment(name, SelectorMode::Child, Nth::NthLast(nth.into()))
+            }
+
+            CSSPseudo::NthLastEveryNChild { frequency, offset } => make_segment(
+                name,
+                SelectorMode::Child,
+                Nth::LastEveryN { frequency, offset },
+            ),
+
+            CSSPseudo::NthChildRange(range) => {
+                make_segment(name, SelectorMode::Child, Nth::Range(range))
+            }
+
+            CSSPseudo::NthChildRangeFrom(range) => {
+                make_segment(name, SelectorMode::Child, Nth::RangeFrom(range))
+            }
+
+            CSSPseudo::NthChildRangeTo(range) => {
+                make_segment(name, SelectorMode::Child, Nth::RangeTo(range))
+            }
+
+            CSSPseudo::OnlyChild => make_segment(name, SelectorMode::Child, Nth::Only),
+
+            CSSPseudo::FirstOfType => make_segment(name, SelectorMode::TypeOf, Nth::First),
+
+            CSSPseudo::LastOfType => make_segment(name, SelectorMode::TypeOf, Nth::Last),
+
+            CSSPseudo::NthOfType(nth) => {
+                make_segment(name, SelectorMode::TypeOf, Nth::Nth(nth.into()))
+            }
+
+            CSSPseudo::EveryNthOfType { frequency, offset } => make_segment(
+                name,
+                SelectorMode::TypeOf,
+                Nth::EveryN { frequency, offset },
+            ),
+
+            CSSPseudo::NthEvenOfType => make_segment(name, SelectorMode::TypeOf, Nth::Even),
+
+            CSSPseudo::NthOddOfType => make_segment(name, SelectorMode::TypeOf, Nth::Odd),
+
+            CSSPseudo::NthLastOfType(nth) => {
+                make_segment(name, SelectorMode::TypeOf, Nth::NthLast(nth.into()))
+            }
+
+            CSSPseudo::NthLastEveryNOfType { frequency, offset } => make_segment(
+                name,
+                SelectorMode::TypeOf,
+                Nth::LastEveryN { frequency, offset },
+            ),
+
+            CSSPseudo::NthOfTypeRange(range) => {
+                make_segment(name, SelectorMode::TypeOf, Nth::Range(range))
+            }
+
+            CSSPseudo::NthOfTypeRangeFrom(range) => {
+                make_segment(name, SelectorMode::TypeOf, Nth::RangeFrom(range))
+            }
+
+            CSSPseudo::NthOfTypeRangeTo(range) => {
+                make_segment(name, SelectorMode::TypeOf, Nth::RangeTo(range))
+            }
+
+            CSSPseudo::OnlyOfType => make_segment(name, SelectorMode::TypeOf, Nth::Only),
         }
     }
 
@@ -1815,170 +1914,623 @@ pub mod injection {
             type_totals: &HashMap<String, usize>,
         ) -> bool {
             match self {
-                Segment::Component { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthChild => nth.matches(target.ordinal, total),
-                    SelectorMode::NthTypeOf => {
-                        nth.matches(target.get_current_position(), type_totals[name])
+                Segment::Component { name, mode, nth }
+                    if name.is_empty() || *name == target.current =>
+                {
+                    match mode {
+                        SelectorMode::Child => nth.matches(&target.current, target.ordinal, total),
+                        SelectorMode::TypeOf => nth.matches(
+                            &target.current,
+                            target.get_current_position(),
+                            type_totals[name],
+                        ),
                     }
-                },
-                Segment::Element { name, mode, nth } if *name == target.current => match mode {
-                    SelectorMode::NthChild => nth.matches(target.ordinal, total),
-                    SelectorMode::NthTypeOf => {
-                        nth.matches(target.get_current_position(), type_totals[name])
+                }
+                Segment::Element { name, mode, nth }
+                    if name.is_empty() || *name == target.current =>
+                {
+                    match mode {
+                        SelectorMode::Child => nth.matches(&target.current, target.ordinal, total),
+                        SelectorMode::TypeOf => nth.matches(
+                            &target.current,
+                            target.get_current_position(),
+                            type_totals[name],
+                        ),
                     }
-                },
+                }
                 _ => false,
             }
         }
     }
 
+    /// CSS Pseudo
+    #[repr(u8)]
+    #[derive(Clone, Eq, PartialEq)]
+    #[cfg_attr(debug_assertions, derive(Debug))]
+    pub(crate) enum CSSPseudo {
+        // :not(p)
+        Not(Vec<String>),
+
+        /// p:first-child
+        FirstChild,
+
+        /// p:last-child
+        LastChild,
+
+        /// p:nth-child(n1, n2, ...)
+        NthChild(Vec<usize>),
+
+        /// p:nth-child(<freq>>n+<offset>)
+        EveryNthChild {
+            frequency: usize,
+            offset: isize,
+        },
+
+        /// p:nth-child(even)
+        NthEvenChild,
+
+        /// p:nth-child(odd)
+        NthOddChild,
+
+        /// p:nth-last-child(n1, n2, ..)
+        NthLastChild(Vec<usize>),
+
+        ///  p:nth-last-child((<freq>>n+<offset>)
+        NthLastEveryNChild {
+            frequency: usize,
+            offset: isize,
+        },
+
+        ///  p:nth-child(x..y)
+        NthChildRange(Range<usize>),
+
+        ///  p:nth-child(x..)
+        NthChildRangeFrom(RangeFrom<usize>),
+
+        ///  p:nth-child(..x)
+        NthChildRangeTo(RangeTo<usize>),
+
+        /// p:only-child
+        OnlyChild,
+
+        /// p:first-of-type
+        FirstOfType,
+
+        /// p:last-of-type
+        LastOfType,
+
+        /// p:nth-of-type(n1, n2, ...)
+        NthOfType(Vec<usize>),
+
+        /// p:nth-of-type(<frq>>n+<offset>)
+        EveryNthOfType {
+            frequency: usize,
+            offset: isize,
+        },
+
+        /// p:nth-of-type(even)
+        NthEvenOfType,
+
+        /// p:nth-of-type(odd)
+        NthOddOfType,
+
+        /// p:nth-last-of-type(n1, n2, ..)
+        NthLastOfType(Vec<usize>),
+
+        ///  p:nth-last-of-type((<frq>>n+<offset>)
+        NthLastEveryNOfType {
+            frequency: usize,
+            offset: isize,
+        },
+
+        ///  p:nth-of-type(x..y)
+        NthOfTypeRange(Range<usize>),
+
+        ///  p:nth-of-type(x..)
+        NthOfTypeRangeFrom(RangeFrom<usize>),
+
+        ///  p:nth-of-type(..x)
+        NthOfTypeRangeTo(RangeTo<usize>),
+
+        /// p:only-of-type
+        OnlyOfType,
+    }
+
+    impl FromStr for CSSPseudo {
+        type Err = String;
+
+        fn from_str(src: &str) -> Result<Self, Self::Err> {
+            let src = src.trim();
+            let parsed = src
+                .split_once('(')
+                .map(|(kind, nth)| (kind.trim(), nth.trim()));
+
+            Ok(match parsed {
+                None => match src {
+                    "first-child" => Self::FirstChild,
+                    "first-of-type" => Self::FirstOfType,
+                    "last-child" => Self::LastChild,
+                    "last-of-type" => Self::LastOfType,
+                    "only-child" => Self::OnlyChild,
+                    "only-of-type" => Self::OnlyOfType,
+                    _ => return Err(String::new()),
+                },
+                Some((kind, nth)) if nth.ends_with(')') => {
+                    let nth = nth.strip_suffix(')').unwrap();
+
+                    match kind {
+                        "not" => Self::Not(parse_identifiers(nth)?),
+                        "nth-child" if nth == "even" => Self::NthEvenChild,
+                        "nth-child" if nth == "odd" => Self::NthOddChild,
+                        "nth-child" if nth == ".." => {
+                            return Err(String::from(
+                                "Unnecessary 'all' range selector, remove ':nth-child(..)'",
+                            ))
+                        }
+                        "nth-child" if nth.contains('n') => {
+                            let (frequency, offset) = parse_every_n(nth)?;
+
+                            Self::EveryNthChild { frequency, offset }
+                        }
+                        "nth-child" if nth.starts_with("..") => {
+                            let (_, end) = parse_range_values(nth)?;
+
+                            Self::NthChildRangeTo(RangeTo { end })
+                        }
+                        "nth-child" if nth.ends_with("..") => {
+                            let (start, _) = parse_range_values(nth)?;
+
+                            Self::NthChildRangeFrom(RangeFrom { start })
+                        }
+                        "nth-child" if nth.contains("..") => {
+                            let range = parse_range_and_validate(nth)?;
+
+                            Self::NthChildRange(range)
+                        }
+                        "nth-child" => Self::NthChild(parse_list_of_values(nth)?),
+                        "nth-last-child" if nth.contains('n') => {
+                            let (frequency, offset) = parse_every_n(nth)?;
+
+                            Self::NthLastEveryNChild { frequency, offset }
+                        }
+                        "nth-last-child" => Self::NthLastChild(parse_list_of_values(nth)?),
+                        "nth-of-type" if nth == "even" => Self::NthEvenOfType,
+                        "nth-of-type" if nth == "odd" => Self::NthOddOfType,
+                        "nth-of-type" if nth == ".." => {
+                            return Err(String::from(
+                                "Unnecessary 'all' range selector, remove ':nth-of-type(..)'",
+                            ))
+                        }
+                        "nth-of-type" if nth.contains('n') => {
+                            let (frequency, offset) = parse_every_n(nth)?;
+
+                            Self::EveryNthOfType { frequency, offset }
+                        }
+                        "nth-of-type" if nth.starts_with("..") => {
+                            let (_, end) = parse_range_values(nth)?;
+
+                            Self::NthOfTypeRangeTo(RangeTo { end })
+                        }
+                        "nth-of-type" if nth.ends_with("..") => {
+                            let (start, _) = parse_range_values(nth)?;
+
+                            Self::NthOfTypeRangeFrom(RangeFrom { start })
+                        }
+                        "nth-of-type" if nth.contains("..") => {
+                            let range = parse_range_and_validate(nth)?;
+
+                            Self::NthOfTypeRange(range)
+                        }
+                        "nth-of-type" => Self::NthOfType(parse_list_of_values(nth)?),
+                        "nth-last-of-type" if nth.contains('n') => {
+                            let (frequency, offset) = parse_every_n(nth)?;
+
+                            Self::NthLastEveryNOfType { frequency, offset }
+                        }
+                        "nth-last-of-type" => Self::NthLastOfType(parse_list_of_values(nth)?),
+                        _ => {
+                            return Err(format!("'{kind}' is not a valid css selector expression"))
+                        }
+                    }
+                }
+                Some((kind, nth)) => {
+                    return match kind {
+                        "not" => Err(format!("'({nth}' is not a valid not expression")),
+                        "nth-child" if nth == "even" => {
+                            Err(format!("'({nth}' is not a valid nth child even expression"))
+                        }
+                        "nth-child" if nth == "odd" => {
+                            Err(format!("'({nth}' is not a valid nth child odd expression"))
+                        }
+                        "nth-child" if nth == ".." => Err(String::from(
+                            "Unnecessary/Invalid all '..' range selector, remove ':nth-child(..'",
+                        )),
+                        "nth-child" if nth.contains('n') => Err(format!(
+                            "'({nth}' is not a valid nth every nth child expression"
+                        )),
+                        "nth-child" if nth.starts_with("..") => Err(format!(
+                            "'({nth}' is not a valid nth child range to expression"
+                        )),
+                        "nth-child" if nth.ends_with("..") => Err(format!(
+                            "'({nth}' is not a valid nth child range from expression"
+                        )),
+                        "nth-child" if nth.contains("..") => Err(format!(
+                            "'({nth}' is not a valid nth child range expression"
+                        )),
+                        "nth-child" => Err(format!("'({nth}' is not a valid nth child expression")),
+                        "nth-last-child" if nth.contains('n') => Err(format!(
+                            "'({nth}' is not a valid nth last every nth child expression"
+                        )),
+                        "nth-last-child" => {
+                            Err(format!("'({nth}' is not a valid nth last child expression"))
+                        }
+                        "nth-of-type" if nth == "even" => Err(format!(
+                            "'({nth}' is not a valid nth of type even expression"
+                        )),
+                        "nth-of-type" if nth == "odd" => Err(format!(
+                            "'({nth}' is not a valid nth of type odd expression"
+                        )),
+                        "nth-of-type" if nth == ".." => Err(String::from(
+                            "Unnecessary/Invalid all '..' range selector, remove ':nth-of-type(..'",
+                        )),
+                        "nth-of-type" if nth.contains('n') => Err(format!(
+                            "'({nth}' is not a valid nth every nth of type expression"
+                        )),
+                        "nth-of-type" if nth.starts_with("..") => Err(format!(
+                            "'({nth}' is not a valid nth of type range to expression"
+                        )),
+                        "nth-of-type" if nth.ends_with("..") => Err(format!(
+                            "'({nth}' is not a valid nth of type range from expression"
+                        )),
+                        "nth-of-type" if nth.contains("..") => Err(format!(
+                            "'({nth}' is not a valid nth of type range expression"
+                        )),
+                        "nth-of-type" => {
+                            Err(format!("'({nth}' is not a valid nth of type expression"))
+                        }
+                        "nth-last-of-type" if nth.contains('n') => Err(format!(
+                            "'({nth}' is not a valid nth last every nth of type expression"
+                        )),
+                        "nth-last-of-type" => Err(format!(
+                            "'({nth}' is not a valid nth last of type expression"
+                        )),
+                        _ => Err(format!("'{src}' is not a valid css selector expression")),
+                    }
+                }
+            })
+        }
+    }
+
+    #[derive(Clone, Debug, Eq)]
+    pub(crate) struct Hashed<T: Debug + Eq + Hash>(Vec<T>);
+
+    impl<T: Debug + Eq + Hash> Hash for Hashed<T> {
+        fn hash<H: Hasher>(&self, state: &mut H) {
+            self.0.iter().for_each(|itm| itm.hash(state))
+        }
+    }
+
+    impl<T: Debug + Eq + Hash> PartialEq for Hashed<T> {
+        fn eq(&self, other: &Self) -> bool {
+            self.0.len() == other.0.len() && self.0.iter().all(|value| other.0.contains(value))
+        }
+    }
+
+    impl<T: Debug + Eq + Hash> Deref for Hashed<T> {
+        type Target = Vec<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl<T: Debug + Eq + Hash + Ord> From<Vec<T>> for Hashed<T> {
+        fn from(source: Vec<T>) -> Self {
+            let mut source = source;
+
+            // needed for consistent hashing :(
+            source.sort_unstable();
+
+            Self(source)
+        }
+    }
+
     /// Instance filter portion of `Segment` rule
+    #[repr(u8)]
     #[derive(Clone, Eq, PartialEq, Hash)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    enum Nth {
+    pub(crate) enum Nth {
         /// matches all instances
         All,
+
+        /// matches all that are not the element
+        Not(Hashed<String>),
+
         /// matches even instances
         Even,
+
         /// matches odd instances
         Odd,
+
         /// matches first instance
         First,
+
         /// matches last instance
         Last,
-        /// matches every n instances
-        EveryN(usize),
+
+        /// matches every n instances + offset from last
+        EveryN { frequency: usize, offset: isize },
+
+        /// matches every n instances + offset from last
+        LastEveryN { frequency: usize, offset: isize },
+
         /// matches a range of instances
         Range(Range<usize>),
+
         /// matches a range of instances starting from a position
         RangeFrom(RangeFrom<usize>),
+
         /// matches a range of instances up to a position
         RangeTo(RangeTo<usize>),
+
         /// matches a list of specific nth instances
-        Nth(Vec<isize>),
+        Nth(Hashed<usize>),
+
+        /// matches a list of specific nth instances from last
+        NthLast(Hashed<usize>),
+
+        /// matches only child of its parent
+        Only,
     }
 
     impl Nth {
         /// Checks if a `SegmentTrace` position of a branches matches `Nth` rule
-        fn matches(&self, position: usize, count: usize) -> bool {
+        fn matches(&self, target: &str, position: usize, count: usize) -> bool {
+            let position = position + 1;
+
             match self {
-                Nth::All => true,
-                Nth::Even => position % 2 == 1,
-                Nth::Odd => position % 2 == 0,
-                Nth::First => position == 0,
-                Nth::Last => position == count - 1,
-                Nth::EveryN(n) => position % n == n - 1,
-                Nth::Range(range) => range.contains(&(position as usize)),
-                Nth::RangeFrom(range) => range.contains(&(position as usize)),
-                Nth::RangeTo(range) => range.contains(&(position as usize)),
-                Nth::Nth(list) => {
-                    list.contains(&(position as isize))
-                        || list.contains(&(-((count - 1 - position) as isize)))
+                Nth::All => position <= count,
+                Nth::Even => position % 2 == 0,
+                Nth::Odd => position % 2 == 1,
+                Nth::First => position == 1,
+                Nth::Last => position == count,
+                Nth::EveryN { frequency, offset } => {
+                    (position - (*offset % *frequency as isize).abs() as usize) % frequency == 0
+                }
+                Nth::Range(range) => range.contains(&position),
+                Nth::RangeFrom(range) => range.contains(&position),
+                Nth::RangeTo(range) => range.contains(&position),
+                Nth::Nth(list) => list.contains(&position),
+                Nth::Not(list) => list.iter().all(|elm| elm != target),
+                Nth::NthLast(list) => list.contains(&(count - position)),
+                Nth::Only => count == 1 && position == 1,
+                Nth::LastEveryN { frequency, offset } => {
+                    (count - position - (*offset % *frequency as isize).abs() as usize + 1)
+                        % frequency
+                        == 0
                 }
             }
         }
-    }
 
-    /// Parses the position portion of a `Segment` rule from a string
-    impl FromStr for Nth {
-        type Err = String;
-
+        /// Parses the position portion of a `Segment` rule from a string
         #[allow(clippy::items_after_statements)]
-        fn from_str(value: &str) -> Result<Self, Self::Err> {
-            return Ok(match value.trim() {
+        fn from_str(src: &str, splitter: char) -> Result<Self, String> {
+            return Ok(match src.trim() {
+                "only" => Self::Only,
                 "even" => Self::Even,
                 "odd" => Self::Odd,
                 "first" => Self::First,
                 "last" => Self::Last,
-                "[..]" => Self::All,
-                nth if nth.starts_with('[') && nth.ends_with("n]") => {
-                    let value = nth
-                        .strip_prefix('[')
-                        .and_then(|v| v.strip_suffix("n]"))
-                        .unwrap();
-
-                    Self::EveryN(
-                        usize::from_str(value)
-                            .map_err(|_| format!("'{nth}' is not a valid nth value"))?,
-                    )
+                "[..]" => {
+                    return Err(format!(
+                        "Unnecessary 'all' range selector, remove '{splitter}[..]'"
+                    ))
                 }
-                range_to if range_to.starts_with("[..") && range_to.ends_with(']') => {
-                    let range_to = range_to
-                        .strip_prefix("[..")
-                        .and_then(|v| v.strip_suffix(']'))
-                        .unwrap();
-                    let values = range_values(range_to)?;
+                nth if nth.starts_with('[') && nth.contains('n') => {
+                    let nth = strip_brackets(nth, "[", "]")
+                        .map_err(|_| format!("'{nth}' invalid nth every n expression"))?;
 
-                    Self::RangeTo(RangeTo { end: values[1] })
+                    let (frequency, offset) = parse_every_n(nth)?;
+
+                    Self::EveryN { frequency, offset }
+                }
+                nth if nth.starts_with("last[") && nth.contains('n') => {
+                    let nth = strip_brackets(nth, "last[", "]")
+                        .map_err(|_| format!("'{nth}' invalid nth last every n expression"))?;
+
+                    let (frequency, offset) = parse_every_n(nth)?;
+
+                    Self::LastEveryN { frequency, offset }
+                }
+                range_to if range_to.starts_with("[..") => {
+                    let range_to = strip_brackets(range_to, "[", "]")
+                        .map_err(|_| format!("'{range_to}' invalid nth range to expression"))?;
+
+                    let (_, end) = parse_range_values(range_to)?;
+
+                    Self::RangeTo(RangeTo { end })
                 }
                 range_from if range_from.starts_with('[') && range_from.ends_with("..]") => {
-                    let range_from = range_from
-                        .strip_prefix('[')
-                        .and_then(|v| v.strip_suffix("n]"))
-                        .unwrap();
-                    let values = range_values(range_from)?;
+                    // always parses because of match
+                    let range_from = strip_brackets(range_from, "[", "]").unwrap();
 
-                    Self::RangeFrom(RangeFrom { start: values[0] })
+                    let (start, _) = parse_range_values(range_from)?;
+
+                    Self::RangeFrom(RangeFrom { start })
                 }
-                range if range.starts_with('[') && range.contains("..") && range.ends_with(']') => {
-                    let range = range
-                        .strip_prefix('[')
-                        .and_then(|v| v.strip_suffix(']'))
-                        .unwrap();
-                    let values = range_values(range)?;
+                range if range.starts_with('[') && range.contains("..") => {
+                    let range = strip_brackets(range, "[", "]")
+                        .map_err(|_| format!("'{range}' invalid nth range expression"))?;
 
-                    let end = values[1];
-                    let start = values[0];
+                    let range = parse_range_and_validate(range)?;
 
-                    if end < usize::max(start, 1) - 1 {
-                        return if range.contains('=') {
-                            Err(format!(
-                                "Range start cannot be less than inclusive end; {} < {start}",
-                                end - 1
-                            ))
-                        } else {
-                            Err(format!(
-                                "Range start cannot be less than end; {end} < {start}"
-                            ))
-                        };
-                    }
-
-                    Self::Range(Range { start, end })
+                    Self::Range(range)
                 }
-                list if list.starts_with('[') && list.ends_with(']') => {
-                    let list = list
-                        .strip_prefix('[')
-                        .and_then(|v| v.strip_suffix(']'))
-                        .unwrap();
+                nth if nth.starts_with('[') => {
+                    let nth = strip_brackets(nth, "[", "]")
+                        .map_err(|_| format!("'{nth}' invalid nth expression"))?;
 
-                    Self::Nth(
-                        list.split(',')
-                            .map(isize::from_str)
-                            .collect::<Result<Vec<_>, _>>()
-                            .map_err(|_| format!("'{list}' is not a valid list of values"))?,
-                    )
+                    let nth = parse_list_of_values(nth)?.into();
+
+                    Self::Nth(nth)
                 }
-                unknown => return Err(format!("{unknown:?} is not a valid Nth selector value")),
+                last if last.starts_with("last[") => {
+                    let last = strip_brackets(last, "last[", "]")
+                        .map_err(|_| format!("'{last}' invalid nth last expression"))?;
+
+                    let last = parse_list_of_values(last)?.into();
+
+                    Self::NthLast(last)
+                }
+                not if not.starts_with("not[") => {
+                    let not = strip_brackets(not, "not[", "]")
+                        .map_err(|_| format!("'{not}' invalid not expression"))?;
+
+                    let not = parse_identifiers(not)?.into();
+
+                    Self::Not(not)
+                }
+                unknown => return Err(format!("'{unknown}' is not a valid nth selector value")),
             });
+        }
+    }
 
-            fn range_values(range: &str) -> Result<Vec<usize>, String> {
-                range
-                    .split("..")
-                    .enumerate()
-                    .take(2)
-                    .map(|(idx, val)| {
-                        let val = val.trim();
+    pub(crate) fn make_segment(
+        name: &str,
+        mode: SelectorMode,
+        nth: Nth,
+    ) -> Result<Segment, String> {
+        let name = if matches!(nth, Nth::Not(_)) {
+            String::new()
+        } else {
+            validate_identifier(name)?
+        };
 
-                        if val.is_empty() {
-                            Ok(0)
-                        } else if idx == 0 || !val.starts_with('=') {
-                            usize::from_str(val)
-                        } else {
-                            usize::from_str(val.strip_prefix('=').unwrap()).map(|val| val + 1)
-                        }
-                    })
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|_| format!("'{range}' is not a valid range value"))
+        Ok(
+            if name.is_empty() || name.chars().next().unwrap().is_lowercase() {
+                Segment::Element { name, mode, nth }
+            } else {
+                Segment::Component { name, mode, nth }
+            },
+        )
+    }
+
+    fn parse_every_n(nth: &str) -> Result<(usize, isize), String> {
+        // assumes nth was verified before calling
+        let (frequency, offset) = nth.split_once('n').unwrap();
+
+        let frequency = usize::from_str(frequency)
+            .map_err(|_| format!("'{}' is not a valid frequency value", frequency))?;
+
+        let offset = if offset.is_empty() { "0" } else { offset };
+
+        let offset = isize::from_str(offset)
+            .map_err(|_| format!("'{offset}' is not a valid offset value"))?;
+
+        Ok((frequency, offset))
+    }
+
+    fn parse_list_of_values<T>(source: &str) -> Result<Vec<T>, String>
+    where
+        T: FromStr + Eq + Hash,
+    {
+        source
+            .split(',')
+            .map(|src| {
+                let src = src.trim();
+                T::from_str(src).map_err(|_| {
+                    if src.is_empty() {
+                        String::from("value can not be blank")
+                    } else {
+                        format!("invalid value '{src}'")
+                    }
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()
+    }
+
+    fn parse_identifiers(source: &str) -> Result<Vec<String>, String> {
+        source
+            .split(',')
+            .map(|element| validate_identifier(element.trim()))
+            .collect::<Result<_, _>>()
+    }
+
+    fn parse_range_and_validate(range: &str) -> Result<Range<usize>, String> {
+        let (start, end) = parse_range_values(range)?;
+
+        if end < usize::max(start, 1) - 1 {
+            if range.contains('=') {
+                Err(format!(
+                    "range start cannot be more than inclusive end; ={} < {start}",
+                    end - 1
+                ))
+            } else {
+                Err(format!(
+                    "range start cannot be more than end; {end} < {start}"
+                ))
+            }
+        } else {
+            Ok(Range { start, end })
+        }
+    }
+
+    fn parse_range_values(range: &str) -> Result<(usize, usize), String> {
+        // assumes range was verified before calling
+        let (start, end) = range.split_once("..").unwrap();
+
+        let start = start.trim();
+        let start = if start.is_empty() {
+            0
+        } else {
+            usize::from_str(start).map_err(|_| format!("'{start}' is not a valid start value"))?
+        };
+
+        let end = end.trim();
+        let end = if end.is_empty() {
+            0
+        } else {
+            if end.starts_with('=') {
+                usize::from_str(end.strip_prefix('=').unwrap()).map(|end| end + 1)
+            } else {
+                usize::from_str(end)
+            }
+            .map_err(|_| format!("'{end}' is not a valid end value"))?
+        };
+
+        Ok((start, end))
+    }
+
+    fn strip_brackets<'a>(value: &'a str, prefix: &str, suffix: &str) -> Result<&'a str, ()> {
+        // assumes prefix and suffix were checked before calling
+        value
+            .strip_prefix(prefix)
+            .and_then(|v| v.strip_suffix(suffix))
+            .ok_or(())
+    }
+
+    fn validate_identifier(name: &str) -> Result<String, String> {
+        // todo: introduce regex to core-macro?
+        let name = name.trim();
+
+        if name.is_empty() {
+            Err(format!("'{name}' an empty element is invalid"))
+        } else if name
+            .chars()
+            .all(|char| char.is_lowercase() || !char.is_alphabetic())
+        {
+            if name.chars().all(|char| char.is_lowercase()) {
+                Ok(String::from(name))
+            } else {
+                Err(format!("'{name}' is an invalid html tag"))
+            }
+        } else {
+            let mut chars = name.chars();
+
+            if chars.next().unwrap().is_uppercase() && chars.all(|char| char.is_alphanumeric()) {
+                Ok(String::from(name))
+            } else {
+                Err(format!("'{name}' is an invalid component name"))
             }
         }
     }

@@ -98,7 +98,7 @@ impl Parse for CallBody {
     }
 }
 
-fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> syn::Result<()> {
+fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> Result<()> {
     let mut branch = Branch::new();
     let properties = InjectedProperties::component_properties(component)?;
     let component = component.to_string();
@@ -137,10 +137,10 @@ fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> 
              mut inject_property: Box<dyn FnMut(&Ident, &Property) -> syn::Result<()>>|
              -> syn::Result<()> {
                 if index == 0 {
-                    branch.child(name)
+                    branch.new_branch(name)
                 } else {
                     branch
-                        .sibling(name)
+                        .next_child(name)
                         .map_err(|err| syn::Error::new(name.span(), err))?;
                 }
 
