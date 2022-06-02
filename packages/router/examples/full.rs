@@ -8,7 +8,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
-            .index(RcComponent(Home))
+            .index(Home as Component)
             .fixed(
                 "blog",
                 Route::new(RcComponent(Blog)).nested(
@@ -24,13 +24,10 @@ fn app(cx: Scope) -> Element {
                 Route::new(RcMulti(RaspberryPage, vec![("other", StrawberryPage)]))
                     .name("raspberry"),
             )
-            .fixed(
-                "the_best_berry",
-                Route::new(RcRedirect(NtName("raspberry", vec![], QNone))).name("best_berry"),
-            )
+            .fixed("the_best_berry", "/raspberry")
             .fixed(
                 PATH_FOR_NAMED_NAVIGATION_FAILURE,
-                Route::new(RcComponent(NamedNavigationFallback)),
+                RcComponent(NamedNavigationFallback),
             )
     });
 
@@ -100,7 +97,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("best_berry", vec![], QNone),
+                    target: "/the_best_berry".into(),
                     "Go to the page about the best berry"
                 }
             }

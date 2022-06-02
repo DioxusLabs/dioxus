@@ -50,14 +50,14 @@ impl Segment {
     /// ```
     ///
     /// [`Router`]: crate::components::Router
-    pub fn fallback(mut self, content: RouteContent) -> Self {
+    pub fn fallback(mut self, content: impl Into<RouteContent>) -> Self {
         if !self.dynamic.is_none() {
             error!("fallback or parameter route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("fallback or parameter route already set");
         }
 
-        self.dynamic = DynamicRoute::Fallback(content);
+        self.dynamic = DynamicRoute::Fallback(content.into());
         self
     }
 
@@ -83,8 +83,8 @@ impl Segment {
     /// # use dioxus::prelude::*;
     /// Segment::new().fixed("path", Route::new(RcNone));
     /// ```
-    pub fn fixed(mut self, path: &str, route: Route) -> Self {
-        if self.fixed.insert(path.to_string(), route).is_some() {
+    pub fn fixed(mut self, path: &str, route: impl Into<Route>) -> Self {
+        if self.fixed.insert(path.to_string(), route.into()).is_some() {
             error!(r#"two fixed routes with identical path: "{path}", later prevails"#);
             #[cfg(debug_assertions)]
             panic!(r#"two fixed routes with identical path: "{path}""#)
@@ -111,14 +111,14 @@ impl Segment {
     /// # use dioxus::prelude::*;
     /// Segment::new().index(RcNone);
     /// ```
-    pub fn index(mut self, content: RouteContent) -> Self {
+    pub fn index(mut self, content: impl Into<RouteContent>) -> Self {
         if !self.index.is_rc_none() {
             error!("index route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("index route already set");
         }
 
-        self.index = content;
+        self.index = content.into();
         self
     }
 
@@ -144,8 +144,8 @@ impl Segment {
     /// # use regex::Regex;
     /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", RcNone));
     /// ```
-    pub fn matching(mut self, regex: Regex, route: ParameterRoute) -> Self {
-        self.matching.push((regex, route));
+    pub fn matching(mut self, regex: Regex, route: impl Into<ParameterRoute>) -> Self {
+        self.matching.push((regex, route.into()));
         self
     }
 
@@ -178,14 +178,14 @@ impl Segment {
     /// # use dioxus::prelude::*;
     /// Segment::new().parameter(ParameterRoute::new("key", RcNone));
     /// ```
-    pub fn parameter(mut self, route: ParameterRoute) -> Self {
+    pub fn parameter(mut self, route: impl Into<ParameterRoute>) -> Self {
         if !self.dynamic.is_none() {
             error!("fallback or parameter route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("fallback or parameter route already set");
         }
 
-        self.dynamic = DynamicRoute::Parameter(route);
+        self.dynamic = DynamicRoute::Parameter(route.into());
         self
     }
 }

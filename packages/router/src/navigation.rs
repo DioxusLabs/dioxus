@@ -1,3 +1,5 @@
+use std::{convert::Infallible, str::FromStr};
+
 /// A target for the router to navigate to.
 #[derive(Clone, Debug)]
 pub enum NavigationTarget {
@@ -43,6 +45,24 @@ impl NavigationTarget {
     }
 }
 
+impl From<&'static str> for NavigationTarget {
+    fn from(s: &'static str) -> Self {
+        s.parse().unwrap()
+    }
+}
+
+impl FromStr for NavigationTarget {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if s.starts_with("http://") || s.starts_with("https://") {
+            Self::NtExternal(s.to_string())
+        } else {
+            Self::NtPath(s.to_string())
+        })
+    }
+}
+
 /// A query string.
 #[derive(Clone, Debug)]
 pub enum Query {
@@ -61,4 +81,31 @@ pub(crate) enum NamedNavigationSegment {
     Fixed(String),
     /// A parameter to be inserted.
     Parameter(&'static str),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nt_from_str_external() {
+        let target = "https://dioxuslabs.com/";
+        let nt: NavigationTarget = target.parse().unwrap();
+
+        assert!(matches!(nt, NavigationTarget::NtExternal(_)));
+        if let NavigationTarget::NtExternal(url) = nt {
+            assert_eq!(url, target);
+        }
+    }
+
+    #[test]
+    fn nt_from_str_internal() {
+        let target = "/some/route";
+        let nt: NavigationTarget = target.parse().unwrap();
+
+        assert!(matches!(nt, NavigationTarget::NtPath(_)));
+        if let NavigationTarget::NtPath(path) = nt {
+            assert_eq!(path, target);
+        }
+    }
 }

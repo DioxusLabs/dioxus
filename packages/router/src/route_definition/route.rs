@@ -1,4 +1,9 @@
+use std::{convert::Infallible, str::FromStr};
+
+use dioxus_core::Component;
 use log::error;
+
+use crate::navigation::NavigationTarget;
 
 use super::{RouteContent, Segment};
 
@@ -18,9 +23,9 @@ impl Route {
     /// # use dioxus::prelude::*;
     /// Route::new(RcNone);
     /// ```
-    pub fn new(content: RouteContent) -> Self {
+    pub fn new(content: impl Into<RouteContent>) -> Self {
         Self {
-            content,
+            content: content.into(),
             name: Default::default(),
             nested: Default::default(),
         }
@@ -63,15 +68,47 @@ impl Route {
     /// # use dioxus::prelude::*;
     /// Route::new(RcNone).nested(Segment::default());
     /// ```
-    pub fn nested(mut self, nested: Segment) -> Self {
+    pub fn nested(mut self, nested: impl Into<Segment>) -> Self {
         if self.nested.is_some() {
             error!(r#"nested already set, later prevails"#);
             #[cfg(debug_assertions)]
             panic!(r#"nested already set"#)
         }
 
-        self.nested = Some(nested);
+        self.nested = Some(nested.into());
         self
+    }
+}
+
+impl From<Component> for Route {
+    fn from(c: Component) -> Self {
+        Self::new(c)
+    }
+}
+
+impl From<NavigationTarget> for Route {
+    fn from(nt: NavigationTarget) -> Self {
+        Self::new(nt)
+    }
+}
+
+impl From<RouteContent> for Route {
+    fn from(rc: RouteContent) -> Self {
+        Self::new(rc)
+    }
+}
+
+impl From<&'static str> for Route {
+    fn from(s: &'static str) -> Self {
+        s.parse().unwrap()
+    }
+}
+
+impl FromStr for Route {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::new(s.parse::<RouteContent>().unwrap()))
     }
 }
 

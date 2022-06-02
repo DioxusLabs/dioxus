@@ -1,4 +1,7 @@
+use dioxus_core::Component;
 use log::error;
+
+use crate::navigation::NavigationTarget;
 
 use super::{RouteContent, Segment};
 
@@ -19,9 +22,9 @@ impl ParameterRoute {
     /// # use dioxus::prelude::*;
     /// ParameterRoute::new("key", RcNone);
     /// ```
-    pub fn new(key: &'static str, content: RouteContent) -> Self {
+    pub fn new(key: &'static str, content: impl Into<RouteContent>) -> Self {
         Self {
-            content,
+            content: content.into(),
             name: Default::default(),
             key,
             nested: Default::default(),
@@ -65,15 +68,33 @@ impl ParameterRoute {
     /// # use dioxus::prelude::*;
     /// ParameterRoute::new("key", RcNone).nested(Segment::new());
     /// ```
-    pub fn nested(mut self, nested: Segment) -> Self {
+    pub fn nested(mut self, nested: impl Into<Segment>) -> Self {
         if self.nested.is_some() {
             error!("nested already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("nested already set");
         }
 
-        self.nested = Some(Box::new(nested));
+        self.nested = Some(Box::new(nested.into()));
         self
+    }
+}
+
+impl From<(&'static str, Component)> for ParameterRoute {
+    fn from((key, c): (&'static str, Component)) -> Self {
+        Self::new(key, c)
+    }
+}
+
+impl From<(&'static str, NavigationTarget)> for ParameterRoute {
+    fn from((key, nt): (&'static str, NavigationTarget)) -> Self {
+        Self::new(key, nt)
+    }
+}
+
+impl From<(&'static str, RouteContent)> for ParameterRoute {
+    fn from((key, rc): (&'static str, RouteContent)) -> Self {
+        Self::new(key, rc)
     }
 }
 

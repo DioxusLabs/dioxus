@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, convert::Infallible, fmt::Debug, str::FromStr};
 
 use dioxus_core::Component;
 
@@ -82,6 +82,32 @@ impl Debug for RouteContent {
 impl Default for RouteContent {
     fn default() -> Self {
         Self::RcNone
+    }
+}
+
+impl From<Component> for RouteContent {
+    fn from(c: Component) -> Self {
+        Self::RcComponent(c)
+    }
+}
+
+impl From<NavigationTarget> for RouteContent {
+    fn from(nt: NavigationTarget) -> Self {
+        Self::RcRedirect(nt)
+    }
+}
+
+impl From<&'static str> for RouteContent {
+    fn from(s: &'static str) -> Self {
+        s.parse().unwrap()
+    }
+}
+
+impl FromStr for RouteContent {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::RcRedirect(s.parse().unwrap()))
     }
 }
 
