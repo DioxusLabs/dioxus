@@ -85,7 +85,7 @@ fn with_class_and_router_active() {
                 init_only: true,
                 active_class: "active_router",
                 Link {
-                    target: NtName("root_index", vec![], QNone),
+                    target: NtName("", vec![], QNone),
                     class: "test_class",
                     "Test Link"
                 }
@@ -109,7 +109,7 @@ fn with_class_and_overridden_active() {
                 init_only: true,
                 active_class: "active_router",
                 Link {
-                    target: NtName("root_index", vec![], QNone),
+                    target: NtName("", vec![], QNone),
                     class: "test_class",
                     active_class: "active_link",
                     "Test Link"

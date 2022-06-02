@@ -52,7 +52,7 @@ fn app(cx: Scope) -> Element {
             routes: routes.clone(),
             header {
                 Link {
-                    target: NtName("root_index", vec![], QNone)
+                    target: NtName("", vec![], QNone)
                     "go home"
                 }
                 GoBackButton {

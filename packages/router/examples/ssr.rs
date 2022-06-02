@@ -106,7 +106,7 @@ fn App(cx: Scope<AppProps>) -> Element {
                 ))))
                 .name("dioxus"),
             )
-            .fallback(RcRedirect(NtName("root_index", vec![], QNone)))
+            .fallback(RcRedirect(NtName("", vec![], QNone)))
     });
 
     let history = cx.use_hook(|_| {
@@ -146,7 +146,7 @@ fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }
         Link {
-            target: NtName("root_index", vec![], QNone),
+            target: NtName("", vec![], QNone),
             "Return to home page"
         }
     })

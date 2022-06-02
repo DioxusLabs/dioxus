@@ -60,7 +60,7 @@ fn Apple(cx: Scope) -> Element {
         p { "Apples are fruit that grows on trees."}
         p {
             Link {
-                target: NtName("root_index", vec![], QNone),
+                target: NtName("", vec![], QNone),
                 "Go back to home"
             }
         }
@@ -74,7 +74,7 @@ fn Potato(cx: Scope) -> Element {
         p { "Potatoes grow underground. There are many recipes involving potatoes."}
         p {
             Link {
-                target: NtName("root_index", vec![], QNone),
+                target: NtName("", vec![], QNone),
                 "Go back to home"
             }
         }

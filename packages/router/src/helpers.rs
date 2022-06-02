@@ -138,10 +138,10 @@ mod tests {
     }
 
     #[test]
-    fn named_path_root_index() {
+    fn named_path_root() {
         assert_eq!(
             Some(String::from("/")),
-            construct_named_path("root_index", &[], &Query::QNone, &test_targets())
+            construct_named_path("", &[], &Query::QNone, &test_targets())
         );
     }
 
@@ -233,7 +233,7 @@ mod tests {
                 NamedNavigationSegment::Parameter("para"),
             ],
         );
-        targets.insert("root_index", vec![]);
+        targets.insert("", vec![]);
 
         targets
     }

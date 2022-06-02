@@ -86,7 +86,7 @@ impl RouterService {
         // create named navigation targets
         let mut named_routes = BTreeMap::new();
         construct_named_targets(&routes, &Vec::new(), &mut named_routes);
-        named_routes.insert("root_index", Vec::new());
+        named_routes.insert("", Vec::new());
         let named_routes = Arc::new(named_routes);
 
         // create state and context
@@ -226,7 +226,7 @@ impl RouterService {
 
             // index on root
             let next = if path.is_empty() && !empty_root {
-                names.insert("root_index");
+                names.insert("");
                 self.routes.index.add_to_list(components)
             }
             // all other cases
@@ -357,11 +357,11 @@ fn construct_named_targets(
         );
     }
 
-    // add root_index
-    if ancestors.is_empty() && targets.insert("root_index", vec![]).is_some() {
-        error!(r#""root_index" is provided by router, custom is overwritten"#);
+    // add root name
+    if ancestors.is_empty() && targets.insert("", vec![]).is_some() {
+        error!(r#"root route name ("" -> "/") is provided by router, custom is overwritten"#);
         #[cfg(debug_assertions)]
-        panic!(r#""root_index" is provided by router"#);
+        panic!(r#"root route name ("" -> "/") is provided by router"#);
     }
 }
 
@@ -498,7 +498,7 @@ mod tests {
         assert_eq!(targets["nested2"].len(), 2);
         assert_eq!(targets["match"].len(), 1);
         assert_eq!(targets["parameter"].len(), 1);
-        assert!(targets["root_index"].is_empty());
+        assert!(targets[""].is_empty());
     }
 
     #[cfg(debug_assertions)]
@@ -527,10 +527,10 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#""root_index" is provided by router"#]
-    fn named_targets_root_index_panic_in_debug() {
+    #[should_panic = r#"root route name ("" -> "/") is provided by router"#]
+    fn named_targets_root_panic_in_debug() {
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("")),
             &[],
             &mut BTreeMap::new(),
         );
@@ -538,15 +538,15 @@ mod tests {
 
     #[cfg(not(debug_assertions))]
     #[test]
-    fn named_targets_root_index_override_in_release() {
+    fn named_targets_root_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("root_index")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("")),
             &[],
             &mut targets,
         );
 
-        assert!(targets["root_index"].is_empty());
+        assert!(targets[""].is_empty());
     }
 
     #[test]
