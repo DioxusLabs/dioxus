@@ -186,7 +186,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
         Ok(body) => {
             #[cfg(feature = "hot_reload")]
             {
-                use dioxus_rsx_interperter::captuered_context::CapturedContextBuilder;
+                use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
 
                 match CapturedContextBuilder::from_call_body(body) {
                     Ok(captured) => {

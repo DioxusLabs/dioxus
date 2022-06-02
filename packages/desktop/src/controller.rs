@@ -1,4 +1,5 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
+
 use dioxus_core::*;
 use std::{
     collections::HashMap,
@@ -48,6 +49,96 @@ impl DesktopController {
                 let window_context = DesktopContext::new(desktop_context_proxy);
 
                 dom.base_scope().provide_context(window_context);
+
+                // allow other proccesses to send the new rsx text to the @dioxus ipc channel
+                #[cfg(feature = "hot_reload")]
+                {
+                    use dioxus_rsx_interpreter::{
+                        error::Error, ErrorHandler, RsxContext, RsxData, SetRsxMessage,
+                    };
+                    use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
+                    use std::io::{BufRead, BufReader, Write};
+                    use std::time::Duration;
+
+                    fn handle_error(
+                        connection: std::io::Result<LocalSocketStream>,
+                    ) -> Option<LocalSocketStream> {
+                        connection
+                            .map_err(|error| eprintln!("Incoming connection failed: {}", error))
+                            .ok()
+                    }
+
+                    let latest_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
+                        Arc::new(Mutex::new(None));
+                    let latest_connection_handle = latest_connection.clone();
+                    let latest_connection_handle2 = latest_connection.clone();
+
+                    struct DesktopErrorHandler {
+                        latest_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>>,
+                    }
+                    impl ErrorHandler for DesktopErrorHandler {
+                        fn handle_error(&self, err: Error) {
+                            println!("reporting err: {err:?}");
+                            if let Some(conn) = &mut *self.latest_connection.lock().unwrap() {
+                                if let Error::RecompileRequiredError(reason) = err {
+                                    conn.get_mut()
+                                        .write_all(
+                                            (serde_json::to_string(&reason).unwrap() + "\n")
+                                                .as_bytes(),
+                                        )
+                                        .unwrap();
+                                    println!("sending error");
+                                }
+                            }
+                        }
+                    }
+
+                    let context = dom
+                        .base_scope()
+                        .provide_root_context(RsxContext::new(RsxData {
+                            hm: HashMap::new(),
+                            error_handler: Box::new(DesktopErrorHandler {
+                                latest_connection: latest_connection_handle,
+                            }),
+                        }));
+
+                    std::thread::spawn(move || {
+                        if let Ok(listener) = LocalSocketListener::bind("@dioxus") {
+                            for conn in listener.incoming().filter_map(handle_error) {
+                                // conn.set_nonblocking(true);
+                                println!("connected");
+                                *latest_connection_handle2.lock().unwrap() =
+                                    Some(BufReader::new(conn));
+                            }
+                        }
+                    });
+
+                    std::thread::spawn(move || {
+                        loop {
+                            if let Some(conn) = &mut *latest_connection.lock().unwrap() {
+                                let mut buf = String::new();
+                                println!("reading");
+                                match conn.read_line(&mut buf) {
+                                    Ok(_) => {
+                                        println!("read");
+                                        let message: SetRsxMessage =
+                                            serde_json::from_str(&buf).unwrap();
+                                        println!("{:?}", message.location);
+                                        context.insert(message.location, message.new_text);
+                                    }
+                                    Err(err) => {
+                                        if err.kind() != std::io::ErrorKind::WouldBlock {
+                                            println!("{err}");
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            // give the error handler time to take the mutex
+                            std::thread::sleep(Duration::from_millis(10));
+                        }
+                    });
+                }
 
                 let edits = dom.rebuild();
 

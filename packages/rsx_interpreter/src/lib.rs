@@ -1,5 +1,4 @@
 use dioxus_core::{Component, Element, LazyNodes, Scope, VNode};
-use dioxus_hooks::*;
 use error::Error;
 use interperter::build;
 use serde::{Deserialize, Serialize};
@@ -11,7 +10,7 @@ use syn::parse_str;
 mod attributes;
 pub mod captuered_context;
 mod elements;
-mod error;
+pub mod error;
 mod interperter;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,7 +49,7 @@ pub struct RsxContext {
 
 pub struct RsxData {
     pub hm: HashMap<CodeLocation, String>,
-    error_handle: Box<dyn FnMut(Error)>,
+    pub error_handler: Box<dyn ErrorHandler + Send + Sync>,
 }
 
 impl std::fmt::Debug for RsxData {
@@ -60,6 +59,12 @@ impl std::fmt::Debug for RsxData {
 }
 
 impl RsxContext {
+    pub fn new(data: RsxData) -> Self {
+        Self {
+            data: Arc::new(RwLock::new(data)),
+        }
+    }
+
     pub fn insert(&self, loc: CodeLocation, text: String) {
         self.data.write().unwrap().hm.insert(loc, text);
     }
@@ -69,6 +74,16 @@ impl RsxContext {
     }
 
     pub fn report_error(&self, error: Error) {
-        (self.data.write().unwrap().error_handle)(error)
+        self.data.write().unwrap().error_handler.handle_error(error)
     }
+}
+
+pub trait ErrorHandler {
+    fn handle_error(&self, err: Error);
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SetRsxMessage {
+    pub location: CodeLocation,
+    pub new_text: String,
 }
