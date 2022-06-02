@@ -20,14 +20,18 @@ impl Tool {
             Tool::List {} => {
                 for item in tools::tool_list() {
                     if tools::Tool::from_str(item).unwrap().is_installed() {
-                        println!("{item} [installed]");
+                        println!("- {item} [installed]");
                     } else {
-                        println!("{item}");
+                        println!("- {item}");
                     }
                 }
             }
             Tool::AppPath {} => {
-                println!("{}", tools::tools_path().to_str().unwrap());
+                if let Some(v) = tools::tools_path().to_str() {
+                    println!("{}", v);
+                } else {
+                    log::error!("Tools path get failed.");
+                }
             }
             Tool::Add { name } => {
                 let tool_list = tools::tool_list();
@@ -58,7 +62,6 @@ impl Tool {
                 log::info!("Tool {name} install successfully!");
             }
         }
-
         Ok(())
     }
 }
