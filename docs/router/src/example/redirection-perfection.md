@@ -13,39 +13,39 @@ As a simple example, let's say you want user to still land on your blog, even
 if they used the path `/myblog`.
 
 All we need to do is update our route definition in our app component:
-```rust,ignore
-let routes = cx.use_hook(|_| Segment {
-    index: RcComponent(Home),
-    fixed: vec![
-        (
-            String::from("blog"),
-            Route {
-                content: RcComponent(Blog),
-                sub: Some(Segment {
-                    index: RcComponent(BlogList),
-                    dynamic: DrParameter {
-                        name: Some("blog_post"),
-                        key: "post_id",
-                        content: RcComponent(BlogPost),
-                        sub: None,
-                    },
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        ),
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# fn Blog(cx: Scope) -> Element { unimplemented!() }
+# fn BlogList(cx: Scope) -> Element { unimplemented!() }
+# fn BlogPost(cx: Scope) -> Element { unimplemented!() }
+# fn Home(cx: Scope) -> Element { unimplemented!() }
+# fn NavBar(cx: Scope) -> Element { unimplemented!() }
+# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
+# fn App(cx: Scope) -> Element {
+let routes = use_segment(&cx, || {
+    Segment::new()
+        .index(RcComponent(Home))
+        .fixed(
+            "blog",
+            Route::new(RcComponent(Blog)).nested(
+                Segment::new()
+                    .index(RcComponent(BlogList))
+                    .parameter(
+                        ParameterRoute::new("post_id", RcComponent(BlogPost))
+                    )
+            )
+        )
         // new stuff starts here
-        (
-            String::from("myblog"),
-            Route {
-                content: RcRedirect(ItPath(String::from("/blog"))),
-                ..Default::default()
-            },
-        ),
+        .fixed(
+            "myblog",
+            Route::new(RcRedirect(NtPath(String::from("/blog"))))
+        )
         // new stuff ends here
-    ],
-    ..Default::default()
 });
+# unimplemented!()
+# }
 ```
 
 That's it! Now your users will be redirected to the blog.

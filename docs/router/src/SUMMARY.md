@@ -1,26 +1,30 @@
 # Summary
 
-[Introduction](./README.md)
+[Introduction](./index.md)
 
-# Basics
-- [Adding the router](./basics/adding-the-router.md)
-- [Nested Routes](./basics/nested-routes.md)
-- [Parameter Routes](./basics/parameter-routes.md)
-- [Redirects](./basics/redirects.md)
-- [Name Based Navigation](./basics/name-based-navigation.md)
-- [Programmatic Navigation](./basics/programmatic-navigation.md)
-
-# Advanced
-- [External Navigation Targets](./advanced/external-navigation-targets.md)
-- [History Providers](./advanced/history-providers.md)
-- [Named Outlets](./advanced/named-outlets.md)
-- [Navigation Failures](./advanced/navigation-failures.md)
-- [`RcNone`](./advanced/rc-none.md)
-- [Query](./advanced/query.md)
-- [Server Side Rendering](./advanced/server-side-rendering.md)
+# Topics
+- [Adding the Router to Your Application](./topics/index.md)
+- [Defining Routes](./topics/routes/index.md)
+  - [Nested Routes](./topics/routes/nested.md)
+  - [Parameter Routes](./topics/routes/parameter.md)
+  - [Matching Routes](./topics/routes/matching.md)
+  - [Fallback Routes](./topics/routes/fallback.md)
+  - [Multiple Components & Redirects](./topics/routes/multiple-and-redirect.md)
+  - [Shortcuts](./topics/routes/shortcuts.md)
+- [Outlets](./topics/outlets.md)
+- [Links & Navigation](./topics/navigation/index.md)
+  - [Named Navigation](./topics/navigation/name.md)
+  - [External Navigation](./topics/navigation/external.md)
+  - [Programmatic Navigation](./topics/navigation/programmatic.md)
+- [Query](./topics/query.md)
+- [Navigation Failures](./topics/failures/index.md)
+  - [Named Navigation Failure](./topics/failures/named.md)
+  - [External Navigation Failure](./topics/failures/external.md)
+- [History Providers](./topics/history-providers.md)
+- [Global Fallback (404 page)](./topics/global_fallback.md)
 
 # Example Project
-- [Introduction](./example/introduction.md)
+- [Introduction](./example/index.md)
 - [Getting Started](./example/getting-started.md)
 - [Creating Our First Route](./example/first-route.md)
 - [Building a Nest](./example/building-a-nest.md)

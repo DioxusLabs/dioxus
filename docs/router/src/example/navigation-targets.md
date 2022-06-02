@@ -17,10 +17,12 @@ navigation targets:
 
 ## External navigation
 If we need a link to an external page we can do it like this:
-```rust,ignore
-import dioxus::prelude::*;
-
-#[accept(non_snake_case)]
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
+#[allow(non_snake_case)]
 fn GoToDioxus(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
@@ -49,19 +51,11 @@ As yo can see, the first value is the routes name. The second value is a vector
 containing the parameters that the route needs. The last parameter is for the
 query string; `QNone` means no query string.
 
-### The special `root_index` name
+### The special root index name
 Whether we define any names or not, the router always knows about the
-`root_index` name. Navigating to it tells the router to go to `/`.
+`""` (empty string) name. Navigating to it tells the router to go to `/`.
 
 ### Use cases for named navigation
 - not having to remember whole paths or care about what the current path is
 - changing paths later won't break internal links
 - paths can easily be localized without affecting navigation
-
-## `InternalNavigationTarget`
-In addition to the `NavigationTarget` enum with the three variants described
-above, there is an `InternalNavigationTarget`.
-
-It is basically the same as `NavigationTarget`, but lacking the `NtExternal`
-variant. It is used for defining redirects (next chapter) and programmatic
-navigation.

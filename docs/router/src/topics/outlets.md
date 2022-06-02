@@ -1,0 +1,189 @@
+# Outlets
+
+[`Outlet`]s tell the router where to render content. In the following example
+the active routes content will be rendered within the [`Outlet`].
+
+```rust
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+use dioxus::prelude::*;
+
+fn Index(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Index" }
+    })
+}
+
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new().index(RcComponent(Index))
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            # init_only: true,
+
+            header { "header" }
+            Outlet {}
+            footer { "footer" }
+        }
+    })
+}
+#
+# let mut vdom = VirtualDom::new(App);
+# vdom.rebuild();
+# let html = dioxus::ssr::render_vdom(&vdom);
+# assert_eq!(
+#     "<header>header</header><h1>Index</h1><footer>footer</footer>",
+#     html
+# );
+```
+
+The example above will output the following HTML (line breaks added for
+readability):
+```html
+<header>
+    header
+</header>
+<h1>
+    Index
+</h1>
+<footer>
+    footer
+</footer>
+```
+
+## Nested Outlets
+When using nested routes, we need to provide equally nested [`Outlet`]s.
+
+> Learn more about [nested routes](./routes/nested.md) in their own chapter.
+
+## Named Outlets
+When building complex apps, we often need to display multiple pieces of content
+simultaneously. For example, we might have a sidebar that changes its content in
+sync with the main part of the page.
+
+When defining our routes, we can use `RcMulti` instead of `RcComponent` to tell
+the router about our content.
+
+We then can use a named [`Outlet`] in our output, to tell the router where to
+put the side content.
+
+```rust
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+use dioxus::prelude::*;
+
+fn Main(cx: Scope) -> Element {
+    cx.render(rsx! {
+        main { "Main Content" }
+    })
+}
+
+fn Aside(cx: Scope) -> Element {
+    cx.render(rsx! {
+        aside { "Side Content" }
+    })
+}
+
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new()
+            .index(RcMulti(Main, vec![("side", Aside)]))
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            # init_only: true,
+
+            Outlet { }
+            Outlet {
+                name: "side"
+            }
+        }
+    })
+}
+#
+# let mut vdom = VirtualDom::new(App);
+# vdom.rebuild();
+# let html = dioxus::ssr::render_vdom(&vdom);
+# assert_eq!("<main>Main Content</main><aside>Side Content</aside>", html);
+```
+
+The example above will output the following HTML (line breaks added for
+readability):
+```html
+<main>
+    Main Content
+</main>
+<aside>
+    Side Content
+</aside>
+```
+
+## Outlet depth override
+When nesting [`Outlet`]s, they communicate with each other. This allows the
+nested [`Outlet`] to render the content of the nested route.
+
+We can override the detected value. Be careful when doing so, it is incredibly
+easy to create an unterminated recursion.
+
+```rust
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::router::history::MemoryHistory;
+use dioxus::prelude::*;
+
+fn RootContent(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Root" }
+        Outlet { }
+    })
+}
+
+fn NestedContent(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h2 { "Nested" }
+    })
+}
+
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new().fixed(
+            "root",
+            Route::new(RcComponent(RootContent)).nested(
+                Segment::new().index(RcComponent(NestedContent))
+            )
+        )
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            # init_only: true,
+            # history: &|| MemoryHistory::with_first(String::from("/root"))
+
+            Outlet {
+                depth: 1
+            }
+        }
+    })
+}
+#
+# let mut vdom = VirtualDom::new(App);
+# vdom.rebuild();
+# let html = dioxus::ssr::render_vdom(&vdom);
+# assert_eq!("<h2>Nested</h2>", html);
+```
+
+The example above will output the following HTML (line breaks added for
+readability):
+```html
+<h2>
+    Nested
+</h2>
+```
+
+[`Outlet`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Outlet.html

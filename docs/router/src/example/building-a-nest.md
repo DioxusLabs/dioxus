@@ -9,7 +9,11 @@ case of rendering components directly in the `Router`.
 Our site visitors won't know all the available pages and blogs on our site so we
 should provide a navigation bar for them.
 Let's create a new `NavBar` component:
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
 #[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -27,7 +31,11 @@ Instead we want to use the `Link` component provided by Dioxus Router.
 The `Link` is similar to a regular `a` tag. It takes a target (for now a path,
 more on targets later) and an element. Let's add our links
 
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
 #[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -58,16 +66,22 @@ fn NavBar(cx: Scope) -> Element {
 > [here](./navigation-targets.md).
 
 And finally, we add the navbar component in our app component:
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# fn Home(cx: Scope) -> Element { unimplemented!() }
+# fn NavBar(cx: Scope) -> Element { unimplemented!() }
+# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
+#
 fn app(cx: Scope) -> Element {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        ..Default::default()
+    let routes = use_segment(&cx, || {
+        Segment::new().index(RcComponent(Home))
     });
 
     cx.render(rsx! {
         Router {
-            routes: routes,
+            routes: routes.clone(),
             fallback: RcComponent(PageNotFound),
             NavBar { } // this is new
             Outlet { }
@@ -97,7 +111,11 @@ URL parameter.
 
 First, lets create component that wraps around all blog content. This allows us
 to add a heading that tells the user they are on the blog
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
 #[allow(non_snake_case)]
 fn Blog(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -112,7 +130,11 @@ fn Blog(cx: Scope) -> Element {
 
 Now we'll create another index component, that'll be displayed when no blog post
 is selected:
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
 #[allow(non_snake_case)]
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -138,7 +160,11 @@ fn BlogList(cx: Scope) -> Element {
 We also need to create a component that displays an actual blog post. Within
 this component we can use the `use_route` hook to gain access to our URL
 parameters:
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+#
 #[allow(non_snake_case)]
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).unwrap();
@@ -155,35 +181,38 @@ fn BlogPost(cx: Scope) -> Element {
 ```
 
 Finally, let's tell our router about those components.
-```rust,ignore
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# fn Blog(cx: Scope) -> Element { unimplemented!() }
+# fn BlogList(cx: Scope) -> Element { unimplemented!() }
+# fn BlogPost(cx: Scope) -> Element { unimplemented!() }
+# fn Home(cx: Scope) -> Element { unimplemented!() }
+# fn NavBar(cx: Scope) -> Element { unimplemented!() }
+# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
+#
 fn app(cx: Scope) -> Element {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        // new stuff starts here
-        fixed: vec![(
-            String::from("blog"),
-            Route {
-                content: RcComponent(Blog),
-                sub: Some(Segment {
-                    index: RcComponent(BlogList),
-                    dynamic: DrParameter {
-                        name: None,
-                        key: "post_id",
-                        content: RcComponent(BlogPost),
-                        sub: None,
-                    },
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-        )],
-        // new stuff ends here
-        ..Default::default()
+    let routes = use_segment(&cx, || {
+        Segment::new()
+            .index(RcComponent(Home))
+            // new stuff starts here
+            .fixed(
+                "blog",
+                Route::new(RcComponent(Blog)).nested(
+                    Segment::new()
+                        .index(RcComponent(BlogList))
+                        .parameter(
+                            ParameterRoute::new("post_id", RcComponent(BlogPost))
+                        )
+                )
+            )
+            // new stuff ends here
     });
 
     cx.render(rsx! {
         Router {
-            routes: routes,
+            routes: routes.clone(),
             fallback: RcComponent(PageNotFound),
             NavBar {}
             Outlet {}
