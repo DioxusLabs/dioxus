@@ -4,7 +4,7 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
+    innerlude::{AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
     AnyEvent, Component,
 };
@@ -339,7 +339,7 @@ pub struct Attribute<'a> {
     pub name: &'static str,
 
     /// The value of the attribute.
-    pub value: &'a str,
+    pub value: AttributeValue<'a>,
 
     /// An indication if this attribute can be ignored during diffing
     ///
@@ -550,7 +550,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    /// Create a new [`VNode::VElement`]
+    /// Create a new [`VNode::Element`]
     pub fn element(
         &self,
         el: impl DioxusElement,
@@ -569,7 +569,7 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    /// Create a new [`VNode::VElement`] without the trait bound
+    /// Create a new [`VNode::Element`] without the trait bound
     ///
     /// IE pass in "div" instead of `div`
     pub fn raw_element(
@@ -612,6 +612,24 @@ impl<'a> NodeFactory<'a> {
         let (value, is_static) = self.raw_text(val);
         Attribute {
             name,
+            value: AttributeValue::Text(value),
+            is_static,
+            namespace,
+            is_volatile,
+        }
+    }
+
+    /// Create a new [`Attribute`] using non-arguments
+    pub fn custom_attr(
+        &self,
+        name: &'static str,
+        value: AttributeValue<'a>,
+        namespace: Option<&'static str>,
+        is_volatile: bool,
+        is_static: bool,
+    ) -> Attribute<'a> {
+        Attribute {
+            name,
             value,
             is_static,
             namespace,
@@ -619,7 +637,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VComponent`]
+    /// Create a new [`VNode::Component`]
     pub fn component<P>(
         &self,
         component: fn(Scope<'a, P>) -> Element,
@@ -666,7 +684,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VFragment`] from a root of the rsx! call
+    /// Create a new [`VNode::Fragment`] from a root of the rsx! call
     pub fn fragment_root<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
@@ -687,7 +705,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VFragment`] from any iterator
+    /// Create a new [`VNode::Fragment`] from any iterator
     pub fn fragment_from_iter<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,

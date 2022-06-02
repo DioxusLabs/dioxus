@@ -1,7 +1,7 @@
 use crate::innerlude::*;
 
 /// An iterator that only yields "real" [`Element`]s. IE only Elements that are
-/// not [`VNode::VComponent`] or [`VNode::VFragment`], .
+/// not [`VNode::Component`] or [`VNode::Fragment`], .
 pub struct ElementIdIterator<'a> {
     vdom: &'a VirtualDom,
 

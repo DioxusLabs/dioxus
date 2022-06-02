@@ -43,7 +43,9 @@
     <span> | </span>
     <a href="https://dioxuslabs.com/router/guide">Guide (Release)</a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/router/guide">Guide (Master)</a>
+    <a href="https://dioxuslabs.com/router"> Guide (Latest) </a>
+    <span> | </span>
+    <a href="https://dioxuslabs.com/nightly/router"> Guide (Master) </a>
   </h3>
 </div>
 

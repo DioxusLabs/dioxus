@@ -186,7 +186,9 @@ impl<'a> TextRenderer<'a, '_> {
                 while let Some(attr) = attr_iter.next() {
                     match attr.namespace {
                         None => match attr.name {
-                            "dangerous_inner_html" => inner_html = Some(attr.value),
+                            "dangerous_inner_html" => {
+                                inner_html = Some(attr.value.as_text().unwrap())
+                            }
                             "allowfullscreen"
                             | "allowpaymentrequest"
                             | "async"
@@ -213,7 +215,7 @@ impl<'a> TextRenderer<'a, '_> {
                             | "reversed"
                             | "selected"
                             | "truespeed" => {
-                                if attr.value != "false" {
+                                if attr.value.is_truthy() {
                                     write!(f, " {}=\"{}\"", attr.name, attr.value)?
                                 }
                             }

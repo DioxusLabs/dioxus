@@ -1,4 +1,5 @@
 use anymap::AnyMap;
+use dioxus_core::AttributeValue;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
@@ -347,7 +348,7 @@ fn state_reduce_parent_called_minimally_on_update() {
         edits: vec![DomEdit::SetAttribute {
             root: 1,
             field: "width",
-            value: "99%",
+            value: AttributeValue::Text("99%"),
             ns: Some("style"),
         }],
         dirty_scopes: fxhash::FxHashSet::default(),
@@ -416,7 +417,7 @@ fn state_reduce_child_called_minimally_on_update() {
         edits: vec![DomEdit::SetAttribute {
             root: 4,
             field: "width",
-            value: "99%",
+            value: AttributeValue::Text("99%"),
             ns: Some("style"),
         }],
         dirty_scopes: fxhash::FxHashSet::default(),

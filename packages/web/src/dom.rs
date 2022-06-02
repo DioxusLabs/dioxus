@@ -146,7 +146,7 @@ impl WebsysDom {
                     value,
                     ns,
                 } => {
-                    let value = serde_wasm_bindgen::to_value(value).unwrap();
+                    let value = serde_wasm_bindgen::to_value(&value).unwrap();
                     self.interpreter.SetAttribute(root, field, value, ns)
                 }
             }
