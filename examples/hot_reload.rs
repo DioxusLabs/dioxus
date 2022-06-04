@@ -13,7 +13,6 @@ fn app(cx: Scope) -> Element {
             onclick: move |_| {
                 count.modify(|count| *count + 10);
             },
-            p{"{__line_num:?}"}
             p {
                 "High-Five counter: {count.to_string():?}",
             }
