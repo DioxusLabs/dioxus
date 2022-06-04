@@ -54,7 +54,7 @@ impl DesktopController {
                 #[cfg(feature = "hot_reload")]
                 {
                     use dioxus_rsx_interpreter::{
-                        error::Error, ErrorHandler, RsxContext, RsxData, SetRsxMessage,
+                        error::Error, ErrorHandler, RsxContext, RsxData, SetRsxMessage, RSX_CONTEXT,
                     };
                     use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
                     use std::io::{BufRead, BufReader, Write};
@@ -93,14 +93,9 @@ impl DesktopController {
                         }
                     }
 
-                    let context = dom
-                        .base_scope()
-                        .provide_root_context(RsxContext::new(RsxData {
-                            hm: HashMap::new(),
-                            error_handler: Box::new(DesktopErrorHandler {
-                                latest_connection: latest_connection_handle,
-                            }),
-                        }));
+                    RSX_CONTEXT.set_error_handler(DesktopErrorHandler {
+                        latest_connection: latest_connection_handle,
+                    });
 
                     std::thread::spawn(move || {
                         if let Ok(listener) = LocalSocketListener::bind("@dioxus") {
@@ -124,7 +119,7 @@ impl DesktopController {
                                         let message: SetRsxMessage =
                                             serde_json::from_str(&buf).unwrap();
                                         println!("{:?}", message.location);
-                                        context.insert(message.location, message.new_text);
+                                        RSX_CONTEXT.insert(message.location, message.new_text);
                                     }
                                     Err(err) => {
                                         if err.kind() != std::io::ErrorKind::WouldBlock {

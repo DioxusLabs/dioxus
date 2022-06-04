@@ -189,44 +189,18 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
 
                 match CapturedContextBuilder::from_call_body(body) {
-                    Ok(captured) => {
-                        quote::quote! {
-                            {
-                                let __line_num = get_line_num();
-                                let __rsx_text_index: RsxContext = cx.consume_context().expect("Hot reload is not avalable on this platform");
-                                // only the insert the rsx text once
-                                if !__rsx_text_index.read().hm.contains_key(&__line_num){
-                                    __rsx_text_index.insert(
-                                        __line_num.clone(),
-                                        #rsx_text.to_string(),
-                                    );
-                                }
-                                LazyNodes::new(move |__cx|{
-                                    if let Some(__text) = {
-                                        let read = __rsx_text_index.read();
-                                        // clone prevents deadlock on nested rsx calls
-                                        read.hm.get(&__line_num).cloned()
-                                    } {
-                                        match interpert_rsx(
-                                            __cx,
-                                            &__text,
-                                            #captured
-                                        ){
-                                            Ok(vnode) => vnode,
-                                            Err(err) => {
-                                                __rsx_text_index.report_error(err);
-                                                __cx.text(format_args!(""))
-                                            }
-                                        }
-                                    }
-                                    else {
-                                        panic!("rsx: line number {:?} not found in rsx index", __line_num);
-                                    }
-                                })
-                            }
+                    Ok(captured) => quote::quote! {
+                        {
+                            LazyNodes::new(|__cx|{
+                                let captured = #captured;
+                                let line_num = get_line_num();
+                                let text = #rsx_text;
+
+                                resolve_scope(line_num, text, captured, __cx)
+                            })
                         }
-                        .into()
                     }
+                    .into(),
                     Err(err) => err.into_compile_error().into(),
                 }
             }
