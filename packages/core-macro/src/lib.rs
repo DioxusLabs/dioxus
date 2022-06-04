@@ -191,7 +191,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 match CapturedContextBuilder::from_call_body(body) {
                     Ok(captured) => quote::quote! {
                         {
-                            LazyNodes::new(|__cx|{
+                            LazyNodes::new(move |__cx|{
                                 let captured = #captured;
                                 let line_num = get_line_num();
                                 let text = #rsx_text;

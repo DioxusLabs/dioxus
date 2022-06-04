@@ -50,7 +50,7 @@ impl DesktopController {
 
                 dom.base_scope().provide_context(window_context);
 
-                // allow other proccesses to send the new rsx text to the @dioxus ipc channel
+                // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
                 #[cfg(feature = "hot_reload")]
                 {
                     use dioxus_rsx_interpreter::{
@@ -68,17 +68,18 @@ impl DesktopController {
                             .ok()
                     }
 
-                    let latest_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
+                    let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
                         Arc::new(Mutex::new(None));
-                    let latest_connection_handle = latest_connection.clone();
-                    let latest_connection_handle2 = latest_connection.clone();
+                    let latest_in_connection_handle = latest_in_connection.clone();
+                    let latest_out_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
+                        Arc::new(Mutex::new(None));
+                    let latest_out_connection_handle = latest_out_connection.clone();
 
                     struct DesktopErrorHandler {
                         latest_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>>,
                     }
                     impl ErrorHandler for DesktopErrorHandler {
                         fn handle_error(&self, err: Error) {
-                            println!("reporting err: {err:?}");
                             if let Some(conn) = &mut *self.latest_connection.lock().unwrap() {
                                 if let Error::RecompileRequiredError(reason) = err {
                                     conn.get_mut()
@@ -87,50 +88,53 @@ impl DesktopController {
                                                 .as_bytes(),
                                         )
                                         .unwrap();
-                                    println!("sending error");
                                 }
                             }
                         }
                     }
 
                     RSX_CONTEXT.set_error_handler(DesktopErrorHandler {
-                        latest_connection: latest_connection_handle,
+                        latest_connection: latest_out_connection_handle,
                     });
 
+                    // connect to processes for incoming data
                     std::thread::spawn(move || {
-                        if let Ok(listener) = LocalSocketListener::bind("@dioxus") {
+                        if let Ok(listener) = LocalSocketListener::bind("@dioxusin") {
                             for conn in listener.incoming().filter_map(handle_error) {
-                                // conn.set_nonblocking(true);
-                                println!("connected");
-                                *latest_connection_handle2.lock().unwrap() =
+                                *latest_in_connection_handle.lock().unwrap() =
                                     Some(BufReader::new(conn));
+                            }
+                        }
+                    });
+
+                    // connect to processes for outgoing errors
+                    std::thread::spawn(move || {
+                        if let Ok(listener) = LocalSocketListener::bind("@dioxusout") {
+                            for conn in listener.incoming().filter_map(handle_error) {
+                                *latest_out_connection.lock().unwrap() = Some(BufReader::new(conn));
                             }
                         }
                     });
 
                     std::thread::spawn(move || {
                         loop {
-                            if let Some(conn) = &mut *latest_connection.lock().unwrap() {
+                            if let Some(conn) = &mut *latest_in_connection.lock().unwrap() {
                                 let mut buf = String::new();
-                                println!("reading");
                                 match conn.read_line(&mut buf) {
                                     Ok(_) => {
-                                        println!("read");
                                         let message: SetRsxMessage =
                                             serde_json::from_str(&buf).unwrap();
-                                        println!("{:?}", message.location);
                                         RSX_CONTEXT.insert(message.location, message.new_text);
                                     }
                                     Err(err) => {
                                         if err.kind() != std::io::ErrorKind::WouldBlock {
-                                            println!("{err}");
                                             break;
                                         }
                                     }
                                 }
                             }
                             // give the error handler time to take the mutex
-                            std::thread::sleep(Duration::from_millis(10));
+                            std::thread::sleep(Duration::from_millis(100));
                         }
                     });
                 }
