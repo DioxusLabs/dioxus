@@ -1,5 +1,8 @@
 use captuered_context::CapturedContext;
-use dioxus_core::{Component, Element, LazyNodes, NodeFactory, Scope, ScopeState, VNode};
+use dioxus_core::{
+    Component, Element, LazyNodes, NodeFactory, SchedulerMsg, Scope, ScopeId, ScopeState, VNode,
+};
+use dioxus_hooks::UnboundedSender;
 use error::Error;
 use interperter::build;
 use lazy_static::lazy_static;
@@ -87,6 +90,7 @@ pub struct RsxContext {
 pub struct RsxData {
     pub hm: HashMap<CodeLocation, String>,
     pub error_handler: Option<Box<dyn ErrorHandler>>,
+    pub scheduler_channel: Option<UnboundedSender<SchedulerMsg>>,
 }
 
 impl std::fmt::Debug for RsxData {
@@ -103,7 +107,13 @@ impl RsxContext {
     }
 
     pub fn insert(&self, loc: CodeLocation, text: String) {
-        self.data.write().unwrap().hm.insert(loc, text);
+        let mut write = self.data.write().unwrap();
+        write.hm.insert(loc, text);
+        if let Some(channel) = &mut write.scheduler_channel {
+            channel
+                .unbounded_send(SchedulerMsg::Immediate(ScopeId(0)))
+                .unwrap()
+        }
     }
 
     pub fn read(&self) -> RwLockReadGuard<RsxData> {
@@ -118,6 +128,10 @@ impl RsxContext {
 
     pub fn set_error_handler(&self, handler: impl ErrorHandler + 'static) {
         self.data.write().unwrap().error_handler = Some(Box::new(handler));
+    }
+
+    pub fn provide_scheduler_channel(&self, channel: UnboundedSender<SchedulerMsg>) {
+        self.data.write().unwrap().scheduler_channel = Some(channel)
     }
 }
 

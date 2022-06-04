@@ -96,6 +96,7 @@ impl DesktopController {
                     RSX_CONTEXT.set_error_handler(DesktopErrorHandler {
                         latest_connection: latest_out_connection_handle,
                     });
+                    RSX_CONTEXT.provide_scheduler_channel(dom.get_scheduler_channel());
 
                     // connect to processes for incoming data
                     std::thread::spawn(move || {
