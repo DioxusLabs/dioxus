@@ -26,15 +26,31 @@ fn app(cx: Scope) -> Element {
         }
         div {
             Router {
-                Route { to: "/", h1 { "Home" } },
-                Route { to: "/settings", h1 { "settings" } },
+                routes: use_segment(&cx, || {
+                    Segment::new().index(Home as Component).fixed("settings", Settings as Component)
+                })
+                .clone(),
 
                 p { "----"}
                 ul {
-                    Link { to: "/", li { "Router link to home" } },
-                    Link { to: "/settings", li { "Router link to settings" } },
+                    Link { target: "/".into(), li { "Router link to home" } },
+                    Link { target: "/settings".into(), li { "Router link to settings" } },
                 }
             }
         }
     ))
+}
+
+#[allow(non_snake_case)]
+fn Home(cx: Scope) -> Element {
+    cx.render(rsx! {
+        "Home"
+    })
+}
+
+#[allow(non_snake_case)]
+fn Settings(cx: Scope) -> Element {
+    cx.render(rsx! {
+        "Settings"
+    })
 }
