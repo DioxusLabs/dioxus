@@ -16,7 +16,7 @@ pub mod error;
 mod interperter;
 
 lazy_static! {
-    /// This a a global store of the current
+    /// This a a global store of the current rsx text for each call to rsx
     // Global mutable data is genrally not great, but it allows users to not worry about passing down the text RsxContex every time they switch to hot reloading.
     pub static ref RSX_CONTEXT: RsxContext = RsxContext::new(RsxData::default());
 }
