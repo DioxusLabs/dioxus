@@ -1,7 +1,5 @@
 use captuered_context::CapturedContext;
-use dioxus_core::{
-    Component, Element, LazyNodes, NodeFactory, SchedulerMsg, Scope, ScopeId, ScopeState, VNode,
-};
+use dioxus_core::{NodeFactory, SchedulerMsg, ScopeId, VNode};
 use dioxus_hooks::UnboundedSender;
 use error::Error;
 use interperter::build;
