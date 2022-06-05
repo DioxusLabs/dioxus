@@ -4,7 +4,7 @@ use dioxus_rsx::{
 };
 use quote::{quote, ToTokens, TokenStreamExt};
 use std::collections::HashMap;
-use syn::{Expr, Result};
+use syn::{Expr, Ident, Result};
 
 #[derive(Default)]
 pub struct CapturedContextBuilder {
@@ -14,6 +14,7 @@ pub struct CapturedContextBuilder {
     pub iterators: Vec<BodyNode>,
     pub captured_expressions: Vec<Expr>,
     pub listeners: Vec<ElementAttrNamed>,
+    pub custom_context: Option<Ident>,
 }
 
 impl CapturedContextBuilder {
@@ -28,6 +29,7 @@ impl CapturedContextBuilder {
 
     pub fn from_call_body(body: CallBody) -> Result<Self> {
         let mut new = Self::default();
+        new.custom_context = body.custom_context;
         for node in body.roots {
             new.extend(Self::find_captured(node)?);
         }
@@ -86,6 +88,7 @@ impl ToTokens for CapturedContextBuilder {
             iterators,
             captured_expressions,
             listeners,
+            custom_context: _,
         } = self;
         let listeners_str = listeners
             .iter()

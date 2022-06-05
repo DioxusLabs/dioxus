@@ -189,8 +189,8 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                 use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
 
                 match CapturedContextBuilder::from_call_body(body) {
-                    Ok(captured) => quote::quote! {
-                        {
+                    Ok(captured) => {
+                        let lazy = quote::quote! {
                             LazyNodes::new(move |__cx|{
                                 let captured = #captured;
                                 let line_num = get_line_num();
@@ -198,9 +198,16 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 
                                 resolve_scope(line_num, text, captured, __cx)
                             })
+                        };
+                        if let Some(cx) = captured.custom_context {
+                            quote::quote! {
+                                #cx.render(#lazy)
+                            }
+                            .into()
+                        } else {
+                            lazy.into()
                         }
                     }
-                    .into(),
                     Err(err) => err.into_compile_error().into(),
                 }
             }
