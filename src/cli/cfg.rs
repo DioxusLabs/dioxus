@@ -16,6 +16,10 @@ pub struct ConfigOptsBuild {
     #[clap(long)]
     pub example: Option<String>,
 
+    /// Build with custom profile
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
@@ -35,6 +39,10 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
+
+    /// Build with custom profile
+    #[clap(long)]
+    pub profile: Option<String>,
 
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]

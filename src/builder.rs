@@ -49,6 +49,11 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         cmd.arg("--release");
     }
 
+    if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd.arg(format!("--profile {}", custom_profile));
+    }
+
     match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),

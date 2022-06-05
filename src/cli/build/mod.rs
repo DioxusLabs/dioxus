@@ -19,6 +19,10 @@ impl Build {
             crate_config.as_example(self.build.example.unwrap());
         }
 
+        if self.build.profile.is_some() {
+            crate_config.set_profile(self.build.profile.unwrap());
+        }
+
         let platform = self.build.platform.unwrap_or_else(|| {
             crate_config
                 .dioxus_config
