@@ -142,7 +142,8 @@ impl FormattedSegment {
                 return Ok(Self::Ident(ident));
             }
         }
-        if let Ok(expr) = parse_str(&("{".to_string() + input + "}")) {
+        // if let Ok(expr) = parse_str(&("{".to_string() + input + "}")) {
+        if let Ok(expr) = parse_str(input) {
             Ok(Self::Expr(expr))
         } else {
             Err(Error::new(
