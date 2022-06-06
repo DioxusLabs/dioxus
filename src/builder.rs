@@ -51,7 +51,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
     if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
-        cmd.arg(format!("--profile {}", custom_profile));
+        cmd.arg("--profile");
+        cmd.arg(custom_profile);
     }
 
     match executable {
@@ -192,6 +193,12 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
 
     if config.release {
         cmd.arg("--release");
+    }
+
+    if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd.arg("--profile");
+        cmd.arg(custom_profile);
     }
 
     match &config.executable {
