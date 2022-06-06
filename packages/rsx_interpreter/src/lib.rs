@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::panic::Location;
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{RwLock, RwLockReadGuard};
 use syn::parse_str;
 
 mod attributes;
@@ -79,9 +79,9 @@ pub fn get_line_num() -> CodeLocation {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RsxContext {
-    data: Arc<RwLock<RsxData>>,
+    data: RwLock<RsxData>,
 }
 
 #[derive(Default)]
@@ -100,7 +100,7 @@ impl std::fmt::Debug for RsxData {
 impl RsxContext {
     pub fn new(data: RsxData) -> Self {
         Self {
-            data: Arc::new(RwLock::new(data)),
+            data: RwLock::new(data),
         }
     }
 
