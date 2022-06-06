@@ -54,7 +54,7 @@ impl DesktopController {
                 #[cfg(feature = "hot_reload")]
                 {
                     use dioxus_rsx_interpreter::{
-                        error::Error, ErrorHandler, RsxContext, RsxData, SetRsxMessage, RSX_CONTEXT,
+                        error::Error, ErrorHandler, SetRsxMessage, RSX_CONTEXT,
                     };
                     use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
                     use std::io::{BufRead, BufReader, Write};
