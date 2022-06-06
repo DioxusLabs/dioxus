@@ -217,6 +217,72 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
     let mut work_loop = ric_raf::RafLoop::new();
 
+    #[cfg(feature = "hot_reload")]
+    {
+        use dioxus_rsx_interpreter::error::Error;
+        use dioxus_rsx_interpreter::{ErrorHandler, SetRsxMessage, RSX_CONTEXT};
+        use futures_channel::mpsc::unbounded;
+        use futures_channel::mpsc::UnboundedSender;
+        use futures_util::StreamExt;
+        use wasm_bindgen::closure::Closure;
+        use wasm_bindgen::JsCast;
+        use web_sys::{MessageEvent, WebSocket};
+
+        let window = web_sys::window().unwrap();
+
+        let protocol = if window.location().protocol().unwrap() == "https:" {
+            "wss:"
+        } else {
+            "ws:"
+        };
+
+        let url = format!(
+            "{protocol} //{}/_dioxus/hot_reload",
+            window.location().host().unwrap()
+        );
+
+        let ws = WebSocket::new(&url).unwrap();
+
+        // change the rsx when new data is received
+        let cl = Closure::wrap(Box::new(|e: MessageEvent| {
+            if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
+                let msg: SetRsxMessage = serde_json::from_str(&format!("{text}")).unwrap();
+                RSX_CONTEXT.insert(msg.location, msg.new_text);
+            }
+        }) as Box<dyn FnMut(MessageEvent)>);
+
+        ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
+
+        let (error_channel_sender, error_channel_receiver) = unbounded();
+
+        struct WebErrorHandler {
+            sender: UnboundedSender<Error>,
+        }
+
+        impl ErrorHandler for WebErrorHandler {
+            fn handle_error(&self, err: dioxus_rsx_interpreter::error::Error) {
+                self.sender.unbounded_send(err).unwrap();
+            }
+        }
+
+        RSX_CONTEXT.set_error_handler(WebErrorHandler {
+            sender: error_channel_sender,
+        });
+
+        // forward stream to the websocket
+        dom.base_scope().spawn_forever(async move {
+            error_channel_receiver
+                .for_each(|err| {
+                    if let Error::RecompileRequiredError(err) = err {
+                        ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
+                            .unwrap();
+                    }
+                    futures_util::future::ready(())
+                })
+                .await;
+        });
+    }
+
     loop {
         log::trace!("waiting for work");
         // if virtualdom has nothing, wait for it to have something before requesting idle time
