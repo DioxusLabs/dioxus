@@ -48,6 +48,9 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     if config.release {
         cmd.arg("--release");
     }
+    if config.verbose {
+        cmd.arg("--verbose");
+    }
 
     if config.custom_profile.is_some() {
         let custom_profile = config.custom_profile.as_ref().unwrap();
@@ -199,6 +202,9 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
 
     if config.release {
         cmd.arg("--release");
+    }
+    if config.verbose {
+        cmd.arg("--verbose");
     }
 
     if config.custom_profile.is_some() {

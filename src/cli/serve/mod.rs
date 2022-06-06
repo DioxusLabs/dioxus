@@ -19,6 +19,7 @@ impl Serve {
 
         // change the relase state.
         crate_config.with_release(self.serve.release);
+        crate_config.with_verbose(self.serve.verbose);
 
         if self.serve.example.is_some() {
             crate_config.as_example(self.serve.example.unwrap());

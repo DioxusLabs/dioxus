@@ -14,6 +14,7 @@ impl Build {
 
         // change the release state.
         crate_config.with_release(self.build.release);
+        crate_config.with_verbose(self.build.verbose);
 
         if self.build.example.is_some() {
             crate_config.as_example(self.build.example.unwrap());

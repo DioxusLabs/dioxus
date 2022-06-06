@@ -12,6 +12,11 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
+    // Use verbose output [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub verbose: bool,
+
     /// Build a example [default: ""]
     #[clap(long)]
     pub example: Option<String>,
@@ -43,6 +48,11 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     #[serde(default)]
     pub release: bool,
+
+    // Use verbose output [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub verbose: bool,
 
     /// Build with custom profile
     #[clap(long)]
