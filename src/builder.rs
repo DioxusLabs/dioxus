@@ -55,6 +55,12 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         cmd.arg(custom_profile);
     }
 
+    if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd.arg("--features");
+        cmd.arg(features_str);
+    }
+
     match executable {
         ExecutableType::Binary(name) => cmd.arg("--bin").arg(name),
         ExecutableType::Lib(name) => cmd.arg("--lib").arg(name),
@@ -199,6 +205,12 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
         let custom_profile = config.custom_profile.as_ref().unwrap();
         cmd.arg("--profile");
         cmd.arg(custom_profile);
+    }
+
+    if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd.arg("--features");
+        cmd.arg(features_str);
     }
 
     match &config.executable {

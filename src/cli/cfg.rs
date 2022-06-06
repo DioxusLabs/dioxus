@@ -23,6 +23,10 @@ pub struct ConfigOptsBuild {
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -47,6 +51,10 @@ pub struct ConfigOptsServe {
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Option<Vec<String>>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

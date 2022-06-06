@@ -115,6 +115,7 @@ pub struct CrateConfig {
     pub dioxus_config: DioxusConfig,
     pub release: bool,
     pub custom_profile: Option<String>,
+    pub features: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,8 +164,8 @@ impl CrateConfig {
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;
-
         let custom_profile = None;
+        let features = None;
 
         Ok(Self {
             out_dir,
@@ -177,6 +178,7 @@ impl CrateConfig {
             release,
             dioxus_config,
             custom_profile,
+            features
         })
     }
 
@@ -192,6 +194,11 @@ impl CrateConfig {
 
     pub fn set_profile(&mut self, profile: String) -> &mut Self {
         self.custom_profile = Some(profile);
+        self
+    }
+
+    pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
+        self.features = Some(features);
         self
     }
 
