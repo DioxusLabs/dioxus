@@ -3,13 +3,11 @@ use dioxus_rsx::{
     BodyNode, CallBody, Component, ElementAttr, ElementAttrNamed, IfmtInput, Segment,
 };
 use quote::{quote, ToTokens, TokenStreamExt};
-use std::collections::HashMap;
 use syn::{Expr, Ident, Result};
 
 #[derive(Default)]
 pub struct CapturedContextBuilder {
-    pub attributes: HashMap<String, IfmtInput>,
-    pub text: Vec<IfmtInput>,
+    pub ifmted: Vec<IfmtInput>,
     pub components: Vec<Component>,
     pub iterators: Vec<BodyNode>,
     pub captured_expressions: Vec<Expr>,
@@ -19,8 +17,7 @@ pub struct CapturedContextBuilder {
 
 impl CapturedContextBuilder {
     pub fn extend(&mut self, other: CapturedContextBuilder) {
-        self.attributes.extend(other.attributes);
-        self.text.extend(other.text);
+        self.ifmted.extend(other.ifmted);
         self.components.extend(other.components);
         self.iterators.extend(other.iterators);
         self.listeners.extend(other.listeners);
@@ -42,18 +39,14 @@ impl CapturedContextBuilder {
             BodyNode::Element(el) => {
                 for attr in el.attributes {
                     match attr.attr {
-                        ElementAttr::AttrText { name, value } => {
-                            let (name, value_tokens) = (name.to_string(), value.to_token_stream());
+                        ElementAttr::AttrText { value, .. }
+                        | ElementAttr::CustomAttrText { value, .. } => {
+                            let value_tokens = value.to_token_stream();
                             let formated: IfmtInput = syn::parse2(value_tokens)?;
-                            captured.attributes.insert(name, formated);
+                            captured.ifmted.push(formated);
                         }
                         ElementAttr::AttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
-                        }
-                        ElementAttr::CustomAttrText { name, value } => {
-                            let (name, value_tokens) = (name.value(), value.to_token_stream());
-                            let formated: IfmtInput = syn::parse2(value_tokens)?;
-                            captured.attributes.insert(name, formated);
                         }
                         ElementAttr::CustomAttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
@@ -61,6 +54,13 @@ impl CapturedContextBuilder {
                         ElementAttr::EventTokens { .. } => captured.listeners.push(attr),
                     }
                 }
+
+                if let Some(key) = el.key {
+                    let value_tokens = key.to_token_stream();
+                    let formated: IfmtInput = syn::parse2(value_tokens)?;
+                    captured.ifmted.push(formated);
+                }
+
                 for child in el.children {
                     captured.extend(Self::find_captured(child)?);
                 }
@@ -71,7 +71,7 @@ impl CapturedContextBuilder {
             BodyNode::Text(t) => {
                 let tokens = t.to_token_stream();
                 let formated: IfmtInput = syn::parse2(tokens).unwrap();
-                captured.text.push(formated);
+                captured.ifmted.push(formated);
             }
             BodyNode::RawExpr(_) => captured.iterators.push(node),
         }
@@ -82,8 +82,7 @@ impl CapturedContextBuilder {
 impl ToTokens for CapturedContextBuilder {
     fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
         let CapturedContextBuilder {
-            attributes,
-            text,
+            ifmted,
             components,
             iterators,
             captured_expressions,
@@ -100,9 +99,8 @@ impl ToTokens for CapturedContextBuilder {
             BodyNode::RawExpr(expr) => expr.to_token_stream().to_string(),
             _ => unreachable!(),
         });
-        let captured: Vec<_> = attributes
-            .values()
-            .chain(text.iter())
+        let captured: Vec<_> = ifmted
+            .iter()
             .map(|input| input.segments.iter())
             .flatten()
             .filter_map(|seg| match seg {
