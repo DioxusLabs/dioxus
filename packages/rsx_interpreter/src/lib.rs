@@ -137,7 +137,7 @@ pub trait ErrorHandler: Send + Sync {
     fn handle_error(&self, err: Error);
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SetRsxMessage {
     pub location: CodeLocation,
     pub new_text: String,
