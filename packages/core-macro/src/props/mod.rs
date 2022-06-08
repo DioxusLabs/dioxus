@@ -1311,7 +1311,6 @@ pub mod injection {
                 .map_err(|err| syn::Error::new(Span::call_site(), err))?;
             }
 
-
             /*
             #[cfg(debug_assertions)]
             InjectedProperties::debug(component)
