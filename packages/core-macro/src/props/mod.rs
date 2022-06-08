@@ -1239,16 +1239,17 @@ Finally, call `.build()` to create the instance of `{name}`.
 
 /// Logic for declaratively injecting properties in custom components
 pub mod injection {
-    use std::{fmt, isize};
     use std::borrow::BorrowMut;
     use std::collections::HashMap;
-    use std::fmt::{Display, Formatter, Write};
     #[cfg(debug_assertions)]
     use std::fmt::Debug;
+    use std::fmt::{Display, Formatter, Write};
     use std::hash::{Hash, Hasher};
     use std::ops::{Deref, DerefMut, Range, RangeFrom, RangeTo};
+    use std::rc::Rc;
     use std::str::FromStr;
     use std::sync::{Mutex, Once};
+    use std::{fmt, isize};
 
     use proc_macro2::Span;
     use quote::ToTokens;
@@ -1325,14 +1326,12 @@ pub mod injection {
             component: &str,
             property: &Property,
             branch: &Branch,
-            total: usize,
-            type_totals: &HashMap<String, usize>,
         ) -> Result<bool, String> {
             let components = Self::components().lock().map_err(|err| format!("{err}"))?;
 
             if let Some(property_selectors) = components.0.get(component) {
                 if let Some(selectors) = property_selectors.get(property) {
-                    return Ok(selectors.matches(branch, total, type_totals));
+                    return Ok(selectors.matches(branch));
                 }
             }
 
@@ -1428,8 +1427,8 @@ pub mod injection {
                 fmt.write_fmt(format_args!(
                     "{}:[{}][{}]",
                     segment.current,
-                    segment.ordinal,
-                    segment.counters.get(&segment.current).unwrap()
+                    segment.position,
+                    segment.position_of_type.get(&segment.current).unwrap()
                 ))?;
             }
 
@@ -1461,52 +1460,53 @@ pub mod injection {
         }
 
         /// Indicates no more siblings; used after last sibling is added
-        pub fn last(&mut self) -> Result<(), String> {
-            if self.segments.is_empty() {
-                Err(String::from(
-                    "Branch traversal expected parent segment, ended unexpectedly",
-                ))
-            } else {
-                self.segments.pop();
-
-                Ok(())
-            }
-        }
-
-        /// Adds next child, updates trace info
-        pub fn next_child<N: ToString>(&mut self, name: N) -> Result<(), String> {
-            if self.segments.is_empty() {
-                Err(String::from(
-                    "Branch is empty, start with a call to child first",
-                ))
-            } else {
-                let trace = self.segments.last_mut().unwrap();
-
-                trace.ordinal += 1;
-                trace.current = name.to_string();
-
-                trace
-                    .counters
-                    .entry(trace.current.clone())
-                    .and_modify(|cnt| *cnt += 1)
-                    .or_insert(0);
-
-                Ok(())
-            }
+        pub fn finish(&mut self) -> Result<(), String> {
+            self.segments.pop().map(|_| ()).ok_or_else(|| {
+                String::from("Branch traversal expected parent segment, ended unexpectedly")
+            })
         }
 
         /// Adds a branches new level;, creates a new segment trace; only used
         /// to start new level, subsequent children need to use `Branch::sibling`
-        pub fn new_branch<N: ToString>(&mut self, name: N) {
+        pub fn new_child<N: ToString>(
+            &mut self,
+            name: N,
+            total: usize,
+            of_type: Rc<HashMap<String, usize>>,
+        ) {
             let mut counters = HashMap::default();
 
-            counters.insert(name.to_string(), 0);
+            counters.insert(name.to_string(), 1);
 
             self.segments.push(SegmentTrace {
                 current: name.to_string(),
-                ordinal: 0,
-                counters,
+                position: 1,
+                position_of_type: counters,
+                total,
+                of_type,
             });
+        }
+
+        /// Adds next sibling, updates trace info
+        pub fn next_sibling<N: ToString>(&mut self, name: N) -> Result<(), String> {
+            if self.segments.is_empty() {
+                Err(String::from(
+                    "Branch is empty, start with a call to new child first",
+                ))
+            } else {
+                let trace = self.segments.last_mut().unwrap();
+
+                trace.position += 1;
+                trace.current = name.to_string();
+
+                trace
+                    .position_of_type
+                    .entry(trace.current.clone())
+                    .and_modify(|cnt| *cnt += 1)
+                    .or_insert(1);
+
+                Ok(())
+            }
         }
     }
 
@@ -1518,12 +1518,18 @@ pub mod injection {
         current: String,
 
         /// Position in list of siblings; only applies to `SegmentTrace::current`
-        ordinal: usize,
+        position: usize,
 
-        /// Trace of counters by element/component; used to determine the position in the
+        /// Trace of position by element/component; used to determine the position in the
         /// list of siblings relative only to a specific element/component,
         /// i.e. nth div, instead of the nth sibling which also needs to be a div
-        counters: HashMap<String, usize>,
+        position_of_type: HashMap<String, usize>,
+
+        /// total number of elements in branch level
+        total: usize,
+
+        /// total number of elements by type in branch level
+        of_type: Rc<HashMap<String, usize>>,
     }
 
     impl SegmentTrace {
@@ -1534,7 +1540,7 @@ pub mod injection {
         #[allow(clippy::missing_panics_doc)]
         fn get_current_position(&self) -> usize {
             // a name always has an entry
-            *self.counters.get(self.current.as_str()).unwrap()
+            *self.position_of_type.get(self.current.as_str()).unwrap()
         }
     }
 
@@ -1599,12 +1605,7 @@ pub mod injection {
         }
 
         /// Checks if a `Branch` matches any of the selector rules
-        pub(crate) fn matches(
-            &self,
-            branch: &Branch,
-            total: usize,
-            type_totals: &HashMap<String, usize>,
-        ) -> bool {
+        pub(crate) fn matches(&self, branch: &Branch) -> bool {
             let name = branch.to_string();
 
             match self.0.get(&name) {
@@ -1616,7 +1617,7 @@ pub mod injection {
                             .deref()
                             .iter()
                             .zip(branch.segments.iter())
-                            .all(|(segment, trace)| segment.matches(trace, total, type_totals))
+                            .all(|(segment, trace)| segment.matches(trace))
                     }),
                 None => false,
             }
@@ -1647,9 +1648,7 @@ pub mod injection {
                     acc.and_then(|mut acc| {
                         next.and_then(|(next, src)| {
                             let next = next?;
-                            let entry = acc
-                                .entry(next.identifier.clone())
-                                .or_insert_with(Vec::new);
+                            let entry = acc.entry(next.identifier.clone()).or_insert_with(Vec::new);
 
                             if entry.iter().any(|segments| segments == &next.segments) {
                                 Err(format!("duplicate selector '{src}'"))
@@ -1667,12 +1666,7 @@ pub mod injection {
                     "selectors can not be empty, provide one or remove definition",
                 ))
             } else {
-                Ok(Self(
-                    selectors
-                        // .into_iter()
-                        // .map(|(key, segments)| (key, segments.into_iter().collect()))
-                        // .collect(),
-                ))
+                Ok(Self(selectors))
             }
         }
     }
@@ -1907,36 +1901,26 @@ pub mod injection {
 
     impl Segment {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
-        fn matches(
-            &self,
-            target: &SegmentTrace,
-            total: usize,
-            type_totals: &HashMap<String, usize>,
-        ) -> bool {
+        fn matches(&self, target: &SegmentTrace) -> bool {
+            let matches = |name: &str, mode: &SelectorMode, nth: &Nth| match mode {
+                SelectorMode::Child => nth.matches(&target.current, target.position, target.total),
+                SelectorMode::TypeOf => nth.matches(
+                    &target.current,
+                    target.get_current_position(),
+                    target.of_type[name],
+                ),
+            };
+
             match self {
                 Segment::Component { name, mode, nth }
                     if name.is_empty() || *name == target.current =>
                 {
-                    match mode {
-                        SelectorMode::Child => nth.matches(&target.current, target.ordinal, total),
-                        SelectorMode::TypeOf => nth.matches(
-                            &target.current,
-                            target.get_current_position(),
-                            type_totals[name],
-                        ),
-                    }
+                    matches(name, mode, nth)
                 }
                 Segment::Element { name, mode, nth }
                     if name.is_empty() || *name == target.current =>
                 {
-                    match mode {
-                        SelectorMode::Child => nth.matches(&target.current, target.ordinal, total),
-                        SelectorMode::TypeOf => nth.matches(
-                            &target.current,
-                            target.get_current_position(),
-                            type_totals[name],
-                        ),
-                    }
+                    matches(name, mode, nth)
                 }
                 _ => false,
             }
@@ -2286,8 +2270,6 @@ pub mod injection {
     impl Nth {
         /// Checks if a `SegmentTrace` position of a branches matches `Nth` rule
         fn matches(&self, target: &str, position: usize, count: usize) -> bool {
-            let position = position + 1;
-
             match self {
                 Nth::All => position <= count,
                 Nth::Even => position % 2 == 0,
@@ -2295,19 +2277,31 @@ pub mod injection {
                 Nth::First => position == 1,
                 Nth::Last => position == count,
                 Nth::EveryN { frequency, offset } => {
-                    (position - (*offset % *frequency as isize).abs() as usize) % frequency == 0
+                    let offset = offset % *frequency as isize;
+                    let offset = if offset < 0 {
+                        offset + *frequency as isize
+                    } else {
+                        offset
+                    };
+
+                    (position - offset.abs() as usize) % frequency == 0
                 }
                 Nth::Range(range) => range.contains(&position),
                 Nth::RangeFrom(range) => range.contains(&position),
                 Nth::RangeTo(range) => range.contains(&position),
                 Nth::Nth(list) => list.contains(&position),
                 Nth::Not(list) => list.iter().all(|elm| elm != target),
-                Nth::NthLast(list) => list.contains(&(count - position)),
+                Nth::NthLast(list) => list.contains(&(count - position + 1)),
                 Nth::Only => count == 1 && position == 1,
                 Nth::LastEveryN { frequency, offset } => {
-                    (count - position - (*offset % *frequency as isize).abs() as usize + 1)
-                        % frequency
-                        == 0
+                    let offset = offset % *frequency as isize;
+                    let offset = if offset < 0 {
+                        offset + *frequency as isize
+                    } else {
+                        offset
+                    };
+
+                    (count + 1 - position - offset.abs() as usize) % frequency == 0
                 }
             }
         }

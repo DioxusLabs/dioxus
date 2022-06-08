@@ -2944,6 +2944,1317 @@ mod injection {
         }
     }
 
+    mod selector_matching {
+        use utils::test_selector_matching;
+
+        #[test]
+        fn select_all_simple() {
+            // select all div in root level
+            let sut = "div";
+            let dom_tests = "
+                div         ✔ first match
+                MyButton    ✘ MyButton
+                div
+                    div     ✘ div 2nd level
+                div         ✔ subsequent match
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_all_multi_level() {
+            // select all 2nd level MyButton in any div in root level
+            let sut = "div > MyButton";
+            let dom_tests = "
+                div
+                    MyButton        ✔ first match
+                    OtherButton     ✘ OtherButton
+                    MyButton        ✔ subsequent match
+                div
+                    div
+                    MyButton        ✔ 2nd branch
+                div
+                    div
+                        MyButton    ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        #[ignore] // todo :not(elm) does not work, needs new matching logic
+        fn select_not_element() {
+            // select all 3rd level div in 2nd level elements not MyLabel or input in any div in root level
+            let sut = "div > :not(MyLabel,input) > div";
+            let dom_tests = "";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_first_child() {
+            // select all 3rd level div in 2nd level first div in any div in root level
+            let sut = "div > div:first-child > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ label
+                        div         ✔ subsequent match
+                    div
+                        div         ✘ 2nd div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_last_child() {
+            // select all 3rd level div in 2nd level last div in any div in root level
+            let sut = "div > div:last-child > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st div
+                        label       ✘ label
+                        div         ✘ 2nd div
+                    div
+                        div         ✔ first match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_only_child() {
+            // select all 3rd level div in 2nd level only child div in any root div
+            let sut = "div > div:only-child > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                div
+                    div
+                    div
+                        div         ✘ not only child
+                div
+                    label
+                        div         ✘ not only div child
+                div
+                    div
+                        div         ✔ 2nd branch
+                div
+                    div
+                        div
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_even() {
+            // select all 3rd level div in 2nd level even div in any root div
+            let sut = "div > div:nth-child(even) > div";
+            let dom_tests = "
+                div
+                    label           ✘ 2nd level label
+                    div
+                        div         ✔ first match
+                        label       ✘ 3rd level label
+                        div         ✔ subsequent match
+                    div
+                        div         ✘ 2nd odd branch
+                    div
+                        div         ✔ 3rd even branch
+                div
+                    label
+                    div
+                        div         ✔ 2nd root branch
+                            div     ✘ deep div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_odd() {
+            // select all 3rd level div in 2nd level odd div in any root div
+            let sut = "div > div:nth-child(odd) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ label
+                    div
+                        div         ✘ even level div
+                    label
+                    label
+                    div
+                        div         ✔ subsequent match
+                    div
+                        div         ✘ even level div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_every_n_no_offset() {
+            // select all 3rd level div in 2nd level every 3rd div in any root div
+            let sut = "div > div:nth-child(3n) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ first match
+                    label
+                    div
+                        div         ✘ 5th - div
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_every_n_positive_offset() {
+            // select all 3rd level div in 2nd level every 3rd div offset by 4 in any root div
+            let sut = "div > div:nth-child(3n+7) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✘ 3rd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                    div
+                        div         ✘ 5th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_every_n_negative_offset() {
+            // select all 3rd level div in 2nd level every 3rd div offset by -2 in any root div
+            let sut = "div > div:nth-child(3n-8) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✘ 3rd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                    div
+                        div         ✘ 5th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_child_every_n_no_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div in any root div
+            let sut = "div > div:nth-last-child(3n) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✘ 3rd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                    div
+                        div         ✘ 5th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    div
+                    div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_child_every_n_positive_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div offset by 4 in any root div
+            let sut = "div > div:nth-last-child(3n+7) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ first match
+                    div
+                        div         ✘ 4th - div
+                    label
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    div
+                    label
+                    div
+                        div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_child_every_n_negative_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div offset by -2 in any root div
+            let sut = "div > div:nth-last-child(3n-8) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ first match
+                    div
+                        div         ✘ 4th - div
+                    label
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    div
+                        div
+                    label
+                        div
+                    div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_range() {
+            // select all 3rd level div in 2nd level div from 2nd through 4th in any root div
+            let sut = "div > div:nth-child(2..5) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_range_inclusive() {
+            // select all 3rd level div in 2nd level div from 2nd through 4th in any root div
+            let sut = "div > div:nth-child(2..=4) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_range_from() {
+            // select all 3rd level div in 2nd level div from 2nd through last in any root div
+            let sut = "div > div:nth-child(2..) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 5th - div
+                    div
+                        div         ✔ another match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_range_to() {
+            // select all 3rd level div in 2nd level div from 1st through 4th in any root div
+            let sut = "div > div:nth-child(..5) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ another match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child_range_to_inclusive() {
+            // select all 3rd level div in 2nd level div from 1st through 4th in any root div
+            let sut = "div > div:nth-child(..=4) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ another match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_child() {
+            // select all 3rd level div in 2nd level 2nd and 5th div in any root div
+            let sut = "div > div:nth-child(2,5) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 2nd - div
+                    label
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_child() {
+            // select all 3rd level div in 2nd level last 2nd and 5th div in any root div
+            let sut = "div > div:nth-last-child(2,5) > div";
+            let dom_tests = "
+                div
+                    div
+                    div
+                        div         ✔ first match
+                    div
+                        div         ✘ 2nd - div
+                        label       ✘ 2nd - label
+                    label
+                        div         ✘ 3rd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_even() {
+            // select all 3rd level div in 2nd level even div in any root div
+            let sut = "div > div:nth-of-type(even) > div";
+            let dom_tests = "
+                div
+                    label           ✘ 2nd level label
+                    div
+                    div
+                        div         ✔ first match
+                        label       ✘ 3rd level label
+                        div         ✔ subsequent match
+                    div
+                        div         ✘ odd branch
+                    div
+                        div         ✔ another match
+                div
+                    div
+                        label
+                    div
+                        div         ✔ 2nd root branch
+                            div     ✘ deep div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_odd() {
+            // select all 3rd level div in 2nd level odd div in any root div
+            let sut = "div > div:nth-of-type(odd) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ label
+                    div
+                        div         ✘ even level div
+                    label
+                    div
+                        div         ✔ subsequent match
+                    div
+                        div         ✘ even level div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_every_n_no_offset() {
+            // select all 3rd level div in 2nd level every 3rd div in any root div
+            let sut = "div > div:nth-of-type(3n) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✘ 2nd - div
+                    div
+                        div         ✔ first match
+                    label
+                    div
+                        div         ✘ 5th - div
+                    label
+                        div         ✘ 6th - div
+                    div
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                        label
+                    div
+                    label
+                        div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_every_n_positive_offset() {
+            // select all 3rd level div in 2nd level every 3rd div offset by 4 in any root div
+            let sut = "div > div:nth-of-type(3n+7) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                    div
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div
+                    div
+                    div
+                        div         ✘ 8th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    label
+                        div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_every_n_negative_offset() {
+            // select all 3rd level div in 2nd level every 3rd div offset by -2 in any root div
+            let sut = "div > div:nth-of-type(3n-8) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                    div
+                        div         ✘ 3rd - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                    div
+                    div
+                        div         ✘ 5th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_of_type_every_n_no_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div in any root div
+            let sut = "div > div:nth-last-of-type(3n) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                    div
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                    div
+                        div         ✘ 7th - div
+                    input
+                        label
+                    div
+                        div         ✘ 9th - div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    div
+                    label
+                        div
+                    div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_of_type_every_n_positive_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div offset by 4 in any root div
+            let sut = "div > div:nth-last-of-type(3n+7) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                    div
+                        div         ✔ first match
+                    label
+                    div
+                        div         ✘ 6th - div
+                    label
+                    div
+                    div
+                        div         ✔ subsequent match
+                    label
+                div
+                    div
+                        input
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_of_type_every_n_negative_offset() {
+            // select all 3rd level div in 2nd level every last 3rd div offset by -2 in any root div
+            let sut = "div > div:nth-last-of-type(3n-8) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✔ first match
+                        label       ✘ 1st - label
+                    label
+                        div         ✘ 2nd - div
+                    div
+                        div         ✘ 3rd div
+                    div
+                        div         ✘ 4th - div
+                    label
+                    div
+                        div         ✔ subsequent match
+                    label
+                div
+                    div
+                        div
+                    label
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                        div
+                    label
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_range() {
+            // select all 3rd level div in 2nd level div from 2nd through 4th in any root div
+            let sut = "div > div:nth-of-type(2..5) > div";
+            let dom_tests = "
+                div
+                    label
+                        div         ✘ 1st - div
+                    div
+                        div         ✘ 2nd - 1st div - div
+                        label       ✘ 2nd - 1st div - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 6th - div
+                div
+                    div
+                    label
+                        div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_range_inclusive() {
+            // select all 3rd level div in 2nd level div from 2nd through 4th in any root div
+            let sut = "div > div:nth-of-type(2..=4) > div";
+            let dom_tests = "
+                div
+                    label
+                        div         ✘ 1st - div
+                    div
+                        div         ✘ 2nd - 1st div - div
+                        label       ✘ 2nd - 1st div - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 6th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_range_from() {
+            // select all 3rd level div in 2nd level div from 2nd through last in any root div
+            let sut = "div > div:nth-of-type(2..) > div";
+            let dom_tests = "
+                div
+                    label
+                        div         ✘ 1st - div
+                    div
+                        div         ✘ 2nd - 1st div - div
+                        label       ✘ 2nd - 1st div - label
+                    div
+                        div         ✔ first match
+                    label
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 6th - div
+                    div
+                        div         ✔ another match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_range_to() {
+            // select all 3rd level div in 2nd level div from 1st through 4th in any root div
+            let sut = "div > div:nth-of-type(..5) > div";
+            let dom_tests = "
+                div
+                    label
+                        div         ✘ 1st - div
+                    div
+                        div         ✔ first match
+                        label       ✘ 2nd - label
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ another match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type_range_to_inclusive() {
+            // select all 3rd level div in 2nd level div from 1st through 4th in any root div
+            let sut = "div > div:nth-of-type(..=4) > div";
+            let dom_tests = "
+                div
+                    label
+                        div         ✘ 1st - div
+                    div
+                        div         ✔ first match
+                        label       ✘ 2nd - label
+                    div
+                        div         ✔ subsequent match
+                    label
+                        div         ✘ 4th - div
+                    div
+                        div         ✔ another match
+                    label
+                        div         ✘ 5th - div
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_of_type() {
+            // select all 3rd level div in 2nd level 2nd and 5th div in any root div
+            let sut = "div > div:nth-of-type(2,5) > div";
+            let dom_tests = "
+                div
+                    div
+                        div         ✘ 1st - div
+                        label       ✘ 1st - label
+                    div
+                        div         ✔ first match
+                    div
+                        div         ✘ 2nd - div
+                    div
+                    div
+                        div         ✔ subsequent match
+                div
+                    div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        #[test]
+        fn select_nth_last_of_type() {
+            // select all 3rd level div in 2nd level last 2nd and 5th div in any root div
+            let sut = "div > div:nth-last-of-type(2,5) > div";
+            let dom_tests = "
+                div
+                    div
+                    div
+                        div         ✔ first match
+                    div
+                        div         ✘ 3rd - div
+                        label       ✘ 3rd - label
+                    label
+                        div         ✘ 4th - div
+                    div
+                    div
+                        div         ✔ subsequent match
+                    div
+                    label
+                        div
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    label
+                        div
+                    div
+                    label
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
+
+        mod utils {
+            use std::cell::RefCell;
+            use std::collections::{HashMap, VecDeque};
+            use std::ops::{Deref, DerefMut};
+            use std::rc::Rc;
+            use std::str::FromStr;
+
+            use crate::props::injection::{Branch, Selectors};
+
+            use super::super::VALID_SELECTORS;
+
+            const SIBLING_ADDED: &str = "sibling added";
+            const BRANCH_FINISHED: &str = "branch finished";
+            const BRANCH_TOTAL: &str = "branch total";
+
+            /// defines a node of a testing dom
+            #[cfg_attr(debug_assertions, derive(Debug))]
+            enum Node<'a> {
+                /// creates a new child branch level, first one is root
+                Child(&'a str),
+
+                /// adds next child
+                Sibling(&'a str),
+
+                /// completes current child branch, pops up one level
+                Finish,
+            }
+
+            /// defines test expected
+            #[cfg_attr(debug_assertions, derive(Debug))]
+            enum Expected<'a> {
+                /// Nth matches
+                Matches(&'a str),
+
+                /// Nth does not match
+                NotMatches(&'a str),
+
+                /// End of Test Iterator
+                EndOfTests,
+            }
+
+            /// Text representation of Tested DOM with test branches
+            #[cfg_attr(debug_assertions, derive(Debug))]
+            struct DomTestBranches<'a> {
+                /// individual test lines
+                dom: VecDeque<&'a str>,
+
+                /// leading spaces to remove, caused by using an indented string literal
+                leading_spaces: usize,
+            }
+
+            impl<'a> DomTestBranches<'a> {
+                fn new(src_dom: &'a str) -> Self {
+                    // split source by cr, filter out empty lines
+                    let dom = src_dom
+                        .split('\n')
+                        .filter_map(|line| {
+                            let line = line.trim_end();
+
+                            if line.is_empty() {
+                                None
+                            } else {
+                                Some(line)
+                            }
+                        })
+                        .collect::<VecDeque<_>>();
+
+                    // calc leading spaces to remove from first line
+                    let leading_spaces = dom
+                        .get(0)
+                        .map(|line| line.len() - line.trim().len())
+                        .unwrap_or_default();
+
+                    Self {
+                        dom,
+                        leading_spaces,
+                    }
+                }
+            }
+
+            impl<'a> Deref for DomTestBranches<'a> {
+                type Target = VecDeque<&'a str>;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.dom
+                }
+            }
+
+            impl<'a> DerefMut for DomTestBranches<'a> {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.dom
+                }
+            }
+
+            impl<'a> From<DomTestBranches<'a>> for Vec<(Vec<Node<'a>>, Expected<'a>)> {
+                fn from(dom: DomTestBranches<'a>) -> Self {
+                    dom.into_iter().collect()
+                }
+            }
+
+            /// All branch totals for a given test dom
+            /// Branch uses total for checking dom tree matching
+            #[cfg_attr(debug_assertions, derive(Debug))]
+            struct BranchTotals(Vec<(usize, Rc<HashMap<String, usize>>)>);
+
+            impl<'a> FromIterator<&'a Node<'a>> for BranchTotals {
+                fn from_iter<T: IntoIterator<Item = &'a Node<'a>>>(source: T) -> Self {
+                    const MORE_TOTALS: &str = "expected more parent totals";
+
+                    // calculated totals
+                    let mut totals = VecDeque::new();
+                    // stack of of type totals for parent branches
+                    let mut stack = Vec::new();
+                    // count by type collector
+                    let mut of_type = Rc::new(RefCell::new(HashMap::new()));
+
+                    for test_branch in source.into_iter() {
+                        match test_branch {
+                            Node::Child(element) => {
+                                stack.push(of_type.clone());
+
+                                of_type = Rc::new(RefCell::new(HashMap::new()));
+
+                                // branch only needs the total of a branch,
+                                // determined at new child
+                                totals.push_front(of_type.clone());
+
+                                update_element_count(element, &of_type);
+                            }
+                            Node::Sibling(element) => update_element_count(element, &of_type),
+                            Node::Finish => of_type = stack.pop().expect(MORE_TOTALS),
+                        }
+                    }
+
+                    let totals = totals
+                        .into_iter()
+                        .map(|itm| {
+                            let of_type = Rc::new(itm.take());
+                            let total: usize = of_type.values().sum();
+
+                            (total, of_type)
+                        })
+                        .collect();
+
+                    return Self(totals);
+
+                    #[inline]
+                    fn update_element_count(
+                        element: &str,
+                        of_type: &Rc<RefCell<HashMap<String, usize>>>,
+                    ) {
+                        {
+                            // update current branch level's count for element type
+                            let mut of_type = of_type.borrow_mut();
+                            let entry = of_type.entry(element.to_string()).or_insert(0);
+
+                            *entry += 1;
+                        }
+                    }
+                }
+            }
+
+            impl Deref for BranchTotals {
+                type Target = Vec<(usize, Rc<HashMap<String, usize>>)>;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+
+            impl DerefMut for BranchTotals {
+                fn deref_mut(&mut self) -> &mut Self::Target {
+                    &mut self.0
+                }
+            }
+
+            impl<'a> IntoIterator for DomTestBranches<'a> {
+                type Item = (Vec<Node<'a>>, Expected<'a>);
+                type IntoIter = TestsIterator<'a>;
+
+                fn into_iter(self) -> Self::IntoIter {
+                    TestsIterator {
+                        dom: self,
+                        current_depth: -1,
+                        nodes: Vec::new(),
+                    }
+                }
+            }
+
+            /// Iterates the tests of DOM
+            struct TestsIterator<'a> {
+                /// dom tests to iterator
+                dom: DomTestBranches<'a>,
+
+                /// tracks the current depth into the dom tree
+                current_depth: isize,
+
+                /// tracks the nodes from a dom tree, for a test
+                nodes: Vec<Node<'a>>,
+            }
+
+            impl<'a> Iterator for TestsIterator<'a> {
+                type Item = (Vec<Node<'a>>, Expected<'a>);
+
+                fn next(&mut self) -> Option<Self::Item> {
+                    const INDENTATION: isize = 4;
+
+                    let indentation = self.dom.leading_spaces;
+                    let dom_tests = &mut self.dom;
+
+                    loop {
+                        let element_test = match dom_tests.pop_front() {
+                            Some(element_test) => element_test,
+                            None if !self.nodes.is_empty() => {
+                                let branches = std::mem::replace(&mut self.nodes, Vec::new());
+
+                                return Some((branches, Expected::EndOfTests));
+                            }
+                            None => return None,
+                        };
+                        let element_test = element_test[indentation..].trim_end();
+                        let spacers =
+                            element_test.chars().take_while(|chr| *chr == ' ').count() as isize;
+                        let depth = spacers / INDENTATION;
+
+                        if depth < self.current_depth {
+                            while self.current_depth != depth {
+                                self.nodes.push(Node::Finish);
+                                self.current_depth -= 1;
+                            }
+                        }
+
+                        let mut branch = |elm, depth| {
+                            if depth == self.current_depth {
+                                Node::Sibling(elm)
+                            } else {
+                                self.current_depth += 1;
+                                Node::Child(elm)
+                            }
+                        };
+
+                        if let Some((element, test)) = element_test.split_once('✔') {
+                            let element = element.trim();
+                            let test = Expected::Matches(test.trim());
+
+                            self.nodes.push(branch(element, depth));
+
+                            let branches = std::mem::replace(&mut self.nodes, Vec::new());
+
+                            return Some((branches, test));
+                        }
+
+                        if let Some((element, test)) = element_test.split_once('✘') {
+                            let element = element.trim();
+                            let test = Expected::NotMatches(test.trim());
+
+                            self.nodes.push(branch(element, depth));
+
+                            let branches = std::mem::replace(&mut self.nodes, Vec::new());
+
+                            return Some((branches, test));
+                        }
+
+                        let element = element_test.trim();
+
+                        self.nodes.push(branch(element, depth));
+                    }
+                }
+            }
+
+            pub fn test_selector_matching(
+                // selectors being tested
+                selectors: &str,
+                // dom selector match tests definition
+                dom_tests: &str,
+            ) {
+                let sut = Selectors::from_str(selectors).expect(VALID_SELECTORS);
+                let mut branch = Branch::new();
+                let dom_tests: Vec<_> = DomTestBranches::new(dom_tests).into();
+                let mut totals = dom_tests
+                    .iter()
+                    .flat_map(|(steps, _)| steps)
+                    .collect::<BranchTotals>();
+
+                for (branches, expected) in &dom_tests {
+                    //
+                    for test_branch in branches {
+                        // build trace branch used to test css matching
+                        match test_branch {
+                            Node::Child(tag) => {
+                                let (total, of_type) = totals.pop().expect(BRANCH_TOTAL);
+
+                                branch.new_child(tag, total, of_type)
+                            }
+                            Node::Sibling(tag) => branch.next_sibling(tag).expect(SIBLING_ADDED),
+                            Node::Finish => branch.finish().expect(BRANCH_FINISHED),
+                        }
+                    }
+
+                    match expected {
+                        //
+                        Expected::Matches(test) => {
+                            assert_eq!(true, sut.matches(&branch), "{}", test)
+                        }
+
+                        //
+                        Expected::NotMatches(test) => {
+                            assert_eq!(false, sut.matches(&branch), "{}", test)
+                        }
+
+                        //
+                        Expected::EndOfTests => {}
+                    }
+                }
+            }
+        }
+    }
+
     #[inline]
     fn expected_selectors(collection: Vec<(&str, SelectorMode, Nth)>) -> Selectors {
         expected_selectors2(vec![collection])
