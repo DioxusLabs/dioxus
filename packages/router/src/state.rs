@@ -4,6 +4,7 @@ use std::{
 };
 
 use dioxus_core::Component;
+use serde::Deserialize;
 
 use crate::navigation::NavigationTarget;
 
@@ -131,6 +132,14 @@ impl RouterState {
         } else {
             None
         }
+    }
+
+    /// Get the query parameters as a [`Deserialize`]d value.
+    #[must_use]
+    pub fn query_values<'a, T: Deserialize<'a>>(
+        &'a self,
+    ) -> Option<Result<T, serde_urlencoded::de::Error>> {
+        self.query.as_ref().map(|q| serde_urlencoded::from_str(q))
     }
 }
 

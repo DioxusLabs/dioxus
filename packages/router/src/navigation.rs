@@ -1,5 +1,7 @@
 use std::{convert::Infallible, str::FromStr};
 
+use serde::Serialize;
+
 /// A target for the router to navigate to.
 #[derive(Clone, Debug)]
 pub enum NavigationTarget {
@@ -72,6 +74,14 @@ pub enum Query {
     QString(String),
     /// Construct a new query string from the provided key value pairs.
     QVec(Vec<(String, String)>),
+}
+
+impl Query {
+    /// Create a [`Query`] from a [`Serialize`]able value.
+    #[must_use]
+    pub fn from_serde(query: impl Serialize) -> Result<Self, serde_urlencoded::ser::Error> {
+        serde_urlencoded::to_string(query).map(|q| Self::QString(q))
+    }
 }
 
 /// A specific path segment. Used to construct a path during named navigation.
