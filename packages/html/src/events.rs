@@ -447,7 +447,7 @@ pub mod on {
         /// Get the key code as an enum Variant.
         ///
         /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
-        /// To match on unicode sequences, use the [`KeyboardEvent::key`] method - this will return a string identifier instead of a limited enum.
+        /// To match on unicode sequences, use the [`KeyboardData::key`] method - this will return a string identifier instead of a limited enum.
         ///
         ///
         /// ## Example
