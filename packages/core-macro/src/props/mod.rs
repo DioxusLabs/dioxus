@@ -1311,11 +1311,11 @@ pub mod injection {
                 .map_err(|err| syn::Error::new(Span::call_site(), err))?;
             }
 
-/*
-            #[cfg(debug_assertions)]
-            InjectedProperties::debug(component)
-                .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
-*/
+            /*
+                        #[cfg(debug_assertions)]
+                        InjectedProperties::debug(component)
+                            .map_err(|err| syn::Error::new(proc_macro2::Span::call_site(), err))?;
+            */
 
             Ok(())
         }
