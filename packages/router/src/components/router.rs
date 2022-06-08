@@ -100,7 +100,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         routes,
     } = cx.props;
 
-    cx.use_hook(|_| {
+    let service = cx.use_hook(|_| {
         // make sure no router context exists
         if cx.consume_context::<RouterContext>().is_some() {
             error!("`Router` can not be used as a descendent of a `Router`, inner will be ignored");
@@ -123,12 +123,20 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         );
         cx.provide_context(context);
 
-        // run service
         match init_only {
-            true => service.single_routing(),
-            false => cx.spawn(async move { service.run().await }),
+            true => return Some(service),
+            false => {
+                // run service
+                cx.spawn(async move { service.run().await });
+                None
+            }
         }
     });
+
+    // update routing when `init_only`
+    if let Some(service) = service {
+        service.single_routing();
+    }
 
     cx.render(rsx!(children))
 }

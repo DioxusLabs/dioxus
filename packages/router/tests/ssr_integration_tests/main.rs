@@ -9,7 +9,7 @@ fn render(component: Component) -> String {
     dioxus::ssr::render_vdom(&app)
 }
 
-fn test_routes(cx: &Scope) -> Arc<Segment> {
+fn test_routes(cx: &ScopeState) -> Arc<Segment> {
     use_segment(&cx, || {
         Segment::new().index(RcComponent(TestComponent_0)).fixed(
             "test",
