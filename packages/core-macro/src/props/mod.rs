@@ -1939,8 +1939,9 @@ pub mod injection {
     impl Segment {
         fn is_root(&self) -> bool {
             match self {
-                Segment::Component { mode, .. } |
-                Segment::Element { mode, .. } => *mode == SelectorMode::Root
+                Segment::Component { mode, .. } | Segment::Element { mode, .. } => {
+                    *mode == SelectorMode::Root
+                }
             }
         }
 
@@ -1991,10 +1992,7 @@ pub mod injection {
         NthChild(Vec<usize>),
 
         /// p:nth-child(<freq>>n+<offset>)
-        EveryNthChild {
-            frequency: usize,
-            offset: isize,
-        },
+        EveryNthChild { frequency: usize, offset: isize },
 
         /// p:nth-child(even)
         NthEvenChild,
@@ -2006,10 +2004,7 @@ pub mod injection {
         NthLastChild(Vec<usize>),
 
         ///  p:nth-last-child((<freq>>n+<offset>)
-        NthLastEveryNChild {
-            frequency: usize,
-            offset: isize,
-        },
+        NthLastEveryNChild { frequency: usize, offset: isize },
 
         ///  p:nth-child(x..y)
         NthChildRange(Range<usize>),
@@ -2033,10 +2028,7 @@ pub mod injection {
         NthOfType(Vec<usize>),
 
         /// p:nth-of-type(<frq>>n+<offset>)
-        EveryNthOfType {
-            frequency: usize,
-            offset: isize,
-        },
+        EveryNthOfType { frequency: usize, offset: isize },
 
         /// p:nth-of-type(even)
         NthEvenOfType,
@@ -2048,10 +2040,7 @@ pub mod injection {
         NthLastOfType(Vec<usize>),
 
         ///  p:nth-last-of-type((<frq>>n+<offset>)
-        NthLastEveryNOfType {
-            frequency: usize,
-            offset: isize,
-        },
+        NthLastEveryNOfType { frequency: usize, offset: isize },
 
         ///  p:nth-of-type(x..y)
         NthOfTypeRange(Range<usize>),
@@ -2441,9 +2430,7 @@ pub mod injection {
         mode: SelectorMode,
         nth: Nth,
     ) -> Result<Segment, String> {
-        let name = if mode == SelectorMode::Root {
-            String::from("*")
-        } else if matches!(nth, Nth::Not(_)) {
+        let name = if mode == SelectorMode::Root || matches!(nth, Nth::Not(_)) {
             String::from("*")
         } else {
             validate_identifier(name)?
