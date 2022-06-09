@@ -7,10 +7,7 @@ use axum::{
     Router,
 };
 use notify::{RecommendedWatcher, Watcher};
-use std::{
-    fs::{self, File},
-    io::{self, Read},
-};
+use std::{fs::File, io::Read};
 
 use std::{path::PathBuf, sync::Arc};
 use tower::ServiceBuilder;
@@ -25,6 +22,7 @@ mod hot_reload_improts {
     pub use dioxus_rsx_interpreter::{error::RecompileReason, CodeLocation, SetRsxMessage};
     pub use std::collections::HashMap;
     pub use std::sync::Mutex;
+    pub use std::{fs, io};
     pub use syn::__private::ToTokens;
 }
 #[cfg(feature = "hot_reload")]
