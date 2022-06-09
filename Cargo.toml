@@ -46,6 +46,11 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 tower = "0.4.12"
 
+# hot reload
+syn = "1.0"
+dioxus-rsx-interpreter = { path = "../dioxus/packages/rsx_interpreter" }
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
+
 [[bin]]
 path = "src/main.rs"
 name = "dioxus"
