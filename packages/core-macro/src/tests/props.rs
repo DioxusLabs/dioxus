@@ -191,12 +191,16 @@ mod injection {
             assert_eq!(expected, actual, "custom component w/underscore");
 
             let actual = Selectors::from_str("div :[1]");
-            let expected = Err(String::from("exception parsing selector 'div :[1]'; 'div ' is an invalid html tag"));
+            let expected = Err(String::from(
+                "exception parsing selector 'div :[1]'; 'div ' is an invalid html tag",
+            ));
 
             assert_eq!(expected, actual, "element with trailing space");
 
             let actual = Selectors::from_str("div > div :[1]");
-            let expected = Err(String::from("exception parsing selector 'div > div :[1]'; 'div ' is an invalid html tag"));
+            let expected = Err(String::from(
+                "exception parsing selector 'div > div :[1]'; 'div ' is an invalid html tag",
+            ));
 
             assert_eq!(expected, actual, "child element with trailing space");
         }
@@ -204,22 +208,28 @@ mod injection {
         #[test]
         fn selector_root_element() {
             let actual = Selectors::from_str(":root").expect(VALID_SELECTORS);
-            let expected = expected_selectors(vec![("*", SelectorMode::Root, Nth::All, )]);
+            let expected = expected_selectors(vec![("*", SelectorMode::Root, Nth::All)]);
 
             assert_eq!(expected, actual, "root only");
 
             let actual = Selectors::from_str("div > :root");
-            let expected = Err(String::from("exception parsing selector 'div > :root'; ':root' must be the only selector"));
+            let expected = Err(String::from(
+                "exception parsing selector 'div > :root'; ':root' must be the only selector",
+            ));
 
             assert_eq!(expected, actual, "child root");
 
             let actual = Selectors::from_str(":root > dev");
-            let expected = Err(String::from("exception parsing selector ':root > dev'; ':root' must be the only selector"));
+            let expected = Err(String::from(
+                "exception parsing selector ':root > dev'; ':root' must be the only selector",
+            ));
 
             assert_eq!(expected, actual, "root w/children");
 
             let actual = Selectors::from_str(":root > :root");
-            let expected = Err(String::from("exception parsing selector ':root > :root'; ':root' must be the only selector"));
+            let expected = Err(String::from(
+                "exception parsing selector ':root > :root'; ':root' must be the only selector",
+            ));
 
             assert_eq!(expected, actual, "re-rooted");
         }
