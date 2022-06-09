@@ -1,5 +1,5 @@
 use captuered_context::CapturedContext;
-use dioxus_core::{NodeFactory, SchedulerMsg, ScopeId, VNode};
+use dioxus_core::{NodeFactory, SchedulerMsg, VNode};
 use dioxus_hooks::UnboundedSender;
 use error::Error;
 use interperter::build;
@@ -108,9 +108,7 @@ impl RsxContext {
         let mut write = self.data.write().unwrap();
         write.hm.insert(loc, text);
         if let Some(channel) = &mut write.scheduler_channel {
-            channel
-                .unbounded_send(SchedulerMsg::Immediate(ScopeId(0)))
-                .unwrap()
+            channel.unbounded_send(SchedulerMsg::DirtyAll).unwrap()
         }
     }
 

@@ -125,6 +125,9 @@ pub enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
+    /// Mark all components as dirty and update them
+    DirtyAll,
+
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
@@ -406,6 +409,11 @@ impl VirtualDom {
             }
             SchedulerMsg::Immediate(s) => {
                 self.dirty_scopes.insert(s);
+            }
+            SchedulerMsg::DirtyAll => {
+                for id in self.scopes.scopes.borrow().keys() {
+                    self.dirty_scopes.insert(*id);
+                }
             }
         }
     }
