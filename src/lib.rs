@@ -19,5 +19,5 @@ pub use error::*;
 pub mod logging;
 pub use logging::*;
 
+#[cfg(feature = "hot_reload")]
 pub mod hot_reload;
-pub use hot_reload::*;
