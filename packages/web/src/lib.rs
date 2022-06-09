@@ -237,7 +237,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         };
 
         let url = format!(
-            "{protocol} //{}/_dioxus/hot_reload",
+            "{protocol}//{}/_dioxus/hot_reload",
             window.location().host().unwrap()
         );
 
@@ -252,8 +252,9 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         }) as Box<dyn FnMut(MessageEvent)>);
 
         ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
+        cl.forget();
 
-        let (error_channel_sender, error_channel_receiver) = unbounded();
+        let (error_channel_sender, mut error_channel_receiver) = unbounded();
 
         struct WebErrorHandler {
             sender: UnboundedSender<Error>,
@@ -269,17 +270,16 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
             sender: error_channel_sender,
         });
 
+        RSX_CONTEXT.provide_scheduler_channel(dom.get_scheduler_channel());
+
         // forward stream to the websocket
         dom.base_scope().spawn_forever(async move {
-            error_channel_receiver
-                .for_each(|err| {
-                    if let Error::RecompileRequiredError(err) = err {
-                        ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
-                            .unwrap();
-                    }
-                    futures_util::future::ready(())
-                })
-                .await;
+            while let Some(err) = error_channel_receiver.next().await {
+                if let Error::RecompileRequiredError(err) = err {
+                    ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
+                        .unwrap();
+                }
+            }
         });
     }
 
