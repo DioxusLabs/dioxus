@@ -7,7 +7,10 @@ use axum::{
     Router,
 };
 use notify::{RecommendedWatcher, Watcher};
-use std::{fs::File, io::Read};
+use std::{
+    fs::{self, File},
+    io::{self, Read},
+};
 
 use std::{path::PathBuf, sync::Arc};
 use tower::ServiceBuilder;
@@ -49,6 +52,8 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
 
     #[cfg(feature = "hot_reload")]
     let last_file_rebuild = Arc::new(Mutex::new(HashMap::new()));
+    #[cfg(feature = "hot_reload")]
+    find_rs_files(&config.crate_dir, &mut *last_file_rebuild.lock().unwrap()).unwrap();
     #[cfg(feature = "hot_reload")]
     let hot_reload_tx = broadcast::channel(100).0;
     #[cfg(feature = "hot_reload")]
@@ -215,6 +220,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                 )
             }),
         );
+
     #[cfg(feature = "hot_reload")]
     let router = router.route("/_dioxus/hot_reload", get(hot_reload_handler));
 
@@ -257,7 +263,9 @@ async fn ws_handler(
                         }
                         #[cfg(feature = "hot_reload")]
                         {
-                            *state.last_file_rebuild.lock().unwrap() = HashMap::new();
+                            let mut write = state.last_file_rebuild.lock().unwrap();
+                            *write = HashMap::new();
+                            find_rs_files(&state.watcher_config.crate_dir, &mut *write).unwrap();
                         }
                     }
                     // ignore the error
@@ -310,4 +318,24 @@ async fn hot_reload_handler(
             };
         }
     })
+}
+
+#[cfg(feature = "hot_reload")]
+fn find_rs_files(root: &PathBuf, files: &mut HashMap<String, String>) -> io::Result<()> {
+    for entry in fs::read_dir(root)? {
+        if let Ok(entry) = entry {
+            let path = entry.path();
+            if path.is_dir() {
+                find_rs_files(&path, files)?;
+            } else {
+                if path.extension().map(|s| s.to_str()).flatten() == Some("rs") {
+                    let mut file = File::open(path.clone()).unwrap();
+                    let mut src = String::new();
+                    file.read_to_string(&mut src).expect("Unable to read file");
+                    files.insert(path.display().to_string(), src);
+                }
+            }
+        }
+    }
+    Ok(())
 }
