@@ -1459,6 +1459,10 @@ pub mod injection {
             }
         }
 
+        pub fn key(&self) -> Vec<&str> {
+            self.segments.iter().map(|v| v.current.as_str()).collect()
+        }
+
         /// Indicates no more siblings; used after last sibling is added
         pub fn finish(&mut self) -> Result<(), String> {
             self.segments.pop().map(|_| ()).ok_or_else(|| {
@@ -1595,7 +1599,7 @@ pub mod injection {
     /// Declarative selectors
     #[derive(Clone, PartialEq)]
     #[cfg_attr(debug_assertions, derive(Debug))]
-    pub struct Selectors(pub(crate) HashMap<String, Vec<Segments>>);
+    pub struct Selectors(pub(crate) HashMap<Vec<String>, Vec<Segments>>);
 
     impl Selectors {
         #[inline]
@@ -1606,21 +1610,34 @@ pub mod injection {
 
         /// Checks if a `Branch` matches any of the selector rules
         pub(crate) fn matches(&self, branch: &Branch) -> bool {
-            let name = branch.to_string();
+            let branch_key = branch.key();
 
-            match self.0.get(&name) {
-                Some(segments) => segments
-                    .iter()
-                    .filter(|segments| segments.len() == branch.segments.len())
-                    .any(|segments| {
-                        segments
-                            .deref()
+            self.0
+                .iter()
+                .filter_map(|(key, values)| {
+                    if branch_key.len() == key.len()
+                        && branch_key
                             .iter()
-                            .zip(branch.segments.iter())
-                            .all(|(segment, trace)| segment.matches(trace))
-                    }),
-                None => false,
-            }
+                            .zip(key.iter())
+                            .all(|(lh, rh)| lh == rh || rh == "*")
+                    {
+                        Some(values)
+                    } else {
+                        None
+                    }
+                })
+                .any(|segments| {
+                    segments
+                        .iter()
+                        .filter(|segments| segments.len() == branch.segments.len())
+                        .any(|segments| {
+                            segments
+                                .deref()
+                                .iter()
+                                .zip(branch.segments.iter())
+                                .all(|(segment, trace)| segment.matches(trace))
+                        })
+                })
         }
     }
 
@@ -1648,7 +1665,9 @@ pub mod injection {
                     acc.and_then(|mut acc| {
                         next.and_then(|(next, src)| {
                             let next = next?;
-                            let entry = acc.entry(next.identifier.clone()).or_insert_with(Vec::new);
+                            let entry = acc
+                                .entry(next.identifier.split(' ').map(|v| v.to_string()).collect())
+                                .or_insert_with(Vec::new);
 
                             if entry.iter().any(|segments| segments == &next.segments) {
                                 Err(format!("duplicate selector '{src}'"))
@@ -1913,13 +1932,11 @@ pub mod injection {
 
             match self {
                 Segment::Component { name, mode, nth }
-                    if name.is_empty() || *name == target.current =>
+                    if name == "*" || *name == target.current =>
                 {
                     matches(name, mode, nth)
                 }
-                Segment::Element { name, mode, nth }
-                    if name.is_empty() || *name == target.current =>
-                {
+                Segment::Element { name, mode, nth } if name == "*" || *name == target.current => {
                     matches(name, mode, nth)
                 }
                 _ => false,
@@ -2395,7 +2412,7 @@ pub mod injection {
         nth: Nth,
     ) -> Result<Segment, String> {
         let name = if matches!(nth, Nth::Not(_)) {
-            String::new()
+            String::from("*")
         } else {
             validate_identifier(name)?
         };

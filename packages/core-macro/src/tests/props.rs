@@ -204,7 +204,7 @@ mod injection {
         fn rusty_selector_not_element() {
             let actual = Selectors::from_str(":not[div , MyButton]").expect(VALID_SELECTORS);
             let expected = expected_selectors(vec![(
-                "",
+                "*",
                 SelectorMode::Child,
                 Nth::Not(vec![String::from("div"), String::from("MyButton")].into()),
             )]);
@@ -1587,7 +1587,7 @@ mod injection {
         fn css_selector_not_element() {
             let actual = Selectors::from_str(":not(div , MyButton)").expect(VALID_SELECTORS);
             let expected = expected_selectors(vec![(
-                "",
+                "*",
                 SelectorMode::Child,
                 Nth::Not(vec![String::from("div"), String::from("MyButton")].into()),
             )]);
@@ -2983,11 +2983,24 @@ mod injection {
         }
 
         #[test]
-        #[ignore] // todo :not(elm) does not work, needs new matching logic
         fn select_not_element() {
             // select all 3rd level div in 2nd level elements not MyLabel or input in any div in root level
             let sut = "div > :not(MyLabel,input) > div";
-            let dom_tests = "";
+            let dom_tests = "
+                div
+                    input
+                        div         ✘ input
+                    div
+                        div         ✔ first match
+                    p
+                        div         ✔ subsequent match
+                div
+                    button
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+                    MyLabel
+                        div         ✘ MyLabel
+            ";
 
             test_selector_matching(sut, dom_tests);
         }
@@ -4264,16 +4277,12 @@ mod injection {
         let mut expected = HashMap::new();
 
         for selectors in collection {
-            let mut key = String::new();
+            let mut key = Vec::new();
 
             let segments = selectors
                 .into_iter()
                 .map(|(name, mode, nth)| {
-                    if key.len() > 0 {
-                        key.push_str(" ");
-                    }
-
-                    key.push_str(name);
+                    key.push(name.to_string());
 
                     make_segment(name, mode, nth).expect(VALID_SEGMENT)
                 })
