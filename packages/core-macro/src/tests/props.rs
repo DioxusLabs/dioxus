@@ -189,6 +189,39 @@ mod injection {
             let expected = Err(String::from("exception parsing selector 'div > My_Button'; 'My_Button' is an invalid component name"));
 
             assert_eq!(expected, actual, "custom component w/underscore");
+
+            let actual = Selectors::from_str("div :[1]");
+            let expected = Err(String::from("exception parsing selector 'div :[1]'; 'div ' is an invalid html tag"));
+
+            assert_eq!(expected, actual, "element with trailing space");
+
+            let actual = Selectors::from_str("div > div :[1]");
+            let expected = Err(String::from("exception parsing selector 'div > div :[1]'; 'div ' is an invalid html tag"));
+
+            assert_eq!(expected, actual, "child element with trailing space");
+        }
+
+        #[test]
+        fn selector_root_element() {
+            let actual = Selectors::from_str(":root").expect(VALID_SELECTORS);
+            let expected = expected_selectors(vec![("*", SelectorMode::Root, Nth::All, )]);
+
+            assert_eq!(expected, actual, "root only");
+
+            let actual = Selectors::from_str("div > :root");
+            let expected = Err(String::from("exception parsing selector 'div > :root'; ':root' must be the only selector"));
+
+            assert_eq!(expected, actual, "child root");
+
+            let actual = Selectors::from_str(":root > dev");
+            let expected = Err(String::from("exception parsing selector ':root > dev'; ':root' must be the only selector"));
+
+            assert_eq!(expected, actual, "root w/children");
+
+            let actual = Selectors::from_str(":root > :root");
+            let expected = Err(String::from("exception parsing selector ':root > :root'; ':root' must be the only selector"));
+
+            assert_eq!(expected, actual, "re-rooted");
         }
     }
 
@@ -2946,6 +2979,33 @@ mod injection {
 
     mod selector_matching {
         use utils::test_selector_matching;
+
+        #[test]
+        fn select_root() {
+            // select root only
+            let sut = ":root";
+            let dom_tests = "
+                div             ✔ only match
+                    div
+                        div
+                        div     ✘ children
+            ";
+
+            test_selector_matching(sut, dom_tests);
+
+            // select multiple root
+            let sut = ":root";
+            let dom_tests = "
+                div             x not only root
+                    div
+                        div     ✘ children
+                div             x not only root 2nd
+                    div
+                        div
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
 
         #[test]
         fn select_all_simple() {

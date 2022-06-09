@@ -1706,9 +1706,22 @@ pub mod injection {
 
         fn from_str(value: &str) -> Result<Self, Self::Err> {
             // a selector is broken down into segments, each separated by a `>`
+            let mut rooted = false;
+
             let segments = value
                 .split('>')
-                .map(Segment::from_str)
+                .enumerate()
+                .map(|(idx, seg)| {
+                    let seg = Segment::from_str(seg)?;
+
+                    if idx > 0 && (seg.is_root() || rooted) {
+                        Err(String::from("':root' must be the only selector"))
+                    } else {
+                        rooted = seg.is_root();
+
+                        Ok(seg)
+                    }
+                })
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|err| format!("exception parsing selector '{value}'; {err}"))?;
 
@@ -1758,6 +1771,9 @@ pub mod injection {
         /// Indicates the Nth rule should use the relative position
         /// of an element/component within a list of only like types
         TypeOf,
+
+        /// Only apply to a single root element
+        Root,
     }
 
     /// Defines the rules for a segment
@@ -1810,7 +1826,7 @@ pub mod injection {
                 };
             }
 
-            // determine selection mode
+            // determine selection mode, css pseudo always captures SelectorMode::Root
             let (mode, splitter) = if value.contains('@') {
                 (SelectorMode::TypeOf, '@')
             } else {
@@ -1831,8 +1847,10 @@ pub mod injection {
     fn css_to_segment(name: &str, css: CSSPseudo) -> Result<Segment, String> {
         match css {
             CSSPseudo::Not(elements) => {
-                make_segment("", SelectorMode::Child, Nth::Not(elements.into()))
+                make_segment(name, SelectorMode::Child, Nth::Not(elements.into()))
             }
+
+            CSSPseudo::Root => make_segment(name, SelectorMode::Root, Nth::All),
 
             CSSPseudo::FirstChild => make_segment(name, SelectorMode::Child, Nth::First),
 
@@ -1919,9 +1937,17 @@ pub mod injection {
     }
 
     impl Segment {
+        fn is_root(&self) -> bool {
+            match self {
+                Segment::Component { mode, .. } |
+                Segment::Element { mode, .. } => *mode == SelectorMode::Root
+            }
+        }
+
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
         fn matches(&self, target: &SegmentTrace) -> bool {
             let matches = |name: &str, mode: &SelectorMode, nth: &Nth| match mode {
+                SelectorMode::Root => target.position == 1 && target.total == 1,
                 SelectorMode::Child => nth.matches(&target.current, target.position, target.total),
                 SelectorMode::TypeOf => nth.matches(
                     &target.current,
@@ -1949,7 +1975,10 @@ pub mod injection {
     #[derive(Clone, Eq, PartialEq)]
     #[cfg_attr(debug_assertions, derive(Debug))]
     pub(crate) enum CSSPseudo {
-        // :not(p)
+        /// :root
+        Root,
+
+        /// :not(p)
         Not(Vec<String>),
 
         /// p:first-child
@@ -2048,6 +2077,7 @@ pub mod injection {
 
             Ok(match parsed {
                 None => match src {
+                    "root" => Self::Root,
                     "first-child" => Self::FirstChild,
                     "first-of-type" => Self::FirstOfType,
                     "last-child" => Self::LastChild,
@@ -2411,7 +2441,9 @@ pub mod injection {
         mode: SelectorMode,
         nth: Nth,
     ) -> Result<Segment, String> {
-        let name = if matches!(nth, Nth::Not(_)) {
+        let name = if mode == SelectorMode::Root {
+            String::from("*")
+        } else if matches!(nth, Nth::Not(_)) {
             String::from("*")
         } else {
             validate_identifier(name)?
@@ -2522,9 +2554,7 @@ pub mod injection {
 
     fn validate_identifier(name: &str) -> Result<String, String> {
         // todo: introduce regex to core-macro?
-        let name = name.trim();
-
-        if name.is_empty() {
+        if name.trim().is_empty() {
             Err(format!("'{name}' an empty element is invalid"))
         } else if name
             .chars()
