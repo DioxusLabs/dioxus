@@ -7,7 +7,7 @@ use axum::{
     Router,
 };
 use notify::{RecommendedWatcher, Watcher};
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, sync::Mutex};
 use syn::__private::ToTokens;
 
 use std::{path::PathBuf, sync::Arc};
@@ -23,10 +23,13 @@ use dioxus_rsx_interpreter::{error::RecompileReason, CodeLocation, SetRsxMessage
 
 struct WsReloadState {
     update: broadcast::Sender<String>,
+    last_file_rebuild: Arc<Mutex<HashMap<String, String>>>,
+    watcher_config: CrateConfig,
 }
 
 struct HotReloadState {
     messages: broadcast::Sender<SetRsxMessage>,
+    update: broadcast::Sender<String>,
 }
 
 pub async fn startup(config: CrateConfig) -> Result<()> {
@@ -36,20 +39,23 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel(100);
 
+    let last_file_rebuild = Arc::new(Mutex::new(HashMap::new()));
+
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
+        last_file_rebuild: last_file_rebuild.clone(),
+        watcher_config: config.clone(),
     });
 
     let hot_reload_tx = broadcast::channel(100).0;
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
+        update: reload_tx.clone(),
     });
 
     let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
-    let watcher_conf = config.clone();
-    let mut old_files_parsed: HashMap<String, String> = HashMap::new();
     let allow_watch_path = config
         .dioxus_config
         .web
@@ -64,7 +70,6 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
         if let Ok(evt) = evt {
             if let notify::EventKind::Modify(_) = evt.kind {
                 for path in evt.paths {
-                    log::info!("File changed: {}", path.display());
                     let mut file = File::open(path.clone()).unwrap();
                     let mut src = String::new();
                     file.read_to_string(&mut src).expect("Unable to read file");
@@ -72,35 +77,19 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                         continue;
                     }
                     if let Ok(syntax) = syn::parse_file(&src) {
-                        if let Some(old_str) = old_files_parsed.get(path.to_str().unwrap()) {
+                        let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
+                        if let Some(old_str) = last_file_rebuild.get(path.to_str().unwrap()) {
                             if let Ok(old) = syn::parse_file(&old_str) {
                                 match find_rsx(&syntax, &old) {
                                     crate::DiffResult::CodeChanged => {
                                         log::info!("reload required");
                                         if chrono::Local::now().timestamp() > last_update_time {
-                                            log::info!("Start to rebuild project...");
-                                            if builder::build(&watcher_conf).is_ok() {
-                                                // change the websocket reload state to true;
-                                                // the page will auto-reload.
-                                                if watcher_conf
-                                                    .dioxus_config
-                                                    .web
-                                                    .watcher
-                                                    .reload_html
-                                                    .unwrap_or(false)
-                                                {
-                                                    let _ = Serve::regen_dev_page(&watcher_conf);
-                                                }
-                                                let _ = reload_tx.send("reload".into());
-                                                old_files_parsed.insert(
-                                                    path.to_str().unwrap().to_string(),
-                                                    src,
-                                                );
-                                                last_update_time = chrono::Local::now().timestamp();
-                                            }
+                                            let _ = reload_tx.send("reload".into());
+                                            last_update_time = chrono::Local::now().timestamp();
                                         }
                                     }
                                     crate::DiffResult::RsxChanged(changed) => {
+                                        log::info!("reloading rsx");
                                         for (old, new) in changed.into_iter() {
                                             if let Some(hr) = old
                                                 .to_token_stream()
@@ -135,7 +124,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                                 }
                             }
                         } else {
-                            old_files_parsed.insert(path.to_str().unwrap().to_string(), src);
+                            last_file_rebuild.insert(path.to_str().unwrap().to_string(), src);
                         }
                     }
                 }
@@ -229,6 +218,22 @@ async fn ws_handler(
             loop {
                 let v = rx.recv().await.unwrap();
                 if v == "reload" {
+                    log::info!("Start to rebuild project...");
+                    if builder::build(&state.watcher_config).is_ok() {
+                        // change the websocket reload state to true;
+                        // the page will auto-reload.
+                        if state
+                            .watcher_config
+                            .dioxus_config
+                            .web
+                            .watcher
+                            .reload_html
+                            .unwrap_or(false)
+                        {
+                            let _ = Serve::regen_dev_page(&state.watcher_config);
+                        }
+                        *state.last_file_rebuild.lock().unwrap() = HashMap::new();
+                    }
                     // ignore the error
                     if socket
                         .send(Message::Text(String::from("reload")))
@@ -261,6 +266,7 @@ async fn hot_reload_handler(
                     if let Some(Ok(Message::Text(err))) = err {
                         let error: RecompileReason = serde_json::from_str(&err).unwrap();
                         log::error!("{:?}", error);
+                        state.update.send("reload".to_string()).unwrap();
                     };
                 },
                 set_rsx = read_set_rsx => {
@@ -272,7 +278,6 @@ async fn hot_reload_handler(
                         {
                             break;
                         };
-                        // println!("{:?}", rsx);
                     }
                 }
             };
