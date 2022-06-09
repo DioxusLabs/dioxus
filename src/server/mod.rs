@@ -289,7 +289,7 @@ async fn hot_reload_handler(
     Extension(state): Extension<Arc<HotReloadState>>,
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
-        println!("🔥 Hot Reload WebSocket is connected.");
+        log::info!("🔥 Hot Reload WebSocket connected");
         let mut rx = state.messages.subscribe();
         loop {
             let read_set_rsx = rx.recv();
