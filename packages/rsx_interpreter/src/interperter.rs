@@ -31,7 +31,6 @@ impl InterpertedIfmt {
                         }
                         None => {
                             let expr_str = segment.to_token_stream().to_string();
-                            println!("{}", expr_str);
                             return Err(Error::RecompileRequiredError(
                                 RecompileReason::CapturedExpression(format!(
                                     "could not resolve {{{}:{}}}",
@@ -148,10 +147,8 @@ fn build_node<'a>(
             }
             let children = bump.alloc(Vec::new());
             for child in el.children {
-                let node = build_node(child, ctx, factory);
-                if let Ok(node) = node {
-                    children.push(node);
-                }
+                let node = build_node(child, ctx, factory)?;
+                children.push(node);
             }
             let listeners = bump.alloc(Vec::new());
             for attr in el.attributes {
