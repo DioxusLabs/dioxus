@@ -64,7 +64,7 @@ The most common hook you'll use for storing state is `use_state`. `use_state` pr
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let (post, set_post) = use_state(&cx, || {
+    let post = use_state(&cx, || {
         PostData {
             id: Uuid::new_v4(),
             score: 10,
@@ -112,11 +112,11 @@ For example, let's say we provide a button to generate a new post. Whenever the 
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let (post, set_post) = use_state(&cx, || PostData::new());
+    let post = use_state(&cx, || PostData::new());
 
     cx.render(rsx!{
         button {
-            onclick: move |_| set_post(PostData::random())
+            onclick: move |_| post.set(PostData::random())
             "Generate a random post"
         }
         Post { props: &post }
@@ -141,19 +141,19 @@ We can use tasks in our components to build a tiny stopwatch that ticks every se
 
 ```rust
 fn App(cx: Scope)-> Element {
-    let (elapsed, set_elapsed) = use_state(&cx, || 0);
-
-    use_future(&cx, || {
-        to_owned![set_elapsed]; // explicitly capture this hook for use in async
+    let elapsed = use_state(&cx, || 0);
+    
+    use_future(&cx, (), |()| {
+        to_owned![elapsed]; // explicitly capture this hook for use in async
         async move {
             loop {
-                TimeoutFuture::from_ms(1000).await;
-                set_elapsed.modify(|i| i + 1)
+                gloo_timers::future::TimeoutFuture::new(1_000).await;
+                elapsed.modify(|i| i + 1)
             }
         }
     });
 
-    rsx!(cx, div { "Current stopwatch time: {sec_elapsed}" })
+    rsx!(cx, div { "Current stopwatch time: {elapsed}" })
 }
 ```
 
