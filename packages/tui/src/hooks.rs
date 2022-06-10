@@ -17,8 +17,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use taffy::{prelude::Layout, Taffy};
 use taffy::geometry::{Point, Size};
+use taffy::{prelude::Layout, Taffy};
 
 use crate::{Dom, Node};
 
