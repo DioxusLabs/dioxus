@@ -1,6 +1,6 @@
 /*
 - [ ] pub display: Display,
-- [x] pub position_type: PositionType,  --> kinda, stretch doesnt support everything
+- [x] pub position_type: PositionType,  --> kinda, taffy doesnt support everything
 - [ ] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -9,7 +9,7 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [x] pub overflow: Overflow, ---> kinda implemented... stretch doesnt have support for directional overflow
+- [x] pub overflow: Overflow, ---> kinda implemented... taffy doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
 - [x] pub align_self: AlignSelf,
@@ -29,7 +29,10 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use stretch2::{prelude::*, style::PositionType};
+use taffy::{
+    prelude::*,
+    style::{FlexDirection, PositionType},
+};
 
 /// applies the entire html namespace defined in dioxus-html
 pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
@@ -109,13 +112,7 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
         "counter-reset" => {}
 
         "cursor" => {}
-        "direction" => {
-            match value {
-                "ltr" => style.direction = Direction::LTR,
-                "rtl" => style.direction = Direction::RTL,
-                _ => {}
-            }
-        }
+        "direction" => {}
 
         "display" => apply_display(name, value, style),
 
@@ -283,18 +280,9 @@ pub fn parse_value(value: &str) -> Option<UnitSystem> {
     }
 }
 
-fn apply_overflow(name: &str, value: &str, style: &mut Style) {
+fn apply_overflow(name: &str, _value: &str, _style: &mut Style) {
     match name {
-        // todo: add more overflow support to stretch2
-        "overflow" | "overflow-x" | "overflow-y" => {
-            style.overflow = match value {
-                "auto" => Overflow::Visible,
-                "hidden" => Overflow::Hidden,
-                "scroll" => Overflow::Scroll,
-                "visible" => Overflow::Visible,
-                _ => Overflow::Visible,
-            };
-        }
+        // todo: add overflow support to taffy
         _ => {}
     }
 }
@@ -307,7 +295,7 @@ fn apply_display(_name: &str, value: &str, style: &mut Style) {
     }
 
     // TODO: there are way more variants
-    // stretch needs to be updated to handle them
+    // taffy needs to be updated to handle them
     //
     // "block" => Display::Block,
     // "inline" => Display::Inline,

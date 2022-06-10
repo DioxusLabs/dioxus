@@ -1,9 +1,9 @@
 use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
-use stretch2::{
+use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
-    Stretch,
+    Taffy,
 };
 use tui::{backend::CrosstermBackend, layout::Rect};
 
@@ -18,7 +18,7 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
-    layout: &Stretch,
+    layout: &Taffy,
     rdom: &Dom,
     node: &Node,
     cfg: Config,

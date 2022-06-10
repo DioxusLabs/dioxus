@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use stretch2::{prelude::Layout, Stretch};
+use taffy::{prelude::Layout, Taffy};
 
 use crate::{Dom, Node};
 
@@ -163,7 +163,7 @@ impl InnerInputState {
         &mut self,
         evts: &mut [EventCore],
         resolved_events: &mut Vec<UserEvent>,
-        layout: &Stretch,
+        layout: &Taffy,
         dom: &mut Dom,
     ) {
         let previous_mouse = self.mouse.as_ref().map(|m| (m.0.clone(), m.1.clone()));
@@ -185,7 +185,7 @@ impl InnerInputState {
         &self,
         previous_mouse: Option<(MouseData, Vec<u16>)>,
         resolved_events: &mut Vec<UserEvent>,
-        layout: &Stretch,
+        layout: &Taffy,
         dom: &mut Dom,
     ) {
         fn layout_contains_point(layout: &Layout, point: (i32, i32)) -> bool {
@@ -513,7 +513,7 @@ impl RinkInputHandler {
         )
     }
 
-    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
+    pub(crate) fn get_events(&self, layout: &Taffy, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(
