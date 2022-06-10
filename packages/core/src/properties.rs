@@ -33,7 +33,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 /// fn App(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         CustomCard {
-///             h1 {}2
+///             h1 {}
 ///             p {}
 ///         }
 ///     })
