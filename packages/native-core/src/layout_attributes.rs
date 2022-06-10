@@ -280,11 +280,8 @@ pub fn parse_value(value: &str) -> Option<UnitSystem> {
     }
 }
 
-fn apply_overflow(name: &str, _value: &str, _style: &mut Style) {
-    match name {
-        // todo: add overflow support to taffy
-        _ => {}
-    }
+fn apply_overflow(_name: &str, _value: &str, _style: &mut Style) {
+    // todo: add overflow support to taffy
 }
 
 fn apply_display(_name: &str, value: &str, style: &mut Style) {
