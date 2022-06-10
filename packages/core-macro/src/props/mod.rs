@@ -1814,6 +1814,9 @@ pub mod injection {
         /// of an element/component within a list of only like types
         TypeOf,
 
+        /// All | Any element in level
+        All,
+
         /// Only apply to a single root element
         Root,
     }
@@ -1891,6 +1894,8 @@ pub mod injection {
             CSSPseudo::Not(elements) => {
                 make_segment(name, SelectorMode::Child, Nth::Not(elements.into()))
             }
+
+            CSSPseudo::All => make_segment(name, SelectorMode::All, Nth::All),
 
             CSSPseudo::Root => make_segment(name, SelectorMode::Root, Nth::All),
 
@@ -1990,6 +1995,7 @@ pub mod injection {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
         fn matches(&self, target: &SegmentTrace) -> bool {
             let matches = |name: &str, mode: &SelectorMode, nth: &Nth| match mode {
+                SelectorMode::All => true,
                 SelectorMode::Root => target.position == 1 && target.total == 1,
                 SelectorMode::Child => nth.matches(&target.current, target.position, target.total),
                 SelectorMode::TypeOf => nth.matches(
@@ -2018,6 +2024,9 @@ pub mod injection {
     #[derive(Clone, Eq, PartialEq)]
     #[cfg_attr(debug_assertions, derive(Debug))]
     pub(crate) enum CSSPseudo {
+        /// :all
+        All,
+
         /// :root
         Root,
 
@@ -2108,6 +2117,7 @@ pub mod injection {
 
             Ok(match parsed {
                 None => match src {
+                    "all" => Self::All,
                     "root" => Self::Root,
                     "first-child" => Self::FirstChild,
                     "first-of-type" => Self::FirstOfType,
@@ -2472,7 +2482,10 @@ pub mod injection {
         mode: SelectorMode,
         nth: Nth,
     ) -> Result<Segment, String> {
-        let name = if mode == SelectorMode::Root || matches!(nth, Nth::Not(_)) {
+        let name = if mode == SelectorMode::All
+            || mode == SelectorMode::Root
+            || matches!(nth, Nth::Not(_))
+        {
             String::from("*")
         } else {
             validate_identifier(name)?

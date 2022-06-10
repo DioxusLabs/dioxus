@@ -206,6 +206,14 @@ mod injection {
         }
 
         #[test]
+        fn selector_all_element() {
+            let actual = Selectors::from_str(":all").expect(VALID_SELECTORS);
+            let expected = expected_selectors(vec![("*", SelectorMode::All, Nth::All)]);
+
+            assert_eq!(expected, actual);
+        }
+
+        #[test]
         fn selector_root_element() {
             let actual = Selectors::from_str(":root").expect(VALID_SELECTORS);
             let expected = expected_selectors(vec![("*", SelectorMode::Root, Nth::All)]);
@@ -219,9 +227,9 @@ mod injection {
 
             assert_eq!(expected, actual, "child root");
 
-            let actual = Selectors::from_str(":root > dev");
+            let actual = Selectors::from_str(":root > div");
             let expected = Err(String::from(
-                "exception parsing selector ':root > dev'; ':root' must be the only selector",
+                "exception parsing selector ':root > div'; ':root' must be the only selector",
             ));
 
             assert_eq!(expected, actual, "root w/children");
@@ -2989,6 +2997,40 @@ mod injection {
 
     mod selector_matching {
         use utils::test_selector_matching;
+
+        #[test]
+        fn select_all() {
+            // select all elements in 2nd level
+            let sut = "div > :all > div";
+            let dom_tests = "
+                div
+                    Label
+                        div         ✔ first match
+                        input       ✘ 1st input
+                        div         ✔ subsequent match
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+
+            // select all elements in 3rd level
+            let sut = "div > :all > :all";
+            let dom_tests = "
+                div
+                    Label
+                        div         ✔ first match
+                        input       ✔ subsequent match
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+        }
 
         #[test]
         fn select_root() {
