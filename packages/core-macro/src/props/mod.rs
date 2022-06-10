@@ -341,18 +341,26 @@ mod field_info {
                             }
                             Ok(())
                         }
+                        // optionally define injection property name
                         "inject_as" => {
-                            let inject_as = parse_string_literal(&assign.right)?;
+                            if self.inject_as.is_some() {
+                                Err(Error::new_spanned(
+                                    &assign.left,
+                                    r#""inject_as" already defined, can only apply one"#,
+                                ))
+                            } else {
+                                let inject_as = parse_string_literal(&assign.right)?;
 
-                            self.inject_as = Some(inject_as);
+                                self.inject_as = Some(inject_as);
 
-                            Ok(())
+                                Ok(())
+                            }
                         }
                         // simple tag selector for applying event handler to inner element/component
                         "selector" => {
                             if self.selectors.is_some() {
                                 Err(Error::new_spanned(
-                                    assign,
+                                    &assign.left,
                                     r#""selector" already defined, can only apply one"#,
                                 ))
                             } else {
