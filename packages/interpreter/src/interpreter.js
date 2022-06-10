@@ -140,7 +140,9 @@ export class Interpreter {
   RemoveAttribute(root, field, ns) {
     const name = field;
     const node = this.nodes[root];
-    if (ns !== null || ns !== undefined) {
+    if (ns == "style") {
+      node.style.removeProperty(name);
+    } else if (ns !== null || ns !== undefined) {
       node.removeAttributeNS(ns, name);
     } else if (name === "value") {
       node.value = "";
