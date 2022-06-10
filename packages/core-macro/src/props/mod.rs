@@ -394,6 +394,32 @@ mod field_info {
                             Ok(())
                         }
 
+                        "root" => {
+                            if self.selectors.is_some() {
+                                let has_root = matches!(
+                                    &self.selectors,
+                                    Some(selectors) if selectors.contains_root()
+                                );
+
+                                if has_root {
+                                    Err(Error::new_spanned(
+                                        &path,
+                                        r#""root" already defined, can not define another "root""#,
+                                    ))
+                                } else {
+                                    Err(Error::new_spanned(
+                                        &path,
+                                        r#""selector" already defined, can not define "root""#,
+                                    ))
+                                }
+                            } else {
+                                let root_expr = &syn::parse(quote!(":root").into()).unwrap();
+                                let selectors = parse_selectors(root_expr)?;
+                                self.selectors = Some(selectors);
+                                Ok(())
+                            }
+                        }
+
                         _ => {
                             macro_rules! handle_fields {
                                 ( $( $flag:expr, $field:ident, $already:expr; )* ) => {
@@ -1614,6 +1640,14 @@ pub mod injection {
         #[must_use]
         fn new() -> Self {
             Self(HashMap::new())
+        }
+
+        pub(crate) fn contains_root(&self) -> bool {
+            self.0.values().any(|selector| {
+                selector
+                    .iter()
+                    .any(|segments| segments.0.iter().any(|segment| segment.is_root()))
+            })
         }
 
         /// Checks if a `Branch` matches any of the selector rules
