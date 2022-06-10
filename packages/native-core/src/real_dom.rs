@@ -15,7 +15,7 @@ use crate::{
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
-/// To get started implement [PushedDownState] and or [BubbledUpState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
+/// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
 #[derive(Debug)]
 pub struct RealDom<S: State> {
     root: usize,
@@ -712,7 +712,7 @@ impl<S: State> IndexMut<ElementId> for RealDom<S> {
     }
 }
 
-/// The node is stored client side and stores only basic data about the node. For more complete information about the node see [`domNode::element`].
+/// The node is stored client side and stores only basic data about the node.
 #[derive(Debug, Clone)]
 pub struct Node<S: State> {
     /// The id of the node this node was created from.

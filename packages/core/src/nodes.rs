@@ -550,7 +550,7 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
-    /// Create a new [`VNode::VElement`]
+    /// Create a new [`VNode::Element`]
     pub fn element(
         &self,
         el: impl DioxusElement,
@@ -569,7 +569,7 @@ impl<'a> NodeFactory<'a> {
         )
     }
 
-    /// Create a new [`VNode::VElement`] without the trait bound
+    /// Create a new [`VNode::Element`] without the trait bound
     ///
     /// IE pass in "div" instead of `div`
     pub fn raw_element(
@@ -637,7 +637,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VComponent`]
+    /// Create a new [`VNode::Component`]
     pub fn component<P>(
         &self,
         component: fn(Scope<'a, P>) -> Element,
@@ -684,7 +684,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VFragment`] from a root of the rsx! call
+    /// Create a new [`VNode::Fragment`] from a root of the rsx! call
     pub fn fragment_root<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
@@ -705,7 +705,7 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    /// Create a new [`VNode::VFragment`] from any iterator
+    /// Create a new [`VNode::Fragment`] from any iterator
     pub fn fragment_from_iter<'b, 'c>(
         self,
         node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,

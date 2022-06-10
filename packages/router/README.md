@@ -43,9 +43,9 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/example-projects"> Examples </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/guide"> Guide (0.1.8) </a>
+    <a href="https://dioxuslabs.com/router"> Guide (Latest) </a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/nightly/guide"> Guide (Master) </a>
+    <a href="https://dioxuslabs.com/nightly/router"> Guide (Master) </a>
   </h3>
 </div>
 
