@@ -206,9 +206,14 @@ mod injection {
         }
 
         #[test]
-        fn selector_all_element() {
-            let actual = Selectors::from_str(":all").expect(VALID_SELECTORS);
-            let expected = expected_selectors(vec![("*", SelectorMode::All, Nth::All)]);
+        fn selector_any_element() {
+            let actual = Selectors::from_str(":any").expect(VALID_SELECTORS);
+            let expected = expected_selectors(vec![("*", SelectorMode::Any, Nth::All)]);
+
+            assert_eq!(expected, actual);
+
+            let actual = Selectors::from_str("*").expect(VALID_SELECTORS);
+            let expected = expected_selectors(vec![("*", SelectorMode::Any, Nth::All)]);
 
             assert_eq!(expected, actual);
         }
@@ -2999,9 +3004,25 @@ mod injection {
         use utils::test_selector_matching;
 
         #[test]
-        fn select_all() {
+        fn select_any() {
             // select all elements in 2nd level
-            let sut = "div > :all > div";
+            let sut = "div > :any > div";
+            let dom_tests = "
+                div
+                    Label
+                        div         ✔ first match
+                        input       ✘ 1st input
+                        div         ✔ subsequent match
+                div
+                    div
+                        div         ✔ 2nd branch
+                            div     ✘ deep child
+            ";
+
+            test_selector_matching(sut, dom_tests);
+
+            // select all elements in 2nd level
+            let sut = "div > * > div";
             let dom_tests = "
                 div
                     Label
@@ -3017,7 +3038,7 @@ mod injection {
             test_selector_matching(sut, dom_tests);
 
             // select all elements in 3rd level
-            let sut = "div > :all > :all";
+            let sut = "div > :any > :any";
             let dom_tests = "
                 div
                     Label

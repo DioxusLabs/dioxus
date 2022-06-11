@@ -1814,8 +1814,8 @@ pub mod injection {
         /// of an element/component within a list of only like types
         TypeOf,
 
-        /// All | Any element in level
-        All,
+        /// Any element in level
+        Any,
 
         /// Only apply to a single root element
         Root,
@@ -1861,6 +1861,10 @@ pub mod injection {
                 return Err(String::from("Segment can not be empty"));
             }
 
+            if value == "*" {
+                return make_segment("*", SelectorMode::Any, Nth::All);
+            }
+
             // try css parse first
             if let Some((name, css)) = value.split_once(':') {
                 match CSSPseudo::from_str(css) {
@@ -1895,7 +1899,7 @@ pub mod injection {
                 make_segment(name, SelectorMode::Child, Nth::Not(elements.into()))
             }
 
-            CSSPseudo::All => make_segment(name, SelectorMode::All, Nth::All),
+            CSSPseudo::Any => make_segment(name, SelectorMode::Any, Nth::All),
 
             CSSPseudo::Root => make_segment(name, SelectorMode::Root, Nth::All),
 
@@ -1995,7 +1999,7 @@ pub mod injection {
         /// Checks if a `SegmentTrace` of a `Branch` matches the `Segment`
         fn matches(&self, target: &SegmentTrace) -> bool {
             let matches = |name: &str, mode: &SelectorMode, nth: &Nth| match mode {
-                SelectorMode::All => true,
+                SelectorMode::Any => true,
                 SelectorMode::Root => target.position == 1 && target.total == 1,
                 SelectorMode::Child => nth.matches(&target.current, target.position, target.total),
                 SelectorMode::TypeOf => nth.matches(
@@ -2024,8 +2028,8 @@ pub mod injection {
     #[derive(Clone, Eq, PartialEq)]
     #[cfg_attr(debug_assertions, derive(Debug))]
     pub(crate) enum CSSPseudo {
-        /// :all
-        All,
+        /// :any
+        Any,
 
         /// :root
         Root,
@@ -2117,7 +2121,7 @@ pub mod injection {
 
             Ok(match parsed {
                 None => match src {
-                    "all" => Self::All,
+                    "any" => Self::Any,
                     "root" => Self::Root,
                     "first-child" => Self::FirstChild,
                     "first-of-type" => Self::FirstOfType,
@@ -2482,7 +2486,7 @@ pub mod injection {
         mode: SelectorMode,
         nth: Nth,
     ) -> Result<Segment, String> {
-        let name = if mode == SelectorMode::All
+        let name = if mode == SelectorMode::Any
             || mode == SelectorMode::Root
             || matches!(nth, Nth::Not(_))
         {
