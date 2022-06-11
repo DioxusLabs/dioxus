@@ -583,7 +583,7 @@ impl VirtualDom {
     ///
     /// *value.borrow_mut() = "goodbye";
     ///
-    /// let edits = dom.diff();
+    /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let mut diff_machine = DiffState::new(&self.scopes);
