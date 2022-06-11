@@ -6,6 +6,8 @@ mod ifmt;
 mod inlineprops;
 mod props;
 mod rsx;
+#[cfg(test)]
+mod tests;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {

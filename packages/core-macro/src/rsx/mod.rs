@@ -33,18 +33,37 @@ use syn::{
     Ident, Result, Token,
 };
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct CustomContext {
+    pub name: Ident,
+    pub cx_type: Option<Ident>,
+}
+
 pub struct CallBody {
-    pub custom_context: Option<Ident>,
+    pub custom_context: Option<CustomContext>,
     pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = if input.peek(Ident) && input.peek2(Token![,]) {
+        let custom_context = if input.peek(Ident) && input.peek2(Token![:]) && input.peek3(Ident) {
+            let name = input.parse::<Ident>()?;
+            input.parse::<Token![:]>()?;
+            let r#type = input.parse::<Ident>()?;
+            input.parse::<Token![;]>()?;
+
+            Some(CustomContext {
+                name,
+                cx_type: Some(r#type),
+            })
+        } else if input.peek(Ident) && input.peek2(Token![,]) {
             let name = input.parse::<Ident>()?;
             input.parse::<Token![,]>()?;
 
-            Some(name)
+            Some(CustomContext {
+                name,
+                cx_type: None,
+            })
         } else {
             None
         };
@@ -61,10 +80,225 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
+        if let Some(CustomContext {
+            name,
+            cx_type: Some(cx_type),
+        }) = custom_context.as_ref()
+        {
+            inject_attributes(name, cx_type, &mut roots)?;
+        }
+
         Ok(Self {
             custom_context,
             roots,
         })
+    }
+}
+
+fn inject_attributes(ctx: &Ident, component: &Ident, roots: &mut [BodyNode]) -> Result<()> {
+    use std::collections::HashMap;
+    use std::rc::Rc;
+
+    use proc_macro2::Span;
+    use syn::LitStr;
+
+    use crate::props::injection::InjectedProperties;
+    use crate::props::injection::{Branch, Property};
+
+    let mut branch = Branch::new();
+    let properties = InjectedProperties::component_properties(component)?;
+    let component = component.to_string();
+    let context = ctx.to_string();
+
+    return inject_attributes(&context, &component, roots, &mut branch, &properties);
+
+    // recursive impl of inject attributes
+    fn inject_attributes(
+        cx: &str,
+        component: &str,
+        nodes: &mut [BodyNode],
+        branch: &mut Branch,
+        properties: &[Property],
+    ) -> Result<()> {
+        let total = nodes.len();
+        let totals = calc_type_totals(nodes);
+
+        let mut inject_properties =
+            |index: usize,
+             name: &Ident,
+             children: &mut Vec<BodyNode>,
+             mut inject_property: Box<dyn FnMut(&Ident, &Property) -> Result<()>>|
+             -> Result<()> {
+                if index == 0 {
+                    branch.new_child(name, total, totals.clone())
+                } else {
+                    branch
+                        .next_sibling(name)
+                        .map_err(|err| syn::Error::new(name.span(), err))?;
+                }
+
+                for property in properties {
+                    let applies = InjectedProperties::check_branch(component, property, branch)
+                        .map_err(|err| syn::Error::new(name.span(), err))?;
+
+                    if applies {
+                        inject_property(name, property)?
+                    }
+                }
+
+                if !children.is_empty() {
+                    inject_attributes(cx, component, children, branch, properties)?;
+                }
+
+                Ok(())
+            };
+
+        let mut branched = false;
+
+        for (index, node) in nodes.iter_mut().enumerate() {
+            match node {
+                BodyNode::Element(Element {
+                    name,
+                    attributes,
+                    children,
+                    ..
+                }) => {
+                    branched = true;
+
+                    inject_properties(
+                        index,
+                        name,
+                        children,
+                        Box::new(move |el_name, property| {
+                            let attr = match property {
+                                Property::Attribute {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ElementAttr::CustomAttrText {
+                                    name: LitStr::new(inject_as, el_name.span()),
+                                    value: LitStr::new(
+                                        &format!(
+                                            "{{{cx}.props.{name}{}}}",
+                                            if *optional { ":?" } else { "" }
+                                        ),
+                                        el_name.span(),
+                                    ),
+                                },
+                                Property::Handler {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ElementAttr::EventTokens {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    tokens: if *optional {
+                                        syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                    } else {
+                                        syn::parse_str(&format!(
+                                            "|evt| {cx}.props.{name}.call(evt)"
+                                        ))?
+                                    },
+                                },
+                            };
+
+                            attributes.push(ElementAttrNamed {
+                                el_name: el_name.clone(),
+                                attr,
+                            });
+
+                            Ok(())
+                        }),
+                    )?;
+                }
+                BodyNode::Component(Component {
+                    name,
+                    body,
+                    children,
+                    ..
+                }) => {
+                    branched = true;
+
+                    let name = match name.segments.last() {
+                        Some(last) => &last.ident,
+                        None => {
+                            return Err(syn::Error::new_spanned(name, "Expected component name"))
+                        }
+                    };
+
+                    inject_properties(
+                        index,
+                        name,
+                        children,
+                        Box::new(|el_name, property| {
+                            let attr = match property {
+                                Property::Attribute {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ComponentField {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    content: ContentField::Formatted(LitStr::new(
+                                        &format!(
+                                            "{{{cx}.props.{name}{}}}",
+                                            if *optional { ":?" } else { "" }
+                                        ),
+                                        el_name.span(),
+                                    )),
+                                },
+                                Property::Handler {
+                                    name,
+                                    inject_as,
+                                    optional,
+                                } => ComponentField {
+                                    name: Ident::new(inject_as, el_name.span()),
+                                    content: ContentField::OnHandlerRaw(if *optional {
+                                        syn::parse_str(&format!("|evt| if let Some({name}) = &{cx}.props.{name} {{ {name}.call(evt) }}"))?
+                                    } else {
+                                        syn::parse_str(&format!(
+                                            "|evt| {cx}.props.{name}.call(evt)"
+                                        ))?
+                                    }),
+                                },
+                            };
+
+                            body.push(attr);
+
+                            Ok(())
+                        }),
+                    )?;
+                }
+                _ => {}
+            }
+        }
+
+        if branched {
+            branch
+                .finish()
+                .map_err(|err| syn::Error::new(Span::call_site(), err))?;
+        }
+
+        Ok(())
+    }
+
+    fn calc_type_totals(nodes: &mut [BodyNode]) -> Rc<HashMap<String, usize>> {
+        Rc::new(
+            nodes
+                .iter()
+                .filter_map(|bn| match bn {
+                    BodyNode::Element(elm) => Some(elm.name.to_token_stream().to_string()),
+                    BodyNode::Component(cmp) => {
+                        Some(cmp.name.segments.last().unwrap().ident.to_string())
+                    }
+                    BodyNode::Text(_) | BodyNode::RawExpr(_) => None,
+                })
+                .fold(HashMap::new(), |mut acc, next| {
+                    let entry = acc.entry(next).or_insert(0_usize);
+
+                    *entry += 1;
+
+                    acc
+                }),
+        )
     }
 }
 
@@ -81,8 +315,8 @@ impl ToTokens for CallBody {
 
         match &self.custom_context {
             // The `in cx` pattern allows directly rendering
-            Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+            Some(CustomContext { name, .. }) => out_tokens.append_all(quote! {
+                #name.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
                     use dioxus_elements::{GlobalAttributes, SvgAttributes};
                     #inner
                 }))
