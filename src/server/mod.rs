@@ -291,30 +291,40 @@ async fn hot_reload_handler(
     ws.on_upgrade(|mut socket| async move {
         log::info!("🔥 Hot Reload WebSocket connected");
         let mut rx = state.messages.subscribe();
-        loop {
-            let read_set_rsx = rx.recv();
-            let read_err = socket.recv();
-            tokio::select! {
-                err = read_err => {
-                    if let Some(Ok(Message::Text(err))) = err {
-                        let error: RecompileReason = serde_json::from_str(&err).unwrap();
-                        log::error!("{:?}", error);
-                        state.update.send("reload".to_string()).unwrap();
-                    };
-                },
-                set_rsx = read_set_rsx => {
-                    if let Ok(rsx) = set_rsx{
-                        if socket
-                            .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
-                            .await
-                            .is_err()
-                        {
+        let hot_reload_handle = tokio::spawn(async move {
+            loop {
+                let read_set_rsx = rx.recv();
+                let read_err = socket.recv();
+                tokio::select! {
+                    err = read_err => {
+                        if let Some(Ok(err)) = err {
+                            if let Message::Text(err) = err {
+                                let error: RecompileReason = serde_json::from_str(&err).unwrap();
+                                log::error!("{:?}", error);
+                                if state.update.send("reload".to_string()).is_err() {
+                                    break;
+                                }
+                            }
+                        } else {
                             break;
-                        };
+                        }
+                    },
+                    set_rsx = read_set_rsx => {
+                        if let Ok(rsx) = set_rsx {
+                            if socket
+                                .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
+                                .await
+                                .is_err()
+                            {
+                                break;
+                            };
+                        }
                     }
-                }
-            };
-        }
+                };
+            }
+        });
+
+        hot_reload_handle.await.unwrap();
     })
 }
 
