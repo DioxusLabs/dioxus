@@ -12,13 +12,26 @@ pub struct ConfigOptsBuild {
     #[serde(default)]
     pub release: bool,
 
+    // Use verbose output [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub verbose: bool,
+
     /// Build a example [default: ""]
     #[clap(long)]
     pub example: Option<String>,
 
+    /// Build with custom profile
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Parser)]
@@ -36,9 +49,22 @@ pub struct ConfigOptsServe {
     #[serde(default)]
     pub release: bool,
 
+    // Use verbose output [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub verbose: bool,
+
+    /// Build with custom profile
+    #[clap(long)]
+    pub profile: Option<String>,
+
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
+
+    /// Space separated list of features to activate
+    #[clap(long)]
+    pub features: Option<Vec<String>>,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.
