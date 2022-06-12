@@ -59,7 +59,7 @@ When using Debian/bullseye `libappindicator3-dev` is no longer available but rep
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
 ```
 
-If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/en/docs/get-started/setup-linux).
+If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/v1/guides/getting-started/prerequisites#setting-up-linux).
 
 
 ### macOS
