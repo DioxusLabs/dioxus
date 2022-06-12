@@ -79,7 +79,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
         .and_then(
-            |response: Response<ServeFileSystemResponseBody>| async move {
+            move |response: Response<ServeFileSystemResponseBody>| async move {
                 let response = if file_service_config
                     .dioxus_config
                     .web
