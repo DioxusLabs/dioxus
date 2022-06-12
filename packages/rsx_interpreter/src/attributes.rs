@@ -1,6 +1,6 @@
 use crate::elements::*;
 
-// find the mapped attribute name
+// map the rsx name of the attribute to the html name of the attribute and the namespace that contains it
 pub fn attrbute_to_static_str(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
     NO_NAMESPACE_ATTRIBUTES
         .iter()

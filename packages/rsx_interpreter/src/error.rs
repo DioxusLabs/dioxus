@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+/// An error produced when interperting the rsx
 #[derive(Debug)]
 pub enum Error {
     ParseError(syn::Error),

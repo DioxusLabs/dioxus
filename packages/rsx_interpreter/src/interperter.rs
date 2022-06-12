@@ -8,43 +8,39 @@ use crate::captuered_context::{CapturedContext, IfmtArgs};
 use crate::elements::element_to_static_str;
 use crate::error::{Error, RecompileReason};
 
-struct InterpertedIfmt(IfmtInput);
-
-impl InterpertedIfmt {
-    fn resolve(&self, captured: &IfmtArgs) -> Result<String, Error> {
-        let mut result = String::new();
-        for seg in &self.0.segments {
-            match seg {
-                Segment::Formatted {
-                    segment,
-                    format_args,
-                } => {
-                    let expr = segment.to_token_stream();
-                    let expr: Expr = parse2(expr).unwrap();
-                    let search = captured.named_args.iter().find(|fmted| {
-                        parse_str::<Expr>(fmted.expr).unwrap() == expr
-                            && fmted.format_args == format_args
-                    });
-                    match search {
-                        Some(formatted) => {
-                            result.push_str(&formatted.result);
-                        }
-                        None => {
-                            let expr_str = segment.to_token_stream().to_string();
-                            return Err(Error::RecompileRequiredError(
-                                RecompileReason::CapturedExpression(format!(
-                                    "could not resolve {{{}:{}}}",
-                                    expr_str, format_args
-                                )),
-                            ));
-                        }
+fn resolve_ifmt(ifmt: &IfmtInput, captured: &IfmtArgs) -> Result<String, Error> {
+    let mut result = String::new();
+    for seg in &ifmt.segments {
+        match seg {
+            Segment::Formatted {
+                segment,
+                format_args,
+            } => {
+                let expr = segment.to_token_stream();
+                let expr: Expr = parse2(expr).unwrap();
+                let search = captured.named_args.iter().find(|fmted| {
+                    parse_str::<Expr>(fmted.expr).unwrap() == expr
+                        && fmted.format_args == format_args
+                });
+                match search {
+                    Some(formatted) => {
+                        result.push_str(&formatted.result);
+                    }
+                    None => {
+                        let expr_str = segment.to_token_stream().to_string();
+                        return Err(Error::RecompileRequiredError(
+                            RecompileReason::CapturedExpression(format!(
+                                "could not resolve {{{}:{}}}",
+                                expr_str, format_args
+                            )),
+                        ));
                     }
                 }
-                Segment::Literal(lit) => result.push_str(lit),
             }
+            Segment::Literal(lit) => result.push_str(lit),
         }
-        Ok(result)
     }
+    Ok(result)
 }
 
 pub fn build<'a>(
@@ -67,10 +63,8 @@ fn build_node<'a>(
     let bump = factory.bump();
     match node {
         BodyNode::Text(text) => {
-            let ifmt = InterpertedIfmt(
-                IfmtInput::from_str(&text.value()).map_err(|err| Error::ParseError(err))?,
-            );
-            let text = bump.alloc(ifmt.resolve(&ctx.captured)?);
+            let ifmt = IfmtInput::from_str(&text.value()).map_err(|err| Error::ParseError(err))?;
+            let text = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
             Ok(factory.text(format_args!("{}", text)))
         }
         BodyNode::Element(el) => {
@@ -78,26 +72,22 @@ fn build_node<'a>(
             for attr in &el.attributes {
                 match &attr.attr {
                     ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
-                        let (name, value): (String, InterpertedIfmt) = match &attr.attr {
+                        let (name, value): (String, IfmtInput) = match &attr.attr {
                             ElementAttr::AttrText { name, value } => (
                                 name.to_string(),
-                                InterpertedIfmt(
-                                    IfmtInput::from_str(&value.value())
-                                        .map_err(|err| Error::ParseError(err))?,
-                                ),
+                                IfmtInput::from_str(&value.value())
+                                    .map_err(|err| Error::ParseError(err))?,
                             ),
                             ElementAttr::CustomAttrText { name, value } => (
                                 name.value(),
-                                InterpertedIfmt(
-                                    IfmtInput::from_str(&value.value())
-                                        .map_err(|err| Error::ParseError(err))?,
-                                ),
+                                IfmtInput::from_str(&value.value())
+                                    .map_err(|err| Error::ParseError(err))?,
                             ),
                             _ => unreachable!(),
                         };
 
                         if let Some((name, namespace)) = attrbute_to_static_str(&name) {
-                            let value = bump.alloc(value.resolve(&ctx.captured)?);
+                            let value = bump.alloc(resolve_ifmt(&value, &ctx.captured)?);
                             attributes.push(Attribute {
                                 name,
                                 value: AttributeValue::Text(value),
@@ -188,10 +178,9 @@ fn build_node<'a>(
                         None,
                     )),
                     Some(lit) => {
-                        let ifmt: InterpertedIfmt = InterpertedIfmt(
-                            parse_str(&lit.value()).map_err(|err| Error::ParseError(err))?,
-                        );
-                        let key = bump.alloc(ifmt.resolve(&ctx.captured)?);
+                        let ifmt: IfmtInput =
+                            parse_str(&lit.value()).map_err(|err| Error::ParseError(err))?;
+                        let key = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
 
                         Ok(factory.raw_element(
                             tag,

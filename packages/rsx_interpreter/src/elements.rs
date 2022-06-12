@@ -1,4 +1,4 @@
-// find the mapped attribute name
+// map the rsx name of the element to the html name of the element and the namespace that contains it
 pub fn element_to_static_str(element: &str) -> Option<(&'static str, Option<&'static str>)> {
     ELEMENTS_WITH_MAPPED_ATTRIBUTES
         .iter()
