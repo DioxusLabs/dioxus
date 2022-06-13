@@ -81,13 +81,16 @@ impl DesktopController {
                     impl ErrorHandler for DesktopErrorHandler {
                         fn handle_error(&self, err: Error) {
                             if let Some(conn) = &mut *self.latest_connection.lock().unwrap() {
-                                if let Error::RecompileRequiredError(reason) = err {
-                                    conn.get_mut()
-                                        .write_all(
-                                            (serde_json::to_string(&reason).unwrap() + "\n")
-                                                .as_bytes(),
-                                        )
-                                        .unwrap();
+                                match err {
+                                    Error::RecompileRequiredError(reason) => {
+                                        conn.get_mut()
+                                            .write_all(
+                                                (serde_json::to_string(&reason).unwrap() + "\n")
+                                                    .as_bytes(),
+                                            )
+                                            .unwrap();
+                                    }
+                                    Error::ParseError(err) => log::warn!("{}", err),
                                 }
                             }
                         }

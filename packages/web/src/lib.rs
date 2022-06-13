@@ -275,9 +275,14 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // forward stream to the websocket
         dom.base_scope().spawn_forever(async move {
             while let Some(err) = error_channel_receiver.next().await {
-                if let Error::RecompileRequiredError(err) = err {
-                    ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
-                        .unwrap();
+                match err {
+                    Error::RecompileRequiredError(err) => {
+                        ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
+                            .unwrap();
+                    }
+                    Error::ParseError(err) => {
+                        web_sys::console::warn_1(&wasm_bindgen::JsValue::from_str(&err.to_string()))
+                    }
                 }
             }
         });
