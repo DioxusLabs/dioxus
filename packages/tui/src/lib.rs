@@ -16,7 +16,7 @@ use futures::{
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use stretch2::{prelude::Size, Stretch};
+use taffy::{geometry::Point, prelude::Size, Taffy};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
@@ -77,9 +77,9 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let mut rdom: Dom = RealDom::new();
     let mutations = dom.rebuild();
     let to_update = rdom.apply_mutations(vec![mutations]);
-    let stretch = Rc::new(RefCell::new(Stretch::new()));
+    let taffy = Rc::new(RefCell::new(Taffy::new()));
     let mut any_map = AnyMap::new();
-    any_map.insert(stretch.clone());
+    any_map.insert(taffy.clone());
     let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
 
     render_vdom(
@@ -88,7 +88,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         handler,
         cfg,
         rdom,
-        stretch,
+        taffy,
         register_event,
     )
     .unwrap();
@@ -100,7 +100,7 @@ fn render_vdom(
     handler: RinkInputHandler,
     cfg: Config,
     mut rdom: Dom,
-    stretch: Rc<RefCell<Stretch>>,
+    taffy: Rc<RefCell<Taffy>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -135,17 +135,17 @@ fn render_vdom(
 
                 if !to_rerender.is_empty() || updated {
                     updated = false;
-                    fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
+                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
                         let root_node = rdom[0].state.layout.node.unwrap();
 
-                        stretch
+                        taffy
                             .compute_layout(
                                 root_node,
                                 Size {
-                                    width: stretch2::prelude::Number::Defined((width - 1) as f32),
-                                    height: stretch2::prelude::Number::Defined((height - 1) as f32),
+                                    width: taffy::prelude::Number::Defined((width - 1) as f32),
+                                    height: taffy::prelude::Number::Defined((height - 1) as f32),
                                 },
                             )
                             .unwrap();
@@ -153,9 +153,16 @@ fn render_vdom(
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
+                            resize(frame.size(), &mut taffy.borrow_mut(), &rdom);
                             let root = &rdom[0];
-                            render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
+                            render::render_vnode(
+                                frame,
+                                &taffy.borrow(),
+                                &rdom,
+                                root,
+                                cfg,
+                                Point::zero(),
+                            );
                         })?;
                     } else {
                         resize(
@@ -165,7 +172,7 @@ fn render_vdom(
                                 width: 300,
                                 height: 300,
                             },
-                            &mut stretch.borrow_mut(),
+                            &mut taffy.borrow_mut(),
                             &rdom,
                         );
                     }
@@ -205,7 +212,7 @@ fn render_vdom(
                 }
 
                 {
-                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
+                    let evts = handler.get_events(&taffy.borrow(), &mut rdom);
                     {
                         updated |= handler.state().focus_state.clean();
                     }
@@ -220,7 +227,7 @@ fn render_vdom(
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
                     let mut any_map = AnyMap::new();
-                    any_map.insert(stretch.clone());
+                    any_map.insert(taffy.clone());
                     to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
                 }
             }

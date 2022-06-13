@@ -1,5 +1,5 @@
 use crate::focus::Focus;
-use crate::layout::StretchLayout;
+use crate::layout::TaffyLayout;
 use crate::style_attributes::StyleModifier;
 use dioxus_native_core::{real_dom::RealDom, state::*};
 use dioxus_native_core_macro::{sorted_str_slice, State};
@@ -10,7 +10,7 @@ pub(crate) type Node = dioxus_native_core::real_dom::Node<NodeState>;
 #[derive(Debug, Clone, State, Default)]
 pub(crate) struct NodeState {
     #[child_dep_state(layout, RefCell<Stretch>)]
-    pub layout: StretchLayout,
+    pub layout: TaffyLayout,
     // depends on attributes, the C component of it's parent and a u8 context
     #[parent_dep_state(style)]
     pub style: StyleModifier,

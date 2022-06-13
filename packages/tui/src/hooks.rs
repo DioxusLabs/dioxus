@@ -17,8 +17,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use stretch2::geometry::{Point, Size};
-use stretch2::{prelude::Layout, Stretch};
+use taffy::geometry::{Point, Size};
+use taffy::{prelude::Layout, Taffy};
 
 use crate::FocusState;
 use crate::{Dom, Node};
@@ -156,7 +156,7 @@ impl InnerInputState {
         &mut self,
         evts: &mut Vec<EventCore>,
         resolved_events: &mut Vec<UserEvent>,
-        layout: &Stretch,
+        layout: &Taffy,
         dom: &mut Dom,
     ) {
         let previous_mouse = self.mouse.clone();
@@ -216,7 +216,7 @@ impl InnerInputState {
         &mut self,
         previous_mouse: Option<MouseData>,
         resolved_events: &mut Vec<UserEvent>,
-        layout: &Stretch,
+        layout: &Taffy,
         dom: &mut Dom,
     ) {
         fn layout_contains_point(layout: &Layout, point: ScreenPoint) -> bool {
@@ -584,8 +584,7 @@ impl RinkInputHandler {
         self.state.borrow_mut().focus_state.prune(mutations, rdom);
     }
 
-    // returns a list of events and if a event will force a rerender
-    pub(crate) fn get_events(&self, layout: &Stretch, dom: &mut Dom) -> Vec<UserEvent> {
+    pub(crate) fn get_events(&self, layout: &Taffy, dom: &mut Dom) -> Vec<UserEvent> {
         let mut resolved_events = Vec::new();
 
         (*self.state).borrow_mut().update(

@@ -46,6 +46,9 @@ fn main() {
 /// This type alias specifies the type for you so you don't need to write "None as Option<()>"
 const NONE_ELEMENT: Option<()> = None;
 
+use core::{fmt, str::FromStr};
+use std::fmt::Display;
+
 use baller::Baller;
 use dioxus::prelude::*;
 
@@ -187,6 +190,15 @@ fn app(cx: Scope) -> Element {
                 text: "using functionc all syntax"
             )
 
+            // Components can be geneirc too
+            // This component takes i32 type to give you typed input
+            TypedInput::<TypedInputProps<i32>> {}
+            // Type inference can be used too
+            TypedInput { initial: 10.0 }
+            // geneircs with the `inline_props` macro
+            label(text: "hello geneirc world!")
+            label(text: 99.9)
+
             // helper functions
             // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
             [helper(&cx, "hello world!")]
@@ -227,8 +239,34 @@ pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     })
 }
 
+#[derive(Props, PartialEq)]
+pub struct TypedInputProps<T> {
+    #[props(optional, default)]
+    initial: Option<T>,
+}
+
+#[allow(non_snake_case)]
+pub fn TypedInput<T>(_: Scope<TypedInputProps<T>>) -> Element
+where
+    T: FromStr + fmt::Display,
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    todo!()
+}
+
 #[inline_props]
 fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
+    cx.render(rsx! {
+        p { "{text}" }
+    })
+}
+
+// generic component with inline_props too
+#[inline_props]
+fn label<T>(cx: Scope, text: T) -> Element
+where
+    T: Display,
+{
     cx.render(rsx! {
         p { "{text}" }
     })

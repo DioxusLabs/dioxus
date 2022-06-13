@@ -1,9 +1,9 @@
 use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
-use stretch2::{
+use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
-    Stretch,
+    Taffy,
 };
 use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
@@ -18,10 +18,11 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
-    layout: &Stretch,
+    layout: &Taffy,
     rdom: &Dom,
     node: &Node,
     cfg: Config,
+    parent_location: Point<f32>,
 ) {
     use dioxus_native_core::real_dom::NodeType;
 
@@ -29,7 +30,11 @@ pub(crate) fn render_vnode(
         return;
     }
 
-    let Layout { location, size, .. } = layout.layout(node.state.layout.node.unwrap()).unwrap();
+    let Layout {
+        mut location, size, ..
+    } = layout.layout(node.state.layout.node.unwrap()).unwrap();
+    location.x += parent_location.x;
+    location.y += parent_location.y;
 
     let Point { x, y } = location;
     let Size { width, height } = size;
@@ -57,7 +62,7 @@ pub(crate) fn render_vnode(
                 text,
                 style: node.state.style.core,
             };
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
@@ -65,7 +70,7 @@ pub(crate) fn render_vnode(
             }
         }
         NodeType::Element { children, .. } => {
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
@@ -73,7 +78,7 @@ pub(crate) fn render_vnode(
             }
 
             for c in children {
-                render_vnode(frame, layout, rdom, &rdom[c.0], cfg);
+                render_vnode(frame, layout, rdom, &rdom[c.0], cfg, location);
             }
         }
         NodeType::Placeholder => unreachable!(),
