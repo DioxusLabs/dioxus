@@ -1000,12 +1000,11 @@ impl TaskQueue {
     fn remove(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
             let _ = tasks.remove(&id);
+            if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
+                task_map.remove(&id);
+            }
         }
-
         // the task map is still around, but it'll be removed when the scope is unmounted
-        if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
-            task_map.remove(&id);
-        }
     }
 
     pub(crate) fn has_tasks(&self) -> bool {
