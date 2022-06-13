@@ -609,7 +609,7 @@ impl ScopeState {
 
     /// Create a subscription that schedules a future render for the reference component
     ///
-    /// ## Notice: you should prefer using prepare_update and get_scope_id
+    /// ## Notice: you should prefer using schedule_update_any and scope_id
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
         Arc::new(move || {
