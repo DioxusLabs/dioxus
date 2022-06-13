@@ -73,22 +73,17 @@ fn build_node<'a>(
             for attr in &el.attributes {
                 match &attr.attr {
                     ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
-                        let (name, value, span): (String, InterpertedIfmt, Span) = match &attr.attr
-                        {
+                        let (name, value, span): (String, IfmtInput, Span) = match &attr.attr {
                             ElementAttr::AttrText { name, value } => (
                                 name.to_string(),
-                                InterpertedIfmt(
-                                    IfmtInput::from_str(&value.value())
-                                        .map_err(|err| Error::ParseError(err))?,
-                                ),
+                                IfmtInput::from_str(&value.value())
+                                    .map_err(|err| Error::ParseError(err))?,
                                 name.span(),
                             ),
                             ElementAttr::CustomAttrText { name, value } => (
                                 name.value(),
-                                InterpertedIfmt(
-                                    IfmtInput::from_str(&value.value())
-                                        .map_err(|err| Error::ParseError(err))?,
-                                ),
+                                IfmtInput::from_str(&value.value())
+                                    .map_err(|err| Error::ParseError(err))?,
                                 name.span(),
                             ),
                             _ => unreachable!(),
