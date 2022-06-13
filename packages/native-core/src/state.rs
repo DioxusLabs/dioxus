@@ -44,10 +44,10 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 }
 
 /// This state is derived from children. For example a node's size could be derived from the size of children.
-/// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
+/// Called when the current node's node properties are modified, a child's [ChildDepState] is modified or a child is removed.
 /// Called at most once per update.
 pub trait ChildDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
+    /// The context is passed to the [ChildDepState::reduce] when it is pushed down.
     /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     /// This must be either a [ChildDepState] or [NodeDepState]
@@ -64,10 +64,10 @@ pub trait ChildDepState {
 }
 
 /// This state that is passed down to children. For example text properties (`<b>` `<i>` `<u>`) would be passed to children.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
 /// Called at most once per update.
 pub trait ParentDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
+    /// The context is passed to the [ParentDepState::reduce] when it is pushed down.
     /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     /// This must be either a [ParentDepState] or [NodeDepState]
@@ -77,7 +77,7 @@ pub trait ParentDepState {
 }
 
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a sibling's [NodeDepState] is modified.
 /// Called at most once per update.
 pub trait NodeDepState {
     type Ctx;
