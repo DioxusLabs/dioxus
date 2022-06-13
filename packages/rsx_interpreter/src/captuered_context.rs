@@ -4,7 +4,6 @@ use dioxus_rsx::{
 };
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Expr, Ident, Result};
-
 #[derive(Default)]
 pub struct CapturedContextBuilder {
     pub ifmted: Vec<IfmtInput>,
@@ -146,7 +145,7 @@ impl ToTokens for CapturedContextBuilder {
 pub struct CapturedContext<'a> {
     // map of the variable name to the formated value
     pub captured: IfmtArgs,
-    // // map of the attribute name and element path to the formated value
+    // map of the attribute name and element path to the formated value
     // pub captured_attribute_values: IfmtArgs,
     // the only thing we can update in component is the children
     pub components: Vec<(&'static str, VNode<'a>)>,
@@ -159,10 +158,11 @@ pub struct CapturedContext<'a> {
 }
 
 pub struct IfmtArgs {
-    // map expressions to the value string they produced
+    // All expressions that have been resolved
     pub named_args: Vec<FormattedArg>,
 }
 
+/// A formated segment that has been resolved
 pub struct FormattedArg {
     pub expr: &'static str,
     pub format_args: &'static str,

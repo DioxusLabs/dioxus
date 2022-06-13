@@ -22,6 +22,7 @@ lazy_static! {
     pub static ref RSX_CONTEXT: RsxContext = RsxContext::new(RsxData::default());
 }
 
+// the location of the code relative to the current crate based on [std::panic::Location]
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeLocation {
     pub file: String,
@@ -29,6 +30,7 @@ pub struct CodeLocation {
     pub column: u32,
 }
 
+/// Get the resolved rsx given the origional rsx, a captured context of dynamic components, and a factory to build the resulting node
 pub fn resolve_scope<'a>(
     location: CodeLocation,
     rsx: &'static str,
@@ -57,7 +59,7 @@ pub fn resolve_scope<'a>(
     }
 }
 
-pub fn interpert_rsx<'a, 'b>(
+fn interpert_rsx<'a, 'b>(
     factory: dioxus_core::NodeFactory<'a>,
     text: &str,
     context: captuered_context::CapturedContext<'a>,
@@ -69,6 +71,7 @@ pub fn interpert_rsx<'a, 'b>(
     )
 }
 
+/// get the code location of the code that called this function
 #[track_caller]
 pub fn get_line_num() -> CodeLocation {
     let location = Location::caller();
@@ -79,11 +82,13 @@ pub fn get_line_num() -> CodeLocation {
     }
 }
 
+/// A handle to the rsx context with interior mutability
 #[derive(Debug)]
 pub struct RsxContext {
     data: RwLock<RsxData>,
 }
 
+/// A store of the text for the rsx macro for each call to rsx
 #[derive(Default)]
 pub struct RsxData {
     pub hm: HashMap<CodeLocation, String>,
@@ -104,6 +109,7 @@ impl RsxContext {
         }
     }
 
+    /// Set the text for an rsx call at some location
     pub fn insert(&self, loc: CodeLocation, text: String) {
         let mut write = self.data.write().unwrap();
         write.hm.insert(loc, text);
@@ -112,25 +118,29 @@ impl RsxContext {
         }
     }
 
-    pub fn read(&self) -> RwLockReadGuard<RsxData> {
+    fn read(&self) -> RwLockReadGuard<RsxData> {
         self.data.read().unwrap()
     }
 
-    pub fn report_error(&self, error: Error) {
+    fn report_error(&self, error: Error) {
         if let Some(handler) = &self.data.write().unwrap().error_handler {
             handler.handle_error(error)
         }
     }
 
+    /// Set the handler for errors interperting the rsx
     pub fn set_error_handler(&self, handler: impl ErrorHandler + 'static) {
         self.data.write().unwrap().error_handler = Some(Box::new(handler));
     }
 
+    /// Provide the scduler channel from [dioxus_code::VirtualDom::get_scheduler_channel].
+    /// The channel allows the interpreter to force re-rendering of the dom when the rsx is changed.
     pub fn provide_scheduler_channel(&self, channel: UnboundedSender<SchedulerMsg>) {
         self.data.write().unwrap().scheduler_channel = Some(channel)
     }
 }
 
+/// A error handler for errors reported by the rsx interperter
 pub trait ErrorHandler: Send + Sync {
     fn handle_error(&self, err: Error);
 }
