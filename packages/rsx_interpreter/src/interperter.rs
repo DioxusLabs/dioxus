@@ -1,6 +1,7 @@
 use dioxus_core::{Attribute, AttributeValue, NodeFactory, VNode};
 use dioxus_rsx::{BodyNode, CallBody, ElementAttr, IfmtInput, Segment};
 use quote::ToTokens;
+use quote::__private::Span;
 use syn::{parse2, parse_str, Expr};
 
 use crate::attributes::attrbute_to_static_str;
@@ -78,13 +79,15 @@ fn build_node<'a>(
             for attr in &el.attributes {
                 match &attr.attr {
                     ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
-                        let (name, value): (String, InterpertedIfmt) = match &attr.attr {
+                        let (name, value, span): (String, InterpertedIfmt, Span) = match &attr.attr
+                        {
                             ElementAttr::AttrText { name, value } => (
                                 name.to_string(),
                                 InterpertedIfmt(
                                     IfmtInput::from_str(&value.value())
                                         .map_err(|err| Error::ParseError(err))?,
                                 ),
+                                name.span(),
                             ),
                             ElementAttr::CustomAttrText { name, value } => (
                                 name.value(),
@@ -92,6 +95,7 @@ fn build_node<'a>(
                                     IfmtInput::from_str(&value.value())
                                         .map_err(|err| Error::ParseError(err))?,
                                 ),
+                                name.span(),
                             ),
                             _ => unreachable!(),
                         };
@@ -105,6 +109,11 @@ fn build_node<'a>(
                                 is_volatile: false,
                                 namespace,
                             });
+                        } else {
+                            return Err(Error::ParseError(syn::Error::new(
+                                span,
+                                "unknown attribute",
+                            )));
                         }
                     }
 
