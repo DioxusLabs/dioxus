@@ -7,7 +7,6 @@ use axum::{
     Router,
 };
 use notify::{RecommendedWatcher, Watcher};
-use std::{fs::File, io::Read};
 
 use std::{path::PathBuf, sync::Arc};
 use tower::ServiceBuilder;
@@ -20,9 +19,12 @@ use tokio::sync::broadcast;
 mod hot_reload_improts {
     pub use crate::hot_reload::{find_rsx, DiffResult};
     pub use dioxus_rsx_interpreter::{error::RecompileReason, CodeLocation, SetRsxMessage};
+    pub use proc_macro2::TokenStream;
     pub use std::collections::HashMap;
     pub use std::sync::Mutex;
-    pub use std::{fs, io};
+    pub use std::time::SystemTime;
+    pub use std::{fs, io, path::Path};
+    pub use std::{fs::File, io::Read};
     pub use syn::__private::ToTokens;
 }
 #[cfg(feature = "hot_reload")]
@@ -31,7 +33,7 @@ use hot_reload_improts::*;
 struct WsReloadState {
     update: broadcast::Sender<String>,
     #[cfg(feature = "hot_reload")]
-    last_file_rebuild: Arc<Mutex<HashMap<String, String>>>,
+    last_file_rebuild: Arc<Mutex<FileMap>>,
     watcher_config: CrateConfig,
 }
 
@@ -39,6 +41,47 @@ struct WsReloadState {
 struct HotReloadState {
     messages: broadcast::Sender<SetRsxMessage>,
     update: broadcast::Sender<String>,
+    last_file_rebuild: Arc<Mutex<FileMap>>,
+    watcher_config: CrateConfig,
+}
+
+#[cfg(feature = "hot_reload")]
+struct FileMap {
+    map: HashMap<PathBuf, String>,
+    last_updated_time: std::time::SystemTime,
+}
+
+#[cfg(feature = "hot_reload")]
+impl FileMap {
+    fn new(path: PathBuf) -> Self {
+        fn find_rs_files(root: PathBuf) -> io::Result<HashMap<PathBuf, String>> {
+            let mut files = HashMap::new();
+            if root.is_dir() {
+                let mut handles = Vec::new();
+                for entry in fs::read_dir(root)? {
+                    if let Ok(entry) = entry {
+                        let path = entry.path();
+                        handles.push(std::thread::spawn(move || find_rs_files(path)));
+                    }
+                }
+                for handle in handles {
+                    files.extend(handle.join().unwrap()?);
+                }
+            } else {
+                if root.extension().map(|s| s.to_str()).flatten() == Some("rs") {
+                    let mut file = File::open(root.clone()).unwrap();
+                    let mut src = String::new();
+                    file.read_to_string(&mut src).expect("Unable to read file");
+                    files.insert(root, src);
+                }
+            }
+            Ok(files)
+        }
+        Self {
+            last_updated_time: SystemTime::now(),
+            map: find_rs_files(path).unwrap(),
+        }
+    }
 }
 
 pub async fn startup(config: CrateConfig) -> Result<()> {
@@ -49,15 +92,15 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     let (reload_tx, _) = broadcast::channel(100);
 
     #[cfg(feature = "hot_reload")]
-    let last_file_rebuild = Arc::new(Mutex::new(HashMap::new()));
-    #[cfg(feature = "hot_reload")]
-    find_rs_files(&config.crate_dir, &mut *last_file_rebuild.lock().unwrap()).unwrap();
+    let last_file_rebuild = Arc::new(Mutex::new(FileMap::new(config.crate_dir.clone())));
     #[cfg(feature = "hot_reload")]
     let hot_reload_tx = broadcast::channel(100).0;
     #[cfg(feature = "hot_reload")]
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
         update: reload_tx.clone(),
+        last_file_rebuild: last_file_rebuild.clone(),
+        watcher_config: config.clone(),
     });
     #[cfg(feature = "hot_reload")]
     let crate_dir = config.crate_dir.clone();
@@ -83,18 +126,21 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
         if let Ok(evt) = evt {
             if let notify::EventKind::Modify(_) = evt.kind {
-                for path in evt.paths {
-                    let mut file = File::open(path.clone()).unwrap();
-                    let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
-                    if src.is_empty() {
-                        continue;
-                    }
-                    #[cfg(feature = "hot_reload")]
-                    {
+                #[cfg(feature = "hot_reload")]
+                {
+                    for path in evt.paths {
+                        let mut file = File::open(path.clone()).unwrap();
+                        if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
+                            continue;
+                        }
+                        let mut src = String::new();
+                        file.read_to_string(&mut src).expect("Unable to read file");
+                        if src.is_empty() {
+                            continue;
+                        }
                         if let Ok(syntax) = syn::parse_file(&src) {
                             let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
-                            if let Some(old_str) = last_file_rebuild.get(path.to_str().unwrap()) {
+                            if let Some(old_str) = last_file_rebuild.map.get(&path) {
                                 if let Ok(old) = syn::parse_file(&old_str) {
                                     match find_rsx(&syntax, &old) {
                                         DiffResult::CodeChanged => {
@@ -107,28 +153,13 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                                         DiffResult::RsxChanged(changed) => {
                                             log::info!("reloading rsx");
                                             for (old, new) in changed.into_iter() {
-                                                if let Some(hr) = old
-                                                    .to_token_stream()
-                                                    .into_iter()
-                                                    .map(|tree| {
-                                                        let location = tree.span();
-                                                        let start = location.start();
-                                                        CodeLocation {
-                                                            file: path
-                                                                .strip_prefix(&crate_dir)
-                                                                .unwrap()
-                                                                .display()
-                                                                .to_string(),
-                                                            line: start.line as u32,
-                                                            column: start.column as u32 + 1,
-                                                        }
-                                                    })
-                                                    .min_by(|cl1, cl2| {
-                                                        cl1.line
-                                                            .cmp(&cl2.line)
-                                                            .then(cl1.column.cmp(&cl2.column))
-                                                    })
-                                                {
+                                                if let Some(hr) = get_min_location(
+                                                    &path
+                                                        .strip_prefix(&crate_dir)
+                                                        .unwrap()
+                                                        .to_path_buf(),
+                                                    old.to_token_stream(),
+                                                ) {
                                                     let rsx = new.to_string();
                                                     let _ = hot_reload_tx.send(SetRsxMessage {
                                                         location: hr,
@@ -140,17 +171,17 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
                                     }
                                 }
                             } else {
-                                last_file_rebuild.insert(path.to_str().unwrap().to_string(), src);
+                                *last_file_rebuild = FileMap::new(crate_dir.clone());
                             }
                         }
                     }
-                    #[cfg(not(feature = "hot_reload"))]
-                    {
-                        log::info!("reload required");
-                        if chrono::Local::now().timestamp() > last_update_time {
-                            let _ = reload_tx.send("reload".into());
-                            last_update_time = chrono::Local::now().timestamp();
-                        }
+                }
+                #[cfg(not(feature = "hot_reload"))]
+                {
+                    log::info!("reload required");
+                    if chrono::Local::now().timestamp() > last_update_time {
+                        let _ = reload_tx.send("reload".into());
+                        last_update_time = chrono::Local::now().timestamp();
                     }
                 }
             }
@@ -262,8 +293,7 @@ async fn ws_handler(
                         #[cfg(feature = "hot_reload")]
                         {
                             let mut write = state.last_file_rebuild.lock().unwrap();
-                            *write = HashMap::new();
-                            find_rs_files(&state.watcher_config.crate_dir, &mut *write).unwrap();
+                            *write = FileMap::new(state.watcher_config.crate_dir.clone());
                         }
                     }
                     // ignore the error
@@ -290,6 +320,59 @@ async fn hot_reload_handler(
 ) -> impl IntoResponse {
     ws.on_upgrade(|mut socket| async move {
         log::info!("🔥 Hot Reload WebSocket connected");
+        {
+            log::info!("Searching files for changes since last run...");
+            // update any files that changed before the websocket connected.
+            let mut messages = Vec::new();
+
+            {
+                let handle = state.last_file_rebuild.lock().unwrap();
+                let update_time = handle.last_updated_time.clone();
+                for (k, v) in handle.map.iter() {
+                    let mut file = File::open(k).unwrap();
+                    if let Ok(md) = file.metadata() {
+                        if let Ok(time) = md.modified() {
+                            if time < update_time {
+                                continue;
+                            }
+                        }
+                    }
+                    let mut new = String::new();
+                    file.read_to_string(&mut new).expect("Unable to read file");
+                    if let Ok(new) = syn::parse_file(&new) {
+                        if let Ok(old) = syn::parse_file(&v) {
+                            if let DiffResult::RsxChanged(changed) = find_rsx(&new, &old) {
+                                for (old, new) in changed.into_iter() {
+                                    if let Some(hr) = get_min_location(
+                                        k.strip_prefix(&state.watcher_config.crate_dir).unwrap(),
+                                        old.to_token_stream(),
+                                    ) {
+                                        let rsx = new.to_string();
+                                        let msg = SetRsxMessage {
+                                            location: hr,
+                                            new_text: rsx,
+                                        };
+                                        messages.push(msg);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for msg in &messages {
+                if socket
+                    .send(Message::Text(serde_json::to_string(msg).unwrap()))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            log::info!("Updated page");
+        }
+
         let mut rx = state.messages.subscribe();
         let hot_reload_handle = tokio::spawn(async move {
             loop {
@@ -329,21 +412,16 @@ async fn hot_reload_handler(
 }
 
 #[cfg(feature = "hot_reload")]
-fn find_rs_files(root: &PathBuf, files: &mut HashMap<String, String>) -> io::Result<()> {
-    for entry in fs::read_dir(root)? {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.is_dir() {
-                find_rs_files(&path, files)?;
-            } else {
-                if path.extension().map(|s| s.to_str()).flatten() == Some("rs") {
-                    let mut file = File::open(path.clone()).unwrap();
-                    let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
-                    files.insert(path.display().to_string(), src);
-                }
+fn get_min_location(path: &Path, ts: TokenStream) -> Option<CodeLocation> {
+    ts.into_iter()
+        .map(|tree| {
+            let location = tree.span();
+            let start = location.start();
+            CodeLocation {
+                file: path.display().to_string(),
+                line: start.line as u32,
+                column: start.column as u32 + 1,
             }
-        }
-    }
-    Ok(())
+        })
+        .min_by(|cl1, cl2| cl1.line.cmp(&cl2.line).then(cl1.column.cmp(&cl2.column)))
 }
