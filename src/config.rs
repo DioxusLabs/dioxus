@@ -114,6 +114,7 @@ pub struct CrateConfig {
     pub executable: ExecutableType,
     pub dioxus_config: DioxusConfig,
     pub release: bool,
+    pub hot_reload: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +163,7 @@ impl CrateConfig {
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;
+        let hot_reload = false;
 
         Ok(Self {
             out_dir,
@@ -173,6 +175,7 @@ impl CrateConfig {
             executable,
             release,
             dioxus_config,
+            hot_reload,
         })
     }
 
@@ -183,6 +186,11 @@ impl CrateConfig {
 
     pub fn with_release(&mut self, release: bool) -> &mut Self {
         self.release = release;
+        self
+    }
+
+    pub fn with_hot_reload(&mut self, hot_reload: bool) -> &mut Self {
+        self.hot_reload = hot_reload;
         self
     }
 

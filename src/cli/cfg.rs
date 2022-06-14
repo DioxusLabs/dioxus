@@ -39,6 +39,11 @@ pub struct ConfigOptsServe {
     /// Build platform: support Web & Desktop [default: "default_platform"]
     #[clap(long)]
     pub platform: Option<String>,
+
+    /// Build with hot reloading rsx [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub hot_reload: bool,
 }
 
 /// Ensure the given value for `--public-url` is formatted correctly.

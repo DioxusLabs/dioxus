@@ -15,20 +15,24 @@ use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 use crate::{builder, serve::Serve, CrateConfig, Result};
 use tokio::sync::broadcast;
 
-#[cfg(feature = "hot_reload")]
 mod hot_reload;
-#[cfg(feature = "hot_reload")]
 use hot_reload::*;
 
 struct WsReloadState {
     update: broadcast::Sender<String>,
-    #[cfg(feature = "hot_reload")]
-    last_file_rebuild: Arc<Mutex<FileMap>>,
+    last_file_rebuild: Option<Arc<Mutex<FileMap>>>,
     watcher_config: CrateConfig,
 }
 
-#[cfg(feature = "hot_reload")]
 pub async fn startup(config: CrateConfig) -> Result<()> {
+    if config.hot_reload {
+        startup_hot_reload(config).await
+    } else {
+        startup_default(config).await
+    }
+}
+
+pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -46,7 +50,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
 
-        last_file_rebuild: last_file_rebuild.clone(),
+        last_file_rebuild: Some(last_file_rebuild.clone()),
         watcher_config: config.clone(),
     });
 
@@ -186,8 +190,7 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(feature = "hot_reload"))]
-pub async fn startup(config: CrateConfig) -> Result<()> {
+pub async fn startup_default(config: CrateConfig) -> Result<()> {
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -196,6 +199,8 @@ pub async fn startup(config: CrateConfig) -> Result<()> {
 
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
+
+        last_file_rebuild: None,
         watcher_config: config.clone(),
     });
 
@@ -313,9 +318,8 @@ async fn ws_handler(
                         {
                             let _ = Serve::regen_dev_page(&state.watcher_config);
                         }
-                        #[cfg(feature = "hot_reload")]
-                        {
-                            let mut write = state.last_file_rebuild.lock().unwrap();
+                        if let Some(file_map) = &state.last_file_rebuild {
+                            let mut write = file_map.lock().unwrap();
                             *write = FileMap::new(state.watcher_config.crate_dir.clone());
                         }
                     }

@@ -18,7 +18,9 @@ impl Serve {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
-        crate_config.with_release(self.serve.release);
+        crate_config
+            .with_release(self.serve.release)
+            .with_hot_reload(self.serve.hot_reload);
 
         if self.serve.example.is_some() {
             crate_config.as_example(self.serve.example.unwrap());
