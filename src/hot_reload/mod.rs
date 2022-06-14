@@ -426,9 +426,7 @@ fn find_rsx_expr(
                 && old_mac.path.get_ident().map(|ident| ident.to_string())
                     == Some("rsx".to_string())
             {
-                if old_mac != new_mac {
-                    rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
-                }
+                rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
                 false
             } else {
                 new_expr != old_expr
