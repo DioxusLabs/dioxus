@@ -2,7 +2,7 @@
 name = "dioxus-cli"
 version = "0.1.4"
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
 license = "MIT/Apache-2.0"
 
