@@ -31,6 +31,12 @@ pub struct CodeLocation {
 }
 
 /// Get the resolved rsx given the origional rsx, a captured context of dynamic components, and a factory to build the resulting node
+#[cfg_attr(
+    not(debug_assertions),
+    deprecated(
+        note = "The hot reload feature is enabled in release mode. This feature should be disabled for production builds."
+    )
+)]
 pub fn resolve_scope<'a>(
     location: CodeLocation,
     rsx: &'static str,
