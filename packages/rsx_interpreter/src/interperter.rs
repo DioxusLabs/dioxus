@@ -103,7 +103,7 @@ fn build_node<'a>(
                             });
                         } else {
                             return Err(Error::ParseError(ParseError::new(
-                                syn::Error::new(span, "unknown attribute"),
+                                syn::Error::new(span, format!("unknown attribute: {}", name)),
                                 ctx.location.clone(),
                             )));
                         }
@@ -207,7 +207,7 @@ fn build_node<'a>(
                 }
             } else {
                 Err(Error::ParseError(ParseError::new(
-                    syn::Error::new(el.name.span(), "unknown element"),
+                    syn::Error::new(el.name.span(), format!("unknown element: {}", tag)),
                     ctx.location.clone(),
                 )))
             }
