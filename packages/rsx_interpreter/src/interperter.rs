@@ -7,7 +7,7 @@ use syn::{parse2, parse_str, Expr};
 use crate::attributes::attrbute_to_static_str;
 use crate::captuered_context::{CapturedContext, IfmtArgs};
 use crate::elements::element_to_static_str;
-use crate::error::{Error, RecompileReason};
+use crate::error::{Error, ParseError, RecompileReason};
 
 fn resolve_ifmt(ifmt: &IfmtInput, captured: &IfmtArgs) -> Result<String, Error> {
     let mut result = String::new();
@@ -64,7 +64,8 @@ fn build_node<'a>(
     let bump = factory.bump();
     match node {
         BodyNode::Text(text) => {
-            let ifmt = IfmtInput::from_str(&text.value()).map_err(|err| Error::ParseError(err))?;
+            let ifmt = IfmtInput::from_str(&text.value())
+                .map_err(|err| Error::ParseError(ParseError::new(err, ctx.location.clone())))?;
             let text = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
             Ok(factory.text(format_args!("{}", text)))
         }
@@ -76,14 +77,16 @@ fn build_node<'a>(
                         let (name, value, span): (String, IfmtInput, Span) = match &attr.attr {
                             ElementAttr::AttrText { name, value } => (
                                 name.to_string(),
-                                IfmtInput::from_str(&value.value())
-                                    .map_err(|err| Error::ParseError(err))?,
+                                IfmtInput::from_str(&value.value()).map_err(|err| {
+                                    Error::ParseError(ParseError::new(err, ctx.location.clone()))
+                                })?,
                                 name.span(),
                             ),
                             ElementAttr::CustomAttrText { name, value } => (
                                 name.value(),
-                                IfmtInput::from_str(&value.value())
-                                    .map_err(|err| Error::ParseError(err))?,
+                                IfmtInput::from_str(&value.value()).map_err(|err| {
+                                    Error::ParseError(ParseError::new(err, ctx.location.clone()))
+                                })?,
                                 name.span(),
                             ),
                             _ => unreachable!(),
@@ -99,9 +102,9 @@ fn build_node<'a>(
                                 namespace,
                             });
                         } else {
-                            return Err(Error::ParseError(syn::Error::new(
-                                span,
-                                "unknown attribute",
+                            return Err(Error::ParseError(ParseError::new(
+                                syn::Error::new(span, "unknown attribute"),
+                                ctx.location.clone(),
                             )));
                         }
                     }
@@ -152,8 +155,9 @@ fn build_node<'a>(
             for attr in el.attributes {
                 match attr.attr {
                     ElementAttr::EventTokens { .. } => {
-                        let expr: Expr =
-                            parse2(attr.to_token_stream()).map_err(|err| Error::ParseError(err))?;
+                        let expr: Expr = parse2(attr.to_token_stream()).map_err(|err| {
+                            Error::ParseError(ParseError::new(err, ctx.location.clone()))
+                        })?;
                         if let Some(idx) = ctx.listeners.iter().position(|(code, _)| {
                             if let Ok(parsed) = parse_str::<Expr>(*code) {
                                 parsed == expr
@@ -186,8 +190,9 @@ fn build_node<'a>(
                         None,
                     )),
                     Some(lit) => {
-                        let ifmt: IfmtInput =
-                            parse_str(&lit.value()).map_err(|err| Error::ParseError(err))?;
+                        let ifmt: IfmtInput = parse_str(&lit.value()).map_err(|err| {
+                            Error::ParseError(ParseError::new(err, ctx.location.clone()))
+                        })?;
                         let key = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
 
                         Ok(factory.raw_element(
@@ -201,15 +206,15 @@ fn build_node<'a>(
                     }
                 }
             } else {
-                Err(Error::ParseError(syn::Error::new(
-                    el.name.span(),
-                    "unknown element",
+                Err(Error::ParseError(ParseError::new(
+                    syn::Error::new(el.name.span(), "unknown element"),
+                    ctx.location.clone(),
                 )))
             }
         }
         BodyNode::Component(comp) => {
-            let expr: Expr =
-                parse2(comp.to_token_stream()).map_err(|err| Error::ParseError(err))?;
+            let expr: Expr = parse2(comp.to_token_stream())
+                .map_err(|err| Error::ParseError(ParseError::new(err, ctx.location.clone())))?;
             if let Some(idx) = ctx.components.iter().position(|(code, _)| {
                 if let Ok(parsed) = parse_str::<Expr>(*code) {
                     parsed == expr

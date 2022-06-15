@@ -192,11 +192,11 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                     Ok(captured) => {
                         let lazy = quote::quote! {
                             LazyNodes::new(move |__cx|{
+                                let code_location = get_line_num();
                                 let captured = #captured;
-                                let line_num = get_line_num();
                                 let text = #rsx_text;
 
-                                resolve_scope(line_num, text, captured, __cx)
+                                resolve_scope(code_location, text, captured, __cx)
                             })
                         };
                         if let Some(cx) = captured.custom_context {

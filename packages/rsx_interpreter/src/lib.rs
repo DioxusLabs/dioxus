@@ -1,7 +1,7 @@
 use captuered_context::CapturedContext;
 use dioxus_core::{NodeFactory, SchedulerMsg, VNode};
 use dioxus_hooks::UnboundedSender;
-use error::Error;
+use error::{Error, ParseError};
 use interperter::build;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -71,7 +71,8 @@ fn interpert_rsx<'a, 'b>(
     context: captuered_context::CapturedContext<'a>,
 ) -> Result<VNode<'a>, Error> {
     build(
-        parse_str(text).map_err(|err| Error::ParseError(err))?,
+        parse_str(text)
+            .map_err(|err| Error::ParseError(ParseError::new(err, context.location.clone())))?,
         context,
         &factory,
     )

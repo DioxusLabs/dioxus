@@ -4,6 +4,8 @@ use dioxus_rsx::{
 };
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Expr, Ident, Result};
+
+use crate::CodeLocation;
 #[derive(Default)]
 pub struct CapturedContextBuilder {
     pub ifmted: Vec<IfmtInput>,
@@ -137,6 +139,7 @@ impl ToTokens for CapturedContextBuilder {
                 iterators: vec![#((#iterators_str, #iterators)),*],
                 expressions: vec![#((#captured_attr_expressions_text, #captured_expressions.to_string())),*],
                 listeners: vec![#((#listeners_str, #listeners)),*],
+                location: code_location.clone()
             }
         })
     }
@@ -155,6 +158,8 @@ pub struct CapturedContext<'a> {
     pub expressions: Vec<(&'static str, String)>,
     // map listener code to the resulting listener
     pub listeners: Vec<(&'static str, Listener<'a>)>,
+    // used to provide better error messages
+    pub location: CodeLocation,
 }
 
 pub struct IfmtArgs {
