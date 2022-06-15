@@ -86,22 +86,36 @@ pub async fn hot_reload_handler(
                             }
                         }
                     }
-                    let mut new = String::new();
-                    file.read_to_string(&mut new).expect("Unable to read file");
-                    if let Ok(new) = syn::parse_file(&new) {
-                        if let Ok(old) = syn::parse_file(&v) {
-                            if let DiffResult::RsxChanged(changed) = find_rsx(&new, &old) {
+                    let mut new_str = String::new();
+                    file.read_to_string(&mut new_str).expect("Unable to read file");
+                    if let Ok(new_file) = syn::parse_file(&new_str) {
+                        if let Ok(old_file) = syn::parse_file(&v) {
+                            if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file) {
                                 for (old, new) in changed.into_iter() {
                                     let hr = get_location(
                                         k.strip_prefix(&state.watcher_config.crate_dir).unwrap(),
                                         old.to_token_stream(),
                                     );
-                                    let rsx = new.to_string();
-                                    let msg = SetRsxMessage {
+                                    // get the original source code to preserve whitespace
+                                    let span = new.span();
+                                    let start = span.start();
+                                    let end = span.end();
+                                    let mut lines: Vec<_> = new_str
+                                        .lines()
+                                        .skip(start.line - 1)
+                                        .take(end.line - start.line + 1)
+                                        .collect();
+                                    if let Some(first) = lines.first_mut() {
+                                        *first = first.split_at(start.column).1;
+                                    }
+                                    if let Some(last) = lines.last_mut() {
+                                        *last = last.split_at(end.column).0;
+                                    }
+                                    let rsx = lines.join("\n");
+                                    messages.push(SetRsxMessage {
                                         location: hr,
                                         new_text: rsx,
-                                    };
-                                    messages.push(msg);
+                                    });
                                 }
                             }
                         }
@@ -131,9 +145,16 @@ pub async fn hot_reload_handler(
                         if let Some(Ok(err)) = err {
                             if let Message::Text(err) = err {
                                 let error: Error = serde_json::from_str(&err).unwrap();
-                                log::error!("{:?}", error);
-                                if state.update.send("reload".to_string()).is_err() {
-                                    break;
+                                match error{
+                                    Error::ParseError(parse_error) => {
+                                        log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file, parse_error.location.line, parse_error.location.column, parse_error.message);
+                                    },
+                                    Error::RecompileRequiredError(reason) => {
+                                        log::info!("{:?}", reason);
+                                        if state.update.send("reload".to_string()).is_err() {
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         } else {
