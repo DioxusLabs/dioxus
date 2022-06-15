@@ -15,6 +15,7 @@ pub use std::time::SystemTime;
 pub use std::{fs, io, path::Path};
 pub use std::{fs::File, io::Read};
 pub use syn::__private::ToTokens;
+use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
 pub struct HotReloadState {
@@ -91,17 +92,16 @@ pub async fn hot_reload_handler(
                         if let Ok(old) = syn::parse_file(&v) {
                             if let DiffResult::RsxChanged(changed) = find_rsx(&new, &old) {
                                 for (old, new) in changed.into_iter() {
-                                    if let Some(hr) = get_min_location(
+                                    let hr = get_location(
                                         k.strip_prefix(&state.watcher_config.crate_dir).unwrap(),
                                         old.to_token_stream(),
-                                    ) {
-                                        let rsx = new.to_string();
-                                        let msg = SetRsxMessage {
-                                            location: hr,
-                                            new_text: rsx,
-                                        };
-                                        messages.push(msg);
-                                    }
+                                    );
+                                    let rsx = new.to_string();
+                                    let msg = SetRsxMessage {
+                                        location: hr,
+                                        new_text: rsx,
+                                    };
+                                    messages.push(msg);
                                 }
                             }
                         }
@@ -159,16 +159,11 @@ pub async fn hot_reload_handler(
     })
 }
 
-pub fn get_min_location(path: &Path, ts: TokenStream) -> Option<CodeLocation> {
-    ts.into_iter()
-        .map(|tree| {
-            let location = tree.span();
-            let start = location.start();
-            CodeLocation {
-                file: path.display().to_string(),
-                line: start.line as u32,
-                column: start.column as u32 + 1,
-            }
-        })
-        .min_by(|cl1, cl2| cl1.line.cmp(&cl2.line).then(cl1.column.cmp(&cl2.column)))
+pub fn get_location(path: &Path, ts: TokenStream) -> CodeLocation {
+    let span = ts.span().start();
+    CodeLocation {
+        file: path.display().to_string(),
+        line: span.line as u32,
+        column: span.column as u32 + 1,
+    }
 }

@@ -7,6 +7,7 @@ use axum::{
     Router,
 };
 use notify::{RecommendedWatcher, Watcher};
+use syn::spanned::Spanned;
 
 use std::{path::PathBuf, sync::Arc};
 use tower::ServiceBuilder;
@@ -93,16 +94,30 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                                 DiffResult::RsxChanged(changed) => {
                                     log::info!("reloading rsx");
                                     for (old, new) in changed.into_iter() {
-                                        if let Some(hr) = get_min_location(
+                                        let hr = get_location(
                                             &path.strip_prefix(&crate_dir).unwrap().to_path_buf(),
                                             old.to_token_stream(),
-                                        ) {
-                                            let rsx = new.to_string();
-                                            let _ = hot_reload_tx.send(SetRsxMessage {
-                                                location: hr,
-                                                new_text: rsx,
-                                            });
+                                        );
+                                        // get the original source code to preserve whitespace
+                                        let span = new.span();
+                                        let start = span.start();
+                                        let end = span.end();
+                                        let mut lines: Vec<_> = src
+                                            .lines()
+                                            .skip(start.line - 1)
+                                            .take(end.line - start.line + 1)
+                                            .collect();
+                                        if let Some(first) = lines.first_mut() {
+                                            *first = first.split_at(start.column).1;
                                         }
+                                        if let Some(last) = lines.last_mut() {
+                                            *last = last.split_at(end.column).0;
+                                        }
+                                        let rsx = lines.join("\n");
+                                        let _ = hot_reload_tx.send(SetRsxMessage {
+                                            location: hr,
+                                            new_text: rsx,
+                                        });
                                     }
                                 }
                             }
