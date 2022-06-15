@@ -28,12 +28,12 @@ impl ParseError {
         let message = error.to_string();
         let syn_call_site = error.span().start();
         location.line += syn_call_site.line as u32;
-        if syn_call_site.line == 0{
+        if syn_call_site.line == 0 {
             location.column += syn_call_site.column as u32;
-        }
-        else{
+        } else {
             location.column = syn_call_site.column as u32;
         }
+        location.column += 1;
         ParseError { message, location }
     }
 }
