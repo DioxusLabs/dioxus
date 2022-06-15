@@ -7,7 +7,7 @@ use std::{path::PathBuf, sync::Arc};
 
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
-pub use dioxus_rsx_interpreter::{error::RecompileReason, CodeLocation, SetRsxMessage};
+pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetRsxMessage};
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
@@ -130,7 +130,7 @@ pub async fn hot_reload_handler(
                     err = read_err => {
                         if let Some(Ok(err)) = err {
                             if let Message::Text(err) = err {
-                                let error: RecompileReason = serde_json::from_str(&err).unwrap();
+                                let error: Error = serde_json::from_str(&err).unwrap();
                                 log::error!("{:?}", error);
                                 if state.update.send("reload".to_string()).is_err() {
                                     break;
