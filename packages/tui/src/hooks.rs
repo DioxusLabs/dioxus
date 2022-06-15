@@ -297,16 +297,16 @@ impl InnerInputState {
                 if old_pos != Some(new_pos) {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("mousemove") {
-                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                        let node_layout = get_abs_layout(node, dom, layout);
                         let previously_contained = old_pos
-                            .filter(|pos| layout_contains_point(node_layout, *pos))
+                            .filter(|pos| layout_contains_point(&node_layout, *pos))
                             .is_some();
-                        let currently_contains = layout_contains_point(node_layout, new_pos);
+                        let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains && previously_contained {
                             try_create_event(
                                 "mousemove",
-                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -321,11 +321,11 @@ impl InnerInputState {
                 // mouseenter
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseenter") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let node_layout = get_abs_layout(node, dom, layout);
                     let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                    let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if currently_contains && !previously_contained {
                         try_create_event(
@@ -344,16 +344,16 @@ impl InnerInputState {
                 // mouseover
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseover") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let node_layout = get_abs_layout(node, dom, layout);
                     let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                    let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if currently_contains && !previously_contained {
                         try_create_event(
                             "mouseover",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                            Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -367,13 +367,13 @@ impl InnerInputState {
             if was_pressed {
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mousedown") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                    let node_layout = get_abs_layout(node, dom, layout);
+                    let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if currently_contains {
                         try_create_event(
                             "mousedown",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                            Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -388,13 +388,13 @@ impl InnerInputState {
                 if was_released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("mouseup") {
-                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                        let currently_contains = layout_contains_point(node_layout, new_pos);
+                        let node_layout = get_abs_layout(node, dom, layout);
+                        let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
                             try_create_event(
                                 "mouseup",
-                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -410,13 +410,13 @@ impl InnerInputState {
                 if mouse_data.trigger_button() == Some(DioxusMouseButton::Primary) && was_released {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("click") {
-                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                        let currently_contains = layout_contains_point(node_layout, new_pos);
+                        let node_layout = get_abs_layout(node, dom, layout);
+                        let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
                             try_create_event(
                                 "click",
-                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -433,13 +433,13 @@ impl InnerInputState {
                 {
                     let mut will_bubble = FxHashSet::default();
                     for node in dom.get_listening_sorted("contextmenu") {
-                        let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
-                        let currently_contains = layout_contains_point(node_layout, new_pos);
+                        let node_layout = get_abs_layout(node, dom, layout);
+                        let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                         if currently_contains {
                             try_create_event(
                                 "contextmenu",
-                                Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                                Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                                 &mut will_bubble,
                                 resolved_events,
                                 node,
@@ -456,9 +456,9 @@ impl InnerInputState {
                     if wheel_delta != 0.0 {
                         let mut will_bubble = FxHashSet::default();
                         for node in dom.get_listening_sorted("wheel") {
-                            let node_layout =
-                                layout.layout(node.state.layout.node.unwrap()).unwrap();
-                            let currently_contains = layout_contains_point(node_layout, new_pos);
+                            let node_layout = get_abs_layout(node, dom, layout);
+
+                            let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                             if currently_contains {
                                 try_create_event(
@@ -479,16 +479,16 @@ impl InnerInputState {
                 // mouseleave
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseleave") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let node_layout = get_abs_layout(node, dom, layout);
                     let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                    let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseleave",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                            Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -502,16 +502,16 @@ impl InnerInputState {
                 // mouseout
                 let mut will_bubble = FxHashSet::default();
                 for node in dom.get_listening_sorted("mouseout") {
-                    let node_layout = layout.layout(node.state.layout.node.unwrap()).unwrap();
+                    let node_layout = get_abs_layout(node, dom, layout);
                     let previously_contained = old_pos
-                        .filter(|pos| layout_contains_point(node_layout, *pos))
+                        .filter(|pos| layout_contains_point(&node_layout, *pos))
                         .is_some();
-                    let currently_contains = layout_contains_point(node_layout, new_pos);
+                    let currently_contains = layout_contains_point(&node_layout, new_pos);
 
                     if !currently_contains && previously_contained {
                         try_create_event(
                             "mouseout",
-                            Arc::new(prepare_mouse_data(mouse_data, node_layout)),
+                            Arc::new(prepare_mouse_data(mouse_data, &node_layout)),
                             &mut will_bubble,
                             resolved_events,
                             node,
@@ -542,6 +542,22 @@ impl InnerInputState {
     // fn subscribe(&mut self, f: Rc<dyn Fn() + 'static>) {
     //     self.subscribers.push(f)
     // }
+}
+
+fn get_abs_layout(node: &Node, dom: &Dom, taffy: &Taffy) -> Layout {
+    let mut node_layout = taffy
+        .layout(node.state.layout.node.unwrap())
+        .unwrap()
+        .clone();
+    let mut current = node;
+    while let Some(parent_id) = current.parent {
+        let parent = &dom[parent_id];
+        current = parent;
+        let parent_layout = taffy.layout(parent.state.layout.node.unwrap()).unwrap();
+        node_layout.location.x += parent_layout.location.x;
+        node_layout.location.y += parent_layout.location.y;
+    }
+    node_layout
 }
 
 pub struct RinkInputHandler {
