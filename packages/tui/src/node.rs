@@ -11,7 +11,6 @@ pub(crate) type Node = dioxus_native_core::real_dom::Node<NodeState>;
 pub(crate) struct NodeState {
     #[child_dep_state(layout, RefCell<Stretch>)]
     pub layout: TaffyLayout,
-    // depends on attributes, the C component of it's parent and a u8 context
     #[parent_dep_state(style)]
     pub style: StyleModifier,
     #[node_dep_state()]
