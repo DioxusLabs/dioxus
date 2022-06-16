@@ -78,7 +78,7 @@ pub async fn hot_reload_handler(
             let mut messages = Vec::new();
 
             {
-                println!("Finding updates since last reload...");
+                log::info!("Finding updates since last compile...");
                 let handle = state.last_file_rebuild.lock().unwrap();
                 let update_time = handle.last_updated_time.clone();
                 for (k, v) in handle.map.iter() {
@@ -125,7 +125,7 @@ pub async fn hot_reload_handler(
                         }
                     }
                 }
-                println!("finished");
+                log::info!("finished");
             }
 
             let msg = SetManyRsxMessage(messages);
