@@ -6,6 +6,7 @@ use dioxus_rsx_interpreter::SetRsxMessage;
 
 use std::{path::PathBuf, sync::Arc};
 
+use super::BuildManager;
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
 pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetManyRsxMessage};
@@ -21,7 +22,7 @@ use tokio::sync::broadcast;
 
 pub struct HotReloadState {
     pub messages: broadcast::Sender<SetManyRsxMessage>,
-    pub update: broadcast::Sender<String>,
+    pub build_manager: Arc<BuildManager>,
     pub last_file_rebuild: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
 }
@@ -63,48 +64,6 @@ impl FileMap {
         log::info!("Files updated");
         result
     }
-
-    pub fn update(&mut self, path: PathBuf) {
-        log::info!("Updating files that changed since last compile...");
-        self.last_updated_time = SystemTime::now();
-        self.update_inner(path);
-        log::info!("Files updated");
-    }
-
-    fn update_inner(&mut self, path: PathBuf) {
-        if path.is_dir() {
-            if let Ok(files) = fs::read_dir(path) {
-                for entry in files {
-                    if let Ok(entry) = entry {
-                        if let Ok(md) = entry.metadata() {
-                            if let Ok(time) = md.modified() {
-                                if time < self.last_updated_time {
-                                    return;
-                                }
-                            }
-                        }
-                        let path = entry.path();
-                        self.update(path);
-                    }
-                }
-            }
-        } else {
-            if path.extension().map(|s| s.to_str()).flatten() == Some("rs") {
-                if let Ok(mut file) = File::open(path.clone()) {
-                    if let Ok(md) = file.metadata() {
-                        if let Ok(time) = md.modified() {
-                            if time < self.last_updated_time {
-                                return;
-                            }
-                        }
-                    }
-                    let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
-                    self.map.insert(path, src);
-                }
-            }
-        }
-    }
 }
 
 pub async fn hot_reload_handler(
@@ -115,10 +74,11 @@ pub async fn hot_reload_handler(
     ws.on_upgrade(|mut socket| async move {
         log::info!("🔥 Hot Reload WebSocket connected");
         {
-            // update any files that changed before the websocket connected.
+            // update any rsx calls that changed before the websocket connected.
             let mut messages = Vec::new();
 
             {
+                println!("Finding updates since last reload...");
                 let handle = state.last_file_rebuild.lock().unwrap();
                 let update_time = handle.last_updated_time.clone();
                 for (k, v) in handle.map.iter() {
@@ -165,6 +125,7 @@ pub async fn hot_reload_handler(
                         }
                     }
                 }
+                println!("finished");
             }
 
             let msg = SetManyRsxMessage(messages);
@@ -192,8 +153,8 @@ pub async fn hot_reload_handler(
                                         log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file, parse_error.location.line, parse_error.location.column, parse_error.message);
                                     },
                                     Error::RecompileRequiredError(_) => {
-                                        if state.update.send("reload".to_string()).is_err() {
-                                            break;
+                                        if let Err(err) = state.build_manager.build(){
+                                            log::error!("{}", err);
                                         }
                                     }
                                 }

@@ -20,18 +20,43 @@ use tokio::sync::broadcast;
 mod hot_reload;
 use hot_reload::*;
 
+pub struct BuildManager {
+    config: CrateConfig,
+    reload_tx: broadcast::Sender<()>,
+}
+
+impl BuildManager {
+    fn build(&self) -> Result<()> {
+        log::info!("Start to rebuild project...");
+        builder::build(&self.config)?;
+        // change the websocket reload state to true;
+        // the page will auto-reload.
+        if self
+            .config
+            .dioxus_config
+            .web
+            .watcher
+            .reload_html
+            .unwrap_or(false)
+        {
+            let _ = Serve::regen_dev_page(&self.config);
+        }
+        let _ = self.reload_tx.send(());
+        Ok(())
+    }
+}
+
 struct WsReloadState {
-    update: broadcast::Sender<String>,
-    last_file_rebuild: Option<Arc<Mutex<FileMap>>>,
-    watcher_config: CrateConfig,
+    update: broadcast::Sender<()>,
 }
 
 pub async fn startup(config: CrateConfig) -> Result<()> {
     if config.hot_reload {
-        startup_hot_reload(config).await
+        startup_hot_reload(config).await?
     } else {
-        startup_default(config).await
+        startup_default(config).await?
     }
+    Ok(())
 }
 
 pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
@@ -40,10 +65,14 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
     let last_file_rebuild = Arc::new(Mutex::new(FileMap::new(config.crate_dir.clone())));
+    let build_manager = Arc::new(BuildManager {
+        config: config.clone(),
+        reload_tx: reload_tx.clone(),
+    });
     let hot_reload_tx = broadcast::channel(100).0;
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
-        update: reload_tx.clone(),
+        build_manager: build_manager.clone(),
         last_file_rebuild: last_file_rebuild.clone(),
         watcher_config: config.clone(),
     });
@@ -51,9 +80,6 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
     let crate_dir = config.crate_dir.clone();
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
-
-        last_file_rebuild: Some(last_file_rebuild.clone()),
-        watcher_config: config.clone(),
     });
 
     let mut last_update_time = chrono::Local::now().timestamp();
@@ -71,6 +97,7 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
         if chrono::Local::now().timestamp() > last_update_time {
             if let Ok(evt) = evt {
                 let mut messages = Vec::new();
+                let mut needs_rebuild = false;
                 for path in evt.paths {
                     let mut file = File::open(path.clone()).unwrap();
                     if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
@@ -88,9 +115,8 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                             if let Ok(old) = syn::parse_file(&old_str) {
                                 match find_rsx(&syntax, &old) {
                                     DiffResult::CodeChanged => {
-                                        log::info!("reload required");
-                                        let _ = reload_tx.send("reload".into());
-                                        break;
+                                        needs_rebuild = true;
+                                        last_file_rebuild.map.insert(path, src);
                                     }
                                     DiffResult::RsxChanged(changed) => {
                                         log::info!("reloading rsx");
@@ -130,6 +156,12 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                             // if this is a new file, rebuild the project
                             *last_file_rebuild = FileMap::new(crate_dir.clone());
                         }
+                    }
+                }
+                if needs_rebuild {
+                    log::info!("reload required");
+                    if let Err(err) = build_manager.build() {
+                        log::error!("{}", err);
                     }
                 }
                 if !messages.is_empty() {
@@ -221,11 +253,13 @@ pub async fn startup_default(config: CrateConfig) -> Result<()> {
 
     let (reload_tx, _) = broadcast::channel(100);
 
+    let build_manager = BuildManager {
+        config: config.clone(),
+        reload_tx: reload_tx.clone(),
+    };
+
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
-
-        last_file_rebuild: None,
-        watcher_config: config.clone(),
     });
 
     let mut last_update_time = chrono::Local::now().timestamp();
@@ -242,8 +276,10 @@ pub async fn startup_default(config: CrateConfig) -> Result<()> {
     let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
         log::info!("reload required");
         if chrono::Local::now().timestamp() > last_update_time {
-            let _ = reload_tx.send("reload".into());
-            last_update_time = chrono::Local::now().timestamp();
+            match build_manager.build() {
+                Ok(_) => last_update_time = chrono::Local::now().timestamp(),
+                Err(e) => log::error!("{}", e),
+            }
         }
     })
     .unwrap();
@@ -322,43 +358,22 @@ async fn ws_handler(
     _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<Arc<WsReloadState>>,
 ) -> impl IntoResponse {
-    ws.max_send_queue(1).on_upgrade(|mut socket| async move {
+    ws.on_upgrade(|mut socket| async move {
         let mut rx = state.update.subscribe();
         let reload_watcher = tokio::spawn(async move {
             loop {
-                let v = rx.recv().await.unwrap();
-                if v == "reload" {
-                    log::info!("Start to rebuild project...");
-                    if builder::build(&state.watcher_config).is_ok() {
-                        // change the websocket reload state to true;
-                        // the page will auto-reload.
-                        if state
-                            .watcher_config
-                            .dioxus_config
-                            .web
-                            .watcher
-                            .reload_html
-                            .unwrap_or(false)
-                        {
-                            let _ = Serve::regen_dev_page(&state.watcher_config);
-                        }
-                        if let Some(file_map) = &state.last_file_rebuild {
-                            let mut write = file_map.lock().unwrap();
-                            write.update(state.watcher_config.crate_dir.clone());
-                        }
-                    }
-                    // ignore the error
-                    if socket
-                        .send(Message::Text(String::from("reload")))
-                        .await
-                        .is_err()
-                    {
-                        break;
-                    }
-
-                    // flush the errors after recompling
-                    rx = rx.resubscribe();
+                rx.recv().await.unwrap();
+                // ignore the error
+                if socket
+                    .send(Message::Text(String::from("reload")))
+                    .await
+                    .is_err()
+                {
+                    break;
                 }
+
+                // flush the errors after recompling
+                rx = rx.resubscribe();
             }
         });
 
