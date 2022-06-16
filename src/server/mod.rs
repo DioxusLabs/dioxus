@@ -6,6 +6,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use dioxus_rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
@@ -67,67 +68,75 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
-        if let Ok(evt) = evt {
-            for path in evt.paths {
-                let mut file = File::open(path.clone()).unwrap();
-                if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
-                    continue;
-                }
-                let mut src = String::new();
-                file.read_to_string(&mut src).expect("Unable to read file");
-                if src.is_empty() {
-                    continue;
-                }
-                // find changes to the rsx in the file
-                if let Ok(syntax) = syn::parse_file(&src) {
-                    let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
-                    if let Some(old_str) = last_file_rebuild.map.get(&path) {
-                        if let Ok(old) = syn::parse_file(&old_str) {
-                            match find_rsx(&syntax, &old) {
-                                DiffResult::CodeChanged => {
-                                    log::info!("reload required");
-                                    if chrono::Local::now().timestamp() > last_update_time {
-                                        let _ = reload_tx.send("reload".into());
-                                        last_update_time = chrono::Local::now().timestamp();
+        if chrono::Local::now().timestamp() > last_update_time {
+            if let Ok(evt) = evt {
+                let mut messages = Vec::new();
+                for path in evt.paths {
+                    let mut file = File::open(path.clone()).unwrap();
+                    if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
+                        continue;
+                    }
+                    let mut src = String::new();
+                    file.read_to_string(&mut src).expect("Unable to read file");
+                    if src.is_empty() {
+                        continue;
+                    }
+                    // find changes to the rsx in the file
+                    if let Ok(syntax) = syn::parse_file(&src) {
+                        let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
+                        if let Some(old_str) = last_file_rebuild.map.get(&path) {
+                            if let Ok(old) = syn::parse_file(&old_str) {
+                                match find_rsx(&syntax, &old) {
+                                    DiffResult::CodeChanged => {
+                                        log::info!("reload required");
+                                        let _ = reload_tx.send("reload time".into());
+                                        break;
                                     }
-                                }
-                                DiffResult::RsxChanged(changed) => {
-                                    log::info!("reloading rsx");
-                                    for (old, new) in changed.into_iter() {
-                                        let hr = get_location(
-                                            &path.strip_prefix(&crate_dir).unwrap().to_path_buf(),
-                                            old.to_token_stream(),
-                                        );
-                                        // get the original source code to preserve whitespace
-                                        let span = new.span();
-                                        let start = span.start();
-                                        let end = span.end();
-                                        let mut lines: Vec<_> = src
-                                            .lines()
-                                            .skip(start.line - 1)
-                                            .take(end.line - start.line + 1)
-                                            .collect();
-                                        if let Some(first) = lines.first_mut() {
-                                            *first = first.split_at(start.column).1;
+                                    DiffResult::RsxChanged(changed) => {
+                                        log::info!("reloading rsx");
+                                        for (old, new) in changed.into_iter() {
+                                            let hr = get_location(
+                                                &path
+                                                    .strip_prefix(&crate_dir)
+                                                    .unwrap()
+                                                    .to_path_buf(),
+                                                old.to_token_stream(),
+                                            );
+                                            // get the original source code to preserve whitespace
+                                            let span = new.span();
+                                            let start = span.start();
+                                            let end = span.end();
+                                            let mut lines: Vec<_> = src
+                                                .lines()
+                                                .skip(start.line - 1)
+                                                .take(end.line - start.line + 1)
+                                                .collect();
+                                            if let Some(first) = lines.first_mut() {
+                                                *first = first.split_at(start.column).1;
+                                            }
+                                            if let Some(last) = lines.last_mut() {
+                                                *last = last.split_at(end.column).0;
+                                            }
+                                            let rsx = lines.join("\n");
+                                            messages.push(SetRsxMessage {
+                                                location: hr,
+                                                new_text: rsx,
+                                            });
                                         }
-                                        if let Some(last) = lines.last_mut() {
-                                            *last = last.split_at(end.column).0;
-                                        }
-                                        let rsx = lines.join("\n");
-                                        let _ = hot_reload_tx.send(SetRsxMessage {
-                                            location: hr,
-                                            new_text: rsx,
-                                        });
                                     }
                                 }
                             }
+                        } else {
+                            // if this is a new file, rebuild the project
+                            *last_file_rebuild = FileMap::new(crate_dir.clone());
                         }
-                    } else {
-                        // if this is a new file, rebuild the project
-                        *last_file_rebuild = FileMap::new(crate_dir.clone());
                     }
                 }
+                if !messages.is_empty() {
+                    let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
+                }
             }
+            last_update_time = chrono::Local::now().timestamp();
         }
     })
     .unwrap();
@@ -313,7 +322,7 @@ async fn ws_handler(
     _: Option<TypedHeader<headers::UserAgent>>,
     Extension(state): Extension<Arc<WsReloadState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(|mut socket| async move {
+    ws.max_send_queue(1).on_upgrade(|mut socket| async move {
         let mut rx = state.update.subscribe();
         let reload_watcher = tokio::spawn(async move {
             loop {
@@ -335,7 +344,7 @@ async fn ws_handler(
                         }
                         if let Some(file_map) = &state.last_file_rebuild {
                             let mut write = file_map.lock().unwrap();
-                            *write = FileMap::new(state.watcher_config.crate_dir.clone());
+                            write.update(state.watcher_config.crate_dir.clone());
                         }
                     }
                     // ignore the error
@@ -346,6 +355,9 @@ async fn ws_handler(
                     {
                         break;
                     }
+
+                    // flush the errors after recompling
+                    rx = rx.resubscribe();
                 }
             }
         });

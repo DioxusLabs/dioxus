@@ -2,12 +2,13 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
+use dioxus_rsx_interpreter::SetRsxMessage;
 
 use std::{path::PathBuf, sync::Arc};
 
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
-pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetRsxMessage};
+pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetManyRsxMessage};
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
@@ -19,7 +20,7 @@ use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<SetRsxMessage>,
+    pub messages: broadcast::Sender<SetManyRsxMessage>,
     pub update: broadcast::Sender<String>,
     pub last_file_rebuild: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
@@ -32,32 +33,76 @@ pub struct FileMap {
 
 impl FileMap {
     pub fn new(path: PathBuf) -> Self {
+        log::info!("Searching files for changes since last compile...");
         fn find_rs_files(root: PathBuf) -> io::Result<HashMap<PathBuf, String>> {
             let mut files = HashMap::new();
             if root.is_dir() {
-                let mut handles = Vec::new();
                 for entry in fs::read_dir(root)? {
                     if let Ok(entry) = entry {
                         let path = entry.path();
-                        handles.push(std::thread::spawn(move || find_rs_files(path)));
+                        files.extend(find_rs_files(path)?);
                     }
-                }
-                for handle in handles {
-                    files.extend(handle.join().unwrap()?);
                 }
             } else {
                 if root.extension().map(|s| s.to_str()).flatten() == Some("rs") {
-                    let mut file = File::open(root.clone()).unwrap();
-                    let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
-                    files.insert(root, src);
+                    if let Ok(mut file) = File::open(root.clone()) {
+                        let mut src = String::new();
+                        file.read_to_string(&mut src).expect("Unable to read file");
+                        files.insert(root, src);
+                    }
                 }
             }
             Ok(files)
         }
-        Self {
-            last_updated_time: SystemTime::now(),
+
+        let last_updated_time = SystemTime::now();
+        let result = Self {
+            last_updated_time,
             map: find_rs_files(path).unwrap(),
+        };
+        log::info!("Files updated");
+        result
+    }
+
+    pub fn update(&mut self, path: PathBuf) {
+        log::info!("Updating files that changed since last compile...");
+        self.last_updated_time = SystemTime::now();
+        self.update_inner(path);
+        log::info!("Files updated");
+    }
+
+    fn update_inner(&mut self, path: PathBuf) {
+        if path.is_dir() {
+            if let Ok(files) = fs::read_dir(path) {
+                for entry in files {
+                    if let Ok(entry) = entry {
+                        if let Ok(md) = entry.metadata() {
+                            if let Ok(time) = md.modified() {
+                                if time < self.last_updated_time {
+                                    return;
+                                }
+                            }
+                        }
+                        let path = entry.path();
+                        self.update(path);
+                    }
+                }
+            }
+        } else {
+            if path.extension().map(|s| s.to_str()).flatten() == Some("rs") {
+                if let Ok(mut file) = File::open(path.clone()) {
+                    if let Ok(md) = file.metadata() {
+                        if let Ok(time) = md.modified() {
+                            if time < self.last_updated_time {
+                                return;
+                            }
+                        }
+                    }
+                    let mut src = String::new();
+                    file.read_to_string(&mut src).expect("Unable to read file");
+                    self.map.insert(path, src);
+                }
+            }
         }
     }
 }
@@ -70,7 +115,6 @@ pub async fn hot_reload_handler(
     ws.on_upgrade(|mut socket| async move {
         log::info!("🔥 Hot Reload WebSocket connected");
         {
-            log::info!("Searching files for changes since last run...");
             // update any files that changed before the websocket connected.
             let mut messages = Vec::new();
 
@@ -123,16 +167,14 @@ pub async fn hot_reload_handler(
                 }
             }
 
-            for msg in &messages {
-                if socket
-                    .send(Message::Text(serde_json::to_string(msg).unwrap()))
-                    .await
-                    .is_err()
-                {
-                    return;
-                }
+            let msg = SetManyRsxMessage(messages);
+            if socket
+                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+                .await
+                .is_err()
+            {
+                return;
             }
-            log::info!("Updated page");
         }
 
         let mut rx = state.messages.subscribe();
@@ -149,8 +191,7 @@ pub async fn hot_reload_handler(
                                     Error::ParseError(parse_error) => {
                                         log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file, parse_error.location.line, parse_error.location.column, parse_error.message);
                                     },
-                                    Error::RecompileRequiredError(reason) => {
-                                        log::info!("{:?}", reason);
+                                    Error::RecompileRequiredError(_) => {
                                         if state.update.send("reload".to_string()).is_err() {
                                             break;
                                         }
