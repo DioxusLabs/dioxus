@@ -1,6 +1,7 @@
 use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
+    tools::Tool,
     DioxusConfig,
 };
 use std::{
@@ -29,6 +30,9 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ..
     } = config;
 
+    // start to build the assets
+    let ignore_files = build_assets(config)?;
+
     let t_start = std::time::Instant::now();
 
     // [1] Build the .wasm module
@@ -43,6 +47,21 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 
     if config.release {
         cmd.arg("--release");
+    }
+    if config.verbose {
+        cmd.arg("--verbose");
+    }
+
+    if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd.arg("--profile");
+        cmd.arg(custom_profile);
+    }
+
+    if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd.arg("--features");
+        cmd.arg(features_str);
     }
 
     match executable {
@@ -154,6 +173,13 @@ pub fn build(config: &CrateConfig) -> Result<()> {
                         log::warn!("Error copying dir: {}", _e);
                     }
                 }
+                for ignore in &ignore_files {
+                    let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
+                    let ignore = config.out_dir.join(ignore);
+                    if ignore.is_file() {
+                        std::fs::remove_file(ignore)?;
+                    }
+                }
             }
         }
     }
@@ -166,6 +192,8 @@ pub fn build(config: &CrateConfig) -> Result<()> {
 pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     log::info!("🚅 Running build [Desktop] command...");
 
+    let ignore_files = build_assets(config)?;
+
     let mut cmd = Command::new("cargo");
     cmd.current_dir(&config.crate_dir)
         .arg("build")
@@ -174,6 +202,21 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
 
     if config.release {
         cmd.arg("--release");
+    }
+    if config.verbose {
+        cmd.arg("--verbose");
+    }
+
+    if config.custom_profile.is_some() {
+        let custom_profile = config.custom_profile.as_ref().unwrap();
+        cmd.arg("--profile");
+        cmd.arg(custom_profile);
+    }
+
+    if config.features.is_some() {
+        let features_str = config.features.as_ref().unwrap().join(" ");
+        cmd.arg("--features");
+        cmd.arg(features_str);
     }
 
     match &config.executable {
@@ -248,6 +291,13 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
                         Ok(_) => {}
                         Err(e) => {
                             log::warn!("Error copying dir: {}", e);
+                        }
+                    }
+                    for ignore in &ignore_files {
+                        let ignore = ignore.strip_prefix(&config.asset_dir).unwrap();
+                        let ignore = config.out_dir.join(ignore);
+                        if ignore.is_file() {
+                            std::fs::remove_file(ignore)?;
                         }
                     }
                 }
@@ -337,6 +387,150 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
         .unwrap_or_else(|| "dioxus | ⛺".into());
 
     html.replace("{app_title}", &title)
+}
+
+// this function will build some assets file
+// like sass tool resources
+// this function will return a array which file don't need copy to out_dir.
+fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
+    let mut result = vec![];
+
+    let dioxus_config = &config.dioxus_config;
+    let dioxus_tools = dioxus_config.application.tools.clone().unwrap_or_default();
+
+    // check sass tool state
+    let sass = Tool::Sass;
+    if sass.is_installed() && dioxus_tools.contains_key("sass") {
+        let sass_conf = dioxus_tools.get("sass").unwrap();
+        if let Some(tab) = sass_conf.as_table() {
+            let source_map = tab.contains_key("source_map");
+            let source_map = if source_map && tab.get("source_map").unwrap().is_bool() {
+                if tab.get("source_map").unwrap().as_bool().unwrap_or_default() {
+                    "--source-map"
+                } else {
+                    "--no-source-map"
+                }
+            } else {
+                "--source-map"
+            };
+
+            if tab.contains_key("input") {
+                if tab.get("input").unwrap().is_str() {
+                    let file = tab.get("input").unwrap().as_str().unwrap().trim();
+
+                    if file == "*" {
+                        // if the sass open auto, we need auto-check the assets dir.
+                        let asset_dir = config.asset_dir.clone();
+                        if asset_dir.is_dir() {
+                            for entry in walkdir::WalkDir::new(&asset_dir)
+                                .into_iter()
+                                .filter_map(|e| e.ok())
+                            {
+                                let temp = entry.path();
+                                if temp.is_file() {
+                                    let suffix = temp.extension();
+                                    if suffix.is_none() { continue; }
+                                    let suffix = suffix.unwrap().to_str().unwrap();
+                                    if suffix == "scss" || suffix == "sass" {
+                                        // if file suffix is `scss` / `sass` we need transform it.
+                                        let out_file = format!(
+                                            "{}.css",
+                                            temp.file_stem().unwrap().to_str().unwrap()
+                                        );
+                                        let target_path = config
+                                            .out_dir
+                                            .join(
+                                                temp.strip_prefix(&asset_dir)
+                                                    .unwrap()
+                                                    .parent()
+                                                    .unwrap(),
+                                            )
+                                            .join(out_file);
+                                        let res = sass.call(
+                                            "sass",
+                                            vec![
+                                                temp.to_str().unwrap(),
+                                                target_path.to_str().unwrap(),
+                                                source_map,
+                                            ],
+                                        );
+                                        if res.is_ok() {
+                                            result.push(temp.to_path_buf());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // just transform one file.
+                        let relative_path = if &file[0..1] == "/" {
+                            &file[1..file.len()]
+                        } else {
+                            file
+                        };
+                        let path = config.asset_dir.join(relative_path);
+                        let out_file =
+                            format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                        let target_path = config
+                            .out_dir
+                            .join(PathBuf::from(relative_path).parent().unwrap())
+                            .join(out_file);
+                        if path.is_file() {
+                            let res = sass.call(
+                                "sass",
+                                vec![
+                                    path.to_str().unwrap(),
+                                    target_path.to_str().unwrap(),
+                                    source_map,
+                                ],
+                            );
+                            if res.is_ok() {
+                                result.push(path);
+                            } else {
+                                log::error!("{:?}", res);
+                            }
+                        }
+                    }
+                } else if tab.get("input").unwrap().is_array() {
+                    // check files list.
+                    let list = tab.get("input").unwrap().as_array().unwrap();
+                    for i in list {
+                        if i.is_str() {
+                            let path = i.as_str().unwrap();
+                            let relative_path = if &path[0..1] == "/" {
+                                &path[1..path.len()]
+                            } else {
+                                path
+                            };
+                            let path = config.asset_dir.join(relative_path);
+                            let out_file =
+                                format!("{}.css", path.file_stem().unwrap().to_str().unwrap());
+                            let target_path = config
+                                .out_dir
+                                .join(PathBuf::from(relative_path).parent().unwrap())
+                                .join(out_file);
+                            if path.is_file() {
+                                let res = sass.call(
+                                    "sass",
+                                    vec![
+                                        path.to_str().unwrap(),
+                                        target_path.to_str().unwrap(),
+                                        source_map,
+                                    ],
+                                );
+                                if res.is_ok() {
+                                    result.push(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // SASS END
+
+    Ok(result)
 }
 
 // use binary_install::{Cache, Download};

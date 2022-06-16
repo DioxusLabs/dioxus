@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, File},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
 };
 
@@ -13,10 +13,11 @@ use tokio::io::AsyncWriteExt;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tool {
     Binaryen,
+    Sass,
 }
 
 pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen"]
+    vec!["binaryen", "sass"]
 }
 
 pub fn app_path() -> PathBuf {
@@ -52,6 +53,7 @@ impl Tool {
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
             "binaryen" => Some(Self::Binaryen),
+            "sass" => Some(Self::Sass),
             _ => None,
         }
     }
@@ -60,6 +62,7 @@ impl Tool {
     pub fn name(&self) -> &str {
         match self {
             Self::Binaryen => "binaryen",
+            Self::Sass => "sass",
         }
     }
 
@@ -67,6 +70,7 @@ impl Tool {
     pub fn bin_path(&self) -> &str {
         match self {
             Self::Binaryen => "bin",
+            Self::Sass => ".",
         }
     }
 
@@ -74,6 +78,17 @@ impl Tool {
     pub fn target_platform(&self) -> &str {
         match self {
             Self::Binaryen => {
+                if cfg!(target_os = "windows") {
+                    "windows"
+                } else if cfg!(target_os = "macos") {
+                    "macos"
+                } else if cfg!(target_os = "linux") {
+                    "linux"
+                } else {
+                    panic!("unsupported platformm");
+                }
+            }
+            Self::Sass => {
                 if cfg!(target_os = "windows") {
                     "windows"
                 } else if cfg!(target_os = "macos") {
@@ -96,6 +111,13 @@ impl Tool {
                     target = self.target_platform()
                 )
             }
+            Self::Sass => {
+                format!(
+                    "https://github.com/sass/dart-sass/releases/download/1.51.0/dart-sass-1.51.0-{target}-x64.{extension}",
+                    target = self.target_platform(),
+                    extension = self.extension()
+                )
+            }
         }
     }
 
@@ -103,6 +125,13 @@ impl Tool {
     pub fn extension(&self) -> &str {
         match self {
             Self::Binaryen => "tar.gz",
+            Self::Sass => {
+                if cfg!(target_os = "windows") {
+                    "zip"
+                } else {
+                    "tar.gz"
+                }
+            }
         }
     }
 
@@ -131,7 +160,7 @@ impl Tool {
             let chunk = chunk_res.context("error reading chunk from download")?;
             let _ = file.write(chunk.as_ref()).await;
         }
-
+        // log::info!("temp file path: {:?}", temp_out);
         Ok(temp_out)
     }
 
@@ -143,7 +172,7 @@ impl Tool {
         let dir_name = if self == &Tool::Binaryen {
             "binaryen-version_105"
         } else {
-            ""
+            "dart-sass"
         };
 
         if self.extension() == "tar.gz" {
@@ -151,7 +180,10 @@ impl Tool {
             let tar = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(tar);
             archive.unpack(&tool_path)?;
-            // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
+            std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
+        } else if self.extension() == "zip" {
+            // decompress the `zip` file
+            extract_zip(&temp_path, &tool_path)?;
             std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
         }
 
@@ -165,6 +197,13 @@ impl Tool {
             Tool::Binaryen => {
                 if cfg!(target_os = "windows") {
                     format!("{}.exe", command)
+                } else {
+                    command.to_string()
+                }
+            }
+            Tool::Sass => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.bat", command)
                 } else {
                     command.to_string()
                 }
@@ -184,4 +223,33 @@ impl Tool {
             .output()?;
         Ok(output.stdout)
     }
+}
+
+fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+    let zip_file = std::fs::File::open(&file)?;
+    let mut zip = zip::ZipArchive::new(zip_file)?;
+
+    if !target.exists() {
+        let _ = std::fs::create_dir_all(target)?;
+    }
+
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i)?;
+        if file.is_dir() {
+            // dir
+            let target = target.join(Path::new(&file.name().replace('\\', "")));
+            let _ = std::fs::create_dir_all(target)?;
+        } else {
+            // file
+            let file_path = target.join(Path::new(file.name()));
+            let mut target_file = if !file_path.exists() {
+                std::fs::File::create(file_path)?
+            } else {
+                std::fs::File::open(file_path)?
+            };
+            let _num = std::io::copy(&mut file, &mut target_file)?;
+        }
+    }
+
+    Ok(())
 }

@@ -115,6 +115,9 @@ pub struct CrateConfig {
     pub dioxus_config: DioxusConfig,
     pub release: bool,
     pub hot_reload: bool,
+    pub verbose: bool,
+    pub custom_profile: Option<String>,
+    pub features: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -164,6 +167,9 @@ impl CrateConfig {
 
         let release = false;
         let hot_reload = false;
+        let verbose = false;
+        let custom_profile = None;
+        let features = None;
 
         Ok(Self {
             out_dir,
@@ -176,6 +182,9 @@ impl CrateConfig {
             release,
             dioxus_config,
             hot_reload,
+            custom_profile,
+            features,
+            verbose,
         })
     }
 
@@ -191,6 +200,21 @@ impl CrateConfig {
 
     pub fn with_hot_reload(&mut self, hot_reload: bool) -> &mut Self {
         self.hot_reload = hot_reload;
+        self
+    }
+
+    pub fn with_verbose(&mut self, verbose: bool) -> &mut Self {
+        self.verbose = verbose;
+        self
+    }
+
+    pub fn set_profile(&mut self, profile: String) -> &mut Self {
+        self.custom_profile = Some(profile);
+        self
+    }
+
+    pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
+        self.features = Some(features);
         self
     }
 

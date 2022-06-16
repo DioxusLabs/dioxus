@@ -2,7 +2,7 @@
 name = "dioxus-cli"
 version = "0.1.4"
 authors = ["Jonathan Kelley"]
-edition = "2018"
+edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
 license = "MIT/Apache-2.0"
 
@@ -39,11 +39,15 @@ hyper = "0.14.17"
 axum = { version = "0.5.1", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
 headers = "0.3.7"
+
+walkdir = "2"
+
 # tools download
 dirs = "4.0.0"
 reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns"] }
 flate2 = "1.0.22"
 tar = "0.4.38"
+zip = "0.6.2"
 tower = "0.4.12"
 
 syn = { version = "1.0" }
