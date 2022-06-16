@@ -125,6 +125,17 @@ impl RsxContext {
         }
     }
 
+    /// Set the text for many rsx calls
+    pub fn extend(&self, msg: SetManyRsxMessage) {
+        let mut write = self.data.write().unwrap();
+        for rsx in msg.0 {
+            write.hm.insert(rsx.location, rsx.new_text);
+        }
+        if let Some(channel) = &mut write.scheduler_channel {
+            channel.unbounded_send(SchedulerMsg::DirtyAll).unwrap()
+        }
+    }
+
     fn read(&self) -> RwLockReadGuard<RsxData> {
         self.data.read().unwrap()
     }
@@ -157,3 +168,7 @@ pub struct SetRsxMessage {
     pub location: CodeLocation,
     pub new_text: String,
 }
+
+/// Set many rsx texts at once to avoid duplicate errors
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SetManyRsxMessage(pub Vec<SetRsxMessage>);

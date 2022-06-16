@@ -54,7 +54,7 @@ impl DesktopController {
                 #[cfg(feature = "hot_reload")]
                 {
                     use dioxus_rsx_interpreter::{
-                        error::Error, ErrorHandler, SetRsxMessage, RSX_CONTEXT,
+                        error::Error, ErrorHandler, SetManyRsxMessage, RSX_CONTEXT,
                     };
                     use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
                     use std::io::{BufRead, BufReader, Write};
@@ -120,9 +120,9 @@ impl DesktopController {
                                 let mut buf = String::new();
                                 match conn.read_line(&mut buf) {
                                     Ok(_) => {
-                                        let message: SetRsxMessage =
+                                        let msgs: SetManyRsxMessage =
                                             serde_json::from_str(&buf).unwrap();
-                                        RSX_CONTEXT.insert(message.location, message.new_text);
+                                        RSX_CONTEXT.extend(msgs);
                                     }
                                     Err(err) => {
                                         if err.kind() != std::io::ErrorKind::WouldBlock {

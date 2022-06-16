@@ -220,7 +220,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
     #[cfg(feature = "hot_reload")]
     {
         use dioxus_rsx_interpreter::error::Error;
-        use dioxus_rsx_interpreter::{ErrorHandler, SetRsxMessage, RSX_CONTEXT};
+        use dioxus_rsx_interpreter::{ErrorHandler, SetManyRsxMessage, RSX_CONTEXT};
         use futures_channel::mpsc::unbounded;
         use futures_channel::mpsc::UnboundedSender;
         use futures_util::StreamExt;
@@ -246,8 +246,8 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // change the rsx when new data is received
         let cl = Closure::wrap(Box::new(|e: MessageEvent| {
             if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-                let msg: SetRsxMessage = serde_json::from_str(&format!("{text}")).unwrap();
-                RSX_CONTEXT.insert(msg.location, msg.new_text);
+                let msgs: SetManyRsxMessage = serde_json::from_str(&format!("{text}")).unwrap();
+                RSX_CONTEXT.extend(msgs);
             }
         }) as Box<dyn FnMut(MessageEvent)>);
 
