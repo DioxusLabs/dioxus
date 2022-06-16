@@ -1,6 +1,6 @@
 /*
 - [ ] pub display: Display,
-- [x] pub position_type: PositionType,  --> kinda, stretch doesnt support everything
+- [x] pub position_type: PositionType,  --> kinda, taffy doesnt support everything
 - [ ] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -9,7 +9,7 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [x] pub overflow: Overflow, ---> kinda implemented... stretch doesnt have support for directional overflow
+- [x] pub overflow: Overflow, ---> kinda implemented... taffy doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
 - [x] pub align_self: AlignSelf,

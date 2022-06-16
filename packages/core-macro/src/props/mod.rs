@@ -653,7 +653,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
 
-                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
+                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics
+                #b_generics_where_extras_predicates
+                {
                     type Builder = #builder_name #generics_with_empty;
                     const IS_STATIC: bool = #is_static;
                     fn builder() -> Self::Builder {

@@ -17,6 +17,7 @@ pub struct InlinePropsBody {
     pub inputs: Punctuated<FnArg, Token![,]>,
     // pub fields: FieldsNamed,
     pub output: ReturnType,
+    pub where_clause: Option<WhereClause>,
     pub block: Box<Block>,
 }
 
@@ -28,7 +29,7 @@ impl Parse for InlinePropsBody {
 
         let fn_token = input.parse()?;
         let ident = input.parse()?;
-        let generics = input.parse()?;
+        let generics: Generics = input.parse()?;
 
         let content;
         let paren_token = syn::parenthesized!(content in input);
@@ -47,6 +48,11 @@ impl Parse for InlinePropsBody {
 
         let output = input.parse()?;
 
+        let where_clause = input
+            .peek(syn::token::Where)
+            .then(|| input.parse())
+            .transpose()?;
+
         let block = input.parse()?;
 
         Ok(Self {
@@ -57,6 +63,7 @@ impl Parse for InlinePropsBody {
             paren_token,
             inputs,
             output,
+            where_clause,
             block,
             cx_token,
             attrs,
@@ -73,6 +80,7 @@ impl ToTokens for InlinePropsBody {
             generics,
             inputs,
             output,
+            where_clause,
             block,
             cx_token,
             attrs,
@@ -136,12 +144,16 @@ impl ToTokens for InlinePropsBody {
         out_tokens.append_all(quote! {
             #modifiers
             #[allow(non_camel_case_types)]
-            #vis struct #struct_name #struct_generics {
+            #vis struct #struct_name #struct_generics
+            #where_clause
+            {
                 #(#fields),*
             }
 
             #(#attrs)*
-            #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output {
+            #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output
+            #where_clause
+            {
                 let #struct_name { #(#field_names),* } = &cx.props;
                 #block
             }
