@@ -89,7 +89,7 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                                 match find_rsx(&syntax, &old) {
                                     DiffResult::CodeChanged => {
                                         log::info!("reload required");
-                                        let _ = reload_tx.send("reload time".into());
+                                        let _ = reload_tx.send("reload".into());
                                         break;
                                     }
                                     DiffResult::RsxChanged(changed) => {
