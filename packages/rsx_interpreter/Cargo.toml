@@ -17,3 +17,7 @@ dioxus-ssr = { path = "../ssr" }
 dioxus-core = { path = "../core" }
 dioxus-html = { path = "../html" }
 dioxus-hooks = { path = "../hooks"}
+
+[dev-dependencies]
+dioxus-core-macro = { path = "../core-macro" }
+bumpalo = { version = "3.6", features = ["collections", "boxed"] }

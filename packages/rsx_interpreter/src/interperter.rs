@@ -53,7 +53,12 @@ pub fn build<'a>(
     for child in rsx.roots {
         children_built.push(build_node(child, &mut ctx, factory)?);
     }
-    Ok(factory.fragment_from_iter(children_built.iter()))
+
+    if children_built.len() == 1 {
+        return Ok(children_built.pop().unwrap());
+    } else {
+        Ok(factory.fragment_from_iter(children_built.iter()))
+    }
 }
 
 fn build_node<'a>(
