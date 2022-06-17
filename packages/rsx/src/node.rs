@@ -25,10 +25,7 @@ pub enum BodyNode {
 
 impl BodyNode {
     pub fn is_litstr(&self) -> bool {
-        match self {
-            BodyNode::Text(_) => true,
-            _ => false,
-        }
+        matches!(self, BodyNode::Text(_))
     }
 }
 

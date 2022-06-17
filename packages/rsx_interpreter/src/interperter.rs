@@ -2,6 +2,7 @@ use dioxus_core::{Attribute, AttributeValue, NodeFactory, VNode};
 use dioxus_rsx::{BodyNode, CallBody, ElementAttr, IfmtInput, Segment};
 use quote::ToTokens;
 use quote::__private::Span;
+use std::str::FromStr;
 use syn::{parse2, parse_str, Expr};
 
 use crate::attributes::attrbute_to_static_str;
@@ -55,7 +56,7 @@ pub fn build<'a>(
     }
 
     if children_built.len() == 1 {
-        return Ok(children_built.pop().unwrap());
+        Ok(children_built.pop().unwrap())
     } else {
         Ok(factory.fragment_from_iter(children_built.iter()))
     }
@@ -158,29 +159,24 @@ fn build_node<'a>(
             }
             let listeners = bump.alloc(Vec::new());
             for attr in el.attributes {
-                match attr.attr {
-                    ElementAttr::EventTokens { .. } => {
-                        let expr: Expr = parse2(attr.to_token_stream()).map_err(|err| {
-                            Error::ParseError(ParseError::new(err, ctx.location.clone()))
-                        })?;
-                        if let Some(idx) = ctx.listeners.iter().position(|(code, _)| {
-                            if let Ok(parsed) = parse_str::<Expr>(*code) {
-                                parsed == expr
-                            } else {
-                                false
-                            }
-                        }) {
-                            let (_, listener) = ctx.listeners.remove(idx);
-                            listeners.push(listener)
+                if let ElementAttr::EventTokens { .. } = attr.attr {
+                    let expr: Expr = parse2(attr.to_token_stream()).map_err(|err| {
+                        Error::ParseError(ParseError::new(err, ctx.location.clone()))
+                    })?;
+                    if let Some(idx) = ctx.listeners.iter().position(|(code, _)| {
+                        if let Ok(parsed) = parse_str::<Expr>(*code) {
+                            parsed == expr
                         } else {
-                            return Err(Error::RecompileRequiredError(
-                                RecompileReason::CapturedListener(
-                                    expr.to_token_stream().to_string(),
-                                ),
-                            ));
+                            false
                         }
+                    }) {
+                        let (_, listener) = ctx.listeners.remove(idx);
+                        listeners.push(listener)
+                    } else {
+                        return Err(Error::RecompileRequiredError(
+                            RecompileReason::CapturedListener(expr.to_token_stream().to_string()),
+                        ));
                     }
-                    _ => (),
                 }
             }
             let tag = bump.alloc(el.name.to_string());

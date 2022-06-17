@@ -65,9 +65,9 @@ macro_rules! builder_constructors {
         ];
     };
 }
-pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: &'static [(
-    &'static str,
-    &'static [(&'static str, &'static str)],
+pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: &[(
+    &str,
+    &[(&str, &str)],
 )] = &[
     ("script", &[("r#type", "type"), ("r#script", "script")]),
     ("button", &[("r#type", "type")]),

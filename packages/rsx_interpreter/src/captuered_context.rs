@@ -26,8 +26,10 @@ impl CapturedContextBuilder {
     }
 
     pub fn from_call_body(body: CallBody) -> Result<Self> {
-        let mut new = Self::default();
-        new.custom_context = body.custom_context;
+        let mut new = Self {
+            custom_context: body.custom_context,
+            ..Default::default()
+        };
         for node in body.roots {
             new.extend(Self::find_captured(node)?);
         }
@@ -102,8 +104,7 @@ impl ToTokens for CapturedContextBuilder {
         });
         let captured: Vec<_> = ifmted
             .iter()
-            .map(|input| input.segments.iter())
-            .flatten()
+            .flat_map(|input| input.segments.iter())
             .filter_map(|seg| match seg {
                 Segment::Formatted {
                     format_args,

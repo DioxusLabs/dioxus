@@ -1,12 +1,12 @@
-use std::cell::{Cell, RefCell};
 
-use bumpalo::boxed::Box;
-use dioxus_core::{prelude::*, AnyEvent};
+
+
+use dioxus_core::{prelude::*};
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_rsx_interpreter::{
     captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
-    CodeLocation, ErrorHandler,
+    CodeLocation,
 };
 
 #[test]

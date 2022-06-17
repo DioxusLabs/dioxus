@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use proc_macro2::{Span, TokenStream};
 
 use quote::{quote, ToTokens};
@@ -12,7 +14,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let mut expr_counter = 0;
     for segment in input.segments.iter() {
         match segment {
-            Segment::Literal(s) => format_literal += &s,
+            Segment::Literal(s) => format_literal += s,
             Segment::Formatted {
                 format_args,
                 segment,
@@ -35,24 +37,24 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     }
 
     let positional_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted { segment, .. } = seg {
-            if let FormattedSegment::Expr(expr) = segment {
-                Some(expr)
-            } else {
-                None
-            }
+        if let Segment::Formatted {
+            segment: FormattedSegment::Expr(expr),
+            ..
+        } = seg
+        {
+            Some(expr)
         } else {
             None
         }
     });
 
     let named_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted { segment, .. } = seg {
-            if let FormattedSegment::Ident(ident) = segment {
-                Some(quote! {#ident = #ident})
-            } else {
-                None
-            }
+        if let Segment::Formatted {
+            segment: FormattedSegment::Ident(ident),
+            ..
+        } = seg
+        {
+            Some(quote! {#ident = #ident})
         } else {
             None
         }
@@ -73,8 +75,10 @@ pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
 
-impl IfmtInput {
-    pub fn from_str(input: &str) -> Result<Self> {
+impl FromStr for IfmtInput {
+    type Err = syn::Error;
+
+    fn from_str(input: &str) -> Result<Self> {
         let mut chars = input.chars().peekable();
         let mut segments = Vec::new();
         let mut current_literal = String::new();
@@ -90,7 +94,7 @@ impl IfmtInput {
                 while let Some(c) = chars.next() {
                     if c == ':' {
                         let mut current_format_args = String::new();
-                        while let Some(c) = chars.next() {
+                        for c in chars.by_ref() {
                             if c == '}' {
                                 segments.push(Segment::Formatted {
                                     format_args: current_format_args,
@@ -131,20 +135,20 @@ pub enum Segment {
 
 #[derive(Debug)]
 pub enum FormattedSegment {
-    Expr(Expr),
+    Expr(Box<Expr>),
     Ident(Ident),
 }
 
 impl FormattedSegment {
     fn parse(input: &str) -> Result<Self> {
         if let Ok(ident) = parse_str::<Ident>(input) {
-            if &ident.to_string() == input {
+            if ident == input {
                 return Ok(Self::Ident(ident));
             }
         }
         // if let Ok(expr) = parse_str(&("{".to_string() + input + "}")) {
         if let Ok(expr) = parse_str(input) {
-            Ok(Self::Expr(expr))
+            Ok(Self::Expr(Box::new(expr)))
         } else {
             Err(Error::new(
                 Span::call_site(),
