@@ -95,6 +95,8 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
 
     let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
         if chrono::Local::now().timestamp() > last_update_time {
+            // Give time for the change to take effect before reading the file
+            std::thread::sleep(std::time::Duration::from_millis(100));
             if let Ok(evt) = evt {
                 let mut messages = Vec::new();
                 let mut needs_rebuild = false;
@@ -105,9 +107,6 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                     }
                     let mut src = String::new();
                     file.read_to_string(&mut src).expect("Unable to read file");
-                    if src.is_empty() {
-                        continue;
-                    }
                     // find changes to the rsx in the file
                     if let Ok(syntax) = syn::parse_file(&src) {
                         let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
