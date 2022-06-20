@@ -71,7 +71,7 @@ Desktop APIs will likely be in flux as we figure out better patterns than our El
 [Jump to the getting started guide for Desktop.](/reference/platforms/desktop)
 
 Examples:
-- [File explorer](https://github.com/dioxusLabs/file-explorer/)
+- [File explorer](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer)
 - [WiFi scanner](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner)
 
 [![File ExplorerExample](https://raw.githubusercontent.com/DioxusLabs/example-projects/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/tree/master/file-explorer)

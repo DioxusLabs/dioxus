@@ -4,7 +4,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    token, Expr, LitStr, Result, Token,
+    token, Expr, LitStr, Result,
 };
 
 /*
@@ -28,39 +28,49 @@ impl Parse for BodyNode {
             return Ok(BodyNode::Text(stream.parse()?));
         }
 
-        // div {} -> el
-        // Div {} -> comp
-        if stream.peek(syn::Ident) && stream.peek2(token::Brace) {
-            if stream
-                .fork()
-                .parse::<Ident>()?
-                .to_string()
-                .chars()
-                .next()
-                .unwrap()
-                .is_ascii_uppercase()
-            {
-                return Ok(BodyNode::Component(stream.parse()?));
-            } else {
-                return Ok(BodyNode::Element(stream.parse::<Element>()?));
+        let body_stream = stream.fork();
+        if let Ok(path) = body_stream.parse::<syn::Path>() {
+            // this is an Element if path match of:
+            // - one ident
+            // - followed by `{`
+            // - 1st char is lowercase
+            //
+            // example:
+            // div {}
+            if let Some(ident) = path.get_ident() {
+                if body_stream.peek(token::Brace)
+                    && ident
+                        .to_string()
+                        .chars()
+                        .next()
+                        .unwrap()
+                        .is_ascii_lowercase()
+                {
+                    return Ok(BodyNode::Element(stream.parse::<Element>()?));
+                }
             }
-        }
 
-        // component() -> comp
-        // ::component {} -> comp
-        // ::component () -> comp
-        if (stream.peek(syn::Ident) && stream.peek2(token::Paren))
-            || (stream.peek(Token![::]))
-            || (stream.peek(Token![:]) && stream.peek2(Token![:]))
-        {
-            return Ok(BodyNode::Component(stream.parse::<Component>()?));
-        }
+            // Otherwise this should be Component, allowed syntax:
+            // - syn::Path
+            // - PathArguments can only apper in last segment
+            // - followed by `{` or `(`, note `(` cannot be used with one ident
+            //
+            // example
+            // Div {}
+            // Div ()
+            // ::Div {}
+            // crate::Div {}
+            // component()
+            // ::component {}
+            // ::component ()
+            // crate::component{}
+            // crate::component()
+            // Input::<InputProps<'_, i32> {}
+            // crate::Input::<InputProps<'_, i32> {}
+            if body_stream.peek(token::Brace) || body_stream.peek(token::Paren) {
+                Component::validate_component_path(&path)?;
 
-        // crate::component{} -> comp
-        // crate::component() -> comp
-        if let Ok(pat) = stream.fork().parse::<syn::Path>() {
-            if pat.segments.len() > 1 {
-                return Ok(BodyNode::Component(stream.parse::<Component>()?));
+                return Ok(BodyNode::Component(stream.parse()?));
             }
         }
 

@@ -7,23 +7,23 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, state::*};
-use dioxus_native_core_macro::State;
+use dioxus_native_core::real_dom::RealDom;
+use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
-use layout::StretchLayout;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use stretch2::{prelude::Size, Stretch};
-use style_attributes::StyleModifier;
+use taffy::{geometry::Point, prelude::Size, Taffy};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
+mod focus;
 mod hooks;
 mod layout;
+mod node;
 mod render;
 mod style;
 mod style_attributes;
@@ -31,18 +31,7 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
-
-type Dom = RealDom<NodeState>;
-type Node = dioxus_native_core::real_dom::Node<NodeState>;
-
-#[derive(Debug, Clone, State, Default)]
-struct NodeState {
-    #[child_dep_state(layout, RefCell<Stretch>)]
-    layout: StretchLayout,
-    // depends on attributes, the C component of it's parent and a u8 context
-    #[parent_dep_state(style)]
-    style: StyleModifier,
-}
+pub(crate) use node::*;
 
 #[derive(Clone)]
 pub struct TuiContext {
@@ -51,6 +40,12 @@ pub struct TuiContext {
 impl TuiContext {
     pub fn quit(&self) {
         self.tx.unbounded_send(InputEvent::Close).unwrap();
+    }
+
+    pub fn inject_event(&self, event: crossterm::event::Event) {
+        self.tx
+            .unbounded_send(InputEvent::UserInput(event))
+            .unwrap();
     }
 }
 
@@ -71,7 +66,6 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
             let tick_rate = Duration::from_millis(1000);
             loop {
                 if crossterm::event::poll(tick_rate).unwrap() {
-                    // if crossterm::event::poll(timeout).unwrap() {
                     let evt = crossterm::event::read().unwrap();
                     if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
                         break;
@@ -88,9 +82,9 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     let mut rdom: Dom = RealDom::new();
     let mutations = dom.rebuild();
     let to_update = rdom.apply_mutations(vec![mutations]);
-    let stretch = Rc::new(RefCell::new(Stretch::new()));
+    let taffy = Rc::new(RefCell::new(Taffy::new()));
     let mut any_map = AnyMap::new();
-    any_map.insert(stretch.clone());
+    any_map.insert(taffy.clone());
     let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
 
     render_vdom(
@@ -99,7 +93,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         handler,
         cfg,
         rdom,
-        stretch,
+        taffy,
         register_event,
     )
     .unwrap();
@@ -111,7 +105,7 @@ fn render_vdom(
     handler: RinkInputHandler,
     cfg: Config,
     mut rdom: Dom,
-    stretch: Rc<RefCell<Stretch>>,
+    taffy: Rc<RefCell<Taffy>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -130,7 +124,7 @@ fn render_vdom(
             }
 
             let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
-            let mut resized = true;
+            let mut updated = true;
 
             loop {
                 /*
@@ -144,19 +138,19 @@ fn render_vdom(
                 todo: lazy re-rendering
                 */
 
-                if !to_rerender.is_empty() || resized {
-                    resized = false;
-                    fn resize(dims: Rect, stretch: &mut Stretch, rdom: &Dom) {
+                if !to_rerender.is_empty() || updated {
+                    updated = false;
+                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
                         let root_node = rdom[0].state.layout.node.unwrap();
 
-                        stretch
+                        taffy
                             .compute_layout(
                                 root_node,
                                 Size {
-                                    width: stretch2::prelude::Number::Defined((width - 1) as f32),
-                                    height: stretch2::prelude::Number::Defined((height - 1) as f32),
+                                    width: taffy::prelude::Number::Defined((width - 1) as f32),
+                                    height: taffy::prelude::Number::Defined((height - 1) as f32),
                                 },
                             )
                             .unwrap();
@@ -164,19 +158,26 @@ fn render_vdom(
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut stretch.borrow_mut(), &rdom);
+                            resize(frame.size(), &mut taffy.borrow_mut(), &rdom);
                             let root = &rdom[0];
-                            render::render_vnode(frame, &stretch.borrow(), &rdom, root, cfg);
+                            render::render_vnode(
+                                frame,
+                                &taffy.borrow(),
+                                &rdom,
+                                root,
+                                cfg,
+                                Point::zero(),
+                            );
                         })?;
                     } else {
                         resize(
                             Rect {
                                 x: 0,
                                 y: 0,
-                                width: 300,
-                                height: 300,
+                                width: 100,
+                                height: 100,
                             },
-                            &mut stretch.borrow_mut(),
+                            &mut taffy.borrow_mut(),
                             &rdom,
                         );
                     }
@@ -202,7 +203,7 @@ fn render_vdom(
                                             break;
                                         }
                                     }
-                                    TermEvent::Resize(_, _) => resized = true,
+                                    TermEvent::Resize(_, _) => updated = true,
                                     TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Close => break,
@@ -216,16 +217,22 @@ fn render_vdom(
                 }
 
                 {
-                    let evts = handler.get_events(&stretch.borrow(), &mut rdom);
+                    let evts = handler.get_events(&taffy.borrow(), &mut rdom);
+                    {
+                        updated |= handler.state().focus_state.clean();
+                    }
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
                     let mutations = vdom.work_with_deadline(|| false);
+                    for m in &mutations {
+                        handler.prune(m, &rdom);
+                    }
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
                     let mut any_map = AnyMap::new();
-                    any_map.insert(stretch.clone());
+                    any_map.insert(taffy.clone());
                     to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
                 }
             }
@@ -244,6 +251,7 @@ fn render_vdom(
         })
 }
 
+#[derive(Debug)]
 enum InputEvent {
     UserInput(TermEvent),
     Close,

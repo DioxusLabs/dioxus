@@ -11,9 +11,9 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let key = use_state(&cx, || "".to_string());
-    let mouse = use_state(&cx, || ScreenPoint::zero());
+    let mouse = use_state(&cx, ScreenPoint::zero);
     let count = use_state(&cx, || 0);
-    let buttons = use_state(&cx, || MouseButtonSet::empty());
+    let buttons = use_state(&cx, MouseButtonSet::empty);
     let mouse_clicked = use_state(&cx, || false);
 
     cx.render(rsx! {

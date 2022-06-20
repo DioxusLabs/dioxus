@@ -6,7 +6,7 @@ use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
 use dioxus_native_core::state::ChildDepState;
 use dioxus_native_core_macro::sorted_str_slice;
-use stretch2::prelude::*;
+use taffy::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum PossiblyUninitalized<T> {
@@ -28,13 +28,13 @@ impl<T> Default for PossiblyUninitalized<T> {
 }
 
 #[derive(Clone, PartialEq, Default, Debug)]
-pub(crate) struct StretchLayout {
+pub(crate) struct TaffyLayout {
     pub style: Style,
     pub node: PossiblyUninitalized<Node>,
 }
 
-impl ChildDepState for StretchLayout {
-    type Ctx = Rc<RefCell<Stretch>>;
+impl ChildDepState for TaffyLayout {
+    type Ctx = Rc<RefCell<Taffy>>;
     type DepState = Self;
     // use tag to force this to be called when a node is built
     const NODE_MASK: NodeMask =
@@ -53,7 +53,7 @@ impl ChildDepState for StretchLayout {
         Self::DepState: 'a,
     {
         let mut changed = false;
-        let mut stretch = ctx.borrow_mut();
+        let mut taffy = ctx.borrow_mut();
         let mut style = Style::default();
         if let Some(text) = node.text() {
             let char_len = text.chars().count();
@@ -70,11 +70,10 @@ impl ChildDepState for StretchLayout {
             };
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {
-                    stretch.set_style(n, style).unwrap();
+                    taffy.set_style(n, style).unwrap();
                 }
             } else {
-                self.node =
-                    PossiblyUninitalized::Initialized(stretch.new_node(style, &[]).unwrap());
+                self.node = PossiblyUninitalized::Initialized(taffy.new_node(style, &[]).unwrap());
                 changed = true;
             }
         } else {
@@ -100,14 +99,14 @@ impl ChildDepState for StretchLayout {
 
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {
-                    stretch.set_style(n, style).unwrap();
+                    taffy.set_style(n, style).unwrap();
                 }
-                if stretch.children(n).unwrap() != child_layout {
-                    stretch.set_children(n, &child_layout).unwrap();
+                if taffy.children(n).unwrap() != child_layout {
+                    taffy.set_children(n, &child_layout).unwrap();
                 }
             } else {
                 self.node = PossiblyUninitalized::Initialized(
-                    stretch.new_node(style, &child_layout).unwrap(),
+                    taffy.new_node(style, &child_layout).unwrap(),
                 );
                 changed = true;
             }
