@@ -545,11 +545,9 @@ impl InnerInputState {
 }
 
 fn get_abs_layout(node: &Node, dom: &Dom, taffy: &Taffy) -> Layout {
-    let mut node_layout = taffy
-        .layout(node.state.layout.node.unwrap())
-        .unwrap()
-        .clone();
+    let mut node_layout = *taffy.layout(node.state.layout.node.unwrap()).unwrap();
     let mut current = node;
+
     while let Some(parent_id) = current.parent {
         let parent = &dom[parent_id];
         current = parent;

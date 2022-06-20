@@ -80,11 +80,11 @@ fn Grid(cx: Scope<GridProps>) -> Element {
         counts.with_mut(|c| {
             let i = *count.current();
             c[i] += 1;
-            c[i] = c[i] % 360;
+            c[i] %= 360;
         });
         count.with_mut(|i| {
             *i += 1;
-            *i = *i % (size * size);
+            *i %= size * size;
         });
     }
 
