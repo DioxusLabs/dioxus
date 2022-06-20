@@ -47,7 +47,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                     Ok(captured) => {
                         let lazy = quote::quote! {
                             LazyNodes::new(move |__cx|{
-                                let code_location = get_line_num();
+                                let code_location = get_line_num!();
                                 let captured = #captured;
                                 let text = #rsx_text;
 

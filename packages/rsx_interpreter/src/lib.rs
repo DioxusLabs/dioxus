@@ -6,7 +6,6 @@ use interperter::build;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::panic::Location;
 use std::sync::{RwLock, RwLockReadGuard};
 use syn::parse_str;
 
@@ -79,14 +78,23 @@ fn interpert_rsx<'a, 'b>(
 }
 
 /// get the code location of the code that called this function
-#[track_caller]
-pub fn get_line_num() -> CodeLocation {
-    let location = Location::caller();
-    CodeLocation {
-        file: location.file().to_string(),
-        line: location.line(),
-        column: location.column(),
-    }
+#[macro_export]
+macro_rules! get_line_num {
+    () => {{
+        let line = line!();
+        let column = column!();
+        let file = file!();
+
+        #[cfg(windows)]
+        let file = env!("CARGO_MANIFEST_DIR").to_string() + "\\" + file!();
+        #[cfg(unix)]
+        let file = env!("CARGO_MANIFEST_DIR").to_string() + "/" + file!();
+        CodeLocation {
+            file: file.to_string(),
+            line: line,
+            column: column,
+        }
+    }};
 }
 
 /// A handle to the rsx context with interior mutability
