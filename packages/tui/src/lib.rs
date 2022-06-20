@@ -41,6 +41,12 @@ impl TuiContext {
     pub fn quit(&self) {
         self.tx.unbounded_send(InputEvent::Close).unwrap();
     }
+
+    pub fn inject_event(&self, event: crossterm::event::Event) {
+        self.tx
+            .unbounded_send(InputEvent::UserInput(event))
+            .unwrap();
+    }
 }
 
 pub fn launch(app: Component<()>) {
@@ -60,7 +66,6 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
             let tick_rate = Duration::from_millis(1000);
             loop {
                 if crossterm::event::poll(tick_rate).unwrap() {
-                    // if crossterm::event::poll(timeout).unwrap() {
                     let evt = crossterm::event::read().unwrap();
                     if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
                         break;
@@ -169,8 +174,8 @@ fn render_vdom(
                             Rect {
                                 x: 0,
                                 y: 0,
-                                width: 300,
-                                height: 300,
+                                width: 100,
+                                height: 100,
                             },
                             &mut taffy.borrow_mut(),
                             &rdom,
@@ -246,6 +251,7 @@ fn render_vdom(
         })
 }
 
+#[derive(Debug)]
 enum InputEvent {
     UserInput(TermEvent),
     Close,
