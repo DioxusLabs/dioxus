@@ -121,10 +121,7 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                                         log::info!("reloading rsx");
                                         for (old, new) in changed.into_iter() {
                                             let hr = get_location(
-                                                &path
-                                                    .strip_prefix(&crate_dir)
-                                                    .unwrap()
-                                                    .to_path_buf(),
+                                                &path.to_path_buf(),
                                                 old.to_token_stream(),
                                             );
                                             // get the original source code to preserve whitespace

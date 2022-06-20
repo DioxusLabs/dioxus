@@ -97,7 +97,7 @@ pub async fn hot_reload_handler(
                             if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file) {
                                 for (old, new) in changed.into_iter() {
                                     let hr = get_location(
-                                        k.strip_prefix(&state.watcher_config.crate_dir).unwrap(),
+                                        k,
                                         old.to_token_stream(),
                                     );
                                     // get the original source code to preserve whitespace
