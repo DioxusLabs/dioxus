@@ -15,11 +15,18 @@ Parse
 -> "text {with_args}"
 -> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
 */
+#[derive(PartialEq, Eq)]
 pub enum BodyNode {
     Element(Element),
     Component(Component),
     Text(LitStr),
     RawExpr(Expr),
+}
+
+impl BodyNode {
+    pub fn is_litstr(&self) -> bool {
+        matches!(self, BodyNode::Text(_))
+    }
 }
 
 impl Parse for BodyNode {

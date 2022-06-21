@@ -2,14 +2,15 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
 
-mod ifmt;
 mod inlineprops;
 mod props;
-mod rsx;
+
+// mod rsx;
+use dioxus_rsx as rsx;
 
 #[proc_macro]
 pub fn format_args_f(input: TokenStream) -> TokenStream {
-    use ifmt::*;
+    use rsx::*;
     let item = parse_macro_input!(input as IfmtInput);
     format_args_f_impl(item)
         .unwrap_or_else(|err| err.to_compile_error())
@@ -31,12 +32,43 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// ```
 #[doc = include_str!("../../../examples/rsx_usage.rs")]
 /// ```
-#[proc_macro_error::proc_macro_error]
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
+    #[cfg(feature = "hot_reload")]
+    let rsx_text = s.to_string();
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
-        Ok(stream) => stream.to_token_stream().into(),
+        Ok(body) => {
+            #[cfg(feature = "hot_reload")]
+            {
+                use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
+
+                match CapturedContextBuilder::from_call_body(body) {
+                    Ok(captured) => {
+                        let lazy = quote::quote! {
+                            LazyNodes::new(move |__cx|{
+                                let code_location = get_line_num!();
+                                let captured = #captured;
+                                let text = #rsx_text;
+
+                                resolve_scope(code_location, text, captured, __cx)
+                            })
+                        };
+                        if let Some(cx) = captured.custom_context {
+                            quote::quote! {
+                                #cx.render(#lazy)
+                            }
+                            .into()
+                        } else {
+                            lazy.into()
+                        }
+                    }
+                    Err(err) => err.into_compile_error().into(),
+                }
+            }
+            #[cfg(not(feature = "hot_reload"))]
+            body.to_token_stream().into()
+        }
     }
 }
 

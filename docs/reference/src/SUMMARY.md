@@ -21,6 +21,7 @@
   - [Custom Renderer](guide/custom_renderer.md)
   - [Server-side components](guide/server_side_components.md)
   - [Bundling and Distributing](guide/bundline.md)
+  - [Hot Reloading Rsx](guide/hot_reloading.md)
 
 - [Reference Guide](reference/reference.md)
   - [Anti-patterns](reference/anti.md)

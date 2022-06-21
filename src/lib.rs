@@ -44,6 +44,11 @@ pub mod events {
     pub use dioxus_html::{on::*, KeyCode};
 }
 
+pub use dioxus_rsx as rsx;
+
+#[cfg(feature = "hot_reload")]
+pub use dioxus_rsx_interpreter as rsx_interpreter;
+
 pub mod prelude {
     pub use crate::hooks::*;
     pub use dioxus_core::prelude::*;
@@ -56,4 +61,10 @@ pub mod prelude {
 
     #[cfg(feature = "fermi")]
     pub use fermi::{use_atom_ref, use_init_atom_root, use_read, use_set, Atom, AtomRef};
+
+    #[cfg(feature = "hot_reload")]
+    pub use dioxus_rsx_interpreter::{
+        captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
+        get_line_num, resolve_scope, CodeLocation, RsxContext,
+    };
 }

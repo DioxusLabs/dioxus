@@ -16,6 +16,7 @@ dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
     "web"
 ] }
+dioxus-rsx-interpreter = { path = "../rsx_interpreter", version = "*", optional = true }
 
 js-sys = "0.3.56"
 wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
@@ -30,6 +31,7 @@ futures-util = "0.3.19"
 smallstr = "0.2.0"
 serde-wasm-bindgen = "0.4.2"
 futures-channel = "0.3.21"
+serde_json = { version = "1.0", optional = true }
 
 [dependencies.web-sys]
 version = "0.3.56"
@@ -75,6 +77,7 @@ features = [
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
+hot_reload = ["dioxus-rsx-interpreter", "web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }

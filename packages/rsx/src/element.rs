@@ -4,12 +4,13 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
-    Expr, Ident, LitStr, Result, Token,
+    Error, Expr, Ident, LitStr, Result, Token,
 };
 
 // =======================================
 // Parse the VNode::Element type
 // =======================================
+#[derive(PartialEq, Eq)]
 pub struct Element {
     pub name: Ident,
     pub key: Option<LitStr>,
@@ -64,7 +65,7 @@ impl Parse for Element {
                 }
 
                 if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident);
+                    missing_trailing_comma!(ident.span());
                 }
                 continue;
             }
@@ -122,7 +123,7 @@ impl Parse for Element {
 
                 // todo: add a message saying you need to include commas between fields
                 if content.parse::<Token![,]>().is_err() {
-                    missing_trailing_comma!(ident);
+                    missing_trailing_comma!(ident.span());
                 }
                 continue;
             }
@@ -189,6 +190,7 @@ impl ToTokens for Element {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
     AttrText { name: Ident, value: LitStr },
@@ -208,6 +210,7 @@ pub enum ElementAttr {
     EventTokens { name: Ident, tokens: Expr },
 }
 
+#[derive(PartialEq, Eq)]
 pub struct ElementAttrNamed {
     pub el_name: Ident,
     pub attr: ElementAttr,

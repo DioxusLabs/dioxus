@@ -1,0 +1,12 @@
+[package]
+name = "dioxus-rsx"
+version = "0.0.0"
+edition = "2018"
+license = "MIT/Apache-2.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+proc-macro2 = { version = "1.0" }
+syn = { version = "1.0", features = ["full", "extra-traits"] }
+quote = { version = "1.0" }
