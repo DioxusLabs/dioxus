@@ -6,7 +6,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
-use dioxus_rsx_interpreter::SetRsxMessage;
+use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 

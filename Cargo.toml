@@ -51,7 +51,7 @@ zip = "0.6.2"
 tower = "0.4.12"
 
 syn = { version = "1.0" }
-dioxus-rsx-interpreter = { path = "../dioxus/packages/rsx_interpreter" }
+dioxus = { git = "https://github.com/dioxuslabs/dioxus/", features = ["hot_reload"] }
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 
 

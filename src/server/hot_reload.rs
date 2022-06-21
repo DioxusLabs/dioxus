@@ -2,14 +2,14 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
-use dioxus_rsx_interpreter::SetRsxMessage;
+use dioxus::rsx_interpreter::SetRsxMessage;
 
 use std::{path::PathBuf, sync::Arc};
 
 use super::BuildManager;
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
-pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetManyRsxMessage};
+pub use dioxus::rsx_interpreter::{error::Error, CodeLocation, SetManyRsxMessage};
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
