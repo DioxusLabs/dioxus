@@ -18,9 +18,12 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
-    token, AngleBracketedGenericArguments, Expr, Ident, LitStr, PathArguments, Result, Token,
+    spanned::Spanned,
+    token, AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result,
+    Token,
 };
 
+#[derive(PartialEq, Eq)]
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
@@ -39,7 +42,7 @@ impl Component {
             .take(path.segments.len() - 1)
             .any(|seg| seg.arguments != PathArguments::None)
         {
-            component_path_cannot_have_arguments!(path);
+            component_path_cannot_have_arguments!(path.span());
         }
 
         // ensure last segment only have value of None or AngleBracketed
@@ -47,7 +50,7 @@ impl Component {
             path.segments.last().unwrap().arguments,
             PathArguments::None | PathArguments::AngleBracketed(_)
         ) {
-            invalid_component_path!(path);
+            invalid_component_path!(path.span());
         }
 
         Ok(())
@@ -190,12 +193,14 @@ impl ToTokens for Component {
 }
 
 // the struct's fields info
+#[derive(PartialEq, Eq)]
 pub struct ComponentField {
-    name: Ident,
-    content: ContentField,
+    pub name: Ident,
+    pub content: ContentField,
 }
 
-enum ContentField {
+#[derive(PartialEq, Eq)]
+pub enum ContentField {
     ManExpr(Expr),
     Formatted(LitStr),
     OnHandlerRaw(Expr),

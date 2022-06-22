@@ -132,7 +132,7 @@ pub trait State: Default + Clone {
         ty: MemberId,
         node: &'a VNode<'a>,
         vdom: &'a dioxus_core::VirtualDom,
-        children: &Vec<&Self>,
+        children: &[&Self],
         ctx: &AnyMap,
     ) -> Option<ChildStatesChanged>;
     /// This must be a valid resolution order. (no nodes updated before a state they rely on)

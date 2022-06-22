@@ -92,6 +92,7 @@ impl NodeDepState for NodeDepCallCounter {
     }
 }
 
+#[allow(clippy::vec_box)]
 #[derive(Debug, Clone, PartialEq, Default)]
 struct BubbledUpStateTester(Option<String>, Vec<Box<BubbledUpStateTester>>);
 impl ChildDepState for BubbledUpStateTester {

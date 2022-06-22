@@ -7,23 +7,23 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, state::*};
-use dioxus_native_core_macro::State;
+use dioxus_native_core::real_dom::RealDom;
+use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
-use layout::TaffyLayout;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use style_attributes::StyleModifier;
 use taffy::{geometry::Point, prelude::Size, Taffy};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
+mod focus;
 mod hooks;
 mod layout;
+mod node;
 mod render;
 mod style;
 mod style_attributes;
@@ -31,18 +31,7 @@ mod widget;
 
 pub use config::*;
 pub use hooks::*;
-
-type Dom = RealDom<NodeState>;
-type Node = dioxus_native_core::real_dom::Node<NodeState>;
-
-#[derive(Debug, Clone, State, Default)]
-struct NodeState {
-    #[child_dep_state(layout, RefCell<Taffy>)]
-    layout: TaffyLayout,
-    // depends on attributes, the C component of it's parent and a u8 context
-    #[parent_dep_state(style)]
-    style: StyleModifier,
-}
+pub(crate) use node::*;
 
 #[derive(Clone)]
 pub struct TuiContext {
@@ -51,6 +40,12 @@ pub struct TuiContext {
 impl TuiContext {
     pub fn quit(&self) {
         self.tx.unbounded_send(InputEvent::Close).unwrap();
+    }
+
+    pub fn inject_event(&self, event: crossterm::event::Event) {
+        self.tx
+            .unbounded_send(InputEvent::UserInput(event))
+            .unwrap();
     }
 }
 
@@ -71,7 +66,6 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
             let tick_rate = Duration::from_millis(1000);
             loop {
                 if crossterm::event::poll(tick_rate).unwrap() {
-                    // if crossterm::event::poll(timeout).unwrap() {
                     let evt = crossterm::event::read().unwrap();
                     if event_tx.unbounded_send(InputEvent::UserInput(evt)).is_err() {
                         break;
@@ -130,7 +124,7 @@ fn render_vdom(
             }
 
             let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
-            let mut resized = true;
+            let mut updated = true;
 
             loop {
                 /*
@@ -144,8 +138,8 @@ fn render_vdom(
                 todo: lazy re-rendering
                 */
 
-                if !to_rerender.is_empty() || resized {
-                    resized = false;
+                if !to_rerender.is_empty() || updated {
+                    updated = false;
                     fn resize(dims: Rect, taffy: &mut Taffy, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
@@ -180,8 +174,8 @@ fn render_vdom(
                             Rect {
                                 x: 0,
                                 y: 0,
-                                width: 300,
-                                height: 300,
+                                width: 100,
+                                height: 100,
                             },
                             &mut taffy.borrow_mut(),
                             &rdom,
@@ -209,7 +203,7 @@ fn render_vdom(
                                             break;
                                         }
                                     }
-                                    TermEvent::Resize(_, _) => resized = true,
+                                    TermEvent::Resize(_, _) => updated = true,
                                     TermEvent::Mouse(_) => {}
                                 },
                                 InputEvent::Close => break,
@@ -224,10 +218,16 @@ fn render_vdom(
 
                 {
                     let evts = handler.get_events(&taffy.borrow(), &mut rdom);
+                    {
+                        updated |= handler.state().focus_state.clean();
+                    }
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
                     let mutations = vdom.work_with_deadline(|| false);
+                    for m in &mutations {
+                        handler.prune(m, &rdom);
+                    }
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
@@ -251,6 +251,7 @@ fn render_vdom(
         })
 }
 
+#[derive(Debug)]
 enum InputEvent {
     UserInput(TermEvent),
     Close,

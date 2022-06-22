@@ -5,7 +5,7 @@ use taffy::{
     prelude::{Layout, Size},
     Taffy,
 };
-use tui::{backend::CrosstermBackend, layout::Rect};
+use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
     style::{RinkColor, RinkStyle},
@@ -271,6 +271,10 @@ impl RinkWidget for &Node {
                 let mut new_cell = RinkCell::default();
                 if let Some(c) = self.state.style.core.bg {
                     new_cell.bg = c;
+                }
+                if self.state.focused {
+                    new_cell.bg.alpha = 100;
+                    new_cell.bg.color = new_cell.bg.blend(Color::White);
                 }
                 buf.set(x, y, new_cell);
             }

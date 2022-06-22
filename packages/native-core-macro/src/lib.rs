@@ -211,7 +211,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ty: dioxus_native_core::state::MemberId,
                         node: &'a dioxus_core::VNode<'a>,
                         vdom: &'a dioxus_core::VirtualDom,
-                        children: &Vec<&Self>,
+                        children: &[&Self],
                         ctx: &anymap::AnyMap,
                     ) -> Option<dioxus_native_core::state::ChildStatesChanged>{
                         use dioxus_native_core::state::ChildDepState as _;
@@ -225,7 +225,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                                         ty - #sum_idents,
                                         node,
                                         vdom,
-                                        &children.iter().map(|p| &p.#child_state_idents).collect(),
+                                        &children.iter().map(|p| &p.#child_state_idents).collect::<Vec<_>>(),
                                         ctx,
                                     ).map(|mut changed|{
                                         for id in &mut changed.node_dep{
