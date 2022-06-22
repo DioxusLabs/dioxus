@@ -187,6 +187,7 @@ impl InnerInputState {
                     name: "focus",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focus"),
                 });
                 resolved_events.push(UserEvent {
                     scope_id: None,
@@ -194,6 +195,7 @@ impl InnerInputState {
                     name: "focusin",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focusin"),
                 });
             }
             if let Some(id) = old_focus {
@@ -203,6 +205,7 @@ impl InnerInputState {
                     name: "focusout",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focusout"),
                 });
             }
         }
