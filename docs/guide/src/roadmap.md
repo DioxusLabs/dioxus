@@ -1,132 +1,121 @@
-# Roadmap & Feature-set
+# Progresso & Conjunto de Características
 
-This feature set and roadmap can help you decide if what Dioxus can do today works for you.
+Antes de irmos à fundo no Dioxus, sinta-se à vontade para ver nosso conjunto de características e nosso progresso para saber se o que o Dioxus pode fornecer hoje funciona pra você.
 
-If a feature that you need doesn't exist or you want to contribute to projects on the roadmap, feel free to get involved by [joining the discord](https://discord.gg/XgGxMSkvUM).
+Se as características que você precisa não existem ou você quer contribuir com o progresso do projeto, sinta-se à vontade para se envolver [se juntando ao Discord](https://discord.gg/XgGxMSkvUM).
 
-Generally, here's the status of each platform:
+No geral, aqui tem o estado de cada plataforma:
 
-- **Web**: Dioxus is a great choice for pure web-apps – especially for CRUD/complex apps. However, it does lack the ecosystem of React, so you might be missing a component library or some useful hook.
+- **Web**: Dioxus é uma ótima escolha para aplicativos puramente feito para Web - especialmente para aplicativos CRUD/complexos. No entanto, ele ainda falta o ecossistema do React, então você pode sentir falta de alguma biblioteca ou algum Hook útil.
 
-- **SSR**: Dioxus is a great choice for pre-rendering, hydration, and rendering HTML on a web endpoint. Be warned – the VirtualDom is not (currently) `Send + Sync`.
+- **SSR**: Dioxus é uma ótima escolha para pre-renderização, hidratação e renderização HTML sobre a Web. Esteja avisado - a VirtualDOM ainda não é (atualmente) `Send + Sync`.
 
-- **Desktop**: You can build very competent single-window desktop apps right now. However, multi-window apps require support from Dioxus core and are not ready.
+- **Desktop**: Você pode desenvolver aplicativos de única-janela bem competentes agora mesmo. No entanto, aplicativos multi-janelas requerem suporte do núcleo do Dioxus que ainda não estão prontos.
 
-- **Mobile**: Mobile support is very young. You'll be figuring things out as you go and there are not many support crates for peripherals.
+- **Mobile**: Suporte móvel é muito recente. Você terá de solucionar as coisas por si mesmo enquanto desenvolve e ainda não muitos pacotes que suportem periféricos.
 
-- **LiveView**: LiveView support is very young. You'll be figuring things out as you go. Thankfully, none of it is too hard and any work can be upstreamed into Dioxus.
+- **LiveView**: O suporte ao LiveView é muito recente. Você terá de solucionar as coisas por si mesmo enquanto desenvolve. Entretanto, nenhuma é muito difícil e qualquer solução pode ser encaminhada para dentro do Dioxus.
 
-## Features
+## Características
+
 ---
 
-| Feature                   | Status | Description                                                          |
-| ------------------------- | ------ | -------------------------------------------------------------------- |
-| Conditional Rendering     | ✅      | if/then to hide/show component                                       |
-| Map, Iterator             | ✅      | map/filter/reduce to produce rsx!                                    |
-| Keyed Components          | ✅      | advanced diffing with keys                                           |
-| Web                       | ✅      | renderer for web browser                                             |
-| Desktop (webview)         | ✅      | renderer for desktop                                                 |
-| Shared State (Context)    | ✅      | share state through the tree                                         |
-| Hooks                     | ✅      | memory cells in components                                           |
-| SSR                       | ✅      | render directly to string                                            |
-| Component Children        | ✅      | cx.children() as a list of nodes                                     |
-| Headless components       | ✅      | components that don't return real elements                           |
-| Fragments                 | ✅      | multiple elements without a real root                                |
-| Manual Props              | ✅      | Manually pass in props with spread syntax                            |
-| Controlled Inputs         | ✅      | stateful wrappers around inputs                                      |
-| CSS/Inline Styles         | ✅      | syntax for inline styles/attribute groups                            |
-| Custom elements           | ✅      | Define new element primitives                                        |
-| Suspense                  | ✅      | schedule future render from future/promise                           |
-| Integrated error handling | ✅      | Gracefully handle errors with ? syntax                               |
-| NodeRef                   | ✅      | gain direct access to nodes                                          |
-| Re-hydration              | ✅      | Pre-render to HTML to speed up first contentful paint                |
-| Jank-Free Rendering       | ✅      | Large diffs are segmented across frames for silky-smooth transitions |
-| Effects                   | ✅      | Run effects after a component has been committed to render           |
-| Portals                   | 🛠      | Render nodes outside of the traditional tree structure               |
-| Cooperative Scheduling    | 🛠      | Prioritize important events over non-important events                |
-| Server Components         | 🛠      | Hybrid components for SPA and Server                                 |
-| Bundle Splitting          | 👀      | Efficiently and asynchronously load the app                          |
-| Lazy Components           | 👀      | Dynamically load the new components as the page is loaded            |
-| 1st class global state    | ✅      | redux/recoil/mobx on top of context                                  |
-| Runs natively             | ✅      | runs as a portable binary w/o a runtime (Node)                       |
-| Subtree Memoization       | ✅      | skip diffing static element subtrees                                 |
-| High-efficiency templates | 🛠      | rsx! calls are translated to templates on the DOM's side             |
-| Compile-time correct      | ✅      | Throw errors on invalid template layouts                             |
-| Heuristic Engine          | ✅      | track component memory usage to minimize future allocations          |
-| Fine-grained reactivity   | 👀      | Skip diffing for fine-grain updates                                  |
+| Característica                      | Estado | Descrição                                                                                        |
+| ----------------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| Renderização Condicional            | ✅     | `if/then` para esconder/mostrar componente                                                       |
+| Map, Iterador                       | ✅     | `map/filter/reduce` para produzir `rsx!`                                                         |
+| Componentes Chaveados               | ✅     | comparação em `diff` com chaves                                                                  |
+| Web                                 | ✅     | renderizador para navegadores Web                                                                |
+| Desktop (WebView)                   | ✅     | renderizador para Desktop                                                                        |
+| Estado Compartilhado (Context)      | ✅     | compartilha estados através de árvores                                                           |
+| Hooks                               | ✅     | células de memoria nos componentes                                                               |
+| SSR                                 | ✅     | renderiza diretamente para `string`                                                              |
+| Componente Filho                    | ✅     | `cx.children()` como lista de nós                                                                |
+| Componentes Sem Elementos           | ✅     | componentes que não renderizam elementos reais na DOM                                            |
+| Fragmentos                          | ✅     | elementos múltiplos sem uma raiz real                                                            |
+| Propriedades Manuais                | ✅     | passa manualmente `props` com `spread syntax`                                                    |
+| Entradas Controladas                | ✅     | encapsulamento com estado em sobre entradas                                                      |
+| Estilos CSS/Inline                  | ✅     | sintaxe para grupos de estilo/atributos em linha                                                 |
+| Elementos Personalizados            | ✅     | define novos elementos primitivos                                                                |
+| Suspense                            | ✅     | programa futuras renderizações usando `future`/`Promise`                                         |
+| Tratamento Integrado de Erros       | ✅     | trata erros graciosamente com a sintaxe `?`                                                      |
+| NodeRef                             | ✅     | ganha acesso direto aos nós                                                                      |
+| Re-hidratação                       | ✅     | pre-renderiza HTML para acelerar a primeira impressão na tela                                    |
+| Renderização Livre de Gargalos      | ✅     | `diffs` grandes são segmentados sobre quadros para uma transição suave como seda                 |
+| Efeitos                             | ✅     | executa efeitos após um componente ser enviado para a fila de renderização                       |
+| Portais                             | 🛠      | renderiza nós fora da árvore tradicional de elementos (DOM)                                      |
+| Agendamento Cooperativo             | 🛠      | prioriza eventos com mais importância sobre eventos menos importantes                            |
+| Componentes de Servidor             | 🛠      | componentes híbridos para aplicativos de única página (SPA) e servidores                         |
+| Divisão de Pacotes                  | 👀     | carrega o aplicativo assincronamente e eficientemente                                            |
+| Componentes Tardios                 | 👀     | dinamicamente carrega os novos componentes assim que estiverem prontos enquanto a página carrega |
+| Estado Global de 1ª Classe          | ✅     | `redux/recoil/mobx` sobre o `context`                                                            |
+| Execução Nativa                     | ✅     | execução como um binário portátil sem um `runtime` (Node)                                        |
+| Sub-Árvore de Memoization           | ✅     | pula o `diffing` em sub-árvores de elementos estáticos                                           |
+| Modelos de Alta Eficiência          | 🛠      | chamadas `rsx!` são traduzidas para modelos sobre a `DOM`                                        |
+| Garantia de Correção por Compilador | ✅     | avisa sobre erros em esquemas de modelos inválidos antes do final da compilação                  |
+| Motor de Heurística                 | ✅     | rastreia componentes na memória para minimizar alocações futures                                 |
+| Controle Preciso de Reatividade     | 👀     | pula o `diffing` para ter controle preciso das atualizações de tela                              |
 
-- ✅ = implemented and working
-- 🛠 = actively being worked on
-- 👀 = not yet implemented or being worked on
+- ✅ = implementado e funcionando
+- 🛠 = sendo ativamente trabalho
+- 👀 = ainda não implementado ou sendo trabalhado
+- ❓ = incerto se pode ou não ser implementado
 
+## Progresso
 
-## Roadmap
-These Features are planned for the future of Dioxus:
+Estas características estão planejadas para o futuro do Dioxus:
+
+---
 
 ### Core
-- [x] Release of Dioxus Core
-- [x] Upgrade documentation to include more theory and be more comprehensive
-- [ ] Support for HTML-side templates for lightning-fast dom manipulation
-- [ ] Support for multiple renderers for same virtualdom (subtrees)
-- [ ] Support for ThreadSafe (Send + Sync)
-- [ ] Support for Portals
+
+- [x] Entrega do Dioxus Core
+- [x] Melhoria da documentação para incluir mais teoria e ser mais compreensivo
+- [ ] Suporte de modelos HTML para manipulação da `DOM` incrivelmente rápido
+- [ ] Suporte para múltiplos renderizadores para a mesma `VirtualDOM` (sub-árvores)
+- [ ] Suporte para ThreadSafe (Send + Sync)
+- [ ] Suporte para Portais
 
 ### SSR
-- [x] SSR Support + Hydration
-- [ ] Integrated suspense support for SSR
+
+- [x] Suporte SSR + Hydration
+- [ ] Suporte ao Suspense integrado para SSR
 
 ### Desktop
-- [ ] Declarative window management
-- [ ] Templates for building/bundling
-- [ ] Fully native renderer
-- [ ] Access to Canvas/WebGL context natively
 
-### Mobile
-- [ ] Mobile standard library
+- [ ] Gerenciamento de janela declarativo
+- [ ] Modelos para contruir/empacotar
+- [ ] Renderizador totalmente nativo
+- [ ] Acesso ao contexto Canvas/WebGL nativo
+
+### Móvel
+
+- [ ] Biblioteca padrão Móvel
   - [ ] GPS
-  - [ ] Camera
-  - [ ] filesystem
-  - [ ] Biometrics
+  - [ ] Câmera
+  - [ ] Arquivo de Sistema
+  - [ ] Biometria
   - [ ] WiFi
   - [ ] Bluetooth
-  - [ ] Notifications
-  - [ ] Clipboard
-- [ ] Animations
-- [ ] Native Renderer
+  - [ ] Notificações
+  - [ ] Área de Transferência
+- [ ] Animações
+- [ ] Renderizador Nativo
 
 ### Bundling (CLI)
-- [x] Translation from HTML into RSX
-- [x] Dev server
+
+- [x] Tradução de HTML para RSX
+- [x] Servidor de Desenvolvimento
 - [x] Live reload
-- [x] Translation from JSX into RSX
-- [ ] Hot module replacement
-- [ ] Code splitting
-- [ ] Asset macros
-- [ ] Css pipeline
-- [ ] Image pipeline
+- [x] Tradução de JSX para RSX
+- [ ] Substituição de módulos em funcionamento (Hot replace)
+- [ ] Segmentação de código
+- [ ] Acervo de macros
+- [ ] Encadeamento de CSS
+- [ ] Encadeamento de Imagens
 
-### Essential hooks
+### Hooks Essenciais
+
 - [x] Router
-- [x] Global state management
-- [ ] Resize observer
-
-
-## Work in Progress
-
-### Build Tool
-
-We are currently working on our own build tool called [Dioxus CLI](https://github.com/DioxusLabs/cli) which will support:
-
-- an interactive TUI
-- on-the-fly reconfiguration
-- hot CSS reloading
-- two-way data binding between browser and source code
-- an interpreter for `rsx!`
-- ability to publish to github/netlify/vercel
-- bundling for iOS/Desktop/etc
-
-### LiveView / Server Component Support
-
-The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support – you'll need to wire this up yourself.
-
-While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between Wasm and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.
+- [x] Gerenciamento Global de Estado
+- [ ] Observador de redimensionamento
