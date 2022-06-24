@@ -44,7 +44,6 @@ enum DomEdit {
 
 The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack.
 
-
 ### An example
 
 For the sake of understanding, lets consider this example – a very simple UI declaration:
@@ -78,7 +77,9 @@ stack: [
     h1,
 ]
 ```
+
 Next, Dioxus sees the text node, and generates the `CreateTextNode` DomEdit:
+
 ```rust
 instructions: [
     PushRoot(Container),
@@ -91,6 +92,7 @@ stack: [
     "hello world"
 ]
 ```
+
 Remember, the text node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the text node to the h1 element. It depends on the situation, but in this case we use `AppendChildren`. This pops the text node off the stack, leaving the h1 element as the next element in line.
 
 ```rust
@@ -105,7 +107,9 @@ stack: [
     h1
 ]
 ```
+
 We call `AppendChildren` again, popping off the h1 node and attaching it to the parent:
+
 ```rust
 instructions: [
     PushRoot(Container),
@@ -118,7 +122,9 @@ stack: [
     ContainerNode,
 ]
 ```
+
 Finally, the container is popped since we don't need it anymore.
+
 ```rust
 instructions: [
     PushRoot(Container),
@@ -130,7 +136,9 @@ instructions: [
 ]
 stack: []
 ```
+
 Over time, our stack looked like this:
+
 ```rust
 []
 [Container]
@@ -253,6 +261,7 @@ The `RealDom` is a higher level abstraction over updating the Dom. It updates wi
 
 Let's build a toy renderer with borders, size, and text color.
 Before we start lets take a look at an exaple element we can render:
+
 ```rust
 cx.render(rsx!{
     div{
@@ -445,6 +454,7 @@ struct ToyState {
 ```
 
 Now that we have our state, we can put it to use in our dom. Re can update the dom with update_state to update the structure of the dom (adding, removing, and chaning properties of nodes) and then apply_mutations to update the ToyState for each of the nodes that changed.
+
 ```rust
 fn main(){
     fn app(cx: Scope) -> Element {
@@ -487,7 +497,9 @@ fn main(){
 ```
 
 ## Layout
+
 For most platforms the layout of the Elements will stay the same. The layout_attributes module provides a way to apply html attributes to a stretch layout style.
 
 ## Conclusion
+
 That should be it! You should have nearly all the knowledge required on how to implement your own renderer. We're super interested in seeing Dioxus apps brought to custom desktop renderers, mobile renderer, video game UI, and even augmented reality! If you're interesting in contributing to any of the these projects, don't be afraid to reach out or join the community.
