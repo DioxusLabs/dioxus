@@ -81,3 +81,7 @@ impl<'a> Iterator for ElementIdIterator<'a> {
         returned_node
     }
 }
+
+pub(crate) type BString<'b> = bumpalo::collections::String<'b>;
+pub(crate) type BVec<'b, T> = bumpalo::collections::Vec<'b, T>;
+pub(crate) type BBox<'b, T> = bumpalo::boxed::Box<'b, T>;

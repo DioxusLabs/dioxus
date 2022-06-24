@@ -3,13 +3,13 @@ use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_ssr::{render_lazy, render_vdom, render_vdom_cfg, SsrConfig, SsrRenderer, TextRenderer};
 
-static SIMPLE_APP: Component = |cx| {
+static SIMPLE_APP: RenderFn = |cx| {
     cx.render(rsx!(div {
         "hello world!"
     }))
 };
 
-static SLIGHTLY_MORE_COMPLEX: Component = |cx| {
+static SLIGHTLY_MORE_COMPLEX: RenderFn = |cx| {
     cx.render(rsx! {
         div { title: "About W3Schools",
             (0..20).map(|f| rsx!{
@@ -27,14 +27,14 @@ static SLIGHTLY_MORE_COMPLEX: Component = |cx| {
     })
 };
 
-static NESTED_APP: Component = |cx| {
+static NESTED_APP: RenderFn = |cx| {
     cx.render(rsx!(
         div {
             SIMPLE_APP {}
         }
     ))
 };
-static FRAGMENT_APP: Component = |cx| {
+static FRAGMENT_APP: RenderFn = |cx| {
     cx.render(rsx!(
         div { "f1" }
         div { "f2" }
@@ -90,7 +90,7 @@ fn write_to_file() {
 
 #[test]
 fn styles() {
-    static STLYE_APP: Component = |cx| {
+    static STLYE_APP: RenderFn = |cx| {
         cx.render(rsx! {
             div { color: "blue", font_size: "46px"  }
         })

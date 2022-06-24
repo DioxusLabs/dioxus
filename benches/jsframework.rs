@@ -23,7 +23,7 @@ criterion_group!(mbenches, create_rows);
 criterion_main!(mbenches);
 
 fn create_rows(c: &mut Criterion) {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         let mut rng = SmallRng::from_entropy();
 
         rsx!(cx, table {

@@ -12,7 +12,7 @@ use dioxus_core::{DomEdit::*, ScopeId};
 
 const IS_LOGGING_ENABLED: bool = false;
 
-fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
+fn new_dom<P: 'static + Send>(app: RenderFn<P>, props: P) -> VirtualDom {
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     VirtualDom::new_with_props(app, props)
 }
@@ -21,7 +21,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 /// In debug, this should also toss a warning.
 #[test]
 fn test_early_abort() {
-    const app: Component = |cx| {
+    const app: RenderFn = |cx| {
         let val = cx.use_hook(|_| 0);
 
         *val += 1;

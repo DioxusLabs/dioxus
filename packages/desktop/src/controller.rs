@@ -24,7 +24,7 @@ impl DesktopController {
     // Launch the virtualdom on its own thread managed by tokio
     // returns the desktop state
     pub(super) fn new_on_tokio<P: Send + 'static>(
-        root: Component<P>,
+        root: RenderFn<P>,
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {

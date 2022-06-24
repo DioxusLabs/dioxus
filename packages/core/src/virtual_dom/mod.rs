@@ -10,6 +10,9 @@ use fxhash::FxHashSet;
 use indexmap::IndexSet;
 use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
+pub(crate) mod builder;
+pub use builder::{dom, DomBuilder, ElementBuilder};
+
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
 ///
@@ -154,7 +157,7 @@ impl VirtualDom {
     /// ```
     ///
     /// Note: the VirtualDom is not progressed, you must either "run_with_deadline" or use "rebuild" to progress it.
-    pub fn new(root: Component) -> Self {
+    pub fn new(root: RenderFn) -> Self {
         Self::new_with_props(root, ())
     }
 
@@ -188,7 +191,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P>(root: Component<P>, root_props: P) -> Self
+    pub fn new_with_props<P>(root: RenderFn<P>, root_props: P) -> Self
     where
         P: 'static,
     {
@@ -209,7 +212,7 @@ impl VirtualDom {
     /// let dom = VirtualDom::new_with_scheduler(Example, (), channel);
     /// ```
     pub fn new_with_props_and_scheduler<P: 'static>(
-        root: Component<P>,
+        root: RenderFn<P>,
         root_props: P,
         channel: (
             UnboundedSender<SchedulerMsg>,

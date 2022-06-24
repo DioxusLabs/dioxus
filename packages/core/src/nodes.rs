@@ -6,7 +6,7 @@
 use crate::{
     innerlude::{AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
-    AnyEvent, Component,
+    AnyEvent, RenderFn,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -213,7 +213,7 @@ impl ElementId {
     }
 }
 
-fn empty_cell() -> Cell<Option<ElementId>> {
+pub(crate) fn empty_cell() -> Cell<Option<ElementId>> {
     Cell::new(None)
 }
 
@@ -457,7 +457,7 @@ pub struct VComponent<'src> {
 }
 
 pub(crate) struct VComponentProps<P> {
-    pub render_fn: Component<P>,
+    pub render_fn: RenderFn<P>,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,
 }
@@ -592,7 +592,7 @@ impl<'a> NodeFactory<'a> {
         VNode::Element(self.bump.alloc(VElement {
             tag: tag_name,
             key,
-            namespace,
+            namespace: namespace.map(Into::into),
             listeners,
             attributes,
             children,

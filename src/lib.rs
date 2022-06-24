@@ -52,7 +52,7 @@ pub use dioxus_rsx_interpreter as rsx_interpreter;
 pub mod prelude {
     pub use crate::hooks::*;
     pub use dioxus_core::prelude::*;
-    pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
+    pub use dioxus_core_macro::{component, format_args_f, inline_props, rsx, Props};
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
     pub use dioxus_html as dioxus_elements;
 

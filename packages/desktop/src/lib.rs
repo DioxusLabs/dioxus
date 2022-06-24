@@ -44,7 +44,7 @@ use wry::webview::WebViewBuilder;
 ///     })
 /// }
 /// ```
-pub fn launch(root: Component) {
+pub fn launch(root: RenderFn) {
     launch_with_props(root, (), |c| c)
 }
 
@@ -68,7 +68,7 @@ pub fn launch(root: Component) {
 /// }
 /// ```
 pub fn launch_cfg(
-    root: Component,
+    root: RenderFn,
     config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {
     launch_with_props(root, (), config_builder)
@@ -98,7 +98,7 @@ pub fn launch_cfg(
 /// }
 /// ```
 pub fn launch_with_props<P: 'static + Send>(
-    root: Component<P>,
+    root: RenderFn<P>,
     props: P,
     builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
 ) {

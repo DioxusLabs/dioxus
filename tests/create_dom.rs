@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 mod test_logging;
 use dioxus_core::DomEdit::*;
 
-fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
+fn new_dom<P: 'static + Send>(app: RenderFn<P>, props: P) -> VirtualDom {
     const IS_LOGGING_ENABLED: bool = false;
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     VirtualDom::new_with_props(app, props)
@@ -18,7 +18,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 
 #[test]
 fn test_original_diff() {
-    static APP: Component = |cx| {
+    static APP: RenderFn = |cx| {
         cx.render(rsx! {
             div {
                 div {
@@ -45,7 +45,7 @@ fn test_original_diff() {
 
 #[test]
 fn create() {
-    static APP: Component = |cx| {
+    static APP: RenderFn = |cx| {
         cx.render(rsx! {
             div {
                 div {
@@ -87,7 +87,7 @@ fn create() {
 
 #[test]
 fn create_list() {
-    static APP: Component = |cx| {
+    static APP: RenderFn = |cx| {
         cx.render(rsx! {
             {(0..3).map(|f| rsx!{ div {
                 "hello"
@@ -118,7 +118,7 @@ fn create_list() {
 
 #[test]
 fn create_simple() {
-    static APP: Component = |cx| {
+    static APP: RenderFn = |cx| {
         cx.render(rsx! {
             div {}
             div {}
@@ -144,7 +144,7 @@ fn create_simple() {
 }
 #[test]
 fn create_components() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx! {
             Child { "abc1" }
             Child { "abc2" }
@@ -192,7 +192,7 @@ fn create_components() {
 }
 #[test]
 fn anchors() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx! {
             {true.then(|| rsx!{ div { "hello" } })}
             {false.then(|| rsx!{ div { "goodbye" } })}

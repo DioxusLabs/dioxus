@@ -49,11 +49,11 @@ impl TuiContext {
     }
 }
 
-pub fn launch(app: Component<()>) {
+pub fn launch(app: RenderFn<()>) {
     launch_cfg(app, Config::default())
 }
 
-pub fn launch_cfg(app: Component<()>, cfg: Config) {
+pub fn launch_cfg(app: RenderFn<()>, cfg: Config) {
     let mut dom = VirtualDom::new(app);
 
     let (handler, state, register_event) = RinkInputHandler::new();

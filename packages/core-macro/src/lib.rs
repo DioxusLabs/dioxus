@@ -2,6 +2,7 @@ use proc_macro::TokenStream;
 use quote::ToTokens;
 use syn::parse_macro_input;
 
+mod component;
 mod inlineprops;
 mod props;
 
@@ -101,6 +102,14 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn inline_props(_args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
     match syn::parse::<inlineprops::InlinePropsBody>(s) {
+        Err(e) => e.to_compile_error().into(),
+        Ok(s) => s.to_token_stream().into(),
+    }
+}
+
+#[proc_macro_attribute]
+pub fn component(_args: proc_macro::TokenStream, s: TokenStream) -> TokenStream {
+    match syn::parse::<component::ComponentFn>(s) {
         Err(e) => e.to_compile_error().into(),
         Ok(s) => s.to_token_stream().into(),
     }

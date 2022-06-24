@@ -3,6 +3,7 @@
 #![deny(missing_docs)]
 
 pub(crate) mod arbitrary_value;
+pub(crate) mod component;
 pub(crate) mod diff;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
@@ -15,6 +16,7 @@ pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::arbitrary_value::*;
+    pub use crate::component::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
@@ -29,7 +31,7 @@ pub(crate) mod innerlude {
     /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
     pub type Element<'a> = Option<VNode<'a>>;
 
-    /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
+    /// A [`RenderFn`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///
     /// Components can be used in other components with two syntax options:
     /// - lowercase as a function call with named arguments (rust style)
@@ -65,7 +67,7 @@ pub(crate) mod innerlude {
     ///     // ...
     /// };
     /// ```
-    pub type Component<P = ()> = fn(Scope<P>) -> Element;
+    pub type RenderFn<P = ()> = fn(Scope<P>) -> Element;
 
     /// A list of attributes
     ///
@@ -73,10 +75,11 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, Attribute, AttributeValue, Component, DioxusElement, DomEdit, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations,
-    NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent, UserEvent,
-    VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    dom, AnyEvent, Attribute, AttributeValue, DioxusElement, DomBuilder, DomEdit, Element,
+    ElementBuilder, ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode,
+    LazyNodes, Listener, Mutations, NodeFactory, Properties, RenderFn, SchedulerMsg, Scope,
+    ScopeId, ScopeState, TaskId, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
+    VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -84,8 +87,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
-        LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode, VirtualDom,
+        dom, fc_to_builder, Attributes, Component, DioxusElement, DomBuilder, Element,
+        ElementBuilder, EventHandler, Fragment, LazyNodes, NodeFactory, Properties, RenderFn,
+        Scope, ScopeId, ScopeState, Slot, VNode, VirtualDom,
     };
 }
 

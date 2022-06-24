@@ -61,7 +61,7 @@ pub use crate::util::use_eval;
 use dioxus::SchedulerMsg;
 use dioxus::VirtualDom;
 pub use dioxus_core as dioxus;
-use dioxus_core::prelude::Component;
+use dioxus_core::prelude::RenderFn;
 use futures_util::FutureExt;
 
 mod cache;
@@ -91,7 +91,7 @@ mod util;
 ///     rsx!(cx, div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: Component) {
+pub fn launch(root_component: RenderFn) {
     launch_with_props(root_component, (), |c| c);
 }
 
@@ -114,7 +114,7 @@ pub fn launch(root_component: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig) {
+pub fn launch_cfg(root: RenderFn, config_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig) {
     launch_with_props(root, (), config_builder)
 }
 
@@ -143,7 +143,7 @@ pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -
 /// }
 /// ```
 pub fn launch_with_props<T>(
-    root_component: Component<T>,
+    root_component: RenderFn<T>,
     root_properties: T,
     configuration_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig,
 ) where
@@ -170,7 +170,7 @@ pub fn launch_with_props<T>(
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
+pub async fn run_with_props<T: 'static + Send>(root: RenderFn<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {

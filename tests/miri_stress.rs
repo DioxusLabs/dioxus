@@ -17,7 +17,7 @@ mod test_logging;
 
 const IS_LOGGING_ENABLED: bool = false;
 
-fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
+fn new_dom<P: 'static + Send>(app: RenderFn<P>, props: P) -> VirtualDom {
     test_logging::set_up_logging(IS_LOGGING_ENABLED);
     VirtualDom::new_with_props(app, props)
 }

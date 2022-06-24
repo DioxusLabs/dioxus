@@ -11,12 +11,12 @@ mod test_logging;
 fn shared_state_test() {
     struct MySharedState(&'static str);
 
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.provide_context(Rc::new(MySharedState("world!")));
         cx.render(rsx!(Child {}))
     };
 
-    static Child: Component = |cx| {
+    static Child: RenderFn = |cx| {
         let shared = cx.consume_context::<Rc<MySharedState>>()?;
         cx.render(rsx!("Hello, {shared.0}"))
     };

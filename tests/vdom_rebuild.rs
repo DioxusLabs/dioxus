@@ -15,7 +15,7 @@ use dioxus_core::DomEdit::*;
 
 #[test]
 fn app_runs() {
-    static App: Component = |cx| rsx!(cx, div{"hello"} );
+    static App: RenderFn = |cx| rsx!(cx, div{"hello"} );
 
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();
@@ -23,7 +23,7 @@ fn app_runs() {
 
 #[test]
 fn fragments_work() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx!(
             div{"hello"}
             div{"goodbye"}
@@ -37,7 +37,7 @@ fn fragments_work() {
 
 #[test]
 fn lists_work() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx!(
             h1 {"hello"}
             (0..6).map(|f| rsx!(span{ "{f}" }))
@@ -50,7 +50,7 @@ fn lists_work() {
 
 #[test]
 fn conditional_rendering() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx!(
             h1 {"hello"}
             {true.then(|| rsx!(span{ "a" }))}
@@ -77,13 +77,13 @@ fn conditional_rendering() {
 
 #[test]
 fn child_components() {
-    static App: Component = |cx| {
+    static App: RenderFn = |cx| {
         cx.render(rsx!(
             {true.then(|| rsx!(Child { }))}
             {false.then(|| rsx!(Child { }))}
         ))
     };
-    static Child: Component = |cx| {
+    static Child: RenderFn = |cx| {
         cx.render(rsx!(
             h1 {"hello"}
             h1 {"goodbye"}

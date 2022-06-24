@@ -17,7 +17,7 @@ fn manual_diffing() {
         value: Shared<&'static str>,
     }
 
-    static App: Component<AppProps> = |cx| {
+    static App: RenderFn<AppProps> = |cx| {
         let val = cx.props.value.lock().unwrap();
         cx.render(rsx! { div { "{val}" } })
     };
@@ -212,7 +212,7 @@ fn component_swap() {
         })
     };
 
-    static NavBar: Component = |cx| {
+    static NavBar: RenderFn = |cx| {
         println!("running navbar");
         cx.render(rsx! {
             h1 {
@@ -222,7 +222,7 @@ fn component_swap() {
         })
     };
 
-    static NavLink: Component = |cx| {
+    static NavLink: RenderFn = |cx| {
         println!("running navlink");
         cx.render(rsx! {
             h1 {
@@ -231,7 +231,7 @@ fn component_swap() {
         })
     };
 
-    static Dashboard: Component = |cx| {
+    static Dashboard: RenderFn = |cx| {
         println!("running dashboard");
         cx.render(rsx! {
             div {
@@ -240,7 +240,7 @@ fn component_swap() {
         })
     };
 
-    static Results: Component = |cx| {
+    static Results: RenderFn = |cx| {
         println!("running results");
         cx.render(rsx! {
             div {
