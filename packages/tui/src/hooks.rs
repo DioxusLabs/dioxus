@@ -9,7 +9,7 @@ use dioxus_html::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, S
 use dioxus_html::input_data::keyboard_types::Modifiers;
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
-use dioxus_html::{on::*, KeyCode};
+use dioxus_html::{event_bubbles, on::*, KeyCode};
 use std::{
     any::Any,
     cell::{RefCell, RefMut},
@@ -187,6 +187,7 @@ impl InnerInputState {
                     name: "focus",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focus"),
                 });
                 resolved_events.push(UserEvent {
                     scope_id: None,
@@ -194,6 +195,7 @@ impl InnerInputState {
                     name: "focusin",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focusin"),
                 });
             }
             if let Some(id) = old_focus {
@@ -203,6 +205,7 @@ impl InnerInputState {
                     name: "focusout",
                     element: Some(id),
                     data: Arc::new(FocusData {}),
+                    bubbles: event_bubbles("focusout"),
                 });
             }
         }
@@ -248,6 +251,7 @@ impl InnerInputState {
                     name,
                     element: Some(node.id),
                     data,
+                    bubbles: event_bubbles(name),
                 })
             }
         }
@@ -649,6 +653,7 @@ impl RinkInputHandler {
                             name: event,
                             element: Some(node.id),
                             data: data.clone(),
+                            bubbles: event_bubbles(event),
                         });
                     }
                 }
