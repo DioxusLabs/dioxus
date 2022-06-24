@@ -1,3 +1,5 @@
+#![cfg(feature = "axum")]
+
 use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
 use dioxus_core::{Element, LazyNodes, Scope};
 
