@@ -62,6 +62,11 @@ pub struct ConfigOptsServe {
     #[clap(long)]
     pub platform: Option<String>,
 
+    /// Build with hot reloading rsx [default: false]
+    #[clap(long)]
+    #[serde(default)]
+    pub hot_reload: bool,
+
     /// Space separated list of features to activate
     #[clap(long)]
     pub features: Option<Vec<String>>,

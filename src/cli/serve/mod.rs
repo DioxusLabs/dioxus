@@ -18,6 +18,7 @@ impl Serve {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
+        crate_config.with_hot_reload(self.serve.hot_reload);
         crate_config.with_release(self.serve.release);
         crate_config.with_verbose(self.serve.verbose);
 

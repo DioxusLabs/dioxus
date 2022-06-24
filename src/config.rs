@@ -114,6 +114,7 @@ pub struct CrateConfig {
     pub executable: ExecutableType,
     pub dioxus_config: DioxusConfig,
     pub release: bool,
+    pub hot_reload: bool,
     pub verbose: bool,
     pub custom_profile: Option<String>,
     pub features: Option<Vec<String>>,
@@ -165,6 +166,7 @@ impl CrateConfig {
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;
+        let hot_reload = false;
         let verbose = false;
         let custom_profile = None;
         let features = None;
@@ -179,6 +181,7 @@ impl CrateConfig {
             executable,
             release,
             dioxus_config,
+            hot_reload,
             custom_profile,
             features,
             verbose,
@@ -192,6 +195,11 @@ impl CrateConfig {
 
     pub fn with_release(&mut self, release: bool) -> &mut Self {
         self.release = release;
+        self
+    }
+
+    pub fn with_hot_reload(&mut self, hot_reload: bool) -> &mut Self {
+        self.hot_reload = hot_reload;
         self
     }
 
