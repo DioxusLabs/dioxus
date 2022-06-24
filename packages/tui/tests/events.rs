@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
 use dioxus_core::VNode;
 use dioxus_core::*;
@@ -7,6 +5,31 @@ use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
 use dioxus_tui::TuiContext;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+/// The tui renderer will look for any event that has occured or any future that has resolved in a loop.
+/// It will resolve at most one event per loop.
+/// This future will resolve after a certain number of polls. If the number of polls is greater than the number of events triggered, and the event has not been recieved there is an issue with the event system.
+struct PollN(usize);
+impl PollN {
+    fn new(n: usize) -> Self {
+        PollN(n)
+    }
+}
+impl Future for PollN {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.0 == 0 {
+            Poll::Ready(())
+        } else {
+            self.0 -= 1;
+            Poll::Pending
+        }
+    }
+}
 
 #[test]
 fn key_down() {
@@ -17,12 +40,17 @@ fn key_down() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
             panic!("Event was not received");
         }
+        // focus the element
+        tui_ctx.inject_event(Event::Key(KeyEvent {
+            code: KeyCode::Tab,
+            modifiers: KeyModifiers::NONE,
+        }));
         tui_ctx.inject_event(Event::Key(KeyEvent {
             code: KeyCode::Char('a'),
             modifiers: KeyModifiers::NONE,
@@ -49,7 +77,7 @@ fn mouse_down() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(2).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -83,7 +111,7 @@ fn mouse_up() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -122,7 +150,7 @@ fn mouse_enter() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -161,7 +189,7 @@ fn mouse_exit() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -200,7 +228,7 @@ fn mouse_move() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -239,7 +267,7 @@ fn wheel() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -279,7 +307,7 @@ fn click() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
@@ -318,7 +346,7 @@ fn context_menu() {
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            PollN::new(3).await;
             render_count_handle.modify(|x| *x + 1);
         });
         if *render_count.get() > 2 {
