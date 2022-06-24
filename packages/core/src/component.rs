@@ -50,14 +50,25 @@ impl<P: Properties> PartialEq for Slot<P> {
 }
 
 impl<P: Properties> Slot<P> {
-    pub fn new<C: Component<Props = P>>(component: C) -> Self {
+    pub fn from_component<C: Component<Props = P>>(component: C) -> Self {
         Self {
             name: component.name(),
             renderer: component.renderer(),
         }
     }
 
-    pub fn lazy(&self, props: P) -> LazyNodes {
-        LazyNodes::new(move |h| h.component(self.renderer, props, None, self.name))
+    pub fn from_renderer(name: &'static str, renderer: fn(Scope<P>) -> Element) -> Self {
+        Self { name, renderer }
+    }
+
+    pub fn empty() -> Self {
+        fn _f<P2>(_cx: Scope<P2>) -> Element {
+            None
+        }
+
+        Self {
+            name: "empty slot",
+            renderer: _f::<P>,
+        }
     }
 }

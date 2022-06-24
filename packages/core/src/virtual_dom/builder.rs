@@ -26,16 +26,7 @@ impl<'a> DomBuilder<'a> {
     }
 
     #[inline]
-    pub fn component<C>(&self, component: C) -> ComponentBuilder<'a, C>
-    where
-        C: Component,
-        C::Props: Default + 'a,
-    {
-        ComponentBuilder::new(*self, component, Default::default())
-    }
-
-    #[inline]
-    pub fn component_with<C>(&self, component: C, props: C::Props) -> ComponentBuilder<'a, C>
+    pub fn component<C>(&self, component: C, props: C::Props) -> ComponentBuilder<'a, C>
     where
         C: Component,
         C::Props: 'a,
@@ -62,7 +53,7 @@ impl<'a> DomBuilder<'a> {
     }
 
     #[inline]
-    fn bump(&self) -> &'a Bump {
+    pub fn bump(&self) -> &'a Bump {
         self.factory.bump()
     }
 }
@@ -104,8 +95,12 @@ where
         self
     }
 
-    pub fn build(self) -> VNode<'a> {
+    pub fn finish(self) -> VNode<'a> {
         self.into()
+    }
+
+    pub fn bump(&self) -> &'a Bump {
+        self.builder.bump()
     }
 }
 
@@ -192,14 +187,14 @@ impl<'a> ElementBuilder<'a> {
         F: Fn(UiEvent<E>) + 'a,
         E: Send + Sync + 'static,
     {
-        self.on_any::<E, _>(event, move |evt: AnyEvent| {
+        self.on_any(event, move |evt: AnyEvent| {
             let event = evt.downcast::<E>().unwrap();
             callback(event)
         })
     }
 
     #[inline]
-    pub fn on_any<E, F>(mut self, event: &'static str, callback: F) -> Self
+    pub fn on_any<F>(mut self, event: &'static str, callback: F) -> Self
     where
         F: Fn(AnyEvent) + 'a,
     {
@@ -220,8 +215,12 @@ impl<'a> ElementBuilder<'a> {
     }
 
     #[inline]
-    pub fn build(self) -> VNode<'a> {
+    pub fn finish(self) -> VNode<'a> {
         self.into()
+    }
+
+    pub fn bump(&self) -> &'a Bump {
+        self.builder.bump()
     }
 }
 

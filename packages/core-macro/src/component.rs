@@ -60,7 +60,17 @@ impl ToTokens for ComponentFn {
         let props_ty = &self.props_ty;
         let render_fn = &self.render_fn;
 
+        let docs = render_fn
+            .attrs
+            .iter()
+            .filter(|attr| attr.path.is_ident("doc"))
+            .fold(quote! {}, |mut ts, attr| {
+                attr.to_tokens(&mut ts);
+                ts
+            });
+
         tokens.extend(quote! {
+            #docs
             #vis struct #name;
 
             impl dioxus::prelude::Component for #name {
