@@ -13,10 +13,7 @@
 //! These numbers don't represent Dioxus with the heuristic engine installed, so I assume it'll be even faster.
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use rand::prelude::*;
 
 criterion_group!(mbenches, create_rows);

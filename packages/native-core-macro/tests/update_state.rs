@@ -1,8 +1,6 @@
 use anymap::AnyMap;
 use dioxus::core as dioxus_core;
-use dioxus::core::AttributeValue;
-use dioxus::core::DomEdit;
-use dioxus::core::Mutations;
+use dioxus::core::{AttributeValue, DomEdit, Mutations};
 use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
