@@ -1,8 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use dioxus_router::*;
 use gloo_utils::document;
 use serde::{Deserialize, Serialize};
