@@ -52,7 +52,6 @@ liveview = ["dioxus-liveview"]
 hot_reload = ["dioxus-core-macro/hot_reload", "dioxus-rsx-interpreter", "dioxus-desktop?/hot_reload", "dioxus-web?/hot_reload"]
 native-core = ["dioxus-native-core", "dioxus-native-core-macro"]
 
-
 [workspace]
 members = [
     "packages/core",
@@ -71,6 +70,7 @@ members = [
     "packages/rsx_interpreter",
     "packages/native-core",
     "packages/native-core-macro",
+    "packages/rsx-prelude",
 ]
 
 [dev-dependencies]
