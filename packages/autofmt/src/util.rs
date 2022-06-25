@@ -11,7 +11,7 @@ pub fn extract_attr_len(attributes: &[ElementAttrNamed]) -> usize {
             ElementAttr::CustomAttrExpression { name, value } => 10,
             ElementAttr::EventTokens { name, tokens } => 1000000,
         })
-        .sum::<usize>()
+        .sum()
 }
 
 pub fn write_tabs(f: &mut dyn Write, num: usize) -> std::fmt::Result {
