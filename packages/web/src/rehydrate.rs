@@ -1,5 +1,6 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{VNode, VirtualDom};
+use dioxus_html::event_bubbles;
 use wasm_bindgen::JsCast;
 use web_sys::{Comment, Element, Node, Text};
 
@@ -111,6 +112,7 @@ impl WebsysDom {
                         listener.event,
                         listener.mounted_node.get().unwrap().as_u64(),
                         self.handler.as_ref().unchecked_ref(),
+                        event_bubbles(listener.event),
                     );
                 }
 

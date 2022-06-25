@@ -63,6 +63,9 @@ pub struct UserEvent {
     /// The event type IE "onclick" or "onmouseover"
     pub name: &'static str,
 
+    /// If the event is bubbles up through the vdom
+    pub bubbles: bool,
+
     /// The event data to be passed onto the event handler
     pub data: Arc<dyn Any + Send + Sync>,
 }

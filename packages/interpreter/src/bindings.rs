@@ -48,10 +48,16 @@ extern "C" {
     pub fn CreatePlaceholder(this: &Interpreter, root: u64);
 
     #[wasm_bindgen(method)]
-    pub fn NewEventListener(this: &Interpreter, name: &str, root: u64, handler: &Function);
+    pub fn NewEventListener(
+        this: &Interpreter,
+        name: &str,
+        root: u64,
+        handler: &Function,
+        bubbles: bool,
+    );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str);
+    pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str, bubbles: bool);
 
     #[wasm_bindgen(method)]
     pub fn SetText(this: &Interpreter, root: u64, text: JsValue);
