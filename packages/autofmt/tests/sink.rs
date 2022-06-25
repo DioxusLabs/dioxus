@@ -36,6 +36,10 @@ fn formats_block() {
                             class: "asd",
                                         }
                                     }
+
+                                    Component {}
+
+                                    Component<Generic> {}
             }
         }
     "#;

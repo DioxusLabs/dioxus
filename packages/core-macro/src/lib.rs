@@ -66,6 +66,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                     Err(err) => err.into_compile_error().into(),
                 }
             }
+
             #[cfg(not(feature = "hot_reload"))]
             body.to_token_stream().into()
         }
