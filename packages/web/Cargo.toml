@@ -77,7 +77,7 @@ features = [
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
-hot_reload = ["dioxus-rsx-interpreter", "web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
+hot-reload = ["dioxus-rsx-interpreter", "web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
