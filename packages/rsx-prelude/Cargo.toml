@@ -19,4 +19,4 @@ dioxus-rsx-interpreter = { path = "../rsx_interpreter", version = "^0.1.0", opti
 dioxus-hooks = { path = "../hooks", version = "^0.2.1" }
 
 [features]
-hot_reload = ["dioxus-core-macro/hot_reload", "dioxus-rsx-interpreter"]
+hot-reload = ["dioxus-core-macro/hot-reload", "dioxus-rsx-interpreter"]

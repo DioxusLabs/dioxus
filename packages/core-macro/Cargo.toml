@@ -28,4 +28,4 @@ trybuild = "1.0"
 
 [features]
 default = []
-hot_reload = ["dioxus-rsx-interpreter"]
+hot-reload = ["dioxus-rsx-interpreter"]

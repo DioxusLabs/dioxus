@@ -44,7 +44,7 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot_reload = ["dioxus-rsx-interpreter", "interprocess"]
+hot-reload = ["dioxus-rsx-interpreter", "interprocess"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
