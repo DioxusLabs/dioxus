@@ -49,7 +49,7 @@ desktop = ["dioxus-desktop"]
 router = ["dioxus-router"]
 tui = ["dioxus-tui"]
 liveview = ["dioxus-liveview"]
-hot_reload = ["dioxus-core-macro/hot_reload", "dioxus-rsx-interpreter", "dioxus-desktop?/hot_reload", "dioxus-web?/hot_reload"]
+hot-reload = ["dioxus-core-macro/hot-reload", "dioxus-rsx-interpreter", "dioxus-desktop?/hot-reload", "dioxus-web?/hot-reload"]
 native-core = ["dioxus-native-core", "dioxus-native-core-macro"]
 
 

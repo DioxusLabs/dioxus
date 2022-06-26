@@ -217,7 +217,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
     let mut work_loop = ric_raf::RafLoop::new();
 
-    #[cfg(feature = "hot_reload")]
+    #[cfg(feature = "hot-reload")]
     {
         use dioxus_rsx_interpreter::error::Error;
         use dioxus_rsx_interpreter::{ErrorHandler, SetManyRsxMessage, RSX_CONTEXT};
