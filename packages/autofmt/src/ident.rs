@@ -11,7 +11,7 @@ pub fn write_ident(
     indent: usize,
 ) -> fmt::Result {
     match node {
-        BodyNode::Element(el) => write_element(el, buf, lines, node, indent),
+        BodyNode::Element(el) => write_element(el, buf, lines, indent),
         BodyNode::Component(component) => write_component(component, buf, indent, lines),
         BodyNode::Text(text) => write_text(text, buf, indent),
         BodyNode::RawExpr(exp) => write_raw_expr(exp, indent, lines, buf),

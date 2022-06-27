@@ -5,6 +5,7 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::ToTokens;
 
 mod block;
+mod buffer;
 mod children;
 mod component;
 mod element;

@@ -1,12 +1,18 @@
 use crate::{util::*, write_ident};
 use dioxus_rsx::*;
-use std::{fmt, fmt::Write};
+use std::{fmt, fmt::Result, fmt::Write};
 
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
     Empty,
+
+    // Special optimization to put everything on the same line
     Oneliner,
+
+    // Optimization where children flow but props remain fixed on top
     PropsOnTop,
+
+    // The noisiest optimization where everything flows
     NoOpt,
 }
 
@@ -20,9 +26,8 @@ pub fn write_element(
     }: &Element,
     buf: &mut String,
     lines: &[&str],
-    node: &BodyNode,
     indent: usize,
-) -> fmt::Result {
+) -> Result {
     /*
         1. Write the tag
         2. Write the key
@@ -157,7 +162,7 @@ fn write_attributes(
     attributes: &[ElementAttrNamed],
     sameline: bool,
     indent: usize,
-) -> fmt::Result {
+) -> Result {
     let mut attr_iter = attributes.iter().peekable();
 
     while let Some(attr) = attr_iter.next() {
@@ -178,7 +183,7 @@ fn write_attributes(
     Ok(())
 }
 
-fn write_attribute(buf: &mut String, attr: &ElementAttrNamed, indent: usize) -> fmt::Result {
+fn write_attribute(buf: &mut String, attr: &ElementAttrNamed, indent: usize) -> Result {
     match &attr.attr {
         ElementAttr::AttrText { name, value } => {
             write!(buf, "{name}: \"{value}\"", value = value.value())?;
