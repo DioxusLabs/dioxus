@@ -2,6 +2,16 @@ use dioxus_autofmt::*;
 use proc_macro2::TokenStream as TokenStream2;
 use syn::{Attribute, Meta};
 
+fn test_block(wrong: &str, right: &str) {
+    let formatted = fmt_block(wrong).unwrap();
+    assert_eq!(formatted, right);
+}
+
+fn print_block(wrong: &str) {
+    let formatted = fmt_block(wrong).unwrap();
+    println!("{}", formatted);
+}
+
 #[test]
 fn formats_block() {
     let block = r#"
@@ -46,7 +56,7 @@ fn formats_block() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -63,6 +73,54 @@ fn parse_comment() {
 }
 
 #[test]
+fn print_cases() {
+    print_block(
+        r#"
+        div {
+            adsasd: "asd",
+                h1 {"asd"}
+                div {
+                    div {
+                        "hello"
+                    }
+                    div {
+                        "goodbye"
+                    }
+                    div { class: "broccoli",
+                        div {
+                            "hi"
+                        }
+                    }
+                    div { class: "broccolibroccolibroccolibroccolibroccolibroccolibroccolibroccolibroccolibroccoli",
+                        div {
+                            "hi"
+                        }
+                    }
+                    div { class: "alksdjasd", onclick: move |_| {
+
+                        liberty!();
+                    },
+                        div {
+                            "hi"
+                        }
+                    }
+
+                    commented{
+                        // is unparalled
+                        class: "asdasd",
+
+                        // My genius
+                        div {
+                            "hi"
+                        }
+                    }
+                }
+        }
+    "#,
+    );
+}
+
+#[test]
 fn formats_component() {
     let block = r#"
     Component {
@@ -76,7 +134,7 @@ fn formats_component() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -97,7 +155,7 @@ fn formats_element() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -118,7 +176,7 @@ fn formats_element_short() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -132,7 +190,25 @@ fn formats_element_nested() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    assert_eq!(
+        formatted,
+        r#"h3 { class: "mb-2 text-xl font-bold", "Invite Member" }"#
+    );
+}
+
+#[test]
+fn formats_element_props_on_top() {
+    let block = r#"
+    h3 {
+        class: "mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold",
+
+        "Invite Member"
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    println!("{formatted}");
 }
 
 #[test]
@@ -143,7 +219,10 @@ fn formats_element_nested_no_trailing_tabs() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    assert_eq!(
+        formatted,
+        r#"img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png", alt: "" }"#
+    );
 }
 
 #[test]
@@ -160,20 +239,20 @@ fn formats_element_with_correct_indent() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
 fn small_elements_and_text_are_small() {
     let block = r###"
-                        a { class: " text-white",
+                        a { class: "text-white",
                             "Send invitation"
           }
 "###;
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    assert_eq!(formatted, r#"a { class: "text-white", "Send invitation" }"#);
 }
 
 #[test]
@@ -192,7 +271,7 @@ fn formats_component_man_props() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -204,24 +283,24 @@ fn formats_component_tiny() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
 fn formats_exprs() {
     let block = r#"
     ul {
-        (0..10).map(|f| rsx!{
-            li {
-                "hi"
-            }
+        div {}
+        (0..10).map(|f| rsx! {
+            li { "hi" }
         })
+        div {}
     }
 "#;
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -238,7 +317,7 @@ fn formats_exprs_neg_indent() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -261,7 +340,7 @@ fn formats_exprs_handlers() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -296,7 +375,7 @@ fn formats_complex() {
 
     let formatted = fmt_block(block).unwrap();
 
-    print!("{formatted}");
+    println!("{formatted}");
 }
 
 #[test]
@@ -314,9 +393,9 @@ rsx!{
 
 "#;
 
-    let formatted = get_format_blocks(block);
+    let formatted = fmt_file(block);
 
-    print!("{formatted:?}");
+    println!("{formatted:?}");
 }
 
 #[test]
@@ -332,9 +411,9 @@ rsx!{
 }
 "#;
 
-    let formatted = get_format_blocks(block);
+    let formatted = fmt_file(block);
 
-    print!("{formatted:?}");
+    println!("{formatted:?}");
 }
 
 #[test]
@@ -350,7 +429,7 @@ rsx! {
 }
 "#;
 
-    let formatted = get_format_blocks(src);
+    let formatted = fmt_file(src);
 
     println!("{formatted:?}");
 }
@@ -378,7 +457,7 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
 "#
     .to_string();
 
-    let formatted = get_format_blocks(&src);
+    let formatted = fmt_file(&src);
 
     let block = formatted.into_iter().next().unwrap();
 
@@ -446,7 +525,7 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
 "#
     .to_string();
 
-    let formatted = get_format_blocks(&src);
+    let formatted = fmt_file(&src);
 
     dbg!(&formatted);
 
@@ -469,7 +548,7 @@ pub fn Alert(cx: Scope) -> Element {
 "###
     .to_string();
 
-    let formatted = get_format_blocks(&src);
+    let formatted = fmt_file(&src);
 
     dbg!(&formatted);
 }

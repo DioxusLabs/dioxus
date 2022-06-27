@@ -14,13 +14,6 @@ pub fn extract_attr_len(attributes: &[ElementAttrNamed]) -> usize {
         .sum()
 }
 
-pub fn write_tabs(f: &mut dyn Write, num: usize) -> std::fmt::Result {
-    for _ in 0..num {
-        write!(f, "    ")?
-    }
-    Ok(())
-}
-
 pub fn find_bracket_end(contents: &str) -> Option<usize> {
     let mut depth = 0;
     let mut i = 0;

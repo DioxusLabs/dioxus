@@ -1,6 +1,6 @@
-use crate::{util::*, write_ident};
+use crate::{util::*, Buffer};
 use dioxus_rsx::*;
-use std::{fmt, fmt::Result, fmt::Write};
+use std::{fmt::Result, fmt::Write};
 
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
@@ -16,108 +16,181 @@ enum ShortOptimization {
     NoOpt,
 }
 
-pub fn write_element(
-    Element {
-        name,
-        key,
-        attributes,
-        children,
-        _is_static,
-    }: &Element,
-    buf: &mut String,
-    lines: &[&str],
-    indent: usize,
-) -> Result {
-    /*
-        1. Write the tag
-        2. Write the key
-        3. Write the attributes
-        4. Write the children
-    */
+impl Buffer {
+    pub fn write_element(
+        &mut self,
+        Element {
+            name,
+            key,
+            attributes,
+            children,
+            _is_static,
+        }: &Element,
+        lines: &[&str],
+    ) -> Result {
+        /*
+            1. Write the tag
+            2. Write the key
+            3. Write the attributes
+            4. Write the children
+        */
 
-    write!(buf, "{name} {{")?;
+        write!(self.buf, "{name} {{")?;
 
-    // decide if we have any special optimizations
-    // Default with none, opt the cases in one-by-one
-    let mut opt_level = ShortOptimization::NoOpt;
+        // decide if we have any special optimizations
+        // Default with none, opt the cases in one-by-one
+        let mut opt_level = ShortOptimization::NoOpt;
 
-    // check if we have a lot of attributes
-    let is_short_attr_list = is_short_attrs(attributes);
-    let is_small_children = is_short_children(children);
+        // check if we have a lot of attributes
+        let is_short_attr_list = is_short_attrs(attributes);
+        let is_small_children = is_short_children(children);
 
-    // if we have few attributes and a lot of children, place the attrs on top
-    if is_short_attr_list && !is_small_children {
-        opt_level = ShortOptimization::PropsOnTop;
-    }
-
-    // if we have few children and few attributes, make it a one-liner
-    if is_short_attr_list && is_small_children {
-        opt_level = ShortOptimization::Oneliner;
-    }
-
-    // If there's nothing at all, empty optimization
-    if attributes.is_empty() && children.is_empty() && key.is_none() {
-        opt_level = ShortOptimization::Empty;
-    }
-
-    match opt_level {
-        ShortOptimization::Empty => write!(buf, "}}")?,
-        ShortOptimization::Oneliner => {
-            write!(buf, " ")?;
-            write_attributes(buf, attributes, true, indent)?;
-
-            if !children.is_empty() && !attributes.is_empty() {
-                write!(buf, ", ")?;
-            }
-
-            // write the children
-            for child in children {
-                write_ident(buf, lines, child, indent + 1)?;
-            }
-
-            write!(buf, " }}")?;
+        // if we have few attributes and a lot of children, place the attrs on top
+        if is_short_attr_list && !is_small_children {
+            opt_level = ShortOptimization::PropsOnTop;
         }
 
-        ShortOptimization::PropsOnTop => {
-            write!(buf, " ")?;
-            write_attributes(buf, attributes, true, indent)?;
-
-            if !children.is_empty() && !attributes.is_empty() {
-                write!(buf, ",")?;
+        // even if the attr is long, it should be put on one line
+        if !is_short_attr_list && attributes.len() <= 1 {
+            if children.is_empty() {
+                opt_level = ShortOptimization::Oneliner;
+            } else {
+                opt_level = ShortOptimization::PropsOnTop;
             }
-
-            // write the children
-            for child in children {
-                writeln!(buf)?;
-                write_tabs(buf, indent + 1)?;
-                write_ident(buf, lines, child, indent + 1)?;
-            }
-
-            writeln!(buf)?;
-            write_tabs(buf, indent)?;
-            write!(buf, "}}")?;
         }
 
-        ShortOptimization::NoOpt => {
-            // write the key
+        // if we have few children and few attributes, make it a one-liner
+        if is_short_attr_list && is_small_children {
+            opt_level = ShortOptimization::Oneliner;
+        }
 
-            // write the attributes
-            write_attributes(buf, attributes, false, indent)?;
+        // If there's nothing at all, empty optimization
+        if attributes.is_empty() && children.is_empty() && key.is_none() {
+            opt_level = ShortOptimization::Empty;
+        }
 
-            // write the children
-            for child in children {
-                writeln!(buf)?;
-                write_tabs(buf, indent + 1)?;
-                write_ident(buf, lines, child, indent + 1)?;
+        match opt_level {
+            ShortOptimization::Empty => write!(self.buf, "}}")?,
+            ShortOptimization::Oneliner => {
+                write!(self.buf, " ")?;
+                self.write_attributes(attributes, true)?;
+
+                if !children.is_empty() && !attributes.is_empty() {
+                    write!(self.buf, ", ")?;
+                }
+
+                // write the children
+                for child in children {
+                    self.write_ident(lines, child)?;
+                }
+
+                write!(self.buf, " }}")?;
             }
 
-            writeln!(buf)?;
-            write_tabs(buf, indent)?;
-            write!(buf, "}}")?;
+            ShortOptimization::PropsOnTop => {
+                write!(self.buf, " ")?;
+                self.write_attributes(attributes, true)?;
+
+                if !children.is_empty() && !attributes.is_empty() {
+                    write!(self.buf, ",")?;
+                }
+
+                // write the children
+                self.write_body_indented(children, lines)?;
+
+                self.tabbed_line()?;
+                write!(self.buf, "}}")?;
+            }
+
+            ShortOptimization::NoOpt => {
+                // write the key
+
+                // write the attributes
+                self.write_attributes(attributes, false)?;
+
+                self.write_body_indented(children, lines)?;
+
+                self.tabbed_line()?;
+                write!(self.buf, "}}")?;
+            }
         }
+
+        Ok(())
     }
 
-    Ok(())
+    fn write_attributes(&mut self, attributes: &[ElementAttrNamed], sameline: bool) -> Result {
+        let mut attr_iter = attributes.iter().peekable();
+
+        while let Some(attr) = attr_iter.next() {
+            if !sameline {
+                self.indented_tabbed_line()?;
+            }
+            self.write_attribute(attr)?;
+
+            if attr_iter.peek().is_some() {
+                write!(self.buf, ",")?;
+
+                if sameline {
+                    write!(self.buf, " ")?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
+        match &attr.attr {
+            ElementAttr::AttrText { name, value } => {
+                write!(self.buf, "{name}: \"{value}\"", value = value.value())?;
+            }
+            ElementAttr::AttrExpression { name, value } => {
+                let out = prettyplease::unparse_expr(value);
+                write!(self.buf, "{}: {}", name, out)?;
+            }
+
+            ElementAttr::CustomAttrText { name, value } => {
+                write!(
+                    self.buf,
+                    "\"{name}\": \"{value}\"",
+                    name = name.value(),
+                    value = value.value()
+                )?;
+            }
+
+            ElementAttr::CustomAttrExpression { name, value } => {
+                let out = prettyplease::unparse_expr(value);
+                write!(self.buf, "\"{}\": {}", name.value(), out)?;
+            }
+
+            ElementAttr::EventTokens { name, tokens } => {
+                let out = prettyplease::unparse_expr(tokens);
+
+                let mut lines = out.split('\n').peekable();
+                let first = lines.next().unwrap();
+
+                // a one-liner for whatever reason
+                // Does not need a new line
+                if lines.peek().is_none() {
+                    write!(self.buf, "{}: {}", name, first)?;
+                } else {
+                    writeln!(self.buf, "{}: {}", name, first)?;
+
+                    while let Some(line) = lines.next() {
+                        self.indented_tab()?;
+                        write!(self.buf, "{}", line)?;
+                        if lines.peek().is_none() {
+                            write!(self.buf, "")?;
+                        } else {
+                            writeln!(self.buf)?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
@@ -132,106 +205,29 @@ fn is_short_children(children: &[BodyNode]) -> bool {
         return true;
     }
 
-    if children.len() == 1 {
-        if let BodyNode::Text(ref text) = &children[0] {
-            return text.value().len() < 80;
-        }
-    }
+    match children {
+        [BodyNode::Text(ref text)] => text.value().len() < 80,
+        [BodyNode::Element(ref el)] => {
+            // && !el.attributes.iter().any(|f| f.attr.is_expr())
 
-    false
+            extract_attr_len(&el.attributes) < 80 && is_short_children(&el.children)
+        }
+        _ => false,
+    }
 }
 
 fn write_key() {
     // if let Some(key) = key.as_ref().map(|f| f.value()) {
     //     if is_long_attr_list {
-    //         writeln!(buf)?;
-    //         write_tabs(buf, indent + 1)?;
+    //         self.new_line()?;
+    //         self.write_tabs( indent + 1)?;
     //     } else {
-    //         write!(buf, " ")?;
+    //         write!(self.buf, " ")?;
     //     }
-    //     write!(buf, "key: \"{key}\"")?;
+    //     write!(self.buf, "key: \"{key}\"")?;
 
     //     if !attributes.is_empty() {
-    //         write!(buf, ",")?;
+    //         write!(self.buf, ",")?;
     //     }
     // }
-}
-
-fn write_attributes(
-    buf: &mut String,
-    attributes: &[ElementAttrNamed],
-    sameline: bool,
-    indent: usize,
-) -> Result {
-    let mut attr_iter = attributes.iter().peekable();
-
-    while let Some(attr) = attr_iter.next() {
-        write_attribute(buf, attr, indent)?;
-
-        if attr_iter.peek().is_some() {
-            write!(buf, ",")?;
-
-            if sameline {
-                write!(buf, " ")?;
-            } else {
-                writeln!(buf)?;
-                write_tabs(buf, indent + 1)?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn write_attribute(buf: &mut String, attr: &ElementAttrNamed, indent: usize) -> Result {
-    match &attr.attr {
-        ElementAttr::AttrText { name, value } => {
-            write!(buf, "{name}: \"{value}\"", value = value.value())?;
-        }
-        ElementAttr::AttrExpression { name, value } => {
-            let out = prettyplease::unparse_expr(value);
-            write!(buf, "{}: {}", name, out)?;
-        }
-
-        ElementAttr::CustomAttrText { name, value } => {
-            write!(
-                buf,
-                "\"{name}\": \"{value}\"",
-                name = name.value(),
-                value = value.value()
-            )?;
-        }
-
-        ElementAttr::CustomAttrExpression { name, value } => {
-            let out = prettyplease::unparse_expr(value);
-            write!(buf, "\"{}\": {}", name.value(), out)?;
-        }
-
-        ElementAttr::EventTokens { name, tokens } => {
-            let out = prettyplease::unparse_expr(tokens);
-
-            let mut lines = out.split('\n').peekable();
-            let first = lines.next().unwrap();
-
-            // a one-liner for whatever reason
-            // Does not need a new line
-            if lines.peek().is_none() {
-                write!(buf, "{}: {}", name, first)?;
-            } else {
-                writeln!(buf, "{}: {}", name, first)?;
-
-                while let Some(line) = lines.next() {
-                    write_tabs(buf, indent + 1)?;
-                    write!(buf, "{}", line)?;
-                    if lines.peek().is_none() {
-                        write!(buf, "")?;
-                    } else {
-                        writeln!(buf)?;
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
 }
