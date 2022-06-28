@@ -16,7 +16,7 @@ dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
     "web"
 ] }
-dioxus-rsx-interpreter = { path = "../rsx_interpreter", version = "*", optional = true }
+dioxus-rsx-interpreter = { path = "../rsx_interpreter", version = "^0.1.0", optional = true }
 
 js-sys = "0.3.56"
 wasm-bindgen = { version = "0.2.79", features = ["enable-interning"] }
@@ -80,7 +80,7 @@ panic_hook = ["console_error_panic_hook"]
 hot-reload = ["dioxus-rsx-interpreter", "web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
 
 [dev-dependencies]
-dioxus-core-macro = { path = "../core-macro" }
+dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"

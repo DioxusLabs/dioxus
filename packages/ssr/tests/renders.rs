@@ -1,6 +1,4 @@
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use dioxus_ssr::{render_lazy, render_vdom, render_vdom_cfg, SsrConfig, SsrRenderer, TextRenderer};
 
 static SIMPLE_APP: Component = |cx| {

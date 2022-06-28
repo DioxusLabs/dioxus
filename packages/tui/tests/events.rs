@@ -1,9 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent};
-use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_hooks::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use dioxus_tui::TuiContext;
 use std::future::Future;
 use std::pin::Pin;

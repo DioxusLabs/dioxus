@@ -1,9 +1,7 @@
 use anymap::AnyMap;
-use dioxus_core::AttributeValue;
-use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::core as dioxus_core;
+use dioxus::core::{AttributeValue, DomEdit, Mutations};
+use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
