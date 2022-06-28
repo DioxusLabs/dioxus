@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::UiEvent;
-use dioxus_html::on::MouseData;
+use dioxus_html::on::{KeyboardData, MouseData};
 use std::sync::Arc;
 
 fn main() {
@@ -14,6 +14,9 @@ enum Event {
     MouseDoubleClick(Arc<MouseData>),
     MouseDown(Arc<MouseData>),
     MouseUp(Arc<MouseData>),
+    KeyDown(Arc<KeyboardData>),
+    KeyUp(Arc<KeyboardData>),
+    KeyPress(Arc<KeyboardData>),
 }
 
 const MAX_EVENTS: usize = 4;
@@ -47,13 +50,18 @@ fn app(cx: Scope) -> Element {
             style: "{container_style}",
             div {
                 style: "{rect_style}",
+                // focusing is necessary to catch keyboard events
+                tabindex: "0",
+
                 onmousemove: move |event| log_event(Event::MouseMove(event.data)),
                 onclick: move |event| log_event(Event::MouseClick(event.data)),
                 ondblclick: move |event| log_event(Event::MouseDoubleClick(event.data)),
                 onmousedown: move |event| log_event(Event::MouseDown(event.data)),
                 onmouseup: move |event| log_event(Event::MouseUp(event.data)),
-                // prevent selection
-                prevent_default: "mousedown",
+
+                onkeydown: move |event| log_event(Event::KeyDown(event.data)),
+                onkeyup: move |event| log_event(Event::KeyUp(event.data)),
+                onkeypress: move |event| log_event(Event::KeyPress(event.data)),
             }
             div { events_rendered },
         },
