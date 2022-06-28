@@ -427,7 +427,7 @@ pub mod on {
 
     pub type KeyboardEvent = UiEvent<KeyboardData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct KeyboardData {
         #[deprecated(
             since = "0.3.0",
@@ -550,6 +550,18 @@ pub mod on {
         pub fn is_auto_repeating(&self) -> bool {
             #[allow(deprecated)]
             self.repeat
+        }
+    }
+
+    impl Debug for KeyboardData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("KeyboardData")
+                .field("key", &self.key())
+                .field("code", &self.code())
+                .field("modifiers", &self.modifiers())
+                .field("location", &self.location())
+                .field("is_auto_repeating", &self.is_auto_repeating())
+                .finish()
         }
     }
 
