@@ -770,7 +770,7 @@ fn translate_key_event(event: crossterm::event::KeyEvent) -> Option<EventData> {
 /// The crossterm key_code nicely represents the meaning of the key and we can mostly convert it without any issues
 ///
 /// Exceptions:
-/// BackTab and Null are converted to Key::Unidentified
+/// BackTab is converted to Key::Tab, and Null is converted to Key::Unidentified
 fn key_from_crossterm_key_code(key_code: TermKeyCode) -> Key {
     match key_code {
         TermKeyCode::Backspace => Key::Backspace,
@@ -785,7 +785,7 @@ fn key_from_crossterm_key_code(key_code: TermKeyCode) -> Key {
         TermKeyCode::PageDown => Key::PageDown,
         TermKeyCode::Tab => Key::Tab,
         // ? no corresponding Key
-        TermKeyCode::BackTab => Key::Unidentified,
+        TermKeyCode::BackTab => Key::Tab,
         TermKeyCode::Delete => Key::Delete,
         TermKeyCode::Insert => Key::Insert,
         TermKeyCode::F(1) => Key::F1,
@@ -823,7 +823,7 @@ fn key_from_crossterm_key_code(key_code: TermKeyCode) -> Key {
 
 // Crossterm does not provide a way to get the `code` (physical key on keyboard)
 // So we make a guess based on their `key_code`, but this is probably going to break on anything other than a very standard european keyboard
-// It may look fine, but it's a horrible hack.
+// It may look fine, but it's a horrible hack. But there's nothing better we can do.
 fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
     let code = match key_code {
         TermKeyCode::Backspace => Code::Backspace,
@@ -837,7 +837,7 @@ fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
         TermKeyCode::PageUp => Code::PageUp,
         TermKeyCode::PageDown => Code::PageDown,
         TermKeyCode::Tab => Code::Tab,
-        // ? no corresponding Code
+        // ? Apparently you get BackTab by pressing Tab
         TermKeyCode::BackTab => Code::Tab,
         TermKeyCode::Delete => Code::Delete,
         TermKeyCode::Insert => Code::Insert,
@@ -897,7 +897,7 @@ fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
                 'X' => Code::KeyX,
                 'Y' => Code::KeyY,
                 'Z' => Code::KeyZ,
-                _ => unreachable!(),
+                _ => unreachable!("Exhaustively checked all characters in range A..Z"),
             },
             ' ' => Code::Space,
             '[' | '{' => Code::BracketLeft,
@@ -928,7 +928,8 @@ fn guess_code_from_crossterm_key_code(key_code: TermKeyCode) -> Option<Code> {
             '*' => Code::Digit8,
             '(' => Code::Digit9,
             ')' => Code::Digit0,
-            // numpad charicter are ambiguous to tui
+            // numpad characters are ambiguous; we don't know which key was really pressed
+            // it could be also:
             // '*' => Code::Multiply,
             // '/' => Code::Divide,
             // '-' => Code::Subtract,
