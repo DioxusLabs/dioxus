@@ -36,7 +36,7 @@ fn app(cx: Scope) -> Element {
     let first_index = events_lock.len().saturating_sub(MAX_EVENTS);
     let events_rendered = events_lock[first_index..]
         .iter()
-        .map(|event| cx.render(rsx!(div{"{event:?}"})));
+        .map(|event| cx.render(rsx!(div {"{event:?}"})));
 
     let log_event = move |event: Event| {
         events.write().push(event);
@@ -45,7 +45,6 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! (
         div {
             style: "{container_style}",
-            "Hover over to display coordinates:",
             div {
                 style: "{rect_style}",
                 onmousemove: move |event| log_event(Event::MouseMove(event.data)),
@@ -53,9 +52,10 @@ fn app(cx: Scope) -> Element {
                 ondblclick: move |event| log_event(Event::MouseDoubleClick(event.data)),
                 onmousedown: move |event| log_event(Event::MouseDown(event.data)),
                 onmouseup: move |event| log_event(Event::MouseUp(event.data)),
+                // prevent selection
                 prevent_default: "mousedown",
             }
+            div { events_rendered },
         },
-        events_rendered,
     ))
 }

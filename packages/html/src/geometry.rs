@@ -96,6 +96,7 @@ impl WheelDelta {
 }
 
 /// Coordinates of a point in the app's interface
+#[derive(Debug)]
 pub struct Coordinates {
     screen: ScreenPoint,
     client: ClientPoint,

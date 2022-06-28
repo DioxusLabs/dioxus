@@ -17,6 +17,7 @@ pub mod on {
     use keyboard_types::{Code, Key, Location, Modifiers};
     use std::collections::HashMap;
     use std::convert::TryInto;
+    use std::fmt::{Debug, Formatter};
     use std::str::FromStr;
 
     use super::*;
@@ -568,7 +569,7 @@ pub mod on {
 
     pub type MouseEvent = UiEvent<MouseData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     /// Data associated with a mouse event
     ///
     /// Do not use the deprecated fields; they may change or become private in the future.
@@ -750,6 +751,17 @@ pub mod on {
         pub fn trigger_button(&self) -> Option<MouseButton> {
             #[allow(deprecated)]
             Some(MouseButton::from_web_code(self.button))
+        }
+    }
+
+    impl Debug for MouseData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MouseData")
+                .field("coordinates", &self.coordinates())
+                .field("modifiers", &self.modifiers())
+                .field("held_buttons", &self.held_buttons())
+                .field("trigger_button", &self.trigger_button())
+                .finish()
         }
     }
 
