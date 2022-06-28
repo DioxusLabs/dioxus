@@ -41,11 +41,6 @@ impl Buffer {
         writeln!(self.buf)
     }
 
-    pub fn write_indented_ident(&mut self, node: &BodyNode) -> Result {
-        self.write_ident(node)?;
-        Ok(())
-    }
-
     pub fn write_ident(&mut self, node: &BodyNode) -> Result {
         match node {
             BodyNode::Element(el) => self.write_element(el),

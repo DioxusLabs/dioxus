@@ -234,7 +234,7 @@ impl Buffer {
                     (None, None) => None,
                 }
             }
-            [BodyNode::RawExpr(ref text)] => {
+            [BodyNode::RawExpr(ref _expr)] => {
                 // TODO: let rawexprs to be inlined
                 // let span = syn::spanned::Spanned::span(&text);
                 // let (start, end) = (span.start(), span.end());
