@@ -72,11 +72,13 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 }
 
 pub fn fmt_block(block: &str) -> Option<String> {
-    let mut buf = Buffer::new();
+    let mut buf = Buffer::default();
+    buf.src = block.lines().map(|f| f.to_string()).collect(); // unnecessary clone, but eh, most files are small
+
     let lines = block.split('\n').collect::<Vec<_>>();
 
     for node in &syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?.roots {
-        buf.write_ident(&lines, node).ok()?;
+        buf.write_ident(&node).ok()?;
     }
 
     Some(buf.buf)

@@ -4,7 +4,7 @@ use std::fmt::{self, Result, Write};
 use crate::Buffer;
 
 impl Buffer {
-    pub fn write_raw_expr(&mut self, exp: &syn::Expr, lines: &[&str]) -> Result {
+    pub fn write_raw_expr(&mut self, exp: &syn::Expr) -> Result {
         /*
         We want to normalize the expr to the appropriate indent level.
         */
@@ -18,12 +18,13 @@ impl Buffer {
         let end = placement.end();
         let num_spaces_desired = (self.indent * 4) as isize;
 
-        let first = lines[start.line - 1];
+        let first = &self.src[start.line - 1];
+        // let first = lines[start.line - 1];
         let num_spaces_real = first.chars().take_while(|c| c.is_whitespace()).count() as isize;
 
         let offset = num_spaces_real - num_spaces_desired;
 
-        for line in &lines[start.line - 1..end.line] {
+        for line in &self.src[start.line - 1..end.line] {
             writeln!(self.buf)?;
             // trim the leading whitespace
             if offset < 0 {

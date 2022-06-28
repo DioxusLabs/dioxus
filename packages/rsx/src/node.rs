@@ -1,10 +1,10 @@
 use super::*;
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    token, Expr, LitStr, Result,
+    token, Expr, LitStr, Result, spanned::Spanned,
 };
 
 /*
@@ -26,6 +26,15 @@ pub enum BodyNode {
 impl BodyNode {
     pub fn is_litstr(&self) -> bool {
         matches!(self, BodyNode::Text(_))
+    }
+
+    pub fn span(&self) -> Span {
+        match self {
+            BodyNode::Element(el) => el.name.span(),
+            BodyNode::Component(component) => component.name.span(),
+            BodyNode::Text(text) => text.span(),
+            BodyNode::RawExpr(exp) => exp.span(),
+        }
     }
 }
 

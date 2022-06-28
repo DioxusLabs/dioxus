@@ -26,7 +26,6 @@ impl Buffer {
             children,
             _is_static,
         }: &Element,
-        lines: &[&str],
     ) -> Result {
         /*
             1. Write the tag
@@ -43,7 +42,7 @@ impl Buffer {
 
         // check if we have a lot of attributes
         let is_short_attr_list = is_short_attrs(attributes);
-        let is_small_children = is_short_children(children);
+        let is_small_children = self.is_short_children(children);
 
         // if we have few attributes and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -81,7 +80,7 @@ impl Buffer {
 
                 // write the children
                 for child in children {
-                    self.write_ident(lines, child)?;
+                    self.write_ident(child)?;
                 }
 
                 write!(self.buf, " }}")?;
@@ -96,7 +95,7 @@ impl Buffer {
                 }
 
                 // write the children
-                self.write_body_indented(children, lines)?;
+                self.write_body_indented(children)?;
 
                 self.tabbed_line()?;
                 write!(self.buf, "}}")?;
@@ -108,7 +107,7 @@ impl Buffer {
                 // write the attributes
                 self.write_attributes(attributes, false)?;
 
-                self.write_body_indented(children, lines)?;
+                self.write_body_indented(children)?;
 
                 self.tabbed_line()?;
                 write!(self.buf, "}}")?;
@@ -191,29 +190,41 @@ impl Buffer {
 
         Ok(())
     }
+
+    // check if the children are short enough to be on the same line
+    // We don't have the notion of current line depth - each line tries to be < 80 total
+    fn is_short_children(&self, children: &[BodyNode]) -> bool {
+        if children.is_empty() {
+            // todo: allow elements with comments but no children
+            // like div { /* comment */ }
+            return true;
+        }
+
+        for child in children {
+            'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
+                if line.trim().starts_with("//") {
+                    return false;
+                } else if line.is_empty() {
+                    continue;
+                } else {
+                    break 'line;
+                }
+            }
+        }
+
+        match children {
+            [BodyNode::Text(ref text)] => text.value().len() < 80,
+            [BodyNode::Element(ref el)] => {
+                extract_attr_len(&el.attributes) < 80 && self.is_short_children(&el.children)
+            }
+            _ => false,
+        }
+    }
 }
 
 fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
     let total_attr_len = extract_attr_len(attrs);
     total_attr_len < 80
-}
-
-// check if the children are short enough to be on the same line
-// We don't have the notion of current line depth - each line tries to be < 80 total
-fn is_short_children(children: &[BodyNode]) -> bool {
-    if children.is_empty() {
-        return true;
-    }
-
-    match children {
-        [BodyNode::Text(ref text)] => text.value().len() < 80,
-        [BodyNode::Element(ref el)] => {
-            // && !el.attributes.iter().any(|f| f.attr.is_expr())
-
-            extract_attr_len(&el.attributes) < 80 && is_short_children(&el.children)
-        }
-        _ => false,
-    }
 }
 
 fn write_key() {

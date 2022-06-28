@@ -13,7 +13,6 @@ impl Buffer {
             manual_props,
             prop_gen_args,
         }: &Component,
-        lines: &[&str],
     ) -> Result {
         let mut name = name.to_token_stream().to_string();
         name.retain(|c| !c.is_whitespace());
@@ -73,7 +72,7 @@ impl Buffer {
         }
 
         for child in children {
-            self.write_indented_ident(lines, child)?;
+            self.write_indented_ident(child)?;
         }
 
         if !body.is_empty() || !children.is_empty() {

@@ -97,7 +97,7 @@ fn print_cases() {
                         }
                     }
                     div { class: "alksdjasd", onclick: move |_| {
-
+                        // hi!
                         liberty!();
                     },
                         div {
@@ -105,7 +105,7 @@ fn print_cases() {
                         }
                     }
 
-                    commented{
+                    commented {
                         // is unparalled
                         class: "asdasd",
 
@@ -113,11 +113,46 @@ fn print_cases() {
                         div {
                             "hi"
                         }
+
+                        div {
+
+                        }
                     }
                 }
         }
     "#,
     );
+}
+
+#[test]
+fn format_comments() {
+    let block = r#"
+    div {
+        adsasd: "asd", block: "asd",
+
+
+        // this is a comment
+        "hello"
+
+        // this is a comment 1
+
+        // this is a comment 2
+        "hello"
+
+        div {
+            // this is a comment
+            "hello"
+        }
+
+        div {
+            // empty space
+        }
+    }
+        "#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    println!("{formatted}");
 }
 
 #[test]
