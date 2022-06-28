@@ -1,9 +1,6 @@
 use crate::ParsedRoute;
 use crate::{cfg::RouterCfg, RouteEvent, RouterCore};
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use futures_util::stream::StreamExt;
 use std::sync::Arc;
 

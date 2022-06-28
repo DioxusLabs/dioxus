@@ -191,7 +191,7 @@ fn build_node<'a>(
                         None,
                     )),
                     Some(lit) => {
-                        let ifmt: IfmtInput = parse_str(&lit.value()).map_err(|err| {
+                        let ifmt: IfmtInput = lit.value().parse().map_err(|err| {
                             Error::ParseError(ParseError::new(err, ctx.location.clone()))
                         })?;
                         let key = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);

@@ -11,9 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1", default-features = false }
-dioxus-html = { path = "../html", version = "^0.2.1", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
+dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
 futures-channel = "0.3.21"
 url = { version = "2.2.2", default-features = false }
 
@@ -44,6 +42,7 @@ default = ["query"]
 web = ["web-sys", "gloo-events", "js-sys", "wasm-bindgen"]
 query = ["serde", "serde_urlencoded"]
 wasm_test = []
+hot-reload = ["dioxus/hot-reload"]
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"

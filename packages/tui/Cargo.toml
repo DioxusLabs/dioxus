@@ -29,6 +29,5 @@ fxhash = "0.2"
 anymap = "0.12.1"
 
 [dev-dependencies]
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
-dioxus-hooks = { path = "../hooks", version = "^0.2.1" }
+dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
 tokio = { version = "1" }
