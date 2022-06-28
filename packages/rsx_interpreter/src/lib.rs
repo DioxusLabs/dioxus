@@ -85,7 +85,7 @@ macro_rules! get_line_num {
         let line = line!();
         let column = column!();
         let file_path = file!().to_string();
-        let mut crate_path = env!("CARGO_MANIFEST_DIR").to_string();
+        let crate_path = env!("CARGO_MANIFEST_DIR").to_string();
 
         CodeLocation {
             crate_path,
