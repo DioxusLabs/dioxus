@@ -16,13 +16,13 @@ mod errors;
 
 mod component;
 mod element;
+mod ifmt;
 mod node;
-
-pub mod pretty;
 
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;
+pub use ifmt::*;
 pub use node::*;
 
 // imports

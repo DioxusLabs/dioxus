@@ -110,7 +110,7 @@ impl From<&MouseEvent> for MouseData {
                 ElementPoint::new(e.offset_x().into(), e.offset_y().into()),
                 PagePoint::new(e.page_x().into(), e.page_y().into()),
             ),
-            Some(MouseButton::from_web_code(e.button().into())),
+            Some(MouseButton::from_web_code(e.button())),
             decode_mouse_button_set(e.buttons()),
             modifiers,
         )

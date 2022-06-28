@@ -1,15 +1,13 @@
-use stretch2 as stretch;
-
 #[test]
 fn margin_and_flex_row() {
-    let mut stretch = stretch::Stretch::new();
-    let node0 = stretch
+    let mut taffy = taffy::Taffy::new();
+    let node0 = taffy
         .new_node(
-            stretch::style::Style {
+            taffy::style::Style {
                 flex_grow: 1f32,
-                margin: stretch::geometry::Rect {
-                    start: stretch::style::Dimension::Points(10f32),
-                    end: stretch::style::Dimension::Points(10f32),
+                margin: taffy::geometry::Rect {
+                    start: taffy::style::Dimension::Points(10f32),
+                    end: taffy::style::Dimension::Points(10f32),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -17,50 +15,50 @@ fn margin_and_flex_row() {
             &[],
         )
         .unwrap();
-    let node = stretch
+    let node = taffy
         .new_node(
-            stretch::style::Style {
-                size: stretch::geometry::Size {
-                    width: stretch::style::Dimension::Points(100f32),
-                    height: stretch::style::Dimension::Points(100f32),
+            taffy::style::Style {
+                size: taffy::geometry::Size {
+                    width: taffy::style::Dimension::Points(100f32),
+                    height: taffy::style::Dimension::Points(100f32),
                 },
                 ..Default::default()
             },
             &[node0],
         )
         .unwrap();
-    stretch
-        .compute_layout(node, stretch::geometry::Size::undefined())
+    taffy
+        .compute_layout(node, taffy::geometry::Size::undefined())
         .unwrap();
-    assert_eq!(stretch.layout(node).unwrap().size.width, 100f32);
-    assert_eq!(stretch.layout(node).unwrap().size.height, 100f32);
-    assert_eq!(stretch.layout(node).unwrap().location.x, 0f32);
-    assert_eq!(stretch.layout(node).unwrap().location.y, 0f32);
-    assert_eq!(stretch.layout(node0).unwrap().size.width, 80f32);
-    assert_eq!(stretch.layout(node0).unwrap().size.height, 100f32);
-    assert_eq!(stretch.layout(node0).unwrap().location.x, 10f32);
-    assert_eq!(stretch.layout(node0).unwrap().location.y, 0f32);
+    assert_eq!(taffy.layout(node).unwrap().size.width, 100f32);
+    assert_eq!(taffy.layout(node).unwrap().size.height, 100f32);
+    assert_eq!(taffy.layout(node).unwrap().location.x, 0f32);
+    assert_eq!(taffy.layout(node).unwrap().location.y, 0f32);
+    assert_eq!(taffy.layout(node0).unwrap().size.width, 80f32);
+    assert_eq!(taffy.layout(node0).unwrap().size.height, 100f32);
+    assert_eq!(taffy.layout(node0).unwrap().location.x, 10f32);
+    assert_eq!(taffy.layout(node0).unwrap().location.y, 0f32);
 }
 
 #[test]
 fn margin_and_flex_row2() {
-    let mut stretch = stretch::Stretch::new();
-    let node0 = stretch
+    let mut taffy = taffy::Taffy::new();
+    let node0 = taffy
         .new_node(
-            stretch::style::Style {
+            taffy::style::Style {
                 flex_grow: 1f32,
-                margin: stretch::geometry::Rect {
+                margin: taffy::geometry::Rect {
                     // left
-                    start: stretch::style::Dimension::Points(10f32),
+                    start: taffy::style::Dimension::Points(10f32),
 
                     // right?
-                    end: stretch::style::Dimension::Points(10f32),
+                    end: taffy::style::Dimension::Points(10f32),
 
                     // top?
-                    // top: stretch::style::Dimension::Points(10f32),
+                    // top: taffy::style::Dimension::Points(10f32),
 
                     // bottom?
-                    // bottom: stretch::style::Dimension::Points(10f32),
+                    // bottom: taffy::style::Dimension::Points(10f32),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -69,12 +67,12 @@ fn margin_and_flex_row2() {
         )
         .unwrap();
 
-    let node = stretch
+    let node = taffy
         .new_node(
-            stretch::style::Style {
-                size: stretch::geometry::Size {
-                    width: stretch::style::Dimension::Points(100f32),
-                    height: stretch::style::Dimension::Points(100f32),
+            taffy::style::Style {
+                size: taffy::geometry::Size {
+                    width: taffy::style::Dimension::Points(100f32),
+                    height: taffy::style::Dimension::Points(100f32),
                 },
                 ..Default::default()
             },
@@ -82,12 +80,12 @@ fn margin_and_flex_row2() {
         )
         .unwrap();
 
-    stretch
-        .compute_layout(node, stretch::geometry::Size::undefined())
+    taffy
+        .compute_layout(node, taffy::geometry::Size::undefined())
         .unwrap();
 
-    assert_eq!(stretch.layout(node).unwrap().size.width, 100f32);
-    assert_eq!(stretch.layout(node).unwrap().size.height, 100f32);
-    assert_eq!(stretch.layout(node).unwrap().location.x, 0f32);
-    assert_eq!(stretch.layout(node).unwrap().location.y, 0f32);
+    assert_eq!(taffy.layout(node).unwrap().size.width, 100f32);
+    assert_eq!(taffy.layout(node).unwrap().size.height, 100f32);
+    assert_eq!(taffy.layout(node).unwrap().location.x, 0f32);
+    assert_eq!(taffy.layout(node).unwrap().location.y, 0f32);
 }

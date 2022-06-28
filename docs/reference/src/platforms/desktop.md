@@ -11,7 +11,7 @@ Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Ca
 
 ```shell
 $ cargo new --bin demo
-$ cd app
+$ cd demo
 ```
 
 Add Dioxus with the `desktop` feature:

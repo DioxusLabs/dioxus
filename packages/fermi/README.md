@@ -69,7 +69,7 @@ It's that simple!
 Fermi is currently under construction, so you have to use the `master` branch to get started.
 
 ```rust
-[depdencies]
+[dependencies]
 fermi = { git = "https://github.com/dioxuslabs/fermi" }
 ```
 
