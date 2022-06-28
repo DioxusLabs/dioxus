@@ -72,7 +72,8 @@ impl Buffer {
             ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
                 write!(self.buf, " ")?;
-                self.write_attributes(attributes, true)?;
+
+                self.write_attributes(attributes, key, true)?;
 
                 if !children.is_empty() && !attributes.is_empty() {
                     write!(self.buf, ", ")?;
@@ -87,7 +88,7 @@ impl Buffer {
 
             ShortOptimization::PropsOnTop => {
                 write!(self.buf, " ")?;
-                self.write_attributes(attributes, true)?;
+                self.write_attributes(attributes, key, true)?;
 
                 if !children.is_empty() && !attributes.is_empty() {
                     write!(self.buf, ",")?;
@@ -98,7 +99,7 @@ impl Buffer {
             }
 
             ShortOptimization::NoOpt => {
-                self.write_attributes(attributes, false)?;
+                self.write_attributes(attributes, key, false)?;
                 self.write_body_indented(children)?;
                 self.tabbed_line()?;
             }
@@ -109,8 +110,23 @@ impl Buffer {
         Ok(())
     }
 
-    fn write_attributes(&mut self, attributes: &[ElementAttrNamed], sameline: bool) -> Result {
+    fn write_attributes(
+        &mut self,
+        attributes: &[ElementAttrNamed],
+        key: &Option<syn::LitStr>,
+        sameline: bool,
+    ) -> Result {
         let mut attr_iter = attributes.iter().peekable();
+
+        if let Some(key) = key {
+            if !sameline {
+                self.indented_tabbed_line()?;
+            }
+            write!(self.buf, "key: \"{}\"", key.value())?;
+            if !attributes.is_empty() {
+                write!(self.buf, ", ")?;
+            }
+        }
 
         while let Some(attr) = attr_iter.next() {
             if !sameline {

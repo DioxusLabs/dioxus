@@ -147,6 +147,12 @@ fn format_comments() {
         div {
             // empty space
         }
+
+        div {
+            key: "asd", class: "asdsda",
+            div {}
+            h3 {}
+        }
     }
         "#;
 
