@@ -83,6 +83,10 @@ impl Buffer {
                     }
                 }
 
+                if comments.len() == 1 && self.src[comments[0]].is_empty() {
+                    comments.pop();
+                }
+
                 let mut last_was_empty = false;
                 for comment_line in comments.drain(..).rev() {
                     let line = &self.src[comment_line];

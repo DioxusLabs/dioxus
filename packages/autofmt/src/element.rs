@@ -42,7 +42,7 @@ impl Buffer {
 
         // check if we have a lot of attributes
         let is_short_attr_list = is_short_attrs(attributes);
-        let is_small_children = self.is_short_children(children);
+        let is_small_children = self.is_short_children(children).is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -201,36 +201,37 @@ impl Buffer {
 
     // check if the children are short enough to be on the same line
     // We don't have the notion of current line depth - each line tries to be < 80 total
-    fn is_short_children(&self, children: &[BodyNode]) -> bool {
+    // returns the total line length if it's short
+    // returns none if the length exceeds the limit
+    // I think this eventually becomes quadratic :(
+    pub fn is_short_children(&self, children: &[BodyNode]) -> Option<usize> {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
-            return true;
+            return Some(0);
         }
 
         for child in children {
             'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
-                if line.trim().starts_with("//") {
-                    return false;
-                } else if line.is_empty() {
-                    continue;
-                } else {
-                    break 'line;
+                match (line.trim().starts_with("//"), line.is_empty()) {
+                    (true, _) => return None,
+                    (_, true) => continue 'line,
+                    _ => break 'line,
                 }
             }
         }
 
         match children {
-            [BodyNode::Text(ref text)] => text.value().len() < 80,
-            [BodyNode::Element(ref el)] => {
-                extract_attr_len(&el.attributes) < 80 && self.is_short_children(&el.children)
-            }
-            _ => false,
+            [BodyNode::Text(ref text)] => Some(text.value().len()),
+            [BodyNode::Element(ref el)] => self
+                .is_short_children(&el.children)
+                .map(|f| f + extract_attr_len(&el.attributes))
+                .and_then(|new_len| if new_len > 80 { None } else { Some(new_len) }),
+            _ => None,
         }
     }
 }
 
 fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
-    let total_attr_len = extract_attr_len(attrs);
-    total_attr_len < 80
+    extract_attr_len(attrs) < 80
 }

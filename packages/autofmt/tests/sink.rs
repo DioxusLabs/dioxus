@@ -1,11 +1,5 @@
 use dioxus_autofmt::*;
 use proc_macro2::TokenStream as TokenStream2;
-use syn::{Attribute, Meta};
-
-fn test_block(wrong: &str, right: &str) {
-    let formatted = fmt_block(wrong).unwrap();
-    assert_eq!(formatted, right);
-}
 
 fn print_block(wrong: &str) {
     let formatted = fmt_block(wrong).unwrap();
@@ -165,11 +159,56 @@ fn format_comments() {
 fn formats_component() {
     let block = r#"
     Component {
-        adsasd: "asd", // this is a comment
+        adsasd: "asd",
+
+        // this is a comment
         onclick: move |_| {
             let blah = 120;
-            let blah = 120;
+            let blah = 122;
         },
+    }
+"#;
+
+    let formatted = fmt_block(block).unwrap();
+
+    println!("{formatted}");
+}
+
+#[test]
+fn formats_component_complex() {
+    let block = r#"
+    div {
+        Component {
+            adsasd: "asd",
+            onclick: move |_| {
+                let a = a;
+            }
+            div {
+                "thing"
+            }
+        }
+        Component {
+            asdasd: "asdasd",
+            asdasd: "asdasdasdasdasdasdasdasdasdasd",
+            ..Props {
+                a: 10,
+                b: 20
+            }
+        }
+        Component {
+            //
+            asdasd: "asdasd",
+            ..Props {
+                a: 10,
+                b: 20,
+                c: {
+                    fn main() {
+                        //
+                    }
+                }
+            }
+            "content"
+        }
     }
 "#;
 
@@ -239,6 +278,7 @@ fn formats_element_nested() {
 
 #[test]
 fn formats_element_props_on_top() {
+    // Gets compressed because there's no real comments
     let block = r#"
     h3 {
         class: "mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold mb-2 text-xl font-bold",
@@ -580,7 +620,7 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
 
 #[test]
 fn empty_blocks() {
-    let mut src = r###"
+    let src = r###"
 pub fn Alert(cx: Scope) -> Element {
     cx.render(rsx! {
         div { }

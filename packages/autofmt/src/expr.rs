@@ -19,7 +19,6 @@ impl Buffer {
         let num_spaces_desired = (self.indent * 4) as isize;
 
         let first = &self.src[start.line - 1];
-        // let first = lines[start.line - 1];
         let num_spaces_real = first.chars().take_while(|c| c.is_whitespace()).count() as isize;
 
         let offset = num_spaces_real - num_spaces_desired;
