@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::UiEvent;
-use dioxus_html::on::{KeyboardData, MouseData, WheelData};
+use dioxus_html::on::{FocusData, KeyboardData, MouseData, WheelData};
 use std::sync::Arc;
 
 fn main() {
@@ -20,9 +20,12 @@ enum Event {
     KeyDown(Arc<KeyboardData>),
     KeyUp(Arc<KeyboardData>),
     KeyPress(Arc<KeyboardData>),
+
+    FocusIn(Arc<FocusData>),
+    FocusOut(Arc<FocusData>),
 }
 
-const MAX_EVENTS: usize = 4;
+const MAX_EVENTS: usize = 8;
 
 fn app(cx: Scope) -> Element {
     let container_style = r#"
@@ -71,6 +74,9 @@ fn app(cx: Scope) -> Element {
                 onkeydown: move |event| log_event(Event::KeyDown(event.data)),
                 onkeyup: move |event| log_event(Event::KeyUp(event.data)),
                 onkeypress: move |event| log_event(Event::KeyPress(event.data)),
+
+                onfocusin: move |event| log_event(Event::FocusIn(event.data)),
+                onfocusout: move |event| log_event(Event::FocusOut(event.data)),
 
                 "Hover, click, type or scroll to see the info down below"
             }
