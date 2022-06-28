@@ -94,7 +94,7 @@ impl FromStr for IfmtInput {
                 while let Some(c) = chars.next() {
                     if c == ':' {
                         let mut current_format_args = String::new();
-                        while let Some(c) = chars.next() {
+                        for c in chars.by_ref() {
                             if c == '}' {
                                 segments.push(Segment::Formatted {
                                     format_args: current_format_args,
