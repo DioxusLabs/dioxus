@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::UiEvent;
-use dioxus_html::on::{KeyboardData, MouseData};
+use dioxus_html::on::{KeyboardData, MouseData, WheelData};
 use std::sync::Arc;
 
 fn main() {
@@ -14,6 +14,9 @@ enum Event {
     MouseDoubleClick(Arc<MouseData>),
     MouseDown(Arc<MouseData>),
     MouseUp(Arc<MouseData>),
+
+    Wheel(Arc<WheelData>),
+
     KeyDown(Arc<KeyboardData>),
     KeyUp(Arc<KeyboardData>),
     KeyPress(Arc<KeyboardData>),
@@ -31,6 +34,10 @@ fn app(cx: Scope) -> Element {
         background: deepskyblue;
         height: 50vh;
         width: 50vw;
+        color: white;
+        padding: 20px;
+        margin: 20px;
+        text-aligh: center;
     "#;
 
     let events = use_ref(&cx, || Vec::new());
@@ -59,9 +66,13 @@ fn app(cx: Scope) -> Element {
                 onmousedown: move |event| log_event(Event::MouseDown(event.data)),
                 onmouseup: move |event| log_event(Event::MouseUp(event.data)),
 
+                onwheel: move |event| log_event(Event::Wheel(event.data)),
+
                 onkeydown: move |event| log_event(Event::KeyDown(event.data)),
                 onkeyup: move |event| log_event(Event::KeyUp(event.data)),
                 onkeypress: move |event| log_event(Event::KeyPress(event.data)),
+
+                "Hover, click, type or scroll to see the info down below"
             }
             div { events_rendered },
         },

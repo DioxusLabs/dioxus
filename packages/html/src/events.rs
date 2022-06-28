@@ -828,7 +828,7 @@ pub mod on {
 
     pub type WheelEvent = UiEvent<WheelData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct WheelData {
         #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_mode: u32,
@@ -886,6 +886,14 @@ pub mod on {
                 2 => WheelDelta::Pages(PagesVector::new(x, y, z)),
                 _ => panic!("Invalid delta mode, {:?}", self.delta_mode),
             }
+        }
+    }
+
+    impl Debug for WheelData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("WheelData")
+                .field("delta", &self.delta())
+                .finish()
         }
     }
 
