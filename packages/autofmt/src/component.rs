@@ -36,7 +36,7 @@ impl Buffer {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let is_short_attr_list = self.is_short_fields(fields, manual_props);
+        let is_short_attr_list = self.is_short_fields(fields, manual_props).is_some();
         let is_small_children = self.is_short_children(children).is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
@@ -179,7 +179,11 @@ impl Buffer {
 
         Ok(())
     }
-    fn is_short_fields(&self, fields: &[ComponentField], manual_props: &Option<syn::Expr>) -> bool {
+    pub fn is_short_fields(
+        &self,
+        fields: &[ComponentField],
+        manual_props: &Option<syn::Expr>,
+    ) -> Option<usize> {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
@@ -193,14 +197,18 @@ impl Buffer {
             Some(p) => {
                 let content = prettyplease::unparse_expr(p);
                 if content.len() + attr_len > 80 {
-                    return false;
+                    return None;
                 }
                 let mut lines = content.lines();
                 lines.next().unwrap();
 
-                lines.next().is_none()
+                if lines.next().is_none() {
+                    Some(attr_len + content.len())
+                } else {
+                    None
+                }
             }
-            None => attr_len < 80,
+            None => Some(attr_len),
         }
     }
 
@@ -208,8 +216,6 @@ impl Buffer {
         /*
         We want to normalize the expr to the appropriate indent level.
         */
-
-        use syn::spanned::Spanned;
 
         let formatted = prettyplease::unparse_expr(exp);
 

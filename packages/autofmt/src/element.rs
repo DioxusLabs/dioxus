@@ -223,6 +223,28 @@ impl Buffer {
 
         match children {
             [BodyNode::Text(ref text)] => Some(text.value().len()),
+            [BodyNode::Component(ref comp)] => {
+                let is_short_child = self.is_short_children(&comp.children);
+                let is_short_attrs = self.is_short_fields(&comp.fields, &comp.manual_props);
+
+                match (is_short_child, is_short_attrs) {
+                    (Some(child_len), Some(attrs_len)) => Some(child_len + attrs_len),
+                    (Some(child_len), None) => Some(child_len),
+                    (None, Some(attrs_len)) => Some(attrs_len),
+                    (None, None) => None,
+                }
+            }
+            [BodyNode::RawExpr(ref text)] => {
+                // TODO: let rawexprs to be inlined
+                // let span = syn::spanned::Spanned::span(&text);
+                // let (start, end) = (span.start(), span.end());
+                // if start.line == end.line {
+                //     Some(end.column - start.column)
+                // } else {
+                //     None
+                // }
+                None
+            }
             [BodyNode::Element(ref el)] => self
                 .is_short_children(&el.children)
                 .map(|f| f + extract_attr_len(&el.attributes))

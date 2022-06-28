@@ -435,7 +435,7 @@ fn formats_complex() {
                     icons::icon_0 {}
                 }
                 span { "{name}" }
-                children.is_some().then(|| rsx!{
+                children.is_some().then(|| rsx! {
                     span {
                         class: "inline-block ml-auto hover:bg-gray-500",
                         onclick: move |evt| {
