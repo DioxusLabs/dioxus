@@ -14,7 +14,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
     let mut expr_counter = 0;
     for segment in input.segments.iter() {
         match segment {
-            Segment::Literal(s) => format_literal += s,
+            Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
             Segment::Formatted {
                 format_args,
                 segment,
@@ -116,6 +116,17 @@ impl FromStr for IfmtInput {
                     current_captured.push(c);
                 }
             } else {
+                if '}' == c {
+                    if let Some(c) = chars.next_if(|c| *c == '}') {
+                        current_literal.push(c);
+                        continue;
+                    } else {
+                        return Err(Error::new(
+                            Span::call_site(),
+                            "unmatched closing '}' in format string",
+                        ));
+                    }
+                }
                 current_literal.push(c);
             }
         }
@@ -146,7 +157,6 @@ impl FormattedSegment {
                 return Ok(Self::Ident(ident));
             }
         }
-        // if let Ok(expr) = parse_str(&("{".to_string() + input + "}")) {
         if let Ok(expr) = parse_str(input) {
             Ok(Self::Expr(Box::new(expr)))
         } else {
