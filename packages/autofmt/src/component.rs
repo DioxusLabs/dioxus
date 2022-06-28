@@ -1,7 +1,7 @@
 use crate::Buffer;
 use dioxus_rsx::*;
 use quote::ToTokens;
-use std::fmt::{self, Result, Write};
+use std::fmt::{Result, Write};
 
 impl Buffer {
     pub fn write_component(

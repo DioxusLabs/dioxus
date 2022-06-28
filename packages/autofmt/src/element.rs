@@ -69,7 +69,7 @@ impl Buffer {
         }
 
         match opt_level {
-            ShortOptimization::Empty => write!(self.buf, "}}")?,
+            ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
                 write!(self.buf, " ")?;
                 self.write_attributes(attributes, true)?;
@@ -78,12 +78,11 @@ impl Buffer {
                     write!(self.buf, ", ")?;
                 }
 
-                // write the children
                 for child in children {
                     self.write_ident(child)?;
                 }
 
-                write!(self.buf, " }}")?;
+                write!(self.buf, " ")?;
             }
 
             ShortOptimization::PropsOnTop => {
@@ -94,25 +93,18 @@ impl Buffer {
                     write!(self.buf, ",")?;
                 }
 
-                // write the children
                 self.write_body_indented(children)?;
-
                 self.tabbed_line()?;
-                write!(self.buf, "}}")?;
             }
 
             ShortOptimization::NoOpt => {
-                // write the key
-
-                // write the attributes
                 self.write_attributes(attributes, false)?;
-
                 self.write_body_indented(children)?;
-
                 self.tabbed_line()?;
-                write!(self.buf, "}}")?;
             }
         }
+
+        write!(self.buf, "}}")?;
 
         Ok(())
     }
@@ -225,20 +217,4 @@ impl Buffer {
 fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
     let total_attr_len = extract_attr_len(attrs);
     total_attr_len < 80
-}
-
-fn write_key() {
-    // if let Some(key) = key.as_ref().map(|f| f.value()) {
-    //     if is_long_attr_list {
-    //         self.new_line()?;
-    //         self.write_tabs( indent + 1)?;
-    //     } else {
-    //         write!(self.buf, " ")?;
-    //     }
-    //     write!(self.buf, "key: \"{key}\"")?;
-
-    //     if !attributes.is_empty() {
-    //         write!(self.buf, ",")?;
-    //     }
-    // }
 }

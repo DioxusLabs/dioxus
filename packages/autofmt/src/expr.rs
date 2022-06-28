@@ -1,5 +1,5 @@
 //! pretty printer for rsx!
-use std::fmt::{self, Result, Write};
+use std::fmt::{Result, Write};
 
 use crate::Buffer;
 

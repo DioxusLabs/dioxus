@@ -59,6 +59,10 @@ impl Buffer {
         write!(self.buf, "\"{}\"", text.value())
     }
 
+    pub fn consume(self) -> Option<String> {
+        Some(self.buf)
+    }
+
     // Push out the indent level and write each component, line by line
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
         self.indent += 1;
@@ -100,94 +104,7 @@ impl Buffer {
             self.write_ident(child)?;
         }
 
-        // let mut children_iter = children.iter().enumerate().peekable();
-
-        // while let Some((id, child)) = children_iter.next() {
-        //     let mut written_empty = false;
-
-        //     for line in lines[self.line..child.span().start().line - 1].iter() {
-        //         if id == 0 && line.trim().is_empty() {
-        //             continue;
-        //         }
-
-        //         if !written_empty && line.is_empty() {
-        //             writeln!(self.buf)?;
-        //             written_empty = true;
-        //             continue;
-        //         }
-
-        //         if written_empty && line.is_empty() {
-        //             continue;
-        //         }
-
-        //         writeln!(self.buf)?;
-        //         // self.write_tabs(indent + 1)?;
-        //         write!(self.buf, "{}", line.trim())?;
-        //     }
-
-        //     writeln!(self.buf)?;
-        //     self.indented_tab()?;
-        //     self.write_ident(lines, child)?;
-
-        //     self.line = child.span().end().line;
-        // }
-
-        // for child in children {
-        //     // Exprs handle their own indenting/line breaks
-        //     if !matches!(child, BodyNode::RawExpr(_)) {
-        //         self.tabbed_line()?;
-        //     }
-
-        //     self.write_ident(lines, child)?;
-        // }
         self.indent -= 1;
         Ok(())
     }
 }
-
-// ShortOptimization::PropsOnTop => {
-//     write!(self.buf, " ")?;
-//     self.write_attributes(attributes, true, indent)?;
-
-//     if !children.is_empty() && !attributes.is_empty() {
-//         write!(self.buf, ",")?;
-//     }
-
-//     if let Some(last_attr) = attributes.last() {
-//         self.cur_line = last_attr.name_span().end().line + 1;
-//     }
-
-//     // write the children
-//     for (id, child) in children.iter().enumerate() {
-//         let mut written_empty = false;
-//         for line in self.lines[self.cur_line..child.span().start().line - 1].iter() {
-//             if id == 0 && line.trim().is_empty() {
-//                 continue;
-//             }
-
-//             if !written_empty && line.is_empty() {
-//                 writeln!(self.buf)?;
-//                 written_empty = true;
-//                 continue;
-//             }
-
-//             if written_empty && line.is_empty() {
-//                 continue;
-//             }
-
-//             writeln!(self.buf)?;
-//             // self.write_tabs(indent + 1)?;
-//             write!(self.buf, "{}", line.trim())?;
-//         }
-
-//         writeln!(self.buf)?;
-//         self.write_tabs(indent + 1)?;
-//         self.write_ident(child, indent + 1)?;
-
-//         self.cur_line = child.span().end().line;
-//     }
-
-//     writeln!(self.buf)?;
-//     self.write_tabs(indent)?;
-//     write!(self.buf, "}}")?;
-// }

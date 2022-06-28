@@ -1,17 +1,11 @@
-//! pretty printer for rsx code
-
-pub use crate::buffer::*;
+use crate::buffer::*;
 use crate::util::*;
 
-mod block;
 mod buffer;
-mod children;
 mod component;
 mod element;
 mod expr;
 mod util;
-
-// pub use block::{fmt_block, get_format_blocks};
 
 /// A modification to the original file to be applied by an IDE
 ///
@@ -43,7 +37,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
     use triple_accel::{levenshtein_search, Match};
 
-    for Match { end, k, start } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
+    for Match { end, start, .. } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
         // ensure the marker is not nested
         if start < last_bracket_end {
             continue;
@@ -72,14 +66,14 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 }
 
 pub fn fmt_block(block: &str) -> Option<String> {
-    let mut buf = Buffer::default();
-    buf.src = block.lines().map(|f| f.to_string()).collect(); // unnecessary clone, but eh, most files are small
+    let mut buf = Buffer {
+        src: block.lines().map(|f| f.to_string()).collect(),
+        ..Buffer::default()
+    };
 
-    let lines = block.split('\n').collect::<Vec<_>>();
-
-    for node in &syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?.roots {
+    for node in syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?.roots {
         buf.write_ident(&node).ok()?;
     }
 
-    Some(buf.buf)
+    buf.consume()
 }
