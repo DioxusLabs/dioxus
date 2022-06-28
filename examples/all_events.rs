@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_core::UiEvent;
 use dioxus_html::on::{FocusData, KeyboardData, MouseData, WheelData};
 use std::sync::Arc;
 

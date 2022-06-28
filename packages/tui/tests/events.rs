@@ -4,6 +4,7 @@ use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_hooks::*;
 use dioxus_html as dioxus_elements;
+use dioxus_html::input_data::keyboard_types::Code;
 use dioxus_tui::TuiContext;
 use std::future::Future;
 use std::pin::Pin;
@@ -60,7 +61,7 @@ fn key_down() {
                 width: "100%",
                 height: "100%",
                 onkeydown: move |evt| {
-                    assert_eq!(evt.data.key_code, dioxus_html::KeyCode::A);
+                    assert_eq!(evt.data.code(), Code::KeyA);
                     tui_ctx.quit();
                 },
             }
@@ -290,7 +291,7 @@ fn wheel() {
                 width: "100%",
                 height: "100%",
                 onwheel: move |evt| {
-                    assert!(evt.data.delta_y > 0.0);
+                    assert!(evt.data.delta().strip_units().y > 0.0);
                     tui_ctx.quit();
                 },
             }

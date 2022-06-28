@@ -1,4 +1,5 @@
 #![cfg(target_arch = "wasm32")]
+#![allow(non_snake_case)]
 
 use dioxus_core::prelude::*;
 use dioxus_core_macro::*;
