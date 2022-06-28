@@ -11,7 +11,7 @@ use dioxus_html::geometry::{
 use dioxus_html::input_data::keyboard_types::{Code, Key, Location, Modifiers};
 use dioxus_html::input_data::MouseButtonSet as DioxusMouseButtons;
 use dioxus_html::input_data::{MouseButton as DioxusMouseButton, MouseButtonSet};
-use dioxus_html::{event_bubbles, on::*, KeyCode};
+use dioxus_html::{event_bubbles, on::*};
 use std::{
     any::Any,
     cell::{RefCell, RefMut},
@@ -172,8 +172,10 @@ impl InnerInputState {
         let old_focus = self.focus_state.last_focused_id;
 
         evts.retain(|e| match &e.1 {
-            EventData::Keyboard(k) => match k.key_code {
-                KeyCode::Tab => !self.focus_state.progress(dom, !k.shift_key),
+            EventData::Keyboard(k) => match k.code() {
+                Code::Tab => !self
+                    .focus_state
+                    .progress(dom, !k.modifiers().contains(Modifiers::SHIFT)),
                 _ => true,
             },
             _ => true,
