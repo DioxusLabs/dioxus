@@ -16,7 +16,8 @@ fn render_basic() {
     let dom = VirtualDom::new(Base);
     let static_vnodes = rsx!(div{"hello world"});
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 0,
         column: 0,
     };
@@ -61,7 +62,8 @@ fn render_nested() {
         }
     };
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 1,
         column: 0,
     };
@@ -112,7 +114,8 @@ fn render_component() {
         }
     };
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 2,
         column: 0,
     };
@@ -163,7 +166,8 @@ fn render_iterator() {
         }
     };
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 3,
         column: 0,
     };
@@ -216,7 +220,8 @@ fn render_captured_variable() {
         }
     };
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 4,
         column: 0,
     };
@@ -267,7 +272,8 @@ fn render_listener() {
         }
     };
     let location = CodeLocation {
-        file: String::new(),
+        file_path: String::new(),
+        crate_path: String::new(),
         line: 5,
         column: 0,
     };
