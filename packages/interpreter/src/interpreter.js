@@ -15,41 +15,43 @@ class ListenerMap {
     this.root = root;
   }
 
-  createBubbling(event_name, handler) {
-    if (this.global[event_name] === undefined) {
-      this.global[event_name] = {};
-      this.global[event_name].active = 1;
-      this.global[event_name].callback = handler;
-      this.root.addEventListener(event_name, handler);
-    } else {
-      this.global[event_name].active++;
+  create(event_name, element, handler, bubbles) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = {};
+        this.global[event_name].active = 1;
+        this.global[event_name].callback = handler;
+        this.root.addEventListener(event_name, handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      this.local[id][event_name] = handler;
+      element.addEventListener(event_name, handler);
     }
   }
 
-  createNonBubbling(event_name, element, handler) {
-    const id = element.getAttribute("data-dioxus-id");
-    if (!this.local[id]) {
-      this.local[id] = {};
+  remove(element, event_name, bubbles) {
+    if (bubbles) {
+      this.global[event_name].active--;
+      if (this.global[event_name].active === 0) {
+        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        delete this.global[event_name];
+      }
     }
-    this.local[id][event_name] = handler;
-    element.addEventListener(event_name, handler);
-  }
-
-  removeBubbling(event_name) {
-    this.global[event_name].active--;
-    if (this.global[event_name].active === 0) {
-      this.root.removeEventListener(event_name, this.global[event_name].callback);
-      delete this.global[event_name];
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      delete this.local[id][event_name];
+      if (this.local[id].length === 0) {
+        delete this.local[id];
+      }
+      element.removeEventListener(event_name, handler);
     }
-  }
-
-  removeNonBubbling(element, event_name) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id][event_name];
-    if (this.local[id].length === 0) {
-      delete this.local[id];
-    }
-    element.removeEventListener(event_name, handler);
   }
 
   removeAllNonBubbling(element) {
@@ -93,7 +95,9 @@ export class Interpreter {
   ReplaceWith(root_id, m) {
     let root = this.nodes[root_id];
     let els = this.stack.splice(this.stack.length - m);
-    this.listeners.removeAllNonBubbling(root);
+    if (is_element_node(root.nodeType)) {
+      this.listeners.removeAllNonBubbling(root);
+    }
     root.replaceWith(...els);
   }
   InsertAfter(root, n) {
@@ -108,8 +112,10 @@ export class Interpreter {
   }
   Remove(root) {
     let node = this.nodes[root];
-    this.listeners.removeAllNonBubbling(node);
     if (node !== undefined) {
+      if (is_element_node(node)) {
+        this.listeners.removeAllNonBubbling(node);
+      }
       node.remove();
     }
   }
@@ -137,22 +143,12 @@ export class Interpreter {
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
-    if (bubbles) {
-      this.listeners.createBubbling(event_name, handler);
-    }
-    else {
-      this.listeners.createNonBubbling(event_name, element, handler);
-    }
+    this.listeners.create(event_name, element, handler, bubbles);
   }
   RemoveEventListener(root, event_name, bubbles) {
     const element = this.nodes[root];
     element.removeAttribute(`data-dioxus-id`);
-    if (bubbles) {
-      this.listeners.removeBubbling(event_name)
-    }
-    else {
-      this.listeners.removeNonBubbling(element, event_name);
-    }
+    this.listeners.remove(element, event_name, bubbles);
   }
   SetText(root, text) {
     this.nodes[root].textContent = text;
@@ -659,6 +655,10 @@ const bool_attrs = {
   selected: true,
   truespeed: true,
 };
+
+function is_element_node(node) {
+  return node.nodeType == 1;
+}
 
 function event_bubbles(event) {
   switch (event) {
