@@ -40,6 +40,11 @@ pub struct ConfigOptsServe {
     #[clap(parse(from_os_str))]
     pub target: Option<PathBuf>,
 
+    /// Port of dev server
+    #[clap(long)]
+    #[clap(default_value_t = 8080)]
+    pub port: u16,
+
     /// Build a example [default: ""]
     #[clap(long)]
     pub example: Option<String>,
