@@ -402,12 +402,12 @@ impl<'b> DiffState<'b> {
 
         if old.listeners.len() == new.listeners.len() {
             for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
+                new_l.mounted_node.set(old_l.mounted_node.get());
                 if old_l.event != new_l.event {
                     self.mutations
                         .remove_event_listener(old_l.event, root.as_u64());
                     self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
-                new_l.mounted_node.set(old_l.mounted_node.get());
             }
         } else {
             for listener in old.listeners {
