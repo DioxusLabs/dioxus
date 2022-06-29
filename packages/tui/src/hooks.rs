@@ -146,14 +146,16 @@ impl InnerInputState {
                     .last_key_pressed
                     .as_ref()
                     // heuristic for guessing which presses are auto-repeating. not necessarily accurate
-                    .filter(|k2| k2.0.key() == k.key() && k2.1.elapsed() < MAX_REPEAT_TIME)
+                    .filter(|(last_data, last_instant)| {
+                        last_data.key() == k.key() && last_instant.elapsed() < MAX_REPEAT_TIME
+                    })
                     .is_some();
-                if is_repeating {
-                    let new = k.clone();
-                    self.last_key_pressed = Some((new, Instant::now()));
 
+                if is_repeating {
                     *k = KeyboardData::new(k.key(), k.code(), k.location(), true, k.modifiers());
                 }
+
+                self.last_key_pressed = Some((k.clone(), Instant::now()));
             }
         }
     }
