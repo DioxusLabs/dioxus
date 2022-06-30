@@ -14,7 +14,7 @@ fn app(cx: Scope) -> Element {
             justify_content: "center",
             align_items: "center",
             background_color: "hsl(248, 53%, 58%)",
-            onwheel: move |w| radius.modify(|r| (r + w.delta_y as i8).abs()),
+            onwheel: move |w| radius.modify(|r| (r + w.delta().strip_units().y as i8).abs()),
 
             border_style: "solid none solid double",
             border_width: "thick",

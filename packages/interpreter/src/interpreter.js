@@ -388,6 +388,7 @@ export function serialize_event(event) {
         location,
         repeat,
         which,
+        code,
       } = event;
       return {
         char_code: charCode,
@@ -400,7 +401,7 @@ export function serialize_event(event) {
         location: location,
         repeat: repeat,
         which: which,
-        locale: "locale",
+        code,
       };
     }
     case "focus":
