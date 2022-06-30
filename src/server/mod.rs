@@ -50,16 +50,16 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(config: CrateConfig) -> Result<()> {
+pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     if config.hot_reload {
-        startup_hot_reload(config).await?
+        startup_hot_reload(port, config).await?
     } else {
-        startup_default(config).await?
+        startup_default(port, config).await?
     }
     Ok(())
 }
 
-pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
+pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -179,7 +179,6 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0:8080
-    let port = "8080";
     log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
 
     let file_service_config = config.clone();
@@ -242,7 +241,7 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn startup_default(config: CrateConfig) -> Result<()> {
+pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -289,8 +288,7 @@ pub async fn startup_default(config: CrateConfig) -> Result<()> {
             .unwrap();
     }
 
-    // start serve dev-server at 0.0.0.0:8080
-    let port = "8080";
+    // start serve dev-server at 0.0.0.0
     log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
 
     let file_service_config = config.clone();
