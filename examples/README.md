@@ -74,8 +74,6 @@ cargo run --example hello_world
 
 [tasks](./tasks.rs) - Continuously run future
 
-[order](./order.rs)
-
 ### SVG
 
 [svg_basic](./svg_basic.rs)
@@ -85,6 +83,12 @@ cargo run --example hello_world
 ### Performance
 
 [framework_benchmark](./framework_benchmark.rs) - Renders a huge list
+
+> Note: The benchmark should be run in release mode:
+>
+>```shell
+> cargo run --example framework_benchmark --release
+>```
 
 [heavy_compute](./heavy_compute.rs) - How to deal with expensive operations
 
