@@ -335,7 +335,7 @@ impl ScopeArena {
                             log::trace!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
-                                break;
+                                return;
                             }
 
                             let mut cb = listener.callback.borrow_mut();
@@ -348,6 +348,10 @@ impl ScopeArena {
                                     bubble_state: state.clone(),
                                     data: event.data.clone(),
                                 });
+                            }
+
+                            if !event.bubbles {
+                                return;
                             }
                         }
                     }

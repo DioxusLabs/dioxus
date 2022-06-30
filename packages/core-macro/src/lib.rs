@@ -34,12 +34,12 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    #[cfg(feature = "hot_reload")]
+    #[cfg(feature = "hot-reload")]
     let rsx_text = s.to_string();
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => {
-            #[cfg(feature = "hot_reload")]
+            #[cfg(feature = "hot-reload")]
             {
                 use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
 
@@ -66,8 +66,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
                     Err(err) => err.into_compile_error().into(),
                 }
             }
-
-            #[cfg(not(feature = "hot_reload"))]
+            #[cfg(not(feature = "hot-reload"))]
             body.to_token_stream().into()
         }
     }

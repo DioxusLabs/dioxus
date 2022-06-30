@@ -5,11 +5,66 @@ export function main() {
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
+
+class ListenerMap {
+  constructor(root) {
+    // bubbling events can listen at the root element
+    this.global = {};
+    // non bubbling events listen at the element the listener was created at
+    this.local = {};
+    this.root = root;
+  }
+
+  create(event_name, element, handler, bubbles) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = {};
+        this.global[event_name].active = 1;
+        this.global[event_name].callback = handler;
+        this.root.addEventListener(event_name, handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      this.local[id][event_name] = handler;
+      element.addEventListener(event_name, handler);
+    }
+  }
+
+  remove(element, event_name, bubbles) {
+    if (bubbles) {
+      this.global[event_name].active--;
+      if (this.global[event_name].active === 0) {
+        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        delete this.global[event_name];
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      delete this.local[id][event_name];
+      if (this.local[id].length === 0) {
+        delete this.local[id];
+      }
+      element.removeEventListener(event_name, handler);
+    }
+  }
+
+  removeAllNonBubbling(element) {
+    const id = element.getAttribute("data-dioxus-id");
+    delete this.local[id];
+  }
+}
+
 export class Interpreter {
   constructor(root) {
     this.root = root;
     this.stack = [root];
-    this.listeners = {};
+    this.listeners = new ListenerMap(root);
     this.handlers = {};
     this.lastNodeWasText = false;
     this.nodes = [root];
@@ -40,6 +95,9 @@ export class Interpreter {
   ReplaceWith(root_id, m) {
     let root = this.nodes[root_id];
     let els = this.stack.splice(this.stack.length - m);
+    if (is_element_node(root.nodeType)) {
+      this.listeners.removeAllNonBubbling(root);
+    }
     root.replaceWith(...els);
   }
   InsertAfter(root, n) {
@@ -55,6 +113,9 @@ export class Interpreter {
   Remove(root) {
     let node = this.nodes[root];
     if (node !== undefined) {
+      if (is_element_node(node)) {
+        this.listeners.removeAllNonBubbling(node);
+      }
       node.remove();
     }
   }
@@ -79,26 +140,15 @@ export class Interpreter {
     this.stack.push(el);
     this.nodes[root] = el;
   }
-  NewEventListener(event_name, root, handler) {
+  NewEventListener(event_name, root, handler, bubbles) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
-    if (this.listeners[event_name] === undefined) {
-      this.listeners[event_name] = 1;
-      this.handlers[event_name] = handler;
-      this.root.addEventListener(event_name, handler);
-    } else {
-      this.listeners[event_name]++;
-    }
+    this.listeners.create(event_name, element, handler, bubbles);
   }
-  RemoveEventListener(root, event_name) {
+  RemoveEventListener(root, event_name, bubbles) {
     const element = this.nodes[root];
     element.removeAttribute(`data-dioxus-id`);
-    this.listeners[event_name]--;
-    if (this.listeners[event_name] === 0) {
-      this.root.removeEventListener(event_name, this.handlers[event_name]);
-      delete this.listeners[event_name];
-      delete this.handlers[event_name];
-    }
+    this.listeners.remove(element, event_name, bubbles);
   }
   SetText(root, text) {
     this.nodes[root].textContent = text;
@@ -198,12 +248,9 @@ export class Interpreter {
         this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
-        console.log(this.listeners);
-
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-          console.log(event);
 
           let target = event.target;
           if (target != null) {
@@ -292,7 +339,8 @@ export class Interpreter {
             );
           }
         };
-        this.NewEventListener(edit.event_name, edit.root, handler);
+        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
+
         break;
       case "SetText":
         this.SetText(edit.root, edit.text);
@@ -336,6 +384,7 @@ export function serialize_event(event) {
         location,
         repeat,
         which,
+        code,
       } = event;
       return {
         char_code: charCode,
@@ -348,7 +397,7 @@ export function serialize_event(event) {
         location: location,
         repeat: repeat,
         which: which,
-        locale: "locale",
+        code,
       };
     }
     case "focus":
@@ -607,3 +656,176 @@ const bool_attrs = {
   selected: true,
   truespeed: true,
 };
+
+function is_element_node(node) {
+  return node.nodeType == 1;
+}
+
+function event_bubbles(event) {
+  switch (event) {
+    case "copy":
+      return true;
+    case "cut":
+      return true;
+    case "paste":
+      return true;
+    case "compositionend":
+      return true;
+    case "compositionstart":
+      return true;
+    case "compositionupdate":
+      return true;
+    case "keydown":
+      return true;
+    case "keypress":
+      return true;
+    case "keyup":
+      return true;
+    case "focus":
+      return false;
+    case "focusout":
+      return true;
+    case "focusin":
+      return true;
+    case "blur":
+      return false;
+    case "change":
+      return true;
+    case "input":
+      return true;
+    case "invalid":
+      return true;
+    case "reset":
+      return true;
+    case "submit":
+      return true;
+    case "click":
+      return true;
+    case "contextmenu":
+      return true;
+    case "doubleclick":
+      return true;
+    case "dblclick":
+      return true;
+    case "drag":
+      return true;
+    case "dragend":
+      return true;
+    case "dragenter":
+      return false;
+    case "dragexit":
+      return false;
+    case "dragleave":
+      return true;
+    case "dragover":
+      return true;
+    case "dragstart":
+      return true;
+    case "drop":
+      return true;
+    case "mousedown":
+      return true;
+    case "mouseenter":
+      return false;
+    case "mouseleave":
+      return false;
+    case "mousemove":
+      return true;
+    case "mouseout":
+      return true;
+    case "scroll":
+      return false;
+    case "mouseover":
+      return true;
+    case "mouseup":
+      return true;
+    case "pointerdown":
+      return true;
+    case "pointermove":
+      return true;
+    case "pointerup":
+      return true;
+    case "pointercancel":
+      return true;
+    case "gotpointercapture":
+      return true;
+    case "lostpointercapture":
+      return true;
+    case "pointerenter":
+      return false;
+    case "pointerleave":
+      return false;
+    case "pointerover":
+      return true;
+    case "pointerout":
+      return true;
+    case "select":
+      return true;
+    case "touchcancel":
+      return true;
+    case "touchend":
+      return true;
+    case "touchmove":
+      return true;
+    case "touchstart":
+      return true;
+    case "wheel":
+      return true;
+    case "abort":
+      return false;
+    case "canplay":
+      return true;
+    case "canplaythrough":
+      return true;
+    case "durationchange":
+      return true;
+    case "emptied":
+      return true;
+    case "encrypted":
+      return true;
+    case "ended":
+      return true;
+    case "error":
+      return false;
+    case "loadeddata":
+      return true;
+    case "loadedmetadata":
+      return true;
+    case "loadstart":
+      return false;
+    case "pause":
+      return true;
+    case "play":
+      return true;
+    case "playing":
+      return true;
+    case "progress":
+      return false;
+    case "ratechange":
+      return true;
+    case "seeked":
+      return true;
+    case "seeking":
+      return true;
+    case "stalled":
+      return true;
+    case "suspend":
+      return true;
+    case "timeupdate":
+      return true;
+    case "volumechange":
+      return true;
+    case "waiting":
+      return true;
+    case "animationstart":
+      return true;
+    case "animationend":
+      return true;
+    case "animationiteration":
+      return true;
+    case "transitionend":
+      return true;
+    case "toggle":
+      return true;
+  }
+}

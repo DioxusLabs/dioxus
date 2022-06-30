@@ -358,7 +358,6 @@ function serialize_event(event) {
         location: location,
         repeat: repeat,
         which: which,
-        locale: "locale",
       };
     }
     case "focus":

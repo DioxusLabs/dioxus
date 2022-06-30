@@ -51,7 +51,7 @@ impl DesktopController {
                 dom.base_scope().provide_context(window_context);
 
                 // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
-                #[cfg(feature = "hot_reload")]
+                #[cfg(feature = "hot-reload")]
                 {
                     use dioxus_rsx_interpreter::{
                         error::Error, ErrorHandler, SetManyRsxMessage, RSX_CONTEXT,

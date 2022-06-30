@@ -1,3 +1,5 @@
+use dioxus::core as dioxus_core;
+use dioxus::prelude::*;
 use dioxus_native_core::{
     real_dom::{NodeType, RealDom},
     state::State,
@@ -11,10 +13,6 @@ struct Empty {}
 #[test]
 #[allow(unused_variables)]
 fn traverse() {
-    use dioxus_core::*;
-    use dioxus_core_macro::*;
-    use dioxus_html as dioxus_elements;
-
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})
@@ -108,11 +106,6 @@ fn traverse() {
 #[test]
 #[allow(unused_variables)]
 fn persist_removes() {
-    use dioxus_core::VNode;
-    use dioxus_core::*;
-    use dioxus_core_macro::*;
-    use dioxus_html as dioxus_elements;
-
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})
@@ -201,10 +194,6 @@ fn persist_removes() {
 #[test]
 #[allow(unused_variables)]
 fn persist_instertions_before() {
-    use dioxus_core::*;
-    use dioxus_core_macro::*;
-    use dioxus_html as dioxus_elements;
-
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})
@@ -271,10 +260,6 @@ fn persist_instertions_before() {
 #[test]
 #[allow(unused_variables)]
 fn persist_instertions_after() {
-    use dioxus_core::*;
-    use dioxus_core_macro::*;
-    use dioxus_html as dioxus_elements;
-
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         rsx!(cx, div {})

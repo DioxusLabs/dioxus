@@ -1,5 +1,5 @@
 use crate::RouterService;
-use dioxus_core::ScopeState;
+use dioxus::core::ScopeState;
 
 /// This hook provides access to the `RouterService` for the app.
 pub fn use_router(cx: &ScopeState) -> &RouterService {

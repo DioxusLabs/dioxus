@@ -1,10 +1,5 @@
+use dioxus::prelude::*;
 use std::sync::Arc;
-
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core_macro::Props;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
 
 use crate::{RouteContext, RouterCore};
 

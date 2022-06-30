@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use crate::{use_route, RouterCore};
-use dioxus_core as dioxus;
-use dioxus_core::prelude::*;
-use dioxus_core_macro::{format_args_f, rsx, Props};
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 
 /// Props for the [`Link`](struct.Link.html) component.
 #[derive(Props)]

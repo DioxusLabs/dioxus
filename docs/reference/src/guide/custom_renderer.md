@@ -206,7 +206,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                     ctrl_key: event.ctrl_key(),
                     meta_key: event.meta_key(),
                     shift_key: event.shift_key(),
-                    locale: "".to_string(),
                     location: event.location(),
                     repeat: event.repeat(),
                     which: event.which(),

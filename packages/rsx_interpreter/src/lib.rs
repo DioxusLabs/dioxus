@@ -24,7 +24,8 @@ lazy_static! {
 // the location of the code relative to the current crate based on [std::panic::Location]
 #[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CodeLocation {
-    pub file: String,
+    pub crate_path: String,
+    pub file_path: String,
     pub line: u32,
     pub column: u32,
 }
@@ -83,14 +84,12 @@ macro_rules! get_line_num {
     () => {{
         let line = line!();
         let column = column!();
-        let file = file!();
+        let file_path = file!().to_string();
+        let crate_path = env!("CARGO_MANIFEST_DIR").to_string();
 
-        #[cfg(windows)]
-        let file = env!("CARGO_MANIFEST_DIR").to_string() + "\\" + file!();
-        #[cfg(unix)]
-        let file = env!("CARGO_MANIFEST_DIR").to_string() + "/" + file!();
         CodeLocation {
-            file: file.to_string(),
+            crate_path,
+            file_path,
             line: line,
             column: column,
         }

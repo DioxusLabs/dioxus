@@ -8,6 +8,7 @@
 //! - Partial delegation?>
 
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
@@ -45,6 +46,7 @@ impl WebsysDom {
                             element: Some(ElementId(id)),
                             scope_id: None,
                             priority: dioxus_core::EventPriority::Medium,
+                            bubbles: event.bubbles(),
                         });
                     }
                     Some(Err(e)) => {
@@ -64,6 +66,7 @@ impl WebsysDom {
                                 element: None,
                                 scope_id: None,
                                 priority: dioxus_core::EventPriority::Low,
+                                bubbles: event.bubbles(),
                             });
                         }
                     }
@@ -121,12 +124,17 @@ impl WebsysDom {
                     event_name, root, ..
                 } => {
                     let handler: &Function = self.handler.as_ref().unchecked_ref();
-                    self.interpreter.NewEventListener(event_name, root, handler);
+                    self.interpreter.NewEventListener(
+                        event_name,
+                        root,
+                        handler,
+                        event_bubbles(event_name),
+                    );
                 }
 
-                DomEdit::RemoveEventListener { root, event } => {
-                    self.interpreter.RemoveEventListener(root, event)
-                }
+                DomEdit::RemoveEventListener { root, event } => self
+                    .interpreter
+                    .RemoveEventListener(root, event, event_bubbles(event)),
 
                 DomEdit::RemoveAttribute { root, name, ns } => {
                     self.interpreter.RemoveAttribute(root, name, ns)

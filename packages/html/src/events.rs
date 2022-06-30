@@ -5,12 +5,20 @@ use dioxus_core::*;
 pub mod on {
     //! Input events and associated data
 
-    use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-    use crate::input_data::{
-        decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
+    use crate::geometry::{
+        ClientPoint, Coordinates, ElementPoint, LinesVector, PagePoint, PagesVector, PixelsVector,
+        ScreenPoint, WheelDelta,
     };
-    use keyboard_types::Modifiers;
+    use crate::input_data::{
+        decode_key_location, decode_mouse_button_set, encode_key_location, encode_mouse_button_set,
+        MouseButton, MouseButtonSet,
+    };
+    use euclid::UnknownUnit;
+    use keyboard_types::{Code, Key, Location, Modifiers};
     use std::collections::HashMap;
+    use std::convert::TryInto;
+    use std::fmt::{Debug, Formatter};
+    use std::str::FromStr;
 
     use super::*;
     macro_rules! event_directory {
@@ -419,71 +427,142 @@ pub mod on {
 
     pub type KeyboardEvent = UiEvent<KeyboardData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct KeyboardData {
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use key() instead."
+        )]
         pub char_code: u32,
 
         /// Identify which "key" was entered.
-        ///
-        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
-        /// The key isn't an enum because there are just so many context-dependent keys.
-        ///
-        /// A full list on which keys to use is available at:
-        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
-        ///
-        /// # Example
-        ///
-        /// ```rust, ignore
-        /// match event.key().as_str() {
-        ///     "Esc" | "Escape" => {}
-        ///     "ArrowDown" => {}
-        ///     "ArrowLeft" => {}
-        ///      _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(since = "0.3.0", note = "use key() instead")]
         pub key: String,
 
         /// Get the key code as an enum Variant.
-        ///
-        /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
-        /// To match on unicode sequences, use the [`KeyboardData::key`] method - this will return a string identifier instead of a limited enum.
-        ///
-        ///
-        /// ## Example
-        ///
-        /// ```rust, ignore
-        /// use dioxus::KeyCode;
-        /// match event.key_code() {
-        ///     KeyCode::Escape => {}
-        ///     KeyCode::LeftArrow => {}
-        ///     KeyCode::RightArrow => {}
-        ///     _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use code() instead."
+        )]
         pub key_code: KeyCode,
 
+        /// the physical key on the keyboard
+        code: Code,
+
         /// Indicate if the `alt` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub alt_key: bool,
 
         /// Indicate if the `ctrl` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub ctrl_key: bool,
 
         /// Indicate if the `meta` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub meta_key: bool,
 
         /// Indicate if the `shift` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub shift_key: bool,
 
-        pub locale: String,
-
+        #[deprecated(since = "0.3.0", note = "use location() instead")]
         pub location: usize,
 
+        #[deprecated(since = "0.3.0", note = "use is_auto_repeating() instead")]
         pub repeat: bool,
 
+        #[deprecated(since = "0.3.0", note = "use code() or key() instead")]
         pub which: usize,
-        // get_modifier_state: bool,
+    }
+
+    impl KeyboardData {
+        pub fn new(
+            key: Key,
+            code: Code,
+            location: Location,
+            is_auto_repeating: bool,
+            modifiers: Modifiers,
+        ) -> Self {
+            #[allow(deprecated)]
+            KeyboardData {
+                char_code: key.legacy_charcode(),
+                key: key.to_string(),
+                key_code: KeyCode::from_raw_code(
+                    key.legacy_keycode()
+                        .try_into()
+                        .expect("could not convert keycode to u8"),
+                ),
+                code,
+                alt_key: modifiers.contains(Modifiers::ALT),
+                ctrl_key: modifiers.contains(Modifiers::CONTROL),
+                meta_key: modifiers.contains(Modifiers::META),
+                shift_key: modifiers.contains(Modifiers::SHIFT),
+                location: encode_key_location(location),
+                repeat: is_auto_repeating,
+                which: key
+                    .legacy_charcode()
+                    .try_into()
+                    .expect("could not convert charcode to usize"),
+            }
+        }
+
+        /// The value of the key pressed by the user, taking into consideration the state of modifier keys such as Shift as well as the keyboard locale and layout.
+        pub fn key(&self) -> Key {
+            #[allow(deprecated)]
+            FromStr::from_str(&self.key).expect("could not parse")
+        }
+
+        /// A physical key on the keyboard (as opposed to the character generated by pressing the key). In other words, this property returns a value that isn't altered by keyboard layout or the state of the modifier keys.
+        pub fn code(&self) -> Code {
+            self.code
+        }
+
+        /// The set of modifier keys which were pressed when the event occurred
+        pub fn modifiers(&self) -> Modifiers {
+            let mut modifiers = Modifiers::empty();
+
+            #[allow(deprecated)]
+            {
+                if self.alt_key {
+                    modifiers.insert(Modifiers::ALT);
+                }
+                if self.ctrl_key {
+                    modifiers.insert(Modifiers::CONTROL);
+                }
+                if self.meta_key {
+                    modifiers.insert(Modifiers::META);
+                }
+                if self.shift_key {
+                    modifiers.insert(Modifiers::SHIFT);
+                }
+            }
+
+            modifiers
+        }
+
+        /// The location of the key on the keyboard or other input device.
+        pub fn location(&self) -> Location {
+            #[allow(deprecated)]
+            decode_key_location(self.location)
+        }
+
+        /// `true` iff the key is being held down such that it is automatically repeating.
+        pub fn is_auto_repeating(&self) -> bool {
+            #[allow(deprecated)]
+            self.repeat
+        }
+    }
+
+    impl Debug for KeyboardData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("KeyboardData")
+                .field("key", &self.key())
+                .field("code", &self.code())
+                .field("modifiers", &self.modifiers())
+                .field("location", &self.location())
+                .field("is_auto_repeating", &self.is_auto_repeating())
+                .finish()
+        }
     }
 
     pub type FocusEvent = UiEvent<FocusData>;
@@ -502,7 +581,7 @@ pub mod on {
 
     pub type MouseEvent = UiEvent<MouseData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     /// Data associated with a mouse event
     ///
     /// Do not use the deprecated fields; they may change or become private in the future.
@@ -687,6 +766,17 @@ pub mod on {
         }
     }
 
+    impl Debug for MouseData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MouseData")
+                .field("coordinates", &self.coordinates())
+                .field("modifiers", &self.modifiers())
+                .field("held_buttons", &self.held_buttons())
+                .field("trigger_button", &self.trigger_button())
+                .finish()
+        }
+    }
+
     pub type PointerEvent = UiEvent<PointerData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Clone)]
@@ -738,12 +828,73 @@ pub mod on {
 
     pub type WheelEvent = UiEvent<WheelData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct WheelData {
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_mode: u32,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_x: f64,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_y: f64,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_z: f64,
+    }
+
+    impl WheelData {
+        /// Construct a new WheelData with the specified wheel movement delta
+        pub fn new(delta: WheelDelta) -> Self {
+            let (delta_mode, vector) = match delta {
+                WheelDelta::Pixels(v) => (0, v.cast_unit::<UnknownUnit>()),
+                WheelDelta::Lines(v) => (1, v.cast_unit::<UnknownUnit>()),
+                WheelDelta::Pages(v) => (2, v.cast_unit::<UnknownUnit>()),
+            };
+
+            #[allow(deprecated)]
+            WheelData {
+                delta_mode,
+                delta_x: vector.x,
+                delta_y: vector.y,
+                delta_z: vector.z,
+            }
+        }
+
+        /// Construct from the attributes of the web wheel event
+        pub fn from_web_attributes(
+            delta_mode: u32,
+            delta_x: f64,
+            delta_y: f64,
+            delta_z: f64,
+        ) -> Self {
+            #[allow(deprecated)]
+            Self {
+                delta_mode,
+                delta_x,
+                delta_y,
+                delta_z,
+            }
+        }
+
+        /// The amount of wheel movement
+        #[allow(deprecated)]
+        pub fn delta(&self) -> WheelDelta {
+            let x = self.delta_x;
+            let y = self.delta_y;
+            let z = self.delta_z;
+            match self.delta_mode {
+                0 => WheelDelta::Pixels(PixelsVector::new(x, y, z)),
+                1 => WheelDelta::Lines(LinesVector::new(x, y, z)),
+                2 => WheelDelta::Pages(PagesVector::new(x, y, z)),
+                _ => panic!("Invalid delta mode, {:?}", self.delta_mode),
+            }
+        }
+    }
+
+    impl Debug for WheelData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("WheelData")
+                .field("delta", &self.delta())
+                .finish()
+        }
     }
 
     pub type MediaEvent = UiEvent<MediaData>;
@@ -1322,5 +1473,93 @@ pub(crate) fn _event_meta(event: &UserEvent) -> (bool, EventPriority) {
         "toggle" => (true, Medium),
 
         _ => (true, Low),
+    }
+}
+
+pub fn event_bubbles(evt: &str) -> bool {
+    match evt {
+        "copy" => true,
+        "cut" => true,
+        "paste" => true,
+        "compositionend" => true,
+        "compositionstart" => true,
+        "compositionupdate" => true,
+        "keydown" => true,
+        "keypress" => true,
+        "keyup" => true,
+        "focus" => false,
+        "focusout" => true,
+        "focusin" => true,
+        "blur" => false,
+        "change" => true,
+        "input" => true,
+        "invalid" => true,
+        "reset" => true,
+        "submit" => true,
+        "click" => true,
+        "contextmenu" => true,
+        "doubleclick" => true,
+        "dblclick" => true,
+        "drag" => true,
+        "dragend" => true,
+        "dragenter" => false,
+        "dragexit" => false,
+        "dragleave" => true,
+        "dragover" => true,
+        "dragstart" => true,
+        "drop" => true,
+        "mousedown" => true,
+        "mouseenter" => false,
+        "mouseleave" => false,
+        "mousemove" => true,
+        "mouseout" => true,
+        "scroll" => false,
+        "mouseover" => true,
+        "mouseup" => true,
+        "pointerdown" => true,
+        "pointermove" => true,
+        "pointerup" => true,
+        "pointercancel" => true,
+        "gotpointercapture" => true,
+        "lostpointercapture" => true,
+        "pointerenter" => false,
+        "pointerleave" => false,
+        "pointerover" => true,
+        "pointerout" => true,
+        "select" => true,
+        "touchcancel" => true,
+        "touchend" => true,
+        "touchmove" => true,
+        "touchstart" => true,
+        "wheel" => true,
+        "abort" => false,
+        "canplay" => true,
+        "canplaythrough" => true,
+        "durationchange" => true,
+        "emptied" => true,
+        "encrypted" => true,
+        "ended" => true,
+        "error" => false,
+        "loadeddata" => true,
+        "loadedmetadata" => true,
+        "loadstart" => false,
+        "pause" => true,
+        "play" => true,
+        "playing" => true,
+        "progress" => false,
+        "ratechange" => true,
+        "seeked" => true,
+        "seeking" => true,
+        "stalled" => true,
+        "suspend" => true,
+        "timeupdate" => true,
+        "volumechange" => true,
+        "waiting" => true,
+        "animationstart" => true,
+        "animationend" => true,
+        "animationiteration" => true,
+        "transitionend" => true,
+        "toggle" => true,
+        _ => panic!("unsupported event type {:?}", evt),
     }
 }

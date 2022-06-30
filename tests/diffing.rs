@@ -756,3 +756,79 @@ fn add_nested_elements() {
         ]
     );
 }
+
+#[test]
+fn add_listeners() {
+    let vdom = new_dom();
+
+    let (_create, change) = vdom.diff_lazynodes(
+        rsx! {
+            div{}
+        },
+        rsx! {
+            div{
+                onkeyup: |_| {},
+                onkeydown: |_| {},
+            }
+        },
+    );
+
+    assert_eq!(
+        change.edits,
+        [
+            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 1 },
+            NewEventListener { event_name: "keydown", scope: ScopeId(0), root: 1 },
+        ]
+    );
+}
+
+#[test]
+fn remove_listeners() {
+    let vdom = new_dom();
+
+    let (_create, change) = vdom.diff_lazynodes(
+        rsx! {
+            div{
+                onkeyup: |_| {},
+                onkeydown: |_| {},
+            }
+        },
+        rsx! {
+            div{}
+        },
+    );
+
+    assert_eq!(
+        change.edits,
+        [
+            RemoveEventListener { event: "keyup", root: 1 },
+            RemoveEventListener { event: "keydown", root: 1 },
+        ]
+    );
+}
+
+#[test]
+fn diff_listeners() {
+    let vdom = new_dom();
+
+    let (_create, change) = vdom.diff_lazynodes(
+        rsx! {
+            div{
+                onkeydown: |_| {},
+            }
+        },
+        rsx! {
+            div{
+                onkeyup: |_| {},
+            }
+        },
+    );
+
+    assert_eq!(
+        change.edits,
+        [
+            RemoveEventListener { root: 1, event: "keydown" },
+            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 1 }
+        ]
+    );
+}
