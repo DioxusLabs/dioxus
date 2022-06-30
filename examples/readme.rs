@@ -11,14 +11,6 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let mut count = use_state(&cx, || 0);
 
-    let a = rsx! {
-        div {
-
-
-            key: "a"
-        }
-    };
-
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }

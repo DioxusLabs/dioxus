@@ -71,9 +71,9 @@ pub fn fmt_block(block: &str) -> Option<String> {
         ..Buffer::default()
     };
 
-    for node in syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?.roots {
-        buf.write_ident(&node).ok()?;
-    }
+    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+
+    buf.write_body_indented(&body.roots).unwrap();
 
     buf.consume()
 }
