@@ -25,7 +25,78 @@ pub struct PageSpace;
 /// A point in PageSpace
 pub type PagePoint = Point2D<f64, PageSpace>;
 
+/// A pixel unit: one unit corresponds to 1 pixel
+pub struct Pixels;
+/// A vector expressed in Pixels
+pub type PixelsVector = Vector3D<f64, Pixels>;
+
+/// A unit in terms of Lines
+///
+/// One unit is relative to the size of one line
+pub struct Lines;
+/// A vector expressed in Lines
+pub type LinesVector = Vector3D<f64, Lines>;
+
+/// A unit in terms of Screens:
+///
+/// One unit is relative to the size of a page
+pub struct Pages;
+/// A vector expressed in Pages
+pub type PagesVector = Vector3D<f64, Pages>;
+
+/// A vector representing the amount the mouse wheel was moved
+///
+/// This may be expressed in Pixels, Lines or Pages
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub enum WheelDelta {
+    /// Movement in Pixels
+    Pixels(PixelsVector),
+    /// Movement in Lines
+    Lines(LinesVector),
+    /// Movement in Pages
+    Pages(PagesVector),
+}
+
+impl WheelDelta {
+    /// Convenience function for constructing a WheelDelta with pixel units
+    pub fn pixels(x: f64, y: f64, z: f64) -> Self {
+        WheelDelta::Pixels(PixelsVector::new(x, y, z))
+    }
+
+    /// Convenience function for constructing a WheelDelta with line units
+    pub fn lines(x: f64, y: f64, z: f64) -> Self {
+        WheelDelta::Lines(LinesVector::new(x, y, z))
+    }
+
+    /// Convenience function for constructing a WheelDelta with page units
+    pub fn pages(x: f64, y: f64, z: f64) -> Self {
+        WheelDelta::Pages(PagesVector::new(x, y, z))
+    }
+
+    /// Returns true iff there is no wheel movement
+    ///
+    /// i.e. the x, y and z delta is zero (disregards units)
+    pub fn is_zero(&self) -> bool {
+        self.strip_units() == Vector3D::new(0., 0., 0.)
+    }
+
+    /// A Vector3D proportional to the amount scrolled
+    ///
+    /// Note that this disregards the 3 possible units: this could be expressed in terms of pixels, lines, or pages.
+    ///
+    /// In most cases, to properly handle scrolling, you should handle all 3 possible enum variants instead of stripping units. Otherwise, if you assume that the units will always be pixels, the user may experience some unexpectedly slow scrolling if their mouse/OS sends values expressed in lines or pages.
+    pub fn strip_units(&self) -> Vector3D<f64, UnknownUnit> {
+        match self {
+            WheelDelta::Pixels(v) => v.cast_unit(),
+            WheelDelta::Lines(v) => v.cast_unit(),
+            WheelDelta::Pages(v) => v.cast_unit(),
+        }
+    }
+}
+
 /// Coordinates of a point in the app's interface
+#[derive(Debug)]
 pub struct Coordinates {
     screen: ScreenPoint,
     client: ClientPoint,

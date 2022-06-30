@@ -204,7 +204,6 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
                 fn ctrl_key(&self) -> bool { self.0.ctrl_key() }
                 fn key(&self) -> String { self.0.key() }
                 fn key_code(&self) -> usize { self.0.key_code() }
-                fn locale(&self) -> String { self.0.locale() }
                 fn location(&self) -> usize { self.0.location() }
                 fn meta_key(&self) -> bool { self.0.meta_key() }
                 fn repeat(&self) -> bool { self.0.repeat() }
