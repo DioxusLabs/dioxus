@@ -1,49 +1,62 @@
 use crate::elements::*;
 
 // map the rsx name of the attribute to the html name of the attribute and the namespace that contains it
-pub fn attrbute_to_static_str(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
-    NO_NAMESPACE_ATTRIBUTES
-        .iter()
-        .find(|&a| *a == attr)
-        .map(|a| (*a, None))
-        .or_else(|| {
-            STYLE_ATTRIBUTES
-                .iter()
-                .find(|(a, _)| *a == attr)
-                .map(|(_, b)| (*b, Some("style")))
+pub fn attrbute_to_static_str(
+    attr: &str,
+    element: &'static str,
+    namespace: Option<&'static str>,
+) -> Option<(&'static str, Option<&'static str>)> {
+    if namespace == Some("http://www.w3.org/2000/svg") {
+        svg::MAPPED_ATTRIBUTES
+            .iter()
+            .find(|(a, _)| *a == attr)
+            .map(|(_, b)| (*b, None))
+    } else {
+        NO_NAMESPACE_ATTRIBUTES
+            .iter()
+            .find(|&a| *a == attr)
+            .map(|a| (*a, None))
+            .or_else(|| {
+                STYLE_ATTRIBUTES
+                    .iter()
+                    .find(|(a, _)| *a == attr)
+                    .map(|(_, b)| (*b, Some("style")))
+            })
+            .or_else(|| {
+                MAPPED_ATTRIBUTES
+                    .iter()
+                    .find(|(a, _)| *a == attr)
+                    .map(|(_, b)| (*b, None))
+            })
+    }
+    .or_else(|| {
+        ELEMENTS_WITH_MAPPED_ATTRIBUTES
+            .iter()
+            .find_map(|(el, attrs)| {
+                (element == *el)
+                    .then(|| {
+                        attrs
+                            .iter()
+                            .find(|(a, _)| *a == attr)
+                            .map(|(_, b)| (*b, None))
+                    })
+                    .flatten()
+            })
+    })
+    .or_else(|| {
+        ELEMENTS_WITH_NAMESPACE.iter().find_map(|(el, ns, attrs)| {
+            (element == *el && namespace == Some(*ns))
+                .then(|| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
+                .flatten()
         })
-        .or_else(|| {
-            MAPPED_ATTRIBUTES
-                .iter()
-                .find(|(a, _)| *a == attr)
-                .map(|(_, b)| (*b, None))
+    })
+    .or_else(|| {
+        ELEMENTS_WITHOUT_NAMESPACE.iter().find_map(|(el, attrs)| {
+            (element == *el)
+                .then(|| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
+                .flatten()
         })
-        .or_else(|| {
-            svg::MAPPED_ATTRIBUTES
-                .iter()
-                .find(|(a, _)| *a == attr)
-                .map(|(_, b)| (*b, None))
-        })
-        .or_else(|| {
-            ELEMENTS_WITH_MAPPED_ATTRIBUTES
-                .iter()
-                .find_map(|(_, attrs)| {
-                    attrs
-                        .iter()
-                        .find(|(a, _)| *a == attr)
-                        .map(|(_, b)| (*b, None))
-                })
-        })
-        .or_else(|| {
-            ELEMENTS_WITH_NAMESPACE
-                .iter()
-                .find_map(|(_, _, attrs)| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
-        })
-        .or_else(|| {
-            ELEMENTS_WITHOUT_NAMESPACE
-                .iter()
-                .find_map(|(_, attrs)| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
-        })
+    })
 }
 
 macro_rules! no_namespace_trait_methods {
@@ -615,6 +628,7 @@ mapped_trait_methods! {
 }
 
 pub mod svg {
+
     mapped_trait_methods! {
         accent_height: "accent-height",
         accumulate: "accumulate",
