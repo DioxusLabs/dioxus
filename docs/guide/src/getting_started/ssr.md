@@ -1,4 +1,4 @@
-# Getting Started: Server-Side-Rendering
+# Server-Side Rendering
 
 The Dioxus VirtualDom can be rendered to a string by traversing the Element Tree. This is implemented in the `ssr` crate where your Dioxus app can be directly rendered to HTML to be served by a web server.
 

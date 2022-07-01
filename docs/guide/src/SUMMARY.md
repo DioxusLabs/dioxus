@@ -1,6 +1,11 @@
 # Summary
 
 - [Introduction](README.md)
+- [Getting Started](getting_started/index.md)
+  - [Desktop](getting_started/desktop.md)
+  - [Web](getting_started/web.md)
+  - [Server-Side Rendering](getting_started/ssr.md)
+  - [Terminal UI](getting_started/tui.md)
 - [Roadmap](ROADMAP.md)
 - [Getting Set Up](setup.md)
 - [Hello, World!](hello_world.md)

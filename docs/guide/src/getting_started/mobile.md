@@ -1,7 +1,7 @@
-# Getting started: mobile
+# Mobile App
 
 
-Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some of the primitives until better support is ready.
+Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some primitives until better support is ready.
 
 Currently, only iOS is supported through us, however you *can* add android support by following the same instructions below by using the `android` guide in `cargo-mobile`.
 
