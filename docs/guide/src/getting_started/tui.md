@@ -2,9 +2,7 @@
 
 TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
 
-
-[TUI Support](https://github.com/DioxusLabs/rink/raw/master/examples/example.png)
-
+![Hello World screenshot](https://github.com/DioxusLabs/rink/raw/master/examples/example.png)
 
 ## Getting Set up
 
@@ -17,12 +15,9 @@ $ cd demo
 $ cargo add dioxus --features tui
 ```
 
-
-
 Then, edit your `main.rs` with the basic template. 
 
 ```rust
-//  main
 use dioxus::prelude::*;
 
 fn main() {
@@ -92,7 +87,3 @@ fn app(cx: Scope) -> Element {
 - Our TUI package uses flexbox for layout
 - 1px is one character lineheight. Your regular CSS px does not translate.
 - If your app panics, your terminal is wrecked. This will be fixed eventually.
-
-## Future Steps
-
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!

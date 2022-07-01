@@ -1,6 +1,5 @@
 # Mobile App
 
-
 Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some primitives until better support is ready.
 
 Currently, only iOS is supported through us, however you *can* add android support by following the same instructions below by using the `android` guide in `cargo-mobile`.
@@ -16,7 +15,6 @@ We're going to be using `cargo-mobile` to build for mobile. First, install it:
 ```shell
 $ cargo install --git https://github.com/BrainiumLLC/cargo-mobile
 ```
-
 
 And then initialize your app for the right platform. Use the `winit` template for now. Right now, there's no "Dioxus" template in cargo-mobile.
 
@@ -55,7 +53,6 @@ simple_logger = "*"
 Edit your `lib.rs`:
 
 ```rust
-// main.rs
 use dioxus::prelude::*;
 
 fn main() {
@@ -70,9 +67,3 @@ fn app(cx: Scope) -> Element {
     })
 }
 ```
-
-To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-mobile/).
-
-## Future Steps
-
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!

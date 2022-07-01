@@ -64,9 +64,6 @@ Generally, here's the status of each platform:
 ## Roadmap
 These Features are planned for the future of Dioxus:
 
----
-
-
 ### Core
 - [x] Release of Dioxus Core
 - [x] Upgrade documentation to include more theory and be more comprehensive
@@ -115,3 +112,16 @@ These Features are planned for the future of Dioxus:
 - [ ] Resize observer
 
 
+## Work in Progress
+
+## Build Tool
+
+We are currently working on our own build tool called [Dioxus CLI](https://github.com/DioxusLabs/cli) which will support:
+
+- an interactive TUI
+- on-the-fly reconfiguration
+- hot CSS reloading
+- two-way data binding between browser and source code
+- an interpreter for `rsx!`
+- ability to publish to github/netlify/vercel
+- bundling for iOS/Desktop/etc

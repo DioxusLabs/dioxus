@@ -1,18 +1,21 @@
 # Web
 
-[*"Pack your things, we're going on an adventure!"*](https://trunkrs.dev)
+The Web is the best-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled.
 
-Dioxus is well supported for the web through WebAssembly. A build of Dioxus for the web will be roughly equivalent to the size of a React build (70kb vs 65kb), but will load significantly faster due to [WebAssembly's StreamingCompile](https://hacks.mozilla.org/2018/01/making-webassembly-even-faster-firefoxs-new-streaming-and-tiering-compiler/) option.
+> Because of the limitations of Wasm, not every crate will work with your web apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
 
-Building Dioxus apps for the web requires much less configuration than our JavaScript counterparts.
+A build of Dioxus for the web will be roughly equivalent to the size of a React build (70kb vs 65kb), but will load significantly faster due to [WebAssembly's StreamingCompile](https://hacks.mozilla.org/2018/01/making-webassembly-even-faster-firefoxs-new-streaming-and-tiering-compiler/) option.
+
+## Examples
+- [TodoMVC](https://github.com/DioxusLabs/example-projects/tree/master/todomvc)
+- [ECommerce](https://github.com/DioxusLabs/example-projects/tree/master/ecommerce-site)
+
+[![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc)
 
 ## Tooling
 
-To develop your Dioxus app for the web, you'll need a tool to build and serve your assets. We recommend using [trunk](https://trunkrs.dev) which includes a build system, Wasm optimization, a dev server, and support for SASS/CSS.
+To develop your Dioxus app for the web, you'll need a tool to build and serve your assets. We recommend using [trunk](https://trunkrs.dev) which includes a build system, Wasm optimization, a dev server, and support for SASS/CSS:
 
-Currently, trunk projects can only build the root binary (ie the `main.rs`). To build a new Dioxus compatible project, this should get you up and running.
-
-First, [install trunk](https://trunkrs.dev/#install):
 ```shell
 $ cargo install trunk
 ```
@@ -22,20 +25,22 @@ Make sure the `wasm32-unknown-unknown` target is installed:
 $ rustup target add wasm32-unknown-unknown
 ```
 
-Create a new project:
+## Creating a New Project
+
+Create a cargo crate:
 
 ```shell
 $ cargo new --bin demo
 $ cd demo
 ```
 
-Add Dioxus with the `web` features:
+Add Dioxus as a dependency with the `web` feature:
 
 ```
 $ cargo add dioxus --features web
 ```
 
-Add an `index.html` for Trunk to use. Make sure your "mount point" element has an ID of "main" (this can be configured later):
+Add an `index.html` for Trunk to use. Make sure your "mount point" element has an ID of "main":
 
 ```html
 <!DOCTYPE html>
@@ -52,8 +57,6 @@ Add an `index.html` for Trunk to use. Make sure your "mount point" element has a
 
 Edit your `main.rs`:
 ```rust
-// main.rs
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -74,38 +77,11 @@ And to serve our app:
 trunk serve
 ```
 
+## Publishing with Github Pages
 To build our app and publish it to Github:
 
-- Make sure Github Pages is set up for your repo
+- Make sure GitHub Pages is set up for your repo
 - Build your app with `trunk build --release` (include `--public-url <repo-name>` to update asset prefixes if using a project site)
 - Move your generated HTML/CSS/JS/Wasm from `dist` into the folder configured for Github Pages
 - Add and commit with git
-- Push to Github
-
-That's it!
-
-## Future Build Tool
-
-We are currently working on our own build tool called [Dioxus Studio](http://github.com/dioxusLabs/studio) which will support:
-- an interactive TUI
-- on-the-fly reconfiguration
-- hot CSS reloading
-- two-way data binding between browser and source code
-- an interpreter for `rsx!` 
-- ability to publish to github/netlify/vercel
-- bundling for iOS/Desktop/etc
-
-## Features
-
-Currently, the web supports:
-
-- Pre-rendering/Hydration
-
-## Events
-
-The regular events in the `html` crate work just fine in the web.
-
-
-## Future Steps
-
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
+- Push to GitHub

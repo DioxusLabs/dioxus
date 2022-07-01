@@ -6,6 +6,7 @@
   - [Web](getting_started/web.md)
   - [Server-Side Rendering](getting_started/ssr.md)
   - [Terminal UI](getting_started/tui.md)
+  - [Mobile](getting_started/mobile.md)
 - [Roadmap](ROADMAP.md)
 - [Getting Set Up](setup.md)
 - [Hello, World!](hello_world.md)

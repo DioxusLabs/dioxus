@@ -47,7 +47,7 @@ dioxus = { version = "*", features = ["ssr"] }
 tokio = { version = "1.15.0", features = ["full"] }
 ```
 
-Now, setup your Axum app to respond on an endpoint.
+Now, set up your Axum app to respond on an endpoint.
 
 ```rust
 use axum::{response::Html, routing::get, Router};
@@ -96,7 +96,3 @@ async fn app_endpoint() -> Html<String> {
 And that's it!
 
 > You might notice that you cannot hold the VirtualDom across an await point. Dioxus is currently not ThreadSafe, so it _must_ remain on the thread it started. We are working on loosening this requirement.
-
-## Future Steps
-
-Make sure to read the [Dioxus Guide](https://dioxuslabs.com/guide) if you already haven't!
