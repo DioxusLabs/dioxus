@@ -58,79 +58,65 @@ We can pass borrowed props by borrowing a value from, e.g. a String:
 ![Screenshot: TitleCard component](./images/component_borrowed_props_screenshot.png)
 
 
+## Prop Options
 
----
+The `#[derive(Props)]` macro has some features that let you customize the behavior of props.
 
-> Dioxus `Props` is very similar to [@idanarye](https://github.com/idanarye)'s [TypedBuilder crate](https://github.com/idanarye/rust-typed-builder) and supports many of the same parameters.
+### Optional Props
 
-
-## Optional Props
-
-You can easily create optional fields by using the `Option<…>` type for a field:
+You can create optional fields by using the `Option<…>` type for a field:
 
 ```rust
-#[derive(Props, PartialEq)]
-struct MyProps {
-    name: String,
-
-    description: Option<String>
-}
-
-fn Demo(cx: MyProps) -> Element {
-    let text = match cx.props.description {
-        Some(d) => d,             // if a value is provided
-        None => "No description"  // if the prop is omitted
-    };
-
-    cx.render(rsx! {
-        "{name}": "{text}"
-    })
-}
+{{#include ../../examples/component_props_options.rs:OptionalProps}}
 ```
-In this example `name` is a required prop and `description` is optional.
-This means we can completely omit the description field when calling the component:
+
+Then, you can choose to either provide them or not:
 
 ```rust
-rsx!{
-    Demo {
-        name: "Thing".to_string(),
-        // description is omitted
-    }
-}
+{{#include ../../examples/component_props_options.rs:OptionalProps_usage}}
 ```
-Additionally if we provide a value we don't have to wrap it with `Some(…)`. This is done automatically for us:
+
+### Explicitly Required `Option`s
+
+If you want to explicitly require an `Option`, and not an optional prop, you can annotate it with `#[props(!optional)]`:
 
 ```rust
-rsx!{
-    Demo {
-        name: "Thing".to_string(),
-        description: "This is explains it".to_string(),
-    }
-}
+{{#include ../../examples/component_props_options.rs:ExplicitOption}}
 ```
 
-If you want to make a prop required even though it is of type `Option` you can provide the `!optional` modifier:
+Then, you have to explicitly pass either `Some("str")` or `None`:
 
 ```rust
-#[derive(Props, PartialEq)]
-struct MyProps {
-    name: String,
-
-    #[props(!optional)]
-    description: Option<String>
-}
+{{#include ../../examples/component_props_options.rs:ExplicitOption_usage}}
 ```
 
-This can be especially useful if you have a type alias named `Option` in the current scope.
+### Default Props
 
-For more information on how tags work, check out the [TypedBuilder](https://github.com/idanarye/rust-typed-builder) crate. However, all attributes for props in Dioxus are flattened (no need for `setter` syntax) and the `optional` field is new. The `optional` modifier is a combination of two separate modifiers: `default` and `strip_option` and it is automatically detected on `Option<…>` types.
+You can use `#[props(default = 42)]` to make a field optional and specify its default value:
 
-The full list of Dioxus' modifiers includes:
+```rust
+{{#include ../../examples/component_props_options.rs:DefaultComponent}}
+```
 
-- `default` - automatically add the field using its `Default` implementation
-- `optional` - alias for `default` and `strip_option`
-- `into` - automatically call `into` on the value at the callsite
+Then, similarly to optional props, you don't have to provide it:
 
+```rust
+{{#include ../../examples/component_props_options.rs:DefaultComponent_usage}}
+```
+
+### Automatic Conversion with `.into`
+
+It is common for Rust functions to accept `impl Into<SomeType>` rather than just `SomeType` to support a wider range of parameters. If you want similar functionality with props, you can use `#[props(into)]`. For example, you could add it on a `String` prop – and `&str` will also be automatically accepted, as it can be converted into `String`:
+
+```rust
+{{#include ../../examples/component_props_options.rs:IntoComponent}}
+```
+
+Then, you can use it so:
+
+```rust
+{{#include ../../examples/component_props_options.rs:IntoComponent_usage}}
+```
 
 ## The `inline_props` macro
 
