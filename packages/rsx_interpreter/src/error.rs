@@ -15,6 +15,7 @@ pub enum RecompileReason {
     CapturedExpression(String),
     CapturedComponent(String),
     CapturedListener(String),
+    CapturedAttribute(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
