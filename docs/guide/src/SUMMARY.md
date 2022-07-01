@@ -9,7 +9,6 @@
   - [Mobile](getting_started/mobile.md)
 - [Hello, World!](hello_world.md)
 - [Describing the UI](describing_ui/index.md)
-  - [Intro to Elements](describing_ui/vnodes.md)
   - [Conditional Rendering](describing_ui/conditional_rendering.md)
   - [Lists](describing_ui/lists.md)
   - [Special Attributes](describing_ui/special_attributes.md)
