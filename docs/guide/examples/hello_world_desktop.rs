@@ -1,3 +1,4 @@
+// ANCHOR: all
 #![allow(non_snake_case)]
 use dioxus::prelude::*;
 
@@ -5,6 +6,7 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
+// ANCHOR: component
 fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
@@ -12,3 +14,5 @@ fn App(cx: Scope) -> Element {
         }
     })
 }
+// ANCHOR_END: component
+// ANCHOR_END: all

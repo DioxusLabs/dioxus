@@ -1,42 +1,25 @@
-# Introduction to Components
+# Components
 
-In the previous chapter, we learned about Elements and how they can be composed to create a basic user interface. Now, we'll learn how to group Elements together to form Components. We'll cover:
+Just like you wouldn't want to write a complex program in a single, long, `main` function, you shouldn't build a complex UI in a single `App` function. Instead, it would be better to break down the functionality of an app in logical parts called components.
 
-- What makes a Component
-- How to model a component and its properties in Dioxus
-- How to "think declaratively"
+A component is a rust function that may or may not take some input, called props, and returns an `Element` describing the UI it wants to render. In fact, our `App` function is a component!
 
-## What is a component?
+```rust
+{{#include ../../examples/hello_world_desktop.rs:component}}
+```
 
-In short, a component is a special function that takes input properties and outputs an Element. Much like a function encapsulates some specific computation task, a Component encapsulates some specific rendering task – typically, rendering an isolated part of the user interface.
+A Component is responsible for some rendering task – typically, rendering an isolated part of the user interface. For example, you could have an `About` component that renders a short description of Dioxus Labs:
 
-### Real-world example
+```rust
+{{#include ../../examples/components.rs:About}}
+```
 
-Let's use a Reddit post as an example:
+Then, you can render your component in another component, similarly to how elements are rendered:
 
-![Reddit Post](../images/reddit_post.png)
+```rust
+{{#include ../../examples/components.rs:App}}
+```
 
-If we look at the layout of the component, we notice quite a few buttons and pieces of functionality:
+![Screenshot containing the About component twice](./about_component_screenshot.png)
 
-- Upvote/Downvote
-- View comments
-- Share
-- Save
-- Hide
-- Give award
-- Report
-- Crosspost
-- Filter by site
-- View article
-- Visit user
-
-If we included all this functionality in one `rsx!` call it would be huge! Instead, let's break the post down into Components:
-
-![Post as Component](../images/reddit_post_components.png)
-
-- **VoteButton**: Upvote/Downvote
-- **TitleCard**: Title, Filter-By-Url
-- **MetaCard**: Original Poster, Time Submitted
-- **ActionCard**: View comments, Share, Save, Hide, Give award, Report, Crosspost
-
-In this chapter, we'll learn how to define these components.
+> At this point, it might seem like components are nothing more than functions. However, as you learn more about the features of Dioxus, you'll see that they are actually more powerful!
