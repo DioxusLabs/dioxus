@@ -1,143 +1,44 @@
-# Passing children and attributes
+# Component Children
 
-Oftentimes, you'll want to wrap some important functionality *around* your state, not directly nested *inside* another component. In these cases, you'll want to pass elements and attributes into a component and let the component place them appropriately.
-
-In this chapter, you'll learn about:
-- Passing elements into components
-- Passing attributes into components
-
-
-## The use case
-
-Let's say you're building a user interface and want to make some part of it a clickable link to another website. You would normally start with the HTML `<a>` tag, like so:
+In some cases, you may wish to create a component that acts as a container for some other content, without the component needing to know what that content is. To achieve this, create a prop of type `Element`:
 
 ```rust
-rsx!(
-    a {
-        href: "https://google.com"
-        "Link to google"
-    }
-)
+{{#include ../../examples/component_element_props.rs:Clickable}}
 ```
 
-But, what if we wanted to style our `<a>` tag? Or wrap it with some helper icon? We could abstract our RSX into its own component:
-
+Then, when rendering the component, you can pass in the output of `cx.render(rsx!(...))`:
 
 ```rust
-#[derive(Props)]
-struct ClickableProps<'a> {
-    href: &'a str,
-    title: &'a str
-}
-
-fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
-    cx.render(rsx!(
-        a {
-            href: "{cx.props.href}"
-            "{cx.props.title}"
-        }
-    ))
-}
+{{#include ../../examples/component_element_props.rs:Clickable_usage}}
 ```
 
-And then use it in our code like so:
+> Note: Since `Element<'a>` is a borrowed prop, there will be no memoization.
+
+> Warning: While it may compile, do not include the same `Element` more than once in the RSX. The resulting behavior is unspecified.
+
+## The `children` field
+
+Rather than passing the RSX through a regular prop, you may wish to accept children similarly to how elements can have children. The "magic" `children` prop lets you achieve this:
 
 ```rust
-rsx!(
-    Clickable {
-        href: "https://google.com"
-        title: "Link to Google"
-    }
-)
+{{#include ../../examples/component_children.rs:Clickable}}
 ```
 
-Let's say we don't just want the text to be clickable, but we want another element, like an image, to be clickable. How do we implement that?
-
-## Passing children
-
-If we want to pass an image into our component, we can just adjust our props and component to allow any `Element`.
+This makes using the component much simpler: simply put the RSX inside the `{}` brackets – and there is no need for a `render` call or another macro!
 
 ```rust
-#[derive(Props)]
-struct ClickableProps<'a> {
-    href: &'a str,
-    body: Element<'a>
-}
-
-fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
-    cx.render(rsx!(
-        a {
-            href: "{cx.props.href}",
-            &cx.props.body
-        }
-    ))
-}
+{{#include ../../examples/component_children.rs:Clickable_usage}}
 ```
 
-Then, at the call site, we can render some nodes and pass them in:
+## Inspecting the `Element`
+
+Since `Element` is a `Option<VNode>`, we can actually inspect the contents of `children`, and render different things based on that. Example:
 
 ```rust
-rsx!(
-    Clickable {
-        href: "https://google.com"
-        body: cx.render(rsx!(
-            img { src: "https://www.google.com/logos/doodles/..." }
-        ))
-    }
-)
+{{#include ../../examples/component_children_inspect.rs:Clickable}}
 ```
 
-## Auto Conversion of the `Children` field
-
-This pattern can become tedious in some instances, so Dioxus actually performs an implicit conversion of any `rsx` calls inside components into `Elements` at the `children` field. This means you must explicitly declare if a component can take children.
-
-```rust
-#[derive(Props)]
-struct ClickableProps<'a> {
-    href: &'a str,
-    children: Element<'a>
-}
-
-fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
-    cx.render(rsx!(
-        a {
-            href: "{cx.props.href}",
-            &cx.props.children
-        }
-    ))
-}
-```
-
-Now, whenever we use `Clickable` in another component, we don't need to call `render` on child nodes - it will happen automatically!
-```rust
-rsx!(
-    Clickable {
-        href: "https://google.com"
-        img { src: "https://www.google.com/logos/doodles/...." }
-    }
-)
-```
-
-> Note: Passing children into components will break any memoization due to the associated lifetime.
-
-While technically allowed, it's an antipattern to pass children more than once in a component and will probably cause your app to crash.
-
-However, because the `Element` is transparently a `VNode`, we can actually match on it to extract the nodes themselves, in case we are expecting a specific format:
-
-```rust
-fn clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
-    match cx.props.children {
-        Some(VNode::Text(text)) => {
-            // ...
-        }
-        _ => {
-            // ...
-        }
-    }
-}
-```
-
-Passing nodes through props means that they are immutable. If you find yourself needing to mutate nodes passed through props, consider creating a new node in its place that takes on its attributes, children, and listeners.
+You can't mutate the `Element`, but if you need a modified version of it, you can construct a new one based on its attributes/children/etc.
 
 <!-- ## Passing attributes
 
@@ -174,45 +75,3 @@ fn clickable(cx: Scope<ClickableProps<'a>>) -> Element {
 
 The quoted escapes are a great way to make your components more flexible.
  -->
-
-## Passing handlers
-
-Dioxus also provides some implicit conversions from listener attributes into an `EventHandler` for any field on components that starts with `on`. IE `onclick`, `onhover`, etc. For properties, we want to define our `on` fields as an event handler:
-
-
-```rust
-#[derive(Props)]
-struct ClickableProps<'a> {
-    onclick: EventHandler<'a, MouseEvent>
-}
-
-fn clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
-    cx.render(rsx!(
-        a {
-            onclick: move |evt| cx.props.onclick.call(evt)
-        }
-    ))
-}
-```
-
-Then, we can attach a listener at the call site:
-
-```rust
-rsx!(
-    Clickable {
-        onclick: move |_| log::info!("Clicked"),
-    }
-)
-```
-
-Currently, Dioxus does not support an arbitrary amount of listeners - they must be strongly typed in `Properties`. If you need this use case, you can pass in an element with these listeners, or dip down into the `NodeFactory` API.
-
-
-## Wrapping up
-
-In this chapter, we learned:
-- How to pass arbitrary nodes through the tree
-- How the `children` field works on component properties
-- How the `attributes` field works on component properties
-- How to convert `listeners` into `EventHandlers` for components
-- How to extend any node with custom attributes and children

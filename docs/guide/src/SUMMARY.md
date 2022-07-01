@@ -14,7 +14,6 @@
   - [Special Attributes](describing_ui/special_attributes.md)
 - [Components](components/index.md)
   - [Properties](components/props.md)
-  - [Reusing, Importing, and Exporting](components/exporting_components.md)
   - [Children and Attributes](components/component_children.md)
   - [How Data Flows](components/composing.md)
 - [Adding Interactivity](interactivity/index.md)
