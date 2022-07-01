@@ -61,17 +61,7 @@ Add an `index.html` for Trunk to use. Make sure your "mount point" element has a
 
 Edit your `main.rs`:
 ```rust
-use dioxus::prelude::*;
-
-fn main() {
-    dioxus::web::launch(app);
-}
-
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
-        div { "hello, wasm!" }
-    })
-}
+{{#include ../../examples/hello_world_web.rs}}
 ```
 
 

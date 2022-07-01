@@ -22,25 +22,7 @@ $ cargo add dioxus --features tui
 Then, edit your `main.rs` with the basic template. 
 
 ```rust
-use dioxus::prelude::*;
-
-fn main() {
-    dioxus::tui::launch(app);
-}
-
-fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {
-            width: "100%",
-            height: "10px",
-            background_color: "red",
-            justify_content: "center",
-            align_items: "center",
-
-            "Hello world!"
-        }
-    })
-}
+{{#include ../../examples/hello_world_tui.rs}}
 ```
 
 To run our app:
@@ -52,38 +34,7 @@ $ cargo run
 Press "ctrl-c" to close the app. To switch from "ctrl-c" to  just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
 
 ```rust
-use dioxus::events::{KeyCode, KeyboardEvent};
-use dioxus::prelude::*;
-use dioxus::tui::TuiContext;
-
-fn main() {
-    dioxus::tui::launch_cfg(
-        app,
-        dioxus::tui::Config::new()
-            .without_ctrl_c_quit()
-            // Some older terminals only support 16 colors or ANSI colors if your terminal is one of these change this to BaseColors or ANSI
-            .with_rendering_mode(dioxus::tui::RenderingMode::Rgb),
-    );
-}
-
-fn app(cx: Scope) -> Element {
-    let tui_ctx: TuiContext = cx.consume_context().unwrap();
-
-    cx.render(rsx! {
-        div {
-            width: "100%",
-            height: "10px",
-            background_color: "red",
-            justify_content: "center",
-            align_items: "center",
-            onkeydown: move |k: KeyboardEvent| if let KeyCode::Q = k.data.key_code {
-                tui_ctx.quit();
-            },
-
-            "Hello world!"
-        }
-    })
-}
+{{#include ../../examples/hello_world_tui_no_ctrl_c.rs}}
 ```
 
 ## Notes

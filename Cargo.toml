@@ -71,6 +71,7 @@ members = [
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-prelude",
+    "docs/guide",
 ]
 
 [dev-dependencies]

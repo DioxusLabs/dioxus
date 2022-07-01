@@ -41,17 +41,5 @@ $ cargo add dioxus --features desktop
 Edit your `main.rs`:
 
 ```rust
-use dioxus::prelude::*;
-
-fn main() {
-    dioxus::desktop::launch(app);
-}
-
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
-        div {
-            "hello world!"
-        }
-    })
-}
+{{#include ../../examples/hello_world_desktop.rs}}
 ```
