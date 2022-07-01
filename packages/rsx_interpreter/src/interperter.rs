@@ -39,7 +39,7 @@ fn resolve_ifmt(ifmt: &IfmtInput, captured: &IfmtArgs) -> Result<String, Error> 
                     }
                 }
             }
-            Segment::Literal(lit) => result.push_str(lit),
+            Segment::Literal(lit) => result.push_str(&lit),
         }
     }
     Ok(result)
@@ -117,12 +117,12 @@ fn build_node<'a>(
 
                     ElementAttr::AttrExpression { .. }
                     | ElementAttr::CustomAttrExpression { .. } => {
-                        let (name, value) = match &attr.attr {
+                        let (name, value, span) = match &attr.attr {
                             ElementAttr::AttrExpression { name, value } => {
-                                (name.to_string(), value)
+                                (name.to_string(), value, name.span())
                             }
                             ElementAttr::CustomAttrExpression { name, value } => {
-                                (name.value(), value)
+                                (name.value(), value, name.span())
                             }
                             _ => unreachable!(),
                         };
@@ -140,6 +140,11 @@ fn build_node<'a>(
                                     is_volatile: false,
                                     namespace,
                                 });
+                            } else {
+                                return Err(Error::ParseError(ParseError::new(
+                                    syn::Error::new(span, format!("unknown attribute: {}", name)),
+                                    ctx.location.clone(),
+                                )));
                             }
                         } else {
                             return Err(Error::RecompileRequiredError(

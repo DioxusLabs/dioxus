@@ -62,6 +62,7 @@ use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
 use dioxus_core::VirtualDom;
 use futures_util::FutureExt;
+use web_sys::console;
 
 mod cache;
 mod cfg;
@@ -172,50 +173,6 @@ pub fn launch_with_props<T>(
 pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    for s in crate::cache::BUILTIN_INTERNED_STRINGS {
-        wasm_bindgen::intern(s);
-    }
-    for s in &cfg.cached_strings {
-        wasm_bindgen::intern(s);
-    }
-
-    let tasks = dom.get_scheduler_channel();
-
-    let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
-        Rc::new(move |event| tasks.unbounded_send(event).unwrap());
-
-    let should_hydrate = cfg.hydrate;
-
-    let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
-
-    log::trace!("rebuilding app");
-
-    if should_hydrate {
-        // todo: we need to split rebuild and initialize into two phases
-        // it's a waste to produce edits just to get the vdom loaded
-        let _ = dom.rebuild();
-
-        if let Err(err) = websys_dom.rehydrate(&dom) {
-            log::error!(
-                "Rehydration failed {:?}. Rebuild DOM into element from scratch",
-                &err
-            );
-
-            websys_dom.root.set_text_content(None);
-
-            // errrrr we should split rebuild into two phases
-            // one that initializes things and one that produces edits
-            let edits = dom.rebuild();
-
-            websys_dom.apply_edits(edits.edits);
-        }
-    } else {
-        let edits = dom.rebuild();
-        websys_dom.apply_edits(edits.edits);
-    }
-
-    let mut work_loop = ric_raf::RafLoop::new();
-
     #[cfg(feature = "hot-reload")]
     {
         use dioxus_rsx_interpreter::error::Error;
@@ -274,11 +231,60 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // forward stream to the websocket
         dom.base_scope().spawn_forever(async move {
             while let Some(err) = error_channel_receiver.next().await {
-                ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
-                    .unwrap();
+                if ws.ready_state() == WebSocket::OPEN {
+                    ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
+                        .unwrap();
+                } else {
+                    console::warn_1(&"WebSocket is not open, cannot send error. Run with dioxus serve --hot-reload to enable hot reloading.".into());
+                    panic!("{}", err);
+                }
             }
         });
     }
+
+    for s in crate::cache::BUILTIN_INTERNED_STRINGS {
+        wasm_bindgen::intern(s);
+    }
+    for s in &cfg.cached_strings {
+        wasm_bindgen::intern(s);
+    }
+
+    let tasks = dom.get_scheduler_channel();
+
+    let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
+        Rc::new(move |event| tasks.unbounded_send(event).unwrap());
+
+    let should_hydrate = cfg.hydrate;
+
+    let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
+
+    log::trace!("rebuilding app");
+
+    if should_hydrate {
+        // todo: we need to split rebuild and initialize into two phases
+        // it's a waste to produce edits just to get the vdom loaded
+        let _ = dom.rebuild();
+
+        if let Err(err) = websys_dom.rehydrate(&dom) {
+            log::error!(
+                "Rehydration failed {:?}. Rebuild DOM into element from scratch",
+                &err
+            );
+
+            websys_dom.root.set_text_content(None);
+
+            // errrrr we should split rebuild into two phases
+            // one that initializes things and one that produces edits
+            let edits = dom.rebuild();
+
+            websys_dom.apply_edits(edits.edits);
+        }
+    } else {
+        let edits = dom.rebuild();
+        websys_dom.apply_edits(edits.edits);
+    }
+
+    let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
