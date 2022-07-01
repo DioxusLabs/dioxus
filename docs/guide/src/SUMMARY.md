@@ -7,8 +7,6 @@
   - [Server-Side Rendering](getting_started/ssr.md)
   - [Terminal UI](getting_started/tui.md)
   - [Mobile](getting_started/mobile.md)
-- [Roadmap](ROADMAP.md)
-- [Getting Set Up](setup.md)
 - [Hello, World!](hello_world.md)
 - [Describing the UI](elements/index.md)
   - [Intro to Elements](elements/vnodes.md)
@@ -40,6 +38,9 @@
   - [UseCoroutine](async/coroutines.md)
   - [Updating State](async/loading_state.md)
   - [Tasks](async/asynctasks.md)
+- [Development](./development/index.md)
+  - [Roadmap](./development/roadmap.md)
+  - [Contributing](./development/contributing.md)
 
 <!--
 - [Putting it all together: Dog Search Engine](tutorial/index.md)

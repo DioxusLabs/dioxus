@@ -1,6 +1,6 @@
 # Roadmap & Feature-set
 
-Before we dive into Dioxus, feel free to take a look at our feature set and roadmap to see if what Dioxus can do today works for you.
+This feature set and roadmap can help you decide if what Dioxus can do today works for you.
 
 If a feature that you need doesn't exist or you want to contribute to projects on the roadmap, feel free to get involved by [joining the discord](https://discord.gg/XgGxMSkvUM).
 
@@ -58,7 +58,6 @@ Generally, here's the status of each platform:
 - ✅ = implemented and working
 - 🛠 = actively being worked on
 - 👀 = not yet implemented or being worked on
-- ❓ = not sure if will or can implement
 
 
 ## Roadmap
