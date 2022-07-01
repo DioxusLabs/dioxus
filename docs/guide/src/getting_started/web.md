@@ -1,16 +1,20 @@
 # Web
 
-The Web is the best-supported target platform for Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled.
+Build single-page applications that run in the browser with Dioxus. To run on the Web, your app must be compiled to WebAssembly and depend on the `dioxus` crate with the `web` feature enabled.
 
 > Because of the limitations of Wasm, not every crate will work with your web apps, so you'll need to make sure that your crates work without native system calls (timers, IO, etc).
 
 A build of Dioxus for the web will be roughly equivalent to the size of a React build (70kb vs 65kb), but will load significantly faster due to [WebAssembly's StreamingCompile](https://hacks.mozilla.org/2018/01/making-webassembly-even-faster-firefoxs-new-streaming-and-tiering-compiler/) option.
 
-## Examples
+Examples:
 - [TodoMVC](https://github.com/DioxusLabs/example-projects/tree/master/todomvc)
 - [ECommerce](https://github.com/DioxusLabs/example-projects/tree/master/ecommerce-site)
 
 [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc)
+
+## Support
+
+The Web is the best-supported target platform for Dioxus.
 
 ## Tooling
 

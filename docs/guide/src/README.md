@@ -18,48 +18,18 @@ fn app(cx: Scope) -> Element {
 
 Dioxus is heavily inspired by React. If you know React, getting started with Dioxus will be a breeze.
 
+> This guide assumes you already know some [Rust](https://www.rust-lang.org/)! If not, we recommend reading [*the book*](https://doc.rust-lang.org/book/ch01-00-getting-started.html) to learn Rust first.
+
 ## Multiplatform
 
 Dioxus is a *portable* toolkit, meaning the Core implementation can run anywhere with no platform-dependent linking. Unlike many other Rust frontend toolkits, Dioxus is not intrinsically linked to WebSys. In fact, every element and event listener can be swapped out at compile time. By default, Dioxus ships with the `html` feature enabled, but this can be disabled depending on your target renderer.
 
 Right now, we have several 1st-party renderers:
-- WebSys (for WASM)
-- Tao/Tokio (for Desktop apps)
-- Tao/Tokio (for Mobile apps)
+- WebSys (for WASM): Great support
+- Tao/Tokio (for Desktop apps): Good support
+- Tao/Tokio (for Mobile apps): Poor support
 - SSR (for generating static markup)
-- TUI/Rink (for terminal-based apps)
-
-
-### SSR Support
-Dioxus supports server-side rendering!
-
-For rendering statically to an `.html` file or from a WebServer, then you'll want to make sure the `ssr` feature is enabled in the `dioxus` crate and use the `dioxus::ssr` API. We don't expect the SSR API to change drastically in the future. [Get started with Dioxus SSR!](./getting_started/ssr.md)
-
-Examples:
-- [Example DocSite](https://github.com/dioxusLabs/docsite)
-
-### Desktop Support
-The desktop is a powerful target for Dioxus, but is currently limited in capability when compared to the Web platform. Currently, desktop apps are rendered with the platform's WebView library, but your Rust code is running natively on a native thread. This means that browser APIs are *not* available, so rendering WebGL, Canvas, etc is not as easy as the Web. However, native system APIs *are* accessible, so streaming, WebSockets, filesystem, etc are all viable APIs. In the future, we plan to move to a custom webrenderer-based DOM renderer with WGPU integrations.
-
-Desktop APIs will likely be in flux as we figure out better patterns than our ElectronJS counterpart.
-
-[Get started on a Dioxus desktop app!](./getting_started/desktop.md)
-
-Examples:
-- [File explorer](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer)
-- [WiFi scanner](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner)
-
-[![File ExplorerExample](https://raw.githubusercontent.com/DioxusLabs/example-projects/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/tree/master/file-explorer)
-
-### Mobile Support
-Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with the platform's WebView, meaning that animations, transparency, and native widgets are not currently achievable. In addition, iOS is the only supported Mobile Platform. It is possible to get Dioxus running on Android and rendered with WebView, but the Rust windowing library that Dioxus uses - tao - does not currently supported Android.
-
-Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
-
-[Get started on a mobile desktop app!](./getting_started/mobile.md)
-
-Examples:
-- [Todo App](https://github.com/DioxusLabs/example-projects/blob/master/ios_demo)
+- TUI/Rink (for terminal-based apps): Experimental
 
 ### LiveView / Server Component Support
 
@@ -82,3 +52,7 @@ Ultimately, you can always wrap the VirtualDom with a `Send` type and manually u
 Dioxus has not reached a stable release yet.
 
 Web: Since the web is a fairly mature platform, we expect there to be very little API churn for web-based features.
+
+Desktop: APIs will likely be in flux as we figure out better patterns than our ElectronJS counterpart.
+
+SSR: We don't expect the SSR API to change drastically in the future.

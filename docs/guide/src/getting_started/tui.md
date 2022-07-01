@@ -1,13 +1,17 @@
 # Terminal UI
 
-TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
+You can build a text-based interface that will run in the terminal using Dioxus.
 
 ![Hello World screenshot](https://github.com/DioxusLabs/rink/raw/master/examples/example.png)
+
+## Support
+
+TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
 
 ## Getting Set up
 
 
-To tinker with TUI support, start by making a new package and adding our TUI feature.
+Start by making a new package and adding our TUI feature.
 
 ```shell
 $ cargo new --bin demo

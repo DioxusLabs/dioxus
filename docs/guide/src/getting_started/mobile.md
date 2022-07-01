@@ -1,10 +1,15 @@
 # Mobile App
 
-Dioxus is unique in that it actually supports mobile. However, support is very young and you might need to dip down into some primitives until better support is ready.
+Build a mobile app with Dioxus!
 
-Currently, only iOS is supported through us, however you *can* add android support by following the same instructions below by using the `android` guide in `cargo-mobile`.
+Example: [Todo App](https://github.com/DioxusLabs/example-projects/blob/master/ios_demo)
 
-Also, Dioxus Desktop and Dioxus Mobile share the same codebase, and dioxus-mobile currently just re-exports dioxus-desktop.
+## Support
+Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with the platform's WebView, meaning that animations, transparency, and native widgets are not currently achievable.
+
+In addition, iOS is the only supported Mobile Platform. It is possible to get Dioxus running on Android and rendered with WebView, but the Rust windowing library that Dioxus uses - tao - does not currently support Android.
+
+Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
 
 ## Getting Set up
 
