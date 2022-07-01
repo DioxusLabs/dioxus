@@ -114,7 +114,7 @@ These Features are planned for the future of Dioxus:
 
 ## Work in Progress
 
-## Build Tool
+### Build Tool
 
 We are currently working on our own build tool called [Dioxus CLI](https://github.com/DioxusLabs/cli) which will support:
 
@@ -125,3 +125,9 @@ We are currently working on our own build tool called [Dioxus CLI](https://githu
 - an interpreter for `rsx!`
 - ability to publish to github/netlify/vercel
 - bundling for iOS/Desktop/etc
+
+### LiveView / Server Component Support
+
+The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support - you'll need to wire this up yourself.
+
+While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between Wasm and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.

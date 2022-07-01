@@ -4,6 +4,15 @@ The Dioxus VirtualDom can be rendered to a HTML string.
 
 [Example: Dioxus DocSite](https://github.com/dioxusLabs/docsite)
 
+## Multithreaded Support
+
+The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite a bit of interior mutability which is not thread-safe. This means you can't easily use Dioxus with most web frameworks like Tide, Rocket, Axum, etc.
+
+To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
+
+When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String - but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
+
+
 ## Setup
 
 If you just want to render `rsx!` or a VirtualDom to HTML, check out the API docs. It's pretty simple:
