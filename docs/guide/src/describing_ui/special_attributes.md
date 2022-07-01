@@ -1,13 +1,11 @@
 # Special Attributes
 
-Dioxus tries its hardest to stay close to React, but there are some divergences and "special behavior" that you should review before moving on.
-
-In this section, we'll cover special attributes built into Dioxus:
+While most attributes are simply passed on to the HTML, some have special behaviors:
 
 - `dangerous_inner_html`
 - Boolean attributes
 - `prevent_default`
-- event handlers as string attributes
+- Event handlers as string attributes
 - `value`, `checked`, and `selected`
 
 ## The HTML escape hatch: `dangerous_inner_html`
@@ -18,15 +16,7 @@ For example, shipping a markdown-to-Dioxus converter might significantly bloat y
 
 
 ```rust
-fn BlogPost(cx: Scope) -> Element {
-    let contents = include_str!("../post.html");
-    cx.render(rsx!{
-        div {
-            class: "markdown",
-            dangerous_inner_html: "{contents}",
-        }
-    })
-}
+{{#include ../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
 ```
 
 > Note! This attribute is called "dangerous_inner_html" because it is **dangerous** to pass it data you don't trust. If you're not careful, you can easily expose cross-site-scripting (XSS) attacks to your users.
@@ -36,17 +26,12 @@ fn BlogPost(cx: Scope) -> Element {
 
 ## Boolean Attributes
 
-Most attributes, when rendered, will be rendered exactly as the input you provided. However, some attributes are considered "boolean" attributes and just their presence determines whether or not they affect the output. For these attributes, a provided value of `"false"` will cause them to be removed from the target element.
+Most attributes, when rendered, will be rendered exactly as the input you provided. However, some attributes are considered "boolean" attributes and just their presence determines whether they affect the output. For these attributes, a provided value of `"false"` will cause them to be removed from the target element.
 
 So this RSX:
 
 ```rust
-rsx!{
-    div {
-        hidden: "false",
-        "hello"
-    }
-}
+{{#include ../../examples/boolean_attribute.rs:boolean_attribute}}
 ```
 wouldn't actually render the `hidden` attribute:
 ```html
@@ -86,22 +71,14 @@ For any other attributes, a value of `"false"` will be sent directly to the DOM.
 
 ## Stopping form input and navigation with `prevent_default`
 
-Currently, calling `prevent_default` on events in EventHandlers is not possible from Desktop/Mobile. Until this is supported, it's possible to prevent default using the `prevent_default` attribute.
+The `prevent_default` attribute can be used to prevent the default behavior of an event (such as a click-drag selecting text).
 
 > Note: you cannot conditionally prevent default with this approach. This is a limitation until synchronous event handling is available across the Webview boundary
 
 To use `prevent_default`, simply attach the `prevent_default` attribute to a given element and set it to the name of the event handler you want to prevent default on. We can attach this attribute multiple times for multiple attributes.
 
 ```rust
-rsx!{
-    input {
-        oninput: move |_| {},
-        prevent_default: "oninput",
-
-        onclick: move |_| {},
-        prevent_default: "onclick",
-    }
-}
+{{#include ../../examples/prevent_default.rs:prevent_default}}
 ```
 <!--
 ## Passing attributes into children: `..Attributes`
