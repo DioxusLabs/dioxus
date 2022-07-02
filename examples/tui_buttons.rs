@@ -1,4 +1,5 @@
-use dioxus::{events::KeyCode, prelude::*};
+use dioxus::prelude::*;
+use dioxus_html::input_data::keyboard_types::Code;
 
 fn main() {
     dioxus::tui::launch(app);
@@ -27,7 +28,7 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
             background_color: "{color}",
             tabindex: "{cx.props.layer}",
             onkeydown: |e| {
-                if let KeyCode::Space = e.data.key_code{
+                if let Code::Space = e.data.code() {
                     toggle.modify(|f| !f);
                 }
             },

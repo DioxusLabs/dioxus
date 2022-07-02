@@ -60,7 +60,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 ///
 ///
-pub fn use_context<'a, T: 'static>(cx: &'a ScopeState) -> Option<UseSharedState<'a, T>> {
+pub fn use_context<T: 'static>(cx: &ScopeState) -> Option<UseSharedState<T>> {
     let state = cx.use_hook(|_| {
         let scope_id = cx.scope_id();
         let root = cx.consume_context::<ProvidedState<T>>();

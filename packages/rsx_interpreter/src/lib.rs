@@ -150,6 +150,8 @@ impl RsxContext {
     fn report_error(&self, error: Error) {
         if let Some(handler) = &self.data.write().unwrap().error_handler {
             handler.handle_error(error)
+        } else {
+            panic!("no error handler set for this platform...\n{}", error);
         }
     }
 
