@@ -61,4 +61,6 @@ Then, you can use it like any other handler:
 {{#include ../../examples/event_handler_prop.rs:usage}}
 ```
 
-> Note: just like any other attribute, you can name the handlers anything you want! You can also pass custom data in the event.
+> Note: just like any other attribute, you can name the handlers anything you want! Though they must start with `on`, for the prop to be automatically turned into an `EventHandler` at the call site.
+> 
+> You can also put custom data in the event, rather than e.g. `MouseData`

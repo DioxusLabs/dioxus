@@ -8,6 +8,7 @@ fn main() {
     dioxus::desktop::launch(MemeEditor);
 }
 
+// ANCHOR: meme_editor
 fn MemeEditor(cx: Scope) -> Element {
     let container_style = r"
         display: flex;
@@ -33,7 +34,9 @@ fn MemeEditor(cx: Scope) -> Element {
         }
     })
 }
+// ANCHOR_END: meme_editor
 
+// ANCHOR: meme_component
 #[inline_props]
 fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
     let container_style = r#"
@@ -73,7 +76,9 @@ fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
         }
     ))
 }
+// ANCHOR_END: meme_component
 
+// ANCHOR: caption_editor
 #[inline_props]
 fn CaptionEditor<'a>(
     cx: Scope<'a>,
@@ -95,5 +100,6 @@ fn CaptionEditor<'a>(
         oninput: move |event| on_input.call(event),
     }))
 }
+// ANCHOR_END: caption_editor
 
 // ANCHOR_END: all
