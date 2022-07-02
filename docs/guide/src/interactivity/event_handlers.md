@@ -46,3 +46,19 @@ In some instances, might want to avoid this default behavior. For this, you can 
 Any event handlers will still be called.
 
 > Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior.
+
+## Handler Props
+
+Sometimes, you might want to make a component that accepts an event handler. The simplest case would be a `FancyButton` component, which accepts an `on_click` handler:
+
+```rust
+{{#include ../../examples/event_handler_prop.rs:component_with_handler}}
+```
+
+Then, you can use it like any other handler:
+
+```rust
+{{#include ../../examples/event_handler_prop.rs:usage}}
+```
+
+> Note: just like any other attribute, you can name the handlers anything you want! You can also pass custom data in the event.

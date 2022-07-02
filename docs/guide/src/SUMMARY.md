@@ -23,6 +23,7 @@
   - [Event Listeners](interactivity/event_handlers.md)
   - [Hooks & Component State](interactivity/hooks.md)
   - [User Input](interactivity/user_input.md)
+  - [Sharing State](interactivity/sharing_state.md)
 - [Managing State](state/index.md)
   - [Local State](state/localstate.md)
   - [Global State](state/sharedstate.md)
@@ -50,8 +51,6 @@
 
 
 -----------
-
-[Contributors](misc/contributors.md)
 
 
   <!-- - [Suspense](concepts/suspense.md) -->
