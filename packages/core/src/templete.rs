@@ -16,6 +16,18 @@ impl TemplateId {
     }
 }
 
+/// A TemplateNode's unique identifier.
+///
+/// `TemplateNodeId` is a `usize` that is only unique across the template that contains it, it is not unique across multaple instances of that template.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TemplateNodeId(pub usize);
+
+impl TemplateId {
+    pub fn as_u64(self) -> u64 {
+        self.0 as u64
+    }
+}
+
 /// A refrence to a template along with any context needed to hydrate it
 pub(crate) struct VTemplateRef<'a> {
     pub(crate) id: Cell<Option<ElementId>>,
@@ -24,42 +36,53 @@ pub(crate) struct VTemplateRef<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Template {
+pub(crate) struct Template<'b> {
     pub(crate) id: TemplateId,
-    pub(crate) root: &'static TemplateNode,
+    pub(crate) nodes: &'b[TemplateNode<'b>],
+    /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
+    pub(crate) dynamic_ids: &'b [TemplateNodeId],
 }
 
 /// Templates can only contain a limited subset of VNodes and id/keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 #[derive(Debug)]
-pub enum TemplateNode {
+struct TemplateNode<'b>{
+    /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
+    id: TemplateNodeId,
+    node_type: TemplateNodeType<'b>
+}
+
+#[derive(Debug)]
+pub enum TemplateNodeType<'b> {
     Element {
         tag: &'static str,
         namespace: Option<&'static str>,
-        attributes: &'static [TemplateAttribute],
-        children: &'static [TemplateNode],
-        /// the number of listeners this node will have
-        listeners: usize,
+        attributes: &'b [TemplateAttribute<'b>],
+        children: &'b [TemplateNodeId],
+        /// The index of each listener in the element
+        listeners: &'b [usize],
     },
     Text {
-        text: TextTemplate,
+        text: TextTemplate<'b>,
     },
     Fragment {
-        nodes: &'static [TemplateNode],
+        nodes: &'b [TemplateNodeId],
     },
+    /// The index in the dynamic node array this node should be replaced with
     DynamicNode(usize),
 }
 
-impl TemplateNode {
-    pub(crate) fn create<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: ElementId) {
+impl<'b> Template<'b> {
+    pub(crate) fn create(&mut self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateId) {
         mutations.create_templete(id.as_u64());
-        let mut id = ElementId(0);
-        self.create_inner(mutations, bump, &mut id);
+        let mut id = TemplateNodeId(0);
+        if let Some(root) = self.nodes.get(id.0){
+            self.create_node(mutations, bump, &mut id);
+        }
         mutations.finish_templete();
     }
-
-    fn create_inner<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: &mut ElementId) {
-        id.0 += 1;
+    
+    fn create_node(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: &mut TemplateNodeId) {
         match self {
             TemplateNode::Element {
                 tag,
@@ -114,7 +137,7 @@ impl TemplateNode {
                     }
                 }
                 for child in *children {
-                    child.create_inner(mutations, bump, id);
+                    self.create_node(mutations, bump, child);
                 }
 
                 mutations.append_children(children.len() as u32)
@@ -131,8 +154,7 @@ impl TemplateNode {
             }
             TemplateNode::Fragment { nodes } => {
                 for node in *nodes {
-                    node.create_inner(mutations, bump, id);
-                    id.0 += 1;
+                    self.create_node(mutations, bump, node);
                 }
             }
         }
@@ -140,19 +162,19 @@ impl TemplateNode {
 }
 
 #[derive(Debug)]
-pub struct TextTemplate {
+pub struct TextTemplate<'b> {
     // this is similar to what ifmt outputs and allows us to only diff the dynamic parts of the text
-    segments: &'static [TextTemplateSegment],
+    segments: &'b [TextTemplateSegment],
 }
 
 #[derive(Debug)]
-pub enum TextTemplateSegment {
-    Static(&'static str),
+pub enum TextTemplateSegment<'b> {
+    Static(&'b str),
     Dynamic(usize),
 }
 
 #[derive(Debug)]
-pub struct TemplateAttribute {
+pub struct TemplateAttribute<'b> {
     name: &'static str,
     namespace: Option<&'static str>,
     // if the attribute is dynamic, this will be empty
@@ -160,14 +182,35 @@ pub struct TemplateAttribute {
 }
 
 #[derive(Debug)]
-enum TemplateAttributeValue {
-    Static(AttributeValue<'static>),
+enum TemplateAttributeValue<'b> {
+    Static(AttributeValue<'b>),
     Dynamic(usize),
 }
 
-struct TemplateContext<'a> {
-    nodes: &'a [VNode<'a>],
-    text_segments: &'a [&'a str],
-    attributes: &'a [AttributeValue<'a>],
-    listeners: &'a [Listener<'a>],
+struct TemplateContext<'b> {
+    nodes: &'b [VNode<'b>],
+    text_segments: &'b [&'b str],
+    attributes: &'b [AttributeValue<'b>],
+    listeners: &'b [Listener<'b>],
+}
+
+impl<'b> TemplateContext<'b>{
+    fn resolve_text(&self, text: &'b[TextTemplateSegment<'b>]) -> String{
+        let mut result = String::new();
+        for seg in text{
+            match seg{
+                TextTemplateSegment::Static(s) => result += s,
+                TextTemplateSegment::Dynamic(idx) => result += self.text_segments[idx]
+            }
+        }
+        result
+    }
+
+    fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b>{
+        &self.attributes[idx]
+    }
+
+    fn resolve_listener(&self, idx: usize) -> &'b Listener<'b>{
+        &self.listeners[idx]
+    }
 }

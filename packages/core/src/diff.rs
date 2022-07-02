@@ -105,7 +105,7 @@ pub(crate) struct DiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
-    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
+    pub(crate) element_stack: SmallVec<[GlobalNodeId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
@@ -125,7 +125,7 @@ impl<'b> DiffState<'b> {
         let scope = self.scopes.get_scope(scopeid).unwrap();
 
         self.scope_stack.push(scopeid);
-        self.element_stack.push(scope.container);
+        self.element_stack.push(GlobalNodeId::VNodeId(scope.container));
         {
             self.diff_node(old, new);
         }
@@ -212,7 +212,7 @@ impl<'b> DiffState<'b> {
 
         dom_id.set(Some(real_id));
 
-        self.element_stack.push(real_id);
+        self.element_stack.push(GlobalNodeId::VNodeId(real_id));
         {
             self.mutations.create_element(tag_name, *namespace, real_id);
 
@@ -315,11 +315,45 @@ impl<'b> DiffState<'b> {
 
         new.id.set(Some(real_id));
 
-        self.element_stack.push(real_id);
-
+        
         self.mutations
-            .create_template_ref(real_id.as_u64(), id.as_u64());
-
+        .create_template_ref(real_id.as_u64(), id.as_u64());
+        
+        for id in new.template.dynamic_ids{
+            let dynamic_node = new.template.nodes[id.0];
+            self.element_stack.push(GlobalNodeId::TemplateId{
+                real_id
+            });
+            match dynamic_node.node_type{
+                TemplateNodeType::Element{tag, namespace, attributes, children, listeners} => {
+                    for attr in attributes{
+                        if let TemplateAttribute::Dynamic(idx) = attr{
+                            self.mutations.set_attribute(new.dynamic_context.resolve_attribute(idx), id.as_u64());
+                        }
+                    }
+                    for listener_idx in listeners{
+                        let listener = new.dynamic_context.resolve_listener(listener_idx);
+                        self.mutations.new_event_listener(listener, todo!("do we even need the scope to be part of this?"));
+                    }
+                    self.mutations.push_root(id.as_u64());
+                    self.mutations.pop_root();
+                    for 
+                }
+                TemplateNodeType::Text{text} => {
+                    let new_text = new.dynamic_context.resolve_text(text);
+                    self.mutations.set_text(self.bump.alloc(new_text), id.as_u64())
+                }
+                TemplateNodeType::DynamicNode(idx) => {
+                    /// this will only be triggered for root elements
+                    self.create_node(new.dynamic_context.nodes[idx]);
+                }
+                _ => {
+                    todo!()  
+                }
+            }
+            self.element_stack.pop();
+        }
+        
         1
     }
 

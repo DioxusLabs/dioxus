@@ -15,6 +15,16 @@ use std::{
     fmt::{Arguments, Debug, Formatter},
 };
 
+/// The ID of a node in the vdom that is either standalone or in a template
+#{derive(Clone, Copy, Debug, PartialEq)}
+pub(crate) enum GlobalNodeId{
+    TemplateId{
+        template_ref_id: ElementId,
+        template_id: TemplateNodeId
+    }
+    VNodeId(ElementId)
+}
+
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
 /// VNodes are designed to be lightweight and used with with a bump allocator. To create a VNode, you can use either of:
@@ -277,7 +287,7 @@ pub struct VElement<'a> {
     /// The parent of the Element (if any).
     ///
     /// Used when bubbling events
-    pub parent: Cell<Option<ElementId>>,
+    pub parent: Cell<Option<GlobalNodeId>>,
 
     /// The Listeners of the VElement.
     pub listeners: &'a [Listener<'a>],
