@@ -21,9 +21,8 @@
 [//]: # (  - [How Data Flows]&#40;components/composing.md&#41;)
 - [Interactivity](interactivity/index.md)
   - [Event Listeners](interactivity/event_handlers.md)
-  - [Hooks](interactivity/hooks.md)
+  - [Hooks & Component State](interactivity/hooks.md)
   - [User Input](interactivity/user_input.md)
-  <!-- - [Effects](interactivity/lifecycles.md) -->
 - [Managing State](state/index.md)
   - [Local State](state/localstate.md)
   - [Global State](state/sharedstate.md)
