@@ -31,6 +31,8 @@ Finally, a third component will render the other two as children. It will be res
 
 ## Using Context
 
+Sometimes, some state needs to be shared between multiple components far down the tree, and passing it down through props is very inconvenient.
+
 Suppose now that we want to implement a dark mode toggle for our app. To achieve this, we will make every component select styling depending on whether dark mode is enabled or not.
 
 > Note: we're choosing this approach for the sake of an example. There are better ways to implement dark mode (e.g. using CSS variables). Let's pretend CSS variables don't exist – welcome to 2013!
