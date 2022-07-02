@@ -22,8 +22,6 @@
 - [Interactivity](interactivity/index.md)
   - [Event Listeners](interactivity/event_handlers.md)
   - [Hooks](interactivity/hooks.md)
-  - [UseState](interactivity/usestate.md)
-  - [UseRef](interactivity/useref.md)
   - [User Input](interactivity/user_input.md)
   <!-- - [Effects](interactivity/lifecycles.md) -->
 - [Managing State](state/index.md)
