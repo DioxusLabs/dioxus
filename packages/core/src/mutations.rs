@@ -189,6 +189,32 @@ pub enum DomEdit<'bump> {
 
     /// Manually pop a root node from the stack.
     PopRoot {},
+
+    /// Create a new templete, dynamic nodes will be added as placeholders.
+    CreateTempleteRef {
+        /// The ID of the new template refrence.
+        id: u64,
+
+        /// The ID of the template the node is refrencing.
+        template_id: u64,
+    },
+
+    /// Create a new templete, dynamic nodes will be added as placeholders.
+    /// IMPORTANT: When adding nodes to a templete, id's will reset to zero, so they must be allocated on a different stack.
+    /// It is recommended to use Cow<NativeNode>.
+    CreateTemplete {
+        /// The ID of the new template.
+        id: u64,
+    },
+
+    /// This command is only valid when a templete ref is on the top of the stack.
+    PushTempleteRoot {
+        /// The ID of the node to push from the templete stack.
+        id: u64,
+    },
+
+    /// Finish a templete
+    FinishTemplete {},
 }
 
 use fxhash::FxHashSet;
@@ -318,6 +344,16 @@ impl<'a> Mutations<'a> {
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
         self.dirty_scopes.insert(scope);
     }
+
+    pub(crate) fn create_templete(&mut self, id: u64) {
+        self.edits.push(CreateTemplete { id });
+    }
+
+    pub(crate) fn finish_templete(&mut self) {
+        self.edits.push(FinishTemplete {});
+    }
+
+    pub(crate) fn create_template_ref(&mut self, id: u64, template_id: u64) {}
 }
 
 // refs are only assigned once

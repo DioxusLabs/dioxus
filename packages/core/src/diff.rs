@@ -91,9 +91,12 @@
 //! More info on how to improve this diffing algorithm:
 //!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
 
-use crate::innerlude::{
-    AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment, VNode,
-    VPlaceholder, VText,
+use crate::{
+    innerlude::{
+        AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment,
+        VNode, VPlaceholder, VText,
+    },
+    templete::{Template, VTemplateRef},
 };
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -133,7 +136,7 @@ impl<'b> DiffState<'b> {
     }
 
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
-        use VNode::{Component, Element, Fragment, Placeholder, Text};
+        use VNode::{Component, Element, Fragment, Placeholder, TemplateRef, Text};
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 self.diff_text_nodes(old, new, old_node, new_node);
@@ -155,6 +158,10 @@ impl<'b> DiffState<'b> {
                 self.diff_fragment_nodes(old, new);
             }
 
+            (TemplateRef(old), TemplateRef(new)) => {
+                self.diff_template_ref_nodes(old, new, old_node, new_node);
+            }
+
             (
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
                 Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
@@ -169,6 +176,7 @@ impl<'b> DiffState<'b> {
             VNode::Element(element) => self.create_element_node(element, node),
             VNode::Fragment(frag) => self.create_fragment_node(frag),
             VNode::Component(component) => self.create_component_node(*component),
+            VNode::TemplateRef(temp) => self.create_template_ref_node(*temp, node),
         }
     }
 
@@ -284,6 +292,35 @@ impl<'b> DiffState<'b> {
         self.leave_scope();
 
         created
+    }
+
+    pub(crate) fn create_template_ref_node(
+        &mut self,
+        new: &'b VTemplateRef<'b>,
+        node: &'b VNode<'b>,
+    ) -> usize {
+        let templates = self.scopes.templates.borrow_mut();
+        let ptr: *const Template = new.template;
+        let id = if let Some(id) = templates.get(&ptr) {
+            *id
+        } else {
+            let id = self.scopes.template_count.get_mut();
+            templates.insert(ptr, *id);
+            let template_id = *id;
+            id.0 += 1;
+            *id
+        };
+
+        let real_id = self.scopes.reserve_node(node);
+
+        new.id.set(Some(real_id));
+
+        self.element_stack.push(real_id);
+
+        self.mutations
+            .create_template_ref(real_id.as_u64(), id.as_u64());
+
+        1
     }
 
     pub(crate) fn diff_text_nodes(
@@ -970,6 +1007,10 @@ impl<'b> DiffState<'b> {
                 }
                 self.leave_scope();
             }
+
+            VNode::TemplateRef(r) => {
+                todo!()
+            }
         }
     }
 
@@ -1028,6 +1069,10 @@ impl<'b> DiffState<'b> {
                         self.scopes.try_remove(scope_id).unwrap();
                     }
                     self.leave_scope();
+                }
+
+                VNode::TemplateRef(r) => {
+                    todo!()
                 }
             }
         }
@@ -1123,6 +1168,8 @@ impl<'b> DiffState<'b> {
                 let root = self.scopes.root_node(scope_id);
                 self.push_all_real_nodes(root)
             }
+
+            VNode::TemplateRef(_) => todo!(),
         }
     }
 }

@@ -1,4 +1,8 @@
-use crate::{innerlude::*, unsafe_utils::extend_vnode};
+use crate::{
+    innerlude::*,
+    templete::{Template, TemplateId},
+    unsafe_utils::extend_vnode,
+};
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
@@ -35,6 +39,8 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
+    pub templates: RefCell<FxHashMap<*const Template, TemplateId>>,
+    pub template_count: Cell<TemplateId>,
 }
 
 impl ScopeArena {
@@ -74,6 +80,8 @@ impl ScopeArena {
                 gen: Cell::new(0),
                 sender,
             }),
+            templates: RefCell::new(FxHashMap::default()),
+            template_count: Cell::new(TemplateId(0)),
         }
     }
 

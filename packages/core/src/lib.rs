@@ -10,6 +10,7 @@ pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod properties;
 pub(crate) mod scopes;
+pub(crate) mod templete;
 pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
