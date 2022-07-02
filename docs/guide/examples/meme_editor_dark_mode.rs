@@ -8,10 +8,14 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
+// ANCHOR: DarkMode_struct
 struct DarkMode(bool);
+// ANCHOR_END: DarkMode_struct
 
 pub fn App(cx: Scope) -> Element {
+    // ANCHOR: context_provider
     use_context_provider(&cx, || DarkMode(false));
+    // ANCHOR_END: context_provider
 
     let is_dark_mode = use_is_dark_mode(&cx);
 
@@ -32,11 +36,16 @@ pub fn App(cx: Scope) -> Element {
 }
 
 pub fn use_is_dark_mode(cx: &ScopeState) -> bool {
-    use_context::<DarkMode>(&cx)
+    // ANCHOR: use_context
+    let dark_mode_context = use_context::<DarkMode>(&cx);
+    // ANCHOR_END: use_context
+
+    dark_mode_context
         .map(|context| context.read().0)
         .unwrap_or(false)
 }
 
+// ANCHOR: toggle
 pub fn DarkModeToggle(cx: Scope) -> Element {
     let dark_mode = use_context::<DarkMode>(&cx)?;
 
@@ -58,6 +67,7 @@ pub fn DarkModeToggle(cx: Scope) -> Element {
         },
     }))
 }
+// ANCHOR_END: toggle
 
 // ANCHOR: meme_editor
 fn MemeEditor(cx: Scope) -> Element {
