@@ -65,3 +65,19 @@ These rules mean that there are certain things you can't do with hooks:
 {{#include ../../examples/hooks_bad.rs:loop}}
 ```
 
+## `use_ref` Hook
+
+`use_state` is great for tracking simple values. However, you may notice in the [`UseState` API](https://docs.rs/dioxus/latest/dioxus/hooks/struct.UseState.html) that the only way to modify its value is to replace it with something else (e.g., by calling `set`, or through one of the `+=`, `-=` operators). This works well when it is cheap to construct a value (such as any primitive). But what if you want to maintain more complex data in the components state?
+
+For example, suppose we want to maintain a `Vec` of values. If we stored it with `use_state`, the only way to add a new value to the list would be to create a new `Vec` with the additional value, and put it in the state. This is expensive! We want to modify the existing `Vec` instead.
+
+Thankfully, there is another hook for that, `use_ref`! It is similar to `use_state`, but it lets you get a mutable reference to the contained data.
+
+Here's a simple example that keeps a list of events in a `use_ref`. We can acquire write access to the state with `.write()`, and then just `.push` a new value to the state:
+
+```rust
+{{#include ../../examples/hooks_use_ref.rs:component}}
+```
+
+> The return values of `use_state` and `use_ref`, (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
+
