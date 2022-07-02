@@ -4,7 +4,6 @@ While most attributes are simply passed on to the HTML, some have special behavi
 
 - `dangerous_inner_html`
 - Boolean attributes
-- `prevent_default`
 - Event handlers as string attributes
 - `value`, `checked`, and `selected`
 
@@ -69,16 +68,6 @@ Not all attributes work like this however. *Only the following attributes* have 
 
 For any other attributes, a value of `"false"` will be sent directly to the DOM.
 
-## Stopping form input and navigation with `prevent_default`
-
-The `prevent_default` attribute can be used to prevent the default behavior of an event (such as a click-drag selecting text).
-
-> Note: you cannot conditionally prevent default with this approach. This is a limitation until synchronous event handling is available across the Webview boundary
-
-To use `prevent_default`, simply attach the `prevent_default` attribute to a given element and set it to the name of the event handler you want to prevent default on. We can attach this attribute multiple times for multiple attributes.
-
-```rust
-{{#include ../../examples/prevent_default.rs:prevent_default}}
 ```
 <!--
 ## Passing attributes into children: `..Attributes`
