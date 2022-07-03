@@ -11,9 +11,6 @@
 [//]: # (- [Hello, World!]&#40;hello_world.md&#41;)
 - [Describing the UI](describing_ui/index.md)
   - [Special Attributes](describing_ui/special_attributes.md)
-
-[//]: # (  - [Conditional Rendering]&#40;describing_ui/conditional_rendering.md&#41;)
-[//]: # (  - [Lists]&#40;describing_ui/lists.md&#41;)
 - [Components](components/index.md)
   - [Props](components/props.md)
   - [Children](components/children.md)

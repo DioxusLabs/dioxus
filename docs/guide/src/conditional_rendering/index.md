@@ -1,10 +1,12 @@
 # Conditional Rendering
 
-Sometimes you want to render different things depending on the state/props. With Dioxus, just describe what you want to see – the framework will take care of making the necessary changes on the fly if the state or props change!
+Sometimes you want to render different things depending on the state/props. With Dioxus, just describe what you want to see using Rust control flow – the framework will take care of making the necessary changes on the fly if the state or props change!
 
 ```rust
 {{#include ../../examples/conditional_rendering.rs:if_else}}
 ```
+
+> You could also use `match` statements, or any Rust function to conditionally render different things.
 
 ## Rendering Nothing
 
@@ -13,6 +15,10 @@ To render nothing, you can return `None` from a component. This is useful if you
 ```rust
 {{#include ../../examples/conditional_rendering.rs:conditional_none}}
 ```
+
+This works because the `Element` type is just an alias for `Option<VNode>`
+
+> Again, you may use a different method to conditionally return `None`. For example the boolean's [`then()`](https://doc.rust-lang.org/std/primitive.bool.html#method.then) function could be used.
 
 ## Rendering Lists
 
@@ -45,3 +51,7 @@ To help Dioxus keep track of list items, we need to associate each item with a u
 - Keys must be unique in a list
 - The same item should always get associated with the same key
 - Keys should be relatively small (i.e. converting the entire Comment structure to a String would be a pretty bad key) so they can be compared efficiently
+
+You might be tempted to use an item's index in the list as its key. In fact, that’s what Dioxus will use if you don’t specify a key at all. This is only acceptable if you can guarantee that the list is constant – i.e., no re-ordering, additions or deletions.
+
+> Note that if you pass the key to a component you've made, it won't receive the key as a prop. It’s only used as a hint by Dioxus itself. If your component needs an ID, you have to pass it as a separate prop.
