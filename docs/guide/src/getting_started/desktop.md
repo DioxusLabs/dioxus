@@ -16,26 +16,27 @@ The desktop is a powerful target for Dioxus, but is currently limited in capabil
 
 Dioxus Desktop is built off [Tauri](https://tauri.app/). Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly.
 
-## Getting Set up
+## Creating a Project
+## Creating a Project
 
-Create a new project:
+Create a new crate:
 
 ```shell
-$ cargo new --bin demo
-$ cd demo
+cargo new --bin demo
+cd demo
 ```
 
 Add Dioxus with the `desktop` feature (this will edit `Cargo.toml`):
 
 ```shell
-$ cargo add dioxus --features desktop
+cargo add dioxus --features desktop
 ```
 
 > If your system does not provide the `libappindicator3` library, like Debian/bullseye, you can enable the replacement `ayatana` with an additional flag:
 >
 >```shell
->$ # On Debian/bullseye use:
->$ cargo add dioxus --features desktop --features ayatana
+># On Debian/bullseye use:
+>cargo add dioxus --features desktop --features ayatana
 >```
 
 Edit your `main.rs`:

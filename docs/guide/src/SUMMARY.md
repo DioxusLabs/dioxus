@@ -1,6 +1,7 @@
 # Summary
 
-- [Introduction](README.md)
+[Introduction](index.md)
+
 - [Getting Started](getting_started/index.md)
   - [Desktop](getting_started/desktop.md)
   - [Web](getting_started/web.md)

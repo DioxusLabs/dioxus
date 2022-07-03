@@ -1,6 +1,6 @@
 # Getting Started
 
-This section will help you get started with your Dioxus project!
+This section will help you set up your Dioxus project!
 
 ## Prerequisites
 
@@ -23,9 +23,6 @@ We've put a lot of care into making Dioxus syntax familiar and easy to understan
 
 ### Platform-Specific Dependencies
 
-If you are running a modern, mainstream operating system, you should need no additional setup to build WebView-based Desktop apps. However, if you are running an older version of Windows or a flavor of Linux with no default web rendering engine, you might need to install some additional dependencies.
-
-
 #### Windows
 
 Windows Desktop apps depend on WebView2 - a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
@@ -40,13 +37,13 @@ For development purposes, use Option 1.
 
 Webview Linux apps require WebkitGtk. When distributing, this can be part of your dependency tree in your `.rpm` or `.deb`. However, it's very likely that your users will already have WebkitGtk.
 
-```
+```bash
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
 ```
 
 When using Debian/bullseye `libappindicator3-dev` is no longer available but replaced by `libayatana-appindicator3-dev`.
 
-```
+```bash
 # on Debian/bullseye use:
 sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
 ```

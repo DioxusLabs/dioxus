@@ -32,21 +32,21 @@ However, for this guide, we're going to show how to use Dioxus SSR with `Axum`.
 Make sure you have Rust and Cargo installed, and then create a new project:
 
 ```shell
-$ cargo new --bin demo
-$ cd app
+cargo new --bin demo
+cd app
 ```
 
 Add Dioxus with the `ssr` feature:
 
 ```shell
-$ cargo add dioxus --features ssr
+cargo add dioxus --features ssr
 ```
 
 Next, add all the Axum dependencies. This will be different if you're using a different Web Framework
 
 ```
-$ cargo add tokio --features full
-$ cargo add axum
+cargo add tokio --features full
+cargo add axum
 ```
 
 Your dependencies should look roughly like this:

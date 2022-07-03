@@ -18,13 +18,13 @@ Getting set up with mobile can be quite challenging. The tooling here isn't grea
 We're going to be using `cargo-mobile` to build for mobile. First, install it:
 
 ```shell
-$ cargo install --git https://github.com/BrainiumLLC/cargo-mobile
+cargo install --git https://github.com/BrainiumLLC/cargo-mobile
 ```
 
 And then initialize your app for the right platform. Use the `winit` template for now. Right now, there's no "Dioxus" template in cargo-mobile.
 
 ```shell
-$ cargo mobile init 
+cargo mobile init 
 ```
 
 We're going to completely clear out the `dependencies` it generates for us, swapping out `winit` with `dioxus-mobile`.
