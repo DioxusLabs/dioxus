@@ -835,10 +835,7 @@ impl ScopeState {
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<'src, State: 'static>(
-        &'src self,
-        initializer: impl FnOnce(usize) -> State,
-    ) -> &'src mut State {
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce(usize) -> State) -> &mut State {
         let mut vals = self.hook_vals.borrow_mut();
 
         let hook_len = vals.len();
