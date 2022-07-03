@@ -1,7 +1,7 @@
 // ANCHOR: all
 #![allow(non_snake_case)]
 
-use dioxus::events::{CompositionData, FormData, FormEvent};
+use dioxus::events::FormEvent;
 use dioxus::prelude::*;
 
 fn main() {

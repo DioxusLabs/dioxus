@@ -39,7 +39,6 @@ pub fn Attributes(cx: Scope) -> Element {
     cx.render(rsx!(a {
         href: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
         class: "primary_button",
-        autofocus: true,
         "Log In"
     }))
     // ANCHOR_END: attributes
@@ -50,8 +49,8 @@ pub fn VariableAttributes(cx: Scope) -> Element {
     let written_in_rust = true;
     let button_type = "button";
     cx.render(rsx!(button {
-        disabled: written_in_rust,
-        class: button_type,
+        disabled: "{written_in_rust}",
+        class: "{button_type}",
         "Rewrite it in rust"
     }))
     // ANCHOR_END: variable_attributes

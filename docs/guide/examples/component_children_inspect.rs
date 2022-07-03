@@ -1,5 +1,5 @@
 // ANCHOR: all
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused)]
 use dioxus::prelude::*;
 
 fn main() {

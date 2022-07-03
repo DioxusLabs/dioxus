@@ -9,7 +9,7 @@ fn App(cx: Scope) -> Element {
     // ANCHOR: rsx
     cx.render(rsx! {
         div {
-            onclick: move |event| {},
+            onclick: move |_event| {},
             "outer",
             button {
                 onclick: move |event| {
