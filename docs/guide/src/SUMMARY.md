@@ -25,6 +25,7 @@
   - [User Input](interactivity/user_input.md)
   - [Sharing State](interactivity/sharing_state.md)
   - [Custom Hooks](interactivity/custom_hooks.md)
+- [Conditional Rendering](conditional_rendering/index.md)
 - [Managing State](state/index.md)
   - [Local State](state/localstate.md)
   - [Error handling](state/errorhandling.md)
