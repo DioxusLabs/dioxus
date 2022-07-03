@@ -4,7 +4,8 @@ use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    token, Expr, LitStr, Result, spanned::Spanned,
+    spanned::Spanned,
+    token, Expr, LitStr, Result,
 };
 
 /*
