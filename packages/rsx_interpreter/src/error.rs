@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 use crate::CodeLocation;
@@ -36,5 +38,20 @@ impl ParseError {
         }
         location.column += 1;
         ParseError { message, location }
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::ParseError(error) => write!(
+                f,
+                "parse error:\n--> at {}:{}:{}\n\t{:?}\n",
+                error.location.file_path, error.location.line, error.location.column, error.message
+            ),
+            Error::RecompileRequiredError(reason) => {
+                write!(f, "recompile required: {:?}\n", reason)
+            }
+        }
     }
 }
