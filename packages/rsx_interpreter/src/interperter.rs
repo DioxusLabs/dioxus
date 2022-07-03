@@ -38,7 +38,7 @@ fn resolve_ifmt(ifmt: &IfmtInput, captured: &IfmtArgs) -> Result<String, Error> 
                     }
                 }
             }
-            Segment::Literal(lit) => result.push_str(&lit),
+            Segment::Literal(lit) => result.push_str(lit),
         }
     }
     Ok(result)
@@ -119,21 +119,16 @@ fn build_node<'a>(
                                     is_volatile: false,
                                     namespace,
                                 });
+                            } else if literal {
+                                // literals will be captured when a full recompile is triggered
+                                return Err(Error::RecompileRequiredError(
+                                    RecompileReason::CapturedAttribute(name.to_string()),
+                                ));
                             } else {
-                                if literal {
-                                    // literals will be captured when a full recompile is triggered
-                                    return Err(Error::RecompileRequiredError(
-                                        RecompileReason::CapturedAttribute(name.to_string()),
-                                    ));
-                                } else {
-                                    return Err(Error::ParseError(ParseError::new(
-                                        syn::Error::new(
-                                            span,
-                                            format!("unknown attribute: {}", name),
-                                        ),
-                                        ctx.location.clone(),
-                                    )));
-                                }
+                                return Err(Error::ParseError(ParseError::new(
+                                    syn::Error::new(span, format!("unknown attribute: {}", name)),
+                                    ctx.location.clone(),
+                                )));
                             }
                         }
 
@@ -164,21 +159,19 @@ fn build_node<'a>(
                                         is_volatile: false,
                                         namespace,
                                     });
+                                } else if literal {
+                                    // literals will be captured when a full recompile is triggered
+                                    return Err(Error::RecompileRequiredError(
+                                        RecompileReason::CapturedAttribute(name.to_string()),
+                                    ));
                                 } else {
-                                    if literal {
-                                        // literals will be captured when a full recompile is triggered
-                                        return Err(Error::RecompileRequiredError(
-                                            RecompileReason::CapturedAttribute(name.to_string()),
-                                        ));
-                                    } else {
-                                        return Err(Error::ParseError(ParseError::new(
-                                            syn::Error::new(
-                                                span,
-                                                format!("unknown attribute: {}", name),
-                                            ),
-                                            ctx.location.clone(),
-                                        )));
-                                    }
+                                    return Err(Error::ParseError(ParseError::new(
+                                        syn::Error::new(
+                                            span,
+                                            format!("unknown attribute: {}", name),
+                                        ),
+                                        ctx.location.clone(),
+                                    )));
                                 }
                             }
                         }

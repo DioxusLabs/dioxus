@@ -44,13 +44,13 @@ impl ParseError {
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::ParseError(error) => write!(
+            Error::ParseError(error) => writeln!(
                 f,
-                "parse error:\n--> at {}:{}:{}\n\t{:?}\n",
+                "parse error:\n--> at {}:{}:{}\n\t{:?}",
                 error.location.file_path, error.location.line, error.location.column, error.message
             ),
             Error::RecompileRequiredError(reason) => {
-                write!(f, "recompile required: {:?}\n", reason)
+                writeln!(f, "recompile required: {:?}", reason)
             }
         }
     }

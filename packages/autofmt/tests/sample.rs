@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 const SRC: &str = include_str!("./samples/all.rs");
 
 fn body() -> &'static str {

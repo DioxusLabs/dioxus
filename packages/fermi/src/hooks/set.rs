@@ -2,7 +2,7 @@ use crate::{use_atom_root, Writable};
 use dioxus_core::ScopeState;
 use std::rc::Rc;
 
-pub fn use_set<'a, T: 'static>(cx: &'a ScopeState, f: impl Writable<T>) -> &'a Rc<dyn Fn(T)> {
+pub fn use_set<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &Rc<dyn Fn(T)> {
     let root = use_atom_root(cx);
     cx.use_hook(|_| {
         let id = f.unique_id();

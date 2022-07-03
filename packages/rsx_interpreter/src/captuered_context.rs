@@ -124,9 +124,9 @@ impl ToTokens for CapturedContextBuilder {
                     let expr = segment.to_token_stream();
                     let as_string = expr.to_string();
                     let format_expr = if format_args.is_empty() {
-                        "{".to_string() + &format_args + "}"
+                        "{".to_string() + format_args + "}"
                     } else {
-                        "{".to_string() + ":" + &format_args + "}"
+                        "{".to_string() + ":" + format_args + "}"
                     };
                     Some(quote! {
                         FormattedArg{

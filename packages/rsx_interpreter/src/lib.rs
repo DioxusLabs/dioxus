@@ -65,7 +65,7 @@ pub fn resolve_scope<'a>(
     }
 }
 
-fn interpert_rsx<'a, 'b>(
+fn interpert_rsx<'a>(
     factory: dioxus_core::NodeFactory<'a>,
     text: &str,
     context: captuered_context::CapturedContext<'a>,
