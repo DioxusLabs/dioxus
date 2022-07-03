@@ -1,8 +1,6 @@
 # Working with Async
 
-Not all apps you'll build can be self-contained with synchronous code. You'll often need to interact with file systems, network interfaces, hardware, or timers.
-
-So far, we've only talked about building apps with synchronous code, so this chapter will focus integrating asynchronous code into your app.
+Often, apps need to interact with file systems, network interfaces, hardware, or timers.
 
 ## The Runtime
 

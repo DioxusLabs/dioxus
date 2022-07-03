@@ -4,7 +4,7 @@ All async code in Dioxus must be explicit and handled through Dioxus' task syste
 
 In this chapter, we'll learn how to spawn new tasks through our `Scope`.
 
-## Spawning a task
+## Spawning a Task
 
 You can push any `'static` future into the Dioxus future queue by simply calling `cx.spawn` to spawn a task. Pushing a future returns a `TaskId` which can then be used to cancel the 
 

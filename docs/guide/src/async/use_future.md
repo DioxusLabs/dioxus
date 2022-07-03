@@ -1,8 +1,6 @@
 # UseFuture
 
-When dealing with asynchronous code, you might need to wait for some action to complete before rendering your component. If you had to build this abstraction yourself, you'd probably end up with some `use_state` spaghetti code.
-
-One of the core hooks that Dioxus provides is `use_future` - a simple hook that lets you tap into a running task.
+[`use_future`](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_future.html) let you run an async closure every time one of its dependencies changes. This is useful, for example, if you need to make a request based on some user input, and display the result of that request.
 
 ## Use case
 
@@ -21,7 +19,7 @@ fn app(cx: Scope) -> Element {
 
     let status = match breeds.value() {
         Some(Ok(val)) => "ready!",
-        Some(Err(err)) => "errored!",
+        Some(Err(err)) => "error!",
         None => "loading!",
     }
 }

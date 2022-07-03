@@ -1,6 +1,10 @@
-# Conditional Rendering
+# Dynamic Rendering
 
 Sometimes you want to render different things depending on the state/props. With Dioxus, just describe what you want to see using Rust control flow – the framework will take care of making the necessary changes on the fly if the state or props change!
+
+## Conditional Rendering
+
+To render different elements based on a condition, you could use an `if-else` statement:
 
 ```rust
 {{#include ../../examples/conditional_rendering.rs:if_else}}
