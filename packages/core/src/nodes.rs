@@ -6,7 +6,7 @@
 use crate::{
     innerlude::{AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
     lazynodes::LazyNodes,
-    templete::VTemplateRef,
+    templete::{TemplateNodeId, VTemplateRef},
     AnyEvent, Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -16,13 +16,13 @@ use std::{
 };
 
 /// The ID of a node in the vdom that is either standalone or in a template
-#{derive(Clone, Copy, Debug, PartialEq)}
-pub(crate) enum GlobalNodeId{
-    TemplateId{
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) enum GlobalNodeId {
+    TemplateId {
         template_ref_id: ElementId,
-        template_id: TemplateNodeId
-    }
-    VNodeId(ElementId)
+        template_id: TemplateNodeId,
+    },
+    VNodeId(ElementId),
 }
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -225,14 +225,13 @@ impl std::fmt::Display for ElementId {
     }
 }
 
-impl ElementId {
-    /// Convertt the ElementId to a `u64`.
-    pub fn as_u64(self) -> u64 {
+impl Into<u64> for ElementId {
+    fn into(self) -> u64 {
         self.0 as u64
     }
 }
 
-fn empty_cell() -> Cell<Option<ElementId>> {
+fn empty_cell<T>() -> Cell<Option<T>> {
     Cell::new(None)
 }
 

@@ -10,8 +10,8 @@ use crate::{Attribute, AttributeValue, ElementId, Listener, Mutations, VNode};
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TemplateId(pub usize);
 
-impl TemplateId {
-    pub fn as_u64(self) -> u64 {
+impl Into<u64> for TemplateId {
+    fn into(self) -> u64 {
         self.0 as u64
     }
 }
@@ -22,8 +22,8 @@ impl TemplateId {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TemplateNodeId(pub usize);
 
-impl TemplateId {
-    pub fn as_u64(self) -> u64 {
+impl Into<u64> for TemplateNodeId {
+    fn into(self) -> u64 {
         self.0 as u64
     }
 }
@@ -31,14 +31,14 @@ impl TemplateId {
 /// A refrence to a template along with any context needed to hydrate it
 pub(crate) struct VTemplateRef<'a> {
     pub(crate) id: Cell<Option<ElementId>>,
-    pub(crate) template: &'static Template,
+    pub(crate) template: &'a Template<'a>,
     pub(crate) dynamic_context: &'a TemplateContext<'a>,
 }
 
 #[derive(Debug)]
 pub(crate) struct Template<'b> {
     pub(crate) id: TemplateId,
-    pub(crate) nodes: &'b[TemplateNode<'b>],
+    pub(crate) nodes: &'b [TemplateNode<'b>],
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
     pub(crate) dynamic_ids: &'b [TemplateNodeId],
 }
@@ -46,10 +46,10 @@ pub(crate) struct Template<'b> {
 /// Templates can only contain a limited subset of VNodes and id/keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 #[derive(Debug)]
-struct TemplateNode<'b>{
+struct TemplateNode<'b> {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
-    id: TemplateNodeId,
-    node_type: TemplateNodeType<'b>
+    pub id: TemplateNodeId,
+    pub node_type: TemplateNodeType<'b>,
 }
 
 #[derive(Debug)]
@@ -74,24 +74,24 @@ pub enum TemplateNodeType<'b> {
 
 impl<'b> Template<'b> {
     pub(crate) fn create(&mut self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateId) {
-        mutations.create_templete(id.as_u64());
+        mutations.create_templete(id.into());
         let mut id = TemplateNodeId(0);
-        if let Some(root) = self.nodes.get(id.0){
-            self.create_node(mutations, bump, &mut id);
+        if id.0 < self.nodes.len() {
+            self.create_node(mutations, bump, id);
         }
         mutations.finish_templete();
     }
-    
-    fn create_node(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: &mut TemplateNodeId) {
-        match self {
-            TemplateNode::Element {
+
+    fn create_node(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
+        match &self.nodes[id.0].node_type {
+            TemplateNodeType::Element {
                 tag,
                 namespace,
                 attributes,
                 children,
                 listeners: _,
             } => {
-                mutations.create_element(tag, *namespace, *id);
+                mutations.create_element(tag, *namespace, id);
                 for attr in *attributes {
                     if let TemplateAttributeValue::Static(val) = attr.value {
                         let val: AttributeValue<'b> = match val {
@@ -133,28 +133,28 @@ impl<'b> Template<'b> {
                             is_volatile: false,
                             namespace: attr.namespace,
                         };
-                        mutations.set_attribute(bump.alloc(attribute), id.as_u64());
+                        mutations.set_attribute(bump.alloc(attribute), id);
                     }
                 }
                 for child in *children {
-                    self.create_node(mutations, bump, child);
+                    self.create_node(mutations, bump, *child);
                 }
 
                 mutations.append_children(children.len() as u32)
             }
-            TemplateNode::Text { text } => {
+            TemplateNodeType::Text { text } => {
                 if let &[TextTemplateSegment::Static(txt)] = text.segments {
-                    mutations.create_text_node(txt, *id);
+                    mutations.create_text_node(txt, id);
                 } else {
-                    mutations.create_text_node("", *id);
+                    mutations.create_text_node("", id);
                 }
             }
-            TemplateNode::DynamicNode(_) => {
-                mutations.create_placeholder(*id);
+            TemplateNodeType::DynamicNode(_) => {
+                mutations.create_placeholder(id);
             }
-            TemplateNode::Fragment { nodes } => {
+            TemplateNodeType::Fragment { nodes } => {
                 for node in *nodes {
-                    self.create_node(mutations, bump, node);
+                    self.create_node(mutations, bump, id);
                 }
             }
         }
@@ -164,7 +164,7 @@ impl<'b> Template<'b> {
 #[derive(Debug)]
 pub struct TextTemplate<'b> {
     // this is similar to what ifmt outputs and allows us to only diff the dynamic parts of the text
-    segments: &'b [TextTemplateSegment],
+    segments: &'b [TextTemplateSegment<'b>],
 }
 
 #[derive(Debug)]
@@ -174,43 +174,42 @@ pub enum TextTemplateSegment<'b> {
 }
 
 #[derive(Debug)]
-pub struct TemplateAttribute<'b> {
-    name: &'static str,
-    namespace: Option<&'static str>,
-    // if the attribute is dynamic, this will be empty
-    value: TemplateAttributeValue,
+pub(crate) struct TemplateAttribute<'b> {
+    pub name: &'static str,
+    pub namespace: Option<&'static str>,
+    pub value: TemplateAttributeValue<'b>,
 }
 
 #[derive(Debug)]
-enum TemplateAttributeValue<'b> {
+pub(crate) enum TemplateAttributeValue<'b> {
     Static(AttributeValue<'b>),
     Dynamic(usize),
 }
 
 struct TemplateContext<'b> {
-    nodes: &'b [VNode<'b>],
-    text_segments: &'b [&'b str],
-    attributes: &'b [AttributeValue<'b>],
-    listeners: &'b [Listener<'b>],
+    pub nodes: &'b [VNode<'b>],
+    pub text_segments: &'b [&'b str],
+    pub attributes: &'b [AttributeValue<'b>],
+    pub listeners: &'b [Listener<'b>],
 }
 
-impl<'b> TemplateContext<'b>{
-    fn resolve_text(&self, text: &'b[TextTemplateSegment<'b>]) -> String{
+impl<'b> TemplateContext<'b> {
+    pub(crate) fn resolve_text(&self, text: &TextTemplate<'b>) -> String {
         let mut result = String::new();
-        for seg in text{
-            match seg{
+        for seg in text.segments {
+            match seg {
                 TextTemplateSegment::Static(s) => result += s,
-                TextTemplateSegment::Dynamic(idx) => result += self.text_segments[idx]
+                TextTemplateSegment::Dynamic(idx) => result += self.text_segments[*idx],
             }
         }
         result
     }
 
-    fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b>{
+    pub(crate) fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b> {
         &self.attributes[idx]
     }
 
-    fn resolve_listener(&self, idx: usize) -> &'b Listener<'b>{
+    pub(crate) fn resolve_listener(&self, idx: usize) -> &'b Listener<'b> {
         &self.listeners[idx]
     }
 }

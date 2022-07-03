@@ -39,7 +39,7 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
-    pub templates: RefCell<FxHashMap<*const Template, TemplateId>>,
+    pub templates: RefCell<FxHashMap<*const Template<'static>, TemplateId>>,
     pub template_count: Cell<TemplateId>,
 }
 
@@ -101,7 +101,7 @@ impl ScopeArena {
         fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
-        container: ElementId,
+        container: GlobalNodeId,
         subtree: u32,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
@@ -327,7 +327,7 @@ impl ScopeArena {
 
     pub fn call_listener_with_bubbling(&self, event: UserEvent, element: ElementId) {
         let nodes = self.nodes.borrow();
-        let mut cur_el = Some(element);
+        let mut cur_el = Some(GlobalNodeId::VNodeId(element));
 
         log::trace!("calling listener {:?}, {:?}", event, element);
         let state = Rc::new(BubbleState::new());
@@ -480,7 +480,7 @@ pub struct TaskId {
 /// use case they might have.
 pub struct ScopeState {
     pub(crate) parent_scope: Option<*mut ScopeState>,
-    pub(crate) container: ElementId,
+    pub(crate) container: GlobalNodeId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,

@@ -230,8 +230,8 @@ impl<'a> Mutations<'a> {
     }
 
     // Navigation
-    pub(crate) fn push_root(&mut self, root: ElementId) {
-        let id = root.as_u64();
+    pub(crate) fn push_root(&mut self, root: impl Into<u64>) {
+        let id = root.into();
         self.edits.push(PushRoot { root: id });
     }
 
@@ -240,18 +240,18 @@ impl<'a> Mutations<'a> {
         self.edits.push(PopRoot {});
     }
 
-    pub(crate) fn replace_with(&mut self, root: ElementId, m: u32) {
-        let root = root.as_u64();
+    pub(crate) fn replace_with(&mut self, root: impl Into<u64>, m: u32) {
+        let root = root.into();
         self.edits.push(ReplaceWith { m, root });
     }
 
-    pub(crate) fn insert_after(&mut self, root: ElementId, n: u32) {
-        let root = root.as_u64();
+    pub(crate) fn insert_after(&mut self, root: impl Into<u64>, n: u32) {
+        let root = root.into();
         self.edits.push(InsertAfter { n, root });
     }
 
-    pub(crate) fn insert_before(&mut self, root: ElementId, n: u32) {
-        let root = root.as_u64();
+    pub(crate) fn insert_before(&mut self, root: impl Into<u64>, n: u32) {
+        let root = root.into();
         self.edits.push(InsertBefore { n, root });
     }
 
@@ -260,13 +260,13 @@ impl<'a> Mutations<'a> {
     }
 
     // Remove Nodes from the dom
-    pub(crate) fn remove(&mut self, id: u64) {
-        self.edits.push(Remove { root: id });
+    pub(crate) fn remove(&mut self, id: impl Into<u64>) {
+        self.edits.push(Remove { root: id.into() });
     }
 
     // Create
-    pub(crate) fn create_text_node(&mut self, text: &'a str, id: ElementId) {
-        let id = id.as_u64();
+    pub(crate) fn create_text_node(&mut self, text: &'a str, id: impl Into<u64>) {
+        let id = id.into();
         self.edits.push(CreateTextNode { text, root: id });
     }
 
@@ -274,17 +274,17 @@ impl<'a> Mutations<'a> {
         &mut self,
         tag: &'static str,
         ns: Option<&'static str>,
-        id: ElementId,
+        id: impl Into<u64>,
     ) {
-        let id = id.as_u64();
+        let id = id.into();
         match ns {
             Some(ns) => self.edits.push(CreateElementNs { root: id, ns, tag }),
             None => self.edits.push(CreateElement { root: id, tag }),
         }
     }
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: ElementId) {
-        let id = id.as_u64();
+    pub(crate) fn create_placeholder(&mut self, id: impl Into<u64>) {
+        let id = id.into();
         self.edits.push(CreatePlaceholder { root: id });
     }
 
@@ -296,7 +296,7 @@ impl<'a> Mutations<'a> {
             ..
         } = listener;
 
-        let element_id = mounted_node.get().unwrap().as_u64();
+        let element_id = mounted_node.get().unwrap().into();
 
         self.edits.push(NewEventListener {
             scope,
@@ -304,16 +304,21 @@ impl<'a> Mutations<'a> {
             root: element_id,
         });
     }
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: u64) {
-        self.edits.push(RemoveEventListener { event, root });
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: impl Into<u64>) {
+        self.edits.push(RemoveEventListener {
+            event,
+            root: root.into(),
+        });
     }
 
     // modify
-    pub(crate) fn set_text(&mut self, text: &'a str, root: u64) {
+    pub(crate) fn set_text(&mut self, text: &'a str, root: impl Into<u64>) {
+        let root = root.into();
         self.edits.push(SetText { text, root });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: u64) {
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: impl Into<u64>) {
+        let root = root.into();
         let Attribute {
             name,
             value,
@@ -329,7 +334,8 @@ impl<'a> Mutations<'a> {
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: impl Into<u64>) {
+        let root = root.into();
         let Attribute {
             name, namespace, ..
         } = attribute;
@@ -353,7 +359,7 @@ impl<'a> Mutations<'a> {
         self.edits.push(FinishTemplete {});
     }
 
-    pub(crate) fn create_template_ref(&mut self, id: u64, template_id: u64) {}
+    pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {}
 }
 
 // refs are only assigned once

@@ -226,7 +226,7 @@ impl VirtualDom {
                 render_fn: root,
             }),
             None,
-            ElementId(0),
+            GlobalNodeId::VNodeId(ElementId(0)),
             0,
         );
 
@@ -532,7 +532,9 @@ impl VirtualDom {
 
         self.scopes.run_scope(scope_id);
 
-        diff_state.element_stack.push(ElementId(0));
+        diff_state
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
@@ -629,7 +631,9 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine.element_stack.push(ElementId(0));
+        machine
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         machine.scope_stack.push(ScopeId(0));
         machine.diff_node(old, new);
 
@@ -652,7 +656,9 @@ impl VirtualDom {
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
-        machine.element_stack.push(ElementId(0));
+        machine
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         let node = self.render_vnodes(nodes);
         let created = machine.create_node(node);
         machine.mutations.append_children(created as u32);
@@ -681,13 +687,15 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
-        create.element_stack.push(ElementId(0));
+        create
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         let created = create.create_node(old);
         create.mutations.append_children(created as u32);
 
         let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));
-        edit.element_stack.push(ElementId(0));
+        edit.element_stack.push(GlobalNodeId::VNodeId(ElementId(0)));
         edit.diff_node(old, new);
 
         (create.mutations, edit.mutations)

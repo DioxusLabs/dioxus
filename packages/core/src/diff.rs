@@ -93,10 +93,13 @@
 
 use crate::{
     innerlude::{
-        AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment,
-        VNode, VPlaceholder, VText,
+        AnyProps, ElementId, GlobalNodeId, Mutations, ScopeArena, ScopeId, VComponent, VElement,
+        VFragment, VNode, VPlaceholder, VText,
     },
-    templete::{Template, VTemplateRef},
+    templete::{
+        Template, TemplateAttribute, TemplateAttributeValue, TemplateNodeType, VTemplateRef,
+    },
+    Attribute,
 };
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -125,7 +128,7 @@ impl<'b> DiffState<'b> {
         let scope = self.scopes.get_scope(scopeid).unwrap();
 
         self.scope_stack.push(scopeid);
-        self.element_stack.push(GlobalNodeId::VNodeId(scope.container));
+        self.element_stack.push(scope.container);
         {
             self.diff_node(old, new);
         }
@@ -224,7 +227,7 @@ impl<'b> DiffState<'b> {
             }
 
             for attr in attributes.iter() {
-                self.mutations.set_attribute(attr, real_id.as_u64());
+                self.mutations.set_attribute(attr, real_id);
             }
 
             if !children.is_empty() {
@@ -300,7 +303,7 @@ impl<'b> DiffState<'b> {
         node: &'b VNode<'b>,
     ) -> usize {
         let templates = self.scopes.templates.borrow_mut();
-        let ptr: *const Template = new.template;
+        let ptr: *const Template = unsafe { std::mem::transmute(new.template) };
         let id = if let Some(id) = templates.get(&ptr) {
             *id
         } else {
@@ -315,45 +318,60 @@ impl<'b> DiffState<'b> {
 
         new.id.set(Some(real_id));
 
-        
-        self.mutations
-        .create_template_ref(real_id.as_u64(), id.as_u64());
-        
-        for id in new.template.dynamic_ids{
+        self.mutations.create_template_ref(real_id, id.into());
+
+        for id in new.template.dynamic_ids {
             let dynamic_node = new.template.nodes[id.0];
-            self.element_stack.push(GlobalNodeId::TemplateId{
-                real_id
+            self.element_stack.push(GlobalNodeId::TemplateId {
+                template_ref_id: real_id,
+                template_id: *id,
             });
-            match dynamic_node.node_type{
-                TemplateNodeType::Element{tag, namespace, attributes, children, listeners} => {
-                    for attr in attributes{
-                        if let TemplateAttribute::Dynamic(idx) = attr{
-                            self.mutations.set_attribute(new.dynamic_context.resolve_attribute(idx), id.as_u64());
+            match dynamic_node.node_type {
+                TemplateNodeType::Element {
+                    tag,
+                    namespace,
+                    attributes,
+                    children,
+                    listeners,
+                } => {
+                    for attr in attributes {
+                        if let TemplateAttributeValue::Dynamic(idx) = attr.value {
+                            let mut attribute = Attribute {
+                                name: attr.name,
+                                value: new.dynamic_context.resolve_attribute(idx).clone(),
+                                is_static: false,
+                                is_volatile: false,
+                                namespace: attr.namespace,
+                            };
+                            self.mutations.set_attribute(&attribute, *id);
                         }
                     }
-                    for listener_idx in listeners{
-                        let listener = new.dynamic_context.resolve_listener(listener_idx);
-                        self.mutations.new_event_listener(listener, todo!("do we even need the scope to be part of this?"));
+                    for listener_idx in listeners {
+                        let listener = new.dynamic_context.resolve_listener(*listener_idx);
+                        self.mutations.new_event_listener(
+                            listener,
+                            todo!("do we even need the scope to be part of this?"),
+                        );
                     }
-                    self.mutations.push_root(id.as_u64());
+                    self.mutations.push_root(*id);
                     self.mutations.pop_root();
-                    for 
                 }
-                TemplateNodeType::Text{text} => {
-                    let new_text = new.dynamic_context.resolve_text(text);
-                    self.mutations.set_text(self.bump.alloc(new_text), id.as_u64())
+                TemplateNodeType::Text { text } => {
+                    let new_text = new.dynamic_context.resolve_text(&text);
+                    self.mutations
+                        .set_text(self.scopes.bump.alloc(new_text), *id)
                 }
                 TemplateNodeType::DynamicNode(idx) => {
-                    /// this will only be triggered for root elements
-                    self.create_node(new.dynamic_context.nodes[idx]);
+                    // this will only be triggered for root elements
+                    self.create_node(&new.dynamic_context.nodes[idx]);
                 }
                 _ => {
-                    todo!()  
+                    todo!()
                 }
             }
             self.element_stack.pop();
         }
-        
+
         1
     }
 
@@ -375,7 +393,7 @@ impl<'b> DiffState<'b> {
         };
 
         if old.text != new.text {
-            self.mutations.set_text(new.text, root.as_u64());
+            self.mutations.set_text(new.text, root);
         }
 
         self.scopes.update_node(new_node, root);
@@ -449,15 +467,15 @@ impl<'b> DiffState<'b> {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value || new_attr.is_volatile {
-                    self.mutations.set_attribute(new_attr, root.as_u64());
+                    self.mutations.set_attribute(new_attr, root);
                 }
             }
         } else {
             for attribute in old.attributes {
-                self.mutations.remove_attribute(attribute, root.as_u64());
+                self.mutations.remove_attribute(attribute, root);
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute, root.as_u64());
+                self.mutations.set_attribute(attribute, root);
             }
         }
 
@@ -474,16 +492,14 @@ impl<'b> DiffState<'b> {
         if old.listeners.len() == new.listeners.len() {
             for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                 if old_l.event != new_l.event {
-                    self.mutations
-                        .remove_event_listener(old_l.event, root.as_u64());
+                    self.mutations.remove_event_listener(old_l.event, root);
                     self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
                 new_l.mounted_node.set(old_l.mounted_node.get());
             }
         } else {
             for listener in old.listeners {
-                self.mutations
-                    .remove_event_listener(listener.event, root.as_u64());
+                self.mutations.remove_event_listener(listener.event, root);
             }
             for listener in new.listeners {
                 listener.mounted_node.set(Some(root));
@@ -1058,7 +1074,7 @@ impl<'b> DiffState<'b> {
                         t.id.set(None);
 
                         if gen_muts {
-                            self.mutations.remove(id.as_u64());
+                            self.mutations.remove(id);
                         }
                     }
                 }
@@ -1068,14 +1084,14 @@ impl<'b> DiffState<'b> {
                     a.id.set(None);
 
                     if gen_muts {
-                        self.mutations.remove(id.as_u64());
+                        self.mutations.remove(id);
                     }
                 }
                 VNode::Element(e) => {
                     let id = e.id.get().unwrap();
 
                     if gen_muts {
-                        self.mutations.remove(id.as_u64());
+                        self.mutations.remove(id);
                     }
 
                     self.scopes.collect_garbage(id);
