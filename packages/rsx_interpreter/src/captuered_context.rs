@@ -182,9 +182,11 @@ impl<'a> CapturedContext<'a> {
     pub fn attrbute_to_static_str(
         &self,
         attr: &str,
+        tag: &'static str,
+        ns: Option<&'static str>,
         literal: bool,
     ) -> Option<(&'static str, Option<&'static str>)> {
-        if let Some(attr) = attrbute_to_static_str(attr) {
+        if let Some(attr) = attrbute_to_static_str(attr, tag, ns) {
             Some(attr)
         } else if literal {
             self.custom_attributes

@@ -54,7 +54,7 @@ macro_rules! builder_constructors {
             $(
                 (
                     stringify!($name),
-                    stringify!($namespace),
+                    $namespace,
                     &[
                         $(
                             stringify!($fil),
