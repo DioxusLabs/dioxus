@@ -5,7 +5,6 @@ use quote::__private::Span;
 use std::str::FromStr;
 use syn::{parse2, parse_str, Expr};
 
-use crate::attributes::attrbute_to_static_str;
 use crate::captuered_context::{CapturedContext, IfmtArgs};
 use crate::elements::element_to_static_str;
 use crate::error::{Error, ParseError, RecompileReason};
@@ -76,37 +75,41 @@ fn build_node<'a>(
             Ok(factory.text(format_args!("{}", text)))
         }
         BodyNode::Element(el) => {
-            let tag = bump.alloc(el.name.to_string());
+            let attributes: &mut Vec<Attribute> = bump.alloc(Vec::new());
+            let tag = &el.name.to_string();
             if let Some((tag, ns)) = element_to_static_str(tag) {
-                let attributes: &mut Vec<Attribute> = bump.alloc(Vec::new());
                 for attr in &el.attributes {
                     match &attr.attr {
                         ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
-                            let (name, value, span): (String, IfmtInput, Span) = match &attr.attr {
-                                ElementAttr::AttrText { name, value } => (
-                                    name.to_string(),
-                                    IfmtInput::from_str(&value.value()).map_err(|err| {
-                                        Error::ParseError(ParseError::new(
-                                            err,
-                                            ctx.location.clone(),
-                                        ))
-                                    })?,
-                                    name.span(),
-                                ),
-                                ElementAttr::CustomAttrText { name, value } => (
-                                    name.value(),
-                                    IfmtInput::from_str(&value.value()).map_err(|err| {
-                                        Error::ParseError(ParseError::new(
-                                            err,
-                                            ctx.location.clone(),
-                                        ))
-                                    })?,
-                                    name.span(),
-                                ),
-                                _ => unreachable!(),
-                            };
+                            let (name, value, span, literal): (String, IfmtInput, Span, bool) =
+                                match &attr.attr {
+                                    ElementAttr::AttrText { name, value } => (
+                                        name.to_string(),
+                                        IfmtInput::from_str(&value.value()).map_err(|err| {
+                                            Error::ParseError(ParseError::new(
+                                                err,
+                                                ctx.location.clone(),
+                                            ))
+                                        })?,
+                                        name.span(),
+                                        false,
+                                    ),
+                                    ElementAttr::CustomAttrText { name, value } => (
+                                        name.value(),
+                                        IfmtInput::from_str(&value.value()).map_err(|err| {
+                                            Error::ParseError(ParseError::new(
+                                                err,
+                                                ctx.location.clone(),
+                                            ))
+                                        })?,
+                                        name.span(),
+                                        true,
+                                    ),
+                                    _ => unreachable!(),
+                                };
 
-                            if let Some((name, namespace)) = attrbute_to_static_str(&name, tag, ns)
+                            if let Some((name, namespace)) =
+                                ctx.attrbute_to_static_str(&name, tag, ns, literal)
                             {
                                 let value = bump.alloc(resolve_ifmt(&value, &ctx.captured)?);
                                 attributes.push(Attribute {
@@ -117,21 +120,31 @@ fn build_node<'a>(
                                     namespace,
                                 });
                             } else {
-                                return Err(Error::ParseError(ParseError::new(
-                                    syn::Error::new(span, format!("unknown attribute: {}", name)),
-                                    ctx.location.clone(),
-                                )));
+                                if literal {
+                                    // literals will be captured when a full recompile is triggered
+                                    return Err(Error::RecompileRequiredError(
+                                        RecompileReason::CapturedAttribute(name.to_string()),
+                                    ));
+                                } else {
+                                    return Err(Error::ParseError(ParseError::new(
+                                        syn::Error::new(
+                                            span,
+                                            format!("unknown attribute: {}", name),
+                                        ),
+                                        ctx.location.clone(),
+                                    )));
+                                }
                             }
                         }
 
                         ElementAttr::AttrExpression { .. }
                         | ElementAttr::CustomAttrExpression { .. } => {
-                            let (name, value, span) = match &attr.attr {
+                            let (name, value, span, literal) = match &attr.attr {
                                 ElementAttr::AttrExpression { name, value } => {
-                                    (name.to_string(), value, name.span())
+                                    (name.to_string(), value, name.span(), false)
                                 }
                                 ElementAttr::CustomAttrExpression { name, value } => {
-                                    (name.value(), value, name.span())
+                                    (name.value(), value, name.span(), true)
                                 }
                                 _ => unreachable!(),
                             };
@@ -141,7 +154,7 @@ fn build_node<'a>(
                                 .find(|(n, _)| parse_str::<Expr>(*n).unwrap() == *value)
                             {
                                 if let Some((name, namespace)) =
-                                    attrbute_to_static_str(&name, tag, ns)
+                                    ctx.attrbute_to_static_str(&name, tag, ns, literal)
                                 {
                                     let value = bump.alloc(resulting_value.clone());
                                     attributes.push(Attribute {
@@ -152,24 +165,25 @@ fn build_node<'a>(
                                         namespace,
                                     });
                                 } else {
-                                    return Err(Error::ParseError(ParseError::new(
-                                        syn::Error::new(
-                                            span,
-                                            format!("unknown attribute: {}", name),
-                                        ),
-                                        ctx.location.clone(),
-                                    )));
+                                    if literal {
+                                        // literals will be captured when a full recompile is triggered
+                                        return Err(Error::RecompileRequiredError(
+                                            RecompileReason::CapturedAttribute(name.to_string()),
+                                        ));
+                                    } else {
+                                        return Err(Error::ParseError(ParseError::new(
+                                            syn::Error::new(
+                                                span,
+                                                format!("unknown attribute: {}", name),
+                                            ),
+                                            ctx.location.clone(),
+                                        )));
+                                    }
                                 }
-                            } else {
-                                return Err(Error::RecompileRequiredError(
-                                    RecompileReason::CapturedExpression(
-                                        value.into_token_stream().to_string(),
-                                    ),
-                                ));
                             }
                         }
                         _ => (),
-                    };
+                    }
                 }
                 let children = bump.alloc(Vec::new());
                 for child in el.children {
