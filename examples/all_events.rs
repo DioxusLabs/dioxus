@@ -41,9 +41,16 @@ const RECT_STYLE: &str = r#"
     "#;
 
 fn app(cx: Scope) -> Element {
-    let events = use_ref(&cx, Vec::new);
+    let events = use_ref(&cx, std::collections::VecDeque::new);
 
-    let log_event = move |event: Event| events.write().push(event);
+    let log_event = move |event: Event| {
+        let mut events = events.write();
+
+        if events.len() >= MAX_EVENTS {
+            events.pop_front();
+        }
+        events.push_back(event);
+    };
 
     cx.render(rsx! (
         div {
@@ -71,13 +78,7 @@ fn app(cx: Scope) -> Element {
                 "Hover, click, type or scroll to see the info down below"
             }
             div {
-                events
-                    .read()
-                    .iter()
-                    .rev()
-                    .take(MAX_EVENTS)
-                    .rev()
-                    .map(|event| cx.render(rsx!(div {"{event:?}"})))
+                events.read().iter().map(|event| rsx!( div { "{event:?}" } ))
             },
         },
     ))
