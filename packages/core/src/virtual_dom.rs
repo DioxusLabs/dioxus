@@ -1,4 +1,4 @@
-//! # VirtualDom Implementation for Rust
+//! # Virtual DOM Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
@@ -387,7 +387,7 @@ impl VirtualDom {
             }
             SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
-                    self.scopes.call_listener_with_bubbling(event, element);
+                    self.scopes.call_listener_with_bubbling(&event, element);
                 }
             }
             SchedulerMsg::Immediate(s) => {

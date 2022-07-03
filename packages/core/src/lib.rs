@@ -56,19 +56,9 @@ pub(crate) mod innerlude {
     ///     Example {}
     /// )
     /// ```
-    ///
-    /// ## As a closure
-    /// This particular type alias lets you even use static closures for pure/static components:
-    ///
-    /// ```rust, ignore
-    /// static Example: Component<Props> = |cx| {
-    ///     // ...
-    /// };
-    /// ```
     pub type Component<P = ()> = fn(Scope<P>) -> Element;
 
     /// A list of attributes
-    ///
     pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
 }
 
