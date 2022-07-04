@@ -27,6 +27,7 @@
   - [Tasks](async/tasks.md)
 - [Best Practices](best_practices/index.md)
   - [Error Handling](best_practices/error_handling.md)
+  - [Antipatterns](best_practices/antipatterns.md)
 - [Development](development/index.md)
   - [Roadmap](development/roadmap.md)
   - [Contributing](development/contributing.md)
