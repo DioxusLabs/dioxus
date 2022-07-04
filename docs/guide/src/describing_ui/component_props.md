@@ -6,16 +6,6 @@ Just like you can pass arguments to a function, you can pass props to a componen
 
 Component props are a single struct annotated with `#[derive(Props)]`. For a component to accept props, the type of its argument must be `Scope<YourPropsStruct>`. Then, you can access the value of the props using `cx.props`.
 
-> Note: By default, the props are `()`, which is why our previous components didn't need any props.
-> 
->```rust
->// this scope
->Scope<()>
->
->// is the same as this scope
->Scope
->```
-
 There are 2 flavors of Props structs:
 - Owned props:
   - Don't have an associated lifetime
