@@ -62,7 +62,6 @@ use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
 use dioxus_core::VirtualDom;
 use futures_util::FutureExt;
-use web_sys::console;
 
 mod cache;
 mod cfg;
@@ -235,7 +234,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
                     ws.send_with_str(serde_json::to_string(&err).unwrap().as_str())
                         .unwrap();
                 } else {
-                    console::warn_1(&"WebSocket is not open, cannot send error. Run with dioxus serve --hot-reload to enable hot reloading.".into());
+                    web_sys::console::warn_1(&"WebSocket is not open, cannot send error. Run with dioxus serve --hot-reload to enable hot reloading.".into());
                     panic!("{}", err);
                 }
             }
