@@ -72,7 +72,6 @@ pub fn VariableAttributes(cx: Scope) -> Element {
 }
 
 pub fn CustomAttributes(cx: Scope) -> Element {
-    println!("???");
     // ANCHOR: custom_attributes
     cx.render(rsx!(b {
         "customAttribute": "value",
