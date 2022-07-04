@@ -12,21 +12,6 @@ Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigate
 {{#include ../../examples/anti_patterns.rs:nested_fragments}}
 ```
 
-## Libraries with Unnecessary Features Enabled
-
-When publishing your custom hook or component, we highly advise using only the core feature on the `dioxus` crate. This makes your crate compile faster, makes it more stable, and avoids bringing in incompatible libraries that might make it not compile on unsupported platforms.
-
-
-❌ Don't include unnecessary dependencies in libraries:
-```toml
-dioxus = { version = "...", features = ["web", "desktop", "full"]}
-```
-
-✅ Only add the features you need:
-```toml
-dioxus = { version = "...", features = "core"}
-```
-
 ## Incorrect Iterator Keys
 
 As described in the conditional rendering chapter, list items must have unique keys that are associated with the same items across renders. This helps Dioxus associate state with the contained components, and ensures good diffing performance. Do not omit keys, unless you know that the list is static and will never change.
