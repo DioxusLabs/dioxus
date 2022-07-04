@@ -86,6 +86,8 @@ impl DesktopController {
                                         (serde_json::to_string(&err).unwrap() + "\n").as_bytes(),
                                     )
                                     .unwrap();
+                            } else {
+                                panic!("{}", err);
                             }
                         }
                     }

@@ -3,7 +3,7 @@
 //! This module provides support for a type called `LazyNodes` which is a micro-heap located on the stack to make calls
 //! to `rsx!` more efficient.
 //!
-//! To support returning rsx! from branches in match statements, we need to use dynamic dispatch on NodeFactory closures.
+//! To support returning rsx! from branches in match statements, we need to use dynamic dispatch on [`NodeFactory`] closures.
 //!
 //! This can be done either through boxing directly, or by using dynamic-sized-types and a custom allocator. In our case,
 //! we build a tiny alloactor in the stack and allocate the closure into that.
@@ -14,10 +14,10 @@
 use crate::innerlude::{NodeFactory, VNode};
 use std::mem;
 
-/// A concrete type provider for closures that build VNode structures.
+/// A concrete type provider for closures that build [`VNode`] structures.
 ///
-/// This struct wraps lazy structs that build VNode trees Normally, we cannot perform a blanket implementation over
-/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of IntoVNode.
+/// This struct wraps lazy structs that build [`VNode`] trees Normally, we cannot perform a blanket implementation over
+/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of [`IntoVNode`].
 ///
 ///
 /// ```rust, ignore
@@ -35,7 +35,7 @@ enum StackNodeStorage<'a, 'b> {
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
-    /// Create a new LazyNodes closure, optimistically placing it onto the stack.
+    /// Create a new [`LazyNodes`] closure, optimistically placing it onto the stack.
     ///
     /// If the closure cannot fit into the stack allocation (16 bytes), then it
     /// is placed on the heap. Most closures will fit into the stack, and is
@@ -45,8 +45,10 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         let mut slot = Some(val);
 
         let val = move |fac: Option<NodeFactory<'a>>| {
-            let inner = slot.take().unwrap();
-            fac.map(inner)
+            fac.map(
+                slot.take()
+                    .expect("LazyNodes closure to be called only once"),
+            )
         };
 
         // miri does not know how to work with mucking directly into bytes
@@ -60,21 +62,21 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
-    /// Create a new LazyNodes closure, but force it onto the heap.
-    pub fn new_boxed<F>(_val: F) -> Self
+    /// Create a new [`LazyNodes`] closure, but force it onto the heap.
+    pub fn new_boxed<F>(inner: F) -> Self
     where
         F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
     {
         // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
-        let mut slot = Some(_val);
-
-        let val = move |fac: Option<NodeFactory<'a>>| {
-            let inner = slot.take().unwrap();
-            fac.map(inner)
-        };
+        let mut slot = Some(inner);
 
         Self {
-            inner: StackNodeStorage::Heap(Box::new(val)),
+            inner: StackNodeStorage::Heap(Box::new(move |fac: Option<NodeFactory<'a>>| {
+                fac.map(
+                    slot.take()
+                        .expect("LazyNodes closure to be called only once"),
+                )
+            })),
         }
     }
 
@@ -135,7 +137,8 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
             }
 
             let src_ptr = data as *const u8;
-            let dataptr = buf.as_mut()[..].as_mut_ptr() as *mut u8;
+            let dataptr = buf.as_mut_ptr().cast::<u8>();
+
             for i in 0..size {
                 *dataptr.add(i) = *src_ptr.add(i);
             }
@@ -152,7 +155,7 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         }
     }
 
-    /// Call the closure with the given factory to produce real VNodes.
+    /// Call the closure with the given factory to produce real [`VNode`].
     ///
     /// ```rust, ignore
     /// let f = LazyNodes::new(move |f| f.element("div", [], [], [] None));
@@ -161,9 +164,12 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     ///
     /// let node = f.call(cac);
     /// ```
+    #[must_use]
     pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
         match self.inner {
-            StackNodeStorage::Heap(mut lazy) => lazy(Some(f)).unwrap(),
+            StackNodeStorage::Heap(mut lazy) => {
+                lazy(Some(f)).expect("Closure should not be called twice")
+            }
             StackNodeStorage::Stack(mut stack) => stack.call(f),
         }
     }
@@ -285,7 +291,6 @@ mod tests {
                 let it = (0..10)
                     .map(|i| {
                         let val = cx.props.inner.clone();
-
                         LazyNodes::new(move |f| {
                             eprintln!("hell closure");
                             let inner = DropInner { id: i };

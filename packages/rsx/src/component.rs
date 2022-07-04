@@ -27,7 +27,7 @@ use syn::{
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
-    pub body: Vec<ComponentField>,
+    pub fields: Vec<ComponentField>,
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
 }
@@ -105,7 +105,7 @@ impl Parse for Component {
         Ok(Self {
             name,
             prop_gen_args,
-            body,
+            fields: body,
             children,
             manual_props,
         })
@@ -124,7 +124,7 @@ impl ToTokens for Component {
                 let mut toks = quote! {
                     let mut __manual_props = #manual_props;
                 };
-                for field in &self.body {
+                for field in &self.fields {
                     if field.name == "key" {
                         has_key = Some(field);
                     } else {
@@ -147,7 +147,7 @@ impl ToTokens for Component {
                     Some(gen_args) => quote! { fc_to_builder #gen_args(#name) },
                     None => quote! { fc_to_builder(#name) },
                 };
-                for field in &self.body {
+                for field in &self.fields {
                     match field.name.to_string().as_str() {
                         "key" => {
                             //

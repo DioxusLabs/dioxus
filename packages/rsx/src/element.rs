@@ -209,6 +209,16 @@ pub enum ElementAttr {
     /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
 }
+impl ElementAttr {
+    pub fn is_expr(&self) -> bool {
+        matches!(
+            self,
+            ElementAttr::AttrExpression { .. }
+                | ElementAttr::CustomAttrExpression { .. }
+                | ElementAttr::EventTokens { .. }
+        )
+    }
+}
 
 #[derive(PartialEq, Eq)]
 pub struct ElementAttrNamed {

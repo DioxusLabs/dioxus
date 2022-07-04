@@ -8,22 +8,19 @@ fn formatting_compiles() {
     // escape sequences work
     assert_eq!(
         format_args_f!("{x:?} {{}}}}").to_string(),
-        format!("{:?} {{}}}}", x).to_string()
+        format!("{:?} {{}}}}", x)
     );
     assert_eq!(
         format_args_f!("{{{{}} {x:?}").to_string(),
-        format!("{{{{}} {:?}", x).to_string()
+        format!("{{{{}} {:?}", x)
     );
 
     // paths in formating works
-    assert_eq!(
-        format_args_f!("{x.0}").to_string(),
-        format!("{}", x.0).to_string()
-    );
+    assert_eq!(format_args_f!("{x.0}").to_string(), format!("{}", x.0));
 
     // function calls in formatings work
     assert_eq!(
         format_args_f!("{x.borrow():?}").to_string(),
-        format!("{:?}", x.borrow()).to_string()
+        format!("{:?}", x.borrow())
     );
 }

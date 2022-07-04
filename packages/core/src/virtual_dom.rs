@@ -1,4 +1,4 @@
-//! # VirtualDom Implementation for Rust
+//! # Virtual DOM Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
@@ -387,7 +387,7 @@ impl VirtualDom {
             }
             SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
-                    self.scopes.call_listener_with_bubbling(event, element);
+                    self.scopes.call_listener_with_bubbling(&event, element);
                 }
             }
             SchedulerMsg::Immediate(s) => {
@@ -466,8 +466,6 @@ impl VirtualDom {
                 h1.cmp(&h2).reverse()
             });
 
-            log::trace!("dirty_scopes: {:?}", self.dirty_scopes);
-
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
@@ -477,8 +475,6 @@ impl VirtualDom {
                     diff_state.diff_scope(scopeid);
 
                     let DiffState { mutations, .. } = diff_state;
-
-                    log::trace!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
 
                     for scope in &mutations.dirty_scopes {
                         self.dirty_scopes.remove(scope);

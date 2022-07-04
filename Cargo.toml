@@ -66,6 +66,7 @@ members = [
     "packages/fermi",
     "packages/tui",
     "packages/liveview",
+    "packages/autofmt",
     "packages/rsx",
     "packages/rsx_interpreter",
     "packages/native-core",

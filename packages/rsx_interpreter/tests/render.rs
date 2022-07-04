@@ -24,6 +24,7 @@ fn render_basic() {
         expressions: Vec::new(),
         listeners: Vec::new(),
         location: location.clone(),
+        custom_attributes: &[],
     };
     let interperted_vnodes = LazyNodes::new(|factory| {
         dioxus_rsx_interpreter::resolve_scope(
@@ -70,6 +71,7 @@ fn render_nested() {
         expressions: Vec::new(),
         listeners: Vec::new(),
         location: location.clone(),
+        custom_attributes: &[],
     };
     let interperted_vnodes = LazyNodes::new(|factory| {
         dioxus_rsx_interpreter::resolve_scope(
@@ -79,6 +81,54 @@ fn render_nested() {
                 div {
                     p { "hello world" }
                 }
+            }"#,
+            empty_context,
+            factory,
+        )
+    });
+
+    let interperted_vnodes = dom.render_vnodes(interperted_vnodes);
+    let static_vnodes = dom.render_vnodes(static_vnodes);
+    assert!(check_eq(interperted_vnodes, static_vnodes));
+}
+
+#[test]
+#[allow(non_snake_case)]
+fn render_custom_attribute() {
+    fn Base(cx: Scope) -> Element {
+        rsx!(cx, div {})
+    }
+
+    let dom = VirtualDom::new(Base);
+    let static_vnodes = rsx! {
+        div {
+            "data-test-1": 0,
+            "data-test-2": "1",
+        }
+    };
+    let location = CodeLocation {
+        file_path: String::new(),
+        crate_path: String::new(),
+        line: 2,
+        column: 0,
+    };
+    let empty_context = CapturedContext {
+        captured: IfmtArgs {
+            named_args: Vec::new(),
+        },
+        components: Vec::new(),
+        iterators: Vec::new(),
+        expressions: vec![("0", "0".to_string())],
+        listeners: Vec::new(),
+        location: location.clone(),
+        custom_attributes: &["data-test-1", "data-test-2"],
+    };
+    let interperted_vnodes = LazyNodes::new(|factory| {
+        dioxus_rsx_interpreter::resolve_scope(
+            location,
+            r#"div {
+                "data-test-1": 0,
+                "data-test-2": "1",
             }"#,
             empty_context,
             factory,
@@ -110,7 +160,7 @@ fn render_component() {
     let location = CodeLocation {
         file_path: String::new(),
         crate_path: String::new(),
-        line: 2,
+        line: 3,
         column: 0,
     };
 
@@ -127,6 +177,7 @@ fn render_component() {
             expressions: Vec::new(),
             listeners: Vec::new(),
             location: location.clone(),
+            custom_attributes: &[],
         };
         dioxus_rsx_interpreter::resolve_scope(
             location,
@@ -162,7 +213,7 @@ fn render_iterator() {
     let location = CodeLocation {
         file_path: String::new(),
         crate_path: String::new(),
-        line: 3,
+        line: 4,
         column: 0,
     };
 
@@ -180,6 +231,7 @@ fn render_iterator() {
             expressions: Vec::new(),
             listeners: Vec::new(),
             location: location.clone(),
+            custom_attributes: &[],
         };
         dioxus_rsx_interpreter::resolve_scope(
             location,
@@ -216,7 +268,7 @@ fn render_captured_variable() {
     let location = CodeLocation {
         file_path: String::new(),
         crate_path: String::new(),
-        line: 4,
+        line: 5,
         column: 0,
     };
 
@@ -234,6 +286,7 @@ fn render_captured_variable() {
             expressions: Vec::new(),
             listeners: Vec::new(),
             location: location.clone(),
+            custom_attributes: &[],
         };
         dioxus_rsx_interpreter::resolve_scope(
             location,
@@ -268,7 +321,7 @@ fn render_listener() {
     let location = CodeLocation {
         file_path: String::new(),
         crate_path: String::new(),
-        line: 5,
+        line: 6,
         column: 0,
     };
 
@@ -287,6 +340,7 @@ fn render_listener() {
                 dioxus_elements::on::onclick(factory, f),
             )],
             location: location.clone(),
+            custom_attributes: &[],
         };
         dioxus_rsx_interpreter::resolve_scope(
             location,

@@ -232,8 +232,3 @@ impl<'a> AttributeValue<'a> {
         }
     }
 }
-
-// #[test]
-// fn test_attribute_value_size() {
-//     assert_eq!(std::mem::size_of::<AttributeValue<'_>>(), 24);
-// }

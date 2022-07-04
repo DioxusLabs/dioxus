@@ -18,7 +18,7 @@ impl BubbleState {
     }
 }
 
-/// User Events are events that are shuttled from the renderer into the VirtualDom through the scheduler channel.
+/// User Events are events that are shuttled from the renderer into the [`VirtualDom`] through the scheduler channel.
 ///
 /// These events will be passed to the appropriate Element given by `mounted_dom_id` and then bubbled up through the tree
 /// where each listener is checked and fired if the event name matches.
@@ -73,7 +73,7 @@ pub struct UserEvent {
 /// Priority of Event Triggers.
 ///
 /// Internally, Dioxus will abort work that's taking too long if new, more important work arrives. Unlike React, Dioxus
-/// won't be afraid to pause work or flush changes to the RealDOM. This is called "cooperative scheduling". Some Renderers
+/// won't be afraid to pause work or flush changes to the Real Dom. This is called "cooperative scheduling". Some Renderers
 /// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
 ///
 /// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
@@ -81,12 +81,12 @@ pub struct UserEvent {
 /// React has a 5-tier priority system. However, they break things into "Continuous" and "Discrete" priority. For now,
 /// we keep it simple, and just use a 3-tier priority system.
 ///
-/// - NoPriority = 0
-/// - LowPriority = 1
-/// - NormalPriority = 2
-/// - UserBlocking = 3
-/// - HighPriority = 4
-/// - ImmediatePriority = 5
+/// - `NoPriority` = 0
+/// - `LowPriority` = 1
+/// - `NormalPriority` = 2
+/// - `UserBlocking` = 3
+/// - `HighPriority` = 4
+/// - `ImmediatePriority` = 5
 ///
 /// We still have a concept of discrete vs continuous though - discrete events won't be batched, but continuous events will.
 /// This means that multiple "scroll" events will be processed in a single frame, but multiple "click" events will be
@@ -123,37 +123,34 @@ pub enum EventPriority {
 }
 
 /// The internal Dioxus type that carries any event data to the relevant handler.
-///
-///
-///
-///
-///
+
 pub struct AnyEvent {
     pub(crate) bubble_state: Rc<BubbleState>,
     pub(crate) data: Arc<dyn Any + Send + Sync>,
 }
 
 impl AnyEvent {
-    /// Convert this AnyEvent into a specific UiEvent with EventData.
+    /// Convert this [`AnyEvent`] into a specific [`UiEvent`] with [`EventData`].
     ///
     /// ```rust, ignore
     /// let evt: FormEvent = evvt.downcast().unwrap();
     /// ```
+    #[must_use]
     pub fn downcast<T: Send + Sync + 'static>(self) -> Option<UiEvent<T>> {
         let AnyEvent { data, bubble_state } = self;
 
         data.downcast::<T>()
             .ok()
-            .map(|data| UiEvent { bubble_state, data })
+            .map(|data| UiEvent { data, bubble_state })
     }
 }
 
-/// A UiEvent is a type that wraps various EventData.
+/// A [`UiEvent`] is a type that wraps various [`EventData`].
 ///
 /// You should prefer to use the name of the event directly, rather than
-/// the UiEvent<T> generic type.
+/// the [`UiEvent`]<T> generic type.
 ///
-/// For the HTML crate, this would include MouseEvent, FormEvent etc.
+/// For the HTML crate, this would include `MouseEvent`, `FormEvent` etc.
 pub struct UiEvent<T> {
     /// The internal data of the event
     /// This is wrapped in an Arc so that it can be sent across threads
