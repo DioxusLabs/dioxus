@@ -1,4 +1,5 @@
-# Hot Reloading
+# Setting Up Hot Reload
+
 1. Hot reloading allows much faster iteration times inside of rsx calls by interperting them and streaming the edits.
 2. It is useful when changing the styling/layout of a program, but will not help with changing the logic of a program.
 3. Currently the cli only implements hot reloading for the web renderer.

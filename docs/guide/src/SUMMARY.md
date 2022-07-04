@@ -5,6 +5,7 @@
 - [Getting Started](getting_started/index.md)
   - [Desktop](getting_started/desktop.md)
   - [Web](getting_started/web.md)
+    - [Hot Reload](getting_started/hot_reload.md)
   - [Server-Side Rendering](getting_started/ssr.md)
   - [Terminal UI](getting_started/tui.md)
   - [Mobile](getting_started/mobile.md)
@@ -31,6 +32,10 @@
 - [Publishing](publishing/index.md)
   - [Desktop](publishing/desktop.md)
   - [Web](publishing/web.md)
+
+-----------
+
+- [Custom Renderer](custom_renderer/index.md)
 
 -----------
 
