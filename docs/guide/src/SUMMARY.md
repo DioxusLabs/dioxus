@@ -24,7 +24,7 @@
 - [Async](async/index.md)
   - [UseFuture](async/use_future.md)
   - [UseCoroutine](async/use_coroutine.md)
-  - [Tasks](async/tasks.md)
+  - [Spawning Futures](async/spawn.md)
 - [Best Practices](best_practices/index.md)
   - [Error Handling](best_practices/error_handling.md)
   - [Antipatterns](best_practices/antipatterns.md)
