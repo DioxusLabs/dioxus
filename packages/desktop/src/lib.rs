@@ -8,6 +8,8 @@ mod controller;
 mod desktop_context;
 mod escape;
 mod events;
+#[cfg(feature = "hot-reload")]
+mod hot_reload;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
