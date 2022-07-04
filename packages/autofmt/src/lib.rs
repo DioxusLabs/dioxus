@@ -98,6 +98,11 @@ pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
 
     buf.write_body_indented(&body.roots).unwrap();
 
+    // writing idents leaves the final line ended at the end of the last ident
+    if buf.buf.contains('\n') {
+        buf.new_line().unwrap();
+    }
+
     buf.consume()
 }
 
