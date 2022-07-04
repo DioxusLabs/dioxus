@@ -1,7 +1,9 @@
 use crate::{util::*, Buffer};
 use dioxus_rsx::*;
 use std::{fmt::Result, fmt::Write};
+use syn::spanned::Spanned;
 
+#[derive(Debug)]
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
     Empty,
@@ -41,7 +43,7 @@ impl Buffer {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let is_short_attr_list = is_short_attrs(attributes);
+        let is_short_attr_list = self.is_short_attrs(attributes);
         let is_small_children = self.is_short_children(children).is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
@@ -53,6 +55,9 @@ impl Buffer {
         if !is_short_attr_list && attributes.len() <= 1 {
             if children.is_empty() {
                 opt_level = ShortOptimization::Oneliner;
+            } else if let Some(ElementAttr::EventTokens { .. }) = attributes.get(0).map(|f| &f.attr)
+            {
+                opt_level = ShortOptimization::NoOpt;
             } else {
                 opt_level = ShortOptimization::PropsOnTop;
             }
@@ -100,6 +105,14 @@ impl Buffer {
 
             ShortOptimization::NoOpt => {
                 self.write_attributes(attributes, key, false)?;
+
+                if !children.is_empty() && !attributes.is_empty() {
+                    write!(self.buf, ",")?;
+                }
+
+                if !children.is_empty() {
+                    self.indented_tabbed_line()?;
+                }
                 self.write_body_indented(children)?;
                 self.tabbed_line()?;
             }
@@ -171,7 +184,7 @@ impl Buffer {
             }
 
             ElementAttr::EventTokens { name, tokens } => {
-                let out = prettyplease::unparse_expr(tokens);
+                let out = self.retrieve_formatted_expr(tokens.span().start()).unwrap();
 
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
@@ -204,7 +217,7 @@ impl Buffer {
     // returns the total line length if it's short
     // returns none if the length exceeds the limit
     // I think this eventually becomes quadratic :(
-    pub fn is_short_children(&self, children: &[BodyNode]) -> Option<usize> {
+    pub fn is_short_children(&mut self, children: &[BodyNode]) -> Option<usize> {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
@@ -252,8 +265,4 @@ impl Buffer {
             _ => None,
         }
     }
-}
-
-fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
-    extract_attr_len(attrs) < 80
 }

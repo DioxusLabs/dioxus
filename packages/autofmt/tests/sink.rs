@@ -13,9 +13,9 @@ rsx! {
 }
 "#;
 
-    let formatted = fmt_file(src);
+    let formatted = &fmt_file(src)[0].formatted;
 
-    println!("{formatted:?}");
+    println!("{formatted}");
 }
 
 #[test]

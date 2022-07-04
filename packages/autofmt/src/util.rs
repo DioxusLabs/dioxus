@@ -1,4 +1,5 @@
 use dioxus_rsx::*;
+use syn::spanned::Spanned;
 
 // todo: use recursive or complete sizeing
 pub fn extract_attr_len(attributes: &[ElementAttrNamed]) -> usize {
@@ -9,7 +10,14 @@ pub fn extract_attr_len(attributes: &[ElementAttrNamed]) -> usize {
             ElementAttr::AttrExpression { .. } => 10,
             ElementAttr::CustomAttrText { value, .. } => value.value().len(),
             ElementAttr::CustomAttrExpression { .. } => 10,
-            ElementAttr::EventTokens { .. } => 1000000,
+            ElementAttr::EventTokens { tokens, .. } => {
+                let span = tokens.span();
+                if span.start().line == span.end().line {
+                    span.end().column - span.start().column
+                } else {
+                    10000
+                }
+            }
         })
         .sum()
 }

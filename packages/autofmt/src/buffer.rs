@@ -1,12 +1,32 @@
-use std::fmt::{Result, Write};
+use std::{
+    collections::HashMap,
+    fmt::{Result, Write},
+};
 
-use dioxus_rsx::BodyNode;
+use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed};
+use proc_macro2::LineColumn;
+use syn::spanned::Spanned;
 
 #[derive(Default, Debug)]
 pub struct Buffer {
     pub src: Vec<String>,
+    pub cached_formats: HashMap<Location, String>,
     pub buf: String,
     pub indent: usize,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq, Debug)]
+pub struct Location {
+    pub line: usize,
+    pub col: usize,
+}
+impl Location {
+    pub fn new(start: LineColumn) -> Self {
+        Self {
+            line: start.line,
+            col: start.column,
+        }
+    }
 }
 
 impl Buffer {
@@ -62,6 +82,7 @@ impl Buffer {
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
         self.indent += 1;
 
+        let mut had_comments = false;
         let mut comments = Vec::new();
 
         for child in children {
@@ -71,7 +92,11 @@ impl Buffer {
                 let start = child.span().start().line;
 
                 for (id, line) in self.src[..start - 1].iter().enumerate().rev() {
-                    if line.trim().starts_with("//") || line.is_empty() {
+                    if line.trim().starts_with("//") {
+                        // if line.trim().starts_with("//") || line.is_empty() {
+                        if line.is_empty() && id == 0 {
+                            break;
+                        }
                         comments.push(id);
                     } else {
                         break;
@@ -82,28 +107,67 @@ impl Buffer {
                     comments.pop();
                 }
 
-                let mut last_was_empty = false;
+                // let mut last_line_was_empty = false;
+                had_comments = !comments.is_empty();
                 for comment_line in comments.drain(..).rev() {
                     let line = &self.src[comment_line];
                     if line.is_empty() {
-                        if !last_was_empty {
-                            self.new_line()?;
-                        }
-                        last_was_empty = true;
-                    } else {
-                        last_was_empty = false;
-                        self.tabbed_line()?;
-                        write!(self.buf, "{}", self.src[comment_line].trim())?;
+                        continue;
+                        // if last_line_was_empty {
+                        //     continue;
+                        // } else {
+                        //     last_line_was_empty = true;
+                        // }
                     }
+
+                    self.tabbed_line()?;
+                    write!(self.buf, "{}", self.src[comment_line].trim())?;
                 }
 
-                self.tabbed_line()?;
+                if children.len() > 1 || had_comments {
+                    self.tabbed_line()?;
+                }
             }
 
             self.write_ident(child)?;
         }
 
+        if children.len() > 1 || had_comments {
+            self.new_line()?;
+        }
+
         self.indent -= 1;
         Ok(())
+    }
+
+    pub(crate) fn is_short_attrs(&mut self, attributes: &[ElementAttrNamed]) -> bool {
+        let len: usize = attributes
+            .iter()
+            .map(|attr| match &attr.attr {
+                ElementAttr::AttrText { value, .. } => value.value().len(),
+                ElementAttr::AttrExpression { .. } => 10,
+                ElementAttr::CustomAttrText { value, .. } => value.value().len(),
+                ElementAttr::CustomAttrExpression { .. } => 10,
+                ElementAttr::EventTokens { tokens, .. } => {
+                    let formatted = prettyplease::unparse_expr(tokens);
+                    let len = if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+
+                    self.cached_formats
+                        .insert(Location::new(tokens.span().start()), formatted);
+
+                    len
+                }
+            })
+            .sum();
+
+        len <= 80
+    }
+
+    pub fn retrieve_formatted_expr(&mut self, location: LineColumn) -> Option<String> {
+        self.cached_formats.remove(&Location::new(location))
     }
 }

@@ -1,8 +1,8 @@
-use crate::Buffer;
+use crate::{buffer::Location, Buffer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
-use syn::AngleBracketedGenericArguments;
+use syn::{spanned::Spanned, AngleBracketedGenericArguments};
 
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
@@ -179,17 +179,26 @@ impl Buffer {
 
         Ok(())
     }
+
     pub fn is_short_fields(
-        &self,
+        &mut self,
         fields: &[ComponentField],
         manual_props: &Option<syn::Expr>,
     ) -> Option<usize> {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
-                ContentField::ManExpr(exp) => exp.to_token_stream().to_string().len(),
                 ContentField::Formatted(s) => s.value().len() ,
-                ContentField::OnHandlerRaw(_) => 100000,
+                ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
+                    let formatted = prettyplease::unparse_expr(exp);
+                    let len = if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+                    self.cached_formats.insert(Location::new(exp.span().start()) , formatted);
+                    len
+                },
             } + 10)
             .sum::<usize>() + self.indent * 4;
 
