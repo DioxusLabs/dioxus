@@ -73,14 +73,16 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             new = format!(" {new} ");
         }
 
-        if new == contents[end + 1..bracket_end + end - 1] {
+        let end_marker = end + bracket_end - indent_level * 4 - 1;
+
+        if new == contents[end..end_marker] {
             continue;
         }
 
         formatted_blocks.push(FormattedBlock {
             formatted: new,
             start: end,
-            end: end + bracket_end - indent_level * 4 - 1,
+            end: end_marker,
         });
     }
 

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-const SRC: &str = include_str!("./samples/all.rs");
+const SRC: &str = include_str!("./samples/all.rsx");
 
 fn body() -> &'static str {
     &SRC[6..SRC.len() - 3]
