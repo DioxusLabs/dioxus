@@ -354,6 +354,17 @@ impl<'b> DiffState<'b> {
                         );
                     }
                     self.mutations.push_root(*id);
+                    let children_created = 0;
+                    for child in children {
+                        let node = &new.template.nodes[child.0];
+                        if let TemplateNodeType::DynamicNode(idx) = node.node_type {
+                            self.create_node(&new.dynamic_context.nodes[idx]);
+                            children_created += 1;
+                        }
+                    }
+                    if children_created > 0 {
+                        self.mutations.append_children(children_created);
+                    }
                     self.mutations.pop_root();
                 }
                 TemplateNodeType::Text { text } => {
