@@ -38,6 +38,24 @@ To add children to an element, put them inside the `{}` brackets. They can be ei
 </ol>
 ```
 
+### Fragments
+
+You can also "group" elements by wrapping them in `Fragment {}`. This will not create any additional elements.
+
+> Note: you can also render multiple elements at the top level of `rsx!` and they will be automatically grouped – no need for an explicit `Fragment {}` there.
+
+```rust
+{{#include ../../examples/rsx_overview.rs:fragments}}
+```
+
+```html
+<p>First Item</p>
+<p>Second Item</p>
+<span>a group</span>
+<span>of three</span>
+<span>items</span>
+```
+
 ### Attributes
 
 Attributes are also specified inside the `{}` brackets, using the `name: value` syntax. You can provide the value as a literal in the RSX:

@@ -10,6 +10,7 @@ pub fn App(cx: Scope) -> Element {
     cx.render(rsx!(
         Empty {},
         Children {},
+        Fragments {},
         Attributes {},
         VariableAttributes {},
         CustomAttributes {},
@@ -32,6 +33,20 @@ pub fn Children(cx: Scope) -> Element {
         li {"Third Item"}
     }))
     // ANCHOR_END: children
+}
+
+pub fn Fragments(cx: Scope) -> Element {
+    // ANCHOR: fragments
+    cx.render(rsx!(
+        p {"First Item"},
+        p {"Second Item"},
+        Fragment {
+            span { "a group" },
+            span { "of three" },
+            span { "items" },
+        }
+    ))
+    // ANCHOR_END: fragments
 }
 
 pub fn Attributes(cx: Scope) -> Element {
