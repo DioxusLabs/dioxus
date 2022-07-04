@@ -98,7 +98,11 @@ Similarly to how you can [format](https://doc.rust-lang.org/rust-by-example/hell
 {{#include ../../examples/rsx_overview.rs:formatting}}
 ```
 ```html
-<button class="country-es">Coordinates: (42, 0)</button>
+
+<div class="country-es">Coordinates: (42, 0)
+    <div>ES</div>
+    <div>42</div>
+</div>
 ```
 
 ### Expressions

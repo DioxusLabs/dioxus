@@ -84,9 +84,17 @@ pub fn Formatting(cx: Scope) -> Element {
     // ANCHOR: formatting
     let coordinates = (42, 0);
     let country = "es";
-    cx.render(rsx!(button {
+    cx.render(rsx!(div {
         class: "country-{country}",
-        "Coordinates: {coordinates:?}"
+        "Coordinates: {coordinates:?}",
+        // arbitrary expressions are allowed,
+        // as long as they don't contain `{}`
+        div {
+            "{country.to_uppercase()}"
+        },
+        div {
+            "{7*6}"
+        },
     }))
     // ANCHOR_END: formatting
 }
