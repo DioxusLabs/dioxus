@@ -1,4 +1,5 @@
-#![allow(non_snake_case)]
+// todo remove deprecated
+#![allow(non_snake_case, deprecated)]
 
 use dioxus::events::{KeyCode, KeyboardEvent};
 use dioxus::prelude::*;
