@@ -97,6 +97,7 @@ pub async fn hot_reload_handler(
                             if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file) {
                                 for (old, new) in changed.into_iter() {
                                     let hr = get_location(
+                                        &state.watcher_config.crate_dir,
                                         k,
                                         old.to_token_stream(),
                                     );
@@ -150,7 +151,7 @@ pub async fn hot_reload_handler(
                                 let error: Error = serde_json::from_str(&err).unwrap();
                                 match error{
                                     Error::ParseError(parse_error) => {
-                                        log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file, parse_error.location.line, parse_error.location.column, parse_error.message);
+                                        log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file_path, parse_error.location.line, parse_error.location.column, parse_error.message);
                                     },
                                     Error::RecompileRequiredError(_) => {
                                         if let Err(err) = state.build_manager.build(){
@@ -182,10 +183,12 @@ pub async fn hot_reload_handler(
     })
 }
 
-pub fn get_location(path: &Path, ts: TokenStream) -> CodeLocation {
+pub fn get_location(crate_path: &Path, path: &Path, ts: TokenStream) -> CodeLocation {
     let span = ts.span().start();
+    let relative = path.strip_prefix(crate_path).unwrap();
     CodeLocation {
-        file: path.display().to_string(),
+        file_path: relative.display().to_string(),
+        crate_path: crate_path.display().to_string(),
         line: span.line as u32,
         column: span.column as u32 + 1,
     }

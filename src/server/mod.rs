@@ -121,6 +121,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                         log::info!("🪁 reloading rsx");
                                         for (old, new) in changed.into_iter() {
                                             let hr = get_location(
+                                                &crate_dir,
                                                 &path.to_path_buf(),
                                                 old.to_token_stream(),
                                             );
