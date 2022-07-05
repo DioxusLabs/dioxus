@@ -304,6 +304,7 @@ impl<'a> Mutations<'a> {
             root: element_id,
         });
     }
+
     pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: impl Into<u64>) {
         self.edits.push(RemoveEventListener {
             event,

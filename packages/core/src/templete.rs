@@ -36,40 +36,50 @@ pub(crate) struct VTemplateRef<'a> {
 }
 
 #[derive(Debug)]
+pub(crate) struct DynamicNodeMapping<'b> {
+    nodes: &'b [Option<TemplateNodeId>],
+    text: &'b [&'b [TemplateNodeId]],
+    attributes: &'b [&'b [(TemplateNodeId, usize)]],
+}
+
+impl<'b> DynamicNodeMapping<'b> {
+    pub(crate) fn all_dynamic(&self) -> impl Iterator<Item = TemplateNodeId> + 'b {
+        self.nodes
+            .iter()
+            .filter_map(|o| o.as_ref())
+            .chain(self.text.iter().map(|ids| ids.iter()).flatten())
+            .copied()
+            .chain(
+                self.attributes
+                    .iter()
+                    .map(|ids| ids.iter())
+                    .flatten()
+                    .map(|dynamic| dynamic.0),
+            )
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
+        self.nodes[idx]
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_text_index(&self, idx: usize) -> &'b [TemplateNodeId] {
+        self.text[idx]
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_attribute_index(
+        &self,
+        idx: usize,
+    ) -> &'b [(TemplateNodeId, usize)] {
+        self.attributes[idx]
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct Template<'b> {
     pub(crate) id: TemplateId,
     pub(crate) nodes: &'b [TemplateNode<'b>],
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub(crate) dynamic_ids: &'b [TemplateNodeId],
-}
-
-/// Templates can only contain a limited subset of VNodes and id/keys are not needed, as diffing will be skipped.
-/// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
-#[derive(Debug)]
-struct TemplateNode<'b> {
-    /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
-    pub id: TemplateNodeId,
-    pub node_type: TemplateNodeType<'b>,
-}
-
-#[derive(Debug)]
-pub enum TemplateNodeType<'b> {
-    Element {
-        tag: &'static str,
-        namespace: Option<&'static str>,
-        attributes: &'b [TemplateAttribute<'b>],
-        children: &'b [TemplateNodeId],
-        /// The index of each listener in the element
-        listeners: &'b [usize],
-    },
-    Text {
-        text: TextTemplate<'b>,
-    },
-    Fragment {
-        nodes: &'b [TemplateNodeId],
-    },
-    /// The index in the dynamic node array this node should be replaced with
-    DynamicNode(usize),
+    pub(crate) dynamic_ids: DynamicNodeMapping<'b>,
 }
 
 impl<'b> Template<'b> {
@@ -161,6 +171,35 @@ impl<'b> Template<'b> {
     }
 }
 
+/// Templates can only contain a limited subset of VNodes and id/keys are not needed, as diffing will be skipped.
+/// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
+#[derive(Debug)]
+struct TemplateNode<'b> {
+    /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
+    pub id: TemplateNodeId,
+    pub node_type: TemplateNodeType<'b>,
+}
+
+#[derive(Debug)]
+pub enum TemplateNodeType<'b> {
+    Element {
+        tag: &'static str,
+        namespace: Option<&'static str>,
+        attributes: &'b [TemplateAttribute<'b>],
+        children: &'b [TemplateNodeId],
+        /// The index of each listener in the element
+        listeners: &'b [usize],
+    },
+    Text {
+        text: TextTemplate<'b>,
+    },
+    Fragment {
+        nodes: &'b [TemplateNodeId],
+    },
+    /// The index in the dynamic node array this node should be replaced with
+    DynamicNode(usize),
+}
+
 #[derive(Debug)]
 pub struct TextTemplate<'b> {
     // this is similar to what ifmt outputs and allows us to only diff the dynamic parts of the text
@@ -190,6 +229,7 @@ struct TemplateContext<'b> {
     pub nodes: &'b [VNode<'b>],
     pub text_segments: &'b [&'b str],
     pub attributes: &'b [AttributeValue<'b>],
+    /// The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
     pub listeners: &'b [Listener<'b>],
 }
 
