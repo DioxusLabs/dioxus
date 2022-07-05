@@ -368,8 +368,12 @@ impl<'b> DiffState<'b> {
                 }
                 TemplateNodeType::Text { text } => {
                     let new_text = new.dynamic_context.resolve_text(&text);
-                    self.mutations
-                        .set_text(self.scopes.bump.alloc(new_text), id)
+                    let scope_bump = self
+                        .scopes
+                        .get_scope(self.current_scope())
+                        .unwrap()
+                        .fin_frame();
+                    self.mutations.set_text(scope_bump.bump.alloc(new_text), id)
                 }
                 TemplateNodeType::DynamicNode(idx) => {
                     // this will only be triggered for root elements
@@ -739,8 +743,13 @@ impl<'b> DiffState<'b> {
         for node_id in dirty_text_nodes {
             if let TemplateNodeType::Text { text } = &new.template.nodes[node_id.0].node_type {
                 let text = new.dynamic_context.resolve_text(text);
+                let scope_bump = self
+                    .scopes
+                    .get_scope(self.current_scope())
+                    .unwrap()
+                    .fin_frame();
                 self.mutations
-                    .set_text(self.scopes.bump.alloc(text), node_id);
+                    .set_text(scope_bump.bump.alloc(text), node_id);
             } else {
                 panic!("expected element node");
             }
