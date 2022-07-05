@@ -12,6 +12,18 @@ To render different elements based on a condition, you could use an `if-else` st
 
 > You could also use `match` statements, or any Rust function to conditionally render different things.
 
+
+### Inspecting `Element` props
+
+Since `Element` is a `Option<VNode>`, components accepting `Element` as a prop can actually inspect its contents, and render different things based on that. Example:
+
+```rust
+{{#include ../../examples/component_children_inspect.rs:Clickable}}
+```
+
+You can't mutate the `Element`, but if you need a modified version of it, you can construct a new one based on its attributes/children/etc.
+
+
 ## Rendering Nothing
 
 To render nothing, you can return `None` from a component. This is useful if you want to conditionally hide something:

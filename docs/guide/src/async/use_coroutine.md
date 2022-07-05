@@ -48,7 +48,7 @@ if sync.is_running() {
 }
 ```
 
-This pattern is where coroutines are extremely useful - instead of writing all the complicated logic for pausing our async tasks like we would with JavaScript promises, the Rust model allows us to just not poll our future.
+This pattern is where coroutines are extremely useful – instead of writing all the complicated logic for pausing our async tasks like we would with JavaScript promises, the Rust model allows us to just not poll our future.
 
 ## Sending Values
 
@@ -103,7 +103,7 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 }
 ```
 
-We can combine coroutines with Fermi to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux - the only Atoms that need to exist are those that are used to drive the display/UI.
+We can combine coroutines with Fermi to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
 
 ```rust
 static USERNAME: Atom<String> = |_| "default".to_string();

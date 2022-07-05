@@ -59,7 +59,7 @@ For example, a macOS app would look like this:
 
 ![Published App](../images/publish.png)
 
-Nice! And it's only 4.8 Mb - extremely lean!! Because Dioxus leverages your platform's native WebView, Dioxus apps are extremely memory efficient and won't waste your battery.
+Nice! And it's only 4.8 Mb – extremely lean!! Because Dioxus leverages your platform's native WebView, Dioxus apps are extremely memory efficient and won't waste your battery.
 
-> Note: not all CSS works the same on all platforms. Make sure to view your app's CSS on each platform - or web browser (Firefox, Chrome, Safari) before publishing.
+> Note: not all CSS works the same on all platforms. Make sure to view your app's CSS on each platform – or web browser (Firefox, Chrome, Safari) before publishing.
 

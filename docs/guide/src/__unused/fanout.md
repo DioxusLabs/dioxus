@@ -35,7 +35,7 @@ fn Titlebar(cx: Scope<TitlebarProps>) -> Element {
 }
 ```
 
-For many apps - this is a fine pattern, especially if the component is a one-off. However, if we want to reuse the component outside of this app, then we'll start to run into issues where our contexts are unavailable.
+For many apps – this is a fine pattern, especially if the component is a one-off. However, if we want to reuse the component outside of this app, then we'll start to run into issues where our contexts are unavailable.
 
 ## Fanning Out
 
@@ -58,4 +58,4 @@ fn DocsiteTitlesection(cx: Scope) {
 
 This particular wrapper component unfortunately cannot be reused across apps. However, because it simply wraps other real elements, it doesn't have to. We are free to reuse our TitleBar and UserBar components across apps with ease. We also know that this particular component is plenty performant because the wrapper doesn't have any props and is always memoized. The only times this component re-renders is when any of the atoms change.
 
-This is the beauty of Dioxus - we always know where our components are likely to be re-rendered. Our wrapper components can easily prevent any large re-renders by simply memoizing their components. This system might not be as elegant or precise as signal systems found in libraries like Sycamore or SolidJS, but it is quite ergonomic.
+This is the beauty of Dioxus – we always know where our components are likely to be re-rendered. Our wrapper components can easily prevent any large re-renders by simply memoizing their components. This system might not be as elegant or precise as signal systems found in libraries like Sycamore or SolidJS, but it is quite ergonomic.

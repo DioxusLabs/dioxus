@@ -6,7 +6,7 @@ The `use_future` and `use_coroutine` hooks are useful if you want to uncondition
 {{#include ../../examples/spawn.rs:spawn}}
 ```
 
-The future must be `'static` - so any values captured by the task cannot carry any references to `cx`, such as a `UseState`.
+The future must be `'static` – so any values captured by the task cannot carry any references to `cx`, such as a `UseState`.
 
 However, since you'll typically need a way to update the value of a hook, you can use `to_owned` to create a clone of the hook handle. You can then use that clone in the async closure.
 

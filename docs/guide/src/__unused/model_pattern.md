@@ -16,7 +16,7 @@ struct Calculator {
 }
 ```
 
-Our component is really simple - we just call `use_ref` to get an initial calculator state.
+Our component is really simple – we just call `use_ref` to get an initial calculator state.
 
 ```rust
 fn app(cx: Scope) -> Element {

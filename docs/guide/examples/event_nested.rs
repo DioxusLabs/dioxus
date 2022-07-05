@@ -5,13 +5,20 @@ fn main() {
     dioxus::desktop::launch(App);
 }
 
-// ANCHOR: component
 fn App(cx: Scope) -> Element {
+    // ANCHOR: rsx
     cx.render(rsx! {
-        button {
-            onclick: move |event| println!("Clicked! Event: {event:?}"),
-            "click me!"
+        div {
+            onclick: move |_event| {},
+            "outer",
+            button {
+                onclick: move |event| {
+                    // now, outer won't be triggered
+                    event.cancel_bubble();
+                },
+                "inner"
+            }
         }
     })
+    // ANCHOR_END: rsx
 }
-// ANCHOR_END: component

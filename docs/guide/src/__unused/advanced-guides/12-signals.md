@@ -22,7 +22,7 @@ fn Comp(cx: Scope) -> DomTree {
 }
 ```
 
-This component is fairly straightforward - the input updates its own value on every change. However, every call to set_title will re-render the component. If we add a large list, then every time we update the title input, Dioxus will need to diff the entire list, over, and over, and over. This is **a lot** of wasted clock-cycles!
+This component is fairly straightforward – the input updates its own value on every change. However, every call to set_title will re-render the component. If we add a large list, then every time we update the title input, Dioxus will need to diff the entire list, over, and over, and over. This is **a lot** of wasted clock-cycles!
 
 ```rust
 fn Comp(cx: Scope) -> DomTree {
@@ -43,7 +43,7 @@ fn Comp(cx: Scope) -> DomTree {
 }
 ```
 
-Many experienced React developers will just say "this is bad design" - but we consider it to be a pit of failure, rather than a pit of success! That's why signals exist - to push you in a more performant (and ergonomic) direction. Signals let us directly bind values to their final place in the VirtualDOM. Whenever the signal value is updated, Dioxus will only the DOM nodes where that signal is used. Signals are built into Dioxus, so we can directly bind attributes of elements to their updates.
+Many experienced React developers will just say "this is bad design" – but we consider it to be a pit of failure, rather than a pit of success! That's why signals exist – to push you in a more performant (and ergonomic) direction. Signals let us directly bind values to their final place in the VirtualDOM. Whenever the signal value is updated, Dioxus will only the DOM nodes where that signal is used. Signals are built into Dioxus, so we can directly bind attributes of elements to their updates.
 
 We can use signals to generate a two-way binding between data and the input box. Our text input is now just a two-line component!
 
@@ -124,7 +124,7 @@ If you build a complex app on top of Dirac, you'll likely notice that many of yo
 
 ## Signals and Iterators
 
-Sometimes you want to use a collection of items. With Signals, you can bypass diffing for collections - a very powerful technique to avoid re-rendering on large collections.
+Sometimes you want to use a collection of items. With Signals, you can bypass diffing for collections – a very powerful technique to avoid re-rendering on large collections.
 
 By default, Dioxus is limited when you use iter/map. With the `For` component, you can provide an iterator and a function for the iterator to map to.
 

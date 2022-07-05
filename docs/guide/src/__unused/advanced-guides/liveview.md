@@ -11,7 +11,7 @@ Because Liveview combines the server and the client, you'll find dedicated APIs 
 You can find more information to data modeling and fetching for LiveApps in the "Book of Dioxus Patterns".
 
 ### Ease of deployment
-There is no hassle for deploying Dioxus liveview apps - simply upload the binary to your hosting provider of choice. There simply is no need to deal with intermediate APIs. An app's frontend and backend are tightly coupled to each other, meaning that the backed and frontend are always up to date.
+There is no hassle for deploying Dioxus liveview apps – simply upload the binary to your hosting provider of choice. There simply is no need to deal with intermediate APIs. An app's frontend and backend are tightly coupled to each other, meaning that the backed and frontend are always up to date.
 
 This is especially powerful for small teams, where fast iteration, versioned unique prototypes, and simple deployments are important. As your app grows, Dioxus will happily grow with you, serving up to 100K RPS (thanks to async Rust performance).
 

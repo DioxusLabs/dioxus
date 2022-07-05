@@ -32,15 +32,15 @@ You can then pass prop values to the component the same way you would pass attri
 
 ### Borrowed Props
 
-Owning props works well if your props are easy to copy around - like a single number. But what if we need to pass a larger data type, like a String from an `App` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it for the subcomponent – but this would be inefficient, especially for larger Strings.
+Owning props works well if your props are easy to copy around – like a single number. But what if we need to pass a larger data type, like a String from an `App` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it for the subcomponent – but this would be inefficient, especially for larger Strings.
 
-Rust allows for something more efficient – borrowing the String as a `&str`. Instead of creating a copy, this will give us a reference to the original String – this is what Borrowed Props are for!
+Rust allows for something more efficient – borrowing the String as a `&str` – this is what Borrowed Props are for!
 
 ```rust
 {{#include ../../examples/component_borrowed_props.rs:TitleCard}}
 ```
 
-We can pass borrowed props by borrowing a value from, e.g. a String:
+We can then use the component like this:
 
 ```rust
 {{#include ../../examples/component_borrowed_props.rs:App}}

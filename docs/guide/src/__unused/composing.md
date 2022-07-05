@@ -15,7 +15,7 @@ This section is a bit long, but worth the read. We recommend coffee, tea, and/or
 
 ## Reactive Programming
 
-Dioxus is one of a handful of Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm - much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
+Dioxus is one of a handful of Rust libraries that provide a "Reactive Programming Model". The term "Reactive programming" is a classification of programming paradigm – much like functional or imperative programming. This is a very important distinction since it affects how we *think* about our code.
 
 Reactive programming is a programming model concerned with deriving computations from asynchronous data flow. Most reactive programs are comprised of datasources, intermediate computations, and a final result.
 

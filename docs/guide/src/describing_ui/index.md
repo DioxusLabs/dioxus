@@ -5,7 +5,7 @@ Dioxus is a *declarative* framework. This means that instead of telling Dioxus w
 You have already seen a simple example or RSX syntax in the "hello world" application:
 
 ```rust
-{{#include ../../examples/hello_world_desktop.rs}}
+{{#include ../../examples/hello_world_desktop.rs:component}}
 ```
 
 Here, we use the `rsx!` macro to *declare* that we want a `div` element, containing the text `"Hello, world!"`. Dioxus takes the RSX and constructs a UI from it.
@@ -20,8 +20,6 @@ RSX is very similar to HTML in that it describes elements with attributes and ch
 ```html
 <div></div>
 ```
-
-> Note: Though the examples here use Dioxus Desktop, and render HTML elements, the RSX sytax is the same for all renderers. The only difference might be that, instead of outputing HTML elements, a TUI renderer, for example, might output nodes to be rendered to the terminal.
 
 ### Children
 
@@ -64,15 +62,6 @@ Attributes are also specified inside the `{}` brackets, using the `name: value` 
 ```
 ```html
 <a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" class="primary_button" autofocus="true">Log In</a>
-```
-
-You can also provide variables to set attributes:
-```rust
-{{#include ../../examples/rsx_overview.rs:variable_attributes}}
-```
-```html
-
-<button disabled="true" class="button">Rewrite it in rust</button>
 ```
 
 > Note: All attributes defined in `dioxus-html` follow the snake_case naming convention. They transform their `snake_case` names to HTML's `camelCase` attributes.

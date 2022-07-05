@@ -47,7 +47,7 @@ The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.
 
 ### An example
 
-For the sake of understanding, lets consider this example - a very simple UI declaration:
+For the sake of understanding, lets consider this example – a very simple UI declaration:
 
 ```rust
 rsx!( h1 {"hello world"} )
@@ -219,7 +219,7 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
 ## Custom raw elements
 
-If you need to go as far as relying on custom elements for your renderer - you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
+If you need to go as far as relying on custom elements for your renderer – you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
 
 These custom elements are defined as unit structs with trait implementations.
 

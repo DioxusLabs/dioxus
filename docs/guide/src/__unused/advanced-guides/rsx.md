@@ -2,7 +2,7 @@
 
 Many modern frameworks provide a domain-specific-language for declaring user-interfaces. In the case of React, this language extension is called JSX and must be handled through additional dependencies and pre/post processors to transform your source code. With Rust, we can simply provide a procedural macro in the Dioxus dependency itself that mimics the JSX language.
 
-With Dioxus, we actually ship two different macros - a macro that mimics JSX (the `html!` macro) and a macro that mimics Rust's native nested-struct syntax (the `rsx!` macro). These macros simply transform their inputs into NodeFactory calls.
+With Dioxus, we actually ship two different macros – a macro that mimics JSX (the `html!` macro) and a macro that mimics Rust's native nested-struct syntax (the `rsx!` macro). These macros simply transform their inputs into NodeFactory calls.
 
 For instance, this html! call:
 ```rust
@@ -18,7 +18,7 @@ becomes this NodeFactory call:
     None // key
 )
 ```
-The NodeFactory API is fairly ergonomic, making it a viable option to use directly. The NodeFactory API is also compile-time correct and has incredible syntax highlighting support. We use what Rust calls a "unit type" - the `dioxus_elements::div` and associated methods to ensure that a `div` can only have attributes associated with `div`s. This lets us tack on relevant documentation, autocomplete support, and jump-to-definition for methods and attributes.
+The NodeFactory API is fairly ergonomic, making it a viable option to use directly. The NodeFactory API is also compile-time correct and has incredible syntax highlighting support. We use what Rust calls a "unit type" – the `dioxus_elements::div` and associated methods to ensure that a `div` can only have attributes associated with `div`s. This lets us tack on relevant documentation, autocomplete support, and jump-to-definition for methods and attributes.
 
 ![Compile time correct syntax](../images/compiletimecorrect.png)
 
@@ -26,7 +26,7 @@ The NodeFactory API is fairly ergonomic, making it a viable option to use direct
 
 The html! macro supports a limited subset of the html standard. Rust's macro parsing tools are somewhat limited, so all text between tags _must be quoted_.
 
-However, writing HTML by hand is a bit tedious - IDE tools for Rust don't support linting/autocomplete/syntax highlighting. We suggest using RSX - it's more natural for Rust programs and _does_ integrate well with Rust IDE tools.
+However, writing HTML by hand is a bit tedious – IDE tools for Rust don't support linting/autocomplete/syntax highlighting. We suggest using RSX – it's more natural for Rust programs and _does_ integrate well with Rust IDE tools.
 
 ```rust
 let name = "jane";

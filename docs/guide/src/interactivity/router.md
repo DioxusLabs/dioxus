@@ -2,7 +2,7 @@
 
 In many of your apps, you'll want to have different "scenes". For a webpage, these scenes might be the different webpages with their own content.
 
-You could write your own scene management solution - quite simply too. However, to save you the effort, Dioxus supports a first-party solution for scene management called Dioxus Router.
+You could write your own scene management solution – quite simply too. However, to save you the effort, Dioxus supports a first-party solution for scene management called Dioxus Router.
 
 
 ## What is it?
@@ -13,7 +13,7 @@ For an app like the Dioxus landing page (https://dioxuslabs.com), we want to hav
 - Blog
 - Example showcase
 
-Each of these scenes is independent - we don't want to render both the homepage and blog at the same time.
+Each of these scenes is independent – we don't want to render both the homepage and blog at the same time.
 
 This is where the router crates come in handy. To make sure we're using the router, simply add the `"router"` feature to your dioxus dependency.
 

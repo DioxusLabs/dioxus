@@ -19,11 +19,11 @@ For example, you might have seen the counter example, in which state (a number) 
 ```
 ![Screenshot: counter app](./images/counter.png)
 
-Every time the component's state changes, it re-renders, and the component function is called, so you can describe what you want the new UI to look like. You don't have to worry about "changing" anything! Just describe what you want in terms of the state, and Dioxus will take care of the rest!
+Every time the component's state changes, it re-renders, and the component function is called, so you can describe what you want the new UI to look like. You don't have to worry about "changing" anything – just describe what you want in terms of the state, and Dioxus will take care of the rest!
 
 > `use_state` returns your value wrapped in a smart pointer of type [`UseState`](https://docs.rs/dioxus/latest/dioxus/hooks/struct.UseState.html). This is why you can both read the value and update it, even within a handler.
 
-You can use multiple hooks in the same component if you want!
+You can use multiple hooks in the same component if you want:
 
 ```rust
 {{#include ../../examples/hooks_counter_two_state.rs:component}}

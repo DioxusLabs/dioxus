@@ -1,6 +1,6 @@
 # Server-Side Rendering
 
-The Dioxus VirtualDom can be rendered to a HTML string.
+The Dioxus VirtualDom can be rendered server-side.
 
 [Example: Dioxus DocSite](https://github.com/dioxusLabs/docsite)
 
@@ -10,7 +10,7 @@ The Dioxus VirtualDom, sadly, is not currently `Send`. Internally, we use quite 
 
 To solve this, you'll want to spawn a VirtualDom on its own thread and communicate with it via channels.
 
-When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String - but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
+When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
 
 
 ## Setup

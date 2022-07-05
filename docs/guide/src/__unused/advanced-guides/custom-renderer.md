@@ -54,7 +54,7 @@ The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.
 
 ### An example
 
-For the sake of understanding, lets consider this example - a very simple UI declaration:
+For the sake of understanding, lets consider this example – a very simple UI declaration:
 
 ```rust
 rsx!( h1 {"hello world"} )
@@ -218,7 +218,7 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
 ## Custom raw elements
 
-If you need to go as far as relying on custom elements for your renderer - you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
+If you need to go as far as relying on custom elements for your renderer – you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
 
 These custom elements are defined as unit structs with trait implementations.
 
@@ -248,7 +248,7 @@ There are three opportunities for platform incompatibilities to break your progr
 2. When downcasting events via `Event.downcast_ref<T>()`
 3. Calling platform-specific APIs that don't exist
 
-The best hooks will properly detect the target platform and still provide functionality, failing gracefully when a platform is not supported. We encourage - and provide - an indication to the user on what platforms a hook supports. For issues 1 and 2, these return a result as to not cause panics on unsupported platforms. When designing your hooks, we recommend propagating this error upwards into user facing code, making it obvious that this particular service is not supported.
+The best hooks will properly detect the target platform and still provide functionality, failing gracefully when a platform is not supported. We encourage – and provide – an indication to the user on what platforms a hook supports. For issues 1 and 2, these return a result as to not cause panics on unsupported platforms. When designing your hooks, we recommend propagating this error upwards into user facing code, making it obvious that this particular service is not supported.
 
 This particular code _will panic_ due to the unwrap on downcast_ref. Try to avoid these types of patterns.
 

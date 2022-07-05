@@ -4,6 +4,8 @@ You can build a text-based interface that will run in the terminal using Dioxus.
 
 ![Hello World screenshot](https://github.com/DioxusLabs/rink/raw/master/examples/example.png)
 
+> Note: this book was written with HTML-based platforms in mind. You might be able to follow along with TUI, but you'll have to adapt a bit.
+
 ## Support
 
 TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.

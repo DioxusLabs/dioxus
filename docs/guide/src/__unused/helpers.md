@@ -18,27 +18,27 @@ Global state as easy as `use_state`.
 
 This crate has yet to be developed! However, we do plan on providing a crate for good fetching and query support.
 
-## 3rd-party - Toast
+## 3rd-party – Toast
 
 Toast notifications, curtesy of [@mrxiaozhuox](https://github.com/mrxiaozhuox).
 
 [Link](https://github.com/mrxiaozhuox/dioxus-toast)
 
-## 3rd-party - HeroIcon
+## 3rd-party – HeroIcon
 
 Collection of helpful hero icons, curtesy of [@autarch](https://github.com/autarch).
 
 
 [Link](https://github.com/houseabsolute/dioxus-heroicons)
 
-## 3rd-party - Katex
+## 3rd-party – Katex
 
 Draw beautiful equations, curtesy of [@oovm](https://github.com/oovm)
 
 [Link](https://github.com/oovm/katex-wasm/tree/dev/projects/dioxus-katex)
 
 
-## 3rd-party - PrimsJS
+## 3rd-party – PrimsJS
 
 Highlight your code blocks with ease, curtesy of [@oovm](https://github.com/oovm)
 

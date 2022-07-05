@@ -29,13 +29,3 @@ This makes using the component much simpler: simply put the RSX inside the `{}` 
 ```rust
 {{#include ../../examples/component_children.rs:Clickable_usage}}
 ```
-
-## Inspecting the `Element`
-
-Since `Element` is a `Option<VNode>`, we can actually inspect the contents of `children`, and render different things based on that. Example:
-
-```rust
-{{#include ../../examples/component_children_inspect.rs:Clickable}}
-```
-
-You can't mutate the `Element`, but if you need a modified version of it, you can construct a new one based on its attributes/children/etc.

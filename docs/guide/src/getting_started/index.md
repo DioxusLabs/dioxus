@@ -25,7 +25,7 @@ We've put a lot of care into making Dioxus syntax familiar and easy to understan
 
 #### Windows
 
-Windows Desktop apps depend on WebView2 - a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
+Windows Desktop apps depend on WebView2 – a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
 
 1. A tiny "evergreen" *bootstrapper* which will fetch an installer from Microsoft's CDN
 2. A tiny *installer* which will fetch Webview2 from Microsoft's CDN
@@ -53,14 +53,14 @@ If you run into issues, make sure you have all the basics installed, as outlined
 
 #### MacOS
 
-Currently - everything for macOS is built right in! However, you might run into an issue if you're using nightly Rust due to some permissions issues in our Tao dependency (which have been resolved but not published).
+Currently – everything for macOS is built right in! However, you might run into an issue if you're using nightly Rust due to some permissions issues in our Tao dependency (which have been resolved but not published).
 
 ### Suggested Cargo Extensions
 
 If you want to keep your traditional `npm install XXX` workflow for adding packages, you might want to install `cargo-edit` and a few other fun `cargo` extensions:
 
 - [cargo-expand](https://github.com/dtolnay/cargo-expand) for expanding macro calls
-- [cargo tree](https://doc.rust-lang.org/cargo/commands/cargo-tree.html) - an integrated cargo command that lets you inspect your dependency tree
+- [cargo tree](https://doc.rust-lang.org/cargo/commands/cargo-tree.html) – an integrated cargo command that lets you inspect your dependency tree
 
 
 ## Setup Guides

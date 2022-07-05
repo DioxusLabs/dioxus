@@ -7,7 +7,6 @@ fn main() {
 
 // ANCHOR: App
 fn App(cx: Scope) -> Element {
-    // For the sake of an example, we create the &str here.
     let hello = "Hello Dioxus!";
 
     cx.render(rsx!(TitleCard { title: hello }))

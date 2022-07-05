@@ -6,12 +6,11 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
-    // ANCHOR: rsx
     cx.render(rsx! {
-        button {
-            onclick: move |event| println!("Clicked! Event: {event:?}"),
-            "click me!"
+        // ANCHOR: rsx
+        div {
+            onclick: "alert('hello world')",
         }
+        // ANCHOR_END: rsx
     })
-    // ANCHOR_END: rsx
 }
