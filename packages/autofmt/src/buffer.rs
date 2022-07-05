@@ -92,27 +92,16 @@ impl Buffer {
                 let start = child.span().start();
                 let line_start = start.line;
 
-                // make sure the comments are actually relevant to this element.
-                let this_line = self.src[line_start - 1].as_str();
-
-                let beginning = if this_line.len() > start.column {
-                    this_line[..start.column].trim()
-                } else {
-                    ""
-                };
-
-                if beginning.is_empty() {
+                if self.current_element_has_comments(child) {
                     for (id, line) in self.src[..line_start - 1].iter().enumerate().rev() {
                         if line.trim().starts_with("//") || line.is_empty() {
-                            comments.push(id);
+                            if id != 0 {
+                                comments.push(id);
+                            }
                         } else {
                             break;
                         }
                     }
-                }
-
-                if comments.len() == 1 && self.src[comments[0]].is_empty() {
-                    comments.pop();
                 }
 
                 let mut last_was_empty = false;

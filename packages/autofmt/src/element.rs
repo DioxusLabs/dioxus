@@ -216,6 +216,22 @@ impl Buffer {
         Ok(())
     }
 
+    pub fn current_element_has_comments(&self, child: &BodyNode) -> bool {
+        let start = child.span().start();
+        let line_start = start.line;
+
+        // make sure the comments are actually relevant to this element.
+        let this_line = self.src[line_start - 1].as_str();
+
+        let beginning = if this_line.len() > start.column {
+            this_line[..start.column].trim()
+        } else {
+            ""
+        };
+
+        beginning.is_empty()
+    }
+
     // check if the children are short enough to be on the same line
     // We don't have the notion of current line depth - each line tries to be < 80 total
     // returns the total line length if it's short
@@ -229,19 +245,7 @@ impl Buffer {
         }
 
         for child in children {
-            let start = child.span().start();
-            let line_start = start.line;
-
-            // make sure the comments are actually relevant to this element.
-            let this_line = self.src[line_start - 1].as_str();
-
-            let beginning = if this_line.len() > start.column {
-                this_line[..start.column].trim()
-            } else {
-                ""
-            };
-
-            if beginning.is_empty() {
+            if self.current_element_has_comments(child) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return None,
