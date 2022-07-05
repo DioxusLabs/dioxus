@@ -12,19 +12,3 @@ macro_rules! twoway {
 }
 
 twoway!("comments" => comments);
-
-// rsx! {
-//     div { class: "asdasd", "hello world" }
-//     h1 {
-//         // Important handler
-//         onclick: move |_| {
-//             let a = 10;
-//         },
-
-//         div { "hello" }
-
-//         // Important handler
-//         "Goodbye world"
-//     }
-//     Component {}
-// }

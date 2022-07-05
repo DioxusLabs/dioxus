@@ -34,4 +34,11 @@ rsx! {
 
     // Components
     Component { ..Props {} }
+
+    // multiline
+    div {
+        class: "asdaskjdhaskjdjaslkdjlakdjaslkdjaslkd asdaskjdhaskjdjaslkdjlakdjaslkdjaslkdasdaskjdhaskjdjaslkdjlakdjaslkdjaslkd",
+        multiple: "asd",
+        "hi"
+    }
 }
