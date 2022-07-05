@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused)]
 
 use dioxus::prelude::*;
 
@@ -62,12 +62,17 @@ pub fn Tokio(cx: Scope) -> Element {
 }
 
 pub fn ToOwnedMacro(cx: Scope) -> Element {
+    let count = use_state(&cx, || 0);
+    let age = use_state(&cx, || 0);
+    let name = use_state(&cx, || 0);
+    let description = use_state(&cx, || 0);
+
     let _ = || {
         // ANCHOR: to_owned_macro
         use dioxus::core::to_owned;
 
         cx.spawn({
-            to_owned![count, age, name, description, etc];
+            to_owned![count, age, name, description];
             async move {
                 // ...
             }
@@ -75,5 +80,5 @@ pub fn ToOwnedMacro(cx: Scope) -> Element {
         // ANCHOR_END: to_owned_macro
     };
 
-    cx.render(rsx!())
+    None
 }

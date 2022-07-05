@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused)]
 
 use dioxus::prelude::*;
 
@@ -47,7 +47,7 @@ fn App(cx: Scope) -> Element {
 #[inline_props]
 fn RandomDog(cx: Scope, breed: String) -> Element {
     // ANCHOR: dependency
-    let future = use_future(&cx, (breed,), |(breed)| async move {
+    let future = use_future(&cx, (breed,), |(breed,)| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{breed}/images/random"))
             .await
             .unwrap()
