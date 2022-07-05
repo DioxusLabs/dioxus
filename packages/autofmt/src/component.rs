@@ -61,7 +61,7 @@ impl Buffer {
         }
 
         // If there's nothing at all, empty optimization
-        if fields.is_empty() && children.is_empty() {
+        if fields.is_empty() && children.is_empty() && manual_props.is_none() {
             opt_level = ShortOptimization::Empty;
         }
 
