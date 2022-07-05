@@ -27,7 +27,7 @@ pub struct BuildManager {
 
 impl BuildManager {
     fn build(&self) -> Result<()> {
-        log::info!("Start to rebuild project...");
+        log::info!("🪁 Rebuild code");
         builder::build(&self.config)?;
         // change the websocket reload state to true;
         // the page will auto-reload.
@@ -118,7 +118,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                         last_file_rebuild.map.insert(path, src);
                                     }
                                     DiffResult::RsxChanged(changed) => {
-                                        log::info!("reloading rsx");
+                                        log::info!("🪁 reloading rsx");
                                         for (old, new) in changed.into_iter() {
                                             let hr = get_location(
                                                 &path.to_path_buf(),
@@ -269,7 +269,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
-        log::info!("reload required");
+        // log::info!("🚧 reload required");
         if chrono::Local::now().timestamp() > last_update_time {
             match build_manager.build() {
                 Ok(_) => last_update_time = chrono::Local::now().timestamp(),

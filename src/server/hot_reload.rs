@@ -34,7 +34,7 @@ pub struct FileMap {
 
 impl FileMap {
     pub fn new(path: PathBuf) -> Self {
-        log::info!("Searching files for changes since last compile...");
+        log::info!("🔮 Searching files for changes since last compile...");
         fn find_rs_files(root: PathBuf) -> io::Result<HashMap<PathBuf, String>> {
             let mut files = HashMap::new();
             if root.is_dir() {
@@ -61,7 +61,7 @@ impl FileMap {
             last_updated_time,
             map: find_rs_files(path).unwrap(),
         };
-        log::info!("Files updated");
+        // log::info!("Files updated");
         result
     }
 }
@@ -78,7 +78,7 @@ pub async fn hot_reload_handler(
             let mut messages = Vec::new();
 
             {
-                log::info!("Finding updates since last compile...");
+                log::info!("🔮 Finding updates since last compile...");
                 let handle = state.last_file_rebuild.lock().unwrap();
                 let update_time = handle.last_updated_time.clone();
                 for (k, v) in handle.map.iter() {
