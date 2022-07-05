@@ -40,3 +40,14 @@ fn comment_attr_case_work() {
 
     println!("{}", out);
 }
+
+#[test]
+fn tiny() {
+    // todo: get oneliner rsx working
+    let _src = include_str!("./samples/tiny.rsx");
+
+    // let formatted = dioxus_autofmt::fmt_file(src);
+    // let out = dioxus_autofmt::apply_formats(src, formatted);
+
+    // println!("{}", out);
+}

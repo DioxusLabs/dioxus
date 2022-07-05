@@ -2,7 +2,6 @@ use crate::Buffer;
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use std::{fmt::Result, fmt::Write};
-use syn::spanned::Spanned;
 
 #[derive(Debug)]
 enum ShortOptimization {
