@@ -1,5 +1,10 @@
 rsx! {
     div {
+        // Comments
+        class: "asdasd",
+        "hello world"
+    }
+    div {
         // My comment here 1
         // My comment here 2
         // My comment here 3

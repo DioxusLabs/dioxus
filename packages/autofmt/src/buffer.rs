@@ -127,7 +127,9 @@ impl Buffer {
         for child in children {
             // Exprs handle their own indenting/line breaks
             if !matches!(child, BodyNode::RawExpr(_)) {
-                self.write_comments(child.span())?;
+                if self.current_span_is_primary(child.span()) {
+                    self.write_comments(child.span())?;
+                }
                 self.tabbed_line()?;
             }
 
