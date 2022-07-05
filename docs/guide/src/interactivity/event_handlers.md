@@ -47,15 +47,6 @@ Any event handlers will still be called.
 
 > Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior.
 
-## JavaScript Handlers
-
-Instead of passing a closure, you can also pass a string to event handlers – this lets you use JavaScript (if your renderer can execute JavaScript):
-
-```rust
-{{#include ../../examples/event_javascript.rs:rsx}}
-```
-
-
 ## Handler Props
 
 Sometimes, you might want to make a component that accepts an event handler. A simple example would be a `FancyButton` component, which accepts an `on_click` handler:
