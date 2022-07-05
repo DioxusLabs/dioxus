@@ -30,3 +30,13 @@ fn comment_case_work() {
 
     println!("{}", out);
 }
+
+#[test]
+fn comment_attr_case_work() {
+    let src = include_str!("./samples/attrs.rsx");
+
+    let formatted = dioxus_autofmt::fmt_file(src);
+    let out = dioxus_autofmt::apply_formats(src, formatted);
+
+    println!("{}", out);
+}

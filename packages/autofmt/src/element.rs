@@ -1,5 +1,6 @@
 use crate::Buffer;
 use dioxus_rsx::*;
+use proc_macro2::Span;
 use std::{fmt::Result, fmt::Write};
 use syn::spanned::Spanned;
 
@@ -146,9 +147,14 @@ impl Buffer {
         }
 
         while let Some(attr) = attr_iter.next() {
+            self.indent += 1;
+            self.write_comments(attr.attr.start())?;
+            self.indent -= 1;
+
             if !sameline {
                 self.indented_tabbed_line()?;
             }
+
             self.write_attribute(attr)?;
 
             if attr_iter.peek().is_some() {
@@ -188,7 +194,7 @@ impl Buffer {
             }
 
             ElementAttr::EventTokens { name, tokens } => {
-                let out = self.retrieve_formatted_expr(tokens.span().start()).unwrap();
+                let out = self.retrieve_formatted_expr(tokens).to_string();
 
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
@@ -216,8 +222,8 @@ impl Buffer {
         Ok(())
     }
 
-    pub fn current_element_has_comments(&self, child: &BodyNode) -> bool {
-        let start = child.span().start();
+    pub fn current_element_has_comments(&self, location: Span) -> bool {
+        let start = location.start();
         let line_start = start.line;
 
         // make sure the comments are actually relevant to this element.
@@ -245,7 +251,7 @@ impl Buffer {
         }
 
         for child in children {
-            if self.current_element_has_comments(child) {
+            if self.current_element_has_comments(child.span()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return None,

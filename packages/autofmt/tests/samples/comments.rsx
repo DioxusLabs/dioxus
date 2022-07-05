@@ -16,6 +16,12 @@ rsx! {
         div { "text" }
 
         div {
+            // Attr
+            class: "asdads",
+            "health"
+        }
+
+        div {
 
 
 
