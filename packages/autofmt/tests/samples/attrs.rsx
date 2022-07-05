@@ -18,4 +18,18 @@ rsx! {
         // This here
         "hi"
     }
+
+
+    // Comment head
+    div {
+        class: "asd",
+        "Jon"
+    }
+
+    // Comment head
+    div {
+        // Collapse
+        class: "asd",
+        "Jon"
+    }
 }

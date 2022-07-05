@@ -136,8 +136,14 @@ impl Buffer {
         let mut total = 0;
 
         for attr in attributes {
-            if self.current_element_has_comments(attr.span()) {
-                return 100000;
+            if self.current_span_is_primary(attr.attr.start()) {
+                'line: for line in self.src[..attr.attr.start().start().line - 1].iter().rev() {
+                    match (line.trim().starts_with("//"), line.is_empty()) {
+                        (true, _) => return 100000,
+                        (_, true) => continue 'line,
+                        _ => break 'line,
+                    }
+                }
             }
 
             total += match &attr.attr {
@@ -182,7 +188,7 @@ impl Buffer {
     pub fn retrieve_formatted_expr(&mut self, expr: &Expr) -> &str {
         self.cached_formats
             .entry(Location::new(expr.span().start()))
-            .or_insert(prettyplease::unparse_expr(expr))
+            .or_insert_with(|| prettyplease::unparse_expr(expr))
             .as_str()
     }
 }

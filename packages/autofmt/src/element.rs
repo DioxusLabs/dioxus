@@ -222,18 +222,21 @@ impl Buffer {
         Ok(())
     }
 
-    pub fn current_element_has_comments(&self, location: Span) -> bool {
+    // make sure the comments are actually relevant to this element.
+    // test by making sure this element is the primary element on this line
+    pub fn current_span_is_primary(&self, location: Span) -> bool {
         let start = location.start();
-        let line_start = start.line;
+        let line_start = start.line - 1;
 
-        // make sure the comments are actually relevant to this element.
-        let this_line = self.src[line_start - 1].as_str();
+        let this_line = self.src[line_start].as_str();
 
         let beginning = if this_line.len() > start.column {
             this_line[..start.column].trim()
         } else {
             ""
         };
+
+        // dbg!(beginning);
 
         beginning.is_empty()
     }
@@ -251,7 +254,7 @@ impl Buffer {
         }
 
         for child in children {
-            if self.current_element_has_comments(child.span()) {
+            if self.current_span_is_primary(child.span()) {
                 'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return None,
