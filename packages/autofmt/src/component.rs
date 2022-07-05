@@ -4,6 +4,7 @@ use quote::ToTokens;
 use std::fmt::{Result, Write};
 use syn::{spanned::Spanned, AngleBracketedGenericArguments};
 
+#[derive(Debug)]
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
     Empty,
@@ -69,6 +70,15 @@ impl Buffer {
             opt_level = ShortOptimization::NoOpt;
         }
 
+        // Useful for debugging
+        // dbg!(
+        //     name.to_token_stream().to_string(),
+        //     &opt_level,
+        //     attr_len,
+        //     is_short_attr_list,
+        //     is_small_children
+        // );
+
         match opt_level {
             ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
@@ -101,6 +111,11 @@ impl Buffer {
 
             ShortOptimization::NoOpt => {
                 self.write_component_fields(fields, manual_props, false)?;
+
+                if !children.is_empty() && !fields.is_empty() {
+                    write!(self.buf, ",")?;
+                }
+
                 self.write_body_indented(children)?;
                 self.tabbed_line()?;
             }
@@ -196,7 +211,6 @@ impl Buffer {
             .map(|field| match &field.content {
                 ContentField::Formatted(s) => s.value().len() ,
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
-
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {
                         10000
@@ -207,7 +221,7 @@ impl Buffer {
                     len
                 },
             } + 10)
-            .sum::<usize>() + self.indent * 4;
+            .sum::<usize>();
 
         match manual_props {
             Some(p) => {

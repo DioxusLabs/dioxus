@@ -98,7 +98,12 @@ pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
 
     let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
-    buf.write_body_indented(&body.roots).unwrap();
+    // Oneliner optimization
+    if buf.is_short_children(&body.roots).is_some() {
+        buf.write_ident(&body.roots[0]).unwrap();
+    } else {
+        buf.write_body_indented(&body.roots).unwrap();
+    }
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.buf.contains('\n') {

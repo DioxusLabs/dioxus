@@ -1,7 +1,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
-    rc::Rc,
 };
 
 use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed};
@@ -118,6 +117,13 @@ impl Buffer {
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
         self.indent += 1;
 
+        self.write_body_no_indent(children)?;
+
+        self.indent -= 1;
+        Ok(())
+    }
+
+    pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
         for child in children {
             // Exprs handle their own indenting/line breaks
             if !matches!(child, BodyNode::RawExpr(_)) {
@@ -128,7 +134,6 @@ impl Buffer {
             self.write_ident(child)?;
         }
 
-        self.indent -= 1;
         Ok(())
     }
 

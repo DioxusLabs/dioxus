@@ -95,7 +95,9 @@ impl Buffer {
             }
 
             ShortOptimization::PropsOnTop => {
-                write!(self.buf, " ")?;
+                if !attributes.is_empty() || key.is_some() {
+                    write!(self.buf, " ")?;
+                }
                 self.write_attributes(attributes, key, true)?;
 
                 if !children.is_empty() && !attributes.is_empty() {
@@ -141,13 +143,18 @@ impl Buffer {
             }
             write!(self.buf, "key: \"{}\"", key.value())?;
             if !attributes.is_empty() {
-                write!(self.buf, ", ")?;
+                write!(self.buf, ",")?;
+                if sameline {
+                    write!(self.buf, " ")?;
+                }
             }
         }
 
         while let Some(attr) = attr_iter.next() {
             self.indent += 1;
-            self.write_comments(attr.attr.start())?;
+            if !sameline {
+                self.write_comments(attr.attr.start())?;
+            }
             self.indent -= 1;
 
             if !sameline {

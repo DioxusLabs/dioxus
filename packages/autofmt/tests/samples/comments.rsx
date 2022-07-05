@@ -1,48 +1,31 @@
 rsx! {
     div {
-        // The title
-        "hello"
+        // My comment here 1
+        // My comment here 2
+        // My comment here 3
+        // My comment here 4
+        class: "asdasd",
 
-        // The title
-        "hello"
+        // Comment here
+        onclick: move |_| {
+            let a = 10;
+            let b = 40;
+            let c = 50;
+        },
 
-        // The title
-        "hello"
+        // my comment
 
-        // The title
-        "hello"
+        // This here
+        "hi"
+    }
 
-        // body
-        div { "text" }
+    // Comment head
+    div { class: "asd", "Jon" }
 
-        div {
-            // Attr
-            class: "asdads",
-            "health"
-        }
-
-        div {
-
-
-
-
-
-            // adadsasd
-
-
-
-            // adadsasd
-            // adadsasd
-
-
-
-            // adadsasd
-            // adadsasd
-            // adadsasd
-
-
-
-            div {}
-        }
+    // Comment head
+    div {
+        // Collapse
+        class: "asd",
+        "Jon"
     }
 }
