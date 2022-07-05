@@ -83,12 +83,53 @@ impl Buffer {
     pub fn write_body_indented(&mut self, children: &[BodyNode]) -> Result {
         self.indent += 1;
 
-        // let mut had_comments = false;
-        // let mut comments = Vec::new();
+        let mut comments = Vec::new();
 
         for child in children {
             // Exprs handle their own indenting/line breaks
             if !matches!(child, BodyNode::RawExpr(_)) {
+                // collect all comments upwards
+                let start = child.span().start();
+                let line_start = start.line;
+
+                // make sure the comments are actually relevant to this element.
+                let this_line = self.src[line_start - 1].as_str();
+
+                let beginning = if this_line.len() > start.column {
+                    this_line[..start.column].trim()
+                } else {
+                    ""
+                };
+
+                if beginning.is_empty() {
+                    for (id, line) in self.src[..line_start - 1].iter().enumerate().rev() {
+                        if line.trim().starts_with("//") || line.is_empty() {
+                            comments.push(id);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                if comments.len() == 1 && self.src[comments[0]].is_empty() {
+                    comments.pop();
+                }
+
+                let mut last_was_empty = false;
+                for comment_line in comments.drain(..).rev() {
+                    let line = &self.src[comment_line];
+                    if line.is_empty() {
+                        if !last_was_empty {
+                            self.new_line()?;
+                        }
+                        last_was_empty = true;
+                    } else {
+                        last_was_empty = false;
+                        self.tabbed_line()?;
+                        write!(self.buf, "{}", self.src[comment_line].trim())?;
+                    }
+                }
+
                 self.tabbed_line()?;
             }
 
@@ -152,39 +193,3 @@ impl SpanLength for Span {
         self.end().line - self.start().line
     }
 }
-
-// collect all comments upwards
-// let start = child.span().start().line;
-
-// for (id, line) in self.src[..start - 1].iter().enumerate().rev() {
-//     if line.trim().starts_with("//") {
-//         // if line.trim().starts_with("//") || line.is_empty() {
-//         if line.is_empty() && id == 0 {
-//             break;
-//         }
-//         comments.push(id);
-//     } else {
-//         break;
-//     }
-// }
-
-// if comments.len() == 1 && self.src[comments[0]].is_empty() {
-//     comments.pop();
-// }
-
-// // let mut last_line_was_empty = false;
-// had_comments = !comments.is_empty();
-// for comment_line in comments.drain(..).rev() {
-//     let line = &self.src[comment_line];
-//     if line.is_empty() {
-//         continue;
-//         // if last_line_was_empty {
-//         //     continue;
-//         // } else {
-//         //     last_line_was_empty = true;
-//         // }
-//     }
-
-//     self.tabbed_line()?;
-//     write!(self.buf, "{}", self.src[comment_line].trim())?;
-// }

@@ -228,15 +228,29 @@ impl Buffer {
             return Some(0);
         }
 
-        // for child in children {
-        //     'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
-        //         match (line.trim().starts_with("//"), line.is_empty()) {
-        //             (true, _) => return None,
-        //             (_, true) => continue 'line,
-        //             _ => break 'line,
-        //         }
-        //     }
-        // }
+        for child in children {
+            let start = child.span().start();
+            let line_start = start.line;
+
+            // make sure the comments are actually relevant to this element.
+            let this_line = self.src[line_start - 1].as_str();
+
+            let beginning = if this_line.len() > start.column {
+                this_line[..start.column].trim()
+            } else {
+                ""
+            };
+
+            if beginning.is_empty() {
+                'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
+                    match (line.trim().starts_with("//"), line.is_empty()) {
+                        (true, _) => return None,
+                        (_, true) => continue 'line,
+                        _ => break 'line,
+                    }
+                }
+            }
+        }
 
         match children {
             [BodyNode::Text(ref text)] => Some(text.value().len()),
@@ -249,14 +263,6 @@ impl Buffer {
                     self.is_short_children(&comp.children)
                         .map(|child_len| child_len + attr_len)
                 }
-                // let is_short_child = self.is_short_children(&comp.children);
-
-                // match (is_short_child, is_short_attrs) {
-                //     (Some(child_len), Some(attrs_len)) => Some(child_len + attrs_len),
-                //     (Some(child_len), None) => Some(child_len),
-                //     (None, Some(attrs_len)) => Some(attrs_len),
-                //     (None, None) => None,
-                // }
             }
             [BodyNode::RawExpr(ref _expr)] => {
                 // TODO: let rawexprs to be inlined

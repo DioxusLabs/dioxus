@@ -20,3 +20,13 @@ fn already_formatted_file_properly() {
 
     println!("{}", out);
 }
+
+#[test]
+fn comment_case_work() {
+    let src = include_str!("./samples/comments.rsx");
+
+    let formatted = dioxus_autofmt::fmt_file(src);
+    let out = dioxus_autofmt::apply_formats(src, formatted);
+
+    println!("{}", out);
+}
