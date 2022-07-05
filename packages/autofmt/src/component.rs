@@ -1,8 +1,8 @@
-use crate::Buffer;
+use crate::{buffer::Location, Buffer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
-use syn::AngleBracketedGenericArguments;
+use syn::{spanned::Spanned, AngleBracketedGenericArguments};
 
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
@@ -36,7 +36,8 @@ impl Buffer {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let is_short_attr_list = self.is_short_fields(fields, manual_props).is_some();
+        let attr_len = self.field_len(fields, manual_props);
+        let is_short_attr_list = attr_len < 80;
         let is_small_children = self.is_short_children(children).is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
@@ -61,6 +62,11 @@ impl Buffer {
         // If there's nothing at all, empty optimization
         if fields.is_empty() && children.is_empty() {
             opt_level = ShortOptimization::Empty;
+        }
+
+        // multiline handlers bump everything down
+        if attr_len > 1000 {
+            opt_level = ShortOptimization::NoOpt;
         }
 
         match opt_level {
@@ -179,17 +185,27 @@ impl Buffer {
 
         Ok(())
     }
-    pub fn is_short_fields(
-        &self,
+
+    pub fn field_len(
+        &mut self,
         fields: &[ComponentField],
         manual_props: &Option<syn::Expr>,
-    ) -> Option<usize> {
+    ) -> usize {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
-                ContentField::ManExpr(exp) => exp.to_token_stream().to_string().len(),
                 ContentField::Formatted(s) => s.value().len() ,
-                ContentField::OnHandlerRaw(_) => 100000,
+                ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
+
+                    let formatted = prettyplease::unparse_expr(exp);
+                    let len = if formatted.contains('\n') {
+                        10000
+                    } else {
+                        formatted.len()
+                    };
+                    self.cached_formats.insert(Location::new(exp.span().start()) , formatted);
+                    len
+                },
             } + 10)
             .sum::<usize>() + self.indent * 4;
 
@@ -197,18 +213,18 @@ impl Buffer {
             Some(p) => {
                 let content = prettyplease::unparse_expr(p);
                 if content.len() + attr_len > 80 {
-                    return None;
+                    return 100000;
                 }
                 let mut lines = content.lines();
                 lines.next().unwrap();
 
                 if lines.next().is_none() {
-                    Some(attr_len + content.len())
+                    attr_len + content.len()
                 } else {
-                    None
+                    100000
                 }
             }
-            None => Some(attr_len),
+            None => attr_len,
         }
     }
 

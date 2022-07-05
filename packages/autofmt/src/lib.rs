@@ -37,37 +37,62 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
     use triple_accel::{levenshtein_search, Match};
 
-    for Match { end, start, .. } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
+    for Match { end, start, k } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
+        if k > 1 {
+            continue;
+        }
+
         // ensure the marker is not nested
         if start < last_bracket_end {
             continue;
         }
+
+        let indent_level = {
+            // walk backwards from start until we find a new line
+            let mut lines = contents[..start].lines().rev();
+            match lines.next() {
+                Some(line) => {
+                    if line.starts_with("//") || line.starts_with("///") {
+                        continue;
+                    }
+
+                    line.chars().take_while(|c| *c == ' ').count() / 4
+                }
+                None => 0,
+            }
+        };
 
         let remaining = &contents[end - 1..];
         let bracket_end = find_bracket_end(remaining).unwrap();
         let sub_string = &contents[end..bracket_end + end - 1];
         last_bracket_end = bracket_end + end - 1;
 
-        let new = fmt_block(sub_string).unwrap();
-        let stripped = &contents[end + 1..bracket_end + end - 1];
+        let mut new = fmt_block(sub_string, indent_level).unwrap();
 
-        if stripped == new {
+        if new.len() <= 80 && !new.contains('\n') {
+            new = format!(" {new} ");
+        }
+
+        let end_marker = end + bracket_end - indent_level * 4 - 1;
+
+        if new == contents[end..end_marker] {
             continue;
         }
 
         formatted_blocks.push(FormattedBlock {
             formatted: new,
             start: end,
-            end: end + bracket_end - 1,
+            end: end_marker,
         });
     }
 
     formatted_blocks
 }
 
-pub fn fmt_block(block: &str) -> Option<String> {
+pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
     let mut buf = Buffer {
         src: block.lines().map(|f| f.to_string()).collect(),
+        indent: indent_level,
         ..Buffer::default()
     };
 
@@ -75,5 +100,46 @@ pub fn fmt_block(block: &str) -> Option<String> {
 
     buf.write_body_indented(&body.roots).unwrap();
 
+    // writing idents leaves the final line ended at the end of the last ident
+    if buf.buf.contains('\n') {
+        buf.new_line().unwrap();
+    }
+
     buf.consume()
+}
+
+pub fn apply_format(input: &str, block: FormattedBlock) -> String {
+    let start = block.start;
+    let end = block.end;
+
+    let (left, _) = input.split_at(start);
+    let (_, right) = input.split_at(end);
+
+    dbg!(&block.formatted);
+
+    format!("{}{}{}", left, block.formatted, right)
+}
+
+// Apply all the blocks
+pub fn apply_formats(input: &str, blocks: Vec<FormattedBlock>) -> String {
+    let mut out = String::new();
+
+    let mut last = 0;
+
+    for FormattedBlock {
+        formatted,
+        start,
+        end,
+    } in blocks
+    {
+        let prefix = &input[last..start];
+        out.push_str(prefix);
+        out.push_str(&formatted);
+        last = end;
+    }
+
+    let suffix = &input[last..];
+    out.push_str(suffix);
+
+    out
 }

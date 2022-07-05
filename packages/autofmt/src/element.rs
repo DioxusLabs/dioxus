@@ -1,7 +1,9 @@
-use crate::{util::*, Buffer};
+use crate::Buffer;
 use dioxus_rsx::*;
 use std::{fmt::Result, fmt::Write};
+use syn::spanned::Spanned;
 
+#[derive(Debug)]
 enum ShortOptimization {
     // Special because we want to print the closing bracket immediately
     Empty,
@@ -41,7 +43,8 @@ impl Buffer {
         let mut opt_level = ShortOptimization::NoOpt;
 
         // check if we have a lot of attributes
-        let is_short_attr_list = is_short_attrs(attributes);
+        let attr_len = self.is_short_attrs(attributes);
+        let is_short_attr_list = attr_len < 80;
         let is_small_children = self.is_short_children(children).is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
@@ -66,6 +69,11 @@ impl Buffer {
         // If there's nothing at all, empty optimization
         if attributes.is_empty() && children.is_empty() && key.is_none() {
             opt_level = ShortOptimization::Empty;
+        }
+
+        // multiline handlers bump everything down
+        if attr_len > 1000 {
+            opt_level = ShortOptimization::NoOpt;
         }
 
         match opt_level {
@@ -94,13 +102,22 @@ impl Buffer {
                     write!(self.buf, ",")?;
                 }
 
-                self.write_body_indented(children)?;
+                if !children.is_empty() {
+                    self.write_body_indented(children)?;
+                }
                 self.tabbed_line()?;
             }
 
             ShortOptimization::NoOpt => {
                 self.write_attributes(attributes, key, false)?;
-                self.write_body_indented(children)?;
+
+                if !children.is_empty() && !attributes.is_empty() {
+                    write!(self.buf, ",")?;
+                }
+
+                if !children.is_empty() {
+                    self.write_body_indented(children)?;
+                }
                 self.tabbed_line()?;
             }
         }
@@ -171,7 +188,7 @@ impl Buffer {
             }
 
             ElementAttr::EventTokens { name, tokens } => {
-                let out = prettyplease::unparse_expr(tokens);
+                let out = self.retrieve_formatted_expr(tokens.span().start()).unwrap();
 
                 let mut lines = out.split('\n').peekable();
                 let first = lines.next().unwrap();
@@ -204,35 +221,42 @@ impl Buffer {
     // returns the total line length if it's short
     // returns none if the length exceeds the limit
     // I think this eventually becomes quadratic :(
-    pub fn is_short_children(&self, children: &[BodyNode]) -> Option<usize> {
+    pub fn is_short_children(&mut self, children: &[BodyNode]) -> Option<usize> {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
             return Some(0);
         }
 
-        for child in children {
-            'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
-                match (line.trim().starts_with("//"), line.is_empty()) {
-                    (true, _) => return None,
-                    (_, true) => continue 'line,
-                    _ => break 'line,
-                }
-            }
-        }
+        // for child in children {
+        //     'line: for line in self.src[..child.span().start().line - 1].iter().rev() {
+        //         match (line.trim().starts_with("//"), line.is_empty()) {
+        //             (true, _) => return None,
+        //             (_, true) => continue 'line,
+        //             _ => break 'line,
+        //         }
+        //     }
+        // }
 
         match children {
             [BodyNode::Text(ref text)] => Some(text.value().len()),
             [BodyNode::Component(ref comp)] => {
-                let is_short_child = self.is_short_children(&comp.children);
-                let is_short_attrs = self.is_short_fields(&comp.fields, &comp.manual_props);
+                let attr_len = self.field_len(&comp.fields, &comp.manual_props);
 
-                match (is_short_child, is_short_attrs) {
-                    (Some(child_len), Some(attrs_len)) => Some(child_len + attrs_len),
-                    (Some(child_len), None) => Some(child_len),
-                    (None, Some(attrs_len)) => Some(attrs_len),
-                    (None, None) => None,
+                if attr_len > 80 {
+                    None
+                } else {
+                    self.is_short_children(&comp.children)
+                        .map(|child_len| child_len + attr_len)
                 }
+                // let is_short_child = self.is_short_children(&comp.children);
+
+                // match (is_short_child, is_short_attrs) {
+                //     (Some(child_len), Some(attrs_len)) => Some(child_len + attrs_len),
+                //     (Some(child_len), None) => Some(child_len),
+                //     (None, Some(attrs_len)) => Some(attrs_len),
+                //     (None, None) => None,
+                // }
             }
             [BodyNode::RawExpr(ref _expr)] => {
                 // TODO: let rawexprs to be inlined
@@ -245,15 +269,17 @@ impl Buffer {
                 // }
                 None
             }
-            [BodyNode::Element(ref el)] => self
-                .is_short_children(&el.children)
-                .map(|f| f + extract_attr_len(&el.attributes))
-                .and_then(|new_len| if new_len > 80 { None } else { Some(new_len) }),
+            [BodyNode::Element(ref el)] => {
+                let attr_len = self.is_short_attrs(&el.attributes);
+
+                if attr_len > 80 {
+                    None
+                } else {
+                    self.is_short_children(&el.children)
+                        .map(|child_len| child_len + attr_len)
+                }
+            }
             _ => None,
         }
     }
-}
-
-fn is_short_attrs(attrs: &[ElementAttrNamed]) -> bool {
-    extract_attr_len(attrs) < 80
 }

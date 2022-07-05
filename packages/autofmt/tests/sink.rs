@@ -15,27 +15,18 @@ rsx! {
 
     let formatted = fmt_file(src);
 
-    println!("{formatted:?}");
+    println!("{formatted:#?}");
 }
 
 #[test]
 fn formats_valid_rust_src_with_indents() {
-    let mut src = r#"
+    let src = r#"
 #[inline_props]
 fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) -> Element {
     const ICON_SIZE: u32 = 36;
 
     rsx! {
-        div {
-
-            h1 {"thing"}
-
-
-        }
-
-
-
-
+        div { h1 { "thing" } }
     }
 }
 "#
@@ -43,12 +34,7 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
 
     let formatted = fmt_file(&src);
 
-    let block = formatted.into_iter().next().unwrap();
-
-    src.replace_range(
-        block.start - 1..block.end + 1,
-        &format!("{{ {}    }}", &block.formatted),
-    );
+    assert!(formatted.is_empty());
 }
 
 #[test]
@@ -59,23 +45,15 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
     const ICON_SIZE: u32 = 36;
 
     rsx! {
-        div {
-
-            h1 {"thing"}
-
-
-        }
-
-
+        div { h1 { "thing" } }
     }
 
     rsx! {
         div {
-
             Ball {
-                a: rsx!{
-                    "asdasd"
-                }
+                a: rsx! {
+    "asdasd"
+}
             }
         }
     }
@@ -85,23 +63,15 @@ fn NavItem<'a>(cx: Scope, to: &'static str, children: Element<'a>, icon: Shape) 
     const ICON_SIZE: u32 = 36;
 
     rsx! {
-        div {
-
-            h1 {"thing"}
-
-
-        }
-
-
+        div { h1 { "thing" } }
     }
 
     rsx! {
         div {
-
             Ball {
-                a: rsx!{
-                    "asdasd"
-                }
+                a: rsx! {
+    "asdasd"
+}
             }
         }
     }
@@ -126,7 +96,7 @@ fn empty_blocks() {
     let src = r###"
 pub fn Alert(cx: Scope) -> Element {
     cx.render(rsx! {
-        div { }
+        div {}
     })
 }
 "###
