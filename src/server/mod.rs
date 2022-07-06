@@ -416,7 +416,7 @@ fn print_console_info(port: u16, config: &CrateConfig) {
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite : {}", url_rewrite.purple());
 
-    println!("\n{}", "Server startup completed.\n".bold());
+    println!("\n{}\n", "Server startup completed.".green().bold());
 }
 
 async fn ws_handler(
