@@ -34,7 +34,7 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ImEvent {
     event: String,
     mounted_dom_id: u64,
