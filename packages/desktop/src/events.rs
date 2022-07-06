@@ -6,8 +6,9 @@ use std::sync::Arc;
 use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub(crate) struct IpcMessage {
     method: String,
     params: serde_json::Value,
@@ -33,7 +34,7 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ImEvent {
     event: String,
     mounted_dom_id: u64,
