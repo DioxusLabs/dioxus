@@ -1,6 +1,6 @@
 use crate::{
     innerlude::*,
-    templete::{Template, TemplateId},
+    templete::{Template, TemplateId, TemplateNodeType},
     unsafe_utils::extend_vnode,
 };
 use bumpalo::Bump;
@@ -333,39 +333,81 @@ impl ScopeArena {
         let state = Rc::new(BubbleState::new());
 
         while let Some(id) = cur_el.take() {
-            if let Some(el) = nodes.get(id.0) {
-                let real_el = unsafe { &**el };
-                log::trace!("looking for listener on {:?}", real_el);
+            if state.canceled.get() {
+                // stop bubbling if canceled
+                return;
+            }
+            match id {
+                GlobalNodeId::TemplateId {
+                    template_ref_id,
+                    template_id,
+                } => {
+                    log::trace!(
+                        "looking for listener in {:?} in node {:?}",
+                        template_ref_id,
+                        template_id
+                    );
+                    if let Some(template) = nodes.get(template_ref_id.0) {
+                        let template = unsafe { &**template };
+                        if let VNode::TemplateRef(template) = template {
+                            let node = &template.template.nodes[template_id.0];
+                            if let TemplateNodeType::Element { listeners, .. } = node.node_type {
+                                for listener_idx in listeners {
+                                    let listener =
+                                        template.dynamic_context.resolve_listener(*listener_idx);
+                                    if listener.event == event.name {
+                                        log::trace!("calling listener {:?}", listener.event);
 
-                if let VNode::Element(real_el) = real_el {
-                    for listener in real_el.listeners.borrow().iter() {
-                        if listener.event == event.name {
-                            log::trace!("calling listener {:?}", listener.event);
-                            if state.canceled.get() {
-                                // stop bubbling if canceled
-                                return;
-                            }
-
-                            let mut cb = listener.callback.borrow_mut();
-                            if let Some(cb) = cb.as_mut() {
-                                // todo: arcs are pretty heavy to clone
-                                // we really want to convert arc to rc
-                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                                // we could convert arc to rc internally or something
-                                (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
-                                    data: event.data.clone(),
-                                });
-                            }
-
-                            if !event.bubbles {
-                                return;
+                                        let mut cb = listener.callback.borrow_mut();
+                                        if let Some(cb) = cb.as_mut() {
+                                            // todo: arcs are pretty heavy to clone
+                                            // we really want to convert arc to rc
+                                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                            // we could convert arc to rc internally or something
+                                            (cb)(AnyEvent {
+                                                bubble_state: state.clone(),
+                                                data: event.data.clone(),
+                                            });
+                                        }
+                                        break;
+                                    }
+                                }
                             }
                         }
                     }
-
-                    cur_el = real_el.parent.get();
                 }
+                GlobalNodeId::VNodeId(id) => {
+                    if let Some(el) = nodes.get(id.0) {
+                        let real_el = unsafe { &**el };
+                        log::trace!("looking for listener on {:?}", real_el);
+
+                        if let VNode::Element(real_el) = real_el {
+                            for listener in real_el.listeners.borrow().iter() {
+                                if listener.event == event.name {
+                                    log::trace!("calling listener {:?}", listener.event);
+
+                                    let mut cb = listener.callback.borrow_mut();
+                                    if let Some(cb) = cb.as_mut() {
+                                        // todo: arcs are pretty heavy to clone
+                                        // we really want to convert arc to rc
+                                        // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                        // we could convert arc to rc internally or something
+                                        (cb)(AnyEvent {
+                                            bubble_state: state.clone(),
+                                            data: event.data.clone(),
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
+
+                            cur_el = real_el.parent.get();
+                        }
+                    }
+                }
+            }
+            if !event.bubbles {
+                return;
             }
         }
     }
