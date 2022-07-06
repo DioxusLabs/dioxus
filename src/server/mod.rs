@@ -6,11 +6,12 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use colored::Colorize;
 use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
@@ -180,7 +181,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0:8080
-    log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
+    print_console_info(port, &config);
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -290,7 +291,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0
-    log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
+    print_console_info(port, &config);
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -346,6 +347,44 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+fn print_console_info(port: u16, config: &CrateConfig) {
+    print!(
+        "{}",
+        String::from_utf8_lossy(
+            &Command::new(if cfg!(target_os = "windows") {
+                "cls"
+            } else {
+                "clear"
+            })
+            .output()
+            .unwrap()
+            .stdout
+        )
+    );
+
+    let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
+    if config.custom_profile.is_some() {
+        profile = config.custom_profile.as_ref().unwrap().to_string();
+    }
+    let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
+    let workspace = config.workspace_dir.to_str().unwrap().to_string();
+
+    println!(
+        "{} @ v{}\n",
+        "Dioxus".bold().green(),
+        crate::DIOXUS_CLI_VERSION
+    );
+    println!(
+        "\t> Local: {}",
+        format!("https://localhost:{}/", port).blue()
+    );
+    println!("\t> Profile: {}", profile.green());
+    println!("\t> Hot Reload: {}", hot_reload.green());
+    println!("\t> Workspace: {}", workspace.yellow());
+
+    println!("\n{}", "Server startup completed.".bold());
 }
 
 async fn ws_handler(

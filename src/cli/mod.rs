@@ -27,7 +27,7 @@ use std::{
 
 /// Build, bundle, & ship your Dioxus app.
 #[derive(Parser)]
-#[clap(name = "dioxus")]
+#[clap(name = "dioxus", version)]
 pub struct Cli {
     #[clap(subcommand)]
     pub action: Commands,
@@ -35,10 +35,6 @@ pub struct Cli {
     /// Enable verbose logging.
     #[clap(short)]
     pub v: bool,
-    // // note: dioxus is still roughly compatible with trunk
-    // /// Path to the Trunk config file [default: Trunk.toml]
-    // #[clap(long, parse(from_os_str), env = "TRUNK_CONFIG")]
-    // pub config: Option<PathBuf>,
 }
 
 #[derive(Parser)]
