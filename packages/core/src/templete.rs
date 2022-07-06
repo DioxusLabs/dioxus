@@ -29,7 +29,7 @@ impl Into<u64> for TemplateNodeId {
 }
 
 /// A refrence to a template along with any context needed to hydrate it
-pub(crate) struct VTemplateRef<'a> {
+pub struct VTemplateRef<'a> {
     pub(crate) id: Cell<Option<ElementId>>,
     pub(crate) template: &'a Template<'a>,
     pub(crate) dynamic_context: &'a TemplateContext<'a>,
@@ -85,7 +85,7 @@ pub(crate) struct Template<'b> {
 impl<'b> Template<'b> {
     pub(crate) fn create(&mut self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateId) {
         mutations.create_templete(id.into());
-        let mut id = TemplateNodeId(0);
+        let id = TemplateNodeId(0);
         if id.0 < self.nodes.len() {
             self.create_node(mutations, bump, id);
         }
@@ -103,8 +103,8 @@ impl<'b> Template<'b> {
             } => {
                 mutations.create_element(tag, *namespace, id);
                 for attr in *attributes {
-                    if let TemplateAttributeValue::Static(val) = attr.value {
-                        let val: AttributeValue<'b> = match val {
+                    if let TemplateAttributeValue::Static(val) = &attr.value {
+                        let val: AttributeValue<'b> = match val.clone() {
                             AttributeValue::Text(txt) => AttributeValue::Text(bump.alloc_str(txt)),
                             AttributeValue::Bytes(bytes) => {
                                 AttributeValue::Bytes(bump.alloc_slice_copy(bytes))
@@ -134,7 +134,7 @@ impl<'b> Template<'b> {
                             AttributeValue::Vec4Uint(u1, u2, u3, u4) => {
                                 AttributeValue::Vec4Uint(u1, u2, u3, u4)
                             }
-                            AttributeValue::Any(a) => panic!("Any not supported"),
+                            AttributeValue::Any(_) => panic!("Any not supported"),
                         };
                         let attribute = Attribute {
                             name: attr.name,
@@ -164,7 +164,7 @@ impl<'b> Template<'b> {
             }
             TemplateNodeType::Fragment { nodes } => {
                 for node in *nodes {
-                    self.create_node(mutations, bump, id);
+                    self.create_node(mutations, bump, *node);
                 }
             }
         }
@@ -174,14 +174,14 @@ impl<'b> Template<'b> {
 /// Templates can only contain a limited subset of VNodes and id/keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 #[derive(Debug)]
-struct TemplateNode<'b> {
+pub(crate) struct TemplateNode<'b> {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
     pub node_type: TemplateNodeType<'b>,
 }
 
 #[derive(Debug)]
-pub enum TemplateNodeType<'b> {
+pub(crate) enum TemplateNodeType<'b> {
     Element {
         tag: &'static str,
         namespace: Option<&'static str>,
@@ -201,13 +201,13 @@ pub enum TemplateNodeType<'b> {
 }
 
 #[derive(Debug)]
-pub struct TextTemplate<'b> {
+pub(crate) struct TextTemplate<'b> {
     // this is similar to what ifmt outputs and allows us to only diff the dynamic parts of the text
     segments: &'b [TextTemplateSegment<'b>],
 }
 
 #[derive(Debug)]
-pub enum TextTemplateSegment<'b> {
+pub(crate) enum TextTemplateSegment<'b> {
     Static(&'b str),
     Dynamic(usize),
 }
@@ -225,7 +225,7 @@ pub(crate) enum TemplateAttributeValue<'b> {
     Dynamic(usize),
 }
 
-struct TemplateContext<'b> {
+pub(crate) struct TemplateContext<'b> {
     pub nodes: &'b [VNode<'b>],
     pub text_segments: &'b [&'b str],
     pub attributes: &'b [AttributeValue<'b>],

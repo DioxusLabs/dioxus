@@ -164,8 +164,8 @@ impl<'b> DiffState<'b> {
             }
 
             (
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_),
+                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_) | TemplateRef(_),
+                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_) | TemplateRef(_),
             ) => self.replace_node(old_node, new_node),
         }
     }
@@ -300,16 +300,17 @@ impl<'b> DiffState<'b> {
         new: &'b VTemplateRef<'b>,
         node: &'b VNode<'b>,
     ) -> usize {
-        let templates = self.scopes.templates.borrow_mut();
+        let mut templates = self.scopes.templates.borrow_mut();
         let ptr: *const Template = unsafe { std::mem::transmute(new.template) };
         let id = if let Some(id) = templates.get(&ptr) {
             *id
         } else {
-            let id = self.scopes.template_count.get_mut();
-            templates.insert(ptr, *id);
-            let template_id = *id;
+            let mut id = self.scopes.template_count.get();
+            templates.insert(ptr, id);
+            let template_id = id;
             id.0 += 1;
-            *id
+            self.scopes.template_count.set(id);
+            template_id
         };
 
         let real_id = self.scopes.reserve_node(node);
@@ -319,32 +320,37 @@ impl<'b> DiffState<'b> {
         self.mutations.create_template_ref(real_id, id.into());
 
         for id in new.template.dynamic_ids.all_dynamic() {
-            let dynamic_node = new.template.nodes[id.0];
+            let dynamic_node = &new.template.nodes[id.0];
             self.element_stack.push(GlobalNodeId::TemplateId {
                 template_ref_id: real_id,
                 template_id: id,
             });
-            match dynamic_node.node_type {
+            match &dynamic_node.node_type {
                 TemplateNodeType::Element {
-                    tag,
-                    namespace,
                     attributes,
                     children,
                     listeners,
+                    ..
                 } => {
-                    for attr in attributes {
+                    for attr in *attributes {
                         if let TemplateAttributeValue::Dynamic(idx) = attr.value {
-                            let mut attribute = Attribute {
+                            let attribute = Attribute {
                                 name: attr.name,
                                 value: new.dynamic_context.resolve_attribute(idx).clone(),
                                 is_static: false,
                                 is_volatile: false,
                                 namespace: attr.namespace,
                             };
-                            self.mutations.set_attribute(&attribute, id);
+                            let scope_bump = self
+                                .scopes
+                                .get_scope(self.current_scope())
+                                .unwrap()
+                                .fin_frame();
+                            self.mutations
+                                .set_attribute(scope_bump.bump.alloc(attribute), id);
                         }
                     }
-                    for listener_idx in listeners {
+                    for listener_idx in *listeners {
                         let listener = new.dynamic_context.resolve_listener(*listener_idx);
                         listener.mounted_node.set(todo!());
                         self.mutations.new_event_listener(
@@ -352,8 +358,8 @@ impl<'b> DiffState<'b> {
                             todo!("do we even need the scope to be part of this?"),
                         );
                     }
-                    let children_created = 0;
-                    for child in children {
+                    let mut children_created = 0;
+                    for child in *children {
                         let node = &new.template.nodes[child.0];
                         if let TemplateNodeType::DynamicNode(idx) = node.node_type {
                             self.create_node(&new.dynamic_context.nodes[idx]);
@@ -377,7 +383,7 @@ impl<'b> DiffState<'b> {
                 }
                 TemplateNodeType::DynamicNode(idx) => {
                     // this will only be triggered for root elements
-                    self.create_node(&new.dynamic_context.nodes[idx]);
+                    self.create_node(&new.dynamic_context.nodes[*idx]);
                 }
                 _ => {
                     todo!()
@@ -644,11 +650,6 @@ impl<'b> DiffState<'b> {
             return;
         }
 
-        let templates = self.scopes.templates.borrow_mut();
-        let ptr: *const Template = unsafe { std::mem::transmute(new.template) };
-        // the template should be in the templates map from when the node was first created
-        let template_id = templates[&ptr];
-
         // if the node is comming back not assigned, that means it was borrowed but removed
         let root = match old.id.get() {
             Some(id) => id,
@@ -662,6 +663,13 @@ impl<'b> DiffState<'b> {
         self.element_stack.push(GlobalNodeId::VNodeId(root));
 
         self.mutations.push_root(root);
+
+        let scope_bump = &self
+            .scopes
+            .get_scope(self.current_scope())
+            .unwrap()
+            .fin_frame()
+            .bump;
 
         // diff dynamic attributes
         for (idx, (old_attr, new_attr)) in old
@@ -680,15 +688,16 @@ impl<'b> DiffState<'b> {
                     if let TemplateNodeType::Element { attributes, .. } =
                         new.template.nodes[node_id.0].node_type
                     {
-                        let attr = attributes[*attr_idx];
-                        let mut attribute = Attribute {
+                        let attr = &attributes[*attr_idx];
+                        let attribute = Attribute {
                             name: attr.name,
                             value: new.dynamic_context.resolve_attribute(idx).clone(),
                             is_static: false,
                             is_volatile: false,
                             namespace: attr.namespace,
                         };
-                        self.mutations.set_attribute(&attribute, *node_id);
+                        self.mutations
+                            .set_attribute(scope_bump.alloc(attribute), *node_id);
                     } else {
                         panic!("expected element node");
                     }
@@ -709,7 +718,7 @@ impl<'b> DiffState<'b> {
                 .dynamic_ids
                 .get_dynamic_nodes_for_node_index(idx)
             {
-                let node = new.template.nodes[id.0];
+                let node = &new.template.nodes[id.0];
                 if let TemplateNodeType::Element { .. } = node.node_type {
                     self.element_stack.push(GlobalNodeId::VNodeId(root));
                     self.diff_node(old_node, new_node);
@@ -722,7 +731,7 @@ impl<'b> DiffState<'b> {
 
         // diff dynamic text
         // text nodes could rely on multiple dynamic text parts, so we keep a record of which ones to rerender and send the diffs at the end
-        let dirty_text_nodes = FxHashSet::default();
+        let mut dirty_text_nodes = FxHashSet::default();
         for (idx, (old_text, new_text)) in old
             .dynamic_context
             .text_segments
@@ -743,13 +752,7 @@ impl<'b> DiffState<'b> {
         for node_id in dirty_text_nodes {
             if let TemplateNodeType::Text { text } = &new.template.nodes[node_id.0].node_type {
                 let text = new.dynamic_context.resolve_text(text);
-                let scope_bump = self
-                    .scopes
-                    .get_scope(self.current_scope())
-                    .unwrap()
-                    .fin_frame();
-                self.mutations
-                    .set_text(scope_bump.bump.alloc(text), node_id);
+                self.mutations.set_text(scope_bump.alloc(text), node_id);
             } else {
                 panic!("expected element node");
             }
@@ -1204,8 +1207,14 @@ impl<'b> DiffState<'b> {
                 self.leave_scope();
             }
 
-            VNode::TemplateRef(r) => {
-                todo!()
+            VNode::TemplateRef(t) => {
+                let id = old
+                    .try_mounted_id()
+                    .unwrap_or_else(|| panic!("broke on {:?}", old));
+
+                self.mutations.replace_with(id, nodes_created as u32);
+                self.remove_nodes(t.dynamic_context.nodes, false);
+                self.scopes.collect_garbage(id);
             }
         }
     }
@@ -1267,8 +1276,17 @@ impl<'b> DiffState<'b> {
                     self.leave_scope();
                 }
 
-                VNode::TemplateRef(r) => {
-                    todo!()
+                VNode::TemplateRef(t) => {
+                    let id = t.id.get().unwrap();
+
+                    if gen_muts {
+                        self.mutations.remove(id);
+                    }
+
+                    self.scopes.collect_garbage(id);
+                    t.id.set(None);
+
+                    self.remove_nodes(t.dynamic_context.nodes, false);
                 }
             }
         }
@@ -1323,6 +1341,7 @@ impl<'b> DiffState<'b> {
                     let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
+                VNode::TemplateRef(t) => break t.id.get(),
             }
         }
     }
@@ -1339,6 +1358,7 @@ impl<'b> DiffState<'b> {
                     let scope = el.scope.get().expect("element to have a scope assigned");
                     search_node = Some(self.scopes.root_node(scope));
                 }
+                VNode::TemplateRef(t) => break t.id.get(),
             }
         }
     }

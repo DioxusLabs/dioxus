@@ -17,7 +17,7 @@ use std::{
 
 /// The ID of a node in the vdom that is either standalone or in a template
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum GlobalNodeId {
+pub enum GlobalNodeId {
     TemplateId {
         template_ref_id: ElementId,
         template_id: TemplateNodeId,
@@ -138,6 +138,7 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => f.key,
             VNode::Text(_t) => None,
             VNode::Placeholder(_f) => None,
+            VNode::TemplateRef(_t) => None,
         }
     }
 
@@ -158,6 +159,7 @@ impl<'src> VNode<'src> {
             VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
+            VNode::TemplateRef(t) => t.id.get(),
         }
     }
 

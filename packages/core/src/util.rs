@@ -34,7 +34,10 @@ impl<'a> Iterator for ElementIdIterator<'a> {
             if let Some((count, node)) = self.stack.last_mut() {
                 match node {
                     // We can only exit our looping when we get "real" nodes
-                    VNode::Element(_) | VNode::Text(_) | VNode::Placeholder(_) => {
+                    VNode::Element(_)
+                    | VNode::Text(_)
+                    | VNode::Placeholder(_)
+                    | VNode::TemplateRef(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         // println!("Found element! Returning it!");
