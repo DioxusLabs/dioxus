@@ -61,7 +61,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let resolve_members = state_strct
                 .state_members
                 .iter()
-                .map(|m| state_strct.resolve(&m));
+                .map(|m| state_strct.resolve(m));
 
             let child_types = state_strct.child_states.iter().map(|s| &s.ty);
             let child_members = state_strct.child_states.iter().map(|s| &s.ident);
@@ -260,9 +260,9 @@ impl<'a> StateStruct<'a> {
             for (dep, _) in &member.dep_mems {
                 if *dep == mem {
                     match member.dep_kind {
-                        DepKind::Node => dependants.node.push(&member.mem),
-                        DepKind::Child => dependants.child.push(&member.mem),
-                        DepKind::Parent => dependants.parent.push(&member.mem),
+                        DepKind::Node => dependants.node.push(member.mem),
+                        DepKind::Child => dependants.child.push(member.mem),
+                        DepKind::Parent => dependants.parent.push(member.mem),
                     }
                 }
             }
@@ -370,7 +370,7 @@ impl<'a> StateStruct<'a> {
 
     fn resolve(&self, mem: &StateMember) -> impl ToTokens {
         let reduce_member = mem.reduce_self();
-        let update_dependant = self.update_dependants(&mem.mem);
+        let update_dependant = self.update_dependants(mem.mem);
         let member = &mem.mem.ident;
 
         match mem.dep_kind {

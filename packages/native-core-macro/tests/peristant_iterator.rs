@@ -1,5 +1,4 @@
 use dioxus::core as dioxus_core;
-use dioxus::core::ElementId;
 use dioxus::prelude::*;
 use dioxus_native_core::{
     real_dom::{NodeType, RealDom},

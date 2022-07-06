@@ -129,9 +129,8 @@ pub trait ParentDepState {
 /// The generic argument (Depstate) must be a tuple containing any number of borrowed elments that are either a [ChildDepState], [ParentDepState] or [NodeDepState].
 pub trait NodeDepState<DepState> {
     type Ctx;
-    // type DepState: ElementBorrowable;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce<'a>(&mut self, node: NodeView, siblings: DepState, ctx: &Self::Ctx) -> bool;
+    fn reduce(&mut self, node: NodeView, siblings: DepState, ctx: &Self::Ctx) -> bool;
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
