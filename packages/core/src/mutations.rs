@@ -355,7 +355,10 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {
-        self.edits.push(CreateTempleteRef { id, template_id })
+        self.edits.push(CreateTempleteRef {
+            id: id.into(),
+            template_id,
+        })
     }
 }
 
