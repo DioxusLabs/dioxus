@@ -13,10 +13,12 @@ use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
+use query::Query;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::{io, time::Duration};
-use taffy::{geometry::Point, prelude::Size, Taffy};
+use taffy::Taffy;
+pub use taffy::{geometry::Point, prelude::Size};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
@@ -24,6 +26,7 @@ mod focus;
 mod hooks;
 mod layout;
 mod node;
+pub mod query;
 mod render;
 mod style;
 mod style_attributes;
@@ -76,16 +79,23 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     }
 
     let cx = dom.base_scope();
+    let rdom = Rc::new(RefCell::new(RealDom::new()));
+    let taffy = Rc::new(RefCell::new(Taffy::new()));
     cx.provide_root_context(state);
     cx.provide_root_context(TuiContext { tx: event_tx_clone });
+    cx.provide_root_context(Query {
+        rdom: rdom.clone(),
+        stretch: taffy.clone(),
+    });
 
-    let mut rdom: Dom = RealDom::new();
-    let mutations = dom.rebuild();
-    let to_update = rdom.apply_mutations(vec![mutations]);
-    let taffy = Rc::new(RefCell::new(Taffy::new()));
-    let mut any_map = AnyMap::new();
-    any_map.insert(taffy.clone());
-    let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+    {
+        let mut rdom = rdom.borrow_mut();
+        let mutations = dom.rebuild();
+        let to_update = rdom.apply_mutations(vec![mutations]);
+        let mut any_map = AnyMap::new();
+        any_map.insert(taffy.clone());
+        let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+    }
 
     render_vdom(
         &mut dom,
@@ -104,7 +114,7 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    mut rdom: Dom,
+    rdom: Rc<RefCell<Dom>>,
     taffy: Rc<RefCell<Taffy>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
@@ -157,6 +167,7 @@ fn render_vdom(
                     }
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
+                            let rdom = rdom.borrow();
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut taffy.borrow_mut(), &rdom);
                             let root = &rdom[0];
@@ -170,6 +181,7 @@ fn render_vdom(
                             );
                         })?;
                     } else {
+                        let rdom = rdom.borrow();
                         resize(
                             Rect {
                                 x: 0,
@@ -217,13 +229,17 @@ fn render_vdom(
                 }
 
                 {
-                    let evts = handler.get_events(&taffy.borrow(), &mut rdom);
+                    let evts = {
+                        let mut rdom = rdom.borrow_mut();
+                        handler.get_events(&taffy.borrow(), &mut rdom)
+                    };
                     {
                         updated |= handler.state().focus_state.clean();
                     }
                     for e in evts {
                         vdom.handle_message(SchedulerMsg::Event(e));
                     }
+                    let mut rdom = rdom.borrow_mut();
                     let mutations = vdom.work_with_deadline(|| false);
                     for m in &mutations {
                         handler.prune(m, &rdom);
