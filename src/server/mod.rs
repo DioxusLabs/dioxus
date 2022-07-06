@@ -94,14 +94,16 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
+    let watcher_config = config.clone();
     let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
         if chrono::Local::now().timestamp() > last_update_time {
             // Give time for the change to take effect before reading the file
             std::thread::sleep(std::time::Duration::from_millis(100));
             if let Ok(evt) = evt {
                 let mut messages = Vec::new();
                 let mut needs_rebuild = false;
-                for path in evt.paths {
+                for path in evt.paths.clone() {
                     let mut file = File::open(path.clone()).unwrap();
                     if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
                         continue;
@@ -157,7 +159,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                     }
                 }
                 if needs_rebuild {
-                    log::info!("reload required");
+                    print_console_info(port, &config, evt.paths);
                     if let Err(err) = build_manager.rebuild() {
                         log::error!("{}", err);
                     }
