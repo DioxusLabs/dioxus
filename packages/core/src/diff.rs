@@ -220,7 +220,9 @@ impl<'b> DiffState<'b> {
             let cur_scope_id = self.current_scope();
 
             for listener in listeners.iter() {
-                listener.mounted_node.set(Some(real_id));
+                listener
+                    .mounted_node
+                    .set(Some(GlobalNodeId::VNodeId(real_id)));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
 
@@ -352,11 +354,13 @@ impl<'b> DiffState<'b> {
                     }
                     for listener_idx in *listeners {
                         let listener = new.dynamic_context.resolve_listener(*listener_idx);
-                        listener.mounted_node.set(todo!());
-                        self.mutations.new_event_listener(
-                            listener,
-                            todo!("do we even need the scope to be part of this?"),
-                        );
+                        let global_id = GlobalNodeId::TemplateId {
+                            template_ref_id: real_id,
+                            template_id: id,
+                        };
+                        listener.mounted_node.set(Some(global_id));
+                        self.mutations
+                            .new_event_listener(listener, self.current_scope());
                     }
                     let mut children_created = 0;
                     for child in *children {
@@ -522,7 +526,7 @@ impl<'b> DiffState<'b> {
                 self.mutations.remove_event_listener(listener.event, root);
             }
             for listener in new.listeners {
-                listener.mounted_node.set(Some(root));
+                listener.mounted_node.set(Some(GlobalNodeId::VNodeId(root)));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
         }
@@ -1366,7 +1370,7 @@ impl<'b> DiffState<'b> {
     // recursively push all the nodes of a tree onto the stack and return how many are there
     fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
         match node {
-            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) | VNode::TemplateRef(_) => {
                 self.mutations.push_root(node.mounted_id());
                 1
             }
@@ -1384,8 +1388,6 @@ impl<'b> DiffState<'b> {
                 let root = self.scopes.root_node(scope_id);
                 self.push_all_real_nodes(root)
             }
-
-            VNode::TemplateRef(_) => todo!(),
         }
     }
 }

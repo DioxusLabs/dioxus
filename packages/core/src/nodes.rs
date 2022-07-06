@@ -382,7 +382,7 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The ID of the node that this listener is mounted to
     /// Used to generate the event listener's ID on the DOM
-    pub mounted_node: Cell<Option<ElementId>>,
+    pub mounted_node: Cell<Option<GlobalNodeId>>,
 
     /// The type of event to listen for.
     ///

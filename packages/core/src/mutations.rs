@@ -290,7 +290,13 @@ impl<'a> Mutations<'a> {
             ..
         } = listener;
 
-        let element_id = mounted_node.get().unwrap().into();
+        let element_id = match mounted_node.get().unwrap() {
+            GlobalNodeId::TemplateId {
+                template_ref_id: _,
+                template_id,
+            } => template_id.into(),
+            GlobalNodeId::VNodeId(id) => id.into(),
+        };
 
         self.edits.push(NewEventListener {
             scope,
