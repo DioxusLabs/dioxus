@@ -2,7 +2,7 @@
 // does each window have its own router? probably, lol
 
 use crate::cfg::RouterCfg;
-use dioxus::core::{ScopeId, ScopeState};
+use dioxus::core::{ScopeId, ScopeState, VirtualDom};
 use futures_channel::mpsc::UnboundedSender;
 use std::any::Any;
 use std::sync::Weak;
@@ -102,6 +102,13 @@ impl RouterCore {
         svc.history.attach_listeners(Arc::downgrade(&svc));
 
         svc
+    }
+
+    /// Push a new route with no custom title or serialized state.
+    ///
+    /// This is a convenience method for easily navigating.
+    pub fn navigate_to(&self, route: &str) {
+        self.push_route(route, None, None);
     }
 
     /// Push a new route to the history.
@@ -220,6 +227,20 @@ impl RouterCore {
             false
         }
     }
+}
+
+/// Get the router service from an existing VirtualDom.
+///
+/// Takes an optional target_scope parameter to specify the scope to use if ScopeId is not the component
+/// that owns the router.
+///
+/// This might change in the future.
+pub fn get_router_from_vdom(
+    dom: &VirtualDom,
+    target_scope: Option<ScopeId>,
+) -> Option<Arc<RouterCore>> {
+    dom.get_scope(target_scope.unwrap_or(ScopeId(0)))
+        .and_then(|scope| scope.consume_context::<Arc<RouterCore>>())
 }
 
 fn clean_route(route: String) -> String {
