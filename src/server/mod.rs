@@ -369,22 +369,54 @@ fn print_console_info(port: u16, config: &CrateConfig) {
         profile = config.custom_profile.as_ref().unwrap().to_string();
     }
     let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-    let workspace = config.workspace_dir.to_str().unwrap().to_string();
+    let tools_str = format!(
+        "{:?}",
+        config
+            .dioxus_config
+            .application
+            .tools
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .map(|d| d.0.clone())
+            .collect::<Vec<String>>()
+    );
+    let crate_root = crate::cargo::crate_root().unwrap();
+    let custom_html_file = if crate_root.join("index.html").is_file() {
+        "Custom [index.html]"
+    } else {
+        "Default"
+    };
+    let url_rewrite = if config
+        .dioxus_config
+        .web
+        .watcher
+        .index_on_404
+        .unwrap_or(false)
+    {
+        "True"
+    } else {
+        "False"
+    };
 
     println!(
         "{} @ v{}\n",
         "Dioxus".bold().green(),
-        crate::DIOXUS_CLI_VERSION
+        crate::DIOXUS_CLI_VERSION,
     );
     println!(
-        "\t> Local: {}",
+        "\t> Local : {}",
         format!("https://localhost:{}/", port).blue()
     );
-    println!("\t> Profile: {}", profile.green());
-    println!("\t> Hot Reload: {}", hot_reload.green());
-    println!("\t> Workspace: {}", workspace.yellow());
+    println!("\t> NetWork : {}", "use --host to expose".white().dimmed());
+    println!("");
+    println!("\t> Profile : {}", profile.green());
+    println!("\t> Hot Reload : {}", hot_reload.cyan());
+    println!("\t> Enabled Tools : {}", tools_str.yellow());
+    println!("\t> Index Template : {}", custom_html_file.green());
+    println!("\t> URL Rewrite : {}", url_rewrite.purple());
 
-    println!("\n{}", "Server startup completed.".bold());
+    println!("\n{}", "Server startup completed.\n".bold());
 }
 
 async fn ws_handler(
