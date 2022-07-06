@@ -46,15 +46,14 @@ macro_rules! dep {
         }
     };
 
-    ( node( $name:ty, ($( $dep:ty ),*) ) ) => {
-        impl NodeDepState for $name {
+    ( node( $name:ty, ($($l:lifetime),*), $dep:ty ) ) => {
+        impl<$($l),*> NodeDepState<$dep> for $name {
             type Ctx = ();
-            type DepState = ($($dep,)*);
             const NODE_MASK: NodeMask = NodeMask::ALL;
             fn reduce(
                 &mut self,
                 _: NodeView,
-                _: ($(&$dep,)*),
+                _: $dep,
                 _: &Self::Ctx,
             ) -> bool {
                 self.0 += 1;
@@ -133,7 +132,7 @@ mod node_depends_on_child_and_parent {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, (Child, Parent)));
+    dep!(node(Node,  ('a, 'b), (&'a Child, &'b Parent)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
@@ -160,7 +159,7 @@ mod child_depends_on_node_that_depends_on_parent {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, (Parent)));
+    dep!(node(Node, ('a), (&'a Parent,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
@@ -187,7 +186,7 @@ mod parent_depends_on_node_that_depends_on_child {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, (Child)));
+    dep!(node(Node, ('a), (&'a Child,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
@@ -214,11 +213,11 @@ mod node_depends_on_other_node_state {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node1(i32);
-    dep!(node(Node1, (Node2)));
+    dep!(node(Node1, ('a), (&'a Node2,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node2(i32);
-    dep!(node(Node2, ()));
+    dep!(node(Node2, (), ()));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
@@ -235,7 +234,7 @@ mod node_child_and_parent_state_depends_on_self {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, ()));
+    dep!(node(Node, (), ()));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);

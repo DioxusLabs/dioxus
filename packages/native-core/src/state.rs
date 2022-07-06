@@ -4,7 +4,6 @@ use anymap::AnyMap;
 use dioxus_core::ElementId;
 use fxhash::FxHashSet;
 
-use crate::element_borrowable::ElementBorrowable;
 use crate::node_ref::{NodeMask, NodeView};
 use crate::traversable::Traversable;
 
@@ -124,17 +123,12 @@ pub trait ParentDepState {
 ///     }
 /// }
 /// ```
-pub trait NodeDepState {
+/// Depstate must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
+pub trait NodeDepState<DepState> {
     type Ctx;
-    /// This must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
-    type DepState: ElementBorrowable;
+    // type DepState: ElementBorrowable;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce<'a>(
-        &mut self,
-        node: NodeView,
-        siblings: <Self::DepState as ElementBorrowable>::Borrowed<'a>,
-        ctx: &Self::Ctx,
-    ) -> bool;
+    fn reduce<'a>(&mut self, node: NodeView, siblings: DepState, ctx: &Self::Ctx) -> bool;
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
@@ -173,10 +167,9 @@ impl ParentDepState for () {
     }
 }
 
-impl NodeDepState for () {
+impl NodeDepState<()> for () {
     type Ctx = ();
-    type DepState = ();
-    fn reduce(&mut self, _: NodeView, _sibling: Self::DepState, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _sibling: (), _: &Self::Ctx) -> bool {
         false
     }
 }

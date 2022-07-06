@@ -4,7 +4,6 @@ use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
-use dioxus_native_core::element_borrowable::ElementBorrowable;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
@@ -84,11 +83,10 @@ impl ParentDepState for ParentDepCallCounter {
 
 #[derive(Debug, Clone, Default)]
 struct NodeDepCallCounter(u32);
-impl NodeDepState for NodeDepCallCounter {
+impl NodeDepState<()> for NodeDepCallCounter {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(&mut self, _node: NodeView, _sibling: Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
         true
     }
@@ -136,11 +134,10 @@ impl ParentDepState for PushedDownStateTester {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct NodeStateTester(Option<String>, Vec<(String, String)>);
-impl NodeDepState for NodeStateTester {
+impl NodeDepState<()> for NodeStateTester {
     type Ctx = u32;
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::All).with_tag();
-    fn reduce(&mut self, node: NodeView, _sibling: Self::DepState, ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, _sibling: (), ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = NodeStateTester(
             node.tag().map(|s| s.to_string()),
@@ -391,14 +388,13 @@ struct UnorderedDependanciesState {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ADepCallCounter(usize, BDepCallCounter);
-impl NodeDepState for ADepCallCounter {
+impl<'a> NodeDepState<(&'a BDepCallCounter,)> for ADepCallCounter {
     type Ctx = ();
-    type DepState = (BDepCallCounter,);
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(
         &mut self,
         _node: NodeView,
-        (sibling,): <Self::DepState as ElementBorrowable>::Borrowed<'_>,
+        (sibling,): (&'a BDepCallCounter,),
         _ctx: &Self::Ctx,
     ) -> bool {
         self.0 += 1;
@@ -409,14 +405,13 @@ impl NodeDepState for ADepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct BDepCallCounter(usize, CDepCallCounter);
-impl NodeDepState for BDepCallCounter {
+impl<'a> NodeDepState<(&'a CDepCallCounter,)> for BDepCallCounter {
     type Ctx = ();
-    type DepState = (CDepCallCounter,);
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(
         &mut self,
         _node: NodeView,
-        (sibling,): <Self::DepState as ElementBorrowable>::Borrowed<'_>,
+        (sibling,): (&'a CDepCallCounter,),
         _ctx: &Self::Ctx,
     ) -> bool {
         self.0 += 1;
@@ -427,11 +422,10 @@ impl NodeDepState for BDepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct CDepCallCounter(usize);
-impl NodeDepState for CDepCallCounter {
+impl NodeDepState<()> for CDepCallCounter {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(&mut self, _node: NodeView, _sibling: Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
         true
     }
