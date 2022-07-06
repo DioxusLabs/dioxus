@@ -966,7 +966,7 @@ impl<'b> DiffState<'b> {
                     c.scope.set(None);
                     let props = scope.props.take().unwrap();
                     c.props.borrow_mut().replace(props);
-                    self.scopes.try_remove(scope_id).unwrap();
+                    self.scopes.try_remove(scope_id);
                 }
                 self.leave_scope();
             }
@@ -1025,7 +1025,7 @@ impl<'b> DiffState<'b> {
 
                         let props = scope.props.take().unwrap();
                         c.props.borrow_mut().replace(props);
-                        self.scopes.try_remove(scope_id).unwrap();
+                        self.scopes.try_remove(scope_id);
                     }
                     self.leave_scope();
                 }

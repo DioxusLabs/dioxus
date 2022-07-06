@@ -32,18 +32,12 @@
 - [Working with Async](async/index.md)
   - [UseFuture](async/use_future.md)
   - [UseCoroutine](async/coroutines.md)
-  <!-- - [Fetching](async/fetching.md) -->
-  <!-- - [Updating State](async/loading_state.md)
-  - [WebSockets](async/sockets.md) -->
-  <!-- - [Tasks](async/asynctasks.md) -->
+  - [Updating State](async/loading_state.md)
+  - [Tasks](async/asynctasks.md)
 
 <!--
 - [Putting it all together: Dog Search Engine](tutorial/index.md)
   - [New app](tutorial/new_app.md)
-  - [Structuring our app](tutorial/structure.md)
-  - [Defining State](tutorial/state.md)
-  - [Defining Components](tutorial/components.md)
-  - [Styling](tutorial/styling.md)
   - [Bundling](tutorial/publishing.md) -->
 
 
