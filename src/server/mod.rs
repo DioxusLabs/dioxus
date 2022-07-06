@@ -11,7 +11,7 @@ use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
-use std::{path::PathBuf, process::Command, sync::Arc};
+use std::{path::PathBuf, process::Command, sync::Arc, net::UdpSocket};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
@@ -408,15 +408,39 @@ fn print_console_info(port: u16, config: &CrateConfig) {
         "\t> Local : {}",
         format!("https://localhost:{}/", port).blue()
     );
-    println!("\t> NetWork : {}", "use --host to expose".white().dimmed());
+    println!(
+        "\t> NetWork : {}",
+        format!(
+            "http://{}:{}/",
+            get_ip().unwrap_or(String::from("0.0.0.0")),
+            port
+        ).blue()
+    );
     println!("");
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
     println!("\t> Enabled Tools : {}", tools_str.yellow());
     println!("\t> Index Template : {}", custom_html_file.green());
-    println!("\t> URL Rewrite : {}", url_rewrite.purple());
+    println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
 
     println!("\n{}\n", "Server startup completed.".green().bold());
+}
+
+fn get_ip() -> Option<String> {
+    let socket = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(s) => s,
+        Err(_) => return None,
+    };
+
+    match socket.connect("8.8.8.8:80") {
+        Ok(()) => (),
+        Err(_) => return None,
+    };
+
+    match socket.local_addr() {
+        Ok(addr) => return Some(addr.ip().to_string()),
+        Err(_) => return None,
+    };
 }
 
 async fn ws_handler(
