@@ -11,7 +11,7 @@ use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
-use std::{path::PathBuf, process::Command, sync::Arc, net::UdpSocket};
+use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
@@ -270,12 +270,17 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
-    let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
-        // log::info!("🚧 reload required");
-        if chrono::Local::now().timestamp() > last_update_time {
-            match build_manager.build() {
-                Ok(_) => last_update_time = chrono::Local::now().timestamp(),
-                Err(e) => log::error!("{}", e),
+    let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
+        if info.is_ok() {
+            let info = info.unwrap();
+            if chrono::Local::now().timestamp() > last_update_time {
+                match build_manager.build() {
+                    Ok(_) => {
+                        last_update_time = chrono::Local::now().timestamp();
+                        print_rebuild_info(info.paths);
+                    }
+                    Err(e) => log::error!("{}", e),
+                }
             }
         }
     })
@@ -414,7 +419,8 @@ fn print_console_info(port: u16, config: &CrateConfig) {
             "http://{}:{}/",
             get_ip().unwrap_or(String::from("0.0.0.0")),
             port
-        ).blue()
+        )
+        .blue()
     );
     println!("");
     println!("\t> Profile : {}", profile.green());
@@ -424,6 +430,28 @@ fn print_console_info(port: u16, config: &CrateConfig) {
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
 
     println!("\n{}\n", "Server startup completed.".green().bold());
+}
+
+fn print_rebuild_info(paths: Vec<PathBuf>) {
+    print!(
+        "{}",
+        String::from_utf8_lossy(
+            &Command::new(if cfg!(target_os = "windows") {
+                "cls"
+            } else {
+                "clear"
+            })
+            .output()
+            .unwrap()
+            .stdout
+        )
+    );
+
+    for path in paths {
+        let path = path.strip_prefix(crate::crate_root().unwrap()).unwrap().to_path_buf();
+        log::info!("Updated {}", format!("{}", path.to_str().unwrap()).green());
+    }
+    log::info!("Project rebuild done.")
 }
 
 fn get_ip() -> Option<String> {
