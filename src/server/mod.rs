@@ -181,7 +181,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0:8080
-    print_console_info(port, &config);
+    print_console_info(port, &config, vec![]);
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -270,15 +270,14 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
+    let watcher_config = config.clone();
     let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
         if info.is_ok() {
-            let info = info.unwrap();
+            print_console_info(port, &config, info.unwrap().paths);
             if chrono::Local::now().timestamp() > last_update_time {
                 match build_manager.rebuild() {
-                    Ok(_) => {
-                        last_update_time = chrono::Local::now().timestamp();
-                        print_rebuild_info(info.paths);
-                    }
+                    Ok(_) => last_update_time = chrono::Local::now().timestamp(),
                     Err(e) => log::error!("{}", e),
                 }
             }
@@ -296,7 +295,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0
-    print_console_info(port, &config);
+    print_console_info(port, &config, vec![]);
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -354,7 +353,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-fn print_console_info(port: u16, config: &CrateConfig) {
+fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
     print!(
         "{}",
         String::from_utf8_lossy(
@@ -368,6 +367,14 @@ fn print_console_info(port: u16, config: &CrateConfig) {
             .stdout
         )
     );
+
+    // for path in &changed {
+    //     let path = path
+    //         .strip_prefix(crate::crate_root().unwrap())
+    //         .unwrap()
+    //         .to_path_buf();
+    //     log::info!("Updated {}", format!("{}", path.to_str().unwrap()).green());
+    // }
 
     let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
     if config.custom_profile.is_some() {
@@ -404,11 +411,18 @@ fn print_console_info(port: u16, config: &CrateConfig) {
         "False"
     };
 
-    println!(
-        "{} @ v{}\n",
-        "Dioxus".bold().green(),
-        crate::DIOXUS_CLI_VERSION,
-    );
+    if changed.len() <= 0 {
+        println!(
+            "{} @ v{}\n",
+            "Dioxus".bold().green(),
+            crate::DIOXUS_CLI_VERSION,
+        );
+    } else {
+        println!(
+            "Project Reloaded: {}\n",
+            format!("Changed {} files.", changed.len()).purple().bold()
+        );
+    }
     println!(
         "\t> Local : {}",
         format!("https://localhost:{}/", port).blue()
@@ -430,28 +444,6 @@ fn print_console_info(port: u16, config: &CrateConfig) {
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
 
     println!("\n{}\n", "Server startup completed.".green().bold());
-}
-
-fn print_rebuild_info(paths: Vec<PathBuf>) {
-    // print!(
-    //     "{}",
-    //     String::from_utf8_lossy(
-    //         &Command::new(if cfg!(target_os = "windows") {
-    //             "cls"
-    //         } else {
-    //             "clear"
-    //         })
-    //         .output()
-    //         .unwrap()
-    //         .stdout
-    //     )
-    // );
-
-    for path in paths {
-        let path = path.strip_prefix(crate::crate_root().unwrap()).unwrap().to_path_buf();
-        log::info!("Updated {}", format!("{}", path.to_str().unwrap()).green());
-    }
-    log::info!("Project rebuild done.")
 }
 
 fn get_ip() -> Option<String> {
