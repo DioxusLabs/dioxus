@@ -190,7 +190,7 @@ pub enum DomEdit<'bump> {
     /// Manually pop a root node from the stack.
     PopRoot {},
 
-    /// Create a new templete, dynamic nodes will be added as placeholders.
+    /// Create a refrence to a template node.
     CreateTempleteRef {
         /// The ID of the new template refrence.
         id: u64,
@@ -199,17 +199,11 @@ pub enum DomEdit<'bump> {
         template_id: u64,
     },
 
-    /// Create a new templete, dynamic nodes will be added as placeholders.
+    /// Create a new templete.
     /// IMPORTANT: When adding nodes to a templete, id's will reset to zero, so they must be allocated on a different stack.
     /// It is recommended to use Cow<NativeNode>.
     CreateTemplete {
         /// The ID of the new template.
-        id: u64,
-    },
-
-    /// This command is only valid when a templete ref is on the top of the stack.
-    PushTempleteRoot {
-        /// The ID of the node to push from the templete stack.
         id: u64,
     },
 
@@ -360,7 +354,9 @@ impl<'a> Mutations<'a> {
         self.edits.push(FinishTemplete {});
     }
 
-    pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {}
+    pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {
+        self.edits.push(CreateTempleteRef { id, template_id })
+    }
 }
 
 // refs are only assigned once
