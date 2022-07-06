@@ -427,7 +427,7 @@ fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
     }
     println!(
         "\t> Local : {}",
-        format!("https://localhost:{}/", port).blue()
+        format!("http://localhost:{}/", port).blue()
     );
     println!(
         "\t> NetWork : {}",
@@ -444,8 +444,14 @@ fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
     println!("\t> Enabled Tools : {}", tools_str.yellow());
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
+    println!("");
 
-    println!("\n{}\n", "Server startup completed.".green().bold());
+    if changed.len() <= 0 {
+        log::info!("{}", "Server startup completed.".green().bold());
+    } else {
+        log::info!("{}", "Project rebuild completed.".green().bold());
+    }
+    
 }
 
 fn get_ip() -> Option<String> {
