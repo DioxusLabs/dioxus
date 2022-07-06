@@ -7,6 +7,7 @@ pub mod create;
 pub mod serve;
 pub mod tool;
 pub mod translate;
+pub mod version;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
@@ -58,6 +59,10 @@ pub enum Commands {
 
     /// Clean output artifacts.
     Clean(clean::Clean),
+
+    /// Print the version of this extension
+    #[clap(name = "version")]
+    Version(version::Version),
 
     /// Format some rsx
     #[clap(name = "fmt")]

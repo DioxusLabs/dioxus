@@ -54,6 +54,11 @@ async fn main() -> Result<()> {
                 log::error!("format error: {}", e);
             }
         }
+
+        Commands::Version(opt) => {
+            let version = opt.version();
+            println!("{}", version);
+        }
     }
 
     Ok(())

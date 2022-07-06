@@ -46,10 +46,8 @@ flate2 = "1.0.22"
 tar = "0.4.38"
 tower = "0.4.12"
 
-dioxus-rsx = { path = "../../dioxus/packages/rsx" }
-dioxus-autofmt = { path = "../../dioxus/packages/autofmt" }
-# dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus.git", branch = "jk/rsx-refactor" }
-# dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus.git", branch = "jk/rsx-refactor" }
+dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus.git" }
+dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus.git" }
 
 [[bin]]
 path = "src/main.rs"
