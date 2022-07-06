@@ -125,6 +125,9 @@ pub enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
+    /// Mark all components as dirty and update them
+    DirtyAll,
+
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
@@ -337,29 +340,12 @@ impl VirtualDom {
 
                     let scopes = &mut self.scopes;
                     let task_poll = poll_fn(|cx| {
-                        //
-                        let mut any_pending = false;
-
                         let mut tasks = scopes.tasks.tasks.borrow_mut();
-                        let mut to_remove = vec![];
+                        tasks.retain(|_, task| task.as_mut().poll(cx).is_pending());
 
-                        // this would be better served by retain
-                        for (id, task) in tasks.iter_mut() {
-                            if task.as_mut().poll(cx).is_ready() {
-                                to_remove.push(*id);
-                            } else {
-                                any_pending = true;
-                            }
-                        }
-
-                        for id in to_remove {
-                            tasks.remove(&id);
-                        }
-
-                        // Resolve the future if any singular task is ready
-                        match any_pending {
-                            true => Poll::Pending,
-                            false => Poll::Ready(()),
+                        match tasks.is_empty() {
+                            true => Poll::Ready(()),
+                            false => Poll::Pending,
                         }
                     });
 
@@ -406,6 +392,11 @@ impl VirtualDom {
             }
             SchedulerMsg::Immediate(s) => {
                 self.dirty_scopes.insert(s);
+            }
+            SchedulerMsg::DirtyAll => {
+                for id in self.scopes.scopes.borrow().keys() {
+                    self.dirty_scopes.insert(*id);
+                }
             }
         }
     }
@@ -583,7 +574,7 @@ impl VirtualDom {
     ///
     /// *value.borrow_mut() = "goodbye";
     ///
-    /// let edits = dom.diff();
+    /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let mut diff_machine = DiffState::new(&self.scopes);

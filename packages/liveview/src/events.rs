@@ -6,6 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use dioxus_core::{ElementId, EventPriority, UserEvent};
+use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -46,6 +47,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         scope_id: None,
         element: mounted_dom_id,
         data: event,
+        bubbles: event_bubbles(name),
     }
 }
 

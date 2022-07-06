@@ -2,7 +2,7 @@
 // does each window have its own router? probably, lol
 
 use crate::cfg::RouterCfg;
-use dioxus_core::ScopeId;
+use dioxus::core::ScopeId;
 use futures_channel::mpsc::UnboundedSender;
 use std::any::Any;
 use std::{

@@ -45,6 +45,8 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 /// Called when the current node's node properties are modified, a child's [ChildDepState] is modified or a child is removed.
 /// Called at most once per update.
 pub trait ChildDepState {
+    /// The context is passed to the [ChildDepState::reduce] when it is pushed down.
+    /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     /// This must be either a [ChildDepState], or [NodeDepState]
     type DepState;
@@ -63,6 +65,8 @@ pub trait ChildDepState {
 /// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
 /// Called at most once per update.
 pub trait ParentDepState {
+    /// The context is passed to the [ParentDepState::reduce] when it is pushed down.
+    /// This is sometimes nessisary for lifetime purposes.
     type Ctx;
     /// This must be either a [ParentDepState] or [NodeDepState]
     type DepState;
@@ -76,13 +80,12 @@ pub trait ParentDepState {
 }
 
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
-/// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
+/// Called when the current node's node properties are modified or a sibling's [NodeDepState] is modified.
 /// Called at most once per update.
 /// NodeDepState is the only state that can accept multiple dependancies, but only from the current node.
 /// ```rust
-/// impl NodeDepState for Layout {
+/// impl<'a, 'b> NodeDepState<(&'a TextWrap, &'b ChildLayout)> for Layout {
 ///     type Ctx = LayoutCache;
-///     type DepState = (TextWrap, ChildLayout);
 ///     const NODE_MASK: NodeMask =
 ///         NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!([
 ///             "width", "height"
@@ -91,7 +94,7 @@ pub trait ParentDepState {
 ///     fn reduce<'a>(
 ///         &mut self,
 ///         node: NodeView,
-///         siblings: (&TextWrap, &ChildLayout),
+///         siblings: (&'a TextWrap, &'b ChildLayout),
 ///         ctx: &Self::Ctx,
 ///     ) -> bool {
 ///         let old = self.clone();
@@ -123,7 +126,7 @@ pub trait ParentDepState {
 ///     }
 /// }
 /// ```
-/// Depstate must be either a [ChildDepState], [ParentDepState] or [NodeDepState]
+/// The generic argument (Depstate) must be a tuple containing any number of borrowed elments that are either a [ChildDepState], [ParentDepState] or [NodeDepState].
 pub trait NodeDepState<DepState> {
     type Ctx;
     // type DepState: ElementBorrowable;

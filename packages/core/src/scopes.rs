@@ -335,7 +335,7 @@ impl ScopeArena {
                             log::trace!("calling listener {:?}", listener.event);
                             if state.canceled.get() {
                                 // stop bubbling if canceled
-                                break;
+                                return;
                             }
 
                             let mut cb = listener.callback.borrow_mut();
@@ -348,6 +348,10 @@ impl ScopeArena {
                                     bubble_state: state.clone(),
                                     data: event.data.clone(),
                                 });
+                            }
+
+                            if !event.bubbles {
+                                return;
                             }
                         }
                     }
@@ -609,7 +613,7 @@ impl ScopeState {
 
     /// Create a subscription that schedules a future render for the reference component
     ///
-    /// ## Notice: you should prefer using prepare_update and get_scope_id
+    /// ## Notice: you should prefer using schedule_update_any and scope_id
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
         Arc::new(move || {
@@ -831,10 +835,7 @@ impl ScopeState {
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<'src, State: 'static>(
-        &'src self,
-        initializer: impl FnOnce(usize) -> State,
-    ) -> &'src mut State {
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce(usize) -> State) -> &mut State {
         let mut vals = self.hook_vals.borrow_mut();
 
         let hook_len = vals.len();
@@ -1000,12 +1001,11 @@ impl TaskQueue {
     fn remove(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
             let _ = tasks.remove(&id);
+            if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
+                task_map.remove(&id);
+            }
         }
-
         // the task map is still around, but it'll be removed when the scope is unmounted
-        if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
-            task_map.remove(&id);
-        }
     }
 
     pub(crate) fn has_tasks(&self) -> bool {

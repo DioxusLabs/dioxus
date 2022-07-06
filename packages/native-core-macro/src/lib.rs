@@ -68,8 +68,8 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
             let gen = quote! {
                 impl State for #type_name {
-                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = ElementId>>(
-                        dirty: &[(ElementId, dioxus_native_core::node_ref::NodeMask)],
+                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = dioxus_core::ElementId>>(
+                        dirty: &[(dioxus_core::ElementId, dioxus_native_core::node_ref::NodeMask)],
                         state_tree: &'a mut T,
                         vdom: &'a dioxus_core::VirtualDom,
                         ctx: &anymap::AnyMap,

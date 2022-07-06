@@ -63,6 +63,9 @@ pub struct UserEvent {
     /// The event type IE "onclick" or "onmouseover"
     pub name: &'static str,
 
+    /// If the event is bubbles up through the vdom
+    pub bubbles: bool,
+
     /// The event data to be passed onto the event handler
     pub data: Arc<dyn Any + Send + Sync>,
 }
@@ -150,7 +153,7 @@ impl AnyEvent {
 /// You should prefer to use the name of the event directly, rather than
 /// the UiEvent<T> generic type.
 ///
-/// For the HTML crate, this would include [`MouseEvent`], [`FormEvent`] etc.
+/// For the HTML crate, this would include MouseEvent, FormEvent etc.
 pub struct UiEvent<T> {
     /// The internal data of the event
     /// This is wrapped in an Arc so that it can be sent across threads

@@ -1,9 +1,8 @@
 use std::cell::Cell;
 
-use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::core as dioxus_core;
+use dioxus::core::{ElementId, VElement, VText};
+use dioxus::prelude::*;
 use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::State;
 use dioxus_native_core_macro::State;

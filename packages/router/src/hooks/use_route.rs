@@ -1,5 +1,5 @@
 use crate::{ParsedRoute, RouteContext, RouterCore, RouterService};
-use dioxus_core::{ScopeId, ScopeState};
+use dioxus::core::{ScopeId, ScopeState};
 use std::{borrow::Cow, str::FromStr, sync::Arc};
 use url::Url;
 
