@@ -154,7 +154,7 @@ pub async fn hot_reload_handler(
                                         log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file_path, parse_error.location.line, parse_error.location.column, parse_error.message);
                                     },
                                     Error::RecompileRequiredError(_) => {
-                                        if let Err(err) = state.build_manager.build(){
+                                        if let Err(err) = state.build_manager.rebuild(){
                                             log::error!("{}", err);
                                         }
                                     }

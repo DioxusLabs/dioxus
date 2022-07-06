@@ -27,9 +27,9 @@ pub struct BuildManager {
 }
 
 impl BuildManager {
-    fn build(&self) -> Result<()> {
-        log::info!("🪁 Rebuild code");
-        builder::build(&self.config)?;
+    fn rebuild(&self) -> Result<()> {
+        log::info!("🪁 Rebuild project");
+        builder::build(&self.config, true)?;
         // change the websocket reload state to true;
         // the page will auto-reload.
         if self
@@ -158,7 +158,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                 }
                 if needs_rebuild {
                     log::info!("reload required");
-                    if let Err(err) = build_manager.build() {
+                    if let Err(err) = build_manager.rebuild() {
                         log::error!("{}", err);
                     }
                 }
@@ -274,7 +274,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         if info.is_ok() {
             let info = info.unwrap();
             if chrono::Local::now().timestamp() > last_update_time {
-                match build_manager.build() {
+                match build_manager.rebuild() {
                     Ok(_) => {
                         last_update_time = chrono::Local::now().timestamp();
                         print_rebuild_info(info.paths);
@@ -433,19 +433,19 @@ fn print_console_info(port: u16, config: &CrateConfig) {
 }
 
 fn print_rebuild_info(paths: Vec<PathBuf>) {
-    print!(
-        "{}",
-        String::from_utf8_lossy(
-            &Command::new(if cfg!(target_os = "windows") {
-                "cls"
-            } else {
-                "clear"
-            })
-            .output()
-            .unwrap()
-            .stdout
-        )
-    );
+    // print!(
+    //     "{}",
+    //     String::from_utf8_lossy(
+    //         &Command::new(if cfg!(target_os = "windows") {
+    //             "cls"
+    //         } else {
+    //             "clear"
+    //         })
+    //         .output()
+    //         .unwrap()
+    //         .stdout
+    //     )
+    // );
 
     for path in paths {
         let path = path.strip_prefix(crate::crate_root().unwrap()).unwrap().to_path_buf();

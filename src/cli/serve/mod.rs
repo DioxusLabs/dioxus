@@ -40,7 +40,7 @@ impl Serve {
 
         match platform.as_str() {
             "web" => {
-                crate::builder::build(&crate_config)?;
+                crate::builder::build(&crate_config, false)?;
             }
             "desktop" => {
                 crate::builder::build_desktop(&crate_config, true)?;
