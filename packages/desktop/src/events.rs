@@ -6,7 +6,7 @@ use std::sync::Arc;
 use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
-use serde::{Serialize,Deserialize};
+use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct IpcMessage {
