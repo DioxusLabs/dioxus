@@ -11,7 +11,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
-        Router { 
+        Router {
             h1 { "Your app here" }
             ul {
                 Link { to: "/", li { "home" } }
