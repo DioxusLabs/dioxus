@@ -165,6 +165,7 @@ impl WebsysDom {
                 let node = scope.root_node();
                 self.rehydrate_single(nodes, place, dom, node, last_node_was_text)?;
             }
+            VNode::TemplateRef(_) => todo!(),
         }
         Ok(())
     }

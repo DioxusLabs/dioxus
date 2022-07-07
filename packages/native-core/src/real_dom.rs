@@ -196,6 +196,12 @@ impl<S: State> RealDom<S> {
                     PopRoot {} => {
                         self.node_stack.pop();
                     }
+                    CreateTempleteRef {
+                        id: _,
+                        template_id: _,
+                    } => todo!(),
+                    CreateTemplete { id: _ } => todo!(),
+                    FinishTemplete {} => todo!(),
                 }
             }
         }
@@ -633,6 +639,7 @@ impl<S: State> RealDom<S> {
                     true
                 }
             }
+            VNode::TemplateRef(_) => todo!(),
         }
     }
 

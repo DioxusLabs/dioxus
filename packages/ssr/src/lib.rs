@@ -283,6 +283,7 @@ impl<'a> TextRenderer<'a, '_> {
                 } else {
                 }
             }
+            VNode::TemplateRef(_) => todo!(),
         }
         Ok(())
     }

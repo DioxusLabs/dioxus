@@ -78,8 +78,6 @@ impl<'a> VTemplateRef<'a> {
                 match &dynamic_node.node_type {
                     TemplateNodeType::Element(el) => {
                         let TemplateElement {
-                            tag,
-                            namespace,
                             attributes,
                             children,
                             listeners,
@@ -195,7 +193,6 @@ impl<'b> Template<'b> {
                         namespace,
                         attributes,
                         children,
-                        listeners,
                         ..
                     } = el;
                     mutations.create_element(tag, *namespace, id);
@@ -263,8 +260,69 @@ impl TemplateNodes {
         }
     }
 
-    fn to_owned(&mut self) {
-        todo!()
+    fn to_owned(self) -> Self {
+        if let Self::Static(old) = self {
+            let mut owned = Vec::with_capacity(old.len());
+            for borrowed in old {
+                let ty = match &borrowed.node_type {
+                    TemplateNodeType::Element(el) => TemplateNodeType::Element(TemplateElement {
+                        tag: el.tag,
+                        namespace: el.namespace,
+                        attributes: el
+                            .attributes
+                            .into_iter()
+                            .map(|attr| {
+                                let owned_value: TemplateAttributeValue<OwnedTemplateValue> =
+                                    match &attr.value {
+                                        TemplateAttributeValue::Static(s) => {
+                                            TemplateAttributeValue::Static(s.clone().into())
+                                        }
+                                        TemplateAttributeValue::Dynamic(d) => {
+                                            TemplateAttributeValue::Dynamic(*d)
+                                        }
+                                    };
+                                TemplateAttribute {
+                                    name: attr.name,
+                                    namespace: attr.namespace,
+                                    value: owned_value,
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                        children: el.children.to_vec(),
+                        listeners: el.listeners.to_vec(),
+                        parent: el.parent,
+                        value: PhantomData,
+                    }),
+                    TemplateNodeType::Text(segments) => TemplateNodeType::Text(TextTemplate {
+                        segments: segments
+                            .segments
+                            .into_iter()
+                            .map(|s| match s {
+                                TextTemplateSegment::Static(s) => {
+                                    TextTemplateSegment::Static(s.to_string())
+                                }
+                                TextTemplateSegment::Dynamic(id) => {
+                                    TextTemplateSegment::Dynamic(*id)
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                        text: PhantomData,
+                    }),
+                    TemplateNodeType::Fragment(fragment) => {
+                        TemplateNodeType::Fragment(fragment.to_vec())
+                    }
+                    TemplateNodeType::DynamicNode(id) => TemplateNodeType::DynamicNode(*id),
+                };
+                let new = TemplateNode {
+                    id: borrowed.id,
+                    node_type: ty,
+                };
+                owned.push(new);
+            }
+            Self::Owned(owned)
+        } else {
+            self
+        }
     }
 
     pub(crate) fn with_node<F1, F2, Ctx, R>(
@@ -479,4 +537,31 @@ pub(crate) enum OwnedTemplateValue {
     Bytes(Vec<u8>),
     // TODO: support other types
     // Any(ArbitraryAttributeValue<'a>),
+}
+
+impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
+    fn from(attr: AttributeValue<'a>) -> Self {
+        match attr {
+            AttributeValue::Text(t) => OwnedTemplateValue::Text(t.to_owned()),
+            AttributeValue::Float32(f) => OwnedTemplateValue::Float32(f),
+            AttributeValue::Float64(f) => OwnedTemplateValue::Float64(f),
+            AttributeValue::Int32(i) => OwnedTemplateValue::Int32(i),
+            AttributeValue::Int64(i) => OwnedTemplateValue::Int64(i),
+            AttributeValue::Uint32(u) => OwnedTemplateValue::Uint32(u),
+            AttributeValue::Uint64(u) => OwnedTemplateValue::Uint64(u),
+            AttributeValue::Bool(b) => OwnedTemplateValue::Bool(b),
+            AttributeValue::Vec3Float(f1, f2, f3) => OwnedTemplateValue::Vec3Float(f1, f2, f3),
+            AttributeValue::Vec3Int(f1, f2, f3) => OwnedTemplateValue::Vec3Int(f1, f2, f3),
+            AttributeValue::Vec3Uint(f1, f2, f3) => OwnedTemplateValue::Vec3Uint(f1, f2, f3),
+            AttributeValue::Vec4Float(f1, f2, f3, f4) => {
+                OwnedTemplateValue::Vec4Float(f1, f2, f3, f4)
+            }
+            AttributeValue::Vec4Int(f1, f2, f3, f4) => OwnedTemplateValue::Vec4Int(f1, f2, f3, f4),
+            AttributeValue::Vec4Uint(f1, f2, f3, f4) => {
+                OwnedTemplateValue::Vec4Uint(f1, f2, f3, f4)
+            }
+            AttributeValue::Bytes(b) => OwnedTemplateValue::Bytes(b.to_owned()),
+            AttributeValue::Any(_) => todo!(),
+        }
+    }
 }

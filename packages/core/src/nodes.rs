@@ -227,6 +227,13 @@ impl std::fmt::Display for ElementId {
     }
 }
 
+impl ElementId {
+    /// Convert the ElementId to a `u64`.
+    pub fn as_u64(&self) -> u64 {
+        (*self).into()
+    }
+}
+
 impl Into<u64> for ElementId {
     fn into(self) -> u64 {
         self.0 as u64
