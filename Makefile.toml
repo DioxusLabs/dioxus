@@ -42,7 +42,7 @@ private = true
 [tasks.test]
 dependencies = ["build"]
 command = "cargo"
-args = ["test", "--all-targets", "--workspace", "--exclude", "dioxus-router"]
+args = ["test", "--lib", "--bins", "--tests", "--examples", "--workspace", "--exclude", "dioxus-router"]
 private = true
 
 [tasks.test-with-browser]

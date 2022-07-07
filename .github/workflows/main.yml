@@ -11,6 +11,7 @@ on:
       - .github/**
       - lib.rs
       - Cargo.toml
+      - Makefile.toml
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
