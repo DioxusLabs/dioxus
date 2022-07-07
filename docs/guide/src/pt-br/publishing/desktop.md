@@ -1,33 +1,24 @@
-# Publishing
+# Publicação
 
-Congrats! You've made your first Dioxus app that actually does some pretty cool stuff. This app uses your operating system's WebView library, so it's portable to be distributed for other platforms.
+Parabéns! Você fez seu primeiro aplicativo Dioxus que realmente faz coisas muito legais. Este aplicativo usa a biblioteca WebView do seu sistema operacional, portanto, é portátil para ser distribuído para outras plataformas.
 
-In this section, we'll cover how to bundle your app for macOS, Windows, and Linux.
+Nesta seção, abordaremos como agrupar seu aplicativo para macOS, Windows e Linux.
 
+## Instale o `cargo-bundle`
 
+A primeira coisa que faremos é instalar o [`cargo-bundle`](https://github.com/burtonageo/cargo-bundle). Essa extensão para carga facilitará muito o empacotamento do nosso aplicativo para as várias plataformas.
 
-## Install `cargo-bundle`
+De acordo com a página do github `cargo-bundle`,
 
+_"cargo-bundle é uma ferramenta usada para gerar instaladores ou pacotes de aplicativos para executáveis ​​GUI criados com o cargo. Ele pode criar pacotes .app para Mac OS X e iOS, pacotes .deb para Linux e instaladores .msi para Windows (observe no entanto que o suporte para iOS e Windows ainda é experimental). O suporte para a criação de pacotes .rpm (para Linux) e pacotes .apk (para Android) ainda está pendente."_
 
-The first thing we'll do is install [`cargo-bundle`](https://github.com/burtonageo/cargo-bundle). This extension to cargo will make it very easy to package our app for the various platforms.
+Para instalar, basta executar
 
-According to the `cargo-bundle` github page, 
+`cargo install <name of cargo package>`
 
+## Configurando seu Projeto
 
-
-*"cargo-bundle is a tool used to generate installers or app bundles for GUI  executables built with cargo. It can create .app bundles for Mac OS X and iOS, .deb packages for Linux, and .msi installers for Windows (note however that iOS and Windows support is still experimental). Support for creating .rpm packages (for Linux) and .apk packages (for Android) is still pending."*
-
-
-To install, simply run
-
-
-`cargo install cargo-bundle`
-
-## Setting up your project
-
-
-To get a project setup for bundling, we need to add some flags to our `Cargo.toml` file. 
-
+Para obter uma configuração de projeto para empacotamento, precisamos adicionar algumas _flags_ ao nosso arquivo `Cargo.toml`.
 
 ```toml
 [package]
@@ -46,20 +37,18 @@ This app makes it quick and easy to browse photos of dogs from over 200 bree
 """
 ```
 
+## Empacotando
 
-## Building
+Seguindo as instruções do cargo-bundle, simplesmente `cargo-bundle --release` para produzir um aplicativo final com todas as otimizações e recursos integrados.
 
-Following cargo-bundle's instructions, we simply `cargo-bundle --release` to produce a final app with all the optimizations and assets builtin.
-
-Once you've ran `cargo-bundle --release`, your app should be accessible in
+Depois de executar `cargo-bundle --release`, seu aplicativo deve estar acessível em
 
 `target/release/bundle/<platform>/`.
 
-For example, a macOS app would look like this:
+Por exemplo, um aplicativo macOS ficaria assim:
 
-![Published App](../images/publish.png)
+![Aplicativo publicado](../images/publish.png)
 
-Nice! And it's only 4.8 Mb – extremely lean!! Because Dioxus leverages your platform's native WebView, Dioxus apps are extremely memory efficient and won't waste your battery.
+Ótimo! E são apenas 4,8 Mb – extremamente enxutos! Como o Dioxus aproveita o WebView nativo da sua plataforma, os aplicativos Dioxus são extremamente eficientes em termos de memória e não desperdiçam sua bateria.
 
-> Note: not all CSS works the same on all platforms. Make sure to view your app's CSS on each platform – or web browser (Firefox, Chrome, Safari) before publishing.
-
+> Nota: nem todo CSS funciona da mesma forma em todas as plataformas. Certifique-se de visualizar o CSS do seu aplicativo em cada plataforma – ou navegador da web (Firefox, Chrome, Safari) antes de publicar.

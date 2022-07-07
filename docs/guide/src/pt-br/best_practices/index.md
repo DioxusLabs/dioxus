@@ -1,4 +1,4 @@
-# Melhores Práticas
+# Práticas Recomendadas
 
 ## Componentes Reutilizáveis
 
