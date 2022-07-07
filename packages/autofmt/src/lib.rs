@@ -47,7 +47,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             continue;
         }
 
-        let indent_level = {
+        let mut indent_level = {
             // walk backwards from start until we find a new line
             let mut lines = contents[..start].lines().rev();
             match lines.next() {
@@ -71,6 +71,10 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
         if new.len() <= 80 && !new.contains('\n') {
             new = format!(" {new} ");
+
+            // if the new string is not multiline, don't try to adjust the marker ending
+            // We want to trim off any indentation that there might be
+            indent_level = 0;
         }
 
         let end_marker = end + bracket_end - indent_level * 4 - 1;

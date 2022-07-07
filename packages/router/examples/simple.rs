@@ -11,14 +11,14 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
-        Router {
+        Router { 
             h1 { "Your app here" }
             ul {
-                Link { to: "/", li { "home"  }}
-                Link { to: "/blog", li { "blog"  }}
-                Link { to: "/blog/tim", li { "tims' blog"  }}
-                Link { to: "/blog/bill", li { "bills' blog"  }}
-                Link { to: "/apples", li { "go to apples"  }}
+                Link { to: "/", li { "home" } }
+                Link { to: "/blog", li { "blog" } }
+                Link { to: "/blog/tim", li { "tims' blog" } }
+                Link { to: "/blog/bill", li { "bills' blog" } }
+                Link { to: "/apples", li { "go to apples" } }
             }
             Route { to: "/", Home {} }
             Route { to: "/blog/", BlogList {} }
@@ -30,15 +30,11 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
-        h1 { "Home" }
-    })
+    cx.render(rsx! { h1 { "Home" } })
 }
 
 fn BlogList(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div { "Blog List" }
-    })
+    cx.render(rsx! { div { "Blog List" } })
 }
 
 fn BlogPost(cx: Scope) -> Element {
