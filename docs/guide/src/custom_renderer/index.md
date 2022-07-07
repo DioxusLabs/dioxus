@@ -243,11 +243,11 @@ You've probably noticed that many elements in the `rsx!` macros support on-hover
 
 # Native Core
 
-Renderers take a lot of work. If you are creating a renderer in rust, native core provides some utilites to implement a renderer. It provides an abstraction over DomEdits and handles layout for you.
+If you are creating a renderer in rust, native core provides some utilites to implement a renderer. It provides an abstraction over DomEdits and handles layout for you.
 
 ## RealDom
 
-The `RealDom` is a higher level abstraction over updating the Dom. It updates with `DomEdits` and provides a way to lazily update the state of nodes based on what attributes change.
+The `RealDom` is a higher level abstraction over updating the Dom. It updates with `DomEdits` and provides a way to incrementally update the state of nodes based on what attributes change.
 
 ### Example
 
@@ -267,43 +267,52 @@ cx.render(rsx!{
 
 In this tree the color depends on the parent's color. The size depends on the childrens size, the current text, and a text size. The border depends on only the current node.
 
-```mermaid
-flowchart TB
-    subgraph context
-        text_width(text width)
-    end
-    subgraph div
-        state1(state)-->color1(color)
-        state1(state)-->border1(border)
-        border1-.->text_width
-        linkStyle 2 stroke:#5555ff,stroke-width:4px;
-        state1(state)-->layout_width1(layout width)
-    end
-    subgraph p
-        state2(state)-->color2(color)
-        color2-.->color1(color)
-        linkStyle 5 stroke:#0000ff,stroke-width:4px;
-        state2(state)-->border2(border)
-        border2-.->text_width
-        linkStyle 7 stroke:#5555ff,stroke-width:4px;
-        state2(state)-->layout_width2(layout width)
-        layout_width1-.->layout_width2
-        linkStyle 9 stroke:#aaaaff,stroke-width:4px;
-    end
-    subgraph hello world
-        state3(state)-->color3(color)
-        color3-.->color2(color)
-        linkStyle 11 stroke:#0000ff,stroke-width:4px;
-        state3(state)-->border3(border)
-        border3-.->text_width
-        linkStyle 13 stroke:#5555ff,stroke-width:4px;
-        state3(state)-->layout_width3(layout width)
-        layout_width2-.->layout_width3
-        linkStyle 15 stroke:#aaaaff,stroke-width:4px;
-    end
-```
+In the following diagram arrows represent dataflow:
 
-To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct.
+[![](https://mermaid.ink/img/pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)
+
+[//]: # "%% mermaid flow chart"
+[//]: # "flowchart TB"
+[//]: # "    subgraph context"
+[//]: # "        text_width(text width)"
+[//]: # "    end"
+[//]: # "    subgraph state"
+[//]: # "        direction TB"
+[//]: # "        subgraph div state"
+[//]: # "            direction TB"
+[//]: # "            state1(state)-->color1(color)"
+[//]: # "            state1-->border1(border)"
+[//]: # "            text_width-.->layout_width1(layout width)"
+[//]: # "            linkStyle 2 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state1-->layout_width1"
+[//]: # "        end"
+[//]: # "        subgraph p state"
+[//]: # "            direction TB"
+[//]: # "            state2(state)-->color2(color)"
+[//]: # "            color1-.->color2"
+[//]: # "            linkStyle 5 stroke:#0000ff,stroke-width:4px;"
+[//]: # "            state2-->border2(border)"
+[//]: # "            text_width-.->layout_width2(layout width)"
+[//]: # "            linkStyle 7 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state2-->layout_width2"
+[//]: # "            layout_width2-.->layout_width1"
+[//]: # "            linkStyle 9 stroke:#00aa00,stroke-width:4px;"
+[//]: # "        end"
+[//]: # "        subgraph hello world state"
+[//]: # "            direction TB"
+[//]: # "            state3(state)-->border3(border)"
+[//]: # "            state3-->color3(color)"
+[//]: # "            color2-.->color3"
+[//]: # "            linkStyle 12 stroke:#0000ff,stroke-width:4px;"
+[//]: # "            text_width-.->layout_width3(layout width)"
+[//]: # "            linkStyle 13 stroke:#ff5500,stroke-width:4px;"
+[//]: # "            state3-->layout_width3"
+[//]: # "            layout_width3-.->layout_width2"
+[//]: # "            linkStyle 15 stroke:#00aa00,stroke-width:4px;"
+[//]: # "        end"
+[//]: # "    end"
+
+To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to discribe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
 
 ```rust
 use dioxus_native_core::node_ref::*;

@@ -62,13 +62,12 @@ pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
-impl NodeDepState for Focus {
+impl NodeDepState<()> for Focus {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
 
-    fn reduce(&mut self, node: NodeView<'_>, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView<'_>, _sibling: (), _: &Self::Ctx) -> bool {
         let new = Focus {
             level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
                 if let Some(index) = a

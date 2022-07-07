@@ -253,7 +253,7 @@ impl InnerInputState {
                 let mut parent = node.parent;
                 while let Some(parent_id) = parent {
                     will_bubble.insert(parent_id);
-                    parent = dom[parent_id.0].parent;
+                    parent = dom[parent_id].parent;
                 }
                 resolved_events.push(UserEvent {
                     scope_id: None,

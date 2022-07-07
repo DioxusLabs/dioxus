@@ -2,4 +2,16 @@
 
 This crate formats rsx! by parsing call bodies and pretty-printing them back out.
 
-It also incorporates a fork of prettyplease to allow formatting arbitrary rust code too. Prettyplease rejected a suggestion to allow arbitrary expression formatting - something our fork lets us do.
+
+
+# Todo:
+Sorted roughly in order of what's possible
+
+- [x] Oneline rsx! calls - blocker because this wrecks formatting
+- [ ] Nested RSX calls (important) - unnecessary but desirable
+- [ ] RSX edits overstepping each other
+- [ ] Collapse components and elements under syntax -
+- [ ] Don't eat comments in exprs
+- [ ] Format regular exprs
+- [ ] Fix prettyplease around chaining
+- [ ] Don't eat comments in prettyplease
