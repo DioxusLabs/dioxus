@@ -6,7 +6,7 @@ use crate::{
 };
 use std::{
     fs::{copy, create_dir_all, remove_dir_all, File},
-    io::Read,
+    io::{Read, BufRead},
     panic,
     path::PathBuf,
     process::Command,
@@ -42,8 +42,9 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
+        .arg("--message-format=json")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 
     if config.release {
         cmd.arg("--release");
@@ -74,7 +75,14 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
+    let loading = loading::Loading::default();
+    loading.text("Building");
     let output = cmd.output()?;
+    for i in output.stdout.lines() {
+        // println!("{:?}", i);
+    }
+    loading.success("OK");
+    loading.end();
 
     if !output.status.success() {
         log::error!("Build failed!");
