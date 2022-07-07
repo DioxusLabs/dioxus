@@ -1,6 +1,9 @@
 use crate::{
     innerlude::*,
-    templete::{Template, TemplateId, TemplateNodeType},
+    templete::{
+        Template, TemplateAttribute, TemplateElement, TemplateId, TemplateNode, TemplateNodeId,
+        TemplateNodeType, TemplateValue, TextTemplateSegment, VTemplateRef,
+    },
     unsafe_utils::extend_vnode,
 };
 use bumpalo::Bump;
@@ -10,7 +13,7 @@ use slab::Slab;
 use std::{
     any::{Any, TypeId},
     borrow::Borrow,
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
@@ -350,29 +353,12 @@ impl ScopeArena {
                     if let Some(template) = nodes.get(template_ref_id.0) {
                         let template = unsafe { &**template };
                         if let VNode::TemplateRef(template) = template {
-                            let node = &template.template.nodes[template_id.0];
-                            if let TemplateNodeType::Element { listeners, .. } = node.node_type {
-                                for listener_idx in listeners {
-                                    let listener =
-                                        template.dynamic_context.resolve_listener(*listener_idx);
-                                    if listener.event == event.name {
-                                        log::trace!("calling listener {:?}", listener.event);
-
-                                        let mut cb = listener.callback.borrow_mut();
-                                        if let Some(cb) = cb.as_mut() {
-                                            // todo: arcs are pretty heavy to clone
-                                            // we really want to convert arc to rc
-                                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                                            // we could convert arc to rc internally or something
-                                            (cb)(AnyEvent {
-                                                bubble_state: state.clone(),
-                                                data: event.data.clone(),
-                                            });
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
+                            cur_el = template.template.nodes.with_node(
+                                template_id,
+                                bubble_template,
+                                bubble_template,
+                                (&nodes, template, &event, &state, template_ref_id),
+                            );
                         }
                     }
                 }
@@ -408,6 +394,68 @@ impl ScopeArena {
             }
             if !event.bubbles {
                 return;
+            }
+        }
+
+        fn bubble_template<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
+            ctx: (
+                &Ref<Slab<*const VNode>>,
+                &VTemplateRef,
+                &UserEvent,
+                &Rc<BubbleState>,
+                ElementId,
+            ),
+        ) -> Option<GlobalNodeId>
+        where
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Fragment: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (vnodes, template, event, state, template_ref_id) = ctx;
+            if let TemplateNodeType::Element(el) = &node.node_type {
+                let TemplateElement { listeners, .. } = el;
+                for listener_idx in listeners.as_ref() {
+                    let listener = template.dynamic_context.resolve_listener(*listener_idx);
+                    if listener.event == event.name {
+                        log::trace!("calling listener {:?}", listener.event);
+
+                        let mut cb = listener.callback.borrow_mut();
+                        if let Some(cb) = cb.as_mut() {
+                            // todo: arcs are pretty heavy to clone
+                            // we really want to convert arc to rc
+                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                            // we could convert arc to rc internally or something
+                            (cb)(AnyEvent {
+                                bubble_state: state.clone(),
+                                data: event.data.clone(),
+                            });
+                        }
+                        break;
+                    }
+                }
+
+                if let Some(id) = el.parent {
+                    Some(GlobalNodeId::TemplateId {
+                        template_ref_id,
+                        template_id: id,
+                    })
+                } else {
+                    vnodes.get(template_ref_id.0).and_then(|el| {
+                        let real_el = unsafe { &**el };
+                        if let VNode::Element(real_el) = real_el {
+                            real_el.parent.get()
+                        } else {
+                            None
+                        }
+                    })
+                }
+            } else {
+                None
             }
         }
     }

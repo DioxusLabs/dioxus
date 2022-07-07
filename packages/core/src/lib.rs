@@ -4,6 +4,7 @@
 
 pub(crate) mod arbitrary_value;
 pub(crate) mod diff;
+pub(crate) mod dynamic_template_context;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
