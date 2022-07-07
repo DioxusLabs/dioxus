@@ -70,7 +70,7 @@ impl<'a> NodeView<'a> {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AttributeMask {
     All,
     Dynamic(Vec<&'static str>),
@@ -175,7 +175,7 @@ impl Default for AttributeMask {
     }
 }
 
-#[derive(Default, PartialEq, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct NodeMask {
     // must be sorted
     attritutes: AttributeMask,

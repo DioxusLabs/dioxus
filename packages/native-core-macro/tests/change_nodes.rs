@@ -51,8 +51,8 @@ fn remove_node() {
 
     assert_eq!(dom.size(), 2);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[1].height, 1);
-    assert_eq!(dom[2].height, 2);
+    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(dom[ElementId(2)].height, 2);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -80,7 +80,7 @@ fn remove_node() {
 
     assert_eq!(dom.size(), 1);
     assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[ElementId(1)].height, 1);
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn add_node() {
 
     assert_eq!(dom.size(), 1);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[ElementId(1)].height, 1);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -152,6 +152,6 @@ fn add_node() {
 
     assert_eq!(dom.size(), 2);
     assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[1].height, 1);
-    assert_eq!(dom[2].height, 2);
+    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(dom[ElementId(2)].height, 2);
 }
