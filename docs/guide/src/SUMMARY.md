@@ -1,54 +1,43 @@
 # Summary
 
-- [Introduction](README.md)
-- [Roadmap](ROADMAP.md)
-- [Getting Set Up](setup.md)
-- [Hello, World!](hello_world.md)
-- [Describing the UI](elements/index.md)
-  - [Intro to Elements](elements/vnodes.md)
-  - [Conditional Rendering](elements/conditional_rendering.md)
-  - [Lists](elements/lists.md)
-  - [Special Attributes](elements/special_attributes.md)
-- [Components](components/index.md)
-  - [Properties](components/propsmacro.md)
-  - [Reusing, Importing, and Exporting](components/exporting_components.md)
-  - [Children and Attributes](components/component_children.md)
-  - [How Data Flows](components/composing.md)
-- [Adding Interactivity](interactivity/index.md)
+[Introduction](index.md)
+
+- [Getting Started](getting_started/index.md)
+  - [Desktop](getting_started/desktop.md)
+  - [Web](getting_started/web.md)
+    - [Hot Reload](getting_started/hot_reload.md)
+  - [Server-Side Rendering](getting_started/ssr.md)
+  - [Terminal UI](getting_started/tui.md)
+  - [Mobile](getting_started/mobile.md)
+- [Describing the UI](describing_ui/index.md)
+  - [Special Attributes](describing_ui/special_attributes.md)
+  - [Components](describing_ui/components.md)
+  - [Props](describing_ui/component_props.md)
+  - [Component Children](describing_ui/component_children.md)
+- [Interactivity](interactivity/index.md)
   - [Event Listeners](interactivity/event_handlers.md)
-  - [Hooks](interactivity/hooks.md)
-  - [UseState](interactivity/usestate.md)
-  - [UseRef](interactivity/useref.md)
+  - [Hooks & Component State](interactivity/hooks.md)
   - [User Input](interactivity/user_input.md)
-  <!-- - [Effects](interactivity/lifecycles.md) -->
-- [Managing State](state/index.md)
-  - [Local State](state/localstate.md)
-  - [Global State](state/sharedstate.md)
-  - [Lifting State](state/liftingstate.md)
-  - [Error handling](state/errorhandling.md)
-- [Helper Crates](helpers/index.md)
-  - [Fermi](state/fermi.md)
-  - [Router](state/router.md)
-- [Working with Async](async/index.md)
+  - [Sharing State](interactivity/sharing_state.md)
+  - [Custom Hooks](interactivity/custom_hooks.md)
+  - [Dynamic Rendering](interactivity/dynamic_rendering.md)
+  - [Routing](interactivity/router.md)
+- [Async](async/index.md)
   - [UseFuture](async/use_future.md)
-  - [UseCoroutine](async/coroutines.md)
-  - [Updating State](async/loading_state.md)
-  - [Tasks](async/asynctasks.md)
-
-<!--
-- [Putting it all together: Dog Search Engine](tutorial/index.md)
-  - [New app](tutorial/new_app.md)
-  - [Bundling](tutorial/publishing.md) -->
-
-
-- [Next Steps and Advanced Topics](final.md)
-
+  - [UseCoroutine](async/use_coroutine.md)
+  - [Spawning Futures](async/spawn.md)
+- [Best Practices](best_practices/index.md)
+  - [Error Handling](best_practices/error_handling.md)
+  - [Antipatterns](best_practices/antipatterns.md)
+- [Publishing](publishing/index.md)
+  - [Desktop](publishing/desktop.md)
+  - [Web](publishing/web.md)
 
 -----------
 
-[Contributors](misc/contributors.md)
+- [Custom Renderer](custom_renderer/index.md)
 
+-----------
 
-  <!-- - [Suspense](concepts/suspense.md) -->
-  <!-- - [Async Callbacks](concepts/asynccallbacks.md) -->
-
+[Roadmap](roadmap.md)
+[Contributing](contributing.md)

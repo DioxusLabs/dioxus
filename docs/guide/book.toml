@@ -1,6 +1,6 @@
 [book]
 title = "Dioxus Documentation"
-description = "Create book from markdown files. Like Gitbook but implemented in Rust"
+description = "Get started with Dioxus, a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
 authors = ["Jonathan Kelley"]
 language = "en"
 

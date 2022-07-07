@@ -1,118 +1,66 @@
-# Event handlers
+# Event Handlers
 
-To make our boring UIs less static and more interesting, we want to add the ability to interact with user input. To do this, we need to add some event handlers.
+Events are interesting things that happen, usually related to something the user has done. For example, some events happen when the user clicks, scrolls, moves the mouse, or types a character. To respond to these actions and make the UI interactive, we need to handle those events.
 
+Events are associated with elements. For example, we usually don't care about all the clicks that happen within an app, only those on a particular button. To handle events that happen on an element, we must attach the desired event handler to it.
 
-## The most basic events: clicks
+Event handlers are similar to regular attributes, but their name usually starts with `on`- and they accept closures as values. The closure will be called whenever the event is triggered, and will be passed that event.
 
-If you've poked around in the Dioxus examples at all, you've definitely noticed the support for buttons and clicks. To add some basic action when a button is clicked, we need to define a button and then attach an "onclick" handler to it.
-
-```rust
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
-        button {
-            onclick: move |evt| println!("I've been clicked!"),
-            "click me!"
-        }
-    })
-}
-```
-
-If you're using the builder pattern, it's pretty simple too. `onclick` is a method for any builder with HTML elements.
+For example, to handle clicks on an element, we can specify an `onclick` handler:
 
 ```rust
-fn app(cx: Scope) -> Element {
-    button(&cx)
-        .onclick(move |evt| println!("I've been clicked!"))
-        .text("click me!")
-        .build()
-}
+{{#include ../../examples/event_click.rs:rsx}}
 ```
-
-The event handler is different in Dioxus than other libraries. Event handlers in Dioxus may borrow any data that has a lifetime that matches the component's scope. This means we can save a value with `use_hook` and then use it in our handler.
-
-```rust
-fn app(cx: Scope) -> Element {
-    let val = cx.use_hook(|_| 10);
-
-    button(&cx)
-        .onclick(move |evt| println!("Current number {val}"))
-        .text("click me!")
-        .build()
-}
-```
-
 
 ## The `Event` object
 
-When the listener is fired, Dioxus will pass in any related data through the `event` parameter. This holds helpful state relevant to the event. For instance, on forms, Dioxus will fill in the "values" field.
+Event handlers receive an [`UiEvent`](https://docs.rs/dioxus-core/latest/dioxus_core/struct.UiEvent.html) object containing information about the event. Different types of events contain different types of data. For example, mouse-related events contain [`MouseData`](https://docs.rs/dioxus/latest/dioxus/events/struct.MouseData.html), which tells you things like where the mouse was clicked and what mouse buttons were used.
 
-```rust
-// the FormEvent is roughly
-struct FormEvent {
-    value: String,
-    values: HashMap<String, String>
-}
+In the example above, this event data was logged to the terminal:
 
-fn app(cx: Scope) -> Element {
-    cx.render(rsx!{
-        form {
-            onsubmit: move |evt| {
-                println!("Values of form are {evt.values:#?}");
-            }
-            input { id: "password", name: "password" }
-            input { id: "username", name: "username" }
-        }
-    })
-}
+```
+Clicked! Event: UiEvent { data: MouseData { coordinates: Coordinates { screen: (468.0, 109.0), client: (73.0, 25.0), element: (63.0, 15.0), page: (73.0, 25.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
+Clicked! Event: UiEvent { data: MouseData { coordinates: Coordinates { screen: (468.0, 109.0), client: (73.0, 25.0), element: (63.0, 15.0), page: (73.0, 25.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
 ```
 
-## Stopping propagation
+To learn what the different event types provide, read the [events module docs](https://docs.rs/dioxus/latest/dioxus/events/index.html).
 
-With a complex enough UI, you might realize that listeners can actually be nested.
+### Stopping propagation
 
-```rust
-div {
-    onclick: move |evt| {},
-    "outer",
-    div {
-        onclick: move |evt| {},
-        "inner"
-    }
-}
-```
-
-In this particular layout, a click on the inner div is transitively also a click on the outer div. If we didn't want the outer div to be triggered every time we trigger the inner div, then we'd want to call `cancel_bubble()`.
-
-This will prevent any listeners above the current listener from being triggered.
+When you have e.g. a `button` inside a `div`, any click on the `button` is also a click on the `div`. For this reason, Dioxus propagates the click event: first, it is triggered on the target element, then on parent elements. If you want to prevent this behavior, you can call `cancel_bubble()` on the event:
 
 ```rust
-div {
-    onclick: move |evt| {},
-    "outer",
-    div {
-        onclick: move |evt| {
-            // now, outer won't be triggered
-            evt.cancel_bubble();
-        },
-        "inner"
-    }
-}
+{{#include ../../examples/event_click.rs:rsx}}
 ```
 
 ## Prevent Default
 
-With HTML-based renderers, the browser will automatically perform some action. For text inputs, this would be entering the provided key. For forms, this might involve navigating the page.
+Some events have a default behavior. For keyboard events, this might be entering the typed character. For mouse events, this might be selecting some text.
 
-In some instances, you don't want this default behavior. In these cases, instead of handling the event directly, you'd want to prevent any default handlers.
-
-Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Instead, you need to add an attribute to the element generating the event.
+In some instances, might want to avoid this default behavior. For this, you can add the `prevent_default` attribute with the name of the handler whose default behavior you want to stop. This attribute is special: you can attach it multiple times for multiple attributes:
 
 ```rust
-form {
-    prevent_default: "onclick",
-    onclick: move |_|{
-        // handle the event without navigating the page.
-    }
-}
+{{#include ../../examples/event_prevent_default.rs:prevent_default}}
 ```
+
+Any event handlers will still be called.
+
+> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior.
+
+## Handler Props
+
+Sometimes, you might want to make a component that accepts an event handler. A simple example would be a `FancyButton` component, which accepts an `on_click` handler:
+
+```rust
+{{#include ../../examples/event_handler_prop.rs:component_with_handler}}
+```
+
+Then, you can use it like any other handler:
+
+```rust
+{{#include ../../examples/event_handler_prop.rs:usage}}
+```
+
+> Note: just like any other attribute, you can name the handlers anything you want! Though they must start with `on`, for the prop to be automatically turned into an `EventHandler` at the call site.
+> 
+> You can also put custom data in the event, rather than e.g. `MouseData`
