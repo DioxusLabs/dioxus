@@ -937,7 +937,7 @@ pub mod on {
     feature = "serialize",
     derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr)
 )]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum KeyCode {
     // That key has no keycode, = 0

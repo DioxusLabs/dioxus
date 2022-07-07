@@ -45,10 +45,8 @@ impl Default for PreventDefault {
     }
 }
 
-impl NodeDepState for PreventDefault {
+impl NodeDepState<()> for PreventDefault {
     type Ctx = ();
-
-    type DepState = ();
 
     const NODE_MASK: dioxus_native_core::node_ref::NodeMask =
         dioxus_native_core::node_ref::NodeMask::new_with_attrs(
@@ -60,7 +58,7 @@ impl NodeDepState for PreventDefault {
     fn reduce(
         &mut self,
         node: dioxus_native_core::node_ref::NodeView,
-        _sibling: &Self::DepState,
+        _sibling: (),
         _ctx: &Self::Ctx,
     ) -> bool {
         let new = match node

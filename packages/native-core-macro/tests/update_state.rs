@@ -1,5 +1,6 @@
 use anymap::AnyMap;
 use dioxus::core as dioxus_core;
+use dioxus::core::ElementId;
 use dioxus::core::{AttributeValue, DomEdit, Mutations};
 use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
@@ -49,13 +50,14 @@ impl ChildDepState for ChildDepCallCounter {
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce<'a>(
         &mut self,
-        _: NodeView,
+        node: NodeView,
         _: impl Iterator<Item = &'a Self::DepState>,
         _: &Self::Ctx,
     ) -> bool
     where
         Self::DepState: 'a,
     {
+        println!("{self:?} {:?}: {} {:?}", node.tag(), node.id(), node.text());
         self.0 += 1;
         true
     }
@@ -80,11 +82,10 @@ impl ParentDepState for ParentDepCallCounter {
 
 #[derive(Debug, Clone, Default)]
 struct NodeDepCallCounter(u32);
-impl NodeDepState for NodeDepCallCounter {
+impl NodeDepState<()> for NodeDepCallCounter {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(&mut self, _node: NodeView, _sibling: &Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
         true
     }
@@ -133,11 +134,10 @@ impl ParentDepState for PushedDownStateTester {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct NodeStateTester(Option<String>, Vec<(String, String)>);
-impl NodeDepState for NodeStateTester {
+impl NodeDepState<()> for NodeStateTester {
     type Ctx = u32;
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::All).with_tag();
-    fn reduce(&mut self, node: NodeView, _sibling: &Self::DepState, ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, _sibling: (), ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = NodeStateTester(
             node.tag().map(|s| s.to_string()),
@@ -187,7 +187,7 @@ fn state_initial() {
     ctx.insert(42u32);
     let _to_rerender = dom.update_state(&vdom, nodes_updated, ctx);
 
-    let root_div = &dom[1];
+    let root_div = &dom[ElementId(1)];
     assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
     assert_eq!(
         root_div.state.bubbled.1,
@@ -204,7 +204,7 @@ fn state_initial() {
     assert_eq!(root_div.state.node.0, Some("div".to_string()));
     assert_eq!(root_div.state.node.1, vec![]);
 
-    let child_p = &dom[2];
+    let child_p = &dom[ElementId(2)];
     assert_eq!(child_p.state.bubbled.0, Some("p".to_string()));
     assert_eq!(child_p.state.bubbled.1, Vec::new());
     assert_eq!(child_p.state.pushed.0, Some("p".to_string()));
@@ -221,7 +221,7 @@ fn state_initial() {
         vec![("color".to_string(), "red".to_string())]
     );
 
-    let child_h1 = &dom[3];
+    let child_h1 = &dom[ElementId(3)];
     assert_eq!(child_h1.state.bubbled.0, Some("h1".to_string()));
     assert_eq!(child_h1.state.bubbled.1, Vec::new());
     assert_eq!(child_h1.state.pushed.0, Some("h1".to_string()));
@@ -234,64 +234,6 @@ fn state_initial() {
     );
     assert_eq!(child_h1.state.node.0, Some("h1".to_string()));
     assert_eq!(child_h1.state.node.1, vec![]);
-}
-
-#[test]
-fn state_reduce_initally_called_minimally() {
-    #[allow(non_snake_case)]
-    fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
-            div{
-                div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        })
-    }
-
-    let vdom = VirtualDom::new(Base);
-
-    let mutations = vdom.create_vnodes(rsx! {
-        div {
-            div{
-                div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        }
-    });
-
-    let mut dom: RealDom<CallCounterState> = RealDom::new();
-
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
-
-    dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part1.child_counter.0, 1);
-        assert_eq!(n.state.child_counter.0, 1);
-        assert_eq!(n.state.part2.parent_counter.0, 1);
-        assert_eq!(n.state.parent_counter.0, 1);
-        assert_eq!(n.state.part3.node_counter.0, 1);
-        assert_eq!(n.state.node_counter.0, 1);
-    });
 }
 
 #[test]
@@ -446,11 +388,15 @@ struct UnorderedDependanciesState {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ADepCallCounter(usize, BDepCallCounter);
-impl NodeDepState for ADepCallCounter {
+impl<'a> NodeDepState<(&'a BDepCallCounter,)> for ADepCallCounter {
     type Ctx = ();
-    type DepState = BDepCallCounter;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, _node: NodeView, sibling: &Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(
+        &mut self,
+        _node: NodeView,
+        (sibling,): (&'a BDepCallCounter,),
+        _ctx: &Self::Ctx,
+    ) -> bool {
         self.0 += 1;
         self.1 = sibling.clone();
         true
@@ -459,11 +405,15 @@ impl NodeDepState for ADepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct BDepCallCounter(usize, CDepCallCounter);
-impl NodeDepState for BDepCallCounter {
+impl<'a> NodeDepState<(&'a CDepCallCounter,)> for BDepCallCounter {
     type Ctx = ();
-    type DepState = CDepCallCounter;
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, _node: NodeView, sibling: &Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(
+        &mut self,
+        _node: NodeView,
+        (sibling,): (&'a CDepCallCounter,),
+        _ctx: &Self::Ctx,
+    ) -> bool {
         self.0 += 1;
         self.1 = sibling.clone();
         true
@@ -472,11 +422,10 @@ impl NodeDepState for BDepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct CDepCallCounter(usize);
-impl NodeDepState for CDepCallCounter {
+impl NodeDepState<()> for CDepCallCounter {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(&mut self, _node: NodeView, _sibling: &Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
         true
     }

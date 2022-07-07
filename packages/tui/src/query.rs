@@ -15,7 +15,7 @@ use crate::Dom;
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
 /// # Example
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 /// use dioxus::tui::query::Query;
 /// use dioxus::tui::Size;

@@ -94,7 +94,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         let to_update = rdom.apply_mutations(vec![mutations]);
         let mut any_map = AnyMap::new();
         any_map.insert(taffy.clone());
-        let _to_rerender = rdom.update_state(&dom, to_update, any_map).unwrap();
+        let _to_rerender = rdom.update_state(&dom, to_update, any_map);
     }
 
     render_vdom(
@@ -133,7 +133,8 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: fxhash::FxHashSet<usize> = vec![0].into_iter().collect();
+            let mut to_rerender: fxhash::FxHashSet<ElementId> =
+                vec![ElementId(0)].into_iter().collect();
             let mut updated = true;
 
             loop {
@@ -153,7 +154,7 @@ fn render_vdom(
                     fn resize(dims: Rect, taffy: &mut Taffy, rdom: &Dom) {
                         let width = dims.width;
                         let height = dims.height;
-                        let root_node = rdom[0].state.layout.node.unwrap();
+                        let root_node = rdom[ElementId(0)].state.layout.node.unwrap();
 
                         taffy
                             .compute_layout(
@@ -170,7 +171,7 @@ fn render_vdom(
                             let rdom = rdom.borrow();
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut taffy.borrow_mut(), &rdom);
-                            let root = &rdom[0];
+                            let root = &rdom[ElementId(0)];
                             render::render_vnode(
                                 frame,
                                 &taffy.borrow(),
@@ -249,7 +250,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = AnyMap::new();
                     any_map.insert(taffy.clone());
-                    to_rerender = rdom.update_state(vdom, to_update, any_map).unwrap();
+                    to_rerender = rdom.update_state(vdom, to_update, any_map);
                 }
             }
 
