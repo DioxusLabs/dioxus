@@ -5,6 +5,7 @@ use crate::{
     AttributeValue, Listener, VNode,
 };
 
+// stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
 #[derive(Debug)]
 pub(crate) struct DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
 where
@@ -124,6 +125,21 @@ impl AnyDynamicNodeMapping {
         match self {
             AnyDynamicNodeMapping::Static(mapping) => mapping.attributes[idx].as_ref(),
             AnyDynamicNodeMapping::Owned(mapping) => mapping.attributes[idx].as_ref(),
+        }
+    }
+
+    pub(crate) fn to_owned(self) -> Self {
+        match self {
+            AnyDynamicNodeMapping::Static(mapping) => {
+                AnyDynamicNodeMapping::Owned(DynamicNodeMapping {
+                    nodes: mapping.nodes.to_vec(),
+                    text_inner: PhantomData,
+                    text: mapping.text.into_iter().map(|t| t.to_vec()).collect(),
+                    attributes_inner: PhantomData,
+                    attributes: mapping.attributes.into_iter().map(|t| t.to_vec()).collect(),
+                })
+            }
+            AnyDynamicNodeMapping::Owned(_) => self,
         }
     }
 }
