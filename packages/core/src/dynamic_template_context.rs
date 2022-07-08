@@ -1,44 +1,130 @@
+use std::marker::PhantomData;
+
 use crate::{
     templete::{TemplateNodeId, TextTemplateSegment},
     AttributeValue, Listener, VNode,
 };
 
 #[derive(Debug)]
-pub(crate) struct DynamicNodeMapping<'b> {
-    nodes: &'b [Option<TemplateNodeId>],
-    text: &'b [&'b [TemplateNodeId]],
-    attributes: &'b [&'b [(TemplateNodeId, usize)]],
+pub(crate) struct DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
+where
+    Nodes: AsRef<[Option<TemplateNodeId>]>,
+    TextOuter: AsRef<[TextInner]>,
+    TextInner: AsRef<[TemplateNodeId]>,
+    AttributesOuter: AsRef<[AttributesInner]>,
+    AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
+{
+    nodes: Nodes,
+    text_inner: PhantomData<TextInner>,
+    text: TextOuter,
+    attributes_inner: PhantomData<AttributesInner>,
+    attributes: AttributesOuter,
 }
 
-impl<'b> DynamicNodeMapping<'b> {
-    pub(crate) fn all_dynamic(&self) -> impl Iterator<Item = TemplateNodeId> + 'b {
+impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
+    DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
+where
+    Nodes: AsRef<[Option<TemplateNodeId>]>,
+    TextOuter: AsRef<[TextInner]>,
+    TextInner: AsRef<[TemplateNodeId]>,
+    AttributesOuter: AsRef<[AttributesInner]>,
+    AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
+{
+    pub(crate) fn all_dynamic<'a>(&'a self) -> impl Iterator<Item = TemplateNodeId> + 'a {
         self.nodes
+            .as_ref()
             .iter()
             .filter_map(|o| o.as_ref())
-            .chain(self.text.iter().map(|ids| ids.iter()).flatten())
+            .chain(
+                self.text
+                    .as_ref()
+                    .iter()
+                    .map(|ids| ids.as_ref().iter())
+                    .flatten(),
+            )
             .copied()
             .chain(
                 self.attributes
+                    .as_ref()
                     .iter()
-                    .map(|ids| ids.iter())
+                    .map(|ids| ids.as_ref().iter())
                     .flatten()
                     .map(|dynamic| dynamic.0),
             )
     }
 
     pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
-        self.nodes[idx]
+        self.nodes.as_ref()[idx]
     }
 
-    pub(crate) fn get_dynamic_nodes_for_text_index(&self, idx: usize) -> &'b [TemplateNodeId] {
-        self.text[idx]
+    pub(crate) fn get_dynamic_nodes_for_text_index<'a>(&'a self, idx: usize) -> &'a TextInner {
+        &self.text.as_ref()[idx]
     }
 
-    pub(crate) fn get_dynamic_nodes_for_attribute_index(
-        &self,
+    pub(crate) fn get_dynamic_nodes_for_attribute_index<'a>(
+        &'a self,
         idx: usize,
-    ) -> &'b [(TemplateNodeId, usize)] {
-        self.attributes[idx]
+    ) -> &'a AttributesInner {
+        &self.attributes.as_ref()[idx]
+    }
+}
+
+type StaticDynamicNodeMapping = DynamicNodeMapping<
+    &'static [Option<TemplateNodeId>],
+    &'static [&'static [TemplateNodeId]],
+    &'static [TemplateNodeId],
+    &'static [&'static [(TemplateNodeId, usize)]],
+    &'static [(TemplateNodeId, usize)],
+>;
+
+type OwnedDynamicNodeMapping = DynamicNodeMapping<
+    Vec<Option<TemplateNodeId>>,
+    Vec<Vec<TemplateNodeId>>,
+    Vec<TemplateNodeId>,
+    Vec<Vec<(TemplateNodeId, usize)>>,
+    Vec<(TemplateNodeId, usize)>,
+>;
+
+/// A dynamic node mapping that is either &'static or owned
+#[derive(Debug)]
+pub(crate) enum AnyDynamicNodeMapping {
+    Static(StaticDynamicNodeMapping),
+    Owned(OwnedDynamicNodeMapping),
+}
+
+impl AnyDynamicNodeMapping {
+    pub(crate) fn all_dynamic<'a>(&'a self) -> Box<dyn Iterator<Item = TemplateNodeId> + 'a> {
+        match self {
+            AnyDynamicNodeMapping::Static(mapping) => Box::new(mapping.all_dynamic()),
+            AnyDynamicNodeMapping::Owned(mapping) => Box::new(mapping.all_dynamic()),
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
+        match self {
+            AnyDynamicNodeMapping::Static(mapping) => mapping.nodes[idx],
+            AnyDynamicNodeMapping::Owned(mapping) => mapping.nodes[idx],
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_text_index<'a>(
+        &'a self,
+        idx: usize,
+    ) -> &'a [TemplateNodeId] {
+        match self {
+            AnyDynamicNodeMapping::Static(mapping) => mapping.text[idx].as_ref(),
+            AnyDynamicNodeMapping::Owned(mapping) => mapping.text[idx].as_ref(),
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_attribute_index<'a>(
+        &'a self,
+        idx: usize,
+    ) -> &'a [(TemplateNodeId, usize)] {
+        match self {
+            AnyDynamicNodeMapping::Static(mapping) => mapping.attributes[idx].as_ref(),
+            AnyDynamicNodeMapping::Owned(mapping) => mapping.attributes[idx].as_ref(),
+        }
     }
 }
 

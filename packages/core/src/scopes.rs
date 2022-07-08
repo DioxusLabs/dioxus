@@ -42,8 +42,12 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
-    pub templates: RefCell<FxHashMap<*const Template<'static>, TemplateId>>,
-    pub template_count: Cell<TemplateId>,
+    pub template_id_mapping: RefCell<FxHashMap<TemplateId, usize>>,
+    pub templates: RefCell<Slab<Template>>,
+    pub template_count: Cell<usize>,
+    // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
+    // todo: this allocates memory without dropping, but only when allocating templates so it should be minimal.
+    pub template_bump: Bump,
 }
 
 impl ScopeArena {
@@ -83,8 +87,10 @@ impl ScopeArena {
                 gen: Cell::new(0),
                 sender,
             }),
-            templates: RefCell::new(FxHashMap::default()),
-            template_count: Cell::new(TemplateId(0)),
+            template_id_mapping: RefCell::new(FxHashMap::default()),
+            templates: RefCell::new(Slab::new()),
+            template_count: Cell::new(0),
+            template_bump: Bump::new(),
         }
     }
 

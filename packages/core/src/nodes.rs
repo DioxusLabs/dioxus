@@ -804,6 +804,9 @@ impl<'a> NodeFactory<'a> {
         let callback = RefCell::new(Some(caller));
         EventHandler { callback }
     }
+
+    /// Create a template
+    pub fn template(&mut self) {}
 }
 
 impl Debug for NodeFactory<'_> {

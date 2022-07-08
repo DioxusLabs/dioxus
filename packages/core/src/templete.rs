@@ -4,18 +4,38 @@ use bumpalo::Bump;
 
 use crate::{
     diff::DiffState,
-    dynamic_template_context::{DynamicNodeMapping, TemplateContext},
+    dynamic_template_context::{AnyDynamicNodeMapping, TemplateContext},
     innerlude::GlobalNodeId,
     Attribute, AttributeValue, ElementId, Mutations,
 };
 
-/// An Template's unique identifier.
-///
-/// `TemplateId` is a `usize` that is unique across the entire VirtualDOM and across time.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TemplateId(pub usize);
+/// The location of a charicter. Used to track the location of rsx calls for hot reloading.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct CodeLocation {
+    /// the path to the crate that contains the location
+    pub crate_path: String,
+    /// the path within the crate to the file that contains the location
+    pub file_path: String,
+    /// the line number of the location
+    pub line: u32,
+    /// the column number of the location
+    pub column: u32,
+}
 
-impl Into<u64> for TemplateId {
+/// An Template's unique identifier within the vdom.
+///
+/// `TemplateId` is a refrence to the location in the code the template was created.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TemplateId(pub &'static CodeLocation);
+
+/// An Template's unique identifier within the renderer.
+///
+/// `ClientTemplateId` is a unique id of the template sent to the renderer. It is unique across time.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct ClientTemplateId(pub usize);
+
+impl Into<u64> for ClientTemplateId {
     fn into(self) -> u64 {
         self.0 as u64
     }
@@ -36,11 +56,12 @@ impl Into<u64> for TemplateNodeId {
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
     pub(crate) id: Cell<Option<ElementId>>,
-    pub(crate) template: &'a Template<'a>,
+    pub(crate) template: &'a Template,
     pub(crate) dynamic_context: &'a TemplateContext<'a>,
 }
 
 impl<'a> VTemplateRef<'a> {
+    // update the template with content from the dynamic context
     pub(crate) fn hydrate<'b>(&self, diff_state: &mut DiffState<'a>) {
         fn hydrate_inner<
             'b,
@@ -154,15 +175,20 @@ impl<'a> VTemplateRef<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Template<'b> {
+pub(crate) struct Template {
     pub(crate) id: TemplateId,
     pub(crate) nodes: TemplateNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub(crate) dynamic_ids: DynamicNodeMapping<'b>,
+    pub(crate) dynamic_ids: AnyDynamicNodeMapping,
 }
 
-impl<'b> Template<'b> {
-    pub(crate) fn create(&mut self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateId) {
+impl Template {
+    pub(crate) fn create<'b>(
+        &self,
+        mutations: &mut Mutations<'b>,
+        bump: &'b Bump,
+        id: ClientTemplateId,
+    ) {
         mutations.create_templete(id.into());
         let id = TemplateNodeId(0);
         if !self.nodes.is_empty() {
@@ -171,10 +197,10 @@ impl<'b> Template<'b> {
         mutations.finish_templete();
     }
 
-    fn create_node(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
+    fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
         fn crate_node_inner<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
             node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
-            ctx: (&mut Mutations<'b>, &'b Bump, &Template<'b>),
+            ctx: (&mut Mutations<'b>, &'b Bump, &Template),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,

@@ -1,5 +1,5 @@
 use captuered_context::CapturedContext;
-use dioxus_core::{NodeFactory, SchedulerMsg, VNode};
+use dioxus_core::{CodeLocation, NodeFactory, SchedulerMsg, VNode};
 use dioxus_hooks::UnboundedSender;
 use error::{Error, ParseError};
 use interperter::build;
@@ -19,15 +19,6 @@ lazy_static! {
     /// This a a global store of the current rsx text for each call to rsx
     // Global mutable data is genrally not great, but it allows users to not worry about passing down the text RsxContex every time they switch to hot reloading.
     pub static ref RSX_CONTEXT: RsxContext = RsxContext::new(RsxData::default());
-}
-
-// the location of the code relative to the current crate based on [std::panic::Location]
-#[derive(Debug, Clone, Hash, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CodeLocation {
-    pub crate_path: String,
-    pub file_path: String,
-    pub line: u32,
-    pub column: u32,
 }
 
 /// Get the resolved rsx given the origional rsx, a captured context of dynamic components, and a factory to build the resulting node

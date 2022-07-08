@@ -23,6 +23,7 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scopes::*;
+    pub use crate::templete::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -65,10 +66,10 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, Attribute, AttributeValue, Component, DioxusElement, DomEdit, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations,
-    NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent, UserEvent,
-    VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    AnyEvent, Attribute, AttributeValue, CodeLocation, Component, DioxusElement, DomEdit, Element,
+    ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener,
+    Mutations, NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent,
+    UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

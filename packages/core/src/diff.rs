@@ -94,8 +94,8 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AnyProps, ElementId, GlobalNodeId, Mutations, ScopeArena, ScopeId, VComponent, VElement,
-        VFragment, VNode, VPlaceholder, VText,
+        AnyProps, ClientTemplateId, ElementId, GlobalNodeId, Mutations, ScopeArena, ScopeId,
+        VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
     templete::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -307,18 +307,7 @@ impl<'b> DiffState<'b> {
         new: &'b VTemplateRef<'b>,
         node: &'b VNode<'b>,
     ) -> usize {
-        let mut templates = self.scopes.templates.borrow_mut();
-        let ptr: *const Template = unsafe { std::mem::transmute(new.template) };
-        let id = if let Some(id) = templates.get(&ptr) {
-            *id
-        } else {
-            let mut id = self.scopes.template_count.get();
-            templates.insert(ptr, id);
-            let template_id = id;
-            id.0 += 1;
-            self.scopes.template_count.set(id);
-            template_id
-        };
+        let id = self.get_or_insert_template_id(new.template);
 
         let real_id = self.scopes.reserve_node(node);
 
@@ -1429,5 +1418,26 @@ impl<'b> DiffState<'b> {
             .unwrap()
             .fin_frame()
             .bump
+    }
+
+    pub fn get_or_insert_template_id(&mut self, template: &Template) -> ClientTemplateId {
+        let template_id = template.id;
+        let mut template_id_mapping = self.scopes.template_id_mapping.borrow_mut();
+        if let Some(id) = template_id_mapping.get(&template_id) {
+            ClientTemplateId(*id)
+        } else {
+            let mut id = self.scopes.template_count.get();
+            template_id_mapping.insert(template_id, id);
+            let template_id = ClientTemplateId(id);
+            id += 1;
+            self.scopes.template_count.set(id);
+            self.register_template(template, template_id);
+            template_id
+        }
+    }
+
+    pub fn register_template(&mut self, template: &Template, id: ClientTemplateId) {
+        let bump = &self.scopes.template_bump;
+        template.create(&mut self.mutations, bump, id);
     }
 }
