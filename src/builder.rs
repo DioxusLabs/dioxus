@@ -75,8 +75,6 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let loading = loading::Loading::default();
-    loading.text("Building");
     let mut child = cmd.spawn()?;
     let out = child.stdout.take().unwrap();
     let mut out = std::io::BufReader::new(out);
@@ -96,8 +94,6 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
             }
         }
     }
-    loading.success("OK");
-    loading.end();
 
     // if !output.status.success() {
     //     log::error!("Build failed!");
