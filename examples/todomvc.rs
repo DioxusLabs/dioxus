@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_elements::input_data::keyboard_types::Key;
 
 fn main() {
     dioxus::desktop::launch(app);
@@ -56,7 +57,7 @@ pub fn app(cx: Scope<()>) -> Element {
                         autofocus: "true",
                         oninput: move |evt| draft.set(evt.value.clone()),
                         onkeydown: move |evt| {
-                            if evt.key == "Enter" && !draft.is_empty() {
+                            if evt.key() == Key::Enter && !draft.is_empty() {
                                 todos.make_mut().insert(
                                     **todo_id,
                                     TodoItem {
@@ -148,8 +149,8 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
                     autofocus: "true",
                     onfocusout: move |_| is_editing.set(false),
                     onkeydown: move |evt| {
-                        match evt.key.as_str() {
-                            "Enter" | "Escape" | "Tab" => is_editing.set(false),
+                        match evt.key() {
+                            Key::Enter | Key::Escape | Key::Tab => is_editing.set(false),
                             _ => {}
                         }
                     },

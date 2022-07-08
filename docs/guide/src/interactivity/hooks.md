@@ -1,253 +1,83 @@
-# Hooks and Internal State
+# Hooks and Component State
 
-In the [Adding Interactivity](./interactivity.md) section, we briefly covered the concept of hooks and state stored internal to components.
+So far our components, being Rust functions, had no state – they were always rendering the same thing. However, in a UI component, it is often useful to have stateful functionality to build user interactions. For example, you might want to track whether the user has openend a drop-down, and render different things accordingly.
 
-In this section, we'll dive a bit deeper into hooks, exploring both the theory and mechanics.
+For stateful logic, you can use hooks. Hooks are Rust functions that take a reference to `ScopeState` (in a component, you can pass `&cx`), and provide you with functionality and state. 
 
+## `use_state` Hook
 
+[`use_state`](https://docs.rs/dioxus/latest/dioxus/hooks/fn.use_state.html) is one of the simplest hooks.
 
-## Theory of Hooks
+- You provide a closure that determines the initial value
+- `use_state` gives you the current value, and a way to update it by setting it to something else
+- When the value updates, `use_state` makes the component re-render, and provides you with the new value
 
-Over the past several decades, computer scientists and engineers have long sought the "right way" of designing user interfaces. With each new programming language, novel features are unlocked that change the paradigm in which user interfaces are coded.
-
-Generally, a number of patterns have emerged, each with their own strengths and tradeoffs.
-
-Broadly, there are two types of GUI structures:
-
-- Immediate GUIs: re-render the entire screen on every update
-- Retained GUIs: only re-render the portion of the screen that changed
-
-Typically, immediate-mode GUIs are simpler to write but can slow down as more features, like styling, are added.
-
-Many GUIs today are written in *Retained mode* - your code changes the data of the user interface but the renderer is responsible for actually drawing to the screen. In these cases, our GUI's state sticks around as the UI is rendered. To help accommodate retained mode GUIs, like the web browser, Dioxus provides a mechanism to keep state around.
-
-> Note: Even though hooks are accessible, you should still prefer one-way data flow and encapsulation. Your UI code should be as predictable as possible. Dioxus is plenty fast, even for the largest apps.
-
-## Mechanics of Hooks
-In order to have state stick around between renders, Dioxus provides the `hook` through the `use_hook` API. This gives us a mutable reference to data returned from the initialization function.
+For example, you might have seen the counter example, in which state (a number) is tracked using the `use_state` hook:
 
 ```rust
-fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
-
-    //
-}
+{{#include ../../examples/hooks_counter.rs:component}}
 ```
+![Screenshot: counter app](./images/counter.png)
 
-We can even modify this value directly from an event handler:
+Every time the component's state changes, it re-renders, and the component function is called, so you can describe what you want the new UI to look like. You don't have to worry about "changing" anything – just describe what you want in terms of the state, and Dioxus will take care of the rest!
+
+> `use_state` returns your value wrapped in a smart pointer of type [`UseState`](https://docs.rs/dioxus/latest/dioxus/hooks/struct.UseState.html). This is why you can both read the value and update it, even within a handler.
+
+You can use multiple hooks in the same component if you want:
 
 ```rust
-fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
-
-    cx.render(rsx!(
-        button {
-            onclick: move |_| name.push_str(".."),
-        }
-    ))
-}
+{{#include ../../examples/hooks_counter_two_state.rs:component}}
 ```
+![Screenshot: app with two counters](./images/counter_two_state.png)
 
-Mechanically, each call to `use_hook` provides us with `&mut T` for a new value.
+## Rules of Hooks
+
+The above example might seem a bit magic, since Rust functions are typically not associated with state. Dioxus allows hooks to maintain state across renders through a reference to `ScopeState`, which is why you must pass `&cx` to them.
+
+But how can Dioxus differentiate between multiple hooks in the same component? As you saw in the second example, both `use_state` functions were called with the same parameters, so how come they can return different things when the counters are different?
 
 ```rust
-fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
-    let age: &mut u32 = cx.use_hook(|| 10);
-    let friends: &mut Vec<String> = cx.use_hook(|| vec!["Jane Doe".to_string()]);
-
-    //
-}
+{{#include ../../examples/hooks_counter_two_state.rs:use_state_calls}}
 ```
 
-Internally, Dioxus is creating a list of hook values with each call to `use_hook` advancing the index of the list to return the next value.
+This is only possible because the two hooks are always called in the same order, so Dioxus knows which is which. So the order you call hooks matters, which is why you must follow certain rules when using hooks:
 
-Our internal HookList would look something like:
+1. Hooks may be only used in components or other hooks (we'll get to that later)
+2. On every call to the component function
+   1. The same hooks must be called
+   2. In the same order
+3. Hooks name's must start with `use_` so you don't accidentally confuse them with regular functions
+
+These rules mean that there are certain things you can't do with hooks:
+
+### No Hooks in Conditionals
+```rust
+{{#include ../../examples/hooks_bad.rs:conditional}}
+```
+
+### No Hooks in Closures
+```rust
+{{#include ../../examples/hooks_bad.rs:closure}}
+```
+
+### No Hooks in Loops
+```rust
+{{#include ../../examples/hooks_bad.rs:loop}}
+```
+
+## `use_ref` Hook
+
+`use_state` is great for tracking simple values. However, you may notice in the [`UseState` API](https://docs.rs/dioxus/latest/dioxus/hooks/struct.UseState.html) that the only way to modify its value is to replace it with something else (e.g., by calling `set`, or through one of the `+=`, `-=` operators). This works well when it is cheap to construct a value (such as any primitive). But what if you want to maintain more complex data in the components state?
+
+For example, suppose we want to maintain a `Vec` of values. If we stored it with `use_state`, the only way to add a new value to the list would be to create a new `Vec` with the additional value, and put it in the state. This is expensive! We want to modify the existing `Vec` instead.
+
+Thankfully, there is another hook for that, `use_ref`! It is similar to `use_state`, but it lets you get a mutable reference to the contained data.
+
+Here's a simple example that keeps a list of events in a `use_ref`. We can acquire write access to the state with `.write()`, and then just `.push` a new value to the state:
 
 ```rust
-[
-    Hook<String>,
-    Hook<u32>,
-    Hook<String>,
-]
+{{#include ../../examples/hooks_use_ref.rs:component}}
 ```
 
-This is why hooks called out of order will fail - if we try to downcast a `Hook<String>` to `Hook<u32>`, Dioxus has no choice but to panic. We do provide a `try_use_hook` but you should never need that in practice.
+> The return values of `use_state` and `use_ref`, (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
 
-This pattern might seem strange at first, but it can be a significant upgrade over structs as blobs of state, which tend to be difficult to use in [Rust given the ownership system](https://rust-lang.github.io/rfcs/2229-capture-disjoint-fields.html).
-
-
-## Rules of hooks
-
-Hooks are sensitive to how they are used. To use hooks, you must abide by the
-"rules of hooks" ([borrowed from react](https://reactjs.org/docs/hooks-rules.html)):
-
-- Functions with "use_" should not be called in callbacks
-- Functions with "use_" should not be called out of order
-- Functions with "use_" should not be called in loops or conditionals
-
-Examples of "no-nos" include:
-
-### ❌ Nested uses
-
-```rust
-// ❌ don't call use_hook or any `use_` function *inside* use_hook!
-cx.use_hook(|_| {
-    let name = cx.use_hook(|_| "ads");
-})
-
-// ✅ instead, move the first hook above
-let name = cx.use_hook(|_| "ads");
-cx.use_hook(|_| {
-    // do something with name here
-})
-```
-
-### ❌ Uses in conditionals
-```rust
-// ❌ don't call use_ in conditionals!
-if do_thing {
-    let name = use_state(&cx, || 0);
-}
-
-// ✅ instead, *always* call use_state but leave your logic
-let name = use_state(&cx, || 0);
-if do_thing {
-    // do thing with name here
-}
-```
-
-### ❌ Uses in loops
-
-
-```rust
-// ❌ Do not use hooks in loops!
-let mut nodes = vec![];
-
-for name in names {
-    let age = use_state(&cx, |_| 0);
-    nodes.push(cx.render(rsx!{
-        div { "{age}" }
-    }))
-}
-
-// ✅ Instead, consider refactoring your usecase into components 
-#[inline_props]
-fn Child(cx: Scope, name: String) -> Element {
-    let age = use_state(&cx, |_| 0);
-    cx.render(rsx!{ div { "{age}" } })
-}
-
-// ✅ Or, use a hashmap with use_ref
-let ages = use_ref(&cx, || HashMap::new());
-
-names.iter().map(|name| {
-    let age = ages.get(name).unwrap();
-    cx.render(rsx!{ div { "{age}" } })
-})
-```
-
-## Building new Hooks
-
-However, most hooks you'll interact with *don't* return an `&mut T` since this is not very useful in a real-world situation.
-
-Consider when we try to pass our `&mut String` into two different handlers:
-
-```rust
-fn example(cx: Scope) -> Element {
-    let name: &mut String = cx.use_hook(|| "John Doe".to_string());
-
-    cx.render(rsx!(
-        button { onclick: move |_| name.push_str("yes"), }
-        button { onclick: move |_| name.push_str("no"), }
-    ))
-}
-```
-
-Rust will not allow this to compile! We cannot `Copy` unique mutable references - they are, by definition, unique. However, we *can* reborrow our `&mut T` as an `&T` which are non-unique references and share those between handlers:
-
-```rust
-fn example(cx: Scope) -> Element {
-    let name: &String = &*cx.use_hook(|| "John Doe".to_string());
-
-    cx.render(rsx!(
-        button { onclick: move |_| log::info!("{}", name), }
-        button { onclick: move |_| log::info!("{}", name), }
-    ))
-}
-```
-
-So, for any custom hook we want to design, we need to enable mutation through [interior mutability](https://doc.rust-lang.org/book/ch15-05-interior-mutability.html) - IE move to runtime [borrow checking](https://doc.rust-lang.org/1.8.0/book/references-and-borrowing.html). We might incur a tiny runtime cost for each time we grab a new value from the hook, but this cost is extremely minimal.
-
-This example uses the `Cell` type to let us replace the value through interior mutability. `Cell` has practically zero overhead, but is slightly more limited that its `RefCell` cousin.
-
-```rust
-fn example(cx: Scope) -> Element {
-    let name: &Cell<&'static str> = cx.use_hook(|| Cell::new("John Doe"));
-
-    cx.render(rsx!(
-        button { onclick: move |_| name.set("John"), }
-        button { onclick: move |_| name.set("Jane"), }
-    ))
-}
-```
-
-## Driving state updates through hooks
-
-Hooks like `use_state` and `use_ref` wrap this runtime borrow checking in a type that *does* implement `Copy`. Additionally, they also mark the component as "dirty" whenever a new value has been set. This way, whenever `use_state` has a new value `set`, the component knows to update.
-
-```rust
-fn example(cx: Scope) -> Element {
-    let name = use_state(&cx, || "Jack");
-
-    cx.render(rsx!(
-        "Hello, {name}"
-        button { onclick: move |_| name.set("John"), }
-        button { onclick: move |_| name.set("Jane"), }
-    ))
-}
-```
-
-Internally, our `set` function looks something like this:
-
-```rust
-impl<'a, T> UseState<'a, T> {
-    fn set(&self, new: T) {
-        // Replace the value in the cell
-        self.value.set(new);
-
-        // Mark our component as dirty
-        self.cx.needs_update();
-    }
-}
-```
-
-Most hooks we provide implement `Deref` on their values since they are essentially smart pointers. To access the underlying value, you'll often need to use the deref operator:
-
-```rust
-fn example(cx: Scope) -> Element {
-    let name = use_state(&cx, || "Jack");
-
-    match *name {
-        "Jack" => {}
-        "Jill" => {}
-        _ => {}
-    }
-
-    // ..
-}
-
-```
-
-
-## Hooks provided by the `Dioxus-Hooks` package
-
-By default, we bundle a handful of hooks in the Dioxus-Hooks package. Feel free to click on each hook to view its definition and associated documentation.
-
-- [use_state](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_state.html) - store state with ergonomic updates
-- [use_ref](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_ref.html) - store non-clone state with a refcell
-- [use_future](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_future.html) - store a future to be polled after initialization
-- [use_coroutine](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_coroutine.html) - store a future that can be stopped/started/communicated with
-- [use_context_provider](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_context_provider.html) - expose state to descendent components
-- [use_context](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_context.html) - consume state provided by `use_provide_context`
-- [use_suspense](https://docs.rs/dioxus-hooks/latest/dioxus_hooks/fn.use_suspense.html)

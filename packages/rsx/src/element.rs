@@ -1,6 +1,6 @@
 use super::*;
 
-use proc_macro2::TokenStream as TokenStream2;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseBuffer, ParseStream},
@@ -208,6 +208,27 @@ pub enum ElementAttr {
     // EventClosure { name: Ident, closure: ExprClosure },
     /// onclick: {}
     EventTokens { name: Ident, tokens: Expr },
+}
+
+impl ElementAttr {
+    pub fn start(&self) -> Span {
+        match self {
+            ElementAttr::AttrText { name, .. } => name.span(),
+            ElementAttr::AttrExpression { name, .. } => name.span(),
+            ElementAttr::CustomAttrText { name, .. } => name.span(),
+            ElementAttr::CustomAttrExpression { name, .. } => name.span(),
+            ElementAttr::EventTokens { name, .. } => name.span(),
+        }
+    }
+
+    pub fn is_expr(&self) -> bool {
+        matches!(
+            self,
+            ElementAttr::AttrExpression { .. }
+                | ElementAttr::CustomAttrExpression { .. }
+                | ElementAttr::EventTokens { .. }
+        )
+    }
 }
 
 #[derive(PartialEq, Eq)]

@@ -30,7 +30,7 @@ use std::{
 ///     ))
 /// }
 /// ```
-pub fn use_atom_state<'a, T: 'static>(cx: &'a ScopeState, f: impl Writable<T>) -> &'a AtomState<T> {
+pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
     let inner = cx.use_hook(|_| AtomState {
@@ -279,13 +279,13 @@ impl<T: 'static> Clone for AtomState<T> {
     }
 }
 
-impl<'a, T: 'static + Display> std::fmt::Display for AtomState<T> {
+impl<T: 'static + Display> std::fmt::Display for AtomState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value.as_ref().unwrap())
     }
 }
 
-impl<'a, T: std::fmt::Binary> std::fmt::Binary for AtomState<T> {
+impl<T: std::fmt::Binary> std::fmt::Binary for AtomState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:b}", self.value.as_ref().unwrap().as_ref())
     }
@@ -316,7 +316,7 @@ impl<T: Debug> Debug for AtomState<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for AtomState<T> {
+impl<T> std::ops::Deref for AtomState<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

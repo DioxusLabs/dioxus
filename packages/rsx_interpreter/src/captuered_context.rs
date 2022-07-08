@@ -1,11 +1,13 @@
+use std::collections::HashSet;
+
 use dioxus_core::{Listener, VNode};
 use dioxus_rsx::{
     BodyNode, CallBody, Component, ElementAttr, ElementAttrNamed, IfmtInput, Segment,
 };
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Expr, Ident, Result};
+use syn::{Expr, Ident, LitStr, Result};
 
-use crate::CodeLocation;
+use crate::{attributes::attrbute_to_static_str, CodeLocation};
 #[derive(Default)]
 pub struct CapturedContextBuilder {
     pub ifmted: Vec<IfmtInput>,
@@ -14,6 +16,7 @@ pub struct CapturedContextBuilder {
     pub captured_expressions: Vec<Expr>,
     pub listeners: Vec<ElementAttrNamed>,
     pub custom_context: Option<Ident>,
+    pub custom_attributes: HashSet<LitStr>,
 }
 
 impl CapturedContextBuilder {
@@ -23,6 +26,7 @@ impl CapturedContextBuilder {
         self.iterators.extend(other.iterators);
         self.listeners.extend(other.listeners);
         self.captured_expressions.extend(other.captured_expressions);
+        self.custom_attributes.extend(other.custom_attributes);
     }
 
     pub fn from_call_body(body: CallBody) -> Result<Self> {
@@ -42,8 +46,13 @@ impl CapturedContextBuilder {
             BodyNode::Element(el) => {
                 for attr in el.attributes {
                     match attr.attr {
-                        ElementAttr::AttrText { value, .. }
-                        | ElementAttr::CustomAttrText { value, .. } => {
+                        ElementAttr::AttrText { value, .. } => {
+                            let value_tokens = value.to_token_stream();
+                            let formated: IfmtInput = syn::parse2(value_tokens)?;
+                            captured.ifmted.push(formated);
+                        }
+                        ElementAttr::CustomAttrText { value, name } => {
+                            captured.custom_attributes.insert(name);
                             let value_tokens = value.to_token_stream();
                             let formated: IfmtInput = syn::parse2(value_tokens)?;
                             captured.ifmted.push(formated);
@@ -51,7 +60,8 @@ impl CapturedContextBuilder {
                         ElementAttr::AttrExpression { name: _, value } => {
                             captured.captured_expressions.push(value);
                         }
-                        ElementAttr::CustomAttrExpression { name: _, value } => {
+                        ElementAttr::CustomAttrExpression { name, value } => {
+                            captured.custom_attributes.insert(name);
                             captured.captured_expressions.push(value);
                         }
                         ElementAttr::EventTokens { .. } => captured.listeners.push(attr),
@@ -91,6 +101,7 @@ impl ToTokens for CapturedContextBuilder {
             captured_expressions,
             listeners,
             custom_context: _,
+            custom_attributes,
         } = self;
         let listeners_str = listeners
             .iter()
@@ -131,6 +142,7 @@ impl ToTokens for CapturedContextBuilder {
         let captured_attr_expressions_text = captured_expressions
             .iter()
             .map(|e| format!("{}", e.to_token_stream()));
+        let custom_attributes_iter = custom_attributes.iter();
         tokens.append_all(quote! {
             CapturedContext {
                 captured: IfmtArgs{
@@ -140,6 +152,7 @@ impl ToTokens for CapturedContextBuilder {
                 iterators: vec![#((#iterators_str, #iterators)),*],
                 expressions: vec![#((#captured_attr_expressions_text, #captured_expressions.to_string())),*],
                 listeners: vec![#((#listeners_str, #listeners)),*],
+                custom_attributes: &[#(#custom_attributes_iter),*],
                 location: code_location.clone()
             }
         })
@@ -159,8 +172,31 @@ pub struct CapturedContext<'a> {
     pub expressions: Vec<(&'static str, String)>,
     // map listener code to the resulting listener
     pub listeners: Vec<(&'static str, Listener<'a>)>,
+    // used to map custom attrbutes form &'a str to &'static str
+    pub custom_attributes: &'static [&'static str],
     // used to provide better error messages
     pub location: CodeLocation,
+}
+
+impl<'a> CapturedContext<'a> {
+    pub fn attrbute_to_static_str(
+        &self,
+        attr: &str,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        literal: bool,
+    ) -> Option<(&'static str, Option<&'static str>)> {
+        if let Some(attr) = attrbute_to_static_str(attr, tag, ns) {
+            Some(attr)
+        } else if literal {
+            self.custom_attributes
+                .iter()
+                .find(|attribute| attr == **attribute)
+                .map(|attribute| (*attribute, None))
+        } else {
+            None
+        }
+    }
 }
 
 pub struct IfmtArgs {

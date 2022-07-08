@@ -8,6 +8,8 @@ mod controller;
 mod desktop_context;
 mod escape;
 mod events;
+#[cfg(feature = "hot-reload")]
+mod hot_reload;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
@@ -211,13 +213,6 @@ pub fn launch_with_props<P: 'static + Send>(
             } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
-
-                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                    if let Some(view) = desktop.webviews.get_mut(&window_id) {
-                        let _ = view.resize();
-                    }
-                }
-
                 _ => {}
             },
 

@@ -30,10 +30,10 @@ use std::{
 ///     ))
 /// }
 /// ```
-pub fn use_state<'a, T: 'static>(
-    cx: &'a ScopeState,
+pub fn use_state<T: 'static>(
+    cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,
-) -> &'a UseState<T> {
+) -> &UseState<T> {
     let hook = cx.use_hook(move |_| {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
@@ -304,13 +304,13 @@ impl<T: 'static> Clone for UseState<T> {
     }
 }
 
-impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
+impl<T: 'static + Display> std::fmt::Display for UseState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.current_val)
     }
 }
 
-impl<'a, T: std::fmt::Binary> std::fmt::Binary for UseState<T> {
+impl<T: std::fmt::Binary> std::fmt::Binary for UseState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:b}", self.current_val.as_ref())
     }
@@ -341,7 +341,7 @@ impl<T: Debug> Debug for UseState<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for UseState<T> {
+impl<T> std::ops::Deref for UseState<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
