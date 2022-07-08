@@ -2,11 +2,11 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
     tools::Tool,
-    DioxusConfig,
+    CargoFormatInfo, DioxusConfig,
 };
 use std::{
     fs::{copy, create_dir_all, remove_dir_all, File},
-    io::{Read, BufRead},
+    io::{BufRead, Read},
     panic,
     path::PathBuf,
     process::Command,
@@ -80,16 +80,21 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
     let mut child = cmd.spawn()?;
     let out = child.stdout.take().unwrap();
     let mut out = std::io::BufReader::new(out);
-    let mut s = String::new();
-    let mut n = 0;
-    while let Ok(_) = out.read_line(&mut s) {
+    let mut content = String::new();
+    while let Ok(_) = out.read_line(&mut content) {
         // 进程退出后结束循环
         if let Ok(Some(_)) = child.try_wait() {
             break;
         }
-        println!("\n{}\n", s);
-        loading.text(format!("Building {}", n));
-        n += 1;
+        let content = content.split('\n').collect::<Vec<&str>>();
+        for json in content {
+            let d = serde_json::from_str::<CargoFormatInfo>(&json);
+            if let Ok(d) = d {
+                println!("\n{:#?}\n", d);
+            } else {
+                println!("\n\n{:?}\n\n", json);
+            }
+        }
     }
     loading.success("OK");
     loading.end();

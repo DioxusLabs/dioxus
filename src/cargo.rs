@@ -1,5 +1,5 @@
 //! Utilities for working with cargo and rust files
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 
 use crate::error::{Error, Result};
 use std::{
@@ -93,7 +93,7 @@ impl Metadata {
     }
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CargoFormatInfo {
     pub reason: CargoFormatReason,
     #[serde(default)]
@@ -101,10 +101,12 @@ pub struct CargoFormatInfo {
     #[serde(default)]
     manifest_path: String,
     #[serde(default)]
-    message: Option<serde_json::Value>
+    target: Option<serde_json::Value>,
+    #[serde(default)]
+    message: Option<serde_json::Value>,
 }
 
-#[derive(Serialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum CargoFormatReason {
     #[serde(rename = "compiler-message")]
     CompilerMessage,
