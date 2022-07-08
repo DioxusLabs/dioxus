@@ -77,18 +77,28 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
 
     let loading = loading::Loading::default();
     loading.text("Building");
-    let output = cmd.output()?;
-    for i in output.stdout.lines() {
-        // println!("{:?}", i);
+    let mut child = cmd.spawn()?;
+    let out = child.stdout.take().unwrap();
+    let mut out = std::io::BufReader::new(out);
+    let mut s = String::new();
+    let mut n = 0;
+    while let Ok(_) = out.read_line(&mut s) {
+        // 进程退出后结束循环
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        println!("\n{}\n", s);
+        loading.text(format!("Building {}", n));
+        n += 1;
     }
     loading.success("OK");
     loading.end();
 
-    if !output.status.success() {
-        log::error!("Build failed!");
-        let reason = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(Error::BuildFailed(reason));
-    }
+    // if !output.status.success() {
+    //     log::error!("Build failed!");
+    //     let reason = String::from_utf8_lossy(&output.stderr).to_string();
+    //     return Err(Error::BuildFailed(reason));
+    // }
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");

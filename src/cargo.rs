@@ -1,4 +1,6 @@
 //! Utilities for working with cargo and rust files
+use serde::Serialize;
+
 use crate::error::{Error, Result};
 use std::{
     env, fs,
@@ -89,4 +91,27 @@ impl Metadata {
 
         Err(Error::CargoError("InvalidOutput".to_string()))
     }
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct CargoFormatInfo {
+    pub reason: CargoFormatReason,
+    #[serde(default)]
+    pub package_id: String,
+    #[serde(default)]
+    manifest_path: String,
+    #[serde(default)]
+    message: Option<serde_json::Value>
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub enum CargoFormatReason {
+    #[serde(rename = "compiler-message")]
+    CompilerMessage,
+    #[serde(rename = "compiler-artifact")]
+    CompilerArtifact,
+    #[serde(rename = "build-script-executed")]
+    BuildScriptExecuted,
+    #[serde(rename = "build-finished")]
+    BuildFinished,
 }
