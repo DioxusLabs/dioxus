@@ -83,28 +83,12 @@ fn build_node<'a>(
                         ElementAttr::AttrText { .. } | ElementAttr::CustomAttrText { .. } => {
                             let (name, value, span, literal): (String, IfmtInput, Span, bool) =
                                 match &attr.attr {
-                                    ElementAttr::AttrText { name, value } => (
-                                        name.to_string(),
-                                        IfmtInput::from_str(&value.value()).map_err(|err| {
-                                            Error::ParseError(ParseError::new(
-                                                err,
-                                                ctx.location.clone(),
-                                            ))
-                                        })?,
-                                        name.span(),
-                                        false,
-                                    ),
-                                    ElementAttr::CustomAttrText { name, value } => (
-                                        name.value(),
-                                        IfmtInput::from_str(&value.value()).map_err(|err| {
-                                            Error::ParseError(ParseError::new(
-                                                err,
-                                                ctx.location.clone(),
-                                            ))
-                                        })?,
-                                        name.span(),
-                                        true,
-                                    ),
+                                    ElementAttr::AttrText { name, value } => {
+                                        (name.to_string(), value.clone(), name.span(), false)
+                                    }
+                                    ElementAttr::CustomAttrText { name, value } => {
+                                        (name.value(), value.clone(), name.span(), true)
+                                    }
                                     _ => unreachable!(),
                                 };
 
@@ -216,10 +200,7 @@ fn build_node<'a>(
                         children.as_slice(),
                         None,
                     )),
-                    Some(lit) => {
-                        let ifmt: IfmtInput = lit.value().parse().map_err(|err| {
-                            Error::ParseError(ParseError::new(err, ctx.location.clone()))
-                        })?;
+                    Some(ifmt) => {
                         let key = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
 
                         Ok(factory.raw_element(

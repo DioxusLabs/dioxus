@@ -9,68 +9,11 @@ use syn::{
 };
 
 pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
-    // build format_literal
-    let mut format_literal = String::new();
-    let mut expr_counter = 0;
-    for segment in input.segments.iter() {
-        match segment {
-            Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
-            Segment::Formatted {
-                format_args,
-                segment,
-            } => {
-                format_literal += "{";
-                match segment {
-                    FormattedSegment::Expr(_) => {
-                        format_literal += &expr_counter.to_string();
-                        expr_counter += 1;
-                    }
-                    FormattedSegment::Ident(ident) => {
-                        format_literal += &ident.to_string();
-                    }
-                }
-                format_literal += ":";
-                format_literal += format_args;
-                format_literal += "}";
-            }
-        }
-    }
-
-    let positional_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted {
-            segment: FormattedSegment::Expr(expr),
-            ..
-        } = seg
-        {
-            Some(expr)
-        } else {
-            None
-        }
-    });
-
-    let named_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted {
-            segment: FormattedSegment::Ident(ident),
-            ..
-        } = seg
-        {
-            Some(quote! {#ident = #ident})
-        } else {
-            None
-        }
-    });
-
-    Ok(quote! {
-        format_args!(
-            #format_literal
-            #(, #positional_args)*
-            #(, #named_args)*
-        )
-    })
+    Ok(input.into_token_stream())
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
@@ -135,7 +78,70 @@ impl FromStr for IfmtInput {
     }
 }
 
-#[derive(Debug)]
+impl ToTokens for IfmtInput {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        // build format_literal
+        let mut format_literal = String::new();
+        let mut expr_counter = 0;
+        for segment in self.segments.iter() {
+            match segment {
+                Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
+                Segment::Formatted {
+                    format_args,
+                    segment,
+                } => {
+                    format_literal += "{";
+                    match segment {
+                        FormattedSegment::Expr(_) => {
+                            format_literal += &expr_counter.to_string();
+                            expr_counter += 1;
+                        }
+                        FormattedSegment::Ident(ident) => {
+                            format_literal += &ident.to_string();
+                        }
+                    }
+                    format_literal += ":";
+                    format_literal += format_args;
+                    format_literal += "}";
+                }
+            }
+        }
+
+        let positional_args = self.segments.iter().filter_map(|seg| {
+            if let Segment::Formatted {
+                segment: FormattedSegment::Expr(expr),
+                ..
+            } = seg
+            {
+                Some(expr)
+            } else {
+                None
+            }
+        });
+
+        let named_args = self.segments.iter().filter_map(|seg| {
+            if let Segment::Formatted {
+                segment: FormattedSegment::Ident(ident),
+                ..
+            } = seg
+            {
+                Some(quote! {#ident = #ident})
+            } else {
+                None
+            }
+        });
+
+        tokens.extend(quote! {
+            format_args!(
+                #format_literal
+                #(, #positional_args)*
+                #(, #named_args)*
+            )
+        })
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Segment {
     Literal(String),
     Formatted {
@@ -144,7 +150,7 @@ pub enum Segment {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum FormattedSegment {
     Expr(Box<Expr>),
     Ident(Ident),

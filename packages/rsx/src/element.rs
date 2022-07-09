@@ -13,7 +13,7 @@ use syn::{
 #[derive(PartialEq, Eq)]
 pub struct Element {
     pub name: Ident,
-    pub key: Option<LitStr>,
+    pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
@@ -46,7 +46,7 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 if content.peek(LitStr) && content.peek2(Token![,]) {
-                    let value = content.parse::<LitStr>()?;
+                    let value = content.parse()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrText { name, value },
@@ -193,13 +193,13 @@ impl ToTokens for Element {
 #[derive(PartialEq, Eq)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
-    AttrText { name: Ident, value: LitStr },
+    AttrText { name: Ident, value: IfmtInput },
 
     /// attribute: true,
     AttrExpression { name: Ident, value: Expr },
 
     /// "attribute": "value {}"
-    CustomAttrText { name: LitStr, value: LitStr },
+    CustomAttrText { name: LitStr, value: IfmtInput },
 
     /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
@@ -244,7 +244,7 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
                 quote! {
-                    dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
+                    dioxus_elements::#el_name.#name(__cx, #value)
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
@@ -254,19 +254,14 @@ impl ToTokens for ElementAttrNamed {
             }
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                    __cx.attr( #name, #value, None, false )
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                    __cx.attr( #name, #value, None, false )
                 }
             }
-            // ElementAttr::EventClosure { name, closure } => {
-            //     quote! {
-            //         dioxus_elements::on::#name(__cx, #closure)
-            //     }
-            // }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)

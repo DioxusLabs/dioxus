@@ -202,7 +202,7 @@ pub struct ComponentField {
 #[derive(PartialEq, Eq)]
 pub enum ContentField {
     ManExpr(Expr),
-    Formatted(LitStr),
+    Formatted(IfmtInput),
     OnHandlerRaw(Expr),
 }
 
