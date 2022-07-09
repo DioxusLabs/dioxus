@@ -17,11 +17,11 @@ use crate::Dom;
 /// # Example
 /// ```rust, ignore
 /// use dioxus::prelude::*;
-/// use dioxus::tui::query::Query;
-/// use dioxus::tui::Size;
+/// use dioxus_tui::query::Query;
+/// use dioxus_tui::Size;
 ///
 /// fn main() {
-///     dioxus::tui::launch(app);
+///     dioxus_tui::launch(app);
 /// }
 ///
 /// fn app(cx: Scope) -> Element {

@@ -2,7 +2,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::web::launch(App);
+    dioxus_web::launch(App);
 }
 
 fn App(cx: Scope) -> Element {

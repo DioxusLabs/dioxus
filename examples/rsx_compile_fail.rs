@@ -7,7 +7,7 @@ fn main() {
     let mut vdom = VirtualDom::new(example);
     vdom.rebuild();
 
-    let out = dioxus::ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
+    let out = dioxus_ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
     println!("{}", out);
 }
 

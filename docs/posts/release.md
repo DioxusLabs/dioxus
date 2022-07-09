@@ -6,7 +6,7 @@
 
 After many months of work, we're very excited to release the first version of Dioxus!
 
-Dioxus is a new library for building interactive user interfaces (GUI) with Rust. It is built around a Virtual DOM, making it portable for the web, desktop, server, mobile, and more. 
+Dioxus is a new library for building interactive user interfaces (GUI) with Rust. It is built around a Virtual DOM, making it portable for the web, desktop, server, mobile, and more.
 
 Dioxus has the following design goals:
 
@@ -24,7 +24,7 @@ To give you an idea of what Dioxus looks like, here's a simple counter app:
 use dioxus::prelude::*;
 
 fn main() {
-	dioxus::desktop::launch(app)
+	dioxus_desktop::launch(app)
 }
 
 fn app(cx: Scope) -> Element {
@@ -187,7 +187,7 @@ We can add our counter from above.
 use dioxus::prelude::*;
 
 fn main() {
-	dioxus::desktop::launch(app)
+	dioxus_desktop::launch(app)
 }
 
 fn app(cx: Scope) -> Element {
@@ -239,7 +239,7 @@ LazyNodes::new(|f| {
 
 The `rsx!` macro generates idiomatic Rust code that uses the factory API — no different than what you'd write by hand yourself.
 
-To make it easier to work with RSX, we've built a small [VSCode extension](https://github.com/DioxusLabs/studio) with useful utilities. This extension provides a command that converts a selected block of HTML into RSX so you can easily reuse existing web templates. 
+To make it easier to work with RSX, we've built a small [VSCode extension](https://github.com/DioxusLabs/studio) with useful utilities. This extension provides a command that converts a selected block of HTML into RSX so you can easily reuse existing web templates.
 
 ## Dioxus prioritizes developer experience
 
@@ -299,7 +299,7 @@ There's *way* more to this story, but hopefully we've convinced you that Dioxus'
 
 ## Dioxus is perfected for the IDE
 
-Note: all IDE-related features have only been tested with [Rust-Analyzer](https://github.com/rust-analyzer/rust-analyzer). 
+Note: all IDE-related features have only been tested with [Rust-Analyzer](https://github.com/rust-analyzer/rust-analyzer).
 
 Dioxus code operates pleasantly with your IDE. For starters, most elements are documented through the Rustdoc system. A quick summary of the MDN docs is always under your finger tips:
 
@@ -337,7 +337,7 @@ Dioxus is humbly built off the work done by [Dodrio](https://github.com/fitzgen/
 
 Dioxus is *substantially* more performant than many of the other Rust DOM-based UI libraries (Yew/Percy) and is *significantly* more performant than React - roughly competitive with InfernoJS. While not as performant as libraries like SolidJS/Sycamore, Dioxus imposes roughly a ~3% overhead over DOM patching, so it's *plenty* fast.
 
-## Works on Desktop and Mobile 
+## Works on Desktop and Mobile
 We’ve mentioned before that Dioxus works practically anywhere that Rust does. When running natively as a desktop or mobile app, your Dioxus code will run on its own thread, not inside of a web runtime. This means you can access hardware, file system, and platform APIs directly without needing to go through a shim layer. In our examples, we feature a [file explorer app](https://github.com/DioxusLabs/example-projects/tree/master/file-explorer) and [WiFi scanner app](https://github.com/DioxusLabs/example-projects/tree/master/wifi-scanner) where platform access occurs inside an asynchronous multithreaded coroutine. This solves the problem faced by React Native and other cross-platform toolkits where JavaScript apps incur a massive performance penalty with substantial maintenance overhead associated with platform API shims.
 
 A desktop app:
@@ -401,7 +401,7 @@ Stay tuned for our next article, which will go over some of the optimization tec
 
 ## Community
 
-The future is bright for Rust frontends! If you'd like to get involved, we have a [Discord server](https://discord.gg/XgGxMSkvUM), [a subreddit](http://reddit.com/r/dioxus), and [GitHub discussion pages](https://github.com/DioxusLabs/dioxus/discussions). 
+The future is bright for Rust frontends! If you'd like to get involved, we have a [Discord server](https://discord.gg/XgGxMSkvUM), [a subreddit](http://reddit.com/r/dioxus), and [GitHub discussion pages](https://github.com/DioxusLabs/dioxus/discussions).
 
 Let us know what you build!
 

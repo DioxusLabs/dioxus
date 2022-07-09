@@ -20,7 +20,7 @@ quote = "1.0"
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 
 [dev-dependencies]
-dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
+dioxus = { path = "../dioxus" }
 
 smallvec = "1.6"
 fxhash = "0.2"

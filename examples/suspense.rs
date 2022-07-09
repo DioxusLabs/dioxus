@@ -16,8 +16,8 @@
 use dioxus::prelude::*;
 
 fn main() {
-    use dioxus::desktop::tao::dpi::LogicalSize;
-    dioxus::desktop::launch_cfg(app, |cfg| {
+    use dioxus_desktop::tao::dpi::LogicalSize;
+    dioxus_desktop::launch_cfg(app, |cfg| {
         cfg.with_window(|w| {
             w.with_title("Doggo Fetcher")
                 .with_inner_size(LogicalSize::new(600.0, 800.0))

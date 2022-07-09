@@ -1,7 +1,5 @@
-use crate::ParsedRoute;
 use crate::{cfg::RouterCfg, RouterCore};
 use dioxus::prelude::*;
-use futures_util::stream::StreamExt;
 use std::sync::Arc;
 
 /// The props for the [`Router`](fn.Router.html) component.

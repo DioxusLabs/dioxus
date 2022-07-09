@@ -3,7 +3,6 @@
 
 use crate::cfg::RouterCfg;
 use dioxus::core::{ScopeId, ScopeState, VirtualDom};
-use futures_channel::mpsc::UnboundedSender;
 use std::any::Any;
 use std::sync::Weak;
 use std::{

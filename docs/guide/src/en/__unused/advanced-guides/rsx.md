@@ -33,7 +33,7 @@ let name = "jane";
 let pending = false;
 let count = 10;
 
-dioxus::ssr::render_lazy(html! {
+dioxus_ssr::render_lazy(html! {
     <div>
         <p> "Hello, {name}!" </p>
         <p> "Status: {pending}!" </p>
@@ -51,7 +51,7 @@ When helpful, the Dioxus VSCode extension provides a way of converting a selecti
 It's also a bit easier on the eyes than HTML.
 
 ```rust
-dioxus::ssr::render_lazy(rsx! {
+dioxus_ssr::render_lazy(rsx! {
     div {
         p {"Hello, {name}!"}
         p {"Status: {pending}!"}

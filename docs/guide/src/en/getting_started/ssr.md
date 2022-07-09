@@ -21,10 +21,10 @@ If you just want to render `rsx!` or a VirtualDom to HTML, check out the API doc
 // We can render VirtualDoms
 let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
-println!("{}", dioxus::ssr::render_vdom(&vdom));
+println!("{}", dioxus_ssr::render_vdom(&vdom));
 
 // Or we can render rsx! calls directly
-println!( "{}", dioxus::ssr::render_lazy(rsx! { h1 { "Hello, world!" } } );
+println!( "{}", dioxus_ssr::render_lazy(rsx! { h1 { "Hello, world!" } } );
 ```
 
 However, for this guide, we're going to show how to use Dioxus SSR with `Axum`.
@@ -84,7 +84,7 @@ And then add our endpoint. We can either render `rsx!` directly:
 
 ```rust
 async fn app_endpoint() -> Html<String> {
-    Html(dioxus::ssr::render_lazy(rsx! {
+    Html(dioxus_ssr::render_lazy(rsx! {
             h1 { "hello world!" }
     }))
 }
@@ -100,7 +100,7 @@ async fn app_endpoint() -> Html<String> {
     let mut app = VirtualDom::new(app);
     let _ = app.rebuild();
 
-    Html(dioxus::ssr::render_vdom(&app))
+    Html(dioxus_ssr::render_vdom(&app))
 }
 ```
 

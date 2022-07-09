@@ -24,7 +24,7 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 ///
 /// you can use `cx.consume_context::<DesktopContext>` to get this context
 ///
-/// ```rust
+/// ```rust, ignore
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl DesktopContext {
     /// Moves the window with the left mouse button until the button is released.
     ///
     /// you need use it in `onmousedown` event:
-    /// ```rust
+    /// ```rust, ignore
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {

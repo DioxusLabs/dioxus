@@ -1,8 +1,8 @@
-use dioxus::desktop::use_window;
 use dioxus::prelude::*;
+use dioxus_desktop::use_window;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

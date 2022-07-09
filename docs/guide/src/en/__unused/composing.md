@@ -159,7 +159,7 @@ force_render(ScopeId(0));
 
 In our guides, we frequently use the phrase "re-render" to describe updates to our app. You'll often hear this paired with "preventing unnecessary re-renders." But what exactly does this mean?
 
-When we call `dioxus::desktop::launch`, Dioxus will create a new `Scope` object and call the component we gave it. Our `rsx!` calls will create new nodes which we return back to the VirtualDom. Dioxus will then look through these nodes for child components, call their functions, and so on until every component has been "rendered." We consider these nodes "rendered" because they were created because of our explicit actions.
+When we call `dioxus_desktop::launch`, Dioxus will create a new `Scope` object and call the component we gave it. Our `rsx!` calls will create new nodes which we return back to the VirtualDom. Dioxus will then look through these nodes for child components, call their functions, and so on until every component has been "rendered." We consider these nodes "rendered" because they were created because of our explicit actions.
 
 The tree of UI that dioxus creates will roughly look like the tree of components presented earlier:
 
