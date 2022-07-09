@@ -814,14 +814,9 @@ impl<'a> NodeFactory<'a> {
     pub fn template_ref(
         &mut self,
         id: TemplateId,
-        template: StaticTemplateNodes,
-        dynamic_mapping: StaticDynamicNodeMapping,
+        template: Template,
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
-        let template = Template {
-            nodes: TemplateNodes::Static(template),
-            dynamic_ids: AnyDynamicNodeMapping::Static(dynamic_mapping),
-        };
         let mut resolver = self.scope.template_resolver.borrow_mut();
         resolver.insert(id, template);
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {

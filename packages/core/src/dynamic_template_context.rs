@@ -75,7 +75,7 @@ pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
 
 /// A dynamic node mapping that is either &'static or owned
 #[derive(Debug)]
-pub(crate) enum AnyDynamicNodeMapping {
+pub enum AnyDynamicNodeMapping {
     Static(StaticDynamicNodeMapping),
     Owned(OwnedDynamicNodeMapping),
 }

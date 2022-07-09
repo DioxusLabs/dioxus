@@ -229,10 +229,10 @@ impl<'a> VTemplateRef<'a> {
 }
 
 #[derive(Debug)]
-pub(crate) struct Template {
-    pub(crate) nodes: TemplateNodes,
+pub struct Template {
+    pub nodes: TemplateNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub(crate) dynamic_ids: AnyDynamicNodeMapping,
+    pub dynamic_ids: AnyDynamicNodeMapping,
 }
 
 impl Template {
@@ -326,7 +326,7 @@ impl Template {
 }
 
 #[derive(Debug)]
-pub(crate) enum TemplateNodes {
+pub enum TemplateNodes {
     Static(&'static [StaticTemplateNode]),
     Owned(Vec<OwnedTemplateNode>),
 }
