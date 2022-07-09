@@ -17,6 +17,7 @@ pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::arbitrary_value::*;
+    pub use crate::dynamic_template_context::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
@@ -68,9 +69,9 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyEvent, Attribute, AttributeValue, CodeLocation, Component, DioxusElement, DomEdit, Element,
     ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener,
-    Mutations, NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState,
-    StaticTemplateNode, StaticTemplateNodes, TaskId, UiEvent, UserEvent, VComponent, VElement,
-    VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    Mutations, NodeFactory, OwnedDynamicNodeMapping, Properties, SchedulerMsg, Scope, ScopeId,
+    ScopeState, StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, UiEvent,
+    UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

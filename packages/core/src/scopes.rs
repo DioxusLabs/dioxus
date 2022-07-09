@@ -2,8 +2,8 @@ use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::*,
     templete::{
-        Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
-        TemplateNodeType, TemplateValue, TextTemplateSegment,
+        TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
+        TemplateValue, TextTemplateSegment,
     },
     unsafe_utils::extend_vnode,
 };

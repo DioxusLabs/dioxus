@@ -7,7 +7,7 @@ use crate::{
 
 // stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
 #[derive(Debug)]
-pub(crate) struct DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
+pub struct DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
 where
     Nodes: AsRef<[Option<TemplateNodeId>]>,
     TextOuter: AsRef<[TextInner]>,
@@ -55,6 +55,7 @@ where
     }
 }
 
+/// A dynamic node mapping that is stack allocated
 pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [Option<TemplateNodeId>],
     &'static [&'static [TemplateNodeId]],
@@ -63,6 +64,7 @@ pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [(TemplateNodeId, usize)],
 >;
 
+/// A dynamic node mapping that is heap allocated
 pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
     Vec<Option<TemplateNodeId>>,
     Vec<Vec<TemplateNodeId>>,
