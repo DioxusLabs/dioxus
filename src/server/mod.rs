@@ -518,24 +518,6 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
                     format!("{}~{}", line.0, line.1)
                 };
                 let code = span.text.clone();
-                // let span_info = format!(
-                //     "[{}: {}]: {} --> {}",
-                //     file,
-                // if line.0 == line.1 {
-                //     line.0.to_string()
-                // } else {
-                //     format!("{}~{}", line.0, line.1)
-                // },
-                //     if code.len() == 1 {
-                //         code.get(0).unwrap().text.trim().blue().bold().to_string()
-                //     } else {
-                // format!("\n{}",code.iter()
-                //     .enumerate()
-                //     .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
-                //     .collect::<String>())
-                //     },
-                //     message.yellow().bold()
-                // );
                 let span_info = if code.len() == 1 {
                     let code = code.get(0).unwrap().text.trim().blue().bold().to_string();
                     format!(
@@ -551,7 +533,7 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
                         .enumerate()
                         .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
                         .collect::<String>();
-                    format!("[{}: {}]:\n{}", file, line_str, code)
+                    format!("[{}: {}]:\n{}\n#:{}", file, line_str, code, message)
                 };
                 console = format!("{console}\n\t{span_info}");
             }
