@@ -95,7 +95,7 @@ use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
         AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
-        TemplateResolver, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
+        TemplateId, TemplateResolver, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
     templete::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -312,7 +312,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
         let resolver = self.scopes.template_resolver.borrow();
         let template = resolver.get(new.template_id).unwrap();
 
-        let id = self.get_or_insert_template_id(template);
+        let id = self.get_or_insert_template_id(template, new.template_id);
 
         let real_id = self.scopes.reserve_node(node);
 
@@ -1427,8 +1427,11 @@ impl<'b, 'a> DiffState<'b, 'a> {
             .bump
     }
 
-    pub fn get_or_insert_template_id(&mut self, template: &Template) -> RendererTemplateId {
-        let template_id = template.id;
+    pub fn get_or_insert_template_id(
+        &mut self,
+        template: &Template,
+        template_id: TemplateId,
+    ) -> RendererTemplateId {
         let (renderer_id, created) = self
             .scopes
             .template_resolver

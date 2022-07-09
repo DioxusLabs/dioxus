@@ -819,7 +819,6 @@ impl<'a> NodeFactory<'a> {
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
         let template = Template {
-            id,
             nodes: TemplateNodes::Static(template),
             dynamic_ids: AnyDynamicNodeMapping::Static(dynamic_mapping),
         };

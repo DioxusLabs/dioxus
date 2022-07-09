@@ -230,7 +230,6 @@ impl<'a> VTemplateRef<'a> {
 
 #[derive(Debug)]
 pub(crate) struct Template {
-    pub(crate) id: TemplateId,
     pub(crate) nodes: TemplateNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
     pub(crate) dynamic_ids: AnyDynamicNodeMapping,
