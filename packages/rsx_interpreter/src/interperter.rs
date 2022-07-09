@@ -2,7 +2,6 @@ use dioxus_core::{Attribute, AttributeValue, NodeFactory, VNode};
 use dioxus_rsx::{BodyNode, CallBody, ElementAttr, IfmtInput, Segment};
 use quote::ToTokens;
 use quote::__private::Span;
-use std::str::FromStr;
 use syn::{parse2, parse_str, Expr};
 
 use crate::captuered_context::{CapturedContext, IfmtArgs};
@@ -68,9 +67,7 @@ fn build_node<'a>(
 ) -> Result<VNode<'a>, Error> {
     let bump = factory.bump();
     match node {
-        BodyNode::Text(text) => {
-            let ifmt = IfmtInput::from_str(&text.value())
-                .map_err(|err| Error::ParseError(ParseError::new(err, ctx.location.clone())))?;
+        BodyNode::Text(ifmt) => {
             let text = bump.alloc(resolve_ifmt(&ifmt, &ctx.captured)?);
             Ok(factory.text(format_args!("{}", text)))
         }

@@ -20,7 +20,7 @@ Parse
 pub enum BodyNode {
     Element(Element),
     Component(Component),
-    Text(LitStr),
+    Text(IfmtInput),
     RawExpr(Expr),
 }
 
