@@ -13,7 +13,7 @@ title = "Documentação do Dioxus"
 description = "Introdução ao Dioxus, um framework portátil, de alto desempenho e ergonômico para criar interfaces de usuário multiplataforma em Rust."
 
 [rust]
-edition = "2021"
+edition = "2018"
 
 [output.html]
 mathjax-support = true
