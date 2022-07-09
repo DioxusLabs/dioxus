@@ -495,7 +495,7 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
         log::info!("{}\n", "A perfect compilation!".green().bold());
     } else {
         log::warn!(
-            "{}\n",
+            "{}",
             format!(
                 "There were {} warning messages during the build: ",
                 options.warnings.len() - 1
@@ -504,13 +504,63 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
             .bold()
         );
         for info in &options.warnings {
-            if info.message == format!("{} warnings emitted", options.warnings.len() - 1) {
+            let message = info.message.clone();
+            if message == format!("{} warnings emitted", options.warnings.len() - 1) {
                 continue;
             }
-            if let Some(val) = info.rendered.clone() {
-                log::warn!("{}", val);
+            let mut console = String::new();
+            for span in &info.spans {
+                let file = &span.file_name;
+                let line = (span.line_start, span.line_end);
+                let line_str = if line.0 == line.1 {
+                    line.0.to_string()
+                } else {
+                    format!("{}~{}", line.0, line.1)
+                };
+                let code = span.text.clone();
+                // let span_info = format!(
+                //     "[{}: {}]: {} --> {}",
+                //     file,
+                // if line.0 == line.1 {
+                //     line.0.to_string()
+                // } else {
+                //     format!("{}~{}", line.0, line.1)
+                // },
+                //     if code.len() == 1 {
+                //         code.get(0).unwrap().text.trim().blue().bold().to_string()
+                //     } else {
+                // format!("\n{}",code.iter()
+                //     .enumerate()
+                //     .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
+                //     .collect::<String>())
+                //     },
+                //     message.yellow().bold()
+                // );
+                let span_info = if code.len() == 1 {
+                    let code = code.get(0).unwrap().text.trim().blue().bold().to_string();
+                    format!(
+                        "[{}: {}]: '{}' --> {}",
+                        file,
+                        line_str,
+                        code,
+                        message.yellow().bold()
+                    )
+                } else {
+                    let code = code
+                        .iter()
+                        .enumerate()
+                        .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
+                        .collect::<String>();
+                    format!("[{}: {}]:\n{}", file, line_str, code)
+                };
+                console = format!("{console}\n\t{span_info}");
             }
+            println!("{console}");
         }
+        println!(
+            "\n{}\n",
+            "Resolving all warnings will help your code run better!".yellow()
+        );
     }
 }
 
