@@ -349,7 +349,9 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
                 let message = msg.message;
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        return Err(anyhow::anyhow!(message.rendered.unwrap_or("Unknown".into())));
+                        return Err(anyhow::anyhow!(message
+                            .rendered
+                            .unwrap_or("Unknown".into())));
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
                         warning_messages.push(message.clone());
