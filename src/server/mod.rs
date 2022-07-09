@@ -342,7 +342,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
             elapsed_time: first_build_result.elapsed_time,
         },
     );
-    
+
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
         .and_then(
@@ -434,18 +434,6 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
         profile = config.custom_profile.as_ref().unwrap().to_string();
     }
     let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
-    let tools_str = format!(
-        "{:?}",
-        config
-            .dioxus_config
-            .application
-            .tools
-            .clone()
-            .unwrap_or_default()
-            .iter()
-            .map(|d| d.0.clone())
-            .collect::<Vec<String>>()
-    );
     let crate_root = crate::cargo::crate_root().unwrap();
     let custom_html_file = if crate_root.join("index.html").is_file() {
         "Custom [index.html]"
@@ -494,15 +482,35 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
     println!("");
     println!("\t> Profile : {}", profile.green());
     println!("\t> Hot Reload : {}", hot_reload.cyan());
-    println!("\t> Enabled Tools : {}", tools_str.yellow());
     println!("\t> Index Template : {}", custom_html_file.green());
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
     println!("");
+    println!(
+        "\t> Build Time Use : {} millis",
+        options.elapsed_time.to_string().green().bold()
+    );
+    println!("");
 
-    if options.changed.len() <= 0 {
-        log::info!("{}", "Server startup completed.".green().bold());
+    if options.warnings.len() == 0 {
+        log::info!("{}\n", "A perfect compilation!".green().bold());
     } else {
-        log::info!("{}", "Project rebuild completed.".green().bold());
+        log::warn!(
+            "{}\n",
+            format!(
+                "There were {} warning messages during the build: ",
+                options.warnings.len() - 1
+            )
+            .yellow()
+            .bold()
+        );
+        for info in &options.warnings {
+            if info.message == format!("{} warnings emitted", options.warnings.len() - 1) {
+                continue;
+            }
+            if let Some(val) = info.rendered.clone() {
+                log::warn!("{}", val);
+            }
+        }
     }
 }
 

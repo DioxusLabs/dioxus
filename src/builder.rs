@@ -368,7 +368,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
             Message::BuildFinished(finished) => {
                 if finished.success {
                     pb.finish_and_clear();
-                    println!("Done in");
+                    log::info!("Build done.");
                 } else {
                     std::process::exit(1);
                 }
