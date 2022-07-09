@@ -174,7 +174,11 @@ impl ToTokens for Component {
         let key_token = match has_key {
             Some(field) => {
                 let inners = &field.content;
-                quote! { Some(format_args_f!(#inners)) }
+                if let ContentField::Formatted(ifmt) = inners {
+                    quote! { Some(#ifmt) }
+                } else {
+                    unreachable!()
+                }
             }
             None => quote! { None },
         };
@@ -211,7 +215,7 @@ impl ToTokens for ContentField {
         match self {
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! {
-                __cx.raw_text(format_args_f!(#s)).0
+                __cx.raw_text(#s).0
             }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.event_handler(#e)
@@ -231,7 +235,7 @@ impl Parse for ComponentField {
         }
 
         if name == "key" {
-            let content = ContentField::ManExpr(input.parse()?);
+            let content = ContentField::Formatted(input.parse()?);
             return Ok(Self { name, content });
         }
 

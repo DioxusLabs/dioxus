@@ -101,7 +101,7 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text(format_args_f!(#txt))
+                __cx.text(#txt)
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)

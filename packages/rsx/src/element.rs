@@ -164,7 +164,7 @@ impl ToTokens for Element {
         let children = &self.children;
 
         let key = match &self.key {
-            Some(ty) => quote! { Some(format_args_f!(#ty)) },
+            Some(ty) => quote! { Some(#ty) },
             None => quote! { None },
         };
 

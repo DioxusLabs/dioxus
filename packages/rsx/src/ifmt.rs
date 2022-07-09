@@ -131,13 +131,14 @@ impl ToTokens for IfmtInput {
             }
         });
 
-        tokens.extend(quote! {
+        quote! {
             format_args!(
                 #format_literal
                 #(, #positional_args)*
                 #(, #named_args)*
             )
-        })
+        }
+        .to_tokens(tokens)
     }
 }
 
