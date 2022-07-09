@@ -140,7 +140,7 @@ impl<T: 'static> UseState<T> {
     /// # Examples
     ///
     /// Basic usage:
-    /// ```rust
+    /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
@@ -236,7 +236,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
@@ -268,7 +268,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// *val.make_mut() += 1;

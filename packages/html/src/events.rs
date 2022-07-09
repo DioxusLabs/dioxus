@@ -193,7 +193,7 @@ pub mod on {
             /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
             ///
             /// ## Example
-            /// ```
+            /// ```rust, ignore
             /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
             /// ```
             ///

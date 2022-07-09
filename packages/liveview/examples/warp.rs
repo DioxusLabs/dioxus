@@ -1,12 +1,18 @@
-#![cfg(feature = "warp")]
+#[cfg(not(feature = "warp"))]
+fn main() {}
 
-use dioxus_core::{Element, LazyNodes, Scope};
-use dioxus_liveview as liveview;
-use warp::ws::Ws;
-use warp::Filter;
-
+#[cfg(feature = "warp")]
 #[tokio::main]
 async fn main() {
+    use dioxus_core::{Element, LazyNodes, Scope};
+    use dioxus_liveview as liveview;
+    use warp::ws::Ws;
+    use warp::Filter;
+
+    fn app(cx: Scope) -> Element {
+        cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
+    }
+
     pretty_env_logger::init();
 
     let addr = ([127, 0, 0, 1], 3030);
@@ -26,8 +32,4 @@ async fn main() {
                 })
             }));
     warp::serve(routes).run(addr).await;
-}
-
-fn app(cx: Scope) -> Element {
-    cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
 }

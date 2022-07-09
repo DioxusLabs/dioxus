@@ -29,5 +29,10 @@ fxhash = "0.2"
 anymap = "0.12.1"
 
 [dev-dependencies]
-dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
+dioxus = { path = "../dioxus" }
 tokio = { version = "1" }
+criterion = "0.3.5"
+
+[[bench]]
+name = "update"
+harness = false

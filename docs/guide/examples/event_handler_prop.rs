@@ -4,7 +4,7 @@ use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus_desktop::launch(App);
 }
 
 fn App(cx: Scope) -> Element {

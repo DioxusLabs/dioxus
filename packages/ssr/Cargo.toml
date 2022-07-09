@@ -16,7 +16,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 
 [dev-dependencies]
-dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
+dioxus = { path = "../dioxus" }
 thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }

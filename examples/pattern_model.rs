@@ -17,13 +17,13 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
-use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::*;
+use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
-use dioxus_html::input_data::keyboard_types::Key;
+use dioxus_desktop::wry::application::dpi::LogicalSize;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |cfg| {
+    dioxus_desktop::launch_cfg(app, |cfg| {
         cfg.with_window(|w| {
             w.with_title("Calculator Demo")
                 .with_resizable(false)

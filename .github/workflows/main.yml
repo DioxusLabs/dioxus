@@ -43,6 +43,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --all --examples --tests
 
   test:
     if: github.event.pull_request.draft == false

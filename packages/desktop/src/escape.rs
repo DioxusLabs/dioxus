@@ -4,7 +4,7 @@ use std::fmt::{self, Write};
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// # use web_view::WebView;
 /// # use std::mem;
 /// #
