@@ -176,7 +176,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                         }
                         Err(err) => {
                             log::error!("{}", err);
-                            std::process::exit(1);
                         }
                     }
                 }

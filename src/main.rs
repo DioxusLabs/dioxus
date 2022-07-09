@@ -9,31 +9,31 @@ async fn main() -> Result<()> {
     match args.action {
         Commands::Translate(opts) => {
             if let Err(e) = opts.translate() {
-                log::error!("translate error: {}", e);
+                log::error!("🚫 Translate failed: {}", e);
             }
         }
 
         Commands::Build(opts) => {
             if let Err(e) = opts.build() {
-                log::error!("build error: {}", e);
+                log::error!("🚫 Build project failed: {}", e);
             }
         }
 
         Commands::Clean(opts) => {
             if let Err(e) = opts.clean() {
-                log::error!("clean error: {}", e);
+                log::error!("🚫 Clean project failed: {}", e);
             }
         }
 
         Commands::Serve(opts) => {
             if let Err(e) = opts.serve().await {
-                log::error!("serve error: {}", e);
+                log::error!("🚫 Serve startup failed: {}", e);
             }
         }
 
         Commands::Create(opts) => {
             if let Err(e) = opts.create() {
-                log::error!("create error: {}", e);
+                log::error!("🚫 Create project failed: {}", e);
             }
         }
 

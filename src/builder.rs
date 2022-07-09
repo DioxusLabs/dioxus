@@ -195,7 +195,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     let t_end = std::time::Instant::now();
     Ok(BuildResult {
         warnings: warning_messages,
-        elapsed_time: (t_end - t_start).as_millis()
+        elapsed_time: (t_end - t_start).as_millis(),
     })
 }
 
@@ -339,7 +339,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
             .unwrap()
             .tick_chars("/|\\- "),
     );
-    pb.set_message("Start to build project");
+    pb.set_message("💼 Waiting to strart build the project...");
 
     let mut command = cmd.spawn()?;
     let reader = std::io::BufReader::new(command.stdout.take().unwrap());
@@ -349,8 +349,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
                 let message = msg.message;
                 match message.level {
                     cargo_metadata::diagnostic::DiagnosticLevel::Error => {
-                        log::error!("Build Failed: {}", message.message);
-                        std::process::exit(1);
+                        return Err(anyhow::anyhow!(message.rendered.unwrap_or("Unknown".into())));
                     }
                     cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
                         warning_messages.push(message.clone());
@@ -368,7 +367,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
             Message::BuildFinished(finished) => {
                 if finished.success {
                     pb.finish_and_clear();
-                    log::info!("Build done.");
+                    log::info!("👑 Build done.");
                 } else {
                     std::process::exit(1);
                 }
