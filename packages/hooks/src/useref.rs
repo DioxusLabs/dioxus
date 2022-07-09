@@ -16,7 +16,7 @@ use std::{
 /// writes through the `write` method. Whenever `write` is called, the component
 /// that initialized the hook will be marked as "dirty".
 ///
-/// ```rust
+/// ```rust, ignore
 /// let val = use_ref(|| HashMap::<u32, String>::new());
 ///
 /// // using `write` will give us a `RefMut` to the inner value, which we can call methods on
@@ -26,7 +26,7 @@ use std::{
 ///
 /// You can avoid this default behavior with `write_silent`
 ///
-/// ```
+/// ```ignore
 /// // with `write_silent`, the component will not be re-rendered
 /// val.write_silent().insert(2, "goodbye".to_string());
 /// ```
@@ -35,7 +35,7 @@ use std::{
 ///
 /// To read values out of the refcell, you can use the `read` method which will retrun a `Ref`.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let map: Ref<_> = val.read();
 ///
 /// let item = map.get(&1);
@@ -43,7 +43,7 @@ use std::{
 ///
 /// To get an &T out of the RefCell, you need to "reborrow" through the Ref:
 ///
-/// ```rust
+/// ```rust, ignore
 /// let read = val.read();
 /// let map = &*read;
 /// ```
@@ -54,7 +54,7 @@ use std::{
 /// Typically this will be a collection like a HashMap or a Vec. To create new
 /// elements from the collection, we can use `read()` directly in our rsx!.
 ///
-/// ```rust
+/// ```rust, ignore
 /// rsx!{
 ///     val.read().iter().map(|(k, v)| {
 ///         rsx!{ key: "{k}", value: "{v}" }
@@ -66,7 +66,7 @@ use std::{
 /// "render" inside the iterator. For some cases you might need to collect into
 /// a temporary Vec.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let items = val.read().iter().map(|(k, v)| {
 ///     cx.render(rsx!{ key: "{k}", value: "{v}" })
 /// });
@@ -82,7 +82,7 @@ use std::{
 /// from the current scope's lifetime, making it a `'static` value. This is done
 /// by simply calling `ToOnwed` or `Clone`.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let val = use_ref(|| HashMap::<u32, String>::new());
 ///
 /// cx.spawn({
@@ -97,7 +97,7 @@ use std::{
 /// If you're working with lots of values like UseState and UseRef, you can use the
 /// `clone!` macro to make it easier to write the above code.
 ///
-/// ```rust
+/// ```rust, ignore
 /// let val1 = use_ref(|| HashMap::<u32, String>::new());
 /// let val2 = use_ref(|| HashMap::<u32, String>::new());
 /// let val3 = use_ref(|| HashMap::<u32, String>::new());
@@ -194,7 +194,7 @@ impl<T> UseRef<T> {
     /// Note: You can always "reborrow" the value through the RefCell.
     /// This method just does it for you automatically.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let val = use_ref(|| HashMap::<u32, String>::new());
     ///
     ///
@@ -214,7 +214,7 @@ impl<T> UseRef<T> {
     /// Note: You can always "reborrow" the value through the RefCell.
     /// This method just does it for you automatically.
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// let val = use_ref(|| HashMap::<u32, String>::new());
     ///
     ///

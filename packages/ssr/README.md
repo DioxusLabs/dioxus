@@ -23,7 +23,7 @@ let app: Component = |cx| cx.render(rsx!(div {"hello world!"}));
 let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
 
-let text = dioxus::ssr::render_vdom(&vdom);
+let text = dioxus_ssr::render_vdom(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
@@ -33,7 +33,7 @@ assert_eq!(text, "<div>hello world!</div>")
 The simplest example is to simply render some `rsx!` nodes to html. This can be done with the [`render_lazy`] api.
 
 ```rust, ignore
-let content = dioxus::ssr::render(rsx!{
+let content = dioxus_ssr::render(rsx!{
     div {
         (0..5).map(|i| rsx!(
             "Number: {i}"
@@ -48,14 +48,14 @@ let content = dioxus::ssr::render(rsx!{
 let mut dom = VirtualDom::new(app);
 let _ = dom.rebuild();
 
-let content = dioxus::ssr::render_vdom(&dom);
+let content = dioxus_ssr::render_vdom(&dom);
 ```
 
 ## Configuring output
 It's possible to configure the output of the generated HTML.
 
 ```rust, ignore
-let content = dioxus::ssr::render_vdom(&dom, |config| config.pretty(true).prerender(true));
+let content = dioxus_ssr::render_vdom(&dom, |config| config.pretty(true).prerender(true));
 ```
 
 ## Usage as a writer
@@ -70,7 +70,7 @@ let mut buf = String::new();
 let dom = VirtualDom::new(app);
 let _ = dom.rebuild();
 
-let args = dioxus::ssr::formatter(dom, |config| config);
+let args = dioxus_ssr::formatter(dom, |config| config);
 buf.write_fmt!(format_args!("{}", args));
 ```
 
@@ -95,7 +95,7 @@ To enable pre-rendering, simply configure the `SsrConfig` with pre-rendering ena
 ```rust, ignore
 let dom = VirtualDom::new(App);
 
-let text = dioxus::ssr::render_vdom(App, |cfg| cfg.pre_render(true));
+let text = dioxus_ssr::render_vdom(App, |cfg| cfg.pre_render(true));
 ```
 
 ## Usage in server-side rendering
@@ -103,7 +103,7 @@ let text = dioxus::ssr::render_vdom(App, |cfg| cfg.pre_render(true));
 Dioxus SSR can also be to render on the server. Obviously, you can just render the VirtualDOM to a string and send that down.
 
 ```rust, ignore
-let text = dioxus::ssr::render_vdom(&vdom);
+let text = dioxus_ssr::render_vdom(&vdom);
 assert_eq!(text, "<div>hello world!</div>")
 ```
 
@@ -114,7 +114,7 @@ The rest of the space - IE doing this more efficiently, caching the virtualdom, 
 Dioxus SSR needs an arena to allocate from - whether it be the VirtualDom or a dedicated Bump allocator. To render `rsx!` directly to a string, you'll want to create an `SsrRenderer` and call `render_lazy`.
 
 ```rust, ignore
-let text = dioxus::ssr::SsrRenderer::new().render_lazy(rsx!{
+let text = dioxus_ssr::SsrRenderer::new().render_lazy(rsx!{
     div { "hello world" }
 });
 assert_eq!(text, "<div>hello world!</div>")

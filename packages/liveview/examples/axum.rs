@@ -1,11 +1,16 @@
-#![cfg(feature = "axum")]
+#[cfg(not(feature = "axum"))]
+fn main() {}
 
-use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
-use dioxus_core::{Element, LazyNodes, Scope};
-
+#[cfg(feature = "axum")]
 #[tokio::main]
 async fn main() {
+    use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
+    use dioxus_core::{Element, LazyNodes, Scope};
     pretty_env_logger::init();
+
+    fn app(cx: Scope) -> Element {
+        cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
+    }
 
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
 
@@ -26,8 +31,4 @@ async fn main() {
         .serve(app.into_make_service())
         .await
         .unwrap();
-}
-
-fn app(cx: Scope) -> Element {
-    cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
 }

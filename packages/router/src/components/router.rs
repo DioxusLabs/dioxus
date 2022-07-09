@@ -1,7 +1,5 @@
-use crate::ParsedRoute;
-use crate::{cfg::RouterCfg, RouteEvent, RouterCore};
+use crate::{cfg::RouterCfg, RouterCore};
 use dioxus::prelude::*;
-use futures_util::stream::StreamExt;
 use std::sync::Arc;
 
 /// The props for the [`Router`](fn.Router.html) component.
@@ -40,81 +38,13 @@ pub struct RouterProps<'a> {
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let svc = cx.use_hook(|_| {
-        let (tx, mut rx) = futures_channel::mpsc::unbounded::<RouteEvent>();
-
-        let svc = RouterCore::new(
-            tx,
+        cx.provide_context(RouterCore::new(
+            &cx,
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
             },
-        );
-
-        cx.spawn({
-            let svc = svc.clone();
-            let regen_route = cx.schedule_update_any();
-            let router_id = cx.scope_id();
-
-            async move {
-                while let Some(msg) = rx.next().await {
-                    match msg {
-                        RouteEvent::Push {
-                            route,
-                            serialized_state,
-                            title,
-                        } => {
-                            let new_route = Arc::new(ParsedRoute {
-                                url: svc.current_location().url.join(&route).ok().unwrap(),
-                                title,
-                                serialized_state,
-                            });
-
-                            svc.history.push(&new_route);
-                            svc.stack.borrow_mut().push(new_route);
-                        }
-
-                        RouteEvent::Replace {
-                            route,
-                            title,
-                            serialized_state,
-                        } => {
-                            let new_route = Arc::new(ParsedRoute {
-                                url: svc.current_location().url.join(&route).ok().unwrap(),
-                                title,
-                                serialized_state,
-                            });
-
-                            svc.history.replace(&new_route);
-                            *svc.stack.borrow_mut().last_mut().unwrap() = new_route;
-                        }
-
-                        RouteEvent::Pop => {
-                            let mut stack = svc.stack.borrow_mut();
-
-                            if stack.len() == 1 {
-                                continue;
-                            }
-
-                            stack.pop();
-                        }
-                    }
-
-                    svc.route_found.set(None);
-
-                    regen_route(router_id);
-
-                    for listener in svc.onchange_listeners.borrow().iter() {
-                        regen_route(*listener);
-                    }
-
-                    for route in svc.ordering.borrow().iter().rev() {
-                        regen_route(*route);
-                    }
-                }
-            }
-        });
-
-        cx.provide_context(svc)
+        ))
     });
 
     // next time we run the rout_found will be filled

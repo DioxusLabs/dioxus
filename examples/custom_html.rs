@@ -4,11 +4,11 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |c| {
+    dioxus_desktop::launch_cfg(app, |c| {
         c.with_custom_head("<style>body { background-color: red; }</style>".into())
     });
 
-    dioxus::desktop::launch_cfg(app, |c| {
+    dioxus_desktop::launch_cfg(app, |c| {
         c.with_custom_index(
             r#"
 <!DOCTYPE html>

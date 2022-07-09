@@ -59,7 +59,7 @@ Edit your `lib.rs`:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::mobile::launch(app);
+    dioxus_mobile::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

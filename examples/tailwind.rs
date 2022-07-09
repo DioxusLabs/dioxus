@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |c| {
+    dioxus_desktop::launch_cfg(app, |c| {
         c.with_custom_head("<script src=\"https://cdn.tailwindcss.com\"></script>".to_string())
     });
 }

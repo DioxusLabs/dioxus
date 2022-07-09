@@ -5,7 +5,7 @@
 /// # Example
 ///
 /// ```rust, ignore
-/// dioxus::web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
+/// dioxus_web::launch(App, |cfg| cfg.hydrate(true).root_name("myroot"))
 /// ```
 pub struct WebConfig {
     pub(crate) hydrate: bool,

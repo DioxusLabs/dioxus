@@ -2,12 +2,11 @@
 
 //! Render a bunch of doggos!
 
+use dioxus::prelude::*;
 use std::collections::HashMap;
 
-use dioxus::prelude::*;
-
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]

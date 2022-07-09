@@ -2,9 +2,9 @@
 // does each window have its own router? probably, lol
 
 use crate::cfg::RouterCfg;
-use dioxus::core::ScopeId;
-use futures_channel::mpsc::UnboundedSender;
+use dioxus::core::{ScopeId, ScopeState, VirtualDom};
 use std::any::Any;
+use std::sync::Weak;
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
@@ -45,8 +45,6 @@ pub struct RouterCore {
 
     pub(crate) stack: RefCell<Vec<Arc<ParsedRoute>>>,
 
-    pub(crate) tx: UnboundedSender<RouteEvent>,
-
     pub(crate) slots: Rc<RefCell<HashMap<ScopeId, String>>>,
 
     pub(crate) ordering: Rc<RefCell<Vec<ScopeId>>>,
@@ -54,6 +52,10 @@ pub struct RouterCore {
     pub(crate) onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
 
     pub(crate) history: Box<dyn RouterProvider>,
+
+    pub(crate) regen_any_route: Arc<dyn Fn(ScopeId)>,
+
+    pub(crate) router_id: ScopeId,
 
     pub(crate) cfg: RouterCfg,
 }
@@ -74,41 +76,38 @@ pub struct ParsedRoute {
     pub serialized_state: Option<String>,
 }
 
-#[derive(Debug)]
-pub(crate) enum RouteEvent {
-    Push {
-        route: String,
-        title: Option<String>,
-        serialized_state: Option<String>,
-    },
-    Replace {
-        route: String,
-        title: Option<String>,
-        serialized_state: Option<String>,
-    },
-    Pop,
-}
-
 impl RouterCore {
-    pub(crate) fn new(tx: UnboundedSender<RouteEvent>, cfg: RouterCfg) -> Arc<Self> {
+    pub(crate) fn new(cx: &ScopeState, cfg: RouterCfg) -> Arc<Self> {
         #[cfg(feature = "web")]
-        let history = Box::new(web::new(tx.clone()));
+        let history = Box::new(web::new());
 
         #[cfg(not(feature = "web"))]
         let history = Box::new(hash::new());
 
         let route = Arc::new(history.init_location());
 
-        Arc::new(Self {
+        let svc = Arc::new(Self {
             cfg,
-            tx,
+            regen_any_route: cx.schedule_update_any(),
+            router_id: cx.scope_id(),
             route_found: Cell::new(None),
             stack: RefCell::new(vec![route]),
             ordering: Default::default(),
             slots: Default::default(),
             onchange_listeners: Default::default(),
             history,
-        })
+        });
+
+        svc.history.attach_listeners(Arc::downgrade(&svc));
+
+        svc
+    }
+
+    /// Push a new route with no custom title or serialized state.
+    ///
+    /// This is a convenience method for easily navigating.
+    pub fn navigate_to(&self, route: &str) {
+        self.push_route(route, None, None);
     }
 
     /// Push a new route to the history.
@@ -117,16 +116,16 @@ impl RouterCore {
     ///
     /// This does not modify the current route
     pub fn push_route(&self, route: &str, title: Option<String>, serialized_state: Option<String>) {
-        let _ = self.tx.unbounded_send(RouteEvent::Push {
-            route: route.to_string(),
+        let new_route = Arc::new(ParsedRoute {
+            url: self.current_location().url.join(route).ok().unwrap(),
             title,
             serialized_state,
         });
-    }
 
-    /// Pop the current route from the history.
-    pub fn pop_route(&self) {
-        let _ = self.tx.unbounded_send(RouteEvent::Pop);
+        self.history.push(&new_route);
+        self.stack.borrow_mut().push(new_route);
+
+        self.regen_routes();
     }
 
     /// Instead of pushing a new route, replaces the current route.
@@ -136,11 +135,44 @@ impl RouterCore {
         title: Option<String>,
         serialized_state: Option<String>,
     ) {
-        let _ = self.tx.unbounded_send(RouteEvent::Replace {
-            route: route.to_string(),
+        let new_route = Arc::new(ParsedRoute {
+            url: self.current_location().url.join(route).ok().unwrap(),
             title,
             serialized_state,
         });
+
+        self.history.replace(&new_route);
+        *self.stack.borrow_mut().last_mut().unwrap() = new_route;
+
+        self.regen_routes();
+    }
+
+    /// Pop the current route from the history.
+    pub fn pop_route(&self) {
+        let mut stack = self.stack.borrow_mut();
+
+        if stack.len() > 1 {
+            stack.pop();
+        }
+
+        self.regen_routes();
+    }
+
+    /// Regenerate any routes that need to be regenerated, discarding the currently found route
+    ///
+    /// You probably don't need this method
+    pub fn regen_routes(&self) {
+        self.route_found.set(None);
+
+        (self.regen_any_route)(self.router_id);
+
+        for listener in self.onchange_listeners.borrow().iter() {
+            (self.regen_any_route)(*listener);
+        }
+
+        for route in self.ordering.borrow().iter().rev() {
+            (self.regen_any_route)(*route);
+        }
     }
 
     /// Get the current location of the Router
@@ -196,6 +228,20 @@ impl RouterCore {
     }
 }
 
+/// Get the router service from an existing VirtualDom.
+///
+/// Takes an optional target_scope parameter to specify the scope to use if ScopeId is not the component
+/// that owns the router.
+///
+/// This might change in the future.
+pub fn get_router_from_vdom(
+    dom: &VirtualDom,
+    target_scope: Option<ScopeId>,
+) -> Option<Arc<RouterCore>> {
+    dom.get_scope(target_scope.unwrap_or(ScopeId(0)))
+        .and_then(|scope| scope.consume_context::<Arc<RouterCore>>())
+}
+
 fn clean_route(route: String) -> String {
     if route.as_str() == "/" {
         return route;
@@ -236,8 +282,6 @@ fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bo
 
     let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
 
-    log::trace!("Comparing {:?} to {:?}", cur_pieces, attempt_pieces);
-
     if attempt_pieces.len() != cur_pieces.len() {
         return false;
     }
@@ -262,6 +306,7 @@ pub(crate) trait RouterProvider {
     fn replace(&self, route: &ParsedRoute);
     fn native_location(&self) -> Box<dyn Any>;
     fn init_location(&self) -> ParsedRoute;
+    fn attach_listeners(&self, svc: Weak<RouterCore>);
 }
 
 #[cfg(not(feature = "web"))]
@@ -291,22 +336,23 @@ mod hash {
         }
 
         fn replace(&self, _route: &ParsedRoute) {}
+
+        fn attach_listeners(&self, _svc: Weak<RouterCore>) {}
     }
 }
 
 #[cfg(feature = "web")]
 mod web {
     use super::RouterProvider;
-    use crate::{ParsedRoute, RouteEvent};
+    use crate::ParsedRoute;
 
-    use futures_channel::mpsc::UnboundedSender;
     use gloo_events::EventListener;
-    use std::any::Any;
+    use std::{any::Any, cell::Cell};
     use web_sys::History;
 
     pub struct WebRouter {
         // keep it around so it drops when the router is dropped
-        _listener: gloo_events::EventListener,
+        _listener: Cell<Option<gloo_events::EventListener>>,
 
         window: web_sys::Window,
         history: History,
@@ -358,30 +404,25 @@ mod web {
                 serialized_state: None,
             }
         }
+
+        fn attach_listeners(&self, svc: std::sync::Weak<crate::RouterCore>) {
+            self._listener.set(Some(EventListener::new(
+                &web_sys::window().unwrap(),
+                "popstate",
+                move |_| {
+                    if let Some(svc) = svc.upgrade() {
+                        svc.pop_route();
+                    }
+                },
+            )));
+        }
     }
 
-    pub(crate) fn new(tx: UnboundedSender<RouteEvent>) -> WebRouter {
+    pub(crate) fn new() -> WebRouter {
         WebRouter {
             history: web_sys::window().unwrap().history().unwrap(),
             window: web_sys::window().unwrap(),
-            _listener: EventListener::new(&web_sys::window().unwrap(), "popstate", move |_| {
-                let _ = tx.unbounded_send(RouteEvent::Pop);
-            }),
+            _listener: Cell::new(None),
         }
     }
 }
-
-/*
-
-
-
-
-
-
-Route { to: "/blog/:id" }
-Route { to: "/blog/:id" }
-Route { to: "/blog/:id" }
-Route { to: "/blog/:id" }
-Route { to: "/blog/:id" }
-
-*/

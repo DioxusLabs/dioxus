@@ -12,7 +12,7 @@ Instead of passing a closure, you can also pass a string to event handlers – t
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus_desktop::launch(App);
 }
 
 fn App(cx: Scope) -> Element {
