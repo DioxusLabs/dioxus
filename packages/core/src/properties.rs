@@ -56,7 +56,7 @@ impl<'a, const A: bool> FragmentBuilder<'a, A> {
 impl<'a> Properties for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
-    fn builder() -> Self::Builder {
+    fn builder(cx: &ScopeState) -> Self::Builder {
         FragmentBuilder(None)
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
@@ -136,7 +136,7 @@ pub trait Properties: Sized {
     const IS_STATIC: bool;
 
     /// Create a builder for this component.
-    fn builder() -> Self::Builder;
+    fn builder(cx: &ScopeState) -> Self::Builder;
 
     /// Memoization can only happen if the props are valid for the 'static lifetime
     ///
@@ -149,7 +149,7 @@ pub trait Properties: Sized {
 impl Properties for () {
     type Builder = EmptyBuilder;
     const IS_STATIC: bool = true;
-    fn builder() -> Self::Builder {
+    fn builder(cx: &ScopeState) -> Self::Builder {
         EmptyBuilder {}
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
@@ -160,11 +160,16 @@ impl Properties for () {
 // that the macros use to anonymously complete prop construction.
 pub struct EmptyBuilder;
 impl EmptyBuilder {
-    pub fn build(self) {}
+    pub fn build<'a>(self) -> Element<'a> {
+        todo!()
+    }
 }
 
 /// This utility function launches the builder method so rsx! and html! macros can use the typed-builder pattern
 /// to initialize a component's props.
-pub fn fc_to_builder<'a, T: Properties + 'a>(_: fn(Scope<'a, T>) -> Element) -> T::Builder {
-    T::builder()
+pub fn fc_to_builder<'a, T: Properties + 'a>(
+    cx: &'a ScopeState,
+    _: fn(Scope<'a, T>) -> Element,
+) -> T::Builder {
+    T::builder(cx)
 }

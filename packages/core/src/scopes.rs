@@ -430,6 +430,12 @@ impl<'a, P> std::ops::Deref for Scope<'a, P> {
     }
 }
 
+impl<'a, P> From<Scope<'a, P>> for &'a ScopeState {
+    fn from(val: Scope<'a, P>) -> Self {
+        val.scope
+    }
+}
+
 /// A component's unique identifier.
 ///
 /// `ScopeId` is a `usize` that is unique across the entire [`VirtualDom`] and across time. [`ScopeID`]s will never be reused
@@ -931,7 +937,32 @@ impl ScopeState {
         // Finally, clear the hook arena
         self.hook_arena.reset();
     }
+
+    // /// Get the builder for this element or component
+    // pub fn builder<'a, P, O, I>(&self, _f: fn(I) -> O) -> P::Builder
+    // where
+    //     P: Properties,
+    //     I: IntoScopeState<'a, P>,
+    // {
+    //     P::builder(self)
+    // }
 }
+
+// pub trait IntoScopeState<'a, P> {
+//     fn inner(self) -> &'a ScopeState;
+// }
+
+// impl<'a, P> IntoScopeState<'a, P> for Scope<'a, P> {
+//     fn inner(self) -> &'a ScopeState {
+//         self.scope
+//     }
+// }
+
+// impl<'a> IntoScopeState<'a, ()> for &'a ScopeState {
+//     fn inner(self) -> &'a ScopeState {
+//         self
+//     }
+// }
 
 pub(crate) struct BumpFrame {
     pub bump: Bump,
