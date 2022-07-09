@@ -107,7 +107,6 @@ impl ScopeArena {
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
         container: GlobalNodeId,
-        subtree: u32,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_gen.get());
@@ -137,7 +136,6 @@ impl ScopeArena {
             scope.height = height;
             scope.fnptr = fc_ptr;
             scope.props.get_mut().replace(vcomp);
-            scope.subtree.set(subtree);
             scope.frames[0].reset();
             scope.frames[1].reset();
             scope.shared_contexts.get_mut().clear();
@@ -167,10 +165,6 @@ impl ScopeArena {
                     fnptr: fc_ptr,
                     props: RefCell::new(Some(vcomp)),
                     frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
-
-                    // todo: subtrees
-                    subtree: Cell::new(0),
-                    is_subtree_root: Cell::default(),
 
                     generation: 0.into(),
 
@@ -579,10 +573,6 @@ pub struct ScopeState {
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,
-
-    // todo: subtrees
-    pub(crate) is_subtree_root: Cell<bool>,
-    pub(crate) subtree: Cell<u32>,
     pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
 
     // nodes, items
@@ -610,52 +600,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
-    /// Get the subtree ID that this scope belongs to.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!{ div {} }));
-    /// dom.rebuild();
-    ///
-    /// let base = dom.base_scope();
-    ///
-    /// assert_eq!(base.subtree(), 0);
-    /// ```
-    ///
-    /// todo: enable
-    pub(crate) fn _subtree(&self) -> u32 {
-        self.subtree.get()
-    }
-
-    /// Create a new subtree with this scope as the root of the subtree.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// This method
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// fn App(cx: Scope) -> Element {
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    ///
-    /// todo: enable subtree
-    pub(crate) fn _create_subtree(&self) -> Option<u32> {
-        if self.is_subtree_root.get() {
-            None
-        } else {
-            todo!()
-        }
-    }
-
     /// Get the height of this Scope - IE the number of scopes above it.
     ///
     /// A Scope with a height of `0` is the root scope - there are no other scopes above it.
@@ -1020,8 +964,6 @@ impl ScopeState {
         self.hook_idx.set(0);
         self.parent_scope = None;
         self.generation.set(0);
-        self.is_subtree_root.set(false);
-        self.subtree.set(0);
 
         // next: shared context data
         self.shared_contexts.get_mut().clear();

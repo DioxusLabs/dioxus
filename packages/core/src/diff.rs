@@ -267,7 +267,6 @@ impl<'b, 'a> DiffState<'b, 'a> {
                 props,
                 Some(parent_idx),
                 self.element_stack.last().copied().unwrap(),
-                0,
             )
         };
 
