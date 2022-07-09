@@ -53,24 +53,9 @@ where
                     .map(|dynamic| dynamic.0),
             )
     }
-
-    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
-        self.nodes.as_ref()[idx]
-    }
-
-    pub(crate) fn get_dynamic_nodes_for_text_index<'a>(&'a self, idx: usize) -> &'a TextInner {
-        &self.text.as_ref()[idx]
-    }
-
-    pub(crate) fn get_dynamic_nodes_for_attribute_index<'a>(
-        &'a self,
-        idx: usize,
-    ) -> &'a AttributesInner {
-        &self.attributes.as_ref()[idx]
-    }
 }
 
-type StaticDynamicNodeMapping = DynamicNodeMapping<
+pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [Option<TemplateNodeId>],
     &'static [&'static [TemplateNodeId]],
     &'static [TemplateNodeId],
@@ -78,7 +63,7 @@ type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [(TemplateNodeId, usize)],
 >;
 
-type OwnedDynamicNodeMapping = DynamicNodeMapping<
+pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
     Vec<Option<TemplateNodeId>>,
     Vec<Vec<TemplateNodeId>>,
     Vec<TemplateNodeId>,
@@ -144,11 +129,11 @@ impl AnyDynamicNodeMapping {
     }
 }
 
-pub(crate) struct TemplateContext<'b> {
+pub struct TemplateContext<'b> {
     pub nodes: &'b [VNode<'b>],
     pub text_segments: &'b [&'b str],
     pub attributes: &'b [AttributeValue<'b>],
-    /// The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
+    // The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
     pub listeners: &'b [Listener<'b>],
 }
 

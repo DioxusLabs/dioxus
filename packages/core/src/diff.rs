@@ -94,8 +94,8 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AnyProps, ClientTemplateId, ElementId, GlobalNodeId, Mutations, ScopeArena, ScopeId,
-        VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
+        AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
+        TemplateResolver, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
     templete::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -107,22 +107,24 @@ use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-pub(crate) struct DiffState<'bump> {
+pub(crate) struct DiffState<'bump, 'a> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
     pub(crate) element_stack: SmallVec<[GlobalNodeId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
+    pub(crate) template_resolver: &'a TemplateResolver,
 }
 
-impl<'b> DiffState<'b> {
-    pub fn new(scopes: &'b ScopeArena) -> Self {
+impl<'b, 'a> DiffState<'b, 'a> {
+    pub fn new(scopes: &'b ScopeArena, template_resolver: &'a TemplateResolver) -> Self {
         Self {
             scopes,
             mutations: Mutations::new(),
             force_diff: false,
             element_stack: smallvec![],
             scope_stack: smallvec![],
+            template_resolver,
         }
     }
 
@@ -307,7 +309,10 @@ impl<'b> DiffState<'b> {
         new: &'b VTemplateRef<'b>,
         node: &'b VNode<'b>,
     ) -> usize {
-        let id = self.get_or_insert_template_id(new.template);
+        let resolver = self.scopes.template_resolver.borrow();
+        let template = resolver.get(new.template_id).unwrap();
+
+        let id = self.get_or_insert_template_id(template);
 
         let real_id = self.scopes.reserve_node(node);
 
@@ -315,7 +320,7 @@ impl<'b> DiffState<'b> {
 
         self.mutations.create_template_ref(real_id, id.into());
 
-        new.hydrate(self);
+        new.hydrate(template, self);
 
         1
     }
@@ -570,7 +575,7 @@ impl<'b> DiffState<'b> {
         }
 
         // if the templates are different, just rebuild it
-        if !std::ptr::eq(old.template, new.template) {
+        if old.template_id != new.template_id {
             self.replace_node(old_node, new_node);
             return;
         }
@@ -590,6 +595,9 @@ impl<'b> DiffState<'b> {
         self.mutations.push_root(root);
 
         let scope_bump = &self.current_scope_bump();
+
+        let resolver = self.scopes.template_resolver.borrow();
+        let template = resolver.get(new.template_id).unwrap();
 
         // diff dynamic attributes
         for (idx, (old_attr, new_attr)) in old
@@ -612,7 +620,13 @@ impl<'b> DiffState<'b> {
                     Text,
                 >(
                     nodes: &Nodes,
-                    ctx: (&mut Mutations<'b>, &'b Bump, &VTemplateRef<'b>, usize),
+                    ctx: (
+                        &mut Mutations<'b>,
+                        &'b Bump,
+                        &VTemplateRef<'b>,
+                        &Template,
+                        usize,
+                    ),
                 ) where
                     Nodes: AsRef<
                         [TemplateNode<
@@ -633,9 +647,8 @@ impl<'b> DiffState<'b> {
                     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
                     Text: AsRef<str>,
                 {
-                    let (mutations, scope_bump, new, idx) = ctx;
-                    for (node_id, attr_idx) in new
-                        .template
+                    let (mutations, scope_bump, new, template, idx) = ctx;
+                    for (node_id, attr_idx) in template
                         .dynamic_ids
                         .get_dynamic_nodes_for_attribute_index(idx)
                     {
@@ -656,10 +669,10 @@ impl<'b> DiffState<'b> {
                         }
                     }
                 }
-                new.template.nodes.with_nodes(
+                template.nodes.with_nodes(
                     diff_attributes,
                     diff_attributes,
-                    (&mut self.mutations, scope_bump, new, idx),
+                    (&mut self.mutations, scope_bump, new, template, idx),
                 );
             }
         }
@@ -672,11 +685,7 @@ impl<'b> DiffState<'b> {
             .zip(new.dynamic_context.nodes.iter())
             .enumerate()
         {
-            if let Some(id) = new
-                .template
-                .dynamic_ids
-                .get_dynamic_nodes_for_node_index(idx)
-            {
+            if let Some(id) = template.dynamic_ids.get_dynamic_nodes_for_node_index(idx) {
                 fn diff_dynamic_node<
                     'b,
                     Attributes,
@@ -696,7 +705,12 @@ impl<'b> DiffState<'b> {
                         TextSegments,
                         Text,
                     >,
-                    ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
+                    ctx: (
+                        &mut DiffState<'b, '_>,
+                        &'b VNode<'b>,
+                        &'b VNode<'b>,
+                        ElementId,
+                    ),
                 ) where
                     Attributes: AsRef<[TemplateAttribute<V>]>,
                     V: TemplateValue,
@@ -715,7 +729,7 @@ impl<'b> DiffState<'b> {
                         diff.diff_node(old_node, new_node);
                     }
                 }
-                new.template.nodes.with_node(
+                template.nodes.with_node(
                     id,
                     diff_dynamic_node,
                     diff_dynamic_node,
@@ -735,11 +749,7 @@ impl<'b> DiffState<'b> {
             .enumerate()
         {
             if old_text != new_text {
-                for node_id in new
-                    .template
-                    .dynamic_ids
-                    .get_dynamic_nodes_for_text_index(idx)
-                {
+                for node_id in template.dynamic_ids.get_dynamic_nodes_for_text_index(idx) {
                     dirty_text_nodes.insert(*node_id);
                 }
             }
@@ -755,7 +765,7 @@ impl<'b> DiffState<'b> {
                     TextSegments,
                     Text,
                 >,
-                ctx: (&mut DiffState<'b>, &TemplateContext<'b>),
+                ctx: (&mut DiffState<'b, '_>, &TemplateContext<'b>),
             ) where
                 Attributes: AsRef<[TemplateAttribute<V>]>,
                 V: TemplateValue,
@@ -774,12 +784,9 @@ impl<'b> DiffState<'b> {
                     panic!("expected text node");
                 }
             }
-            new.template.nodes.with_node(
-                node_id,
-                diff_text,
-                diff_text,
-                (self, &new.dynamic_context),
-            );
+            template
+                .nodes
+                .with_node(node_id, diff_text, diff_text, (self, &new.dynamic_context));
         }
 
         self.element_stack.pop();
@@ -1420,23 +1427,20 @@ impl<'b> DiffState<'b> {
             .bump
     }
 
-    pub fn get_or_insert_template_id(&mut self, template: &Template) -> ClientTemplateId {
+    pub fn get_or_insert_template_id(&mut self, template: &Template) -> RendererTemplateId {
         let template_id = template.id;
-        let mut template_id_mapping = self.scopes.template_id_mapping.borrow_mut();
-        if let Some(id) = template_id_mapping.get(&template_id) {
-            ClientTemplateId(*id)
-        } else {
-            let mut id = self.scopes.template_count.get();
-            template_id_mapping.insert(template_id, id);
-            let template_id = ClientTemplateId(id);
-            id += 1;
-            self.scopes.template_count.set(id);
-            self.register_template(template, template_id);
-            template_id
+        let (renderer_id, created) = self
+            .scopes
+            .template_resolver
+            .borrow_mut()
+            .get_or_create_client_id(template_id);
+        if created {
+            self.register_template(template, renderer_id);
         }
+        renderer_id
     }
 
-    pub fn register_template(&mut self, template: &Template, id: ClientTemplateId) {
+    pub fn register_template(&mut self, template: &Template, id: RendererTemplateId) {
         let bump = &self.scopes.template_bump;
         template.create(&mut self.mutations, bump, id);
     }

@@ -4,7 +4,11 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    innerlude::{AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState},
+    dynamic_template_context::{AnyDynamicNodeMapping, StaticDynamicNodeMapping, TemplateContext},
+    innerlude::{
+        AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState,
+        StaticTemplateNodes, Template, TemplateId, TemplateNodes,
+    },
     lazynodes::LazyNodes,
     templete::{TemplateNodeId, VTemplateRef},
     AnyEvent, Component,
@@ -209,7 +213,8 @@ impl Debug for VNode<'_> {
                 .finish(),
             VNode::TemplateRef(temp) => s
                 .debug_struct("VNode::TemplateRef")
-                .field("template", &temp.template)
+                .field("template_id", &temp.template_id)
+                .field("id", &temp.id)
                 .finish(),
         }
     }
@@ -805,8 +810,27 @@ impl<'a> NodeFactory<'a> {
         EventHandler { callback }
     }
 
-    /// Create a template
-    pub fn template(&mut self) {}
+    /// Create a refrence to a template
+    pub fn template_ref(
+        &mut self,
+        id: TemplateId,
+        template: StaticTemplateNodes,
+        dynamic_mapping: StaticDynamicNodeMapping,
+        dynamic_context: TemplateContext<'a>,
+    ) -> VNode<'a> {
+        let template = Template {
+            id,
+            nodes: TemplateNodes::Static(template),
+            dynamic_ids: AnyDynamicNodeMapping::Static(dynamic_mapping),
+        };
+        let mut resolver = self.scope.template_resolver.borrow_mut();
+        resolver.insert(id, template);
+        VNode::TemplateRef(self.bump.alloc(VTemplateRef {
+            id: empty_cell(),
+            dynamic_context,
+            template_id: id,
+        }))
+    }
 }
 
 impl Debug for NodeFactory<'_> {

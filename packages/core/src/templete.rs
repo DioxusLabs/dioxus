@@ -50,6 +50,7 @@
 //! Notice how the indecies are no longer in depth first traversal order, and indecies are no longer unique. Attributes and dynamic parts of the text can be duplicated, but dynamic vnodes and componets cannot.
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 
+use fxhash::FxHashMap;
 use std::{cell::Cell, hash::Hash, marker::PhantomData};
 
 use bumpalo::Bump;
@@ -85,9 +86,9 @@ pub struct TemplateId(pub &'static CodeLocation);
 ///
 /// `ClientTemplateId` is a unique id of the template sent to the renderer. It is unique across time.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ClientTemplateId(pub usize);
+pub struct RendererTemplateId(pub usize);
 
-impl Into<u64> for ClientTemplateId {
+impl Into<u64> for RendererTemplateId {
     fn into(self) -> u64 {
         self.0 as u64
     }
@@ -108,13 +109,13 @@ impl Into<u64> for TemplateNodeId {
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
     pub(crate) id: Cell<Option<ElementId>>,
-    pub(crate) template: &'a Template,
-    pub(crate) dynamic_context: &'a TemplateContext<'a>,
+    pub(crate) template_id: TemplateId,
+    pub(crate) dynamic_context: TemplateContext<'a>,
 }
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b>(&self, diff_state: &mut DiffState<'a>) {
+    pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a, '_>) {
         fn hydrate_inner<
             'b,
             Nodes,
@@ -126,8 +127,8 @@ impl<'a> VTemplateRef<'a> {
             TextSegments,
             Text,
         >(
-            nodes: &'b Nodes,
-            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>),
+            nodes: &Nodes,
+            ctx: (&mut DiffState<'b, '_>, &VTemplateRef<'b>, &Template),
         ) where
             Nodes: AsRef<
                 [TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>],
@@ -140,8 +141,8 @@ impl<'a> VTemplateRef<'a> {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (diff_state, template_ref) = ctx;
-            for id in template_ref.template.dynamic_ids.all_dynamic() {
+            let (diff_state, template_ref, template) = ctx;
+            for id in template.dynamic_ids.all_dynamic() {
                 let dynamic_node = &nodes.as_ref()[id.0];
                 let real_id = template_ref.id.get().unwrap();
                 diff_state.element_stack.push(GlobalNodeId::TemplateId {
@@ -220,9 +221,10 @@ impl<'a> VTemplateRef<'a> {
                 diff_state.element_stack.pop();
             }
         }
-        self.template
+
+        template
             .nodes
-            .with_nodes(hydrate_inner, hydrate_inner, (diff_state, self));
+            .with_nodes(hydrate_inner, hydrate_inner, (diff_state, self, template));
     }
 }
 
@@ -239,7 +241,7 @@ impl Template {
         &self,
         mutations: &mut Mutations<'b>,
         bump: &'b Bump,
-        id: ClientTemplateId,
+        id: RendererTemplateId,
     ) {
         mutations.create_templete(id.into());
         let id = TemplateNodeId(0);
@@ -329,6 +331,10 @@ pub(crate) enum TemplateNodes {
     Static(&'static [StaticTemplateNode]),
     Owned(Vec<OwnedTemplateNode>),
 }
+
+/// A array of stack allocated Template nodes
+pub type StaticTemplateNodes = &'static [StaticTemplateNode];
+pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
 impl TemplateNodes {
     fn is_empty(&self) -> bool {
@@ -432,7 +438,8 @@ impl TemplateNodes {
     }
 }
 
-type StaticTemplateNode = TemplateNode<
+/// A stack allocated Template node
+pub type StaticTemplateNode = TemplateNode<
     &'static [TemplateAttribute<AttributeValue<'static>>],
     AttributeValue<'static>,
     &'static [TemplateNodeId],
@@ -442,7 +449,7 @@ type StaticTemplateNode = TemplateNode<
     &'static str,
 >;
 
-type OwnedTemplateNode = TemplateNode<
+pub type OwnedTemplateNode = TemplateNode<
     Vec<TemplateAttribute<OwnedTemplateValue>>,
     OwnedTemplateValue,
     Vec<TemplateNodeId>,
@@ -456,7 +463,7 @@ type OwnedTemplateNode = TemplateNode<
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
 #[derive(Debug)]
-pub(crate) struct TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>
+pub struct TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
     V: TemplateValue,
@@ -473,19 +480,19 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct TemplateAttribute<V: TemplateValue> {
+pub struct TemplateAttribute<V: TemplateValue> {
     pub name: &'static str,
     pub namespace: Option<&'static str>,
     pub value: TemplateAttributeValue<V>,
 }
 
 #[derive(Debug)]
-pub(crate) enum TemplateAttributeValue<V: TemplateValue> {
+pub enum TemplateAttributeValue<V: TemplateValue> {
     Static(V),
     Dynamic(usize),
 }
 
-pub(crate) trait TemplateValue {
+pub trait TemplateValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b>;
 }
 
@@ -539,7 +546,7 @@ impl TemplateValue for OwnedTemplateValue {
 }
 
 #[derive(Debug)]
-pub(crate) enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>
+pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>
 where
     Fragment: AsRef<[TemplateNodeId]>,
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -557,7 +564,7 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct TemplateElement<Attributes, V, Children, Listeners>
+pub struct TemplateElement<Attributes, V, Children, Listeners>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
     Children: AsRef<[TemplateNodeId]>,
@@ -574,7 +581,7 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) struct TextTemplate<Segments, Text>
+pub struct TextTemplate<Segments, Text>
 where
     Segments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
@@ -585,7 +592,7 @@ where
 }
 
 #[derive(Debug)]
-pub(crate) enum TextTemplateSegment<Text>
+pub enum TextTemplateSegment<Text>
 where
     Text: AsRef<str>,
 {
@@ -594,7 +601,7 @@ where
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum OwnedTemplateValue {
+pub enum OwnedTemplateValue {
     Text(String),
     Float32(f32),
     Float64(f64),
@@ -640,6 +647,39 @@ impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
             }
             AttributeValue::Bytes(b) => OwnedTemplateValue::Bytes(b.to_owned()),
             AttributeValue::Any(_) => todo!(),
+        }
+    }
+}
+
+#[derive(Default)]
+pub(crate) struct TemplateResolver {
+    pub template_id_mapping: FxHashMap<TemplateId, RendererTemplateId>,
+    pub templates: FxHashMap<TemplateId, Template>,
+    pub template_count: usize,
+}
+
+impl TemplateResolver {
+    pub fn insert(&mut self, id: TemplateId, template: Template) {
+        self.templates.insert(id, template);
+    }
+
+    pub fn get(&self, id: TemplateId) -> Option<&Template> {
+        self.templates.get(&id)
+    }
+
+    // returns (id, if the id was created)
+    pub fn get_or_create_client_id(
+        &mut self,
+        template_id: TemplateId,
+    ) -> (RendererTemplateId, bool) {
+        if let Some(id) = self.template_id_mapping.get(&template_id) {
+            (*id, false)
+        } else {
+            let id = self.template_count;
+            let renderer_id = RendererTemplateId(id);
+            self.template_id_mapping.insert(template_id, renderer_id);
+            self.template_count += 1;
+            (renderer_id, true)
         }
     }
 }

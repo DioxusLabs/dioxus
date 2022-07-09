@@ -1,8 +1,9 @@
 use crate::{
+    dynamic_template_context::TemplateContext,
     innerlude::*,
     templete::{
-        Template, TemplateAttribute, TemplateElement, TemplateId, TemplateNode, TemplateNodeId,
-        TemplateNodeType, TemplateValue, TextTemplateSegment, VTemplateRef,
+        Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
+        TemplateNodeType, TemplateValue, TextTemplateSegment,
     },
     unsafe_utils::extend_vnode,
 };
@@ -12,7 +13,6 @@ use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    borrow::Borrow,
     cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
@@ -42,9 +42,7 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
-    pub template_id_mapping: RefCell<FxHashMap<TemplateId, usize>>,
-    pub templates: RefCell<Slab<Template>>,
-    pub template_count: Cell<usize>,
+    pub template_resolver: Rc<RefCell<TemplateResolver>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
     // todo: this allocates memory without dropping, but only when allocating templates so it should be minimal.
     pub template_bump: Bump,
@@ -87,9 +85,7 @@ impl ScopeArena {
                 gen: Cell::new(0),
                 sender,
             }),
-            template_id_mapping: RefCell::new(FxHashMap::default()),
-            templates: RefCell::new(Slab::new()),
-            template_count: Cell::new(0),
+            template_resolver: Rc::new(RefCell::new(TemplateResolver::default())),
             template_bump: Bump::new(),
         }
     }
@@ -189,6 +185,8 @@ impl ScopeArena {
                     hook_arena: Bump::new(),
                     hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
                     hook_idx: Cell::default(),
+
+                    template_resolver: self.template_resolver.clone(),
                 }),
             );
         }
@@ -354,12 +352,20 @@ impl ScopeArena {
                     );
                     if let Some(template) = nodes.get(template_ref_id.0) {
                         let template = unsafe { &**template };
-                        if let VNode::TemplateRef(template) = template {
-                            cur_el = template.template.nodes.with_node(
+                        if let VNode::TemplateRef(template_ref) = template {
+                            let resolver = self.template_resolver.borrow();
+                            let template = resolver.get(template_ref.template_id).unwrap();
+                            cur_el = template.nodes.with_node(
                                 template_id,
                                 bubble_template,
                                 bubble_template,
-                                (&nodes, template, &event, &state, template_ref_id),
+                                (
+                                    &nodes,
+                                    &template_ref.dynamic_context,
+                                    &event,
+                                    &state,
+                                    template_ref_id,
+                                ),
                             );
                         }
                     }
@@ -370,7 +376,7 @@ impl ScopeArena {
                         log::trace!("looking for listener on {:?}", real_el);
 
                         if let VNode::Element(real_el) = real_el {
-                            for listener in real_el.listeners.borrow().iter() {
+                            for listener in real_el.listeners.iter() {
                                 if listener.event == event.name {
                                     log::trace!("calling listener {:?}", listener.event);
 
@@ -403,7 +409,7 @@ impl ScopeArena {
             node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
             ctx: (
                 &Ref<Slab<*const VNode>>,
-                &VTemplateRef,
+                &TemplateContext<'b>,
                 &UserEvent,
                 &Rc<BubbleState>,
                 ElementId,
@@ -418,11 +424,11 @@ impl ScopeArena {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (vnodes, template, event, state, template_ref_id) = ctx;
+            let (vnodes, dynamic_context, event, state, template_ref_id) = ctx;
             if let TemplateNodeType::Element(el) = &node.node_type {
                 let TemplateElement { listeners, .. } = el;
                 for listener_idx in listeners.as_ref() {
-                    let listener = template.dynamic_context.resolve_listener(*listener_idx);
+                    let listener = dynamic_context.resolve_listener(*listener_idx);
                     if listener.event == event.name {
                         log::trace!("calling listener {:?}", listener.event);
 
@@ -592,6 +598,9 @@ pub struct ScopeState {
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
+
+    // templates
+    pub(crate) template_resolver: Rc<RefCell<TemplateResolver>>,
 }
 
 pub struct SelfReferentialItems<'a> {

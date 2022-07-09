@@ -452,7 +452,8 @@ impl VirtualDom {
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
-            let mut diff_state = DiffState::new(scopes);
+            let resolver = self.scopes.template_resolver.borrow();
+            let mut diff_state = DiffState::new(scopes, &resolver);
 
             let mut ran_scopes = FxHashSet::default();
 
@@ -524,8 +525,9 @@ impl VirtualDom {
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
         let scope_id = ScopeId(0);
-        let mut diff_state = DiffState::new(&self.scopes);
 
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut diff_state = DiffState::new(&self.scopes, &resolver);
         self.scopes.run_scope(scope_id);
 
         diff_state
@@ -575,7 +577,8 @@ impl VirtualDom {
     /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
-        let mut diff_machine = DiffState::new(&self.scopes);
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut diff_machine = DiffState::new(&self.scopes, &resolver);
         self.scopes.run_scope(scope_id);
 
         let (old, new) = (
@@ -626,7 +629,8 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
-        let mut machine = DiffState::new(&self.scopes);
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut machine = DiffState::new(&self.scopes, &resolver);
         machine
             .element_stack
             .push(GlobalNodeId::VNodeId(ElementId(0)));
@@ -650,7 +654,8 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
-        let mut machine = DiffState::new(&self.scopes);
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut machine = DiffState::new(&self.scopes, &resolver);
         machine.scope_stack.push(ScopeId(0));
         machine
             .element_stack
@@ -681,7 +686,8 @@ impl VirtualDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
-        let mut create = DiffState::new(&self.scopes);
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut create = DiffState::new(&self.scopes, &resolver);
         create.scope_stack.push(ScopeId(0));
         create
             .element_stack
@@ -689,7 +695,7 @@ impl VirtualDom {
         let created = create.create_node(old);
         create.mutations.append_children(created as u32);
 
-        let mut edit = DiffState::new(&self.scopes);
+        let mut edit = DiffState::new(&self.scopes, &resolver);
         edit.scope_stack.push(ScopeId(0));
         edit.element_stack.push(GlobalNodeId::VNodeId(ElementId(0)));
         edit.diff_node(old, new);
@@ -729,7 +735,8 @@ impl Drop for VirtualDom {
 
         // todo: move the remove nodes method onto scopearena
         // this will clear *all* scopes *except* the root scope
-        let mut machine = DiffState::new(&self.scopes);
+        let resolver = self.scopes.template_resolver.borrow();
+        let mut machine = DiffState::new(&self.scopes, &resolver);
         machine.remove_nodes([scope.root_node()], false);
 
         // Now, clean up the root scope
