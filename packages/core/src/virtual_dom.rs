@@ -128,6 +128,12 @@ pub enum SchedulerMsg {
     /// Mark all components as dirty and update them
     DirtyAll,
 
+    /// Mark a template as dirty, used for hot reloading
+    SetTemplate {
+        /// The id of the template
+        id: TemplateId,
+    },
+
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
@@ -227,7 +233,6 @@ impl VirtualDom {
             }),
             None,
             GlobalNodeId::VNodeId(ElementId(0)),
-            0,
         );
 
         Self {
@@ -398,6 +403,10 @@ impl VirtualDom {
                     self.dirty_scopes.insert(*id);
                 }
             }
+            SchedulerMsg::SetTemplate { id } => {
+                // self.scopes.template_resolver.get_mut().insert(id, template);
+                // mark any scopes that used the template as dirty
+            }
         }
     }
 
@@ -453,7 +462,7 @@ impl VirtualDom {
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
             let resolver = self.scopes.template_resolver.borrow();
-            let mut diff_state = DiffState::new(scopes, &resolver);
+            let mut diff_state = DiffState::new(scopes);
 
             let mut ran_scopes = FxHashSet::default();
 
@@ -527,7 +536,7 @@ impl VirtualDom {
         let scope_id = ScopeId(0);
 
         let resolver = self.scopes.template_resolver.borrow();
-        let mut diff_state = DiffState::new(&self.scopes, &resolver);
+        let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
         diff_state
@@ -578,7 +587,7 @@ impl VirtualDom {
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let resolver = self.scopes.template_resolver.borrow();
-        let mut diff_machine = DiffState::new(&self.scopes, &resolver);
+        let mut diff_machine = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
         let (old, new) = (
@@ -630,7 +639,7 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let resolver = self.scopes.template_resolver.borrow();
-        let mut machine = DiffState::new(&self.scopes, &resolver);
+        let mut machine = DiffState::new(&self.scopes);
         machine
             .element_stack
             .push(GlobalNodeId::VNodeId(ElementId(0)));
@@ -655,7 +664,7 @@ impl VirtualDom {
     /// ```
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let resolver = self.scopes.template_resolver.borrow();
-        let mut machine = DiffState::new(&self.scopes, &resolver);
+        let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
         machine
             .element_stack
@@ -687,7 +696,7 @@ impl VirtualDom {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
         let resolver = self.scopes.template_resolver.borrow();
-        let mut create = DiffState::new(&self.scopes, &resolver);
+        let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
         create
             .element_stack
@@ -695,7 +704,7 @@ impl VirtualDom {
         let created = create.create_node(old);
         create.mutations.append_children(created as u32);
 
-        let mut edit = DiffState::new(&self.scopes, &resolver);
+        let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));
         edit.element_stack.push(GlobalNodeId::VNodeId(ElementId(0)));
         edit.diff_node(old, new);
@@ -736,7 +745,7 @@ impl Drop for VirtualDom {
         // todo: move the remove nodes method onto scopearena
         // this will clear *all* scopes *except* the root scope
         let resolver = self.scopes.template_resolver.borrow();
-        let mut machine = DiffState::new(&self.scopes, &resolver);
+        let mut machine = DiffState::new(&self.scopes);
         machine.remove_nodes([scope.root_node()], false);
 
         // Now, clean up the root scope

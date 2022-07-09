@@ -56,10 +56,8 @@ use std::{cell::Cell, hash::Hash, marker::PhantomData};
 use bumpalo::Bump;
 
 use crate::{
-    diff::DiffState,
-    dynamic_template_context::{AnyDynamicNodeMapping, TemplateContext},
-    innerlude::GlobalNodeId,
-    Attribute, AttributeValue, ElementId, Mutations,
+    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId, Attribute,
+    AttributeValue, ElementId, Mutations, OwnedDynamicNodeMapping, StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -115,7 +113,7 @@ pub struct VTemplateRef<'a> {
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a, '_>) {
+    pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a>) {
         fn hydrate_inner<
             'b,
             Nodes,
@@ -128,7 +126,7 @@ impl<'a> VTemplateRef<'a> {
             Text,
         >(
             nodes: &Nodes,
-            ctx: (&mut DiffState<'b, '_>, &VTemplateRef<'b>, &Template),
+            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template),
         ) where
             Nodes: AsRef<
                 [TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>],
@@ -142,7 +140,7 @@ impl<'a> VTemplateRef<'a> {
             Text: AsRef<str>,
         {
             let (diff_state, template_ref, template) = ctx;
-            for id in template.dynamic_ids.all_dynamic() {
+            for id in template.all_dynamic() {
                 let dynamic_node = &nodes.as_ref()[id.0];
                 let real_id = template_ref.id.get().unwrap();
                 diff_state.element_stack.push(GlobalNodeId::TemplateId {
@@ -222,17 +220,22 @@ impl<'a> VTemplateRef<'a> {
             }
         }
 
-        template
-            .nodes
-            .with_nodes(hydrate_inner, hydrate_inner, (diff_state, self, template));
+        template.with_nodes(hydrate_inner, hydrate_inner, (diff_state, self, template));
     }
 }
 
 #[derive(Debug)]
-pub struct Template {
-    pub nodes: TemplateNodes,
-    /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub dynamic_ids: AnyDynamicNodeMapping,
+pub enum Template {
+    Static {
+        nodes: StaticTemplateNodes,
+        /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
+        dynamic_ids: StaticDynamicNodeMapping,
+    },
+    Owned {
+        nodes: OwnedTemplateNodes,
+        /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
+        dynamic_ids: OwnedDynamicNodeMapping,
+    },
 }
 
 impl Template {
@@ -243,8 +246,12 @@ impl Template {
         id: RendererTemplateId,
     ) {
         mutations.create_templete(id.into());
-        let id = TemplateNodeId(0);
-        if !self.nodes.is_empty() {
+        let empty = match self {
+            Template::Static { nodes, .. } => nodes.is_empty(),
+            Template::Owned { nodes, .. } => nodes.is_empty(),
+        };
+        if !empty {
+            let id = TemplateNodeId(0);
             self.create_node(mutations, bump, id);
         }
         mutations.finish_templete();
@@ -316,96 +323,12 @@ impl Template {
                 }
             }
         }
-        self.nodes.with_node(
+        self.with_node(
             id,
             crate_node_inner,
             crate_node_inner,
             (mutations, bump, self),
         );
-    }
-}
-
-#[derive(Debug)]
-pub enum TemplateNodes {
-    Static(&'static [StaticTemplateNode]),
-    Owned(Vec<OwnedTemplateNode>),
-}
-
-/// A array of stack allocated Template nodes
-pub type StaticTemplateNodes = &'static [StaticTemplateNode];
-pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
-
-impl TemplateNodes {
-    fn is_empty(&self) -> bool {
-        match self {
-            TemplateNodes::Static(nodes) => nodes.is_empty(),
-            TemplateNodes::Owned(nodes) => nodes.is_empty(),
-        }
-    }
-
-    fn to_owned(self) -> Self {
-        if let Self::Static(old) = self {
-            let mut owned = Vec::with_capacity(old.len());
-            for borrowed in old {
-                let ty = match &borrowed.node_type {
-                    TemplateNodeType::Element(el) => TemplateNodeType::Element(TemplateElement {
-                        tag: el.tag,
-                        namespace: el.namespace,
-                        attributes: el
-                            .attributes
-                            .into_iter()
-                            .map(|attr| {
-                                let owned_value: TemplateAttributeValue<OwnedTemplateValue> =
-                                    match &attr.value {
-                                        TemplateAttributeValue::Static(s) => {
-                                            TemplateAttributeValue::Static(s.clone().into())
-                                        }
-                                        TemplateAttributeValue::Dynamic(d) => {
-                                            TemplateAttributeValue::Dynamic(*d)
-                                        }
-                                    };
-                                TemplateAttribute {
-                                    name: attr.name,
-                                    namespace: attr.namespace,
-                                    value: owned_value,
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                        children: el.children.to_vec(),
-                        listeners: el.listeners.to_vec(),
-                        parent: el.parent,
-                        value: PhantomData,
-                    }),
-                    TemplateNodeType::Text(segments) => TemplateNodeType::Text(TextTemplate {
-                        segments: segments
-                            .segments
-                            .into_iter()
-                            .map(|s| match s {
-                                TextTemplateSegment::Static(s) => {
-                                    TextTemplateSegment::Static(s.to_string())
-                                }
-                                TextTemplateSegment::Dynamic(id) => {
-                                    TextTemplateSegment::Dynamic(*id)
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                        text: PhantomData,
-                    }),
-                    TemplateNodeType::Fragment(fragment) => {
-                        TemplateNodeType::Fragment(fragment.to_vec())
-                    }
-                    TemplateNodeType::DynamicNode(id) => TemplateNodeType::DynamicNode(*id),
-                };
-                let new = TemplateNode {
-                    id: borrowed.id,
-                    node_type: ty,
-                };
-                owned.push(new);
-            }
-            Self::Owned(owned)
-        } else {
-            self
-        }
     }
 
     pub(crate) fn with_node<F1, F2, Ctx, R>(
@@ -420,8 +343,8 @@ impl TemplateNodes {
         F2: FnMut(&OwnedTemplateNode, Ctx) -> R,
     {
         match self {
-            TemplateNodes::Static(nodes) => f1(&nodes[id.0], ctx),
-            TemplateNodes::Owned(nodes) => f2(&nodes[id.0], ctx),
+            Template::Static { nodes, .. } => f1(&nodes[id.0], ctx),
+            Template::Owned { nodes, .. } => f2(&nodes[id.0], ctx),
         }
     }
 
@@ -431,11 +354,49 @@ impl TemplateNodes {
         F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx),
     {
         match self {
-            TemplateNodes::Static(nodes) => f1(&nodes, ctx),
-            TemplateNodes::Owned(nodes) => f2(&nodes, ctx),
+            Template::Static { nodes, .. } => f1(&nodes, ctx),
+            Template::Owned { nodes, .. } => f2(&nodes, ctx),
+        }
+    }
+
+    pub(crate) fn all_dynamic<'a>(&'a self) -> Box<dyn Iterator<Item = TemplateNodeId> + 'a> {
+        match self {
+            Template::Static { dynamic_ids, .. } => Box::new(dynamic_ids.all_dynamic()),
+            Template::Owned { dynamic_ids, .. } => Box::new(dynamic_ids.all_dynamic()),
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
+        match self {
+            Template::Static { dynamic_ids, .. } => dynamic_ids.nodes[idx],
+            Template::Owned { dynamic_ids, .. } => dynamic_ids.nodes[idx],
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_text_index<'a>(
+        &'a self,
+        idx: usize,
+    ) -> &'a [TemplateNodeId] {
+        match self {
+            Template::Static { dynamic_ids, .. } => dynamic_ids.text[idx].as_ref(),
+            Template::Owned { dynamic_ids, .. } => dynamic_ids.text[idx].as_ref(),
+        }
+    }
+
+    pub(crate) fn get_dynamic_nodes_for_attribute_index<'a>(
+        &'a self,
+        idx: usize,
+    ) -> &'a [(TemplateNodeId, usize)] {
+        match self {
+            Template::Static { dynamic_ids, .. } => dynamic_ids.attributes[idx].as_ref(),
+            Template::Owned { dynamic_ids, .. } => dynamic_ids.attributes[idx].as_ref(),
         }
     }
 }
+
+/// A array of stack allocated Template nodes
+pub type StaticTemplateNodes = &'static [StaticTemplateNode];
+pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
 /// A stack allocated Template node
 pub type StaticTemplateNode = TemplateNode<
@@ -652,14 +613,19 @@ impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
 
 #[derive(Default)]
 pub(crate) struct TemplateResolver {
-    pub template_id_mapping: FxHashMap<TemplateId, RendererTemplateId>,
+    // maps a id to the rendererid and if that template needs to be re-created
+    pub template_id_mapping: FxHashMap<TemplateId, (RendererTemplateId, bool)>,
     pub templates: FxHashMap<TemplateId, Template>,
     pub template_count: usize,
 }
 
 impl TemplateResolver {
     pub fn insert(&mut self, id: TemplateId, template: Template) {
-        self.templates.insert(id, template);
+        if self.templates.insert(id, template).is_some() {
+            if let Some((_, dirty)) = self.template_id_mapping.get_mut(&id) {
+                *dirty = true;
+            }
+        }
     }
 
     pub fn get(&self, id: TemplateId) -> Option<&Template> {
@@ -672,11 +638,12 @@ impl TemplateResolver {
         template_id: TemplateId,
     ) -> (RendererTemplateId, bool) {
         if let Some(id) = self.template_id_mapping.get(&template_id) {
-            (*id, false)
+            *id
         } else {
             let id = self.template_count;
             let renderer_id = RendererTemplateId(id);
-            self.template_id_mapping.insert(template_id, renderer_id);
+            self.template_id_mapping
+                .insert(template_id, (renderer_id, false));
             self.template_count += 1;
             (renderer_id, true)
         }

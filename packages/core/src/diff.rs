@@ -95,7 +95,7 @@ use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
         AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
-        TemplateId, TemplateResolver, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
+        TemplateId, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
     templete::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -107,24 +107,22 @@ use bumpalo::Bump;
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-pub(crate) struct DiffState<'bump, 'a> {
+pub(crate) struct DiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
     pub(crate) element_stack: SmallVec<[GlobalNodeId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
-    pub(crate) template_resolver: &'a TemplateResolver,
 }
 
-impl<'b, 'a> DiffState<'b, 'a> {
-    pub fn new(scopes: &'b ScopeArena, template_resolver: &'a TemplateResolver) -> Self {
+impl<'b> DiffState<'b> {
+    pub fn new(scopes: &'b ScopeArena) -> Self {
         Self {
             scopes,
             mutations: Mutations::new(),
             force_diff: false,
             element_stack: smallvec![],
             scope_stack: smallvec![],
-            template_resolver,
         }
     }
 
@@ -647,10 +645,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                     Text: AsRef<str>,
                 {
                     let (mutations, scope_bump, new, template, idx) = ctx;
-                    for (node_id, attr_idx) in template
-                        .dynamic_ids
-                        .get_dynamic_nodes_for_attribute_index(idx)
-                    {
+                    for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
                         if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type
                         {
                             let TemplateElement { attributes, .. } = el;
@@ -668,7 +663,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                         }
                     }
                 }
-                template.nodes.with_nodes(
+                template.with_nodes(
                     diff_attributes,
                     diff_attributes,
                     (&mut self.mutations, scope_bump, new, template, idx),
@@ -684,7 +679,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
             .zip(new.dynamic_context.nodes.iter())
             .enumerate()
         {
-            if let Some(id) = template.dynamic_ids.get_dynamic_nodes_for_node_index(idx) {
+            if let Some(id) = template.get_dynamic_nodes_for_node_index(idx) {
                 fn diff_dynamic_node<
                     'b,
                     Attributes,
@@ -704,12 +699,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                         TextSegments,
                         Text,
                     >,
-                    ctx: (
-                        &mut DiffState<'b, '_>,
-                        &'b VNode<'b>,
-                        &'b VNode<'b>,
-                        ElementId,
-                    ),
+                    ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
                 ) where
                     Attributes: AsRef<[TemplateAttribute<V>]>,
                     V: TemplateValue,
@@ -728,7 +718,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                         diff.diff_node(old_node, new_node);
                     }
                 }
-                template.nodes.with_node(
+                template.with_node(
                     id,
                     diff_dynamic_node,
                     diff_dynamic_node,
@@ -748,7 +738,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
             .enumerate()
         {
             if old_text != new_text {
-                for node_id in template.dynamic_ids.get_dynamic_nodes_for_text_index(idx) {
+                for node_id in template.get_dynamic_nodes_for_text_index(idx) {
                     dirty_text_nodes.insert(*node_id);
                 }
             }
@@ -764,7 +754,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                     TextSegments,
                     Text,
                 >,
-                ctx: (&mut DiffState<'b, '_>, &TemplateContext<'b>),
+                ctx: (&mut DiffState<'b>, &TemplateContext<'b>),
             ) where
                 Attributes: AsRef<[TemplateAttribute<V>]>,
                 V: TemplateValue,
@@ -783,9 +773,7 @@ impl<'b, 'a> DiffState<'b, 'a> {
                     panic!("expected text node");
                 }
             }
-            template
-                .nodes
-                .with_node(node_id, diff_text, diff_text, (self, &new.dynamic_context));
+            template.with_node(node_id, diff_text, diff_text, (self, &new.dynamic_context));
         }
 
         self.element_stack.pop();
