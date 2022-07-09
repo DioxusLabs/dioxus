@@ -339,7 +339,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
             .unwrap()
             .tick_chars("/|\\- "),
     );
-    pb.set_message("💼 Waiting to strart build the project...");
+    pb.set_message("💼 Waiting to start build the project...");
 
     let mut command = cmd.spawn()?;
     let reader = std::io::BufReader::new(command.stdout.take().unwrap());

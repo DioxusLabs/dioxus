@@ -460,9 +460,13 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
     } else {
         println!(
             "Project Reloaded: {}\n",
-            format!("Changed {} files.", options.changed.len())
-                .purple()
-                .bold()
+            format!(
+                "Changed {} files. [{}]",
+                options.changed.len(),
+                chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
+            )
+            .purple()
+            .bold()
         );
     }
     println!(
