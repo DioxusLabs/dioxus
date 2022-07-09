@@ -2,11 +2,14 @@ use crate::{
     config::{CrateConfig, ExecutableType},
     error::{Error, Result},
     tools::Tool,
-    CargoFormatInfo, DioxusConfig,
+    DioxusConfig,
 };
+use cargo_metadata::Message;
+use loading::Loading;
 use std::{
+    collections::HashMap,
     fs::{copy, create_dir_all, remove_dir_all, File},
-    io::{BufRead, Read},
+    io::Read,
     panic,
     path::PathBuf,
     process::Command,
@@ -75,25 +78,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let mut child = cmd.spawn()?;
-    let out = child.stdout.take().unwrap();
-    let mut out = std::io::BufReader::new(out);
-    let mut content = String::new();
-    while let Ok(_) = out.read_line(&mut content) {
-        // 进程退出后结束循环
-        if let Ok(Some(_)) = child.try_wait() {
-            break;
-        }
-        let content = content.split('\n').collect::<Vec<&str>>();
-        for json in content {
-            let d = serde_json::from_str::<CargoFormatInfo>(&json);
-            if let Ok(d) = d {
-                println!("\n{:#?}\n", d);
-            } else {
-                println!("\n\n{:?}\n\n", json);
-            }
-        }
-    }
+    prettier_build(cmd).unwrap();
 
     // if !output.status.success() {
     //     log::error!("Build failed!");
@@ -339,6 +324,37 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
         );
     }
 
+    Ok(())
+}
+
+fn prettier_build(mut cmd: Command) -> anyhow::Result<()> {
+    let loading = Loading::default();
+    let mut record: HashMap<String, String> = HashMap::new();
+    let mut command = cmd.spawn()?;
+    let reader = std::io::BufReader::new(command.stdout.take().unwrap());
+    for message in cargo_metadata::Message::parse_stream(reader) {
+        match message.unwrap() {
+            Message::CompilerMessage(_msg) => {
+                // println!("{:#?}", msg);
+            }
+            Message::CompilerArtifact(artifact) => {
+                record.insert(artifact.package_id.to_string(), artifact.target.name);
+            }
+            Message::BuildScriptExecuted(script) => {
+                let package_id = script.package_id.to_string();
+                if let Some(name) = record.get(&package_id) {
+                    loading.text(format!("[{}] build done", name));
+                }
+            }
+            Message::BuildFinished(finished) => {
+                if finished.success {
+                } else {
+                    std::process::exit(1);
+                }
+            }
+            _ => (), // Unknown message
+        }
+    }
     Ok(())
 }
 
