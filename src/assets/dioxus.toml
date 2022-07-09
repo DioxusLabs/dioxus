@@ -17,7 +17,7 @@ asset_dir = "public"
 [web.app]
 
 # HTML title tag content
-title = "dioxus | ⛺"
+title = "Dioxus | An elegant GUI library for Rust"
 
 index_on_404 = true
 
