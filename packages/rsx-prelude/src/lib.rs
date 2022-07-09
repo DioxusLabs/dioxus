@@ -25,6 +25,6 @@ pub mod prelude {
     #[cfg(feature = "hot-reload")]
     pub use dioxus_rsx_interpreter::{
         captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
-        get_line_num, resolve_scope, CodeLocation, RsxContext,
+        get_line_num, resolve_scope, RsxContext,
     };
 }

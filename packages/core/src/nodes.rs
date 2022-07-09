@@ -4,10 +4,10 @@
 //! cheap and *very* fast to construct - building a full tree should be quick.
 
 use crate::{
-    dynamic_template_context::{AnyDynamicNodeMapping, StaticDynamicNodeMapping, TemplateContext},
+    dynamic_template_context::TemplateContext,
     innerlude::{
-        AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState,
-        StaticTemplateNodes, Template, TemplateId, TemplateNodes,
+        AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState, Template,
+        TemplateId,
     },
     lazynodes::LazyNodes,
     templete::{TemplateNodeId, VTemplateRef},
