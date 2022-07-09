@@ -6,6 +6,7 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
 use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
@@ -15,7 +16,7 @@ use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
-use crate::{builder, serve::Serve, CrateConfig, Result};
+use crate::{builder, serve::Serve, BuildResult, CrateConfig, Result};
 use tokio::sync::broadcast;
 
 mod hot_reload;
@@ -27,9 +28,9 @@ pub struct BuildManager {
 }
 
 impl BuildManager {
-    fn rebuild(&self) -> Result<()> {
+    fn rebuild(&self) -> Result<BuildResult> {
         log::info!("🪁 Rebuild project");
-        builder::build(&self.config, true)?;
+        let result = builder::build(&self.config, true)?;
         // change the websocket reload state to true;
         // the page will auto-reload.
         if self
@@ -43,7 +44,7 @@ impl BuildManager {
             let _ = Serve::regen_dev_page(&self.config);
         }
         let _ = self.reload_tx.send(());
-        Ok(())
+        Ok(result)
     }
 }
 
@@ -61,6 +62,8 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
 }
 
 pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -159,9 +162,22 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                     }
                 }
                 if needs_rebuild {
-                    print_console_info(port, &config, evt.paths);
-                    if let Err(err) = build_manager.rebuild() {
-                        log::error!("{}", err);
+                    match build_manager.rebuild() {
+                        Ok(res) => {
+                            print_console_info(
+                                port,
+                                &config,
+                                PrettierOptions {
+                                    changed: evt.paths,
+                                    warnings: res.warnings,
+                                    elapsed_time: res.elapsed_time,
+                                },
+                            );
+                        }
+                        Err(err) => {
+                            log::error!("{}", err);
+                            std::process::exit(1);
+                        }
                     }
                 }
                 if !messages.is_empty() {
@@ -183,7 +199,15 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0:8080
-    print_console_info(port, &config, vec![]);
+    print_console_info(
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -246,6 +270,8 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 }
 
 pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -276,10 +302,20 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if info.is_ok() {
-            print_console_info(port, &config, info.unwrap().paths);
             if chrono::Local::now().timestamp() > last_update_time {
                 match build_manager.rebuild() {
-                    Ok(_) => last_update_time = chrono::Local::now().timestamp(),
+                    Ok(res) => {
+                        last_update_time = chrono::Local::now().timestamp();
+                        print_console_info(
+                            port,
+                            &config,
+                            PrettierOptions {
+                                changed: info.unwrap().paths,
+                                warnings: res.warnings,
+                                elapsed_time: res.elapsed_time,
+                            },
+                        );
+                    }
                     Err(e) => log::error!("{}", e),
                 }
             }
@@ -297,8 +333,16 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0
-    print_console_info(port, &config, vec![]);
-
+    print_console_info(
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
+    
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
         .and_then(
@@ -355,7 +399,14 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
+#[derive(Debug, Default)]
+pub struct PrettierOptions {
+    changed: Vec<PathBuf>,
+    warnings: Vec<Diagnostic>,
+    elapsed_time: u128,
+}
+
+fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
     print!(
         "{}",
         String::from_utf8_lossy(
@@ -413,7 +464,7 @@ fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
         "False"
     };
 
-    if changed.len() <= 0 {
+    if options.changed.len() <= 0 {
         println!(
             "{} @ v{}\n",
             "Dioxus".bold().green(),
@@ -422,7 +473,9 @@ fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
     } else {
         println!(
             "Project Reloaded: {}\n",
-            format!("Changed {} files.", changed.len()).purple().bold()
+            format!("Changed {} files.", options.changed.len())
+                .purple()
+                .bold()
         );
     }
     println!(
@@ -446,12 +499,11 @@ fn print_console_info(port: u16, config: &CrateConfig, changed: Vec<PathBuf>) {
     println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
     println!("");
 
-    if changed.len() <= 0 {
+    if options.changed.len() <= 0 {
         log::info!("{}", "Server startup completed.".green().bold());
     } else {
         log::info!("{}", "Project rebuild completed.".green().bold());
     }
-    
 }
 
 fn get_ip() -> Option<String> {

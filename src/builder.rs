@@ -4,19 +4,26 @@ use crate::{
     tools::Tool,
     DioxusConfig,
 };
-use cargo_metadata::Message;
-use loading::Loading;
+use cargo_metadata::{diagnostic::Diagnostic, Message};
+use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
 use std::{
-    collections::HashMap,
     fs::{copy, create_dir_all, remove_dir_all, File},
     io::Read,
     panic,
     path::PathBuf,
     process::Command,
+    time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
+#[derive(Serialize, Debug, Clone)]
+pub struct BuildResult {
+    pub warnings: Vec<Diagnostic>,
+    pub elapsed_time: u128,
+}
+
+pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
@@ -78,13 +85,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    prettier_build(cmd).unwrap();
-
-    // if !output.status.success() {
-    //     log::error!("Build failed!");
-    //     let reason = String::from_utf8_lossy(&output.stderr).to_string();
-    //     return Err(Error::BuildFailed(reason));
-    // }
+    let warning_messages = prettier_build(cmd)?;
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
@@ -122,8 +123,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
             .unwrap();
     });
     if bindgen_result.is_err() {
-        log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
-        return Ok(());
+        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.".to_string()));
     }
 
     // check binaryen:wasm-opt tool
@@ -193,8 +193,10 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<()> {
     }
 
     let t_end = std::time::Instant::now();
-    log::info!("🏁 Done in {}ms!", (t_end - t_start).as_millis());
-    Ok(())
+    Ok(BuildResult {
+        warnings: warning_messages,
+        elapsed_time: (t_end - t_start).as_millis()
+    })
 }
 
 pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
@@ -327,27 +329,46 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     Ok(())
 }
 
-fn prettier_build(mut cmd: Command) -> anyhow::Result<()> {
-    let loading = Loading::default();
-    let mut record: HashMap<String, String> = HashMap::new();
+fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
+    let mut warning_messages: Vec<Diagnostic> = vec![];
+
+    let pb = ProgressBar::new_spinner();
+    pb.enable_steady_tick(Duration::from_millis(200));
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+            .unwrap()
+            .tick_chars("/|\\- "),
+    );
+    pb.set_message("Start to build project");
+
     let mut command = cmd.spawn()?;
     let reader = std::io::BufReader::new(command.stdout.take().unwrap());
     for message in cargo_metadata::Message::parse_stream(reader) {
         match message.unwrap() {
-            Message::CompilerMessage(_msg) => {
-                // println!("{:#?}", msg);
+            Message::CompilerMessage(msg) => {
+                let message = msg.message;
+                match message.level {
+                    cargo_metadata::diagnostic::DiagnosticLevel::Error => {
+                        log::error!("Build Failed: {}", message.message);
+                        std::process::exit(1);
+                    }
+                    cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
+                        warning_messages.push(message.clone());
+                    }
+                    _ => {}
+                }
             }
             Message::CompilerArtifact(artifact) => {
-                record.insert(artifact.package_id.to_string(), artifact.target.name);
+                pb.set_message(format!("Compiling {} ", artifact.package_id));
+                pb.tick();
             }
             Message::BuildScriptExecuted(script) => {
-                let package_id = script.package_id.to_string();
-                if let Some(name) = record.get(&package_id) {
-                    loading.text(format!("[{}] build done", name));
-                }
+                let _package_id = script.package_id.to_string();
             }
             Message::BuildFinished(finished) => {
                 if finished.success {
+                    pb.finish_and_clear();
+                    println!("Done in");
                 } else {
                     std::process::exit(1);
                 }
@@ -355,7 +376,7 @@ fn prettier_build(mut cmd: Command) -> anyhow::Result<()> {
             _ => (), // Unknown message
         }
     }
-    Ok(())
+    Ok(warning_messages)
 }
 
 pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {

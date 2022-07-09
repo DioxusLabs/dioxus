@@ -29,14 +29,14 @@ notify = { version = "5.0.0-pre.13", features = ["serde"] }
 html_parser = "0.6.2"
 binary-install = "0.0.2"
 convert_case = "0.5.0"
-cargo_metadata = "0.14.1"
+cargo_metadata = "0.15.0"
 tokio = { version = "1.16.1", features = ["full"] }
 atty = "0.2.14"
 regex = "1.5.4"
 chrono = "0.4.19"
 anyhow = "1.0.53"
 hyper = "0.14.17"
-loading = "0.3.0"
+indicatif = "0.17.0-rc.11"
 
 axum = { version = "0.5.1", features = ["ws", "headers"] }
 tower-http = { version = "0.2.2", features = ["fs", "trace"] }
