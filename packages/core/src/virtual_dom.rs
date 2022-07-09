@@ -129,10 +129,7 @@ pub enum SchedulerMsg {
     DirtyAll,
 
     /// Mark a template as dirty, used for hot reloading
-    SetTemplate {
-        /// The id of the template
-        id: TemplateId,
-    },
+    SetTemplate(Box<SetTemplateMsg>),
 
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
@@ -403,9 +400,22 @@ impl VirtualDom {
                     self.dirty_scopes.insert(*id);
                 }
             }
-            SchedulerMsg::SetTemplate { id } => {
-                // self.scopes.template_resolver.get_mut().insert(id, template);
+            SchedulerMsg::SetTemplate(msg) => {
+                let SetTemplateMsg {
+                    id,
+                    nodes,
+                    dynamic_mapping,
+                } = *msg;
+                self.scopes.template_resolver.borrow_mut().insert(
+                    id,
+                    Template::Owned {
+                        nodes,
+                        dynamic_mapping,
+                    },
+                );
+
                 // mark any scopes that used the template as dirty
+                self.process_message(SchedulerMsg::DirtyAll);
             }
         }
     }
@@ -535,7 +545,6 @@ impl VirtualDom {
     pub fn rebuild(&mut self) -> Mutations {
         let scope_id = ScopeId(0);
 
-        let resolver = self.scopes.template_resolver.borrow();
         let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
@@ -586,7 +595,6 @@ impl VirtualDom {
     /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
-        let resolver = self.scopes.template_resolver.borrow();
         let mut diff_machine = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
@@ -638,7 +646,6 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
-        let resolver = self.scopes.template_resolver.borrow();
         let mut machine = DiffState::new(&self.scopes);
         machine
             .element_stack
@@ -663,7 +670,6 @@ impl VirtualDom {
     /// let nodes = dom.render_nodes(rsx!("div"));
     /// ```
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
-        let resolver = self.scopes.template_resolver.borrow();
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
         machine
@@ -695,7 +701,6 @@ impl VirtualDom {
     ) -> (Mutations<'a>, Mutations<'a>) {
         let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
-        let resolver = self.scopes.template_resolver.borrow();
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
         create
@@ -744,7 +749,6 @@ impl Drop for VirtualDom {
 
         // todo: move the remove nodes method onto scopearena
         // this will clear *all* scopes *except* the root scope
-        let resolver = self.scopes.template_resolver.borrow();
         let mut machine = DiffState::new(&self.scopes);
         machine.remove_nodes([scope.root_node()], false);
 
