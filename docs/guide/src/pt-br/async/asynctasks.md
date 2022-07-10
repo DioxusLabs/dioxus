@@ -6,7 +6,7 @@ Neste capítulo, aprenderemos como gerar novas tarefas através do nosso `Scope`
 
 ## Gerando uma Tarefa
 
-Você pode enviar qualquer `Future` `'static` para a fila de `Futures` do Dioxus simplesmente chamando `cx.spawn` para gerar uma nova tarefa. Empilhar um `Future` retorna um `TaskId` que pode ser usado para cancelar se for preciso:
+Você pode enviar qualquer `Future` `'static` para a fila de `Future` do Dioxus simplesmente chamando `cx.spawn` para gerar uma tarefa. Enfileirar um `Future` retorna um `TaskId` que pode ser usado para cancelamento
 
 ```rust
 fn App(cx: Scope) -> Element {
@@ -23,7 +23,7 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
-O `Future` deve ser `'static` - então quaisquer valores capturados pela tarefa não devem conter nenhuma referência a `cx`. Todos os hooks do Dioxus têm um método chamado `for_async` que criará um `handle` um pouco mais limitado para o hook para você usar em seu código assíncrono.
+O `Future` deve ser `'static` - então quaisquer valores capturados pela tarefa não devem conter nenhuma referência a `cx`. Todos os hooks do Dioxus têm um método chamado `for_async` que criará um handle um pouco mais limitado para o hook para você usar em seu código assíncrono.
 
 ```rust
 fn App(cx: Scope) -> Element {
@@ -44,9 +44,9 @@ fn App(cx: Scope) -> Element {
 
 A tarefa será executada em segundo plano até que seja concluída.
 
-> Nota: `spawn` sempre gerará um _novo_ `Future`. Você provavelmente terá de chamá-lo por um Hook inicializador em vez do corpo principal do seu componente.
+> Nota: `spawn` sempre gerará um _novo_ `Future`. Você provavelmente quer chamá-lo de um inicializador de `hook` em vez do corpo principal do seu componente.
 
-Ao trazer muitos valores para sua tarefa, nós fornecemos a macro `for_async!` que poderá aplicar `for_async` em todos os valores passados. Para tipos que implementam `ToOwned`, `for_async!` simplesmente chamará `ToOwned` para esse valor .
+Ao trazer muitos valores para sua tarefa, nós fornecemos a macro `for_async!` que pode usar `for_async` em todos os valores passados. Para tipos que implementam `ToOwned`, `for_async!` simplesmente chamará `ToOwned` para esse valor.
 
 ```rust
 fn App(cx: Scope) -> Element {
@@ -61,13 +61,13 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
-## Detalhes de Tarefas
+## Detalhes das Tarefas
 
-Chamar `spawn` _não_ é o mesmo que chamar um Hook e _sempre_ gerará uma nova tarefa. Certifique-se de gerar tarefas apenas quando precisar. Você deve _provavelmente_ não usar `spawn` no corpo principal do seu componente, já que uma nova tarefa será gerada em cada renderização.
+Chamar `spawn` _não_ é um `hook` e _sempre_ gerará uma nova tarefa. Certifique-se de gerar tarefas apenas quando quiser. Você deve _provavelmente_ não chamar `spawn` no corpo principal do seu componente, pois uma nova tarefa será gerada em cada renderização.
 
-## Gerando Tarefas com o Tokio (para casos de multitarefas)
+## Gerando Tarefas do Tokio (para casos de uso multitarefados)
 
-Às vezes, você pode querer gerar uma tarefa em segundo plano que precise de vários processos ou lidar com o hardware que pode bloquear o código do seu aplicativo. Nesses casos, podemos gerar diretamente uma `tarefa tokio` do nosso `Future`. Para Dioxus-Desktop, sua tarefa será gerada no tempo de execução multitarefas do Tokio:
+Às vezes, você pode querer gerar uma tarefa em segundo plano que precise de vários processos ou conversar com o hardware que pode bloquear o código do seu aplicativo. Nesses casos, podemos gerar diretamente uma `tokio task` do nosso `Future`. Para Dioxus-Desktop, sua tarefa será gerada no tempo de execução Multitarefado do Tokio:
 
 ```rust
 cx.spawn({

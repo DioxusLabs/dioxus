@@ -1,4 +1,4 @@
-## Publicando com páginas do Github
+## Publicando com o Github Pages
 
 Para construir nosso aplicativo e publicá-lo no Github:
 
