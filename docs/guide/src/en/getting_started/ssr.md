@@ -12,7 +12,6 @@ To solve this, you'll want to spawn a VirtualDom on its own thread and communica
 
 When working with web frameworks that require `Send`, it is possible to render a VirtualDom immediately to a String – but you cannot hold the VirtualDom across an await point. For retained-state SSR (essentially LiveView), you'll need to create a pool of VirtualDoms.
 
-
 ## Setup
 
 If you just want to render `rsx!` or a VirtualDom to HTML, check out the API docs. It's pretty simple:
@@ -21,10 +20,10 @@ If you just want to render `rsx!` or a VirtualDom to HTML, check out the API doc
 // We can render VirtualDoms
 let mut vdom = VirtualDom::new(app);
 let _ = vdom.rebuild();
-println!("{}", dioxus_ssr::render_vdom(&vdom));
+println!("{}", dioxus::ssr::render_vdom(&vdom));
 
 // Or we can render rsx! calls directly
-println!( "{}", dioxus_ssr::render_lazy(rsx! { h1 { "Hello, world!" } } );
+println!( "{}", dioxus::ssr::render_lazy(rsx! { h1 { "Hello, world!" } } );
 ```
 
 However, for this guide, we're going to show how to use Dioxus SSR with `Axum`.
@@ -84,7 +83,7 @@ And then add our endpoint. We can either render `rsx!` directly:
 
 ```rust
 async fn app_endpoint() -> Html<String> {
-    Html(dioxus_ssr::render_lazy(rsx! {
+    Html(dioxus::ssr::render_lazy(rsx! {
             h1 { "hello world!" }
     }))
 }
@@ -100,7 +99,7 @@ async fn app_endpoint() -> Html<String> {
     let mut app = VirtualDom::new(app);
     let _ = app.rebuild();
 
-    Html(dioxus_ssr::render_vdom(&app))
+    Html(dioxus::ssr::render_vdom(&app))
 }
 ```
 

@@ -1,14 +1,14 @@
 # Roadmap & Feature-set
 
-Before we dive into Dioxus, feel free to take a look at our feature set and roadmap to see if what Dioxus can do today works for you.
+This feature set and roadmap can help you decide if what Dioxus can do today works for you.
 
 If a feature that you need doesn't exist or you want to contribute to projects on the roadmap, feel free to get involved by [joining the discord](https://discord.gg/XgGxMSkvUM).
 
 Generally, here's the status of each platform:
 
-- **Web**: Dioxus is a great choice for pure web-apps - especially for CRUD/complex apps. However, it does lack the ecosystem of React, so you might be missing a component library or some useful hook.
+- **Web**: Dioxus is a great choice for pure web-apps – especially for CRUD/complex apps. However, it does lack the ecosystem of React, so you might be missing a component library or some useful hook.
 
-- **SSR**: Dioxus is a great choice for pre-rendering, hydration, and rendering HTML on a web endpoint. Be warned - the VirtualDom is not (currently) `Send + Sync`.
+- **SSR**: Dioxus is a great choice for pre-rendering, hydration, and rendering HTML on a web endpoint. Be warned – the VirtualDom is not (currently) `Send + Sync`.
 
 - **Desktop**: You can build very competent single-window desktop apps right now. However, multi-window apps require support from Dioxus core and are not ready.
 
@@ -59,13 +59,10 @@ Generally, here's the status of each platform:
 - ✅ = implemented and working
 - 🛠 = actively being worked on
 - 👀 = not yet implemented or being worked on
-- ❓ = not sure if will or can implement
 
 ## Roadmap
 
 These Features are planned for the future of Dioxus:
-
----
 
 ### Core
 
@@ -119,3 +116,23 @@ These Features are planned for the future of Dioxus:
 - [x] Router
 - [x] Global state management
 - [ ] Resize observer
+
+## Work in Progress
+
+### Build Tool
+
+We are currently working on our own build tool called [Dioxus CLI](https://github.com/DioxusLabs/cli) which will support:
+
+- an interactive TUI
+- on-the-fly reconfiguration
+- hot CSS reloading
+- two-way data binding between browser and source code
+- an interpreter for `rsx!`
+- ability to publish to github/netlify/vercel
+- bundling for iOS/Desktop/etc
+
+### LiveView / Server Component Support
+
+The internal architecture of Dioxus was designed from day one to support the `LiveView` use-case, where a web server hosts a running app for each connected user. As of today, there is no first-class LiveView support – you'll need to wire this up yourself.
+
+While not currently fully implemented, the expectation is that LiveView apps can be a hybrid between Wasm and server-rendered where only portions of a page are "live" and the rest of the page is either server-rendered, statically generated, or handled by the host SPA.
