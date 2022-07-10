@@ -17,7 +17,9 @@ asset_dir = "public"
 [web.app]
 
 # HTML title tag content
-title = "dioxus | ⛺"
+title = "Dioxus | An elegant GUI library for Rust"
+
+index_on_404 = true
 
 [web.watcher]
 
@@ -45,10 +47,12 @@ script = []
 binaryen = { wasm_opt = true }
 
 # use sass auto will auto check sass file and build it.
-[application.tools.sass]
+
+
+# [application.tools.sass]
 
 # auto will check the assets dirs, and auto to transform all scss file to css file.
-input = "*"
+# input = "*"
 
 # or you can specify some scss file -> css file
 # input = [
@@ -57,4 +61,4 @@ input = "*"
 #     "/css/test.scss"
 # ]
 
-source_map = true
+# source_map = true

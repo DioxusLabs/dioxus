@@ -1,3 +1,5 @@
+pub const DIOXUS_CLI_VERSION: &'static str = "0.1.5";
+
 pub mod builder;
 pub mod server;
 pub mod tools;

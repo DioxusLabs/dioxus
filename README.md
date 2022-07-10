@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>📦✨  dioxus-cli </h1>
+  <h1>📦✨ Dioxus CLI </h1>
   <p><strong>Tooling to supercharge dioxus projects</strong></p>
 </div>
 

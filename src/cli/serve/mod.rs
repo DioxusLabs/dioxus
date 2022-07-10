@@ -38,31 +38,25 @@ impl Serve {
                 .clone()
         });
 
-        match platform.as_str() {
-            "web" => {
-                crate::builder::build(&crate_config)?;
-            }
-            "desktop" => {
-                crate::builder::build_desktop(&crate_config, true)?;
+        if platform.as_str() == "desktop" {
+            crate::builder::build_desktop(&crate_config, true)?;
 
-                match &crate_config.executable {
-                    crate::ExecutableType::Binary(name)
-                    | crate::ExecutableType::Lib(name)
-                    | crate::ExecutableType::Example(name) => {
-                        let mut file = crate_config.out_dir.join(name);
-                        if cfg!(windows) {
-                            file.set_extension("exe");
-                        }
-                        Command::new(crate_config.out_dir.join(file).to_str().unwrap())
-                            .stdout(Stdio::inherit())
-                            .output()?;
+            match &crate_config.executable {
+                crate::ExecutableType::Binary(name)
+                | crate::ExecutableType::Lib(name)
+                | crate::ExecutableType::Example(name) => {
+                    let mut file = crate_config.out_dir.join(name);
+                    if cfg!(windows) {
+                        file.set_extension("exe");
                     }
+                    Command::new(crate_config.out_dir.join(file).to_str().unwrap())
+                        .stdout(Stdio::inherit())
+                        .output()?;
                 }
-                return Ok(());
             }
-            _ => {
-                return custom_error!("Unsoppurt platform target.");
-            }
+            return Ok(());
+        } else if platform != "web" {
+            return custom_error!("Unsoppurt platform target.");
         }
 
         // generate dev-index page

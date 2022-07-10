@@ -6,15 +6,17 @@ use axum::{
     routing::{get, get_service},
     Router,
 };
+use cargo_metadata::diagnostic::Diagnostic;
+use colored::Colorize;
 use dioxus::rsx_interpreter::SetRsxMessage;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
-use crate::{builder, serve::Serve, CrateConfig, Result};
+use crate::{builder, serve::Serve, BuildResult, CrateConfig, Result};
 use tokio::sync::broadcast;
 
 mod hot_reload;
@@ -26,9 +28,9 @@ pub struct BuildManager {
 }
 
 impl BuildManager {
-    fn build(&self) -> Result<()> {
-        log::info!("Start to rebuild project...");
-        builder::build(&self.config)?;
+    fn rebuild(&self) -> Result<BuildResult> {
+        log::info!("🪁 Rebuild project");
+        let result = builder::build(&self.config, true)?;
         // change the websocket reload state to true;
         // the page will auto-reload.
         if self
@@ -42,7 +44,7 @@ impl BuildManager {
             let _ = Serve::regen_dev_page(&self.config);
         }
         let _ = self.reload_tx.send(());
-        Ok(())
+        Ok(result)
     }
 }
 
@@ -60,6 +62,8 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
 }
 
 pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -93,14 +97,16 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
+    let watcher_config = config.clone();
     let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
         if chrono::Local::now().timestamp() > last_update_time {
             // Give time for the change to take effect before reading the file
             std::thread::sleep(std::time::Duration::from_millis(100));
             if let Ok(evt) = evt {
                 let mut messages = Vec::new();
                 let mut needs_rebuild = false;
-                for path in evt.paths {
+                for path in evt.paths.clone() {
                     let mut file = File::open(path.clone()).unwrap();
                     if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
                         continue;
@@ -118,7 +124,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                         last_file_rebuild.map.insert(path, src);
                                     }
                                     DiffResult::RsxChanged(changed) => {
-                                        log::info!("reloading rsx");
+                                        log::info!("🪁 reloading rsx");
                                         for (old, new) in changed.into_iter() {
                                             let hr = get_location(
                                                 &crate_dir,
@@ -156,9 +162,21 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                     }
                 }
                 if needs_rebuild {
-                    log::info!("reload required");
-                    if let Err(err) = build_manager.build() {
-                        log::error!("{}", err);
+                    match build_manager.rebuild() {
+                        Ok(res) => {
+                            print_console_info(
+                                port,
+                                &config,
+                                PrettierOptions {
+                                    changed: evt.paths,
+                                    warnings: res.warnings,
+                                    elapsed_time: res.elapsed_time,
+                                },
+                            );
+                        }
+                        Err(err) => {
+                            log::error!("{}", err);
+                        }
                     }
                 }
                 if !messages.is_empty() {
@@ -180,7 +198,15 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0:8080
-    log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
+    print_console_info(
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -243,6 +269,8 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 }
 
 pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
+    let first_build_result = crate::builder::build(&config, false)?;
+
     log::info!("🚀 Starting development server...");
 
     let dist_path = config.out_dir.clone();
@@ -269,12 +297,26 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .clone()
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
-    let mut watcher = RecommendedWatcher::new(move |_: notify::Result<notify::Event>| {
-        log::info!("reload required");
-        if chrono::Local::now().timestamp() > last_update_time {
-            match build_manager.build() {
-                Ok(_) => last_update_time = chrono::Local::now().timestamp(),
-                Err(e) => log::error!("{}", e),
+    let watcher_config = config.clone();
+    let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
+        if info.is_ok() {
+            if chrono::Local::now().timestamp() > last_update_time {
+                match build_manager.rebuild() {
+                    Ok(res) => {
+                        last_update_time = chrono::Local::now().timestamp();
+                        print_console_info(
+                            port,
+                            &config,
+                            PrettierOptions {
+                                changed: info.unwrap().paths,
+                                warnings: res.warnings,
+                                elapsed_time: res.elapsed_time,
+                            },
+                        );
+                    }
+                    Err(e) => log::error!("{}", e),
+                }
             }
         }
     })
@@ -290,7 +332,15 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     }
 
     // start serve dev-server at 0.0.0.0
-    log::info!("📡 Dev-Server is started at: http://127.0.0.1:{}/", port);
+    print_console_info(
+        port,
+        &config,
+        PrettierOptions {
+            changed: vec![],
+            warnings: first_build_result.warnings,
+            elapsed_time: first_build_result.elapsed_time,
+        },
+    );
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
@@ -346,6 +396,174 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+#[derive(Debug, Default)]
+pub struct PrettierOptions {
+    changed: Vec<PathBuf>,
+    warnings: Vec<Diagnostic>,
+    elapsed_time: u128,
+}
+
+fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
+    print!(
+        "{}",
+        String::from_utf8_lossy(
+            &Command::new(if cfg!(target_os = "windows") {
+                "cls"
+            } else {
+                "clear"
+            })
+            .output()
+            .unwrap()
+            .stdout
+        )
+    );
+
+    // for path in &changed {
+    //     let path = path
+    //         .strip_prefix(crate::crate_root().unwrap())
+    //         .unwrap()
+    //         .to_path_buf();
+    //     log::info!("Updated {}", format!("{}", path.to_str().unwrap()).green());
+    // }
+
+    let mut profile = if config.release { "Release" } else { "Debug" }.to_string();
+    if config.custom_profile.is_some() {
+        profile = config.custom_profile.as_ref().unwrap().to_string();
+    }
+    let hot_reload = if config.hot_reload { "RSX" } else { "Normal" };
+    let crate_root = crate::cargo::crate_root().unwrap();
+    let custom_html_file = if crate_root.join("index.html").is_file() {
+        "Custom [index.html]"
+    } else {
+        "Default"
+    };
+    let url_rewrite = if config
+        .dioxus_config
+        .web
+        .watcher
+        .index_on_404
+        .unwrap_or(false)
+    {
+        "True"
+    } else {
+        "False"
+    };
+
+    if options.changed.len() <= 0 {
+        println!(
+            "{} @ v{}\n",
+            "Dioxus".bold().green(),
+            crate::DIOXUS_CLI_VERSION,
+        );
+    } else {
+        println!(
+            "Project Reloaded: {}\n",
+            format!(
+                "Changed {} files. [{}]",
+                options.changed.len(),
+                chrono::Local::now().format("%H:%M:%S").to_string().dimmed()
+            )
+            .purple()
+            .bold()
+        );
+    }
+    println!(
+        "\t> Local : {}",
+        format!("http://localhost:{}/", port).blue()
+    );
+    println!(
+        "\t> NetWork : {}",
+        format!(
+            "http://{}:{}/",
+            get_ip().unwrap_or(String::from("0.0.0.0")),
+            port
+        )
+        .blue()
+    );
+    println!("");
+    println!("\t> Profile : {}", profile.green());
+    println!("\t> Hot Reload : {}", hot_reload.cyan());
+    println!("\t> Index Template : {}", custom_html_file.green());
+    println!("\t> URL Rewrite [index_on_404] : {}", url_rewrite.purple());
+    println!("");
+    println!(
+        "\t> Build Time Use : {} millis",
+        options.elapsed_time.to_string().green().bold()
+    );
+    println!("");
+
+    if options.warnings.len() == 0 {
+        log::info!("{}\n", "A perfect compilation!".green().bold());
+    } else {
+        log::warn!(
+            "{}",
+            format!(
+                "There were {} warning messages during the build: ",
+                options.warnings.len() - 1
+            )
+            .yellow()
+            .bold()
+        );
+        for info in &options.warnings {
+            let message = info.message.clone();
+            if message == format!("{} warnings emitted", options.warnings.len() - 1) {
+                continue;
+            }
+            let mut console = String::new();
+            for span in &info.spans {
+                let file = &span.file_name;
+                let line = (span.line_start, span.line_end);
+                let line_str = if line.0 == line.1 {
+                    line.0.to_string()
+                } else {
+                    format!("{}~{}", line.0, line.1)
+                };
+                let code = span.text.clone();
+                let span_info = if code.len() == 1 {
+                    let code = code.get(0).unwrap().text.trim().blue().bold().to_string();
+                    format!(
+                        "[{}: {}]: '{}' --> {}",
+                        file,
+                        line_str,
+                        code,
+                        message.yellow().bold()
+                    )
+                } else {
+                    let code = code
+                        .iter()
+                        .enumerate()
+                        .map(|(_i, s)| format!("\t{}\n", s.text).blue().bold().to_string())
+                        .collect::<String>();
+                    format!("[{}: {}]:\n{}\n#:{}", file, line_str, code, message)
+                };
+                console = format!("{console}\n\t{span_info}");
+            }
+            println!("{console}");
+        }
+        println!(
+            "\n{}\n",
+            "Resolving all warnings will help your code run better!".yellow()
+        );
+    }
+}
+
+fn get_ip() -> Option<String> {
+    let socket = match UdpSocket::bind("0.0.0.0:0") {
+        Ok(s) => s,
+        Err(_) => return None,
+    };
+
+    match socket.connect("8.8.8.8:80") {
+        Ok(()) => (),
+        Err(_) => return None,
+    };
+
+    match socket.local_addr() {
+        Ok(addr) => return Some(addr.ip().to_string()),
+        Err(_) => return None,
+    };
 }
 
 async fn ws_handler(

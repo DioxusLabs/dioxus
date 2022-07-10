@@ -4,16 +4,26 @@ use crate::{
     tools::Tool,
     DioxusConfig,
 };
+use cargo_metadata::{diagnostic::Diagnostic, Message};
+use indicatif::{ProgressBar, ProgressStyle};
+use serde::Serialize;
 use std::{
     fs::{copy, create_dir_all, remove_dir_all, File},
     io::Read,
     panic,
     path::PathBuf,
     process::Command,
+    time::Duration,
 };
 use wasm_bindgen_cli_support::Bindgen;
 
-pub fn build(config: &CrateConfig) -> Result<()> {
+#[derive(Serialize, Debug, Clone)]
+pub struct BuildResult {
+    pub warnings: Vec<Diagnostic>,
+    pub elapsed_time: u128,
+}
+
+pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [1] Build the project with cargo, generating a wasm32-unknown-unknown target (is there a more specific, better target to leverage?)
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
@@ -42,14 +52,19 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         .arg("build")
         .arg("--target")
         .arg("wasm32-unknown-unknown")
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit());
+        .arg("--message-format=json")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
 
     if config.release {
         cmd.arg("--release");
     }
     if config.verbose {
         cmd.arg("--verbose");
+    }
+
+    if quiet {
+        cmd.arg("--quiet");
     }
 
     if config.custom_profile.is_some() {
@@ -70,13 +85,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
         ExecutableType::Example(name) => cmd.arg("--example").arg(name),
     };
 
-    let output = cmd.output()?;
-
-    if !output.status.success() {
-        log::error!("Build failed!");
-        let reason = String::from_utf8_lossy(&output.stderr).to_string();
-        return Err(Error::BuildFailed(reason));
-    }
+    let warning_messages = prettier_build(cmd)?;
 
     // [2] Establish the output directory structure
     let bindgen_outdir = out_dir.join("assets").join("dioxus");
@@ -114,8 +123,7 @@ pub fn build(config: &CrateConfig) -> Result<()> {
             .unwrap();
     });
     if bindgen_result.is_err() {
-        log::error!("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.");
-        return Ok(());
+        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.79` Bindgen crate.".to_string()));
     }
 
     // check binaryen:wasm-opt tool
@@ -185,8 +193,10 @@ pub fn build(config: &CrateConfig) -> Result<()> {
     }
 
     let t_end = std::time::Instant::now();
-    log::info!("🏁 Done in {}ms!", (t_end - t_start).as_millis());
-    Ok(())
+    Ok(BuildResult {
+        warnings: warning_messages,
+        elapsed_time: (t_end - t_start).as_millis(),
+    })
 }
 
 pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
@@ -319,6 +329,57 @@ pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
     Ok(())
 }
 
+fn prettier_build(mut cmd: Command) -> anyhow::Result<Vec<Diagnostic>> {
+    let mut warning_messages: Vec<Diagnostic> = vec![];
+
+    let pb = ProgressBar::new_spinner();
+    pb.enable_steady_tick(Duration::from_millis(200));
+    pb.set_style(
+        ProgressStyle::with_template("{spinner:.dim.bold} {wide_msg}")
+            .unwrap()
+            .tick_chars("/|\\- "),
+    );
+    pb.set_message("💼 Waiting to start build the project...");
+
+    let mut command = cmd.spawn()?;
+    let reader = std::io::BufReader::new(command.stdout.take().unwrap());
+    for message in cargo_metadata::Message::parse_stream(reader) {
+        match message.unwrap() {
+            Message::CompilerMessage(msg) => {
+                let message = msg.message;
+                match message.level {
+                    cargo_metadata::diagnostic::DiagnosticLevel::Error => {
+                        return Err(anyhow::anyhow!(message
+                            .rendered
+                            .unwrap_or("Unknown".into())));
+                    }
+                    cargo_metadata::diagnostic::DiagnosticLevel::Warning => {
+                        warning_messages.push(message.clone());
+                    }
+                    _ => {}
+                }
+            }
+            Message::CompilerArtifact(artifact) => {
+                pb.set_message(format!("Compiling {} ", artifact.package_id));
+                pb.tick();
+            }
+            Message::BuildScriptExecuted(script) => {
+                let _package_id = script.package_id.to_string();
+            }
+            Message::BuildFinished(finished) => {
+                if finished.success {
+                    pb.finish_and_clear();
+                    log::info!("👑 Build done.");
+                } else {
+                    std::process::exit(1);
+                }
+            }
+            _ => (), // Unknown message
+        }
+    }
+    Ok(warning_messages)
+}
+
 pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
     let crate_root = crate::cargo::crate_root().unwrap();
     let custom_html_file = crate_root.join("index.html");
@@ -429,7 +490,9 @@ fn build_assets(config: &CrateConfig) -> Result<Vec<PathBuf>> {
                                 let temp = entry.path();
                                 if temp.is_file() {
                                     let suffix = temp.extension();
-                                    if suffix.is_none() { continue; }
+                                    if suffix.is_none() {
+                                        continue;
+                                    }
                                     let suffix = suffix.unwrap().to_str().unwrap();
                                     if suffix == "scss" || suffix == "sass" {
                                         // if file suffix is `scss` / `sass` we need transform it.

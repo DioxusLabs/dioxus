@@ -66,6 +66,7 @@ impl Create {
         let mut meta_file = String::new();
         dioxus_file.read_to_string(&mut meta_file)?;
         meta_file = meta_file.replace("{{project-name}}", &self.name);
+        meta_file = meta_file.replace("{{default-platform}}", "web");
         File::create(project_path.join("Dioxus.toml"))?.write_all(meta_file.as_bytes())?;
 
         println!();
