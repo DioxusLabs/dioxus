@@ -21,6 +21,8 @@ pub mod input_data;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
 
+mod builder;
+
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;
