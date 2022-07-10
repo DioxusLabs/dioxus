@@ -20,11 +20,11 @@ Podemos então renderizar esse resultado:
 
 ## Reiniciando o `Future`
 
-O identificador `UseFuture` fornece um método `restart`. Ele pode ser usado para executar o futuro novamente, produzindo um novo valor.
+O identificador `UseFuture` fornece um método `restart`. Ele pode ser usado para executar o `Future` novamente, produzindo um novo valor.
 
 ## Dependências
 
-Muitas vezes, você precisará executar o futuro novamente toda vez que algum valor (por exemplo, uma prop) mudar. Ao invés de `.restart` manualmente, você pode fornecer uma tupla de "dependências" para o gancho. Ele executará automaticamente o futuro quando qualquer uma dessas dependências for alterada. Exemplo:
+Muitas vezes, você precisará executar o `Future` novamente toda vez que algum valor (por exemplo, uma prop) mudar. Ao invés de `.restart` manualmente, você pode fornecer uma tupla de "dependências" para o gancho. Ele executará automaticamente o `Future` quando qualquer uma dessas dependências for alterada. Exemplo:
 
 ```rust
 {{#include ../../examples/use_future.rs:dependency}}

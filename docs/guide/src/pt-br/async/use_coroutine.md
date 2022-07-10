@@ -2,7 +2,7 @@
 
 Outra boa ferramenta para manter em sua caixa de ferramentas assíncrona são as corrotinas. Corrotinas são `Futures` que podem ser interrompidos, iniciados, pausados e retomados manualmente.
 
-Assim como os futuros regulares, o código em uma corrotina Dioxus será executado até o próximo ponto `await` antes do _render_. Esse controle de baixo nível sobre tarefas assíncronas é bastante poderoso, permitindo tarefas em _loop_ infinito, como pesquisa de WebSocket, temporizadores em segundo plano e outras ações periódicas.
+Assim como os `Futures` regulares, o código em uma corrotina Dioxus será executado até o próximo ponto `await` antes do _render_. Esse controle de baixo nível sobre tarefas assíncronas é bastante poderoso, permitindo tarefas em _loop_ infinito, como pesquisa de WebSocket, temporizadores em segundo plano e outras ações periódicas.
 
 ## `use_coroutine`
 
