@@ -1,1 +1,0 @@
-# Entradas do Usuário
