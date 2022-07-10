@@ -44,7 +44,7 @@
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README_pt-br.md"> PT-BR </a>
   </h3>
 </div>
 
