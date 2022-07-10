@@ -5,7 +5,7 @@ This doc goes into the design of asynchronicity in Dioxus.
 
 ## for UI elements
 
-`suspend`-ing a future submits an &mut future to Dioxus. the future must return VNodes. the future is still waiting before the component renders, the `.await` is dropped and tried again. users will want to attach their future to a hook so the future doesn't really get dropped.
+`suspend`-ing a future submits a &mut future to Dioxus. the future must return VNodes. the future is still waiting before the component renders, the `.await` is dropped and tried again. users will want to attach their future to a hook so the future doesn't really get dropped.
 
 
 ## for tasks

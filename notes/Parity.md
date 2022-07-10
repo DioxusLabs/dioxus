@@ -20,7 +20,7 @@ pub static Example: Component = |cx| {
             "Size, x: {observer.x} y: {observer.y}"
         }
     ))
-}
+};
 ```
 
 However, resize observing is _not_ cross-platform, so this hook (internally) needs to abstract over the rendering platform.
@@ -28,19 +28,19 @@ However, resize observing is _not_ cross-platform, so this hook (internally) nee
 For other services, we shell out to gloo. If the gloo service doesn't exist, then we need to contribute to the project to make sure it exists.
 
 | Service                      | Hook examples | Current Projects |
-| ---------------------------- | ------------- | ---------------- |
-| Fetch                        | 👀             | Reqwest/surf     |
-| Local storage (cache)        | 👀             | Gloo             |
-| Persistent storage (IndexDB) | 👀             | 👀                |
-| WebSocket                    | 👀             | Gloo             |
-| 3D Renderer / WebGL          | 👀             | Gloo             |
-| Web Worker                   | 👀             | 👀                |
-| Router                       | 👀             | 👀                |
-| Notifications                | 👀             | 👀                |
-| WebRTC Client                | 👀             | 👀                |
-| Service Workers              | 👀             | 👀                |
-| Resize Observer              | 👀             | 👀                |
-| Canvas                       | 👀             | 👀                |
-| Clipboard                    | 👀             | 👀                |
-| Fullscreen                   | 👀             | 👀                |
-| History API                  | 👀             | 👀                |
+|------------------------------|---------------|------------------|
+| Fetch                        | 👀            | Reqwest/surf     |
+| Local storage (cache)        | 👀            | Gloo             |
+| Persistent storage (IndexDB) | 👀            | 👀               |
+| WebSocket                    | 👀            | Gloo             |
+| 3D Renderer / WebGL          | 👀            | Gloo             |
+| Web Worker                   | 👀            | 👀               |
+| Router                       | 👀            | 👀               |
+| Notifications                | 👀            | 👀               |
+| WebRTC Client                | 👀            | 👀               |
+| Service Workers              | 👀            | 👀               |
+| Resize Observer              | 👀            | 👀               |
+| Canvas                       | 👀            | 👀               |
+| Clipboard                    | 👀            | 👀               |
+| Fullscreen                   | 👀            | 👀               |
+| History API                  | 👀            | 👀               |

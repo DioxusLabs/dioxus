@@ -21,7 +21,7 @@ Approach:
 
 Thoughts:
 - the macros should generate a static set of attrs into a [attr] array (faster, more predictable, no allocs)
-- children should be generated as a static set if no parans are detected
+- children should be generated as a static set if no params are detected
   - More complex in the macro sized, unfortunately, not *too* hard
 - Listeners should also be a static set (dynamic listeners don't make too much sense) 
   - use the builder syntax if you're doing something wild and need this granular control
