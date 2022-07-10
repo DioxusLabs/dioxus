@@ -1,48 +1,48 @@
-# Parabens!
+# Congrats!
 
-Parabéns! Você terminou o livro `aprendendo Dioxus`. Durante este tutorial, você aprendeu muito sobre:
+Congrats! You've made it through the `learning Dioxus` book. Throughout this tutorial, you've learned a ton:
 
-- Como construir Interfaces de Usuário com Elementos
-- Como compor grupos de Elementos juntos como Componentes
-- Como tratar entradas de usuário com ouvintes de eventos
-- How gerenciar estados globais e locais
-- Como trabalhar com tarefas assíncronas, co-rotinas e Suspense
-- Como criar Hooks personalizados e manipuladores
+- How to build User Interfaces with Elements
+- How to compose Element groups together as Components
+- How to handle user input with event listeners
+- How to manage local and global state
+- How to work with async using tasks, coroutines, and suspense
+- How to build custom hooks and handlers
 
-Como alguma sorte, você seguiu através do mini Guia "Juntando Tudo" e fez o seu próprio aplicativo de motor de busca de cachorros!
+With any luck, you followed through the "Putting it All Together" mini guide and have your very own dog search engine app!
 
-# Próximos passos e tópicos avançados
+# Next Steps and Advanced Topics
 
-Continuando na sua jornada com o Dioxus, você pode tentar um número de coisas:
+Continuing on your journey with Dioxus, you can try a number of things:
 
-- Construir um aplicativos simples com TUI
-- Publicar o seu motor de busca
-- Implantar um aplicativo WASM no GitHub
-- Projetar um Custom Hook
-- Contribuir para o ecossistema!
+- Build a simple TUI app
+- Publish your search engine app
+- Deploy a WASM app to GitHub
+- Design a custom hook
+- Contribute to the ecosystem!
 
-Há um número de tópicos avançados que nós separamos:
+There are a number of advanced topics we glossed over:
 
-- Entendendo a API NodeFactory
-- Elementos estáticos e modelos
-- Anti-padrões
-- Empacotando/distribuindo
-- Trabalhando com aplicativos WASM
+- The underlying NodeFactory API
+- Static elements and templates
+- Anti-patterns
+- Bundling/distribution
+- Working with wasm apps
 
-# Contribua para o Ecossistema
+# Contributing to the ecosystem
 
-Dioxus é muito novo ainda e poderia se beneficiar com sua ajuda!
+Dioxus is still quite young and could use your help!
 
-A equipe responsável pelo núcleo está trabalhando em:
+The core team is actively working on:
 
-- Gerenciamento de janela declarativo (através do Tauri) para aplicativos Desktop
-- Portais para o Dioxus core
-- Suporte móvel
-- Integração com renderizadores 3D
-- Melhorias no fluxo assíncrono (suspense, tratamento de erros)
-- Gerenciamento global de estado
-- Desenvolvimento de servidor Web
+- Declarative window management (via Tauri) for Desktop apps
+- Portals for Dioxus Core
+- Mobile support
+- Integration with 3D renderers
+- Better async story (suspense, error handling)
+- Global state management
+- Web development server
 - LiveView
-- Maior suporte de plataformas (iOS/Android/embedded)
+- Broader platform support (iOS/Android/TV/embedded)
 
-Se há algo especificamente interessante pra você, não tenha medo e venha para o time!
+If there's something specifically interesting to you, don't be afraid to jump in!

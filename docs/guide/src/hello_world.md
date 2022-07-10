@@ -1,22 +1,22 @@
-# Aplicativo de Desktop: "Hello, World"
+# "Hello, World" desktop app
 
-Vamos fazer um aplicativo "hello world" de Desktop simples para nos familiarizar com o Dioxus.
+Let's put together a simple "hello world" desktop application to get acquainted with Dioxus.
 
-Neste capítulo, nós cobriremos:
+In this chapter, we'll cover:
 
-- Iniciando um novo projeto Dioxus com o Cargo
-- Adicionando o Dioxus como uma dependência
-- Lançando nosso primeiro componente como aplicativo raiz
+- Starting a new Dioxus project with Cargo
+- Adding Dioxus as a dependency
+- Launching our first component as the app root
 
-### Um novo projecto utilizando o Cargo
+### A new project with Cargo
 
-Primeiramente, vamos começar um novo projeto. Em Rust temos os conceitos de executável e biblioteca. Executáveis têm `main.rs` e bibliotecas tem `lib.rs`. Um projeto pode ter ambos. Nosso "hello world" será um executável - nós esperamos que nosso aplicativo seja executado ao ser iniciado. Cargo providencia isso para nós:
+First, let's start a new project. Rust has the concept of executables and libraries. Executables have a `main.rs` and libraries have `lib.rs`. A project may have both. Our `hello world` will be an executable - we expect our app to launch when we run it! Cargo provides this for us:
 
 ```shell
 $ cargo new --bin hello-dioxus
 ```
 
-Agora nós podemos acessar `cd` no nosso projeto e bisbilhotar:
+Now, we can `cd` into our project and poke around:
 
 ```shell
 $ cd hello-dioxus
@@ -29,9 +29,9 @@ $ tree
     └── main.rs
 ```
 
-Nós estamos sendo saudados com uma repositório git pre-inicializado, nossa pasta fonte (`src`) e nosso projeto (`Cargo.toml`).
+We are greeted with a pre-initialized git repository, our code folder (`src`) and our project file (`Cargo.toml`).
 
-Nossa pasta `src` contém nosso código. Nosso arquivo `main.rs` contém nosso `fn main` que irá ser executado quando o aplicativo for iniciado,
+Our `src` folder holds our code. Our `main.rs` file holds our `fn main` which will be executed when our app is run.
 
 ```shell
 $ more src/main.rs
@@ -43,7 +43,7 @@ fn main() {
 }
 ```
 
-Agora, em qualquer momento que nosso aplicativo for iniciado, `Hello world` irá ser executado e impresso na tela do terminal.
+Right now, whenever our app is launched, "Hello world" will be echoed to the terminal.
 
 ```shell
 $ cargo run
@@ -53,7 +53,7 @@ $ cargo run
 Hello, world!
 ```
 
-Nosso arquivo `Cargo.toml` contém nossas dependências e `flags`do projeto.
+Our `Cargo.toml` file holds our dependencies and project flags.
 
 ```shell
 $ cat Cargo.toml
@@ -71,28 +71,28 @@ edition = "2021"
 
 ```
 
-### Adicionando o Dioxus como uma dependência
+### Adding Dioxus as a dependency
 
-Para usar a biblioteca do Dioxus, nós vamos preferir adicionar a versão mais recente para nossa `crate`. Se você tiver o `cargo edit` instalado, simplemente execute:
+To use the Dioxus library, we'll want to add the most recent version of `Dioxus` to our crate. If you have `cargo edit` installed, simply call:
 
 ```shell
 $ cargo add dioxus --features desktop
 ```
 
-É muito importante que adicione `dioxus` com a função `desktop` para esse exemplo. A `crate` do `dioxus` tem baterias inclusas que combinam vários utilitários juntos, garantindo compatibilidade das partes mais importantes do ecosystem. Por baixo dos panos, o `dioxus` configura vários renderizadores, hooks, ferramentas de debug e mais. A função `desktop` garante que nós somente dependemos do mínimo de pacotes requerido para compilar e renderizar.
+It's very important to add `dioxus` with the `desktop` feature for this example. The `dioxus` crate is a batteries-include crate that combines a bunch of utility crates together, ensuring compatibility of the most important parts of the ecosystem. Under the hood, the `dioxus` crate configures various renderers, hooks, debug tooling, and more. The `desktop` feature ensures the we only depend on the smallest set of required crates to compile and render.
 
-Se seu sistema não provê a biblioteca `libappindicator3`, como no Debin/bullseye, você pode habilitar uma substituta, `ayatana`, com uma `flag` adicional:
+If you system does not provide the `libappindicator3` library, like Debian/bullseye, you can enable the replacement `ayatana` with an additional flag:
 
 ```shell
 $ # On Debian/bullseye use:
 $ cargo add dioxus --features desktop --features ayatana
 ```
 
-Se você planeja desenvolver extensões para o ecossistema do `Dioxus`, por favor use o `dioxus` com a função `core` para limitar o número de dependências no seu projeto.
+If you plan to develop extensions for the `Dioxus` ecosystem, please use the `dioxus` crate with the `core` feature to limit the amount of dependencies your project brings in.
 
-### Nosso primeiro aplicativo
+### Our first app
 
-Agora, vamos editar nosso arquivo `main.rs`:
+Now, let's edit our `main.rs` file:
 
 ```rust
 use dioxus::prelude::*;
@@ -109,19 +109,19 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Nesse momento, você pode executar `cargo run` e você será saudado com um simples `Hello, world!` na tela:
+At this point, you could call `cargo run` and be greeted with a simple `Hello, World!` screen:
 
 ![hello world](images/helloworld.png)
 
-### Dissecando nosso exemplo
+### Dissecting our example
 
-A declaração `use` no topo do nosso projeto importa tudo do módulo `prelude`. Usando o `prelude` importa os Traits, Tipos e Macros necessários para trabalhar com o Dioxus.
+The `use` statement at the top of our app imports everything from the `prelude` module. `use`-ing the prelude imports the right traits, types, and macros needed for working with Dioxus.
 
 ```rust
 use dioxus::prelude::*;
 ```
 
-Esse código de inicialização inicia um Tokio `runtime` num processo auxiliar onde o seu código irá executar. Então, a WebView irá lançar no processo principal. Devido aos requerimentos da plataforma, o processo principal é bloqueado pelo ciclo de eventos do seu aplicativo.
+This initialization code launches a Tokio runtime on a helper thread where your code will run. Then, the WebView renderer will be launched on the main thread. Due to platform requirements, the main thread is blocked by your app's event loop.
 
 ```rust
 fn main() {
@@ -129,7 +129,7 @@ fn main() {
 }
 ```
 
-Finalmente, nosso aplicativo. Cada componente no Dioxus é uma função que tem um `Context`, uma `Props` e retorna um `Element`.
+Finally, our app. Every component in Dioxus is a function that takes in `Context` and `Props` and returns an `Element`.
 
 ```rust
 fn app(cx: Scope) -> Element {
@@ -139,14 +139,14 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-### O seria esse objeto `Scope`?
+### What is this `Scope` object?
 
-Vindo do React, o objeto `Scope` pode soar confuso. No React, você iria armazenar dados entre renderizadores com Hooks. No entanto, Hooks dependem de variáveis globais que tornam difícil de integrar em um sistema multi-usuário como numa `SSR`.
+Coming from React, the `Scope` object might be confusing. In React, you'll want to store data between renders with hooks. However, hooks rely on global variables which make them difficult to integrate in multi-tenant systems like server-rendering.
 
-No Dioxus, você recebe um objeto `Scope` explícito para controlar como o componente renderiza e armazena dados. O objeto `Scope` provê um punhado de APIs úteis para funções como Suspense, Renderização e mais outros.
+In Dioxus, you are given an explicit `Scope` object to control how the component renders and stores data. The `Scope` object provides a handful of useful APIs for features like suspense, rendering, and more.
 
-Por agora, apenas saiba que `Scope` habilita você armazenar estados com Hooks e elementos `render` com `cx.render`.
+For now, just know that `Scope` lets you store state with hooks and render elements with `cx.render`.
 
-## Seguindo em Frente
+## Moving on
 
-Parabéns! Você desenvolver o seu primeiro aplicativo de Desktop com o Dioxus. Em seguida, nós vamos aprender sobre o básico para desenvolver interfaces interativas.
+Congrats! You've built your first desktop application with Dioxus. Next, we're going to learn about the basics of building interactive user interfaces.
