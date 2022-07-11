@@ -34,8 +34,6 @@
   </a>
 </div>
 
-
-
 <div align="center">
   <h3>
     <a href="https://dioxuslabs.com"> Website </a>
@@ -45,9 +43,10 @@
     <a href="https://dioxuslabs.com/guide"> Guide </a>
     <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/notes/README/ZH_CN.md"> 中文 </a>
+    <span> | </span>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
   </h3>
 </div>
-
 
 <br/>
 
@@ -70,6 +69,7 @@ Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, 
 If you know React, then you already know Dioxus.
 
 ### Unique features:
+
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - Incredibly ergonomic and powerful state management.
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
@@ -89,13 +89,11 @@ If you know React, then you already know Dioxus.
     <tr>
 </table>
 
-
 ## Example Projects:
 
 | File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | E-commerce w/ Tailwind (SSR/LiveView)                                                                                                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
-
 
 See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for a curated list of content in the Dioxus Ecosystem.
 
@@ -105,7 +103,7 @@ TypeScript is a fantastic addition to JavaScript, but it's still fundamentally J
 
 By using Rust, we gain:
 
-- Static types for *every* library
+- Static types for _every_ library
 - Immutability by default
 - A simple and intuitive module system
 - Integrated documentation (`go to source` _actually goes to source_)
@@ -127,6 +125,7 @@ Specifically, Dioxus provides us many other assurances:
 And much more. Dioxus makes Rust apps just as fast to write as React apps, but affords more robustness, giving your frontend team greater confidence in making big changes in shorter time.
 
 ## Why NOT Dioxus?
+
 You shouldn't use Dioxus if:
 
 - You don't like the React Hooks approach to frontend
@@ -135,6 +134,7 @@ You shouldn't use Dioxus if:
 - You need a Send+Sync UI solution (Dioxus is not currently thread-safe)
 
 ## Comparison with other Rust UI frameworks
+
 Dioxus primarily emphasizes **developer experience** and **familiarity with React principles**.
 
 - [Yew](https://github.com/yewstack/yew): prefers the elm pattern instead, no borrowed props, supports SSR (no hydration), no direct desktop/mobile support.
@@ -142,7 +142,6 @@ Dioxus primarily emphasizes **developer experience** and **familiarity with Reac
 - [Sycamore](https://github.com/sycamore-rs/sycamore): VDOM-less using fine-grained reactivity, but no direct support for desktop/mobile.
 - [Dominator](https://github.com/Pauan/rust-dominator): Signal-based zero-cost alternative, less emphasis on community and docs.
 - [Azul](https://azul.rs): Fully native HTML/CSS renderer for desktop applications, no support for web/ssr
-
 
 ## Parity with React & Roadmap
 
@@ -174,7 +173,7 @@ Want to jump in and help build the future of Rust frontend? There's plenty of pl
 
 This project is licensed under the [MIT license].
 
-[MIT license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 ### Contribution
 

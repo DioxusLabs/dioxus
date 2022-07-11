@@ -33,11 +33,11 @@
   - [Desktop](publishing/desktop.md)
   - [Web](publishing/web.md)
 
------------
+---
 
 - [Custom Renderer](custom_renderer/index.md)
 
------------
+---
 
 [Roadmap](roadmap.md)
 [Contributing](contributing.md)
