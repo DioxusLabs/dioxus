@@ -658,7 +658,7 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component = |cx| {
-    ///     cx.use_hook(|_| cx.provide_context(SharedState("world")));
+    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
     ///     rsx!(cx, Child {})
     /// }
     ///
@@ -684,7 +684,7 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component = |cx| {
-    ///     cx.use_hook(|_| cx.provide_root_context(SharedState("world")));
+    ///     cx.use_hook(|| cx.provide_root_context(SharedState("world")));
     ///     rsx!(cx, Child {})
     /// }
     ///
@@ -811,33 +811,31 @@ impl ScopeState {
         }))
     }
 
-    /// Store a value between renders
+    /// Store a value between renders. The foundational hook for all other hooks.
     ///
-    /// This is *the* foundational hook for all other hooks.
+    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
     ///
-    /// - Initializer: closure used to create the initial hook state
-    /// - Runner: closure used to output a value every time the hook is used
-    ///
-    /// To "cleanup" the hook, implement `Drop` on the stored hook value. Whenever the component is dropped, the hook
-    /// will be dropped as well.
+    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// // use_ref is the simplest way of storing a value between renders
-    /// fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T) -> &RefCell<T> {
-    ///     use_hook(|| Rc::new(RefCell::new(initial_value())))
+    /// ```
+    /// use dioxus_core::ScopeState;
+    ///
+    /// // prints a greeting on the initial render
+    /// pub fn use_hello_world(cx: &ScopeState) {
+    ///     cx.use_hook(|| println!("Hello, world!"));
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce(usize) -> State) -> &mut State {
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let mut vals = self.hook_vals.borrow_mut();
 
         let hook_len = vals.len();
         let cur_idx = self.hook_idx.get();
 
         if cur_idx >= hook_len {
-            vals.push(self.hook_arena.alloc(initializer(hook_len)));
+            vals.push(self.hook_arena.alloc(initializer()));
         }
 
         vals

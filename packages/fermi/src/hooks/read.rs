@@ -22,7 +22,7 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
         }
     }
 
-    let inner = cx.use_hook(|_| UseReadInner {
+    let inner = cx.use_hook(|| UseReadInner {
         value: None,
         root: root.clone(),
         scope_id: cx.scope_id(),

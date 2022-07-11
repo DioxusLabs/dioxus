@@ -34,7 +34,7 @@ pub fn use_state<T: 'static>(
     cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> &UseState<T> {
-    let hook = cx.use_hook(move |_| {
+    let hook = cx.use_hook(move || {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));

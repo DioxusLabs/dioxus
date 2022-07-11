@@ -16,7 +16,7 @@ use dioxus_core::*;
 /// The closure will panic if the provided script is not valid JavaScript code
 /// or if it returns an uncaught error.
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-    cx.use_hook(|_| {
+    cx.use_hook(|| {
         |script: S| {
             js_sys::Function::new_no_args(&script.to_string())
                 .call0(&wasm_bindgen::JsValue::NULL)
