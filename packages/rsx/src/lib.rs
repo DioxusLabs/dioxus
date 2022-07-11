@@ -18,6 +18,7 @@ mod component;
 mod element;
 mod ifmt;
 mod node;
+mod template;
 
 // Re-export the namespaces into each other
 pub use component::*;

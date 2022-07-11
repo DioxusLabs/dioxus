@@ -39,10 +39,10 @@ impl FromStr for IfmtInput {
                         let mut current_format_args = String::new();
                         for c in chars.by_ref() {
                             if c == '}' {
-                                segments.push(Segment::Formatted {
+                                segments.push(Segment::Formatted(FormattedSegment {
                                     format_args: current_format_args,
-                                    segment: FormattedSegment::parse(&current_captured)?,
-                                });
+                                    segment: FormattedSegmentType::parse(&current_captured)?,
+                                }));
                                 break;
                             }
                             current_format_args.push(c);
@@ -50,10 +50,10 @@ impl FromStr for IfmtInput {
                         break;
                     }
                     if c == '}' {
-                        segments.push(Segment::Formatted {
+                        segments.push(Segment::Formatted(FormattedSegment {
                             format_args: String::new(),
-                            segment: FormattedSegment::parse(&current_captured)?,
-                        });
+                            segment: FormattedSegmentType::parse(&current_captured)?,
+                        }));
                         break;
                     }
                     current_captured.push(c);
@@ -86,17 +86,17 @@ impl ToTokens for IfmtInput {
         for segment in self.segments.iter() {
             match segment {
                 Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
-                Segment::Formatted {
+                Segment::Formatted(FormattedSegment {
                     format_args,
                     segment,
-                } => {
+                }) => {
                     format_literal += "{";
                     match segment {
-                        FormattedSegment::Expr(_) => {
+                        FormattedSegmentType::Expr(_) => {
                             format_literal += &expr_counter.to_string();
                             expr_counter += 1;
                         }
-                        FormattedSegment::Ident(ident) => {
+                        FormattedSegmentType::Ident(ident) => {
                             format_literal += &ident.to_string();
                         }
                     }
@@ -108,10 +108,10 @@ impl ToTokens for IfmtInput {
         }
 
         let positional_args = self.segments.iter().filter_map(|seg| {
-            if let Segment::Formatted {
-                segment: FormattedSegment::Expr(expr),
+            if let Segment::Formatted(FormattedSegment {
+                segment: FormattedSegmentType::Expr(expr),
                 ..
-            } = seg
+            }) = seg
             {
                 Some(expr)
             } else {
@@ -120,10 +120,10 @@ impl ToTokens for IfmtInput {
         });
 
         let named_args = self.segments.iter().filter_map(|seg| {
-            if let Segment::Formatted {
-                segment: FormattedSegment::Ident(ident),
+            if let Segment::Formatted(FormattedSegment {
+                segment: FormattedSegmentType::Ident(ident),
                 ..
-            } = seg
+            }) = seg
             {
                 Some(quote! {#ident = #ident})
             } else {
@@ -145,19 +145,22 @@ impl ToTokens for IfmtInput {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Segment {
     Literal(String),
-    Formatted {
-        format_args: String,
-        segment: FormattedSegment,
-    },
+    Formatted(FormattedSegment),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum FormattedSegment {
+pub struct FormattedSegment {
+    format_args: String,
+    segment: FormattedSegmentType,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum FormattedSegmentType {
     Expr(Box<Expr>),
     Ident(Ident),
 }
 
-impl FormattedSegment {
+impl FormattedSegmentType {
     fn parse(input: &str) -> Result<Self> {
         if let Ok(ident) = parse_str::<Ident>(input) {
             if ident == input {
@@ -175,7 +178,7 @@ impl FormattedSegment {
     }
 }
 
-impl ToTokens for FormattedSegment {
+impl ToTokens for FormattedSegmentType {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Expr(expr) => expr.to_tokens(tokens),

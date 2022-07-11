@@ -420,6 +420,7 @@ impl Template {
 
 /// A array of stack allocated Template nodes
 pub type StaticTemplateNodes = &'static [StaticTemplateNode];
+/// A vec of heep allocated Template nodes
 pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
 /// A stack allocated Template node
@@ -433,6 +434,7 @@ pub type StaticTemplateNode = TemplateNode<
     &'static str,
 >;
 
+/// A heap allocated Template node
 pub type OwnedTemplateNode = TemplateNode<
     Vec<TemplateAttribute<OwnedTemplateValue>>,
     OwnedTemplateValue,
@@ -529,6 +531,7 @@ impl TemplateValue for OwnedTemplateValue {
     }
 }
 
+/// The kind of node the template is.
 #[derive(Debug)]
 pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>
 where
@@ -540,13 +543,18 @@ where
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
 {
+    /// A element node (e.g. div{}).
     Element(TemplateElement<Attributes, V, Children, Listeners>),
+    /// A text node (e.g. "Hello World").
     Text(TextTemplate<TextSegments, Text>),
+    /// A fragment node (e.g. div{}, div{}).
     Fragment(Fragment),
+    /// A dynamic node (e.g. (0..10).map(|i| cx.render(rsx!{div{}})))
     /// The index in the dynamic node array this node should be replaced with
     DynamicNode(usize),
 }
 
+/// A element template
 #[derive(Debug)]
 pub struct TemplateElement<Attributes, V, Children, Listeners>
 where
@@ -564,23 +572,41 @@ where
     value: PhantomData<V>,
 }
 
+/// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".
 #[derive(Debug)]
 pub struct TextTemplate<Segments, Text>
 where
     Segments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
 {
-    // this is similar to what ifmt outputs and allows us to only diff the dynamic parts of the text
+    /// The segments of the template.
     pub segments: Segments,
     text: PhantomData<Text>,
 }
 
+impl<Segments, Text> TextTemplate<Segments, Text>
+where
+    Segments: AsRef<[TextTemplateSegment<Text>]>,
+    Text: AsRef<str>,
+{
+    /// create a new template from the segments it is composed of.
+    pub fn new(segments: Segments) -> Self {
+        TextTemplate {
+            segments,
+            text: PhantomData,
+        }
+    }
+}
+
+/// A segment of a text template that may be dynamic or static.
 #[derive(Debug)]
 pub enum TextTemplateSegment<Text>
 where
     Text: AsRef<str>,
 {
+    /// A constant text segment
     Static(Text),
+    /// A dynamic text segment
     Dynamic(usize),
 }
 

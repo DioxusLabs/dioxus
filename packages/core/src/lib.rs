@@ -69,8 +69,10 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyEvent, Attribute, AttributeValue, CodeLocation, Component, DioxusElement, DomEdit, Element,
     ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener,
-    Mutations, NodeFactory, OwnedDynamicNodeMapping, Properties, SchedulerMsg, Scope, ScopeId,
-    ScopeState, StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, UiEvent,
+    Mutations, NodeFactory, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
+    OwnedTemplateValue, Properties, SchedulerMsg, Scope, ScopeId, ScopeState,
+    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, TemplateAttribute,
+    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, UiEvent,
     UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
