@@ -7,6 +7,11 @@ language = "en"
 [language.en]
 name = "English"
 
+[language.pt-br]
+name = "Português Brasileiro"
+title = "Documentação do Dioxus"
+description = "Introdução ao Dioxus, um framework portátil, de alto desempenho e ergonômico para criar interfaces de usuário multiplataforma em Rust."
+
 [rust]
 edition = "2018"
 
