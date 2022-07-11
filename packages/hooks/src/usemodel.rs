@@ -14,7 +14,7 @@ use std::{
 };
 
 pub fn use_model<'a, T: 'static>(cx: &'a ScopeState, f: impl FnOnce() -> T) -> UseModel<'a, T> {
-    let inner = cx.use_hook(|_| UseModelInner {
+    let inner = cx.use_hook(|| UseModelInner {
         update_scheduled: Cell::new(false),
         update_callback: cx.schedule_update(),
         value: RefCell::new(f()),
@@ -78,7 +78,7 @@ pub fn use_model_coroutine<'a, T, F: Future<Output = ()> + 'static>(
     _model: UseModel<T>,
     _f: impl FnOnce(AppModels) -> F,
 ) -> UseModelCoroutine {
-    cx.use_hook(|_| UseModelTaskInner {
+    cx.use_hook(|| UseModelTaskInner {
         task: Default::default(),
     });
     todo!()

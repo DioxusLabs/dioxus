@@ -20,7 +20,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 #[test]
 fn test_early_abort() {
     const app: Component = |cx| {
-        let val = cx.use_hook(|_| 0);
+        let val = cx.use_hook(|| 0);
 
         *val += 1;
 

@@ -34,7 +34,7 @@ where
         dependencies: Vec<Box<dyn Any>>,
     }
 
-    let state = cx.use_hook(move |_| UseEffect {
+    let state = cx.use_hook(move || UseEffect {
         needs_regen: true,
         task: Cell::new(None),
         dependencies: Vec::new(),
