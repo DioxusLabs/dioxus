@@ -8,7 +8,7 @@ fn test_borrowed_state() {
 }
 
 fn Parent(cx: Scope) -> Element {
-    let value = cx.use_hook(|_| String::new());
+    let value = cx.use_hook(|| String::new());
 
     cx.render(rsx! {
         div {

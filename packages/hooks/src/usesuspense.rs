@@ -7,7 +7,7 @@ pub fn use_suspense<R: 'static, F: Future<Output = R> + 'static>(
     create_future: impl FnOnce() -> F,
     render: impl FnOnce(&R) -> Element,
 ) -> Element {
-    let sus = cx.use_hook(|_| {
+    let sus = cx.use_hook(|| {
         let fut = create_future();
 
         let wip_value: Rc<Cell<Option<R>>> = Default::default();

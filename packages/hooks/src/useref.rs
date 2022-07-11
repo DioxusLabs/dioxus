@@ -111,7 +111,7 @@ use std::{
 /// })
 /// ```
 pub fn use_ref<T: 'static>(cx: &ScopeState, initialize_refcell: impl FnOnce() -> T) -> &UseRef<T> {
-    let hook = cx.use_hook(|_| UseRef {
+    let hook = cx.use_hook(|| UseRef {
         update: cx.schedule_update(),
         value: Rc::new(RefCell::new(initialize_refcell())),
         dirty: Rc::new(Cell::new(false)),

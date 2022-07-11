@@ -37,7 +37,7 @@ pub struct RouterProps<'a> {
 /// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let svc = cx.use_hook(|_| {
+    let svc = cx.use_hook(|| {
         cx.provide_context(RouterCore::new(
             &cx,
             RouterCfg {
