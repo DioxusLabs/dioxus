@@ -465,16 +465,23 @@ where
         TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>,
 }
 
+/// A template for an attribute
 #[derive(Debug)]
 pub struct TemplateAttribute<V: TemplateValue> {
+    /// The name of the attribute
     pub name: &'static str,
+    /// The namespace of the attribute
     pub namespace: Option<&'static str>,
+    /// The value of the attribute
     pub value: TemplateAttributeValue<V>,
 }
 
+/// A template attribute value that is either dynamic or static
 #[derive(Debug)]
 pub enum TemplateAttributeValue<V: TemplateValue> {
+    /// A static attribute
     Static(V),
+    /// A dynamic attribute
     Dynamic(usize),
 }
 
@@ -610,7 +617,9 @@ where
     Dynamic(usize),
 }
 
+/// A template value that is created at runtime.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum OwnedTemplateValue {
     Text(String),
     Float32(f32),

@@ -18,6 +18,20 @@ pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
 
+impl IfmtInput {
+    pub fn to_static(&self) -> Option<String> {
+        self.segments
+            .iter()
+            .try_fold(String::new(), |acc, segment| {
+                if let Segment::Literal(seg) = segment {
+                    Some(acc + seg)
+                } else {
+                    None
+                }
+            })
+    }
+}
+
 impl FromStr for IfmtInput {
     type Err = syn::Error;
 

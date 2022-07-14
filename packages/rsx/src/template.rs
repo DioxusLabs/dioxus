@@ -1,14 +1,41 @@
 use dioxus_core::{
-    OwnedTemplateNode, OwnedTemplateValue, TemplateAttribute, TemplateElement, TemplateNodeId,
-    TemplateNodeType, TextTemplate, TextTemplateSegment,
+    OwnedTemplateNode, OwnedTemplateValue, TemplateAttribute, TemplateAttributeValue,
+    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
 };
-use syn::Expr;
+use proc_macro2::TokenStream;
+use quote::quote;
+use syn::{Expr, Ident, LitStr};
 
-use crate::{BodyNode, FormattedSegment, FormattedSegmentType, Segment};
+use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
+
+struct TemplateElementBuilder {
+    tag: String,
+    attributes: Vec<TemplateAttributeBuilder>,
+    children: Vec<TemplateNodeId>,
+    listeners: Vec<usize>,
+    parent: Option<TemplateNodeId>,
+}
+
+struct TemplateAttributeBuilder {
+    name: String,
+    value: TemplateAttributeValue<OwnedTemplateValue>,
+}
+
+enum TemplateNodeTypeBuilder {
+    Element(TemplateElementBuilder),
+    Text(TextTemplate<Vec<TextTemplateSegment<String>>, String>),
+    Fragment(Vec<TemplateNodeId>),
+    DynamicNode(usize),
+}
+
+struct TemplateNodeBuilder {
+    id: TemplateNodeId,
+    node_type: TemplateNodeTypeBuilder,
+}
 
 #[derive(Default)]
 struct TemplateBuilder {
-    nodes: Vec<OwnedTemplateNode>,
+    nodes: Vec<TemplateNodeBuilder>,
     dynamic_context: DynamicTemplateContextBuilder,
 }
 
@@ -16,40 +43,95 @@ impl TemplateBuilder {
     pub fn from_root(root: BodyNode) -> Self {
         let mut builder = Self::default();
 
-        builder.build_node(root);
+        builder.build_node(root, None);
 
         builder
     }
 
-    fn build_node(&mut self, node: BodyNode) {
+    fn build_node(&mut self, node: BodyNode, parent: Option<TemplateNodeId>) -> TemplateNodeId {
         let id = TemplateNodeId(self.nodes.len());
         match node {
             BodyNode::Element(el) => {
-                let attributes: Vec<_> = el.attributes.iter().map(|attr| TemplateAttribute {
-                    name: todo!(),
-                    namespace: todo!(),
-                    value: todo!(),
-                });
-                for child in el.children {
-                    self.build_node(child);
+                let mut attributes = Vec::new();
+                let mut listeners = Vec::new();
+                for attr in el.attributes {
+                    match attr.attr {
+                        ElementAttr::AttrText { name, value } => {
+                            if let Some(static_value) = value.to_static() {
+                                attributes.push(TemplateAttributeBuilder {
+                                    name: name.to_string(),
+                                    value: TemplateAttributeValue::Static(
+                                        OwnedTemplateValue::Text(static_value),
+                                    ),
+                                })
+                            } else {
+                                attributes.push(TemplateAttributeBuilder {
+                                    name: name.to_string(),
+                                    value: TemplateAttributeValue::Dynamic(
+                                        self.dynamic_context.add_attr(quote!(#value)),
+                                    ),
+                                })
+                            }
+                        }
+                        ElementAttr::CustomAttrText { name, value } => {
+                            if let Some(static_value) = value.to_static() {
+                                attributes.push(TemplateAttributeBuilder {
+                                    name: name.value(),
+                                    value: TemplateAttributeValue::Static(
+                                        OwnedTemplateValue::Text(static_value),
+                                    ),
+                                })
+                            } else {
+                                attributes.push(TemplateAttributeBuilder {
+                                    name: name.value(),
+                                    value: TemplateAttributeValue::Dynamic(
+                                        self.dynamic_context.add_attr(quote!(#value)),
+                                    ),
+                                })
+                            }
+                        }
+                        ElementAttr::AttrExpression { name, value } => {
+                            attributes.push(TemplateAttributeBuilder {
+                                name: name.to_string(),
+                                value: TemplateAttributeValue::Dynamic(
+                                    self.dynamic_context.add_attr(quote!(#value)),
+                                ),
+                            })
+                        }
+                        ElementAttr::CustomAttrExpression { name, value } => {
+                            attributes.push(TemplateAttributeBuilder {
+                                name: name.value(),
+                                value: TemplateAttributeValue::Dynamic(
+                                    self.dynamic_context.add_attr(quote!(#value)),
+                                ),
+                            })
+                        }
+                        ElementAttr::EventTokens { name, tokens } => {
+                            listeners.push(self.dynamic_context.add_listener(name, tokens))
+                        }
+                    }
                 }
-                OwnedTemplateNode {
+                let children: Vec<_> = el
+                    .children
+                    .into_iter()
+                    .map(|child| self.build_node(child, Some(id)))
+                    .collect();
+
+                self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeType::Element(TemplateElement {
-                        tag: todo!(),
-                        namespace: todo!(),
+                    node_type: TemplateNodeTypeBuilder::Element(TemplateElementBuilder {
+                        tag: el.name.to_string(),
                         attributes,
-                        children: todo!(),
-                        listeners: todo!(),
-                        parent: todo!(),
-                        value: todo!(),
+                        children,
+                        listeners,
+                        parent,
                     }),
-                }
+                })
             }
             BodyNode::Component(comp) => {
-                self.nodes.push(OwnedTemplateNode {
+                self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeType::DynamicNode(
+                    node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::Component(comp)),
                     ),
                 });
@@ -66,20 +148,21 @@ impl TemplateBuilder {
                     })
                 }
 
-                self.nodes.push(OwnedTemplateNode {
+                self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeType::Text(TextTemplate::new(segments)),
+                    node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments)),
                 });
             }
             BodyNode::RawExpr(expr) => {
-                self.nodes.push(OwnedTemplateNode {
+                self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeType::DynamicNode(
+                    node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::RawExpr(expr)),
                     ),
                 });
             }
         }
+        id
     }
 }
 
@@ -87,7 +170,8 @@ impl TemplateBuilder {
 struct DynamicTemplateContextBuilder {
     nodes: Vec<BodyNode>,
     text: Vec<FormattedSegment>,
-    attributes: Vec<Expr>,
+    attributes: Vec<TokenStream>,
+    listeners: Vec<(String, Expr)>,
 }
 
 impl DynamicTemplateContextBuilder {
@@ -105,5 +189,21 @@ impl DynamicTemplateContextBuilder {
         self.text.push(text);
 
         text_id
+    }
+
+    fn add_attr(&mut self, attr: TokenStream) -> usize {
+        let attr_id = self.attributes.len();
+
+        self.attributes.push(attr);
+
+        attr_id
+    }
+
+    fn add_listener(&mut self, name: Ident, listener: Expr) -> usize {
+        let listener_id = self.listeners.len();
+
+        self.listeners.push((name.to_string(), listener));
+
+        listener_id
     }
 }

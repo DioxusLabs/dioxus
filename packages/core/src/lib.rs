@@ -72,8 +72,9 @@ pub use crate::innerlude::{
     Mutations, NodeFactory, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
     OwnedTemplateValue, Properties, SchedulerMsg, Scope, ScopeId, ScopeState,
     StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, TemplateAttribute,
-    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, UiEvent,
-    UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate,
+    TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
+    VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
