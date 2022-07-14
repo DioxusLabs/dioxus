@@ -137,7 +137,13 @@ pub async fn startup_hot_reload(config: CrateConfig) -> Result<()> {
                                                 *first = first.split_at(start.column).1;
                                             }
                                             if let Some(last) = lines.last_mut() {
-                                                *last = last.split_at(end.column).0;
+                                                // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
+                                                if start.line == end.line {
+                                                    *last =
+                                                        last.split_at(end.column - start.column).0;
+                                                } else {
+                                                    *last = last.split_at(end.column).0;
+                                                }
                                             }
                                             let rsx = lines.join("\n");
                                             messages.push(SetRsxMessage {
