@@ -34,7 +34,7 @@ pub struct RedirectProps<'a> {
 pub fn Redirect<'a>(cx: Scope<'a, RedirectProps<'a>>) -> Element {
     let router = use_router(&cx);
 
-    let immediate_redirect = cx.use_hook(|_| {
+    let immediate_redirect = cx.use_hook(|| {
         if let Some(from) = cx.props.from {
             router.register_total_route(from.to_string(), cx.scope_id());
             false

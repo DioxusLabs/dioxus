@@ -33,7 +33,7 @@ use std::{
 pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
-    let inner = cx.use_hook(|_| AtomState {
+    let inner = cx.use_hook(|| AtomState {
         value: None,
         root: root.clone(),
         scope_id: cx.scope_id(),

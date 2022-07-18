@@ -28,10 +28,10 @@ pub struct RouteProps<'a> {
 /// ```
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
     let router_root = cx
-        .use_hook(|_| cx.consume_context::<Arc<RouterCore>>())
+        .use_hook(|| cx.consume_context::<Arc<RouterCore>>())
         .as_ref()?;
 
-    cx.use_hook(|_| {
+    cx.use_hook(|| {
         // create a bigger, better, longer route if one above us exists
         let total_route = match cx.consume_context::<RouteContext>() {
             Some(ctx) => ctx.total_route,

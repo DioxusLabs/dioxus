@@ -65,7 +65,7 @@ where
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(|_| {
+    cx.use_hook(|| {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let task = cx.push_future(init(rx));
         cx.provide_context(CoroutineHandle { tx, task })
@@ -76,7 +76,7 @@ where
 ///
 /// See the docs for [`use_coroutine`] for more details.
 pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&CoroutineHandle<M>> {
-    cx.use_hook(|_| cx.consume_context::<CoroutineHandle<M>>())
+    cx.use_hook(|| cx.consume_context::<CoroutineHandle<M>>())
         .as_ref()
 }
 

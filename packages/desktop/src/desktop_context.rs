@@ -10,7 +10,7 @@ pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
 pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+    cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
 }
@@ -232,5 +232,5 @@ pub(super) fn handler(
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
     let desktop = use_window(cx).clone();
 
-    cx.use_hook(|_| move |script| desktop.eval(script))
+    cx.use_hook(|| move |script| desktop.eval(script))
 }
