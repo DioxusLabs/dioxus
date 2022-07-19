@@ -1,8 +1,7 @@
-use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
-    prelude::{Layout, Size},
+    prelude::{Dimension, Layout, Size},
     Taffy,
 };
 use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
@@ -252,8 +251,9 @@ impl RinkWidget for &Node {
                 BorderStyle::Hidden => 0.0,
                 BorderStyle::None => 0.0,
                 _ => match border.radius {
-                    UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
-                    UnitSystem::Point(p) => p,
+                    Dimension::Percent(p) => p * area.width as f32 / 100.0,
+                    Dimension::Points(p) => p,
+                    _ => todo!(),
                 }
                 .abs()
                 .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)
