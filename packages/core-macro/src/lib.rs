@@ -29,7 +29,7 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
 ///
 /// ## Complete Reference Guide:
-/// ```
+/// ```ignore
 #[doc = include_str!("../../../examples/rsx_usage.rs")]
 /// ```
 #[proc_macro]
@@ -81,7 +81,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 /// you would be repeating a lot of the usual Rust boilerplate.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// #[inline_props]
 /// fn app(cx: Scope, bob: String) -> Element {
 ///     cx.render(rsx!("hello, {bob}"))

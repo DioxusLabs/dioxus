@@ -44,7 +44,7 @@ To launch an app, we use the `launch` method for the specific renderer we want t
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -276,7 +276,7 @@ Using components, templates, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus_desktop::launch(App);
 }
 
 fn App(cx: Scope) -> Element {

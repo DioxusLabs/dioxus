@@ -16,7 +16,7 @@ For the simplest of apps, all of your state can enter the app from the root prop
 ```rust
 let all_content = get_all_content().await;
 
-let output = dioxus::ssr::render_lazy(rsx!{
+let output = dioxus_ssr::render_lazy(rsx!{
     div {
         RenderContent { content: all_content }
     }

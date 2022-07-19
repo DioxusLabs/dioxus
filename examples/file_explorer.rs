@@ -11,7 +11,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |c| c.with_window(|w| w.with_resizable(true)));
+    dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_resizable(true)));
 }
 
 fn app(cx: Scope) -> Element {

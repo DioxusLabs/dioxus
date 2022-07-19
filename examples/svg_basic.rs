@@ -71,5 +71,5 @@ fn app(cx: Scope) -> Element {
 }
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }

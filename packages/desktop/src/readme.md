@@ -26,12 +26,12 @@ $ cargo add dioxus --features desktop
 
 Edit your `main.rs`:
 
-```rust
+```rust, ignore
 // main.rs
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

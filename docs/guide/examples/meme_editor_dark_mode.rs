@@ -5,7 +5,7 @@ use dioxus::events::FormEvent;
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus_desktop::launch(App);
 }
 
 // ANCHOR: DarkMode_struct

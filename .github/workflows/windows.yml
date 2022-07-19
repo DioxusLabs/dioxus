@@ -71,6 +71,6 @@ jobs:
           rustc -Vv
           cargo -V
           set RUST_BACKTRACE=1
-          cargo build --features "desktop, ssr, router"
-          cargo test --features "desktop, ssr, router"
+          cargo build --all --tests --examples
+          cargo test --all --tests
         shell: cmd

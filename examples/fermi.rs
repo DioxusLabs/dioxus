@@ -1,9 +1,10 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
+use fermi::*;
 
 fn main() {
-    dioxus::desktop::launch(app)
+    dioxus_desktop::launch(app)
 }
 
 static NAME: Atom<String> = |_| "world".to_string();

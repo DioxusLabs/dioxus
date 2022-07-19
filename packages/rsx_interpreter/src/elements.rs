@@ -190,7 +190,7 @@ builder_constructors! {
     ///
     /// # Usage
     ///
-    /// ```
+    /// ```rust, ignore
     /// html!(<h1> A header element </h1>)
     /// rsx!(h1 { "A header element" })
     /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
@@ -210,7 +210,7 @@ builder_constructors! {
     /// - The `<h2>` heading is usually a large bolded font.
     ///
     /// # Usage
-    /// ```
+    /// ```rust, ignore
     /// html!(<h2> A header element </h2>)
     /// rsx!(h2 { "A header element" })
     /// LazyNodes::new(|f| f.el(h2).children([f.text("A header element")]).finish())
@@ -283,7 +283,7 @@ builder_constructors! {
     /// Note: By default, browsers always place a line break before and after the <div> element.
     ///
     /// ## Usage
-    /// ```
+    /// ```rust, ignore
     /// html!(<div> A header element </div>)
     /// rsx!(div { "A header element" })
     /// LazyNodes::new(|f| f.element(div, &[], &[], &[], None))

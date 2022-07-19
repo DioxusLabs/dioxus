@@ -211,7 +211,7 @@ pub enum ElementAttr {
 }
 
 impl ElementAttr {
-    pub fn start(&self) -> Span {
+    pub fn flart(&self) -> Span {
         match self {
             ElementAttr::AttrText { name, .. } => name.span(),
             ElementAttr::AttrExpression { name, .. } => name.span(),
