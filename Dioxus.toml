@@ -43,6 +43,3 @@ script = []
 # use binaryen.wasm-opt for output Wasm file
 # binaryen just will trigger in `web` platform
 binaryen = { wasm_opt = true }
-
-# enable tailwindcss CSS building
-tailwindcss= { input = "/somewhere", config = "yay"}
