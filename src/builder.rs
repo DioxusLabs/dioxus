@@ -28,7 +28,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     // [2] Generate the appropriate build folders
     // [3] Wasm-bindgen the .wasm fiile, and move it into the {builddir}/modules/xxxx/xxxx_bg.wasm
     // [4] Wasm-opt the .wasm file with whatever optimizations need to be done
-    // [5] Link up the html page to the wasm module
+    // [5][OPTIONAL] Builds the Tailwind CSS file using the Tailwind standalone binary
+    // [6] Link up the html page to the wasm module
 
     let CrateConfig {
         out_dir,
@@ -137,18 +138,23 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                 if sub.contains_key("wasm_opt")
                     && sub.get("wasm_opt").unwrap().as_bool().unwrap_or(false)
                 {
+                    log::info!("Optimizing WASM size with wasm-opt...");
                     let target_file = out_dir
                         .join("assets")
                         .join("dioxus")
                         .join(format!("{}_bg.wasm", dioxus_config.application.name));
                     if target_file.is_file() {
+                        let mut args = vec![
+                            target_file.to_str().unwrap(),
+                            "-o",
+                            target_file.to_str().unwrap(),
+                        ];
+                        if config.release == true {
+                            args.push("-Oz");
+                        }
                         binaryen.call(
                             "wasm-opt",
-                            vec![
-                                target_file.to_str().unwrap(),
-                                "-o",
-                                target_file.to_str().unwrap(),
-                            ],
+                            args,
                         )?;
                     }
                 }
@@ -156,6 +162,45 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
         } else {
             log::warn!(
                 "Binaryen tool not found, you can use `dioxus tool add binaryen` to install it."
+            );
+        }
+    }
+
+    // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
+    if dioxus_tools.contains_key("tailwind-css") {
+        let info = dioxus_tools.get("tailwind-css").unwrap();
+        let tailwind = crate::tools::Tool::Tailwind;
+
+        if tailwind.is_installed() {
+            if let Some(sub) = info.as_table() {
+                log::info!("Building Tailwind bundle CSS file...");
+
+                let input_path = match sub.get("input") {
+                    Some(val) => val.as_str().unwrap(),
+                    None => "./public"
+                };
+                let config_path = match sub.get("config") {
+                    Some(val) => val.as_str().unwrap(),
+                    None => "./src/tailwind.config.js"
+                };
+                let mut args = vec![
+                    "-i",
+                    input_path,
+                    "-o",
+                    "dist/tailwind.css",
+                    "-c",
+                    config_path
+                ];
+
+                if config.release == true {
+                    args.push("--minify");
+                }
+                
+                tailwind.call("tailwind-css", args)?;
+            }
+        } else {
+            log::warn!(
+                "Tailwind tool not found, you can use `dioxus tool add tailwind-css` to install it."
             );
         }
     }
@@ -413,6 +458,9 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
             "<link rel=\"stylesheet\" href=\"{}\">\n",
             &style.to_str().unwrap(),
         ))
+    }
+    if config.application.tools.clone().unwrap_or_default().contains_key("tailwind-css") {
+        style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
     html = html.replace("{style_include}", &style_str);
 

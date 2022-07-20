@@ -25,6 +25,30 @@ We use `toml` to define some info for `dioxus` project.
    asset_dir = "public"
    ```
 
+### Application.Tool
+
+You can combine different tools with `dioxus`.
+
+1. ***binaryen*** - Use the `binaryen` tooling suite.
+   ```
+   # current support: wasm-opt
+   # default: web
+   binaryen = { wasm_opt = true }
+   ```
+   Use the `wasm_opt = true` key/pair value to activate optimization with wasm-opt.
+   When building on `release` profile, Dioxus will run `wasm_opt` with `-Oz` option.
+2. ***tailwind-css*** - Use the `tailwind-css` standalone binary to generate a Tailwind CSS bundle file.
+   ```
+   tailwind-css = { input = "main.css", config = "tailwind.config.js" }
+   ```
+   You can set two optional keys :
+    - input: path of the input CSS file (default value is "public/tailwind.css")
+    - config: path to the config file for Tailwind (default value is "src/tailwind.config.js")
+
+    When building on `release` profile, Dioxus will run `tailwind-css` with the `--minify` option.
+
+    Note : Dioxus will automatically include the generated tailwind file in the `index.html`
+
 ### Web.App
 
 Web platform application config:

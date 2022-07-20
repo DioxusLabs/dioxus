@@ -38,17 +38,17 @@ impl Default for DioxusConfig {
                 sub_package: None,
             },
             web: WebConfig {
-                app: WebAppConfing {
+                app: WebAppConfig {
                     title: Some("dioxus | ⛺".into()),
                     base_path: None,
                 },
-                watcher: WebWatcherConfing {
+                watcher: WebWatcherConfig {
                     watch_path: Some(vec![PathBuf::from("src")]),
                     reload_html: Some(false),
                     index_on_404: Some(true),
                 },
-                resource: WebResourceConfing {
-                    dev: WebDevResourceConfing {
+                resource: WebResourceConfig {
+                    dev: WebDevResourceConfig {
                         style: Some(vec![]),
                         script: Some(vec![]),
                     },
@@ -72,33 +72,33 @@ pub struct ApplicationConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfig {
-    pub app: WebAppConfing,
-    pub watcher: WebWatcherConfing,
-    pub resource: WebResourceConfing,
+    pub app: WebAppConfig,
+    pub watcher: WebWatcherConfig,
+    pub resource: WebResourceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebAppConfing {
+pub struct WebAppConfig {
     pub title: Option<String>,
     pub base_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebWatcherConfing {
+pub struct WebWatcherConfig {
     pub watch_path: Option<Vec<PathBuf>>,
     pub reload_html: Option<bool>,
     pub index_on_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebResourceConfing {
-    pub dev: WebDevResourceConfing,
+pub struct WebResourceConfig {
+    pub dev: WebDevResourceConfig,
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebDevResourceConfing {
+pub struct WebDevResourceConfig {
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
 }
