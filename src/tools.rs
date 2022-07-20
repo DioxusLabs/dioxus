@@ -19,7 +19,7 @@ pub enum Tool {
 }
 
 pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen", "sass", "tailwind-css"]
+    vec!["binaryen", "sass", "tailwindcss"]
 }
 
 pub fn app_path() -> PathBuf {
@@ -56,7 +56,7 @@ impl Tool {
         match name {
             "binaryen" => Some(Self::Binaryen),
             "sass" => Some(Self::Sass),
-            "tailwind-css" => Some(Self::Tailwind),
+            "tailwindcss" => Some(Self::Tailwind),
             _ => None,
         }
     }
@@ -66,7 +66,7 @@ impl Tool {
         match self {
             Self::Binaryen => "binaryen",
             Self::Sass => "sass",
-            Self::Tailwind => "tailwind-css",
+            Self::Tailwind => "tailwindcss",
         }
     }
 

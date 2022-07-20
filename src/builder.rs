@@ -167,8 +167,8 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     }
 
     // [5][OPTIONAL] If tailwind is enabled and installed we run it to generate the CSS
-    if dioxus_tools.contains_key("tailwind-css") {
-        let info = dioxus_tools.get("tailwind-css").unwrap();
+    if dioxus_tools.contains_key("tailwindcss") {
+        let info = dioxus_tools.get("tailwindcss").unwrap();
         let tailwind = crate::tools::Tool::Tailwind;
 
         if tailwind.is_installed() {
@@ -196,11 +196,11 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                     args.push("--minify");
                 }
                 
-                tailwind.call("tailwind-css", args)?;
+                tailwind.call("tailwindcss", args)?;
             }
         } else {
             log::warn!(
-                "Tailwind tool not found, you can use `dioxus tool add tailwind-css` to install it."
+                "Tailwind tool not found, you can use `dioxus tool add tailwindcss` to install it."
             );
         }
     }
@@ -459,7 +459,7 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
             &style.to_str().unwrap(),
         ))
     }
-    if config.application.tools.clone().unwrap_or_default().contains_key("tailwind-css") {
+    if config.application.tools.clone().unwrap_or_default().contains_key("tailwindcss") {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
     html = html.replace("{style_include}", &style_str);
