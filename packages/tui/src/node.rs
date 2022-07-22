@@ -63,7 +63,7 @@ impl NodeDepState<()> for PreventDefault {
     ) -> bool {
         let new = match node
             .attributes()
-            .find(|a| a.name == "dioxus-prevent-default")
+            .find(|a| a.attribute.name == "dioxus-prevent-default")
             .and_then(|a| a.value.as_text())
         {
             Some("onfocus") => PreventDefault::Focus,

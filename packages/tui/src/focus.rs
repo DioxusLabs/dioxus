@@ -69,7 +69,7 @@ impl NodeDepState<()> for Focus {
 
     fn reduce(&mut self, node: NodeView<'_>, _sibling: (), _: &Self::Ctx) -> bool {
         let new = Focus {
-            level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
+            level: if let Some(a) = node.attributes().find(|a| a.attribute.name == "tabindex") {
                 if let Some(index) = a
                     .value
                     .as_int32()

@@ -33,6 +33,7 @@ use syn::{
     parse::{Parse, ParseStream},
     Ident, Result, Token,
 };
+use template::TemplateBuilder;
 
 pub struct CallBody {
     pub custom_context: Option<Ident>,
@@ -74,10 +75,14 @@ impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let inner = if self.roots.len() == 1 {
             let inner = &self.roots[0];
-            quote! { #inner }
+            let template = TemplateBuilder::from_root(inner.clone());
+            quote! { #template }
         } else {
-            let childs = &self.roots;
-            quote! { __cx.fragment_root([ #(#childs),* ]) }
+            let children = &self.roots;
+            let templates = children
+                .iter()
+                .map(|root| TemplateBuilder::from_root(root.clone()));
+            quote! { __cx.fragment_root([ #(#templates),* ]) }
         };
 
         match &self.custom_context {

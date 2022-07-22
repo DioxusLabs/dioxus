@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     *,
@@ -166,6 +166,14 @@ pub enum Segment {
 pub struct FormattedSegment {
     format_args: String,
     segment: FormattedSegmentType,
+}
+
+impl ToTokens for FormattedSegment {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.append_all(quote! {
+            format_args!({0#self.format_args}, #self.segment)
+        });
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

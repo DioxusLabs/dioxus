@@ -84,10 +84,13 @@ impl ChildDepState for TaffyLayout {
             }
         } else {
             // gather up all the styles from the attribute list
-            for Attribute { name, value, .. } in node.attributes() {
-                assert!(SORTED_LAYOUT_ATTRS.binary_search(name).is_ok());
+            for Attribute {
+                attribute, value, ..
+            } in node.attributes()
+            {
+                assert!(SORTED_LAYOUT_ATTRS.binary_search(&attribute.name).is_ok());
                 if let Some(text) = value.as_text() {
-                    apply_layout_attributes(name, text, &mut style);
+                    apply_layout_attributes(attribute.name, text, &mut style);
                 }
             }
 

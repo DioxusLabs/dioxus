@@ -1,3 +1,5 @@
+use crate::template::TemplateBuilder;
+
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -16,7 +18,7 @@ Parse
 -> "text {with_args}"
 -> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
 */
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum BodyNode {
     Element(Element),
     Component(Component),

@@ -67,14 +67,14 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, Attribute, AttributeValue, CodeLocation, Component, DioxusElement, DomEdit, Element,
-    ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener,
-    Mutations, NodeFactory, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
-    OwnedTemplateValue, Properties, SchedulerMsg, Scope, ScopeId, ScopeState,
-    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, TemplateAttribute,
-    TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate,
-    TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
-    VText, VirtualDom,
+    AnyEvent, Attribute, AttributeDiscription, AttributeValue, CodeLocation, Component,
+    DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority,
+    IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedDynamicNodeMapping,
+    OwnedTemplateNode, OwnedTemplateNodes, OwnedTemplateValue, Properties, SchedulerMsg, Scope,
+    ScopeId, ScopeState, StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId,
+    TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType,
+    TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
+    VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -82,9 +82,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Attributes, CodeLocation, Component, DioxusElement, Element, EventHandler,
-        Fragment, LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode,
-        VirtualDom,
+        fc_to_builder, AttributeDiscription, Attributes, CodeLocation, Component, DioxusElement,
+        Element, EventHandler, Fragment, LazyNodes, NodeFactory, Properties, Scope, ScopeId,
+        ScopeState, VNode, VirtualDom,
     };
 }
 

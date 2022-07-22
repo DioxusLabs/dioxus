@@ -56,8 +56,9 @@ use std::{cell::Cell, hash::Hash, marker::PhantomData};
 use bumpalo::Bump;
 
 use crate::{
-    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId, Attribute,
-    AttributeValue, ElementId, Mutations, OwnedDynamicNodeMapping, StaticDynamicNodeMapping,
+    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
+    nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
+    OwnedDynamicNodeMapping, StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -158,14 +159,12 @@ impl<'a> VTemplateRef<'a> {
                         for attr in attributes.as_ref() {
                             if let TemplateAttributeValue::Dynamic(idx) = attr.value {
                                 let attribute = Attribute {
-                                    name: attr.name,
+                                    attribute: attr.attritbute,
                                     value: template_ref
                                         .dynamic_context
                                         .resolve_attribute(idx)
                                         .to_owned(),
                                     is_static: false,
-                                    is_volatile: false,
-                                    namespace: attr.namespace,
                                 };
                                 let scope_bump = diff_state.current_scope_bump();
                                 diff_state
@@ -286,11 +285,9 @@ impl Template {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
                             let val: AttributeValue<'b> = val.allocate(bump);
                             let attribute = Attribute {
-                                name: attr.name,
-                                value: val,
+                                attribute: attr.attritbute,
                                 is_static: true,
-                                is_volatile: false,
-                                namespace: attr.namespace,
+                                value: val,
                             };
                             mutations.set_attribute(bump.alloc(attribute), id);
                         }
@@ -369,6 +366,21 @@ impl Template {
                 dynamic_mapping: dynamic_ids,
                 ..
             } => Box::new(dynamic_ids.all_dynamic()),
+        }
+    }
+
+    pub(crate) fn volitile_attributes<'a>(
+        &'a self,
+    ) -> Box<dyn Iterator<Item = (TemplateNodeId, usize)> + 'a> {
+        match self {
+            Template::Static {
+                dynamic_mapping: dynamic_ids,
+                ..
+            } => Box::new(dynamic_ids.volitile_attributes.iter().copied()),
+            Template::Owned {
+                dynamic_mapping: dynamic_ids,
+                ..
+            } => Box::new(dynamic_ids.volitile_attributes.iter().copied()),
         }
     }
 
@@ -468,10 +480,8 @@ where
 /// A template for an attribute
 #[derive(Debug)]
 pub struct TemplateAttribute<V: TemplateValue> {
-    /// The name of the attribute
-    pub name: &'static str,
-    /// The namespace of the attribute
-    pub namespace: Option<&'static str>,
+    /// The discription of the attribute
+    pub attritbute: AttributeDiscription,
     /// The value of the attribute
     pub value: TemplateAttributeValue<V>,
 }
@@ -577,6 +587,34 @@ where
     pub(crate) listeners: Listeners,
     pub(crate) parent: Option<TemplateNodeId>,
     value: PhantomData<V>,
+}
+
+impl<Attributes, V, Children, Listeners> TemplateElement<Attributes, V, Children, Listeners>
+where
+    Attributes: AsRef<[TemplateAttribute<V>]>,
+    Children: AsRef<[TemplateNodeId]>,
+    Listeners: AsRef<[usize]>,
+    V: TemplateValue,
+{
+    /// create a new element template
+    pub fn new(
+        tag: &'static str,
+        namespace: Option<&'static str>,
+        attributes: Attributes,
+        children: Children,
+        listeners: Listeners,
+        parent: Option<TemplateNodeId>,
+    ) -> Self {
+        TemplateElement {
+            tag,
+            namespace,
+            attributes,
+            children,
+            listeners,
+            parent,
+            value: PhantomData,
+        }
+    }
 }
 
 /// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".

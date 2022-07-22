@@ -321,29 +321,24 @@ impl<'a> Mutations<'a> {
     pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: impl Into<u64>) {
         let root = root.into();
         let Attribute {
-            name,
-            value,
-            namespace,
-            ..
+            value, attribute, ..
         } = attribute;
 
         self.edits.push(SetAttribute {
-            field: name,
+            field: attribute.name,
             value: value.clone(),
-            ns: *namespace,
+            ns: attribute.namespace,
             root,
         });
     }
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: impl Into<u64>) {
         let root = root.into();
-        let Attribute {
-            name, namespace, ..
-        } = attribute;
+        let Attribute { attribute, .. } = attribute;
 
         self.edits.push(RemoveAttribute {
-            name,
-            ns: *namespace,
+            name: attribute.name,
+            ns: attribute.namespace,
             root,
         });
     }

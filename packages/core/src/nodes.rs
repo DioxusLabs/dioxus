@@ -363,30 +363,37 @@ pub trait DioxusElement {
     }
 }
 
-/// An attribute on a DOM node, such as `id="my-thing"` or
-/// `href="https://example.com"`.
-#[derive(Clone, Debug)]
-pub struct Attribute<'a> {
+/// A discription of the attribute
+#[derive(Clone, Copy, Debug)]
+pub struct AttributeDiscription {
     /// The name of the attribute.
     pub name: &'static str,
-
-    /// The value of the attribute.
-    pub value: AttributeValue<'a>,
-
-    /// An indication if this attribute can be ignored during diffing
-    ///
-    /// Usually only when there are no strings to be formatted (so the value is &'static str)
-    pub is_static: bool,
-
-    /// An indication of we should always try and set the attribute.
-    /// Used in controlled components to ensure changes are propagated.
-    pub is_volatile: bool,
 
     /// The namespace of the attribute.
     ///
     /// Doesn't exist in the html spec.
     /// Used in Dioxus to denote "style" tags and other attribute groups.
     pub namespace: Option<&'static str>,
+
+    /// An indication of we should always try and set the attribute.
+    /// Used in controlled components to ensure changes are propagated.
+    pub volitile: bool,
+}
+
+/// An attribute on a DOM node, such as `id="my-thing"` or
+/// `href="https://example.com"`.
+#[derive(Clone, Debug)]
+pub struct Attribute<'a> {
+    /// The discription of the attribute.
+    pub attribute: AttributeDiscription,
+
+    /// An indication if this attribute can be ignored during diffing
+    ///
+    /// Usually only when there are no strings to be formatted (so the value is &'static str)
+    pub is_static: bool,
+
+    /// The value of the attribute.
+    pub value: AttributeValue<'a>,
 }
 
 /// An event listener.
@@ -633,6 +640,20 @@ impl<'a> NodeFactory<'a> {
         }))
     }
 
+    /// Create a new [`Attribute`] from a attribute discrimination and a value
+    pub fn attr_disciption(
+        &self,
+        discription: AttributeDiscription,
+        val: Arguments,
+    ) -> Attribute<'a> {
+        let (value, is_static) = self.raw_text(val);
+        Attribute {
+            attribute: discription,
+            is_static,
+            value: AttributeValue::Text(value),
+        }
+    }
+
     /// Create a new [`Attribute`]
     pub fn attr(
         &self,
@@ -643,11 +664,13 @@ impl<'a> NodeFactory<'a> {
     ) -> Attribute<'a> {
         let (value, is_static) = self.raw_text(val);
         Attribute {
-            name,
-            value: AttributeValue::Text(value),
+            attribute: AttributeDiscription {
+                name,
+                namespace,
+                volitile: is_volatile,
+            },
             is_static,
-            namespace,
-            is_volatile,
+            value: AttributeValue::Text(value),
         }
     }
 
@@ -661,11 +684,13 @@ impl<'a> NodeFactory<'a> {
         is_static: bool,
     ) -> Attribute<'a> {
         Attribute {
-            name,
-            value,
+            attribute: AttributeDiscription {
+                name,
+                namespace,
+                volitile: is_volatile,
+            },
             is_static,
-            namespace,
-            is_volatile,
+            value,
         }
     }
 

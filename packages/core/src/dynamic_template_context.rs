@@ -18,8 +18,8 @@ where
     pub nodes: Nodes,
     text_inner: PhantomData<TextInner>,
     pub text: TextOuter,
-    attributes_inner: PhantomData<AttributesInner>,
     pub attributes: AttributesOuter,
+    pub volitile_attributes: AttributesInner,
 }
 
 impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
@@ -31,13 +31,18 @@ where
     AttributesOuter: AsRef<[AttributesInner]>,
     AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
 {
-    pub fn new(nodes: Nodes, text: TextOuter, attributes: AttributesOuter) -> Self {
+    pub fn new(
+        nodes: Nodes,
+        text: TextOuter,
+        attributes: AttributesOuter,
+        volitile_attributes: AttributesInner,
+    ) -> Self {
         DynamicNodeMapping {
             nodes,
             text_inner: PhantomData,
             text,
-            attributes_inner: PhantomData,
             attributes,
+            volitile_attributes,
         }
     }
 

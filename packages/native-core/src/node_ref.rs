@@ -39,7 +39,7 @@ impl<'a> NodeView<'a> {
             .map(|el| el.attributes)
             .unwrap_or_default()
             .iter()
-            .filter(|a| self.mask.attritutes.contains_attribute(a.name))
+            .filter(|a| self.mask.attritutes.contains_attribute(a.attribute.name))
     }
 
     pub fn text(&self) -> Option<&str> {

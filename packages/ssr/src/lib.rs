@@ -184,8 +184,8 @@ impl<'a> TextRenderer<'a, '_> {
                 let mut attr_iter = el.attributes.iter().peekable();
 
                 while let Some(attr) = attr_iter.next() {
-                    match attr.namespace {
-                        None => match attr.name {
+                    match attr.attribute.namespace {
+                        None => match attr.attribute.name {
                             "dangerous_inner_html" => {
                                 inner_html = Some(attr.value.as_text().unwrap())
                             }
@@ -216,10 +216,10 @@ impl<'a> TextRenderer<'a, '_> {
                             | "selected"
                             | "truespeed" => {
                                 if attr.value.is_truthy() {
-                                    write!(f, " {}=\"{}\"", attr.name, attr.value)?
+                                    write!(f, " {}=\"{}\"", attr.attribute.name, attr.value)?
                                 }
                             }
-                            _ => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
+                            _ => write!(f, " {}=\"{}\"", attr.attribute.name, attr.value)?,
                         },
 
                         Some(ns) => {
@@ -227,9 +227,11 @@ impl<'a> TextRenderer<'a, '_> {
                             write!(f, " {}=\"", ns)?;
                             let mut cur_ns_el = attr;
                             'ns_parse: loop {
-                                write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
+                                write!(f, "{}:{};", cur_ns_el.attribute.name, cur_ns_el.value)?;
                                 match attr_iter.peek() {
-                                    Some(next_attr) if next_attr.namespace == Some(ns) => {
+                                    Some(next_attr)
+                                        if next_attr.attribute.namespace == Some(ns) =>
+                                    {
                                         cur_ns_el = attr_iter.next().unwrap();
                                     }
                                     _ => break 'ns_parse,

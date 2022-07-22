@@ -10,7 +10,7 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Element {
     pub name: Ident,
     pub key: Option<IfmtInput>,
@@ -190,7 +190,7 @@ impl ToTokens for Element {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
     AttrText { name: Ident, value: IfmtInput },
@@ -231,7 +231,7 @@ impl ElementAttr {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct ElementAttrNamed {
     pub el_name: Ident,
     pub attr: ElementAttr,
@@ -244,12 +244,12 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
                 quote! {
-                    dioxus_elements::#el_name.#name(__cx, #value)
+                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
                 quote! {
-                    dioxus_elements::#el_name.#name(__cx, #value)
+                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
