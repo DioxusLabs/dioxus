@@ -110,7 +110,7 @@ pub(crate) mod unsafe_utils {
 /// # Usage
 ///
 ///
-/// ```
+/// ```ignore
 /// let (data) = use_ref(&cx, || {});
 ///
 /// let handle_thing = move |_| {

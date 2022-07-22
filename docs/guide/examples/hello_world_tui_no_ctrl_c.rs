@@ -3,16 +3,16 @@
 
 use dioxus::events::{KeyCode, KeyboardEvent};
 use dioxus::prelude::*;
-use dioxus::tui::TuiContext;
+use dioxus_tui::TuiContext;
 
 fn main() {
-    dioxus::tui::launch_cfg(
+    dioxus_tui::launch_cfg(
         App,
-        dioxus::tui::Config::new()
+        dioxus_tui::Config::new()
             .without_ctrl_c_quit()
             // Some older terminals only support 16 colors or ANSI colors
             // If your terminal is one of these, change this to BaseColors or ANSI
-            .with_rendering_mode(dioxus::tui::RenderingMode::Rgb),
+            .with_rendering_mode(dioxus_tui::RenderingMode::Rgb),
     );
 }
 

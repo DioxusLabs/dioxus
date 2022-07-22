@@ -7,6 +7,7 @@ pub struct NodeView<'a> {
     inner: &'a VNode<'a>,
     mask: NodeMask,
 }
+
 impl<'a> NodeView<'a> {
     pub fn new(mut vnode: &'a VNode<'a>, view: NodeMask, vdom: &'a VirtualDom) -> Self {
         if let VNode::Component(sc) = vnode {

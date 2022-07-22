@@ -102,7 +102,7 @@ pub fn launch(root_component: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {

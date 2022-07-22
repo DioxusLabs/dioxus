@@ -77,7 +77,7 @@ pub struct LinkProps<'a> {
 /// }
 /// ```
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let svc = cx.use_hook(|_| cx.consume_context::<Arc<RouterCore>>());
+    let svc = cx.use_hook(|| cx.consume_context::<Arc<RouterCore>>());
 
     let LinkProps {
         to,
@@ -120,15 +120,15 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             id: format_args!("{}", id.unwrap_or("")),
             title: format_args!("{}", title.unwrap_or("")),
             prevent_default: "{prevent_default}",
-            target: format_args!("{}", if *new_tab { "_blank" } else { "" }),
+            target: format_args!("{}", if * new_tab { "_blank" } else { "" }),
             onclick: move |_| {
                 if !outerlink {
                     if let Some(service) = svc {
                         service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
                     } else {
                         log::error!(
-                            "Attempted to create a Link to {} outside of a Router context",
-                            cx.props.to,
+                            "Attempted to create a Link to {} outside of a Router context", cx.props
+                            .to,
                         );
                     }
                 }

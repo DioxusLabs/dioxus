@@ -5,7 +5,7 @@
 use dioxus::{events::FormEvent, prelude::*};
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 const FIELDS: &[(&str, &str)] = &[

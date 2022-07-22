@@ -80,7 +80,7 @@ panic_hook = ["console_error_panic_hook"]
 hot-reload = ["dioxus-rsx-interpreter", "web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
 
 [dev-dependencies]
-dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
+dioxus = { path = "../dioxus" }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"

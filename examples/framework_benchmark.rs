@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use rand::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 #[derive(Clone, PartialEq)]

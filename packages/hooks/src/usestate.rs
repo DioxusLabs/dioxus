@@ -34,7 +34,7 @@ pub fn use_state<T: 'static>(
     cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> &UseState<T> {
-    let hook = cx.use_hook(move |_| {
+    let hook = cx.use_hook(move || {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
@@ -140,7 +140,7 @@ impl<T: 'static> UseState<T> {
     /// # Examples
     ///
     /// Basic usage:
-    /// ```rust
+    /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
@@ -236,7 +236,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
@@ -268,7 +268,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// *val.make_mut() += 1;

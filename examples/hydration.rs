@@ -10,13 +10,12 @@
 //! proof-of-concept for the hydration feature, but you'll probably only want to use hydration for the web.
 
 use dioxus::prelude::*;
-use dioxus::ssr;
 
 fn main() {
     let vdom = VirtualDom::new(app);
-    let content = ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
+    let content = dioxus_ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
 
-    dioxus::desktop::launch_cfg(app, |c| c.with_prerendered(content));
+    dioxus_desktop::launch_cfg(app, |c| c.with_prerendered(content));
 }
 
 fn app(cx: Scope) -> Element {

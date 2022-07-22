@@ -39,7 +39,7 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 /// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.

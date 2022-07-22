@@ -46,7 +46,7 @@ use dioxus::prelude::*;
 
 fn main() {
     // Launch Dioxus web app
-    dioxus::web::launch(app);
+    dioxus_web::launch(app);
 }
 
 // Our root component.

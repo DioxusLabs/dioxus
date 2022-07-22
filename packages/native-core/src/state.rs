@@ -83,7 +83,7 @@ pub trait ParentDepState {
 /// Called when the current node's node properties are modified or a sibling's [NodeDepState] is modified.
 /// Called at most once per update.
 /// NodeDepState is the only state that can accept multiple dependancies, but only from the current node.
-/// ```rust
+/// ```rust, ignore
 /// impl<'a, 'b> NodeDepState<(&'a TextWrap, &'b ChildLayout)> for Layout {
 ///     type Ctx = LayoutCache;
 ///     const NODE_MASK: NodeMask =

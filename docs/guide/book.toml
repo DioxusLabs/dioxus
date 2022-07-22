@@ -1,8 +1,16 @@
-[book]
+[book.en]
 title = "Dioxus Documentation"
 description = "Get started with Dioxus, a portable, performant, and ergonomic framework for building cross-platform user interfaces in Rust"
 authors = ["Jonathan Kelley"]
 language = "en"
+
+[language.en]
+name = "English"
+
+[language.pt-br]
+name = "Português Brasileiro"
+title = "Documentação do Dioxus"
+description = "Introdução ao Dioxus, um framework portátil, de alto desempenho e ergonômico para criar interfaces de usuário multiplataforma em Rust."
 
 [rust]
 edition = "2018"

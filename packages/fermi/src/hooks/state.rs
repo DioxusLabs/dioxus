@@ -33,7 +33,7 @@ use std::{
 pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
-    let inner = cx.use_hook(|_| AtomState {
+    let inner = cx.use_hook(|| AtomState {
         value: None,
         root: root.clone(),
         scope_id: cx.scope_id(),
@@ -124,7 +124,7 @@ impl<T: 'static> AtomState<T> {
     /// # Examples
     ///
     /// Basic usage:
-    /// ```rust
+    /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
@@ -219,7 +219,7 @@ impl<T: Clone> AtomState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
@@ -242,7 +242,7 @@ impl<T: Clone> AtomState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// *val.make_mut() += 1;

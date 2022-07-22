@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../rsx-prelude", version = "^0.1.0",  package = "rsx-prelude" }
+dioxus = { path = "../dioxus" }
 futures-channel = "0.3.21"
 url = { version = "2.2.2", default-features = false }
 
@@ -26,7 +26,7 @@ web-sys = { version = "0.3", features = [
     "Url",
     "UrlSearchParams",
     "Window",
-    "Location"
+    "Location",
 ], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -46,14 +46,11 @@ hot-reload = ["dioxus/hot-reload"]
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-web = { path = "../web" }
 log = "0.4.14"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
-dioxus-ssr = { path = "../ssr" }
-
-dioxus-router = { path = ".", default-features = false }
+dioxus-web = { path = "../web" }
 
 [target.wasm32-unknown-unknown.dev-dependencies]
 dioxus-router = { path = ".", features = ["web"] }

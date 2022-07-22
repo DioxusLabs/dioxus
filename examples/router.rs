@@ -1,11 +1,11 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus::router::{Link, Route, Router};
+use dioxus_router::{Link, Route, Router};
 use serde::Deserialize;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -30,7 +30,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment()?;
+    let post = dioxus_router::use_route(&cx).last_segment()?;
 
     cx.render(rsx! {
         div {
@@ -46,9 +46,9 @@ struct Query {
 }
 
 fn User(cx: Scope) -> Element {
-    let post = dioxus::router::use_route(&cx).last_segment()?;
+    let post = dioxus_router::use_route(&cx).last_segment()?;
 
-    let query = dioxus::router::use_route(&cx)
+    let query = dioxus_router::use_route(&cx)
         .query::<Query>()
         .unwrap_or(Query { bold: false });
 
