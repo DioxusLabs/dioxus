@@ -92,8 +92,8 @@ impl<T: 'static> AtomState<T> {
     ///
     /// This is useful for passing the setter function to other components.
     ///
-    /// However, for most cases, calling `to_owned` o`AtomState`te is the
-    /// preferred way to get "anoth`set_state`tate handle.
+    /// However, for most cases, calling `to_owned` on the state is the
+    /// preferred way to get "another" state handle.
     ///
     ///
     /// # Examples
