@@ -1,13 +1,16 @@
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{fs::create_dir_all, path::PathBuf, io::Read};
 
-use anyhow::Ok;
 use mlua::Lua;
 use serde::{Deserialize, Serialize};
 use walkdir::WalkDir;
 
 use crate::tools::app_path;
 
+use self::{log::PluginLogger, interface::PluginInfo};
+
 pub mod log;
+
+mod interface;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginConfig {
@@ -29,11 +32,22 @@ impl PluginManager {
 
         let manager = lua.create_table().ok()?;
 
+        lua.globals().set("plugin_logger", PluginLogger).unwrap();
+
         let plugin_dir = Self::init_plugin_dir();
+        let mut index = 0;
         for entry in WalkDir::new(plugin_dir).into_iter().filter_map(|e| e.ok()) {
             let plugin_dir = entry.path().to_path_buf();
             if plugin_dir.is_dir() {
-                
+                let init_file = plugin_dir.join("init.lua");
+                if init_file.is_file() {
+                    let mut file = std::fs::File::open(init_file).unwrap();
+                    let mut buffer = String::new();
+                    file.read_to_string(&mut buffer).unwrap();
+                    let info = lua.load(&buffer).eval::<mlua::Value>().unwrap();
+                    let _ = manager.set(index, info);
+                }
+                index += 1;
             }
         }
 
