@@ -1,4 +1,4 @@
-use crate::error::Result;
+use crate::{error::Result, plugin::PluginConfig};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 
@@ -34,7 +34,10 @@ impl Default for DioxusConfig {
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
+
                 tools: None,
+                plugins: None,
+                
                 sub_package: None,
             },
             web: WebConfig {
@@ -66,7 +69,10 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
+    
     pub tools: Option<HashMap<String, toml::Value>>,
+    pub plugins: Option<PluginConfig>,
+
     pub sub_package: Option<String>,
 }
 
@@ -218,19 +224,4 @@ impl CrateConfig {
         self
     }
 
-    // pub fn with_build_options(&mut self, options: &BuildOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = options.outdir.clone().into();
-    // }
-
-    // pub fn with_develop_options(&mut self, options: &DevelopOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
-    // }
 }
