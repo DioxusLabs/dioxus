@@ -36,8 +36,7 @@ impl PluginManager {
 
         let plugin_dir = Self::init_plugin_dir();
         let mut index = 0;
-        println!("{plugin_dir:?}");
-        for entry in WalkDir::new(plugin_dir).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(&plugin_dir).into_iter().filter_map(|e| e.ok()) {
             let plugin_dir = entry.path().to_path_buf();
             if plugin_dir.is_dir() {
                 let init_file = plugin_dir.join("init.lua");
@@ -51,6 +50,9 @@ impl PluginManager {
                 index += 1;
             }
         }
+
+        lua.globals()
+            .set("package.path", format!("{}", plugin_dir.display())).unwrap();
 
         lua.globals().set("manager", manager).unwrap();
 
