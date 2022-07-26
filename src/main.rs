@@ -1,10 +1,17 @@
 use clap::Parser;
-use dioxus_cli::*;
+use dioxus_cli::{*, plugin::{PluginManager, PluginConfig}};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
+
+    let plugin_manager = PluginManager::init(&PluginConfig {
+        available: true,
+        required: vec![],
+    }).unwrap();
+
+    plugin_manager.load_all_plugins().unwrap();
 
     match args.action {
         Commands::Translate(opts) => {

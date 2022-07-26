@@ -1,4 +1,4 @@
-local Api = require("interface")
+local Api = require("./interface")
 local log = Api.log;
 
 local manager = {

@@ -1,7 +1,7 @@
 use mlua::{FromLua, Function};
 
 pub struct PluginInfo<'lua> {
-    name: String,
+    pub name: String,
     repository: String,
     author: String,
 
