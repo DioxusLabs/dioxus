@@ -124,7 +124,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
             .unwrap();
     });
     if bindgen_result.is_err() {
-        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.82` Bindgen crate.".to_string()));
+        return Err(Error::BuildFailed("Bindgen build failed! \nThis is probably due to the Bindgen version, dioxus-cli using `0.2.81` Bindgen crate.".to_string()));
     }
 
     // check binaryen:wasm-opt tool

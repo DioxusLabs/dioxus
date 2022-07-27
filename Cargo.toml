@@ -13,7 +13,7 @@ license = "MIT/Apache-2.0"
 # cli core
 clap = { version = "3.0.14", features = ["derive"] }
 thiserror = "1.0.30"
-wasm-bindgen-cli-support = "0.2.82"
+wasm-bindgen-cli-support = "0.2.79"
 colored = "2.0.0"
 
 # features
