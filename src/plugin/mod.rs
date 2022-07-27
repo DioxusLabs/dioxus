@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::tools::{app_path, clone_repo};
 
-use self::{interface::{logger::PluginLogger, command::PluginCommander}, interface::PluginInfo};
+use self::{
+    interface::PluginInfo,
+    interface::{command::PluginCommander, logger::PluginLogger},
+};
 
 pub mod interface;
 
@@ -30,7 +33,9 @@ impl PluginManager {
         let manager = lua.create_table().unwrap();
 
         lua.globals().set("plugin_logger", PluginLogger).unwrap();
-        lua.globals().set("plugin_commander", PluginCommander).unwrap();
+        lua.globals()
+            .set("plugin_commander", PluginCommander)
+            .unwrap();
 
         let plugin_dir = Self::init_plugin_dir();
         let mut index = 1;
@@ -54,6 +59,9 @@ impl PluginManager {
         }
 
         lua.globals().set("manager", manager).unwrap();
+        lua.globals()
+            .set("LIBDIR", plugin_dir.join("library").to_str().unwrap())
+            .unwrap();
 
         Some(Self { lua })
     }
