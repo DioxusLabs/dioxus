@@ -48,7 +48,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     });
 
     // next time we run the rout_found will be filled
-    if svc.route_found.get().is_none() {
+    if svc.route_found.borrow().is_empty() {
         cx.props.onchange.call(svc.clone());
     }
 

@@ -1,3 +1,4 @@
+use dioxus::prelude::*;
 /// A `RouteContext` is a context that is provided by [`Route`](fn.Route.html) components.
 ///
 /// This signals to all child [`Route`] and [`Link`] components that they are
@@ -21,4 +22,7 @@ pub struct RouteContext {
     /// "/level0/level1/:id"
     /// ```
     pub total_route: String,
+
+    /// The `scope_id` is used to identify this route as parent for nested routes.
+    pub(crate) scope_id: ScopeId,
 }

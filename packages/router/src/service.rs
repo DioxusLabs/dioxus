@@ -1,12 +1,13 @@
 // todo: how does router work in multi-window contexts?
 // does each window have its own router? probably, lol
+// maybe every window renders based on the router and we have a single DOM for all of them? :P
 
 use crate::cfg::RouterCfg;
 use dioxus::core::{ScopeId, ScopeState, VirtualDom};
 use std::any::Any;
 use std::sync::Weak;
 use std::{
-    cell::{Cell, RefCell},
+    cell::RefCell,
     collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
@@ -41,13 +42,13 @@ use url::Url;
 /// - On desktop, mobile, and SSR, this is just a Vec of Strings. Currently on
 ///   desktop, there is no way to tap into forward/back for the app unless explicitly set.
 pub struct RouterCore {
-    pub(crate) route_found: Cell<Option<ScopeId>>,
+    pub(crate) route_found: Rc<RefCell<HashMap<ScopeId, ScopeId>>>,
 
     pub(crate) stack: RefCell<Vec<Arc<ParsedRoute>>>,
 
     pub(crate) slots: Rc<RefCell<HashMap<ScopeId, String>>>,
 
-    pub(crate) ordering: Rc<RefCell<Vec<ScopeId>>>,
+    pub(crate) ordering: Rc<RefCell<HashMap<ScopeId, Vec<ScopeId>>>>,
 
     pub(crate) onchange_listeners: Rc<RefCell<HashSet<ScopeId>>>,
 
@@ -90,7 +91,7 @@ impl RouterCore {
             cfg,
             regen_any_route: cx.schedule_update_any(),
             router_id: cx.scope_id(),
-            route_found: Cell::new(None),
+            route_found: Default::default(),
             stack: RefCell::new(vec![route]),
             ordering: Default::default(),
             slots: Default::default(),
@@ -162,7 +163,7 @@ impl RouterCore {
     ///
     /// You probably don't need this method
     pub fn regen_routes(&self) {
-        self.route_found.set(None);
+        self.route_found.borrow_mut().clear();
 
         (self.regen_any_route)(self.router_id);
 
@@ -170,14 +171,24 @@ impl RouterCore {
             (self.regen_any_route)(*listener);
         }
 
-        for route in self.ordering.borrow().iter().rev() {
-            (self.regen_any_route)(*route);
+        // we don't really care for order when sending to renderer
+        // so we could use self.slots.keys() instead?
+        for parent in self.ordering.borrow().iter() {
+            for route in parent.1.iter() {
+                (self.regen_any_route)(*route);
+            }
         }
     }
 
     /// Get the current location of the Router
     pub fn current_location(&self) -> Arc<ParsedRoute> {
-        self.stack.borrow().last().unwrap().clone()
+        let resp = self.stack.borrow().last().unwrap().clone();
+        return resp;
+    }
+
+    /// Get the current route of the Router
+    pub fn current_route(&self) -> String {
+        self.current_location().url.path().to_string()
     }
 
     /// Get the current native location of the Router
@@ -199,32 +210,98 @@ impl RouterCore {
         self.onchange_listeners.borrow_mut().remove(&id);
     }
 
-    pub(crate) fn register_total_route(&self, route: String, scope: ScopeId) {
+    pub(crate) fn register_total_route(
+        &self,
+        route: String,
+        parent: Option<ScopeId>,
+        scope: ScopeId,
+    ) {
         let clean = clean_route(route);
-        self.slots.borrow_mut().insert(scope, clean);
-        self.ordering.borrow_mut().push(scope);
+
+        // block in place to release borrows
+        {
+            let parent_id = parent.unwrap_or_else(|| self.router_id);
+            let mut ordering_parent = self.ordering.borrow_mut();
+            let mut slots = self.slots.borrow_mut();
+            let ordering = ordering_parent.entry(parent_id).or_insert(Vec::new());
+            // Here we are only checking for route sibligns, so nesting should be efficient.
+            let index = ordering.iter().position(|&r| {
+                if let Some(item) = slots.get(&r) {
+                    item.len() <= clean.len()
+                } else {
+                    false
+                }
+            });
+            if let Some(found_index) = index {
+                ordering.insert(found_index, scope);
+            } else {
+                ordering.push(scope);
+            }
+            slots.insert(scope, clean.clone());
+        }
+
+        // if the route we are adding would be a candidate to be rendered we need to reevaluate
+        if route_matches_path(
+            &self.current_location().url,
+            clean.as_str(),
+            self.cfg.base_url.as_ref(),
+        ) || clean.is_empty()
+        {
+            self.regen_routes();
+        }
     }
 
-    pub(crate) fn should_render(&self, scope: ScopeId) -> bool {
-        if let Some(root_id) = self.route_found.get() {
-            return root_id == scope;
+    pub(crate) fn unregister_total_route(&self, scope_id: ScopeId, parent: Option<ScopeId>) {
+        let parent_id = parent.unwrap_or_else(|| self.router_id);
+
+        // block in place to release borrows
+        {
+            let mut ordering = self.ordering.borrow_mut();
+            // we remove route from parent
+            ordering.entry(parent_id).and_modify(|items| {
+                items.retain(|&r| r != scope_id);
+            });
+            // and we remove route AS parent
+            ordering.remove(&scope_id);
+            self.slots.borrow_mut().remove(&scope_id);
+        }
+
+        // If the route we are removing is currently rendered we need to reevaluate
+        let current_route = self.route_found.borrow().get(&parent_id).cloned();
+        if let Some(root_id) = current_route {
+            if root_id == scope_id {
+                self.regen_routes();
+            }
+        }
+    }
+
+    pub(crate) fn should_render(&self, scope: ScopeId, parent: Option<ScopeId>) -> bool {
+        // rendering is done one level at a time. When a route is active for a particular level,
+        // every child route will be checked after render. That's the reason to have the
+        // `route_found` momoized considering the route parent.
+        let parent_id = parent.unwrap_or_else(|| self.router_id);
+        if let Some(root_id) = self.route_found.borrow().get(&parent_id) {
+            return root_id == &scope;
         }
 
         let roots = self.slots.borrow();
+        // When checking if a route needs to be rendered, we actually check every route inside parent
+        // to see which one would be the best candidate. When found, we store the value so that
+        // every sibling route will avoid this check.
+        for ordered_scope in self.ordering.borrow().get(&parent_id).unwrap() {
+            if let Some(route) = roots.get(ordered_scope) {
+                let cur = &self.current_location().url;
+                log::trace!("Checking if {} matches {}", cur, route);
 
-        if let Some(route) = roots.get(&scope) {
-            let cur = &self.current_location().url;
-            log::trace!("Checking if {} matches {}", cur, route);
-
-            if route_matches_path(cur, route, self.cfg.base_url.as_ref()) || route.is_empty() {
-                self.route_found.set(Some(scope));
-                true
-            } else {
-                false
+                if route_matches_path(cur, route, self.cfg.base_url.as_ref()) || route.is_empty() {
+                    self.route_found
+                        .borrow_mut()
+                        .insert(parent_id, *ordered_scope);
+                    return ordered_scope == &scope;
+                }
             }
-        } else {
-            false
         }
+        return false;
     }
 }
 
@@ -271,6 +348,11 @@ fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bo
         None => cur_piece_iter.collect::<Vec<_>>(),
     };
 
+    // allows for empty paths (404)
+    if cur_pieces.len() == 0 {
+        return false;
+    }
+
     if attempt == "/" && cur_pieces.len() == 1 && cur_pieces[0].is_empty() {
         return true;
     }
@@ -282,14 +364,21 @@ fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bo
 
     let attempt_pieces = clean_path(attempt).split('/').collect::<Vec<_>>();
 
-    if attempt_pieces.len() != cur_pieces.len() {
-        return false;
-    }
-
     for (i, r) in attempt_pieces.iter().enumerate() {
+        // Stop matching if the route does not have enough segments
+        if i >= cur_pieces.len() {
+            return false;
+        }
         // If this is a parameter then it matches as long as there's
         // _any_thing in that spot in the path.
         if r.starts_with(':') {
+            // If the parameter to match is empty we skip the match
+            // Ideas:
+            //   - we could have r.ends_with('?') to allow for optional param?
+            //   - we could do some regexp thing to match like /:id(\d+) maybe?
+            if cur_pieces[i].is_empty() {
+                return false;
+            }
             continue;
         }
 
@@ -297,6 +386,10 @@ fn route_matches_path(cur: &Url, attempt: &str, base_url: Option<&String>) -> bo
             return false;
         }
     }
+
+    // NOTE: We can still have pieces left unchecked, but we can't avoid it in every case,
+    // as it would break nested routes (/blog -> /:id needs to render for /blog and then check children)
+    // Maybe we could add an exact param on routes to enforce that no more pieces are left?
 
     true
 }

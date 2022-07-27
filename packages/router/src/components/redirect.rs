@@ -36,14 +36,14 @@ pub fn Redirect<'a>(cx: Scope<'a, RedirectProps<'a>>) -> Element {
 
     let immediate_redirect = cx.use_hook(|| {
         if let Some(from) = cx.props.from {
-            router.register_total_route(from.to_string(), cx.scope_id());
+            router.register_total_route(from.to_string(), None, cx.scope_id());
             false
         } else {
             true
         }
     });
 
-    if *immediate_redirect || router.should_render(cx.scope_id()) {
+    if *immediate_redirect || router.should_render(cx.scope_id(), None) {
         router.replace_route(cx.props.to, None, None);
     }
 
