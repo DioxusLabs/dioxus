@@ -2,6 +2,7 @@ use mlua::{FromLua, Function, ToLua};
 
 pub mod logger;
 pub mod command;
+pub mod fs;
 
 #[derive(Debug)]
 pub struct PluginInfo<'lua> {
@@ -38,16 +39,16 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
                 res.author = v;
             }
 
-            if let Ok(v) = tab.get::<_, Function>("onInit") {
+            if let Ok(v) = tab.get::<_, Function>("on_init") {
                 res.on_init = Some(v);
             }
-            if let Ok(v) = tab.get::<_, Function>("onLoad") {
+            if let Ok(v) = tab.get::<_, Function>("on_load") {
                 res.on_load = Some(v);
             }
-            if let Ok(v) = tab.get::<_, Function>("onBuildStart") {
+            if let Ok(v) = tab.get::<_, Function>("on_build_start") {
                 res.on_build_start = Some(v);
             }
-            if let Ok(v) = tab.get::<_, Function>("onBuildFinish") {
+            if let Ok(v) = tab.get::<_, Function>("on_build_finish") {
                 res.on_build_finish = Some(v);
             }
 
@@ -67,16 +68,16 @@ impl<'lua> ToLua<'lua> for PluginInfo<'lua> {
         res.set("author", self.author.to_string())?;
 
         if let Some(e) = self.on_init {
-            res.set("onInit", e)?;
+            res.set("on_init", e)?;
         }
         if let Some(e) = self.on_load {
-            res.set("onLoad", e)?;
+            res.set("on_load", e)?;
         }
         if let Some(e) = self.on_build_start {
-            res.set("onBuildStart", e)?;
+            res.set("on_build_start", e)?;
         }
         if let Some(e) = self.on_build_finish {
-            res.set("onBuildFinish", e)?;
+            res.set("on_build_finish", e)?;
         }
 
         Ok(mlua::Value::Table(res))
