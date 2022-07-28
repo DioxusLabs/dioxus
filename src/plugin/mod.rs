@@ -7,7 +7,7 @@ use crate::tools::{app_path, clone_repo};
 
 use self::{
     interface::PluginInfo,
-    interface::{command::PluginCommander, logger::PluginLogger, fs::PluginFileSystem},
+    interface::{command::PluginCommander, logger::PluginLogger, fs::PluginFileSystem, download::PluginDownloader},
 };
 
 pub mod interface;
@@ -36,7 +36,8 @@ impl PluginManager {
         lua.globals()
             .set("PLUGIN_COMMAND", PluginCommander)
             .unwrap();
-        lua.globals().set("PLUGINFS", PluginFileSystem).unwrap();
+        lua.globals().set("PLUGIN_FS", PluginFileSystem).unwrap();
+        lua.globals().set("PLUGIN_DOWNLOAD", PluginDownloader).unwrap();
 
         let plugin_dir = Self::init_plugin_dir();
         let mut index = 1;
@@ -73,7 +74,7 @@ impl PluginManager {
         for i in 1..(manager.len()? as i32 + 1) {
             let v = manager.get::<i32, PluginInfo>(i)?;
             println!("{v:?}");
-            let code = format!("manager[{i}].onLoad()");
+            let code = format!("manager[{i}].on_load()");
             lua.load(&code).exec()?;
         }
         Ok(())

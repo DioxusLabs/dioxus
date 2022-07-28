@@ -3,6 +3,7 @@ use mlua::{FromLua, Function, ToLua};
 pub mod logger;
 pub mod command;
 pub mod fs;
+pub mod download;
 
 #[derive(Debug)]
 pub struct PluginInfo<'lua> {
