@@ -75,11 +75,29 @@ pub struct CodeLocation {
     pub column: u32,
 }
 
+/// get the code location of the code that called this function
+#[macro_export]
+macro_rules! get_line_num {
+    () => {{
+        let line = line!();
+        let column = column!();
+        let file_path = file!().to_string();
+        let crate_path = env!("CARGO_MANIFEST_DIR").to_string();
+
+        CodeLocation {
+            crate_path,
+            file_path,
+            line: line,
+            column: column,
+        }
+    }};
+}
+
 /// An Template's unique identifier within the vdom.
 ///
 /// `TemplateId` is a refrence to the location in the code the template was created.
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TemplateId(pub &'static CodeLocation);
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct TemplateId(pub CodeLocation);
 
 /// An Template's unique identifier within the renderer.
 ///
@@ -159,7 +177,7 @@ impl<'a> VTemplateRef<'a> {
                         for attr in attributes.as_ref() {
                             if let TemplateAttributeValue::Dynamic(idx) = attr.value {
                                 let attribute = Attribute {
-                                    attribute: attr.attritbute,
+                                    attribute: attr.attribute,
                                     value: template_ref
                                         .dynamic_context
                                         .resolve_attribute(idx)
@@ -223,14 +241,19 @@ impl<'a> VTemplateRef<'a> {
     }
 }
 
-#[derive(Debug)]
+/// A template used to skip diffing on some static parts of the rsx
+#[derive(Debug, Clone)]
 pub enum Template {
+    /// A template that is createded at compile time
     Static {
+        /// The nodes in the template
         nodes: StaticTemplateNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: StaticDynamicNodeMapping,
     },
+    /// A template that is created at runtime
     Owned {
+        /// The nodes in the template
         nodes: OwnedTemplateNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: OwnedDynamicNodeMapping,
@@ -285,7 +308,7 @@ impl Template {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
                             let val: AttributeValue<'b> = val.allocate(bump);
                             let attribute = Attribute {
-                                attribute: attr.attritbute,
+                                attribute: attr.attribute,
                                 is_static: true,
                                 value: val,
                             };
@@ -369,18 +392,18 @@ impl Template {
         }
     }
 
-    pub(crate) fn volitile_attributes<'a>(
+    pub(crate) fn volatile_attributes<'a>(
         &'a self,
     ) -> Box<dyn Iterator<Item = (TemplateNodeId, usize)> + 'a> {
         match self {
             Template::Static {
                 dynamic_mapping: dynamic_ids,
                 ..
-            } => Box::new(dynamic_ids.volitile_attributes.iter().copied()),
+            } => Box::new(dynamic_ids.volatile_attributes.as_ref().iter().copied()),
             Template::Owned {
                 dynamic_mapping: dynamic_ids,
                 ..
-            } => Box::new(dynamic_ids.volitile_attributes.iter().copied()),
+            } => Box::new(dynamic_ids.volatile_attributes.iter().copied()),
         }
     }
 
@@ -437,8 +460,8 @@ pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
 /// A stack allocated Template node
 pub type StaticTemplateNode = TemplateNode<
-    &'static [TemplateAttribute<AttributeValue<'static>>],
-    AttributeValue<'static>,
+    &'static [TemplateAttribute<StaticTemplateValue>],
+    StaticTemplateValue,
     &'static [TemplateNodeId],
     &'static [TemplateNodeId],
     &'static [usize],
@@ -460,7 +483,7 @@ pub type OwnedTemplateNode = TemplateNode<
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -473,21 +496,22 @@ where
 {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
+    /// The type of the [`TemplateNode`].
     pub node_type:
         TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>,
 }
 
 /// A template for an attribute
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TemplateAttribute<V: TemplateValue> {
     /// The discription of the attribute
-    pub attritbute: AttributeDiscription,
+    pub attribute: AttributeDiscription,
     /// The value of the attribute
     pub value: TemplateAttributeValue<V>,
 }
 
 /// A template attribute value that is either dynamic or static
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TemplateAttributeValue<V: TemplateValue> {
     /// A static attribute
     Static(V),
@@ -499,25 +523,30 @@ pub trait TemplateValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b>;
 }
 
-impl TemplateValue for AttributeValue<'static> {
+impl TemplateValue for StaticTemplateValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b> {
         match self.clone() {
-            AttributeValue::Text(txt) => AttributeValue::Text(bump.alloc_str(txt)),
-            AttributeValue::Bytes(bytes) => AttributeValue::Bytes(bump.alloc_slice_copy(bytes)),
-            AttributeValue::Float32(f) => AttributeValue::Float32(f),
-            AttributeValue::Float64(f) => AttributeValue::Float64(f),
-            AttributeValue::Int32(i) => AttributeValue::Int32(i),
-            AttributeValue::Int64(i) => AttributeValue::Int64(i),
-            AttributeValue::Uint32(u) => AttributeValue::Uint32(u),
-            AttributeValue::Uint64(u) => AttributeValue::Uint64(u),
-            AttributeValue::Bool(b) => AttributeValue::Bool(b),
-            AttributeValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
-            AttributeValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
-            AttributeValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
-            AttributeValue::Vec4Float(f1, f2, f3, f4) => AttributeValue::Vec4Float(f1, f2, f3, f4),
-            AttributeValue::Vec4Int(i1, i2, i3, i4) => AttributeValue::Vec4Int(i1, i2, i3, i4),
-            AttributeValue::Vec4Uint(u1, u2, u3, u4) => AttributeValue::Vec4Uint(u1, u2, u3, u4),
-            AttributeValue::Any(_) => panic!("Any not supported"),
+            StaticTemplateValue::Text(txt) => AttributeValue::Text(bump.alloc_str(&txt)),
+            StaticTemplateValue::Bytes(bytes) => {
+                AttributeValue::Bytes(bump.alloc_slice_copy(&bytes))
+            }
+            StaticTemplateValue::Float32(f) => AttributeValue::Float32(f),
+            StaticTemplateValue::Float64(f) => AttributeValue::Float64(f),
+            StaticTemplateValue::Int32(i) => AttributeValue::Int32(i),
+            StaticTemplateValue::Int64(i) => AttributeValue::Int64(i),
+            StaticTemplateValue::Uint32(u) => AttributeValue::Uint32(u),
+            StaticTemplateValue::Uint64(u) => AttributeValue::Uint64(u),
+            StaticTemplateValue::Bool(b) => AttributeValue::Bool(b),
+            StaticTemplateValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
+            StaticTemplateValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
+            StaticTemplateValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
+            StaticTemplateValue::Vec4Float(f1, f2, f3, f4) => {
+                AttributeValue::Vec4Float(f1, f2, f3, f4)
+            }
+            StaticTemplateValue::Vec4Int(i1, i2, i3, i4) => AttributeValue::Vec4Int(i1, i2, i3, i4),
+            StaticTemplateValue::Vec4Uint(u1, u2, u3, u4) => {
+                AttributeValue::Vec4Uint(u1, u2, u3, u4)
+            }
         }
     }
 }
@@ -549,7 +578,7 @@ impl TemplateValue for OwnedTemplateValue {
 }
 
 /// The kind of node the template is.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>
 where
     Fragment: AsRef<[TemplateNodeId]>,
@@ -572,7 +601,7 @@ where
 }
 
 /// A element template
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TemplateElement<Attributes, V, Children, Listeners>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -580,12 +609,18 @@ where
     Listeners: AsRef<[usize]>,
     V: TemplateValue,
 {
-    pub(crate) tag: &'static str,
-    pub(crate) namespace: Option<&'static str>,
-    pub(crate) attributes: Attributes,
-    pub(crate) children: Children,
-    pub(crate) listeners: Listeners,
-    pub(crate) parent: Option<TemplateNodeId>,
+    /// The tag name of the element
+    pub tag: &'static str,
+    /// The namespace of the element
+    pub namespace: Option<&'static str>,
+    /// The attributes that modify the element
+    pub attributes: Attributes,
+    /// The ids of the children of the element
+    pub children: Children,
+    /// The ids of the listeners of the element
+    pub listeners: Listeners,
+    /// The parent of the element
+    pub parent: Option<TemplateNodeId>,
     value: PhantomData<V>,
 }
 
@@ -597,7 +632,7 @@ where
     V: TemplateValue,
 {
     /// create a new element template
-    pub fn new(
+    pub const fn new(
         tag: &'static str,
         namespace: Option<&'static str>,
         attributes: Attributes,
@@ -618,7 +653,7 @@ where
 }
 
 /// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct TextTemplate<Segments, Text>
 where
     Segments: AsRef<[TextTemplateSegment<Text>]>,
@@ -644,7 +679,7 @@ where
 }
 
 /// A segment of a text template that may be dynamic or static.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TextTemplateSegment<Text>
 where
     Text: AsRef<str>,
@@ -708,6 +743,57 @@ impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
     }
 }
 
+/// A template value that is created at compile time that is sync.
+#[derive(Debug, Clone)]
+#[allow(missing_docs)]
+pub enum StaticTemplateValue {
+    Text(String),
+    Float32(f32),
+    Float64(f64),
+    Int32(i32),
+    Int64(i64),
+    Uint32(u32),
+    Uint64(u64),
+    Bool(bool),
+
+    Vec3Float(f32, f32, f32),
+    Vec3Int(i32, i32, i32),
+    Vec3Uint(u32, u32, u32),
+
+    Vec4Float(f32, f32, f32, f32),
+    Vec4Int(i32, i32, i32, i32),
+    Vec4Uint(u32, u32, u32, u32),
+
+    Bytes(Vec<u8>),
+}
+
+impl<'a> From<AttributeValue<'a>> for StaticTemplateValue {
+    fn from(attr: AttributeValue<'a>) -> Self {
+        match attr {
+            AttributeValue::Text(t) => StaticTemplateValue::Text(t.to_owned()),
+            AttributeValue::Float32(f) => StaticTemplateValue::Float32(f),
+            AttributeValue::Float64(f) => StaticTemplateValue::Float64(f),
+            AttributeValue::Int32(i) => StaticTemplateValue::Int32(i),
+            AttributeValue::Int64(i) => StaticTemplateValue::Int64(i),
+            AttributeValue::Uint32(u) => StaticTemplateValue::Uint32(u),
+            AttributeValue::Uint64(u) => StaticTemplateValue::Uint64(u),
+            AttributeValue::Bool(b) => StaticTemplateValue::Bool(b),
+            AttributeValue::Vec3Float(f1, f2, f3) => StaticTemplateValue::Vec3Float(f1, f2, f3),
+            AttributeValue::Vec3Int(f1, f2, f3) => StaticTemplateValue::Vec3Int(f1, f2, f3),
+            AttributeValue::Vec3Uint(f1, f2, f3) => StaticTemplateValue::Vec3Uint(f1, f2, f3),
+            AttributeValue::Vec4Float(f1, f2, f3, f4) => {
+                StaticTemplateValue::Vec4Float(f1, f2, f3, f4)
+            }
+            AttributeValue::Vec4Int(f1, f2, f3, f4) => StaticTemplateValue::Vec4Int(f1, f2, f3, f4),
+            AttributeValue::Vec4Uint(f1, f2, f3, f4) => {
+                StaticTemplateValue::Vec4Uint(f1, f2, f3, f4)
+            }
+            AttributeValue::Bytes(b) => StaticTemplateValue::Bytes(b.to_owned()),
+            AttributeValue::Any(_) => todo!(),
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct TemplateResolver {
     // maps a id to the rendererid and if that template needs to be re-created
@@ -718,29 +804,29 @@ pub(crate) struct TemplateResolver {
 
 impl TemplateResolver {
     pub fn insert(&mut self, id: TemplateId, template: Template) {
-        if self.templates.insert(id, template).is_some() {
-            if let Some((_, dirty)) = self.template_id_mapping.get_mut(&id) {
+        if let Some((_, dirty)) = self.template_id_mapping.get_mut(&id) {
+            if self.templates.insert(id, template).is_some() {
                 *dirty = true;
             }
         }
     }
 
-    pub fn get(&self, id: TemplateId) -> Option<&Template> {
-        self.templates.get(&id)
+    pub fn get(&self, id: &TemplateId) -> Option<&Template> {
+        self.templates.get(id)
     }
 
     // returns (id, if the id was created)
     pub fn get_or_create_client_id(
         &mut self,
-        template_id: TemplateId,
+        template_id: &TemplateId,
     ) -> (RendererTemplateId, bool) {
-        if let Some(id) = self.template_id_mapping.get(&template_id) {
+        if let Some(id) = self.template_id_mapping.get(template_id) {
             *id
         } else {
             let id = self.template_count;
             let renderer_id = RendererTemplateId(id);
             self.template_id_mapping
-                .insert(template_id, (renderer_id, false));
+                .insert(template_id.clone(), (renderer_id, false));
             self.template_count += 1;
             (renderer_id, true)
         }

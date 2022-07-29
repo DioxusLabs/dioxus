@@ -78,6 +78,7 @@ impl ToTokens for CallBody {
             let template = TemplateBuilder::from_root(inner.clone());
             quote! { #template }
         } else {
+            // todo use fragments
             let children = &self.roots;
             let templates = children
                 .iter()

@@ -69,24 +69,6 @@ fn interpert_rsx<'a>(
     )
 }
 
-/// get the code location of the code that called this function
-#[macro_export]
-macro_rules! get_line_num {
-    () => {{
-        let line = line!();
-        let column = column!();
-        let file_path = file!().to_string();
-        let crate_path = env!("CARGO_MANIFEST_DIR").to_string();
-
-        CodeLocation {
-            crate_path,
-            file_path,
-            line: line,
-            column: column,
-        }
-    }};
-}
-
 /// A handle to the rsx context with interior mutability
 #[derive(Debug)]
 pub struct RsxContext {

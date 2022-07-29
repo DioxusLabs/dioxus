@@ -12,7 +12,7 @@ macro_rules! no_namespace_trait_methods {
             const $name: AttributeDiscription = AttributeDiscription{
                 name: stringify!($name),
                 namespace: None,
-                volitile: false
+                volatile: false
             };
         )*
     };
@@ -29,7 +29,7 @@ macro_rules! style_trait_methods {
             const $name: AttributeDiscription = AttributeDiscription{
                 name: stringify!($lit),
                 namespace: Some("style"),
-                volitile: false
+                volatile: false
             };
         )*
     };
@@ -46,7 +46,7 @@ macro_rules! aria_trait_methods {
             const $name: AttributeDiscription = AttributeDiscription{
                 name: stringify!($lit),
                 namespace: None,
-                volitile: false
+                volatile: false
             };
         )*
     };
@@ -61,7 +61,7 @@ pub trait GlobalAttributes {
     const prevent_default: AttributeDiscription = AttributeDiscription {
         name: "dioxus-prevent-default",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 
     no_namespace_trait_methods! {
@@ -596,7 +596,7 @@ pub trait SvgAttributes {
     const prevent_default: AttributeDiscription = AttributeDiscription {
         name: "dioxus-prevent-default",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
     aria_trait_methods! {
         accent_height: "accent-height",

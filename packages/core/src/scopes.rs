@@ -348,7 +348,7 @@ impl ScopeArena {
                         let template = unsafe { &**template };
                         if let VNode::TemplateRef(template_ref) = template {
                             let resolver = self.template_resolver.borrow();
-                            let template = resolver.get(template_ref.template_id).unwrap();
+                            let template = resolver.get(&template_ref.template_id).unwrap();
                             cur_el = template.with_node(
                                 template_id,
                                 bubble_template,

@@ -72,19 +72,23 @@ pub use crate::innerlude::{
     IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedDynamicNodeMapping,
     OwnedTemplateNode, OwnedTemplateNodes, OwnedTemplateValue, Properties, SchedulerMsg, Scope,
     ScopeId, ScopeState, StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId,
-    TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType,
-    TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
-    VPlaceholder, VText, VirtualDom,
+    Template, TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId,
+    TemplateNodeType, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
+    VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
 ///
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
+    pub use crate::get_line_num;
     pub use crate::innerlude::{
-        fc_to_builder, AttributeDiscription, Attributes, CodeLocation, Component, DioxusElement,
-        Element, EventHandler, Fragment, LazyNodes, NodeFactory, Properties, Scope, ScopeId,
-        ScopeState, VNode, VirtualDom,
+        fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
+        DioxusElement, Element, EventHandler, Fragment, LazyNodes, LazyStaticVec, NodeFactory,
+        Properties, Scope, ScopeId, ScopeState, StaticDynamicNodeMapping, StaticTemplateNodes,
+        StaticTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateContext,
+        TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType, TextTemplate,
+        TextTemplateSegment, VNode, VirtualDom,
     };
 }
 
@@ -93,6 +97,7 @@ pub mod exports {
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
     pub use futures_channel;
+    pub use once_cell;
 }
 
 /// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite

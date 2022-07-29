@@ -1,6 +1,5 @@
 use crate::{GlobalAttributes, SvgAttributes};
 use dioxus_core::*;
-use std::fmt::Arguments;
 
 macro_rules! builder_constructors {
     (
@@ -32,7 +31,7 @@ macro_rules! builder_constructors {
                     pub const $fil: AttributeDiscription = AttributeDiscription{
                         name: stringify!($fil),
                         namespace: None,
-                        volitile: false
+                        volatile: false
                     };
                 )*
             }
@@ -1063,14 +1062,14 @@ impl input {
     pub const r#type: AttributeDiscription = AttributeDiscription {
         name: "type",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 
     #[allow(non_upper_case_globals)]
     pub const value: AttributeDiscription = AttributeDiscription {
         name: "value",
         namespace: None,
-        volitile: true,
+        volatile: true,
     };
 }
 
@@ -1085,14 +1084,14 @@ impl script {
     pub const r#type: AttributeDiscription = AttributeDiscription {
         name: "type",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 
     #[allow(non_upper_case_globals)]
     pub const r#script: AttributeDiscription = AttributeDiscription {
         name: "script",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 }
 
@@ -1101,7 +1100,7 @@ impl button {
     pub const r#type: AttributeDiscription = AttributeDiscription {
         name: "type",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 }
 
@@ -1110,7 +1109,7 @@ impl select {
     pub const value: AttributeDiscription = AttributeDiscription {
         name: "value",
         namespace: None,
-        volitile: true,
+        volatile: true,
     };
 }
 
@@ -1119,7 +1118,7 @@ impl option {
     pub const selected: AttributeDiscription = AttributeDiscription {
         name: "selected",
         namespace: None,
-        volitile: true,
+        volatile: true,
     };
 }
 
@@ -1128,7 +1127,7 @@ impl textarea {
     pub const value: AttributeDiscription = AttributeDiscription {
         name: "value",
         namespace: None,
-        volitile: true,
+        volatile: true,
     };
 }
 impl label {
@@ -1136,7 +1135,7 @@ impl label {
     pub const r#for: AttributeDiscription = AttributeDiscription {
         name: "for",
         namespace: None,
-        volitile: false,
+        volatile: false,
     };
 }
 
