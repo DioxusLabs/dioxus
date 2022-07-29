@@ -1,7 +1,7 @@
 use dioxus_core::{
     OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
 };
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::TokenStream;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Expr, Ident};
 
@@ -35,7 +35,7 @@ impl ToTokens for TemplateElementBuilder {
             }
             None => quote! {None},
         };
-        let tag_ident = Ident::new(&tag, Span::call_site());
+        let tag_ident = syn::parse_str::<Ident>(&tag).expect(&tag);
         tokens.append_all(quote! {
             TemplateElement::new(
                 dioxus_elements::#tag_ident::TAG_NAME,
@@ -97,8 +97,8 @@ impl ToTokens for TemplateAttributeBuilder {
             }
             TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
-        let name = Ident::new(&name, Span::call_site());
-        let tag = Ident::new(&element_tag, Span::call_site());
+        let name = syn::parse_str::<Ident>(&name).expect(&name);
+        let tag = syn::parse_str::<Ident>(&element_tag).expect(&element_tag);
         tokens.append_all(quote! {
             TemplateAttribute{
                 attribute: dioxus_elements::#tag::#name,
@@ -375,32 +375,34 @@ impl ToTokens for TemplateBuilder {
         });
 
         tokens.append_all(quote! {
-            const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
-            const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
-            const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
-            const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
-            static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
-                // check each property to see if it is volatile
-                let mut volatile = Vec::new();
-                for n in __NODES {
-                    if let TemplateNodeType::Element(el) = &n.node_type {
-                        for (i, attr) in el.attributes.iter().enumerate() {
-                            if attr.attribute.volatile {
-                                volatile.push((n.id, i));
+            {
+                const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
+                const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
+                const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
+                const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
+                static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
+                    // check each property to see if it is volatile
+                    let mut volatile = Vec::new();
+                    for n in __NODES {
+                        if let TemplateNodeType::Element(el) = &n.node_type {
+                            for (i, attr) in el.attributes.iter().enumerate() {
+                                if attr.attribute.volatile {
+                                    volatile.push((n.id, i));
+                                }
                             }
                         }
                     }
-                }
-                volatile
-            });
-            static __VOLITALE_MAPPING: &'static dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = &__VOLITALE_MAPPING_INNER;
-            static __STATIC_VOLITALE_MAPPING: dioxus::prelude::LazyStaticVec<(dioxus::prelude::TemplateNodeId, usize)> = LazyStaticVec(__VOLITALE_MAPPING);
-            static __TEMPLATE: dioxus::prelude::Template = Template::Static {
-                nodes: __NODES,
-                dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
-            };
-            
-            __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
+                    volatile
+                });
+                static __VOLITALE_MAPPING: &'static dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = &__VOLITALE_MAPPING_INNER;
+                static __STATIC_VOLITALE_MAPPING: dioxus::prelude::LazyStaticVec<(dioxus::prelude::TemplateNodeId, usize)> = LazyStaticVec(__VOLITALE_MAPPING);
+                static __TEMPLATE: dioxus::prelude::Template = Template::Static {
+                    nodes: __NODES,
+                    dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
+                };
+                
+                __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
+            }
         })
     }
 }
@@ -455,7 +457,7 @@ impl ToTokens for DynamicTemplateContextBuilder {
         let listeners_names = self
             .listeners
             .iter()
-            .map(|(n, _)| Ident::new(n, Span::call_site()));
+            .map(|(n, _)| syn::parse_str::<Ident>(n).expect(n));
         let listeners_exprs = self.listeners.iter().map(|(_, e)| e);
         tokens.append_all(quote! {
             TemplateContext {

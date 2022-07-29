@@ -670,7 +670,7 @@ where
     Text: AsRef<str>,
 {
     /// create a new template from the segments it is composed of.
-    pub fn new(segments: Segments) -> Self {
+    pub const fn new(segments: Segments) -> Self {
         TextTemplate {
             segments,
             text: PhantomData,
