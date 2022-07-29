@@ -1,7 +1,7 @@
 use dioxus_core::{
     OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
 };
-use proc_macro2::{TokenStream, Span};
+use proc_macro2::{Span, TokenStream};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Expr, Ident};
 
@@ -57,7 +57,11 @@ struct TemplateAttributeBuilder {
 
 impl ToTokens for TemplateAttributeBuilder {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Self { element_tag, name, value } = self;
+        let Self {
+            element_tag,
+            name,
+            value,
+        } = self;
         let value = match value {
             TemplateAttributeValue::Static(val) => {
                 let val = match val {
@@ -245,22 +249,26 @@ impl TemplateBuilder {
                         }
                     }
                 }
-                let children: Vec<_> = el
-                    .children
-                    .into_iter()
-                    .map(|child| self.build_node(child, Some(id)))
-                    .collect();
-
                 self.nodes.push(TemplateNodeBuilder {
                     id,
                     node_type: TemplateNodeTypeBuilder::Element(TemplateElementBuilder {
                         tag: el.name.to_string(),
                         attributes,
-                        children,
+                        children: Vec::new(),
                         listeners,
                         parent,
                     }),
-                })
+                });
+
+                let children = el
+                    .children
+                    .into_iter()
+                    .map(|child| self.build_node(child, Some(id)))
+                    .collect();
+                let parent = &mut self.nodes[id.0];
+                if let TemplateNodeTypeBuilder::Element(element) = &mut parent.node_type {
+                    element.children = children;
+                }
             }
 
             BodyNode::Component(comp) => {
@@ -443,7 +451,10 @@ impl ToTokens for DynamicTemplateContextBuilder {
         let nodes = &self.nodes;
         let text = &self.text;
         let attributes = &self.attributes;
-        let listeners_names = self.listeners.iter().map(|(n, _)| Ident::new(n, Span::call_site()));
+        let listeners_names = self
+            .listeners
+            .iter()
+            .map(|(n, _)| Ident::new(n, Span::call_site()));
         let listeners_exprs = self.listeners.iter().map(|(_, e)| e);
         tokens.append_all(quote! {
             TemplateContext {
