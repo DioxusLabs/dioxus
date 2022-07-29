@@ -377,7 +377,7 @@ pub struct AttributeDiscription {
 
     /// An indication of we should always try and set the attribute.
     /// Used in controlled components to ensure changes are propagated.
-    pub volitile: bool,
+    pub volatile: bool,
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or
@@ -667,7 +667,7 @@ impl<'a> NodeFactory<'a> {
             attribute: AttributeDiscription {
                 name,
                 namespace,
-                volitile: is_volatile,
+                volatile: is_volatile,
             },
             is_static,
             value: AttributeValue::Text(value),
@@ -687,7 +687,7 @@ impl<'a> NodeFactory<'a> {
             attribute: AttributeDiscription {
                 name,
                 namespace,
-                volitile: is_volatile,
+                volatile: is_volatile,
             },
             is_static,
             value,
@@ -837,13 +837,13 @@ impl<'a> NodeFactory<'a> {
 
     /// Create a refrence to a template
     pub fn template_ref(
-        &mut self,
+        &self,
         id: TemplateId,
         template: Template,
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
         let mut resolver = self.scope.template_resolver.borrow_mut();
-        resolver.insert(id, template);
+        resolver.insert(id.clone(), template);
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {
             id: empty_cell(),
             dynamic_context,

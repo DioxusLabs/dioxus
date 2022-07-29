@@ -1,48 +1,72 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, ops::Deref};
+
+use once_cell::sync::Lazy;
 
 use crate::{
     templete::{TemplateNodeId, TextTemplateSegment},
     AttributeValue, Listener, VNode,
 };
 
-// stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
-#[derive(Debug)]
-pub struct DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
-where
+/// A lazily initailized vector
+#[derive(Debug, Clone, Copy)]
+pub struct LazyStaticVec<T: 'static>(pub &'static Lazy<Vec<T>>);
+
+impl<T: 'static> AsRef<[T]> for LazyStaticVec<T> {
+    fn as_ref(&self) -> &[T] {
+        let v: &Vec<_> = self.0.deref();
+        v.as_ref()
+    }
+}
+
+// Stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
+// This makes adding constant template nodes add no additional cost to diffing.
+#[derive(Debug, Clone, Copy)]
+pub struct DynamicNodeMapping<
+    Nodes,
+    TextOuter,
+    TextInner,
+    AttributesOuter,
+    AttributesInner,
+    Volatile,
+> where
     Nodes: AsRef<[Option<TemplateNodeId>]>,
     TextOuter: AsRef<[TextInner]>,
     TextInner: AsRef<[TemplateNodeId]>,
     AttributesOuter: AsRef<[AttributesInner]>,
     AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
+    Volatile: AsRef<[(TemplateNodeId, usize)]>,
 {
     pub nodes: Nodes,
     text_inner: PhantomData<TextInner>,
     pub text: TextOuter,
     pub attributes: AttributesOuter,
-    pub volitile_attributes: AttributesInner,
+    attributes_inner: PhantomData<AttributesInner>,
+    pub volatile_attributes: Volatile,
 }
 
-impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
-    DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner>
+impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner, Volatile>
+    DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner, Volatile>
 where
     Nodes: AsRef<[Option<TemplateNodeId>]>,
     TextOuter: AsRef<[TextInner]>,
     TextInner: AsRef<[TemplateNodeId]>,
     AttributesOuter: AsRef<[AttributesInner]>,
     AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
+    Volatile: AsRef<[(TemplateNodeId, usize)]>,
 {
-    pub fn new(
+    pub const fn new(
         nodes: Nodes,
         text: TextOuter,
         attributes: AttributesOuter,
-        volitile_attributes: AttributesInner,
+        volatile_attributes: Volatile,
     ) -> Self {
         DynamicNodeMapping {
             nodes,
             text_inner: PhantomData,
             text,
             attributes,
-            volitile_attributes,
+            attributes_inner: PhantomData,
+            volatile_attributes,
         }
     }
 
@@ -77,6 +101,8 @@ pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [TemplateNodeId],
     &'static [&'static [(TemplateNodeId, usize)]],
     &'static [(TemplateNodeId, usize)],
+    // volatile attribute information is available at compile time, but there is no way for the macro to generate it, so we initialize it lazily instead
+    LazyStaticVec<(TemplateNodeId, usize)>,
 >;
 
 /// A dynamic node mapping that is heap allocated
@@ -86,12 +112,18 @@ pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
     Vec<TemplateNodeId>,
     Vec<Vec<(TemplateNodeId, usize)>>,
     Vec<(TemplateNodeId, usize)>,
+    Vec<(TemplateNodeId, usize)>,
 >;
 
+/// The dynamic parts used to saturate a template durring runtime
 pub struct TemplateContext<'b> {
+    /// The dynamic nodes
     pub nodes: &'b [VNode<'b>],
+    /// The dynamic text
     pub text_segments: &'b [&'b str],
+    /// The dynamic attributes
     pub attributes: &'b [AttributeValue<'b>],
+    /// The dynamic attributes
     // The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
     pub listeners: &'b [Listener<'b>],
 }

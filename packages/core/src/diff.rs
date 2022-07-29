@@ -307,9 +307,9 @@ impl<'b> DiffState<'b> {
         node: &'b VNode<'b>,
     ) -> usize {
         let resolver = self.scopes.template_resolver.borrow();
-        let template = resolver.get(new.template_id).unwrap();
+        let template = resolver.get(&new.template_id).unwrap();
 
-        let id = self.get_or_insert_template_id(template, new.template_id);
+        let id = self.get_or_insert_template_id(template, &new.template_id);
 
         let real_id = self.scopes.reserve_node(node);
 
@@ -414,7 +414,7 @@ impl<'b> DiffState<'b> {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if !old_attr.is_static && old_attr.value != new_attr.value
-                    || new_attr.attribute.volitile
+                    || new_attr.attribute.volatile
                 {
                     self.mutations.set_attribute(new_attr, root);
                 }
@@ -596,7 +596,7 @@ impl<'b> DiffState<'b> {
         let scope_bump = &self.current_scope_bump();
 
         let resolver = self.scopes.template_resolver.borrow();
-        let template = resolver.get(new.template_id).unwrap();
+        let template = resolver.get(&new.template_id).unwrap();
 
         fn diff_attributes<
             'b,
@@ -635,7 +635,7 @@ impl<'b> DiffState<'b> {
                     let TemplateElement { attributes, .. } = el;
                     let attr = &attributes.as_ref()[*attr_idx];
                     let attribute = Attribute {
-                        attribute: attr.attritbute,
+                        attribute: attr.attribute,
                         value: new.dynamic_context.resolve_attribute(idx).clone(),
                         is_static: false,
                     };
@@ -686,7 +686,7 @@ impl<'b> DiffState<'b> {
                     TemplateAttributeValue::Static(value) => value.allocate(scope_bump),
                 };
                 let attribute = Attribute {
-                    attribute: attr.attritbute,
+                    attribute: attr.attribute,
                     value,
                     is_static: false,
                 };
@@ -696,8 +696,8 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        // set volatile attributes
-        for (id, idx) in template.volitile_attributes() {
+        // set all volatile attributes
+        for (id, idx) in template.volatile_attributes() {
             template.with_node(
                 id,
                 set_attribute,
@@ -1436,7 +1436,7 @@ impl<'b> DiffState<'b> {
     pub fn get_or_insert_template_id(
         &mut self,
         template: &Template,
-        template_id: TemplateId,
+        template_id: &TemplateId,
     ) -> RendererTemplateId {
         let (renderer_id, created) = self
             .scopes

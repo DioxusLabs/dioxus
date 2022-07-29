@@ -1,10 +1,9 @@
 use dioxus_core::{
-    OwnedTemplateNode, OwnedTemplateValue, TemplateAttribute, TemplateAttributeValue,
-    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
+    OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
 };
-use proc_macro2::TokenStream;
+use proc_macro2::{TokenStream, Span};
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Expr, Ident, LitStr};
+use syn::{Expr, Ident};
 
 use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
 
@@ -36,64 +35,69 @@ impl ToTokens for TemplateElementBuilder {
             }
             None => quote! {None},
         };
+        let tag_ident = Ident::new(&tag, Span::call_site());
         tokens.append_all(quote! {
             TemplateElement::new(
-                tag: #tag,
-                attributes: &[#(#attributes),*],
-                children: &[#(#children),*],
-                listeners: &[#(#listeners),*],
-                parent: #parent,
+                dioxus_elements::#tag_ident::TAG_NAME,
+                dioxus_elements::#tag_ident::NAME_SPACE,
+                &[#(#attributes),*],
+                &[#(#children),*],
+                &[#(#listeners),*],
+                #parent,
             )
         })
     }
 }
 
 struct TemplateAttributeBuilder {
+    element_tag: String,
     name: String,
     value: TemplateAttributeValue<OwnedTemplateValue>,
 }
 
 impl ToTokens for TemplateAttributeBuilder {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Self { name, value } = self;
+        let Self { element_tag, name, value } = self;
         let value = match value {
             TemplateAttributeValue::Static(val) => {
                 let val = match val {
-                    OwnedTemplateValue::Text(txt) => quote! {AttributeValue::Text(#txt)},
-                    OwnedTemplateValue::Float32(f) => quote! {AttributeValue::Float32(#f)},
-                    OwnedTemplateValue::Float64(f) => quote! {AttributeValue::Float64(#f)},
-                    OwnedTemplateValue::Int32(i) => quote! {AttributeValue::Int32(#i)},
-                    OwnedTemplateValue::Int64(i) => quote! {AttributeValue::Int64(#i)},
-                    OwnedTemplateValue::Uint32(u) => quote! {AttributeValue::Uint32(#u)},
-                    OwnedTemplateValue::Uint64(u) => quote! {AttributeValue::Uint64(#u)},
-                    OwnedTemplateValue::Bool(b) => quote! {AttributeValue::Bool(#b)},
+                    OwnedTemplateValue::Text(txt) => quote! {StaticTemplateValue::Text(#txt)},
+                    OwnedTemplateValue::Float32(f) => quote! {StaticTemplateValue::Float32(#f)},
+                    OwnedTemplateValue::Float64(f) => quote! {StaticTemplateValue::Float64(#f)},
+                    OwnedTemplateValue::Int32(i) => quote! {StaticTemplateValue::Int32(#i)},
+                    OwnedTemplateValue::Int64(i) => quote! {StaticTemplateValue::Int64(#i)},
+                    OwnedTemplateValue::Uint32(u) => quote! {StaticTemplateValue::Uint32(#u)},
+                    OwnedTemplateValue::Uint64(u) => quote! {StaticTemplateValue::Uint64(#u)},
+                    OwnedTemplateValue::Bool(b) => quote! {StaticTemplateValue::Bool(#b)},
                     OwnedTemplateValue::Vec3Float(f1, f2, f3) => {
-                        quote! {AttributeValue::Vec3Float(#f1, #f2, #f3)}
+                        quote! {StaticTemplateValue::Vec3Float(#f1, #f2, #f3)}
                     }
                     OwnedTemplateValue::Vec3Int(f1, f2, f3) => {
-                        quote! {AttributeValue::Vec3Int(#f1, #f2, #f3)}
+                        quote! {StaticTemplateValue::Vec3Int(#f1, #f2, #f3)}
                     }
                     OwnedTemplateValue::Vec3Uint(f1, f2, f3) => {
-                        quote! {AttributeValue::Vec3Uint(#f1, #f2, #f3)}
+                        quote! {StaticTemplateValue::Vec3Uint(#f1, #f2, #f3)}
                     }
                     OwnedTemplateValue::Vec4Float(f1, f2, f3, f4) => {
-                        quote! {AttributeValue::Vec4Float(#f1, #f2, #f3, #f4)}
+                        quote! {StaticTemplateValue::Vec4Float(#f1, #f2, #f3, #f4)}
                     }
                     OwnedTemplateValue::Vec4Int(f1, f2, f3, f4) => {
-                        quote! {AttributeValue::Vec4Int(#f1, #f2, #f3, #f4)}
+                        quote! {StaticTemplateValue::Vec4Int(#f1, #f2, #f3, #f4)}
                     }
                     OwnedTemplateValue::Vec4Uint(f1, f2, f3, f4) => {
-                        quote! {AttributeValue::Vec4Uint(#f1, #f2, #f3, #f4)}
+                        quote! {StaticTemplateValue::Vec4Uint(#f1, #f2, #f3, #f4)}
                     }
-                    OwnedTemplateValue::Bytes(b) => quote! {AttributeValue::Bytes(&[#(#b),*])},
+                    OwnedTemplateValue::Bytes(b) => quote! {StaticTemplateValue::Bytes(&[#(#b),*])},
                 };
                 quote! {#val}
             }
-            TemplateAttributeValue::Dynamic(idx) => quote! {AttributeValue::Dynamic(#idx)},
+            TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
+        let name = Ident::new(&name, Span::call_site());
+        let tag = Ident::new(&element_tag, Span::call_site());
         tokens.append_all(quote! {
             TemplateAttribute{
-                attribute: dioxus_elements::#name,
+                attribute: dioxus_elements::#tag::#name,
                 value: #value,
             }
         })
@@ -183,6 +187,7 @@ impl TemplateBuilder {
                         ElementAttr::AttrText { name, value } => {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
+                                    element_tag: el.name.to_string(),
                                     name: name.to_string(),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
@@ -190,9 +195,10 @@ impl TemplateBuilder {
                                 })
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
+                                    element_tag: el.name.to_string(),
                                     name: name.to_string(),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(#value)),
+                                        self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
                                 })
                             }
@@ -200,6 +206,7 @@ impl TemplateBuilder {
                         ElementAttr::CustomAttrText { name, value } => {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
+                                    element_tag: el.name.to_string(),
                                     name: name.value(),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
@@ -207,26 +214,29 @@ impl TemplateBuilder {
                                 })
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
+                                    element_tag: el.name.to_string(),
                                     name: name.value(),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(#value)),
+                                        self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
                                 })
                             }
                         }
                         ElementAttr::AttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
+                                element_tag: el.name.to_string(),
                                 name: name.to_string(),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(#value)),
+                                    self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
                             })
                         }
                         ElementAttr::CustomAttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
+                                element_tag: el.name.to_string(),
                                 name: name.value(),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(#value)),
+                                    self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
                             })
                         }
@@ -299,11 +309,89 @@ impl ToTokens for TemplateBuilder {
             nodes,
             dynamic_context,
         } = self;
-        tokens.append_all(quote! {
-            Template {
-                nodes: &[#(#nodes),*],
-                dynamic_context: #dynamic_context,
+
+        let mut node_mapping = vec![None; dynamic_context.nodes.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::DynamicNode(idx) => node_mapping[*idx] = Some(n.id),
+                _ => (),
             }
+        }
+        let node_mapping_quoted = node_mapping.iter().map(|op| match op {
+            Some(id) => {
+                let raw_id = id.0;
+                quote! {Some(TemplateNodeId(#raw_id))}
+            }
+            None => quote! {None},
+        });
+
+        let mut text_mapping = vec![Vec::new(); dynamic_context.text.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Text(txt) => {
+                    for seg in &txt.segments {
+                        match seg {
+                            TextTemplateSegment::Static(_) => (),
+                            TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        let text_mapping_quoted = text_mapping.iter().map(|inner| {
+            let raw = inner.iter().map(|id| id.0);
+            quote! {&[#(TemplateNodeId(#raw)),*]}
+        });
+
+        let mut attribute_mapping = vec![Vec::new(); dynamic_context.attributes.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Element(el) => {
+                    for attr in &el.attributes {
+                        match attr.value {
+                            TemplateAttributeValue::Static(_) => (),
+                            TemplateAttributeValue::Dynamic(idx) => {
+                                attribute_mapping[idx].push(n.id);
+                            }
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        let attribute_mapping_quoted = attribute_mapping.iter().map(|inner| {
+            let raw = inner.iter().map(|id| id.0);
+            quote! {&[#(TemplateNodeId(#raw)),*]}
+        });
+
+        tokens.append_all(quote! {
+            const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
+            const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
+            const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
+            const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
+            static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
+                // check each property to see if it is volatile
+                let mut volatile = Vec::new();
+                for n in __NODES {
+                    if let TemplateNodeType::Element(el) = &n.node_type {
+                        for (i, attr) in el.attributes.iter().enumerate() {
+                            if attr.attribute.volatile {
+                                volatile.push((n.id, i));
+                            }
+                        }
+                    }
+                }
+                volatile
+            });
+            static __VOLITALE_MAPPING: &'static dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = &__VOLITALE_MAPPING_INNER;
+            static __STATIC_VOLITALE_MAPPING: dioxus::prelude::LazyStaticVec<(dioxus::prelude::TemplateNodeId, usize)> = LazyStaticVec(__VOLITALE_MAPPING);
+            static __TEMPLATE: dioxus::prelude::Template = Template::Static {
+                nodes: __NODES,
+                dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
+            };
+            
+            __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
         })
     }
 }
@@ -355,14 +443,14 @@ impl ToTokens for DynamicTemplateContextBuilder {
         let nodes = &self.nodes;
         let text = &self.text;
         let attributes = &self.attributes;
-        let listeners_names = self.listeners.iter().map(|(n, _)| n);
+        let listeners_names = self.listeners.iter().map(|(n, _)| Ident::new(n, Span::call_site()));
         let listeners_exprs = self.listeners.iter().map(|(_, e)| e);
         tokens.append_all(quote! {
             TemplateContext {
                 nodes: __cx.bump().alloc([#(#nodes),*]),
                 text_segments: __cx.bump().alloc([#(__cx.bump().alloc(#text)),*]),
                 attributes: __cx.bump().alloc([#(#attributes),*]),
-                listeners: __cx.bump().alloc([#(dioxus_elements::on::#listeners_names(__cx.bump(), #listeners_exprs)),*]),
+                listeners: __cx.bump().alloc([#(dioxus_elements::on::#listeners_names(__cx, #listeners_exprs)),*]),
             }
         })
     }
