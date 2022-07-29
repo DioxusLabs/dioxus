@@ -93,7 +93,7 @@ impl ToTokens for TemplateAttributeBuilder {
                     }
                     OwnedTemplateValue::Bytes(b) => quote! {StaticTemplateValue::Bytes(&[#(#b),*])},
                 };
-                quote! {#val}
+                quote! {TemplateAttributeValue::Static(#val)}
             }
             TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
@@ -202,7 +202,7 @@ impl TemplateBuilder {
                                     element_tag: el.name.to_string(),
                                     name: name.to_string(),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
                                 })
                             }
@@ -221,7 +221,7 @@ impl TemplateBuilder {
                                     element_tag: el.name.to_string(),
                                     name: name.value(),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
                                 })
                             }
@@ -231,7 +231,7 @@ impl TemplateBuilder {
                                 element_tag: el.name.to_string(),
                                 name: name.to_string(),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
                             })
                         }
@@ -240,7 +240,7 @@ impl TemplateBuilder {
                                 element_tag: el.name.to_string(),
                                 name: name.value(),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(StaticTemplateValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
                             })
                         }
@@ -356,11 +356,11 @@ impl ToTokens for TemplateBuilder {
         for n in nodes {
             match &n.node_type {
                 TemplateNodeTypeBuilder::Element(el) => {
-                    for attr in &el.attributes {
+                    for (i, attr) in el.attributes.iter().enumerate() {
                         match attr.value {
                             TemplateAttributeValue::Static(_) => (),
                             TemplateAttributeValue::Dynamic(idx) => {
-                                attribute_mapping[idx].push(n.id);
+                                attribute_mapping[idx].push((n.id, i));
                             }
                         }
                     }
@@ -369,8 +369,9 @@ impl ToTokens for TemplateBuilder {
             }
         }
         let attribute_mapping_quoted = attribute_mapping.iter().map(|inner| {
-            let raw = inner.iter().map(|id| id.0);
-            quote! {&[#(TemplateNodeId(#raw)),*]}
+            let raw = inner.iter().map(|(id, _)| id.0);
+            let indecies = inner.iter().map(|(_, idx)| idx);
+            quote! {&[#((TemplateNodeId(#raw), #indecies)),*]}
         });
 
         tokens.append_all(quote! {

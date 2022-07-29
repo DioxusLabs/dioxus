@@ -747,7 +747,7 @@ impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub enum StaticTemplateValue {
-    Text(String),
+    Text(&'static str),
     Float32(f32),
     Float64(f64),
     Int32(i32),
@@ -764,34 +764,7 @@ pub enum StaticTemplateValue {
     Vec4Int(i32, i32, i32, i32),
     Vec4Uint(u32, u32, u32, u32),
 
-    Bytes(Vec<u8>),
-}
-
-impl<'a> From<AttributeValue<'a>> for StaticTemplateValue {
-    fn from(attr: AttributeValue<'a>) -> Self {
-        match attr {
-            AttributeValue::Text(t) => StaticTemplateValue::Text(t.to_owned()),
-            AttributeValue::Float32(f) => StaticTemplateValue::Float32(f),
-            AttributeValue::Float64(f) => StaticTemplateValue::Float64(f),
-            AttributeValue::Int32(i) => StaticTemplateValue::Int32(i),
-            AttributeValue::Int64(i) => StaticTemplateValue::Int64(i),
-            AttributeValue::Uint32(u) => StaticTemplateValue::Uint32(u),
-            AttributeValue::Uint64(u) => StaticTemplateValue::Uint64(u),
-            AttributeValue::Bool(b) => StaticTemplateValue::Bool(b),
-            AttributeValue::Vec3Float(f1, f2, f3) => StaticTemplateValue::Vec3Float(f1, f2, f3),
-            AttributeValue::Vec3Int(f1, f2, f3) => StaticTemplateValue::Vec3Int(f1, f2, f3),
-            AttributeValue::Vec3Uint(f1, f2, f3) => StaticTemplateValue::Vec3Uint(f1, f2, f3),
-            AttributeValue::Vec4Float(f1, f2, f3, f4) => {
-                StaticTemplateValue::Vec4Float(f1, f2, f3, f4)
-            }
-            AttributeValue::Vec4Int(f1, f2, f3, f4) => StaticTemplateValue::Vec4Int(f1, f2, f3, f4),
-            AttributeValue::Vec4Uint(f1, f2, f3, f4) => {
-                StaticTemplateValue::Vec4Uint(f1, f2, f3, f4)
-            }
-            AttributeValue::Bytes(b) => StaticTemplateValue::Bytes(b.to_owned()),
-            AttributeValue::Any(_) => todo!(),
-        }
-    }
+    Bytes(&'static [u8]),
 }
 
 #[derive(Default)]
