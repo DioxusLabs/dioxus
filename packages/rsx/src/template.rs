@@ -3,7 +3,7 @@ use dioxus_core::{
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Expr, Ident};
+use syn::{Expr, Ident, LitStr};
 
 use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
 
@@ -49,9 +49,14 @@ impl ToTokens for TemplateElementBuilder {
     }
 }
 
+enum AttributeName {
+    Ident(Ident),
+    Str(LitStr),
+}
+
 struct TemplateAttributeBuilder {
     element_tag: String,
-    name: String,
+    name: AttributeName,
     value: TemplateAttributeValue<OwnedTemplateValue>,
 }
 
@@ -97,14 +102,25 @@ impl ToTokens for TemplateAttributeBuilder {
             }
             TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
-        let name = syn::parse_str::<Ident>(&name).expect(&name);
         let tag = syn::parse_str::<Ident>(&element_tag).expect(&element_tag);
-        tokens.append_all(quote! {
-            TemplateAttribute{
-                attribute: dioxus_elements::#tag::#name,
-                value: #value,
-            }
-        })
+        match name {
+            AttributeName::Ident(name) => tokens.append_all(quote! {
+                TemplateAttribute{
+                    attribute: dioxus_elements::#tag::#name,
+                    value: #value,
+                }
+            }),
+            AttributeName::Str(lit) => tokens.append_all(quote! {
+                TemplateAttribute{
+                    attribute: dioxus::prelude::AttributeDiscription{
+                        name: #lit,
+                        namespace: None,
+                        volatile: false
+                    },
+                    value: #value,
+                }
+            }),
+        }
     }
 }
 
@@ -192,7 +208,7 @@ impl TemplateBuilder {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
                                     element_tag: el.name.to_string(),
-                                    name: name.to_string(),
+                                    name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
                                     ),
@@ -200,7 +216,7 @@ impl TemplateBuilder {
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
                                     element_tag: el.name.to_string(),
-                                    name: name.to_string(),
+                                    name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Dynamic(
                                         self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
@@ -211,7 +227,7 @@ impl TemplateBuilder {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
                                     element_tag: el.name.to_string(),
-                                    name: name.value(),
+                                    name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
                                     ),
@@ -219,7 +235,7 @@ impl TemplateBuilder {
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
                                     element_tag: el.name.to_string(),
-                                    name: name.value(),
+                                    name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Dynamic(
                                         self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                     ),
@@ -229,7 +245,7 @@ impl TemplateBuilder {
                         ElementAttr::AttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
                                 element_tag: el.name.to_string(),
-                                name: name.to_string(),
+                                name: AttributeName::Ident(name),
                                 value: TemplateAttributeValue::Dynamic(
                                     self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
@@ -238,7 +254,7 @@ impl TemplateBuilder {
                         ElementAttr::CustomAttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
                                 element_tag: el.name.to_string(),
-                                name: name.value(),
+                                name: AttributeName::Str(name),
                                 value: TemplateAttributeValue::Dynamic(
                                     self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
                                 ),
