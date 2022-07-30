@@ -188,10 +188,28 @@ pub(crate) struct TemplateBuilder {
 }
 
 impl TemplateBuilder {
-    pub fn from_root(root: BodyNode) -> Self {
+    pub fn from_roots(roots: Vec<BodyNode>) -> Self {
         let mut builder = Self::default();
 
-        builder.build_node(root, None);
+        let fragment_id = TemplateNodeId(0);
+        let create_fragment = roots.len() > 1;
+        if create_fragment {
+            builder.nodes.push(TemplateNodeBuilder {
+                id: fragment_id,
+                node_type: TemplateNodeTypeBuilder::Fragment(Vec::new()),
+            });
+        }
+        let mut root_ids = Vec::new();
+        for root in roots {
+            root_ids.push(builder.build_node(root, None));
+        }
+        if create_fragment {
+            if let TemplateNodeTypeBuilder::Fragment(ids) =
+                &mut builder.nodes[fragment_id.0].node_type
+            {
+                *ids = root_ids;
+            }
+        }
 
         builder
     }

@@ -73,18 +73,8 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let inner = if self.roots.len() == 1 {
-            let inner = &self.roots[0];
-            let template = TemplateBuilder::from_root(inner.clone());
-            quote! { #template }
-        } else {
-            // todo use fragments
-            let children = &self.roots;
-            let templates = children
-                .iter()
-                .map(|root| TemplateBuilder::from_root(root.clone()));
-            quote! { __cx.fragment_root([ #(#templates),* ]) }
-        };
+        let template = TemplateBuilder::from_roots(self.roots.clone());
+        let inner = quote! { #template };
 
         match &self.custom_context {
             // The `in cx` pattern allows directly rendering
