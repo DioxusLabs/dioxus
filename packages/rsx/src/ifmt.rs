@@ -45,7 +45,9 @@ impl FromStr for IfmtInput {
                     current_literal.push(c);
                     continue;
                 }
-                segments.push(Segment::Literal(current_literal));
+                if !current_literal.is_empty() {
+                    segments.push(Segment::Literal(current_literal));
+                }
                 current_literal = String::new();
                 let mut current_captured = String::new();
                 while let Some(c) = chars.next() {
@@ -87,7 +89,9 @@ impl FromStr for IfmtInput {
                 current_literal.push(c);
             }
         }
-        segments.push(Segment::Literal(current_literal));
+        if !current_literal.is_empty() {
+            segments.push(Segment::Literal(current_literal));
+        }
         Ok(Self { segments })
     }
 }
