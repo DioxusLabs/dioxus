@@ -66,7 +66,6 @@ export class Interpreter {
     this.stack = [root];
     this.listeners = new ListenerMap(root);
     this.handlers = {};
-    this.lastNodeWasText = false;
     this.nodes = [root];
   }
   top() {
@@ -95,7 +94,7 @@ export class Interpreter {
   ReplaceWith(root_id, m) {
     let root = this.nodes[root_id];
     let els = this.stack.splice(this.stack.length - m);
-    if (is_element_node(root.nodeType)) {
+    if (is_element_node(root)) {
       this.listeners.removeAllNonBubbling(root);
     }
     root.replaceWith(...els);
