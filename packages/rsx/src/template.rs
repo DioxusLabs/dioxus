@@ -464,7 +464,7 @@ impl ToTokens for DynamicTemplateContextBuilder {
         tokens.append_all(quote! {
             TemplateContext {
                 nodes: __cx.bump().alloc([#(#nodes),*]),
-                text_segments: __cx.bump().alloc([#(__cx.bump().alloc(#text)),*]),
+                text_segments: __cx.bump().alloc([#(&*__cx.bump().alloc_str(&#text.to_string())),*]),
                 attributes: __cx.bump().alloc([#(#attributes),*]),
                 listeners: __cx.bump().alloc([#(dioxus_elements::on::#listeners_names(__cx, #listeners_exprs)),*]),
             }
