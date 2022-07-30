@@ -170,8 +170,10 @@ pub struct FormattedSegment {
 
 impl ToTokens for FormattedSegment {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        let (fmt, seg) = (&self.format_args, &self.segment);
+        let fmt = format!("{{0{}}}", fmt);
         tokens.append_all(quote! {
-            format_args!({0#self.format_args}, #self.segment)
+            format_args!(#fmt, #seg)
         });
     }
 }

@@ -260,7 +260,7 @@ impl TemplateBuilder {
                     }),
                 });
 
-                let children = el
+                let children: Vec<_> = el
                     .children
                     .into_iter()
                     .map(|child| self.build_node(child, Some(id)))
@@ -374,7 +374,7 @@ impl ToTokens for TemplateBuilder {
             quote! {&[#((TemplateNodeId(#raw), #indecies)),*]}
         });
 
-        tokens.append_all(quote! {
+        let quoted = quote! {
             {
                 const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
                 const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
@@ -400,10 +400,12 @@ impl ToTokens for TemplateBuilder {
                     nodes: __NODES,
                     dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
                 };
-                
+
                 __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
             }
-        })
+        };
+
+        tokens.append_all(quoted)
     }
 }
 
