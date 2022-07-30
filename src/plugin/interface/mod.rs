@@ -4,6 +4,7 @@ pub mod logger;
 pub mod command;
 pub mod fs;
 pub mod download;
+pub mod dirs;
 
 #[derive(Debug)]
 pub struct PluginInfo<'lua> {
