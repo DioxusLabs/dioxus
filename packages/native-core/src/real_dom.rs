@@ -196,11 +196,11 @@ impl<S: State> RealDom<S> {
                     PopRoot {} => {
                         self.node_stack.pop();
                     }
-                    CreateTempleteRef {
+                    CreateTemplateRef {
                         id: _,
                         template_id: _,
                     } => todo!(),
-                    CreateTemplete { id: _ } => todo!(),
+                    CreateTemplate { id: _ } => todo!(),
                     FinishTemplete {} => todo!(),
                 }
             }

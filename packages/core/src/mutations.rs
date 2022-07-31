@@ -191,7 +191,7 @@ pub enum DomEdit<'bump> {
     PopRoot {},
 
     /// Create a refrence to a template node.
-    CreateTempleteRef {
+    CreateTemplateRef {
         /// The ID of the new template refrence.
         id: u64,
 
@@ -202,7 +202,7 @@ pub enum DomEdit<'bump> {
     /// Create a new templete.
     /// IMPORTANT: When adding nodes to a templete, id's will reset to zero, so they must be allocated on a different stack.
     /// It is recommended to use Cow<NativeNode>.
-    CreateTemplete {
+    CreateTemplate {
         /// The ID of the new template.
         id: u64,
     },
@@ -348,7 +348,7 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn create_templete(&mut self, id: u64) {
-        self.edits.push(CreateTemplete { id });
+        self.edits.push(CreateTemplate { id });
     }
 
     pub(crate) fn finish_templete(&mut self) {
@@ -356,7 +356,7 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {
-        self.edits.push(CreateTempleteRef {
+        self.edits.push(CreateTemplateRef {
             id: id.into(),
             template_id,
         })
