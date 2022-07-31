@@ -8,8 +8,8 @@ use crate::tools::{app_path, clone_repo};
 use self::{
     interface::PluginInfo,
     interface::{
-        command::PluginCommander, download::PluginDownloader, fs::PluginFileSystem,
-        logger::PluginLogger,
+        command::PluginCommander, dirs::PluginDirs, download::PluginDownloader,
+        fs::PluginFileSystem, logger::PluginLogger,
     },
 };
 
@@ -43,6 +43,7 @@ impl PluginManager {
         lua.globals()
             .set("PLUGIN_DOWNLOAD", PluginDownloader)
             .unwrap();
+        lua.globals().set("PLUGIN_DIRS", PluginDirs).unwrap();
 
         let plugin_dir = Self::init_plugin_dir();
         let mut index = 1;
