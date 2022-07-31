@@ -4,7 +4,7 @@
 Instead of passing a closure, you can also pass a string to event handlers – this lets you use JavaScript (if your renderer can execute JavaScript):
 
 ```rust
-{{#include ../../examples/event_javascript.rs:rsx}}
+{{#include ../../../examples/event_javascript.rs:rsx}}
 ```
 
 

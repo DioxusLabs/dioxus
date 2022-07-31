@@ -61,7 +61,7 @@ Add an `index.html` for Trunk to use. Make sure your "mount point" element has a
 
 Edit your `main.rs`:
 ```rust
-{{#include ../../examples/hello_world_web.rs}}
+{{#include ../../../examples/hello_world_web.rs}}
 ```
 
 
