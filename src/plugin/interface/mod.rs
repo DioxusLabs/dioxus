@@ -11,6 +11,7 @@ pub struct PluginInfo<'lua> {
     pub name: String,
     pub repository: String,
     pub author: String,
+    pub version: String,
 
     pub on_init: Option<Function<'lua>>,
     pub on_load: Option<Function<'lua>>,
@@ -24,6 +25,7 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             name: String::default(),
             repository: String::default(),
             author: String::default(),
+            version: String::from("0.1.0"),
 
             on_init: None,
             on_load: None,
@@ -39,6 +41,9 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             }
             if let Ok(v) = tab.get::<_, String>("author") {
                 res.author = v;
+            }
+            if let Ok(v) = tab.get::<_, String>("version") {
+                res.version = v;
             }
 
             if let Ok(v) = tab.get::<_, Function>("on_init") {
@@ -68,6 +73,7 @@ impl<'lua> ToLua<'lua> for PluginInfo<'lua> {
         res.set("name", self.name.to_string())?;
         res.set("repository", self.repository.to_string())?;
         res.set("author", self.author.to_string())?;
+        res.set("version", self.version.to_string())?;
 
         if let Some(e) = self.on_init {
             res.set("on_init", e)?;
