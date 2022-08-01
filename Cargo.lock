@@ -1625,6 +1625,9 @@ checksum = "8afb4815a6d6a3bd1c23e6c647f7df18c9800c12e80526a98e18d7decd7cedcd"
 dependencies = [
  "bstr",
  "cc",
+ "futures-core",
+ "futures-task",
+ "futures-util",
  "lua-src",
  "luajit-src",
  "num-traits",
