@@ -208,7 +208,10 @@ pub enum DomEdit<'bump> {
     },
 
     /// Finish a templete
-    FinishTemplete {},
+    FinishTemplate {
+        /// The number of root nodes in the template
+        len: u64,
+    },
 }
 
 use fxhash::FxHashSet;
@@ -351,8 +354,8 @@ impl<'a> Mutations<'a> {
         self.edits.push(CreateTemplate { id });
     }
 
-    pub(crate) fn finish_templete(&mut self) {
-        self.edits.push(FinishTemplete {});
+    pub(crate) fn finish_templete(&mut self, len: u64) {
+        self.edits.push(FinishTemplate { len });
     }
 
     pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {

@@ -157,6 +157,11 @@ impl WebsysDom {
                     let value = serde_wasm_bindgen::to_value(&value).unwrap();
                     self.interpreter.SetAttribute(root, field, value, ns)
                 }
+                DomEdit::CreateTemplateRef { id, template_id } => {
+                    self.interpreter.CreateTemplateRef(id, template_id)
+                }
+                DomEdit::CreateTemplate { id } => self.interpreter.CreateTemplate(id),
+                DomEdit::FinishTemplate {} => self.interpreter.FinishTemplate(),
             }
         }
     }

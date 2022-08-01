@@ -276,7 +276,23 @@ impl Template {
             let id = TemplateNodeId(0);
             self.create_node(mutations, bump, id);
         }
-        mutations.finish_templete();
+        let len = match self {
+            Template::Static { nodes, .. } => {
+                if let TemplateNodeType::Fragment(n) = &nodes[0].node_type {
+                    n.len()
+                } else {
+                    1
+                }
+            }
+            Template::Owned { nodes, .. } => {
+                if let TemplateNodeType::Fragment(n) = &nodes[0].node_type {
+                    n.len()
+                } else {
+                    1
+                }
+            }
+        };
+        mutations.finish_templete(len as u64);
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
@@ -777,8 +793,9 @@ pub(crate) struct TemplateResolver {
 
 impl TemplateResolver {
     pub fn insert(&mut self, id: TemplateId, template: Template) {
+        let changed = self.templates.insert(id.clone(), template).is_some();
         if let Some((_, dirty)) = self.template_id_mapping.get_mut(&id) {
-            if self.templates.insert(id, template).is_some() {
+            if changed {
                 *dirty = true;
             }
         }

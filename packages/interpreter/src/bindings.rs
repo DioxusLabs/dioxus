@@ -73,4 +73,13 @@ extern "C" {
 
     #[wasm_bindgen(method)]
     pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str, ns: Option<&str>);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTemplateRef(this: &Interpreter, id: u64, template_id: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTemplate(this: &Interpreter, id: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn FinishTemplate(this: &Interpreter);
 }

@@ -201,7 +201,7 @@ impl<S: State> RealDom<S> {
                         template_id: _,
                     } => todo!(),
                     CreateTemplate { id: _ } => todo!(),
-                    FinishTemplete {} => todo!(),
+                    FinishTemplate {} => todo!(),
                 }
             }
         }

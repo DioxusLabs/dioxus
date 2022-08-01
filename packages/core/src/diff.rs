@@ -95,7 +95,7 @@ use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
         AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
-        TemplateId, VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
+        VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
     templete::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -306,10 +306,14 @@ impl<'b> DiffState<'b> {
         new: &'b VTemplateRef<'b>,
         node: &'b VNode<'b>,
     ) -> usize {
-        let resolver = self.scopes.template_resolver.borrow();
+        let mut resolver = self.scopes.template_resolver.borrow_mut();
+        let (id, created) = resolver.get_or_create_client_id(&new.template_id);
+
         let template = resolver.get(&new.template_id).unwrap();
 
-        let id = self.get_or_insert_template_id(template, &new.template_id);
+        if created {
+            self.register_template(template, id);
+        }
 
         let real_id = self.scopes.reserve_node(node);
 
@@ -1431,22 +1435,6 @@ impl<'b> DiffState<'b> {
             .unwrap()
             .fin_frame()
             .bump
-    }
-
-    pub fn get_or_insert_template_id(
-        &mut self,
-        template: &Template,
-        template_id: &TemplateId,
-    ) -> RendererTemplateId {
-        let (renderer_id, created) = self
-            .scopes
-            .template_resolver
-            .borrow_mut()
-            .get_or_create_client_id(template_id);
-        if created {
-            self.register_template(template, renderer_id);
-        }
-        renderer_id
     }
 
     pub fn register_template(&mut self, template: &Template, id: RendererTemplateId) {
