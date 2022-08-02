@@ -43,6 +43,7 @@ pub(crate) struct ScopeArena {
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
     pub template_resolver: Rc<RefCell<TemplateResolver>>,
+    pub templates: Rc<RefCell<FxHashMap<TemplateId, Template>>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
     // todo: this allocates memory without dropping, but only when allocating templates so it should be minimal.
     pub template_bump: Bump,
@@ -86,6 +87,7 @@ impl ScopeArena {
                 sender,
             }),
             template_resolver: Rc::new(RefCell::new(TemplateResolver::default())),
+            templates: Rc::new(RefCell::new(FxHashMap::default())),
             template_bump: Bump::new(),
         }
     }
@@ -181,6 +183,7 @@ impl ScopeArena {
                     hook_idx: Cell::default(),
 
                     template_resolver: self.template_resolver.clone(),
+                    templates: self.templates.clone(),
                 }),
             );
         }
@@ -347,8 +350,8 @@ impl ScopeArena {
                     if let Some(template) = nodes.get(template_ref_id.0) {
                         let template = unsafe { &**template };
                         if let VNode::TemplateRef(template_ref) = template {
-                            let resolver = self.template_resolver.borrow();
-                            let template = resolver.get(&template_ref.template_id).unwrap();
+                            let templates = self.templates.borrow();
+                            let template = templates.get(&template_ref.template_id).unwrap();
                             cur_el = template.with_node(
                                 template_id,
                                 bubble_template,
@@ -590,6 +593,7 @@ pub struct ScopeState {
 
     // templates
     pub(crate) template_resolver: Rc<RefCell<TemplateResolver>>,
+    pub(crate) templates: Rc<RefCell<FxHashMap<TemplateId, Template>>>,
 }
 
 pub struct SelfReferentialItems<'a> {

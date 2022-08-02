@@ -842,8 +842,11 @@ impl<'a> NodeFactory<'a> {
         template: Template,
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
-        let mut resolver = self.scope.template_resolver.borrow_mut();
-        resolver.insert(id.clone(), template);
+        let mut borrow = self.scope.templates.borrow_mut();
+        if borrow.insert(id.clone(), template).is_some() {
+            let mut resolver = self.scope.template_resolver.borrow_mut();
+            resolver.mark_dirty(&id);
+        }
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {
             id: empty_cell(),
             dynamic_context,

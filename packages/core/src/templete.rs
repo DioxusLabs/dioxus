@@ -765,22 +765,14 @@ pub enum StaticTemplateValue {
 pub(crate) struct TemplateResolver {
     // maps a id to the rendererid and if that template needs to be re-created
     pub template_id_mapping: FxHashMap<TemplateId, (RendererTemplateId, bool)>,
-    pub templates: FxHashMap<TemplateId, Template>,
     pub template_count: usize,
 }
 
 impl TemplateResolver {
-    pub fn insert(&mut self, id: TemplateId, template: Template) {
-        let changed = self.templates.insert(id.clone(), template).is_some();
-        if let Some((_, dirty)) = self.template_id_mapping.get_mut(&id) {
-            if changed {
-                *dirty = true;
-            }
+    pub fn mark_dirty(&mut self, id: &TemplateId) {
+        if let Some((_, dirty)) = self.template_id_mapping.get_mut(id) {
+            *dirty = true;
         }
-    }
-
-    pub fn get(&self, id: &TemplateId) -> Option<&Template> {
-        self.templates.get(id)
     }
 
     // returns (id, if the id was created)

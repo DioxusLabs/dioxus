@@ -407,14 +407,22 @@ impl VirtualDom {
                     root_count,
                     dynamic_mapping,
                 } = *msg;
-                self.scopes.template_resolver.borrow_mut().insert(
-                    id,
-                    Template::Owned {
-                        nodes,
-                        root_nodes: root_count,
-                        dynamic_mapping,
-                    },
-                );
+                if self
+                    .scopes
+                    .templates
+                    .borrow_mut()
+                    .insert(
+                        id.clone(),
+                        Template::Owned {
+                            nodes,
+                            root_nodes: root_count,
+                            dynamic_mapping,
+                        },
+                    )
+                    .is_some()
+                {
+                    self.scopes.template_resolver.borrow_mut().mark_dirty(&id)
+                }
 
                 // mark any scopes that used the template as dirty
                 self.process_message(SchedulerMsg::DirtyAll);

@@ -306,10 +306,13 @@ impl<'b> DiffState<'b> {
         new: &'b VTemplateRef<'b>,
         node: &'b VNode<'b>,
     ) -> usize {
-        let mut resolver = self.scopes.template_resolver.borrow_mut();
-        let (id, created) = resolver.get_or_create_client_id(&new.template_id);
+        let (id, created) = {
+            let mut resolver = self.scopes.template_resolver.borrow_mut();
+            resolver.get_or_create_client_id(&new.template_id)
+        };
+        let templates = self.scopes.templates.borrow();
 
-        let template = resolver.get(&new.template_id).unwrap();
+        let template = templates.get(&new.template_id).unwrap();
 
         if created {
             self.register_template(template, id);
@@ -599,8 +602,8 @@ impl<'b> DiffState<'b> {
 
         let scope_bump = &self.current_scope_bump();
 
-        let resolver = self.scopes.template_resolver.borrow();
-        let template = resolver.get(&new.template_id).unwrap();
+        let templates = self.scopes.templates.borrow();
+        let template = templates.get(&new.template_id).unwrap();
 
         fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
