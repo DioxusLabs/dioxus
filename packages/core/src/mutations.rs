@@ -296,8 +296,8 @@ impl<'a> Mutations<'a> {
         let element_id = match mounted_node.get().unwrap() {
             GlobalNodeId::TemplateId {
                 template_ref_id: _,
-                template_id,
-            } => template_id.into(),
+                template_node_id,
+            } => template_node_id.into(),
             GlobalNodeId::VNodeId(id) => id.into(),
         };
 

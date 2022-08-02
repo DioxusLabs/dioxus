@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use once_cell::sync::Lazy;
 
 use crate::{
-    templete::{TemplateNodeId, TextTemplateSegment},
+    template::{TemplateNodeId, TextTemplateSegment},
     AttributeValue, Listener, VNode,
 };
 
@@ -28,6 +28,7 @@ pub struct DynamicNodeMapping<
     AttributesOuter,
     AttributesInner,
     Volatile,
+    Listeners,
 > where
     Nodes: AsRef<[Option<TemplateNodeId>]>,
     TextOuter: AsRef<[TextInner]>,
@@ -35,6 +36,7 @@ pub struct DynamicNodeMapping<
     AttributesOuter: AsRef<[AttributesInner]>,
     AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
     Volatile: AsRef<[(TemplateNodeId, usize)]>,
+    Listeners: AsRef<[TemplateNodeId]>,
 {
     pub nodes: Nodes,
     text_inner: PhantomData<TextInner>,
@@ -42,10 +44,19 @@ pub struct DynamicNodeMapping<
     pub attributes: AttributesOuter,
     attributes_inner: PhantomData<AttributesInner>,
     pub volatile_attributes: Volatile,
+    pub nodes_with_listeners: Listeners,
 }
 
-impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner, Volatile>
-    DynamicNodeMapping<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner, Volatile>
+impl<Nodes, TextOuter, TextInner, AttributesOuter, AttributesInner, Volatile, Listeners>
+    DynamicNodeMapping<
+        Nodes,
+        TextOuter,
+        TextInner,
+        AttributesOuter,
+        AttributesInner,
+        Volatile,
+        Listeners,
+    >
 where
     Nodes: AsRef<[Option<TemplateNodeId>]>,
     TextOuter: AsRef<[TextInner]>,
@@ -53,12 +64,14 @@ where
     AttributesOuter: AsRef<[AttributesInner]>,
     AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
     Volatile: AsRef<[(TemplateNodeId, usize)]>,
+    Listeners: AsRef<[TemplateNodeId]>,
 {
     pub const fn new(
         nodes: Nodes,
         text: TextOuter,
         attributes: AttributesOuter,
         volatile_attributes: Volatile,
+        listeners: Listeners,
     ) -> Self {
         DynamicNodeMapping {
             nodes,
@@ -67,6 +80,7 @@ where
             attributes,
             attributes_inner: PhantomData,
             volatile_attributes,
+            nodes_with_listeners: listeners,
         }
     }
 
@@ -91,6 +105,7 @@ where
                     .flatten()
                     .map(|dynamic| dynamic.0),
             )
+            .chain(self.nodes_with_listeners.as_ref().iter().copied())
     }
 }
 
@@ -103,6 +118,7 @@ pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [(TemplateNodeId, usize)],
     // volatile attribute information is available at compile time, but there is no way for the macro to generate it, so we initialize it lazily instead
     LazyStaticVec<(TemplateNodeId, usize)>,
+    &'static [TemplateNodeId],
 >;
 
 /// A dynamic node mapping that is heap allocated
@@ -113,6 +129,7 @@ pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
     Vec<Vec<(TemplateNodeId, usize)>>,
     Vec<(TemplateNodeId, usize)>,
     Vec<(TemplateNodeId, usize)>,
+    Vec<TemplateNodeId>,
 >;
 
 /// The dynamic parts used to saturate a template durring runtime

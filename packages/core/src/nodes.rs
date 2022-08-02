@@ -10,7 +10,7 @@ use crate::{
         TemplateId,
     },
     lazynodes::LazyNodes,
-    templete::{TemplateNodeId, VTemplateRef},
+    template::{TemplateNodeId, VTemplateRef},
     AnyEvent, Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
@@ -21,11 +21,17 @@ use std::{
 
 /// The ID of a node in the vdom that is either standalone or in a template
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
 pub enum GlobalNodeId {
+    /// The ID of a node and the template that contains it
     TemplateId {
+        /// The template that contains the node
         template_ref_id: ElementId,
-        template_id: TemplateNodeId,
+        /// The ID of the node in the template
+        template_node_id: TemplateNodeId,
     },
+    /// The ID of a regular node
     VNodeId(ElementId),
 }
 
@@ -225,6 +231,8 @@ impl Debug for VNode<'_> {
 /// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
 /// unmounted, then the `ElementId` will be reused for a new component.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct ElementId(pub usize);
 impl std::fmt::Display for ElementId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

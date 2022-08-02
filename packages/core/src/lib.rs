@@ -11,7 +11,7 @@ pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod properties;
 pub(crate) mod scopes;
-pub(crate) mod templete;
+pub(crate) mod template;
 pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
@@ -24,7 +24,7 @@ pub(crate) mod innerlude {
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scopes::*;
-    pub use crate::templete::*;
+    pub use crate::template::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -69,7 +69,7 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyEvent, Attribute, AttributeDiscription, AttributeValue, CodeLocation, Component,
     DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority,
-    IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedDynamicNodeMapping,
+    GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedDynamicNodeMapping,
     OwnedTemplateNode, OwnedTemplateNodes, OwnedTemplateValue, Properties, SchedulerMsg, Scope,
     ScopeId, ScopeState, StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId,
     Template, TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId,

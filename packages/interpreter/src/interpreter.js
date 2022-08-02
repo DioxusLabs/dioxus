@@ -7,9 +7,11 @@ export function main() {
 }
 
 class Template {
-  constructor() {
+  constructor(template_id, id) {
     this.template = document.createElement("template");
     this.nodes = [];
+    this.templaet_id = template_id;
+    this.id = id;
   }
 
   finalize(toAdd) {
@@ -95,12 +97,32 @@ export class Interpreter {
       this.listeners.removeAllNonBubbling(id);
     }
   }
-  getId(id, skip = 0) {
+  currentTemplate(skip = 0) {
     if (this.templateInProgress !== null) {
-      return this.templates[this.templateInProgress].nodes[id];
+      return this.templates[this.templateInProgress];
     }
     else if (this.stack[this.stack.length - 1 - skip] instanceof Template) {
-      return this.stack[this.stack.length - 1 - skip].nodes[id];
+      return this.stack[this.stack.length - 1 - skip];
+    }
+    else {
+      return null;
+    }
+  }
+  currentTempltateRefId(skip = 0) {
+    if (this.templateInProgress !== null) {
+      return this.templates[this.templateInProgress].id;
+    }
+    else if (this.stack[this.stack.length - 1 - skip] instanceof Template) {
+      return this.stack[this.stack.length - 1 - skip].id;
+    }
+    else {
+      return null;
+    }
+  }
+  getId(id, skip = 0) {
+    let currentTemplate = this.currentTemplate(skip);
+    if (currentTemplate) {
+      return currentTemplate.nodes[id];
     }
     else {
       return this.nodes[id];
@@ -126,15 +148,9 @@ export class Interpreter {
   }
   AppendChildren(many) {
     let root = this.stack[this.stack.length - (1 + many)];
-    console.log("root");
-    console.log(root);
     let to_add = this.stack.splice(this.stack.length - many);
     for (let i = 0; i < many; i++) {
       const child = to_add[i];
-      console.log("appending");
-      console.log(child);
-      console.log("to")
-      console.log(root);
       if (child instanceof Template) {
         root.appendChild(child.template.content.cloneNode(true));
       }
@@ -144,9 +160,7 @@ export class Interpreter {
     }
   }
   ReplaceWith(root_id, m) {
-    console.log(`replacing ${root_id} #${m}`);
     let root = this.getId(root_id, m);
-    console.log(root);
     let els = this.stack.splice(this.stack.length - m).map(function (el) {
       if (el instanceof Template) {
         return el.template.content.cloneNode(true);
@@ -210,14 +224,20 @@ export class Interpreter {
     this.stack.push(el);
     this.setId(root, el);
   }
-  // This will only be called for real nodes. Listeners on templates are handled as dynamic
   NewEventListener(event_name, root, handler, bubbles) {
-    const element = this.nodes[root];
-    element.setAttribute("data-dioxus-id", `${root}`);
+    const element = this.getId(root);
+    let currentTemplateRefId = this.currentTempltateRefId();
+    if (currentTemplateRefId) {
+      element.setAttribute("data-dioxus-id", `${currentTemplateRefId},${root}`);
+    }
+    else {
+      element.setAttribute("data-dioxus-id", `${root}`);
+    }
     this.listeners.create(event_name, element, handler, bubbles);
+    console.log(element);
   }
   RemoveEventListener(root, event_name, bubbles) {
-    const element = this.nodes[root];
+    const element = this.getId(root);
     element.removeAttribute(`data-dioxus-id`);
     this.listeners.remove(element, event_name, bubbles);
   }
@@ -279,12 +299,13 @@ export class Interpreter {
   }
   CreateTemplateRef(id, template_id) {
     const el = this.templates[template_id];
+    el.id = id;
     this.nodes[id] = el;
     this.stack.push(el);
   }
   CreateTemplate(template_id) {
     this.templateInProgress = template_id;
-    this.templates[template_id] = new Template();
+    this.templates[template_id] = new Template(template_id, 0);
   }
   FinishTemplate(many) {
     this.templates[this.templateInProgress].finalize(this.stack.splice(this.stack.length - many));
@@ -416,10 +437,21 @@ export class Interpreter {
             if (realId === null) {
               return;
             }
+            if (realId.includes(",")) {
+              realId = realId.split(',');
+              realId = {
+                template_ref_id: parseInt(realId[0]),
+                template_node_id: parseInt(realId[1]),
+              };
+            }
+            else {
+              realId = parseInt(realId);
+            }
+            console.log(`sending event to ${realId}`);
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,
-                mounted_dom_id: parseInt(realId),
+                mounted_dom_id: realId,
                 contents: contents,
               })
             );

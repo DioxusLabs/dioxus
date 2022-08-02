@@ -97,7 +97,7 @@ use crate::{
         AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
         VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
     },
-    templete::{
+    template::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
         TemplateNodeType, TemplateValue, TextTemplateSegment, VTemplateRef,
     },
@@ -319,6 +319,7 @@ impl<'b> DiffState<'b> {
         }
 
         let real_id = self.scopes.reserve_node(node);
+        println!("created template ref node {}", real_id);
 
         new.id.set(Some(real_id));
 

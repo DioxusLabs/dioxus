@@ -1,7 +1,7 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::*,
-    templete::{
+    template::{
         TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
         TemplateValue, TextTemplateSegment,
     },
@@ -326,9 +326,9 @@ impl ScopeArena {
         scope.cycle_frame();
     }
 
-    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: ElementId) {
+    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: GlobalNodeId) {
         let nodes = self.nodes.borrow();
-        let mut cur_el = Some(GlobalNodeId::VNodeId(element));
+        let mut cur_el = Some(element);
 
         let state = Rc::new(BubbleState::new());
 
@@ -340,20 +340,25 @@ impl ScopeArena {
             match id {
                 GlobalNodeId::TemplateId {
                     template_ref_id,
-                    template_id,
+                    template_node_id,
                 } => {
                     log::trace!(
                         "looking for listener in {:?} in node {:?}",
                         template_ref_id,
-                        template_id
+                        template_node_id
                     );
+                    println!(
+                        "looking for listener in {:?} in node {:?}",
+                        template_ref_id, template_node_id
+                    );
+                    println!("{nodes:?}");
                     if let Some(template) = nodes.get(template_ref_id.0) {
                         let template = unsafe { &**template };
                         if let VNode::TemplateRef(template_ref) = template {
                             let templates = self.templates.borrow();
                             let template = templates.get(&template_ref.template_id).unwrap();
                             cur_el = template.with_node(
-                                template_id,
+                                template_node_id,
                                 bubble_template,
                                 bubble_template,
                                 (
@@ -427,6 +432,7 @@ impl ScopeArena {
                     let listener = dynamic_context.resolve_listener(*listener_idx);
                     if listener.event == event.name {
                         log::trace!("calling listener {:?}", listener.event);
+                        println!("calling listener {:?}", listener.event);
 
                         let mut cb = listener.callback.borrow_mut();
                         if let Some(cb) = cb.as_mut() {
@@ -446,7 +452,7 @@ impl ScopeArena {
                 if let Some(id) = el.parent {
                     Some(GlobalNodeId::TemplateId {
                         template_ref_id,
-                        template_id: id,
+                        template_node_id: id,
                     })
                 } else {
                     vnodes.get(template_ref_id.0).and_then(|el| {

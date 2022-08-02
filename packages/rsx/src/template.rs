@@ -390,6 +390,19 @@ impl ToTokens for TemplateBuilder {
             quote! {&[#((TemplateNodeId(#raw), #indecies)),*]}
         });
 
+        let mut listener_mapping = Vec::new();
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Element(el) => {
+                    if !el.listeners.is_empty() {
+                        let raw = n.id.0;
+                        listener_mapping.push(quote! {TemplateNodeId(#raw)});
+                    }
+                }
+                _ => (),
+            }
+        }
+
         let quoted = quote! {
             {
                 const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
@@ -397,6 +410,7 @@ impl ToTokens for TemplateBuilder {
                 const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
                 const __ROOT_NODES: &'static [dioxus::prelude::TemplateNodeId] = &[#(#root_nodes),*];
                 const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
+                const __NODES_WITH_LISTENERS: &'static [dioxus::prelude::TemplateNodeId] = &[#(#listener_mapping),*];
                 static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
                     // check each property to see if it is volatile
                     let mut volatile = Vec::new();
@@ -416,7 +430,7 @@ impl ToTokens for TemplateBuilder {
                 static __TEMPLATE: dioxus::prelude::Template = Template::Static {
                     nodes: __NODES,
                     root_nodes: __ROOT_NODES,
-                    dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
+                    dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING, __NODES_WITH_LISTENERS),
                 };
 
                 __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)

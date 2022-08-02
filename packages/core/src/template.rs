@@ -115,6 +115,8 @@ impl Into<u64> for RendererTemplateId {
 ///
 /// `TemplateNodeId` is a `usize` that is only unique across the template that contains it, it is not unique across multaple instances of that template.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct TemplateNodeId(pub usize);
 
 impl Into<u64> for TemplateNodeId {
@@ -444,7 +446,7 @@ where
 
         diff_state.element_stack.push(GlobalNodeId::TemplateId {
             template_ref_id: real_id,
-            template_id: self.id,
+            template_node_id: self.id,
         });
         match &self.node_type {
             TemplateNodeType::Element(el) => {
@@ -473,7 +475,7 @@ where
                     let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
                     let global_id = GlobalNodeId::TemplateId {
                         template_ref_id: real_id,
-                        template_id: self.id,
+                        template_node_id: self.id,
                     };
                     listener.mounted_node.set(Some(global_id));
                     diff_state
