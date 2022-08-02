@@ -133,27 +133,14 @@ pub struct VTemplateRef<'a> {
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
     pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a>) {
-        fn hydrate_inner<
-            'b,
-            Nodes,
-            Attributes,
-            V,
-            Children,
-            Fragment,
-            Listeners,
-            TextSegments,
-            Text,
-        >(
+        fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
             ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template),
         ) where
-            Nodes: AsRef<
-                [TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>],
-            >,
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
@@ -229,9 +216,6 @@ impl<'a> VTemplateRef<'a> {
                         // this will only be triggered for root elements
                         diff_state.create_node(&template_ref.dynamic_context.nodes[*idx]);
                     }
-                    _ => {
-                        todo!()
-                    }
                 }
                 diff_state.element_stack.pop();
             }
@@ -248,6 +232,8 @@ pub enum Template {
     Static {
         /// The nodes in the template
         nodes: StaticTemplateNodes,
+        /// The number of root nodes the template has
+        root_nodes: StaticRootNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: StaticDynamicNodeMapping,
     },
@@ -255,6 +241,8 @@ pub enum Template {
     Owned {
         /// The nodes in the template
         nodes: OwnedTemplateNodes,
+        /// The number of root nodes the template has
+        root_nodes: OwnedRootNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: OwnedDynamicNodeMapping,
     },
@@ -272,38 +260,34 @@ impl Template {
             Template::Static { nodes, .. } => nodes.is_empty(),
             Template::Owned { nodes, .. } => nodes.is_empty(),
         };
+        let mut len = 0;
         if !empty {
-            let id = TemplateNodeId(0);
-            self.create_node(mutations, bump, id);
+            let roots = match self {
+                Template::Static {
+                    root_nodes: root_count,
+                    ..
+                } => *root_count,
+                Template::Owned {
+                    root_nodes: root_count,
+                    ..
+                } => root_count,
+            };
+            for root in roots {
+                len += 1;
+                self.create_node(mutations, bump, *root);
+            }
         }
-        let len = match self {
-            Template::Static { nodes, .. } => {
-                if let TemplateNodeType::Fragment(n) = &nodes[0].node_type {
-                    n.len()
-                } else {
-                    1
-                }
-            }
-            Template::Owned { nodes, .. } => {
-                if let TemplateNodeType::Fragment(n) = &nodes[0].node_type {
-                    n.len()
-                } else {
-                    1
-                }
-            }
-        };
         mutations.finish_templete(len as u64);
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
-        fn crate_node_inner<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
+        fn crate_node_inner<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (&mut Mutations<'b>, &'b Bump, &Template),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
@@ -351,11 +335,6 @@ impl Template {
                 }
                 TemplateNodeType::DynamicNode(_) => {
                     mutations.create_placeholder(id);
-                }
-                TemplateNodeType::Fragment(nodes) => {
-                    for node in nodes.as_ref() {
-                        template.create_node(mutations, bump, *node);
-                    }
                 }
             }
         }
@@ -479,7 +458,6 @@ pub type StaticTemplateNode = TemplateNode<
     &'static [TemplateAttribute<StaticTemplateValue>],
     StaticTemplateValue,
     &'static [TemplateNodeId],
-    &'static [TemplateNodeId],
     &'static [usize],
     &'static [TextTemplateSegment<&'static str>],
     &'static str,
@@ -490,22 +468,26 @@ pub type OwnedTemplateNode = TemplateNode<
     Vec<TemplateAttribute<OwnedTemplateValue>>,
     OwnedTemplateValue,
     Vec<TemplateNodeId>,
-    Vec<TemplateNodeId>,
     Vec<usize>,
     Vec<TextTemplateSegment<String>>,
     String,
 >;
 
+/// A stack allocated list of root Template nodes
+pub type StaticRootNodes = &'static [TemplateNodeId];
+
+/// A heap allocated list of root Template nodes
+pub type OwnedRootNodes = Vec<TemplateNodeId>;
+
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
 #[derive(Debug, Clone, Copy)]
-pub struct TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>
+pub struct TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
     V: TemplateValue,
     Children: AsRef<[TemplateNodeId]>,
-    Fragment: AsRef<[TemplateNodeId]>,
     Listeners: AsRef<[usize]>,
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
@@ -513,8 +495,7 @@ where
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
     /// The type of the [`TemplateNode`].
-    pub node_type:
-        TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>,
+    pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
 }
 
 /// A template for an attribute
@@ -595,9 +576,8 @@ impl TemplateValue for OwnedTemplateValue {
 
 /// The kind of node the template is.
 #[derive(Debug, Clone, Copy)]
-pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text, Fragment>
+pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
 where
-    Fragment: AsRef<[TemplateNodeId]>,
     Attributes: AsRef<[TemplateAttribute<V>]>,
     Children: AsRef<[TemplateNodeId]>,
     Listeners: AsRef<[usize]>,
@@ -609,8 +589,6 @@ where
     Element(TemplateElement<Attributes, V, Children, Listeners>),
     /// A text node (e.g. "Hello World").
     Text(TextTemplate<TextSegments, Text>),
-    /// A fragment node (e.g. div{}, div{}).
-    Fragment(Fragment),
     /// A dynamic node (e.g. (0..10).map(|i| cx.render(rsx!{div{}})))
     /// The index in the dynamic node array this node should be replaced with
     DynamicNode(usize),
@@ -830,6 +808,8 @@ pub struct SetTemplateMsg {
     pub id: TemplateId,
     /// The nodes of the new template
     pub nodes: OwnedTemplateNodes,
+    /// The number of root nodes in the new template
+    pub root_count: OwnedRootNodes,
     /// The mapping from dynamic parts to the ids that depend on them
     pub dynamic_mapping: OwnedDynamicNodeMapping,
 }

@@ -399,8 +399,8 @@ impl ScopeArena {
             }
         }
 
-        fn bubble_template<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (
                 &Ref<Slab<*const VNode>>,
                 &TemplateContext<'b>,
@@ -413,7 +413,6 @@ impl ScopeArena {
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,

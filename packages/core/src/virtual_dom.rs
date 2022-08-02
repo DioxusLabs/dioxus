@@ -404,12 +404,14 @@ impl VirtualDom {
                 let SetTemplateMsg {
                     id,
                     nodes,
+                    root_count,
                     dynamic_mapping,
                 } = *msg;
                 self.scopes.template_resolver.borrow_mut().insert(
                     id,
                     Template::Owned {
                         nodes,
+                        root_nodes: root_count,
                         dynamic_mapping,
                     },
                 );

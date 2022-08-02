@@ -127,7 +127,6 @@ impl ToTokens for TemplateAttributeBuilder {
 enum TemplateNodeTypeBuilder {
     Element(TemplateElementBuilder),
     Text(TextTemplate<Vec<TextTemplateSegment<String>>, String>),
-    Fragment(Vec<TemplateNodeId>),
     DynamicNode(usize),
 }
 
@@ -144,15 +143,6 @@ impl ToTokens for TemplateNodeTypeBuilder {
                 });
                 tokens.append_all(quote! {
                     TemplateNodeType::Text(TextTemplate::new(&[#(#segments),*]))
-                });
-            }
-            TemplateNodeTypeBuilder::Fragment(frag) => {
-                let ids = frag.iter().map(|id| {
-                    let raw = id.0;
-                    quote! {TemplateNodeId(#raw)}
-                });
-                tokens.append_all(quote! {
-                    TemplateNodeType::Fragment(&[#(#ids),*])
                 });
             }
             TemplateNodeTypeBuilder::DynamicNode(idx) => tokens.append_all(quote! {
@@ -184,6 +174,7 @@ impl ToTokens for TemplateNodeBuilder {
 #[derive(Default)]
 pub(crate) struct TemplateBuilder {
     nodes: Vec<TemplateNodeBuilder>,
+    root_nodes: Vec<TemplateNodeId>,
     dynamic_context: DynamicTemplateContextBuilder,
 }
 
@@ -191,24 +182,9 @@ impl TemplateBuilder {
     pub fn from_roots(roots: Vec<BodyNode>) -> Self {
         let mut builder = Self::default();
 
-        let fragment_id = TemplateNodeId(0);
-        let create_fragment = roots.len() > 1;
-        if create_fragment {
-            builder.nodes.push(TemplateNodeBuilder {
-                id: fragment_id,
-                node_type: TemplateNodeTypeBuilder::Fragment(Vec::new()),
-            });
-        }
-        let mut root_ids = Vec::new();
         for root in roots {
-            root_ids.push(builder.build_node(root, None));
-        }
-        if create_fragment {
-            if let TemplateNodeTypeBuilder::Fragment(ids) =
-                &mut builder.nodes[fragment_id.0].node_type
-            {
-                *ids = root_ids;
-            }
+            let id = builder.build_node(root, None);
+            builder.root_nodes.push(id);
         }
 
         builder
@@ -349,8 +325,14 @@ impl ToTokens for TemplateBuilder {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let Self {
             nodes,
+            root_nodes,
             dynamic_context,
         } = self;
+
+        let root_nodes = root_nodes.iter().map(|id| {
+            let raw = id.0;
+            quote! { TemplateNodeId(#raw) }
+        });
 
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         for n in nodes {
@@ -413,6 +395,7 @@ impl ToTokens for TemplateBuilder {
                 const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
                 const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
                 const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
+                const __ROOT_NODES: &'static [dioxus::prelude::TemplateNodeId] = &[#(#root_nodes),*];
                 const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
                 static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
                     // check each property to see if it is volatile
@@ -432,6 +415,7 @@ impl ToTokens for TemplateBuilder {
                 static __STATIC_VOLITALE_MAPPING: dioxus::prelude::LazyStaticVec<(dioxus::prelude::TemplateNodeId, usize)> = LazyStaticVec(__VOLITALE_MAPPING);
                 static __TEMPLATE: dioxus::prelude::Template = Template::Static {
                     nodes: __NODES,
+                    root_nodes: __ROOT_NODES,
                     dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING),
                 };
 

@@ -602,17 +602,7 @@ impl<'b> DiffState<'b> {
         let resolver = self.scopes.template_resolver.borrow();
         let template = resolver.get(&new.template_id).unwrap();
 
-        fn diff_attributes<
-            'b,
-            Nodes,
-            Attributes,
-            V,
-            Children,
-            Fragment,
-            Listeners,
-            TextSegments,
-            Text,
-        >(
+        fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
             ctx: (
                 &mut Mutations<'b>,
@@ -622,13 +612,10 @@ impl<'b> DiffState<'b> {
                 usize,
             ),
         ) where
-            Nodes: AsRef<
-                [TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>],
-            >,
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
@@ -667,14 +654,13 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn set_attribute<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
+        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (&mut Mutations<'b>, &'b Bump, &VTemplateRef<'b>, usize),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
@@ -710,14 +696,13 @@ impl<'b> DiffState<'b> {
             )
         }
 
-        fn diff_dynamic_node<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Fragment, Listeners, TextSegments, Text>,
+        fn diff_dynamic_node<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
-            Fragment: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
@@ -767,22 +752,13 @@ impl<'b> DiffState<'b> {
             }
         }
         for node_id in dirty_text_nodes {
-            fn diff_text<'b, Attributes, V, Children, Fragment, Listeners, TextSegments, Text>(
-                node: &TemplateNode<
-                    Attributes,
-                    V,
-                    Children,
-                    Fragment,
-                    Listeners,
-                    TextSegments,
-                    Text,
-                >,
+            fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+                node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
                 ctx: (&mut DiffState<'b>, &TemplateContext<'b>),
             ) where
                 Attributes: AsRef<[TemplateAttribute<V>]>,
                 V: TemplateValue,
                 Children: AsRef<[TemplateNodeId]>,
-                Fragment: AsRef<[TemplateNodeId]>,
                 Listeners: AsRef<[usize]>,
                 TextSegments: AsRef<[TextTemplateSegment<Text>]>,
                 Text: AsRef<str>,
