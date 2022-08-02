@@ -1,5 +1,5 @@
 use std::{
-    fs::{create_dir, create_dir_all},
+    fs::{create_dir, create_dir_all, remove_dir_all},
     path::PathBuf, io::{Read, Write},
 };
 
@@ -33,6 +33,11 @@ impl UserData for PluginFileSystem {
                 return Ok(v.is_ok());
             }
             Ok(true)
+        });
+        methods.add_function("remove_dir", |_, path: String| {
+            let path = PathBuf::from(path);
+            let r = remove_dir_all(path);
+            Ok(r.is_ok())
         });
         methods.add_function("file_get_content", |_, path: String| {
             let path = PathBuf::from(path);

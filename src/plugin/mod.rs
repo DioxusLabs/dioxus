@@ -1,7 +1,11 @@
-use std::{io::Read, path::PathBuf};
+use std::{
+    io::{Read, Write},
+    path::PathBuf,
+};
 
 use mlua::{Lua, Table};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 use crate::tools::{app_path, clone_repo};
 
@@ -46,7 +50,8 @@ impl PluginManager {
         lua.globals().set("PLUGIN_DIRS", PluginDirs).unwrap();
 
         let plugin_dir = Self::init_plugin_dir();
-        let mut index = 1;
+        let mut index: u32 = 1;
+        let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
         for entry in std::fs::read_dir(&plugin_dir).ok()? {
             if entry.is_err() {
                 continue;
@@ -60,7 +65,14 @@ impl PluginManager {
                     let mut buffer = String::new();
                     file.read_to_string(&mut buffer).unwrap();
                     let info = lua.load(&buffer).eval::<PluginInfo>().unwrap();
-                    let _ = manager.set(index, info);
+                    let _ = manager.set(index, info.clone());
+
+                    // call `on_init` if file "dcp.json" not exists
+                    let dcp_file = plugin_dir.join("dcp.json");
+                    if !dcp_file.is_file() {
+                        init_list.push((index, dcp_file, info));
+                    }
+
                     index += 1;
                 }
             }
@@ -71,6 +83,22 @@ impl PluginManager {
             .unwrap();
         lua.globals().set("manager", manager).unwrap();
 
+        for (idx, path, info) in init_list {
+            let res = lua.load(&format!("manager[{idx}].on_init()")).exec();
+            if res.is_ok() {
+                let mut file = std::fs::File::create(path).unwrap();
+                let buffer = json!({
+                    "name": info.name,
+                    "author": info.author,
+                    "repository": info.repository,
+                    "version": info.version,
+                })
+                .to_string();
+                let buffer = buffer.as_bytes();
+                file.write_all(buffer).unwrap();
+            }
+        }
+
         Some(Self { lua })
     }
 
@@ -78,8 +106,7 @@ impl PluginManager {
         let lua = &self.lua;
         let manager = lua.globals().get::<_, Table>("manager")?;
         for i in 1..(manager.len()? as i32 + 1) {
-            let v = manager.get::<i32, PluginInfo>(i)?;
-            println!("{v:?}");
+            let _ = manager.get::<i32, PluginInfo>(i)?;
             let code = format!("manager[{i}].on_load()");
             lua.load(&code).exec()?;
         }

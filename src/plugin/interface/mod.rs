@@ -6,7 +6,7 @@ pub mod fs;
 pub mod download;
 pub mod dirs;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PluginInfo<'lua> {
     pub name: String,
     pub repository: String,
