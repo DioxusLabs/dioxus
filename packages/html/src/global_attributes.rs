@@ -27,7 +27,7 @@ macro_rules! style_trait_methods {
         $(
             #[allow(non_upper_case_globals)]
             const $name: AttributeDiscription = AttributeDiscription{
-                name: stringify!($lit),
+                name: $lit,
                 namespace: Some("style"),
                 volatile: false
             };
@@ -44,7 +44,7 @@ macro_rules! aria_trait_methods {
         $(
             #[allow(non_upper_case_globals)]
             const $name: AttributeDiscription = AttributeDiscription{
-                name: stringify!($lit),
+                name: $lit,
                 namespace: None,
                 volatile: false
             };
