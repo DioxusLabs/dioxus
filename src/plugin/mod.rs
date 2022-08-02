@@ -87,13 +87,14 @@ impl PluginManager {
             let res = lua.load(&format!("manager[{idx}].on_init()")).exec();
             if res.is_ok() {
                 let mut file = std::fs::File::create(path).unwrap();
-                let buffer = json!({
+                let value = json!({
                     "name": info.name,
                     "author": info.author,
                     "repository": info.repository,
                     "version": info.version,
-                })
-                .to_string();
+                    "generate_time": chrono::Local::now().timestamp(),
+                });
+                let buffer = serde_json::to_string_pretty(&value).unwrap();
                 let buffer = buffer.as_bytes();
                 file.write_all(buffer).unwrap();
             }
