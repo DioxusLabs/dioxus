@@ -148,76 +148,7 @@ impl<'a> VTemplateRef<'a> {
             let (diff_state, template_ref, template) = ctx;
             for id in template.all_dynamic() {
                 let dynamic_node = &nodes.as_ref()[id.0];
-                let real_id = template_ref.id.get().unwrap();
-                diff_state.element_stack.push(GlobalNodeId::TemplateId {
-                    template_ref_id: real_id,
-                    template_id: id,
-                });
-                match &dynamic_node.node_type {
-                    TemplateNodeType::Element(el) => {
-                        let TemplateElement {
-                            attributes,
-                            children,
-                            listeners,
-                            ..
-                        } = el;
-                        for attr in attributes.as_ref() {
-                            if let TemplateAttributeValue::Dynamic(idx) = attr.value {
-                                let attribute = Attribute {
-                                    attribute: attr.attribute,
-                                    value: template_ref
-                                        .dynamic_context
-                                        .resolve_attribute(idx)
-                                        .to_owned(),
-                                    is_static: false,
-                                };
-                                let scope_bump = diff_state.current_scope_bump();
-                                diff_state
-                                    .mutations
-                                    .set_attribute(scope_bump.alloc(attribute), id);
-                            }
-                        }
-                        for listener_idx in listeners.as_ref() {
-                            let listener =
-                                template_ref.dynamic_context.resolve_listener(*listener_idx);
-                            let global_id = GlobalNodeId::TemplateId {
-                                template_ref_id: real_id,
-                                template_id: id,
-                            };
-                            listener.mounted_node.set(Some(global_id));
-                            diff_state
-                                .mutations
-                                .new_event_listener(listener, diff_state.current_scope());
-                        }
-                        let mut children_created = 0;
-                        for child in children.as_ref() {
-                            let node = &nodes.as_ref()[child.0];
-                            if let TemplateNodeType::DynamicNode(idx) = node.node_type {
-                                diff_state.create_node(&template_ref.dynamic_context.nodes[idx]);
-                                children_created += 1;
-                            }
-                        }
-                        if children_created > 0 {
-                            diff_state.mutations.push_root(id);
-                            diff_state.mutations.append_children(children_created);
-                            diff_state.mutations.pop_root();
-                        }
-                    }
-                    TemplateNodeType::Text(text) => {
-                        let new_text = template_ref
-                            .dynamic_context
-                            .resolve_text(&text.segments.as_ref());
-                        let scope_bump = diff_state.current_scope_bump();
-                        diff_state
-                            .mutations
-                            .set_text(scope_bump.alloc(new_text), id)
-                    }
-                    TemplateNodeType::DynamicNode(idx) => {
-                        // this will only be triggered for root elements
-                        diff_state.create_node(&template_ref.dynamic_context.nodes[*idx]);
-                    }
-                }
-                diff_state.element_stack.pop();
+                dynamic_node.hydrate(diff_state, template_ref);
             }
         }
 
@@ -496,6 +427,77 @@ where
     pub id: TemplateNodeId,
     /// The type of the [`TemplateNode`].
     pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
+}
+
+impl<Attributes, V, Children, Listeners, TextSegments, Text>
+    TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
+where
+    Attributes: AsRef<[TemplateAttribute<V>]>,
+    V: TemplateValue,
+    Children: AsRef<[TemplateNodeId]>,
+    Listeners: AsRef<[usize]>,
+    TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+    Text: AsRef<str>,
+{
+    fn hydrate<'b>(&self, diff_state: &mut DiffState<'b>, template_ref: &VTemplateRef<'b>) {
+        let real_id = template_ref.id.get().unwrap();
+
+        diff_state.element_stack.push(GlobalNodeId::TemplateId {
+            template_ref_id: real_id,
+            template_id: self.id,
+        });
+        match &self.node_type {
+            TemplateNodeType::Element(el) => {
+                let TemplateElement {
+                    attributes,
+                    listeners,
+                    ..
+                } = el;
+                for attr in attributes.as_ref() {
+                    if let TemplateAttributeValue::Dynamic(idx) = attr.value {
+                        let attribute = Attribute {
+                            attribute: attr.attribute,
+                            value: template_ref
+                                .dynamic_context
+                                .resolve_attribute(idx)
+                                .to_owned(),
+                            is_static: false,
+                        };
+                        let scope_bump = diff_state.current_scope_bump();
+                        diff_state
+                            .mutations
+                            .set_attribute(scope_bump.alloc(attribute), self.id);
+                    }
+                }
+                for listener_idx in listeners.as_ref() {
+                    let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
+                    let global_id = GlobalNodeId::TemplateId {
+                        template_ref_id: real_id,
+                        template_id: self.id,
+                    };
+                    listener.mounted_node.set(Some(global_id));
+                    diff_state
+                        .mutations
+                        .new_event_listener(listener, diff_state.current_scope());
+                }
+            }
+            TemplateNodeType::Text(text) => {
+                let new_text = template_ref
+                    .dynamic_context
+                    .resolve_text(&text.segments.as_ref());
+                let scope_bump = diff_state.current_scope_bump();
+                diff_state
+                    .mutations
+                    .set_text(scope_bump.alloc(new_text), self.id)
+            }
+            TemplateNodeType::DynamicNode(idx) => {
+                // this will only be triggered for root elements
+                let created = diff_state.create_node(&template_ref.dynamic_context.nodes[*idx]);
+                diff_state.mutations.replace_with(self.id, created as u32);
+            }
+        }
+        diff_state.element_stack.pop();
+    }
 }
 
 /// A template for an attribute
