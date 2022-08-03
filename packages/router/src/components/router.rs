@@ -29,8 +29,8 @@ pub struct RouterProps<'a> {
     /// By default set to `"active"`.
     pub active_class: Option<&'a str>,
 
-    /// Set the active url.
-    pub active_url: Option<String>,
+    /// Set the initial url.
+    pub initial_url: Option<String>,
 }
 
 /// A component that conditionally renders children based on the current location of the app.
@@ -46,7 +46,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
-                active_url: cx.props.active_url.clone(),
+                initial_url: cx.props.initial_url.clone(),
             },
         ))
     });

@@ -85,11 +85,11 @@ impl RouterCore {
         #[cfg(not(feature = "web"))]
         let history = Box::new(hash::new());
 
-        let route = match &cfg.active_url {
+        let route = match &cfg.initial_url {
             Some(url) => Arc::new(ParsedRoute {
                 url: Url::from_str(&url).expect(
                     format!(
-                        "RouterCfg expects a valid active_url, but got '{}'. Example: '{{scheme}}://{{?authority}}/{{?path}}'",
+                        "RouterCfg expects a valid initial_url, but got '{}'. Example: '{{scheme}}://{{?authority}}/{{?path}}'",
                         &url
                     ).as_str()
                 ),
