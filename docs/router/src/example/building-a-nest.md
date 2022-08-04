@@ -48,13 +48,13 @@ fn NavBar(cx: Scope) -> Element {
                 // new stuff starts here
                 li {
                     Link {
-                        target: NtPath(String::from("")),
+                        target: NtPath(String::from("/")),
                         "Home"
                     }
                 }
                 li {
                     Link {
-                        target: "/blog".into(), //short form
+                        target: "/blog", //short form
                         "Blog"
                     }
                 }
@@ -184,13 +184,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: "/blog/1".into(),
+                    target: "/blog/1",
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: "/blog/2".into(),
+                    target: "/blog/2",
                     "Read the second blog post"
                 }
             }

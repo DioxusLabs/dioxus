@@ -32,7 +32,7 @@ fn GoToDioxus(cx: Scope) -> Element {
             "Explicit NtExternal target"
         }
         Link {
-            target: "https://dioxuslabs.com".into(),
+            target: "https://dioxuslabs.com",
             "Implicit NtExternal target"
         }
     })
@@ -148,7 +148,7 @@ fn NavBar(cx: Scope) -> Element {
                 }
                 li {
                     Link {
-                        target: "/blog".into(),
+                        target: "/blog",
                         "Blog"
                     }
                 }

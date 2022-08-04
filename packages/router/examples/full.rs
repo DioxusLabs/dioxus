@@ -98,7 +98,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: "/the_best_berry".into(),
+                    target: "/the_best_berry",
                     "Go to the page about the best berry"
                 }
             }

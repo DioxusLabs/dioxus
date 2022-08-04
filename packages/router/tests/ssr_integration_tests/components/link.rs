@@ -16,7 +16,7 @@ fn basic() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtPath(String::from("/")),
+                    target: "/",
                     "Test Link"
                 }
             }
@@ -142,24 +142,24 @@ fn with_class_and_exact_active() {
                 history: &|| MemoryHistory::with_first(String::from("/test/")),
 
                 Link {
-                    target: NtPath(String::from("/")),
+                    target: "/",
                     exact: true,
                     class: "test_class_1",
                     "Test Link 1"
                 }
                 Link {
-                    target: NtPath(String::from("/")),
+                    target: "/",
                     class: "test_class_2",
                     "Test Link 2"
                 }
                 Link {
-                    target: NtPath(String::from("/test/")),
+                    target: "/test/",
                     exact:true,
                     class: "test_class_3",
                     "Test Link 3"
                 }
                 Link {
-                    target: NtPath(String::from("/test/")),
+                    target: "/test/",
                     class: "test_class_4",
                     "Test Link 4"
                 }
@@ -230,7 +230,7 @@ fn with_external_target() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtExternal(ADDRESS.to_string()),
+                    target: ADDRESS,
                     "Test Link"
                 }
             }
@@ -254,7 +254,7 @@ fn with_external_target_and_rel() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtExternal(ADDRESS.to_string()),
+                    target: ADDRESS,
                     rel: "custom",
                     "Test Link"
                 }
@@ -280,7 +280,7 @@ fn without_router_ignore_in_release() {
 fn LinkWithoutRouter(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtPath(String::new()),
+            target: "",
             "Test link"
         }
     })

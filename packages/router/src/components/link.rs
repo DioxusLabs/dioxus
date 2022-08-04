@@ -42,6 +42,7 @@ pub struct LinkProps<'a> {
     /// Defaults to `"noreferrer noopener"` for [`NtExternal`] targets.
     pub rel: Option<&'a str>,
     /// The navigation target. Corresponds to the `href` of an HTML anchor.
+    #[props(into)]
     pub target: NavigationTarget,
 }
 
