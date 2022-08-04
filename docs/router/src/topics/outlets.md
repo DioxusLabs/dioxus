@@ -134,7 +134,7 @@ When nesting [`Outlet`]s, they communicate with each other. This allows the
 nested [`Outlet`] to render the content of the nested route.
 
 We can override the detected value. Be careful when doing so, it is incredibly
-easy to create an unterminated recursion.
+easy to create an unterminated recursion. See below for an example of that.
 
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
@@ -193,5 +193,52 @@ readability):
     Nested
 </h2>
 ```
+
+### Outlet recursion
+This code will create a crash due to an unterminated recursion using
+[`Outlet`]s.
+
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+#
+fn Content(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Heyho!" }
+        Outlet {
+            depth: 0,
+        }
+    })
+}
+
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new().index(Content as Component)
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+
+            Outlet { }
+        }
+    })
+}
+```
+
+The [`Outlet`] directly within the [`Router`] has no parent [`Outlet`], so its
+depth will be `0`. When rendering for the path `/`, it therefore will render the
+`Content` component.
+
+The `Content` component will render an `h1` and an [`Outlet`]. That [`Outlet`]
+would usually have a depth of `1`, since its a descendant of the [`Outlet`] in
+the [`Router`]. However, we override its depth to `0`, so it will render the
+`Content` component.
+
+That means the `Content` component will recurse until someone (e.g. the OS) puts
+a stop to it.
 
 [`Outlet`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Outlet.html
