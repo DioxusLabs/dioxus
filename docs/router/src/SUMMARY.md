@@ -21,6 +21,7 @@
   - [Named Navigation Failure](./topics/failures/named.md)
   - [External Navigation Failure](./topics/failures/external.md)
 - [History Providers](./topics/history-providers.md)
+- [History Buttons](./topics/history-buttons.md)
 - [Global Fallback (404 page)](./topics/global_fallback.md)
 
 # Example Project
