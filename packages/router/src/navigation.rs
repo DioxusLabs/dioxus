@@ -1,6 +1,7 @@
-use std::{convert::Infallible, str::FromStr};
+use std::str::FromStr;
 
 use serde::Serialize;
+use url::{ParseError, Url};
 
 /// A target for the router to navigate to.
 #[derive(Clone, Debug)]
@@ -49,19 +50,19 @@ impl NavigationTarget {
 
 impl From<&'static str> for NavigationTarget {
     fn from(s: &'static str) -> Self {
-        s.parse().unwrap()
+        s.parse().unwrap_or_else(|_| Self::NtPath(s.to_string()))
     }
 }
 
 impl FromStr for NavigationTarget {
-    type Err = Infallible;
+    type Err = ParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(if s.starts_with("http://") || s.starts_with("https://") {
-            Self::NtExternal(s.to_string())
-        } else {
-            Self::NtPath(s.to_string())
-        })
+        match Url::parse(s) {
+            Ok(_) => Ok(Self::NtExternal(s.to_string())),
+            Err(ParseError::RelativeUrlWithoutBase) => Ok(Self::NtPath(s.to_string())),
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -95,16 +96,20 @@ pub(crate) enum NamedNavigationSegment {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
     fn nt_from_str_external() {
-        let target = "https://dioxuslabs.com/";
-        let nt: NavigationTarget = target.parse().unwrap();
+        let targets = vec!["https://dioxuslabs.com/", "ftp://dioxuslabs.com/"];
 
-        assert!(matches!(nt, NavigationTarget::NtExternal(_)));
-        if let NavigationTarget::NtExternal(url) = nt {
-            assert_eq!(url, target);
+        for t in targets {
+            let nt: NavigationTarget = t.parse().unwrap();
+
+            assert!(nt.is_nt_external());
+            if let NavigationTarget::NtExternal(url) = nt {
+                assert_eq!(url, t);
+            }
         }
     }
 
