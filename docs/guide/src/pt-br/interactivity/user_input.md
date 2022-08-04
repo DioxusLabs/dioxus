@@ -7,7 +7,7 @@ As interfaces geralmente precisam fornecer uma maneira de inserir dados: por exe
 Com entradas controladas, você fica diretamente responsável pelo estado da entrada. Isso lhe dá muita flexibilidade e facilita manter as coisas em sincronia. Por exemplo, é assim que você criaria uma entrada de texto controlada:
 
 ```rust
-{{#include ../../examples/input_controlled.rs:component}}
+{{#include ../../../examples/input_controlled.rs:component}}
 ```
 
 Observe a flexibilidade - você pode:
@@ -25,7 +25,7 @@ Como alternativa às entradas controladas, você pode simplesmente deixar a plat
 Como você não tem necessariamente o valor atual da entrada não controlada no estado, você pode acessá-lo ouvindo os eventos `oninput` (de maneira semelhante aos componentes controlados) ou, se a entrada for parte de um formulário, você pode acessar os dados do formulário nos eventos do formulário (por exemplo, `oninput` ou `onsubmit`):
 
 ```rust
-{{#include ../../examples/input_uncontrolled.rs:component}}
+{{#include ../../../examples/input_uncontrolled.rs:component}}
 ```
 
 ```

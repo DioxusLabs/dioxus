@@ -9,7 +9,7 @@ Para evitar a repetição, você pode encapsular a lógica de negócios com base
 Por exemplo, se muitos componentes precisam acessar uma _struct_ `AppSettings`, você pode criar um gancho de "atalho":
 
 ```rust
-{{#include ../../examples/hooks_composed.rs:wrap_context}}
+{{#include ../../../examples/hooks_composed.rs:wrap_context}}
 ```
 
 ## Lógica de Hook Personalizada

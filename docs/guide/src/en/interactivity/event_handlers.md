@@ -9,7 +9,7 @@ Event handlers are similar to regular attributes, but their name usually starts 
 For example, to handle clicks on an element, we can specify an `onclick` handler:
 
 ```rust
-{{#include ../../examples/event_click.rs:rsx}}
+{{#include ../../../examples/event_click.rs:rsx}}
 ```
 
 ## The `Event` object
@@ -30,7 +30,7 @@ To learn what the different event types provide, read the [events module docs](h
 When you have e.g. a `button` inside a `div`, any click on the `button` is also a click on the `div`. For this reason, Dioxus propagates the click event: first, it is triggered on the target element, then on parent elements. If you want to prevent this behavior, you can call `cancel_bubble()` on the event:
 
 ```rust
-{{#include ../../examples/event_click.rs:rsx}}
+{{#include ../../../examples/event_click.rs:rsx}}
 ```
 
 ## Prevent Default
@@ -40,7 +40,7 @@ Some events have a default behavior. For keyboard events, this might be entering
 In some instances, might want to avoid this default behavior. For this, you can add the `prevent_default` attribute with the name of the handler whose default behavior you want to stop. This attribute is special: you can attach it multiple times for multiple attributes:
 
 ```rust
-{{#include ../../examples/event_prevent_default.rs:prevent_default}}
+{{#include ../../../examples/event_prevent_default.rs:prevent_default}}
 ```
 
 Any event handlers will still be called.
@@ -52,15 +52,15 @@ Any event handlers will still be called.
 Sometimes, you might want to make a component that accepts an event handler. A simple example would be a `FancyButton` component, which accepts an `on_click` handler:
 
 ```rust
-{{#include ../../examples/event_handler_prop.rs:component_with_handler}}
+{{#include ../../../examples/event_handler_prop.rs:component_with_handler}}
 ```
 
 Then, you can use it like any other handler:
 
 ```rust
-{{#include ../../examples/event_handler_prop.rs:usage}}
+{{#include ../../../examples/event_handler_prop.rs:usage}}
 ```
 
 > Note: just like any other attribute, you can name the handlers anything you want! Though they must start with `on`, for the prop to be automatically turned into an `EventHandler` at the call site.
-> 
+>
 > You can also put custom data in the event, rather than e.g. `MouseData`

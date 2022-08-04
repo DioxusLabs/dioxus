@@ -12,7 +12,7 @@ For example, suppose we want to build a meme editor. We want to have an input to
 
 We start with a `Meme` component, responsible for rendering a meme with a given caption:
 ```rust
-{{#include ../../examples/meme_editor.rs:meme_component}}
+{{#include ../../../examples/meme_editor.rs:meme_component}}
 ```
 
 > Note that the `Meme` component is unaware where the caption is coming from – it could be stored in `use_state`, `use_ref`, or a constant. This ensures that it is very reusable – the same component can be used for a meme gallery without any changes!
@@ -20,12 +20,12 @@ We start with a `Meme` component, responsible for rendering a meme with a given 
 We also create a caption editor, completely decoupled from the meme. The caption editor must not store the caption itself – otherwise, how will we provide it to the `Meme` component? Instead, it should accept the current caption as a prop, as well as an event handler to delegate input events to:
 
 ```rust
-{{#include ../../examples/meme_editor.rs:caption_editor}}
+{{#include ../../../examples/meme_editor.rs:caption_editor}}
 ```
 
 Finally, a third component will render the other two as children. It will be responsible for keeping the state and passing down the relevant props.
 ```rust
-{{#include ../../examples/meme_editor.rs:meme_editor}}
+{{#include ../../../examples/meme_editor.rs:meme_editor}}
 ```
 ![Meme Editor Screenshot: An old plastic skeleton sitting on a park bench. Caption: "me waiting for a language feature"](./images/meme_editor_screenshot.png)
 
@@ -44,23 +44,23 @@ Dioxus offers a better solution than this "prop drilling" – providing context.
 First, we have to create a struct for our dark mode configuration:
 
 ```rust
-{{#include ../../examples/meme_editor_dark_mode.rs:DarkMode_struct}}
+{{#include ../../../examples/meme_editor_dark_mode.rs:DarkMode_struct}}
 ```
 
-Now, in a top-level component (like `App`), we can provide the `DarkMode` context to all children components: 
+Now, in a top-level component (like `App`), we can provide the `DarkMode` context to all children components:
 ```rust
-{{#include ../../examples/meme_editor_dark_mode.rs:context_provider}}
+{{#include ../../../examples/meme_editor_dark_mode.rs:context_provider}}
 ```
 
 As a result, any child component of `App` (direct or not), can access the `DarkMode` context.
 ```rust
-{{#include ../../examples/meme_editor_dark_mode.rs:use_context}}
+{{#include ../../../examples/meme_editor_dark_mode.rs:use_context}}
 ```
 
 > `use_context` returns `Option<UseSharedState<DarkMode>>` here. If the context has been provided, the value is `Some(UseSharedState)`, which you can call `.read` or `.write` on, similarly to `UseRef`. Otherwise, the value is `None`.
 
 For example, here's how we would implement the dark mode toggle, which both reads the context (to determine what color it should render) and writes to it (to toggle dark mode):
 ```rust
-{{#include ../../examples/meme_editor_dark_mode.rs:toggle}}
+{{#include ../../../examples/meme_editor_dark_mode.rs:toggle}}
 ```
 

@@ -9,7 +9,7 @@ Se você estiver trabalhando com itens pré-renderizados, modelos ou uma bibliot
 Por exemplo, enviar um conversor de markdown para Dioxus pode aumentar significativamente o tamanho final do aplicativo. Em vez disso, você desejará pré-renderizar sua remarcação para HTML e, em seguida, incluir o HTML diretamente em sua saída. Usamos essa abordagem para a [página inicial do Dioxus](https://dioxuslabs.com):
 
 ```rust
-{{#include ../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
+{{#include ../../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
 ```
 
 > Nota! Esse atributo é chamado de "dangerous_inner_html" porque é **perigoso** passar dados que você não confia. Se você não for cuidadoso, poderá facilmente expor ataques de [cross-site scripting (XSS)](https://en.wikipedia.org/wiki/Cross-site_scripting) aos seus usuários.
@@ -23,7 +23,7 @@ A maioria dos atributos, quando renderizados, serão renderizados exatamente com
 Portanto, este RSX não renderizaria o atributo `hidden`:
 
 ```rust
-{{#include ../../examples/boolean_attribute.rs:boolean_attribute}}
+{{#include ../../../examples/boolean_attribute.rs:boolean_attribute}}
 ```
 
 ```html
