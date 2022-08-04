@@ -46,7 +46,6 @@ class Template {
       this.createPaths([i], node);
       this.template.content.appendChild(node);
     }
-    document.head.appendChild(this.template);
   }
 
   createPaths(currentPath, node) {

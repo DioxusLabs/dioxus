@@ -481,7 +481,6 @@ impl VirtualDom {
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
-            let resolver = self.scopes.template_resolver.borrow();
             let mut diff_state = DiffState::new(scopes);
 
             let mut ran_scopes = FxHashSet::default();
