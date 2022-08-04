@@ -63,7 +63,7 @@ root of your project run:
 dioxus serve --platform web
 ```
 Then head to [http://localhost:8080](http://localhost:8080) in your browser, and
- ou should see ``Hello, wasm!`` on your screen.
+you should see ``Hello, wasm!`` on your screen.
 
 ## Conclusion
 We setup a new project with Dioxus and got everything running correctly. Next

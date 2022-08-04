@@ -49,7 +49,8 @@ Up to now, when creating links we told the router the exact path to go to. With
 named navigation we instead give it a name, and let it figure out the path.
 
 This has several advantages:
-- We don't hav to remember absolute paths or care about what the current path is
+- We don't have to remember absolute paths or care about what the current path
+  is
 - changing paths later on won't break internal links
 - paths can easily be localized without affecting app logic
 
