@@ -41,9 +41,10 @@ use dioxus_router::prelude::*;
 
 fn main() {
     // Launch Dioxus web app
-    # // deliberately impossible
+    # // deliberately impossible. otherwise the test would panic, and the
+    # // the SSR assert not be reached
     # #[cfg(all(debug_assertions, not(debug_assertions)))]
-    dioxus_web::launch(app);
+    dioxus_web::launch(App);
     # let mut vdom = VirtualDom::new(App);
     # vdom.rebuild();
     # assert_eq!(
