@@ -3,7 +3,7 @@ Not a bird's nest! A nest of routes!
 
 In this chapter we will begin to build the blog portion of our site which will
 include links, nested URLs, and URL parameters. We will also explore the use
-case of rendering components directly in the `Router`.
+case of rendering components directly in the [`Router`].
 
 ## Site Navigation
 Our site visitors won't know all the available pages and blogs on our site so we
@@ -25,11 +25,11 @@ fn NavBar(cx: Scope) -> Element {
 ```
 
 Our navbar will be a list of links going between our pages. We could always use
-an HTML anchor element but that would cause our page to unnecessarily reload.
-Instead we want to use the `Link` component provided by Dioxus Router.
+an HTML anchor element but that would cause our page to reload unnecessarily.
+Instead we want to use the [`Link`] component provided by Dioxus Router.
 
-The `Link` is similar to a regular `a` tag. It takes a target (for now a path,
-more on targets later) and an element. Let's add our links
+The [`Link`] is similar to a regular `a` tag. It takes a target (for now a path,
+more on other targets later) and an element. Let's add our links
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -44,13 +44,13 @@ fn NavBar(cx: Scope) -> Element {
                 // new stuff starts here
                 li {
                     Link {
-                        target: NtPath(String::from("/")),
+                        target: NtPath(String::from("")),
                         "Home"
                     }
                 }
                 li {
                     Link {
-                        target: NtPath(String::from("/blog")),
+                        target: "/blog".into(), //short form
                         "Blog"
                     }
                 }
@@ -61,7 +61,7 @@ fn NavBar(cx: Scope) -> Element {
 }
 ```
 
-> Using this method, the `Link` component only works for links within our
+> Using this method, the [`Link`] component only works for links within our
 > application. To learn more about navigation targets see
 > [here](./navigation-targets.md).
 
@@ -74,7 +74,8 @@ And finally, we add the navbar component in our app component:
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new().index(RcComponent(Home))
     });
@@ -92,7 +93,36 @@ fn app(cx: Scope) -> Element {
 Now you should see a list of links near the top of your page. Click on one and
 you should seamlessly travel between pages.
 
-### WIP: Active Link Styling
+### Active Link Styling
+You might want to style links differently, when their page is currently open.
+To achieve this, we can tell the router to give the internal `a` tag a class in
+that case.
+
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# fn Home(cx: Scope) -> Element { unimplemented!() }
+# fn NavBar(cx: Scope) -> Element { unimplemented!() }
+# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
+#
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new().index(RcComponent(Home))
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            fallback: RcComponent(PageNotFound),
+            active_class: "active", // this is new
+            NavBar { }
+            Outlet { }
+        }
+    })
+}
+```
 
 ## URL Parameters and Nested Routes
 Many websites such as GitHub put parameters in their URL. For example,
@@ -106,11 +136,11 @@ want our users to be able to send people a link to a specific blog post.
 We could utilize a search page that loads a blog when clicked but then our users
 won't be able to share our blogs easily. This is where URL parameters come in.
 
-The path to our blog will look like `/blog/myBlogPage`. `myBlogPage` being the
+The path to our blog will look like `/blog/myBlogPage`, `myBlogPage` being the
 URL parameter.
 
-First, lets create component that wraps around all blog content. This allows us
-to add a heading that tells the user they are on the blog
+First, lets create a component that wraps around all blog content. This allows
+us to add a heading that tells the user they are on the blog.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
@@ -142,13 +172,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NtPath(String::from("/blog/1")),
+                    target: "/blog/1".into(),
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: NtPath(String::from("/blog/1")),
+                    target: "/blog/2".into(),
                     "Read the second blog post"
                 }
             }
@@ -192,20 +222,19 @@ Finally, let's tell our router about those components.
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new()
-            .index(RcComponent(Home))
+        Segment::default()
+            .index(Home as Component)
             // new stuff starts here
             .fixed(
                 "blog",
-                Route::new(RcComponent(Blog)).nested(
-                    Segment::new()
-                        .index(RcComponent(BlogList))
-                        .parameter(
-                            ParameterRoute::new("post_id", RcComponent(BlogPost))
-                        )
-                )
+                Route::new(Blog as Component).nested(
+                    Segment::default().index(BlogList as Component).parameter(
+                        ParameterRoute::new("post_id", BlogPost as Component),
+                    ),
+                ),
             )
             // new stuff ends here
     });
@@ -214,6 +243,7 @@ fn app(cx: Scope) -> Element {
         Router {
             routes: routes.clone(),
             fallback: RcComponent(PageNotFound),
+            active_class: "active",
             NavBar {}
             Outlet {}
         }
@@ -221,10 +251,13 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-That's it! If you head to `/blog/foo` you should see our sample post.
+That's it! If you head to `/blog/1` you should see our sample post.
 
-### Conclusion
+## Conclusion
 In this chapter we utilized Dioxus Router's Link, URL Parameter, and `use_route`
 functionality to build the blog portion of our application. In the next chapter,
 we will go over how navigation targets (like the one we passed to our links)
 work.
+
+[`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
+[`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html

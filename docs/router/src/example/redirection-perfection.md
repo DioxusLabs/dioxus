@@ -1,10 +1,10 @@
 # Redirection Perfection
 You're well on your way to becoming a routing master!
 
-In this chapter we will cover utilizing the ``Redirect`` component so you can
-take Rickrolling to the next level.
+In this chapter we will cover utilizing redirects so you can take Rickrolling to
+the next level.
 
-### What Is This Redirect Thing?
+## What Is This Redirect Thing?
 A redirect is very simple. When dioxus encounters a redirect while finding out
 what components to render, it will redirect the user to the target of the
 redirect.
@@ -37,12 +37,7 @@ let routes = use_segment(&cx, || {
                     )
             )
         )
-        // new stuff starts here
-        .fixed(
-            "myblog",
-            Route::new(RcRedirect(NtPath(String::from("/blog"))))
-        )
-        // new stuff ends here
+        .fixed("myblog", "/blog") // this is new
 });
 # unimplemented!()
 # }
@@ -50,8 +45,8 @@ let routes = use_segment(&cx, || {
 
 That's it! Now your users will be redirected to the blog.
 
-Notice that instead of `RcComponent` we used `RcRedirect` to tell the router
-that this is a redirect.
+Notice that the `"/blog"` `str` is a [navigation target](./navigation-targets.md).
+We could also use external or named targets.
 
 ### Conclusion
 Well done! You've completed the Dioxus Router guide book. You've built a small

@@ -2,14 +2,14 @@
 In this chapter, we will continue off of our new Dioxus project to create a
 homepage and start utilizing Dioxus Router!
 
-### Fundamentals
-Dioxus Router works based on a router and route component. If you've ever used
-[Vue Router](https://router.vue.com/), you should feel at home with Dioxus
-Router.
+## Fundamentals
+Dioxus Router works based on a [`Router`] component, a route definition in
+regular rust and [`Outlet`] components. If you've ever used [Vue Router],
+you should feel at home with Dioxus Router.
 
 In the previous chapter we imported the dioxus prelude. When the `router`
-feature is active, this also imports the components and Types we need for the
-router
+feature is active, this also imports the components and types we need for the
+router.
 
 We also need an actual page to route to! Add a homepage component:
 ```rust,no_run
@@ -25,27 +25,28 @@ fn Home(cx: Scope) -> Element {
 }
 ```
 
-### To Route or Not to Route
+## To Route or Not to Route
 We want to use Dioxus Router to seperate our application into different "pages".
 Dioxus Router will then determine which page to render based on the URL path.
 
-To start using Dioxus Router, we need to use the `Router` component. All hooks
+To start using Dioxus Router, we need to use the [`Router`] component. All hooks
 and other components the Router provides can only be used as a descendant of
-a `Router` component.
+a [`Router`] component.
 
-Before we can add the `Router` we need to describe our routes in a type it can
-understand:
+However, before we can add the [`Router`] we need to describe our routes in a
+type it can understand:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     // this is new
     let routes = use_segment(&cx, || {
         // we want our home page component to render as an index
-        Segment::new().index(RcComponent(Home))
+        Segment::default().index(Home as Component)
     });
 
     cx.render(rsx! {
@@ -54,16 +55,17 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Now we can replace the `p { "Hello, wasm!" }` with our router:
+Now we can replace the `p { "Hello, wasm!" }` with our [`Router`]:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Home))
+        Segment::default().index(RcComponent(Home))
     });
 
     cx.render(rsx! {
@@ -82,9 +84,10 @@ route:
 # use dioxus::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Home))
+        Segment::default().index(RcComponent(Home))
     });
 
     cx.render(rsx! {
@@ -96,17 +99,19 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-If you head to your application's browser tab, you should see the text
+If you head to your application's browser tab, you should now see the text
 `Welcome to Dioxus Blog!` when on the root URL (`http://localhost:8080/`). If
 you enter a different path for the URL, nothing should be displayed.
 
 This is because we told Dioxus Router to render the `Home` component only when
-the URL path is `/`.
+the URL path is `/`. The _index_ functionality we used basically emulates how
+web servers treat `index.html` files.
 
-### What if a Route Doesn't Exist?
+## What if a Route Doesn't Exist?
 In our example Dioxus Router doesn't render anything. Many sites also have a
 "404" page for when a URL path leads to nowhere. Dioxus Router can do this too!
-Create a new `PageNotFound` component.
+
+First, we create a new `PageNotFound` component.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
@@ -129,9 +134,10 @@ Now to tell Dioxus Router to render our new component when no route exists.
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 # use dioxus::prelude::*;
 #
-fn app(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Home))
+        Segment::default().index(RcComponent(Home))
     });
 
     cx.render(rsx! {
@@ -147,8 +153,12 @@ fn app(cx: Scope) -> Element {
 Now when you go to a route that doesn't exist, you should see the page not found
 text.
 
-### Conclusion
+## Conclusion
 In this chapter we learned how to create a route and tell Dioxus Router what
 component to render when the URL path is `/`. We also created a 404 page to
 handle when a route doesn't exist. Next, we'll create the blog portion of our
 site. We will utilize nested routes and URL parameters.
+
+[`Outlet`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Outlet.html
+[`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html
+[Vue Router]: https://router.vuejs.org/
