@@ -389,7 +389,6 @@ impl VirtualDom {
             }
             SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
-                    println!("event: {:?}", element);
                     self.scopes.call_listener_with_bubbling(&event, element);
                 }
             }

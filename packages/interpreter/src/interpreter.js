@@ -6,19 +6,61 @@ export function main() {
   }
 }
 
-class Template {
-  constructor(template_id, id) {
-    this.template = document.createElement("template");
-    this.nodes = [];
-    this.templaet_id = template_id;
+class TemplateRef {
+  constructor(fragment, paths, id) {
+    this.fragment = fragment;
+    // a cache for the nodes that have been modified
+    this.nodeCache = [];
+    // a list of paths to index into nodes
+    this.paths = paths;
     this.id = id;
   }
 
-  finalize(toAdd) {
-    for (let node of toAdd) {
+  get(id) {
+    let node = this.nodeCache[id];
+    if (!node) {
+      let path = this.paths[id];
+      let current = this.fragment;
+      for (let segment of path) {
+        current = current.childNodes[segment];
+      }
+      node = current;
+      this.nodeCache[id] = node;
+    }
+    return node;
+  }
+}
+
+class Template {
+  constructor(template_id, id) {
+    this.nodes = [];
+    this.slowPaths = [];
+    this.template_id = template_id;
+    this.id = id;
+    this.template = document.createElement("template");
+  }
+
+  finalize(roots) {
+    for (let i = 0; i < roots.length; i++) {
+      let node = roots[i];
+      this.createPaths([i], node);
       this.template.content.appendChild(node);
     }
-    document.head.append(this.template)
+    document.head.appendChild(this.template);
+  }
+
+  createPaths(currentPath, node) {
+    this.slowPaths[node.tmplId] = currentPath;
+    for (let i = 0; i < node.childNodes.length; i++) {
+      let child = node.childNodes[i];
+      let newPath = [...currentPath];
+      newPath.push(i);
+      this.createPaths(newPath, child);
+    }
+  }
+
+  ref(id) {
+    return new TemplateRef(this.template.content.cloneNode(true), this.slowPaths, id);
   }
 }
 
@@ -97,11 +139,8 @@ export class Interpreter {
       this.listeners.removeAllNonBubbling(id);
     }
   }
-  currentTemplate(skip = 0) {
-    if (this.templateInProgress !== null) {
-      return this.templates[this.templateInProgress];
-    }
-    else if (this.stack[this.stack.length - 1 - skip] instanceof Template) {
+  currentTemplateRef(skip = 0) {
+    if (this.stack[this.stack.length - 1 - skip] instanceof TemplateRef) {
       return this.stack[this.stack.length - 1 - skip];
     }
     else {
@@ -112,7 +151,7 @@ export class Interpreter {
     if (this.templateInProgress !== null) {
       return this.templates[this.templateInProgress].id;
     }
-    else if (this.stack[this.stack.length - 1 - skip] instanceof Template) {
+    else if (this.stack[this.stack.length - 1 - skip] instanceof TemplateRef) {
       return this.stack[this.stack.length - 1 - skip].id;
     }
     else {
@@ -120,24 +159,25 @@ export class Interpreter {
     }
   }
   getId(id, skip = 0) {
-    let currentTemplate = this.currentTemplate(skip);
+    let currentTemplate = this.currentTemplateRef(skip);
     if (currentTemplate) {
-      return currentTemplate.nodes[id];
+      return currentTemplate.get(id);
+    }
+    else if (this.templateInProgress !== null) {
+      return this.templates[this.templateInProgress].nodes[id];
     }
     else {
       return this.nodes[id];
     }
   }
-  setId(id, value) {
-    if (this.templateInProgress !== null || this.top() instanceof Template) {
-      this.templates[this.templateInProgress].nodes[id] = value;
+  SetNode(id, node) {
+    if (this.templateInProgress !== null) {
+      this.templates[this.templateInProgress].nodes[id] = node;
+      node.tmplId = id;
     }
     else {
       this.nodes[id] = value;
     }
-  }
-  SetNode(id, node) {
-    this.setId(id, node);
   }
   PushRoot(root) {
     const node = this.getId(root);
@@ -151,8 +191,8 @@ export class Interpreter {
     let to_add = this.stack.splice(this.stack.length - many);
     for (let i = 0; i < many; i++) {
       const child = to_add[i];
-      if (child instanceof Template) {
-        root.appendChild(child.template.content.cloneNode(true));
+      if (child instanceof TemplateRef) {
+        root.appendChild(child.fragment);
       }
       else {
         root.appendChild(child);
@@ -162,8 +202,8 @@ export class Interpreter {
   ReplaceWith(root_id, m) {
     let root = this.getId(root_id, m);
     let els = this.stack.splice(this.stack.length - m).map(function (el) {
-      if (el instanceof Template) {
-        return el.template.content.cloneNode(true);
+      if (el instanceof TemplateRef) {
+        return el.fragment;
       }
       else {
         return el;
@@ -175,8 +215,8 @@ export class Interpreter {
   InsertAfter(root, n) {
     let old = this.getId(root, n);
     let new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
-      if (el instanceof Template) {
-        return el.template.content.cloneNode(true);
+      if (el instanceof TemplateRef) {
+        return el.fragment;
       }
       else {
         return el;
@@ -187,8 +227,8 @@ export class Interpreter {
   InsertBefore(root, n) {
     let old = this.getId(root, n);
     let new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
-      if (el instanceof Template) {
-        return el.template.content.cloneNode(true);
+      if (el instanceof TemplateRef) {
+        return el.fragment;
       }
       else {
         return el;
@@ -205,24 +245,24 @@ export class Interpreter {
   }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
-    this.setId(root, node);
     this.stack.push(node);
+    this.SetNode(root, node);
   }
   CreateElement(tag, root) {
     const el = document.createElement(tag);
-    this.setId(root, el);
     this.stack.push(el);
+    this.SetNode(root, el);
   }
   CreateElementNs(tag, root, ns) {
     let el = document.createElementNS(ns, tag);
     this.stack.push(el);
-    this.setId(root, el);
+    this.SetNode(root, el);
   }
   CreatePlaceholder(root) {
     let el = document.createElement("pre");
     el.hidden = true;
     this.stack.push(el);
-    this.setId(root, el);
+    this.SetNode(root, el);
   }
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.getId(root);
@@ -234,7 +274,6 @@ export class Interpreter {
       element.setAttribute("data-dioxus-id", `${root}`);
     }
     this.listeners.create(event_name, element, handler, bubbles);
-    console.log(element);
   }
   RemoveEventListener(root, event_name, bubbles) {
     const element = this.getId(root);
@@ -298,8 +337,7 @@ export class Interpreter {
     }
   }
   CreateTemplateRef(id, template_id) {
-    const el = this.templates[template_id];
-    el.id = id;
+    const el = this.templates[template_id].ref(id);
     this.nodes[id] = el;
     this.stack.push(el);
   }
@@ -318,9 +356,6 @@ export class Interpreter {
     }
   }
   handleEdit(edit) {
-    console.log(edit);
-    console.log(`${this.stack}`);
-    console.log(this.templates);
     switch (edit.type) {
       case "PushRoot":
         this.PushRoot(edit.root);
@@ -447,7 +482,6 @@ export class Interpreter {
             else {
               realId = parseInt(realId);
             }
-            console.log(`sending event to ${realId}`);
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,

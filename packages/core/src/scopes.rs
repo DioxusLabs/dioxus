@@ -347,11 +347,6 @@ impl ScopeArena {
                         template_ref_id,
                         template_node_id
                     );
-                    println!(
-                        "looking for listener in {:?} in node {:?}",
-                        template_ref_id, template_node_id
-                    );
-                    println!("{nodes:?}");
                     if let Some(template) = nodes.get(template_ref_id.0) {
                         let template = unsafe { &**template };
                         if let VNode::TemplateRef(template_ref) = template {
@@ -432,7 +427,6 @@ impl ScopeArena {
                     let listener = dynamic_context.resolve_listener(*listener_idx);
                     if listener.event == event.name {
                         log::trace!("calling listener {:?}", listener.event);
-                        println!("calling listener {:?}", listener.event);
 
                         let mut cb = listener.callback.borrow_mut();
                         if let Some(cb) = cb.as_mut() {

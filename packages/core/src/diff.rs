@@ -319,7 +319,6 @@ impl<'b> DiffState<'b> {
         }
 
         let real_id = self.scopes.reserve_node(node);
-        println!("created template ref node {}", real_id);
 
         new.id.set(Some(real_id));
 
