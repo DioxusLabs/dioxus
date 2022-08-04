@@ -32,8 +32,11 @@ A fallback route is active in two cases:
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::router::history::MemoryHistory;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# use dioxus_router::history::MemoryHistory;
+# extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -76,7 +79,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<h1>Content not found</h1>", html);
 ```
 

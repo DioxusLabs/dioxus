@@ -13,6 +13,8 @@ Let's create a new `NavBar` component:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
@@ -35,6 +37,8 @@ more on other targets later) and an element. Let's add our links
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
@@ -70,6 +74,8 @@ And finally, we add the navbar component in our app component:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
@@ -102,6 +108,8 @@ that case.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
@@ -145,6 +153,8 @@ us to add a heading that tells the user they are on the blog.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn Blog(cx: Scope) -> Element {
@@ -164,6 +174,8 @@ is selected:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn BlogList(cx: Scope) -> Element {
@@ -194,6 +206,8 @@ parameters:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn BlogPost(cx: Scope) -> Element {
@@ -215,6 +229,8 @@ Finally, let's tell our router about those components.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Blog(cx: Scope) -> Element { unimplemented!() }
 # fn BlogList(cx: Scope) -> Element { unimplemented!() }
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }

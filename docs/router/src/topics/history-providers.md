@@ -23,7 +23,9 @@ You can override the default history:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::{prelude::*, router::history::WebHashHistory};
+use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::{prelude::*, history::WebHashHistory};
 
 fn App(cx: Scope) -> Element {
     cx.render(rsx! {

@@ -7,6 +7,9 @@ the active routes content will be rendered within the [`Outlet`].
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -33,7 +36,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!(
 #     "<header>header</header><h1>Index</h1><footer>footer</footer>",
 #     html
@@ -73,8 +76,11 @@ put the side content.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
-
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
+#
 fn Main(cx: Scope) -> Element {
     cx.render(rsx! {
         main { "Main Content" }
@@ -108,7 +114,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<main>Main Content</main><aside>Side Content</aside>", html);
 ```
 
@@ -133,9 +139,11 @@ easy to create an unterminated recursion.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::router::history::MemoryHistory;
-use dioxus::prelude::*;
-
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::{prelude::*, history::MemoryHistory};
+# extern crate dioxus_ssr;
+#
 fn RootContent(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Root" }
@@ -174,7 +182,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<h2>Nested</h2>", html);
 ```
 

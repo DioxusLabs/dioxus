@@ -13,6 +13,8 @@ leading `?`). Alternatively we can use the `query_params` function to get a
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
 
 fn SomeComponent(cx: Scope) -> Element {
     let route = use_route(&cx).expect("nested in Router");
@@ -35,8 +37,10 @@ When using `NtPath` or `NtExternal` we have to append our query manually.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
-
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+#
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
@@ -60,8 +64,10 @@ We can either provide a query string, or a `Vec<(String, String)>`.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
-
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+#
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {

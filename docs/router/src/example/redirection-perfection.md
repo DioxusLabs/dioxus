@@ -17,6 +17,8 @@ All we need to do is update our route definition in our app component:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Blog(cx: Scope) -> Element { unimplemented!() }
 # fn BlogList(cx: Scope) -> Element { unimplemented!() }
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }

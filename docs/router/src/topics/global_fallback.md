@@ -7,8 +7,11 @@ a given path. This is similar to the `404` pages of traditional websites.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::router::history::MemoryHistory;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# use dioxus_router::history::MemoryHistory;
+# extern crate dioxus_ssr;
 
 fn Fallback(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -31,7 +34,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<h1>Not Found!</h1>", html);
 ```
 

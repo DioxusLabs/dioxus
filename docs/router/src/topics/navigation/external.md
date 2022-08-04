@@ -19,6 +19,9 @@ the [`Link`] component is more convenient to use, as it automatically sets the
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
 
 fn Content(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -47,7 +50,7 @@ fn App(cx: Scope) -> Element {
 
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!(
 #     format!(
 #         "<a {attr1} {attr2}>Go to the dioxus home page</a>",

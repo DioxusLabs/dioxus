@@ -39,6 +39,8 @@ type it can understand:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
 #[allow(non_snake_case)]
@@ -60,6 +62,8 @@ Now we can replace the `p { "Hello, wasm!" }` with our [`Router`]:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
 #[allow(non_snake_case)]
@@ -82,6 +86,8 @@ route:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
 #[allow(non_snake_case)]
@@ -130,9 +136,11 @@ Now to tell Dioxus Router to render our new component when no route exists.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
-# use dioxus::prelude::*;
 #
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {

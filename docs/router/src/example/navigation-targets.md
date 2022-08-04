@@ -21,6 +21,8 @@ If we need a link to an external page we can do it like this:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #
 #[allow(non_snake_case)]
 fn GoToDioxus(cx: Scope) -> Element {
@@ -59,6 +61,8 @@ Let's try that now! First, we give our blog post route a name.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Blog(cx: Scope) -> Element { unimplemented!() }
 # fn BlogList(cx: Scope) -> Element { unimplemented!() }
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
@@ -90,6 +94,8 @@ Now we can change the targets of the links in our `BlogList` component.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #[allow(non_snake_case)]
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -127,6 +133,8 @@ We can change the link in our `NavBar` component to take advantage of that.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 #[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {

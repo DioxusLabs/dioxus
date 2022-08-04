@@ -28,6 +28,9 @@ _Named_ navigation has a few advantages over _path-based_ navigation:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
 
 fn Source(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -70,7 +73,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!(
 #     format!(
 #         "<a {attr1} {attr2}>Go to target</a>",

@@ -11,6 +11,8 @@ that purpose we can use the [`use_navigate`] hook.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
 
 fn Content(cx: Scope) -> Element {
     let nav = use_navigate(&cx).expect("called inside a router");
@@ -33,7 +35,9 @@ We can use the [`Navigator`] to trigger four different kinds of navigation:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 
 fn Content(cx: Scope) -> Element {
     let nav = use_navigate(&cx).expect("called inside a router");

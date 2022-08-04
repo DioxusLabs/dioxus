@@ -14,6 +14,9 @@ This way, we can ensure that we have access to all its functionality everywhere.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
 
 // This is the component we pass to dioxus when launching our app.
 fn App(cx: Scope) -> Element {
@@ -38,7 +41,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<h1>Our sites title</h1><!--placeholder-->", html);
 ```
 

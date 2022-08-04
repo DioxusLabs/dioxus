@@ -14,7 +14,9 @@ forward buttons:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::{prelude::*};
+use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
 
 fn HistoryNavigation(cx: Scope) -> Element {
     cx.render(rsx! {

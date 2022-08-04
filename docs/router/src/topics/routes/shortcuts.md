@@ -7,6 +7,8 @@ this is how we'd declare a redirect to an external page:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn App(cx: Scope) -> Element {
 let routes = use_segment(&cx, || {
     Segment::new()
@@ -31,6 +33,8 @@ However, the router allows us to simplify this declaration quite a bit:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn App(cx: Scope) -> Element {
 let routes = use_segment(&cx, || {
     Segment::new().fixed("redirect", "https://dioxuslabs.com")

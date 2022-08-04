@@ -24,6 +24,8 @@ we will later also define on our route.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
 
 fn Greeting(cx: Scope) -> Element {
     let route = use_route(&cx).expect("is nested within a Router component");
@@ -48,6 +50,8 @@ Also note that each [`Segment`] can have exactly one parameter or
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Greeting(cx: Scope) -> Element { unimplemented!() }
 
 fn App(cx: Scope) -> Element {
@@ -93,8 +97,10 @@ define it that way. For our example it would look like this: `//`.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::router::history::MemoryHistory;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::{prelude::*, history::MemoryHistory};
+# extern crate dioxus_ssr;
 
 fn Greeting(cx: Scope) -> Element {
     let route = use_route(&cx).expect("is nested within a Router component");
@@ -127,7 +133,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<p>Hello, Dioxus!</p>", html);
 ```
 

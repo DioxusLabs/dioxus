@@ -33,16 +33,21 @@ Now we can start coding! Open `src/main.rs` and replace its contents with:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# extern crate dioxus_web;
+# extern crate dioxus_ssr;
+
 
 fn main() {
     // Launch Dioxus web app
     # // deliberately impossible
     # #[cfg(all(debug_assertions, not(debug_assertions)))]
-    dioxus::web::launch(app);
+    dioxus_web::launch(app);
     # let mut vdom = VirtualDom::new(App);
     # vdom.rebuild();
     # assert_eq!(
-    #     dioxus::ssr::render_vdom(&vdom),
+    #     dioxus_ssr::render_vdom(&vdom),
     #     "<p>Hello, wasm!</p>"
     # )
 }

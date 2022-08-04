@@ -13,9 +13,12 @@ on the format of a path parameter. _Matching_ routes allow us to that.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# extern crate regex;
-# use dioxus::router::history::MemoryHistory;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# use dioxus_router::history::MemoryHistory;
+# extern crate dioxus_ssr;
+# extern crate regex;
 use regex::Regex;
 
 fn GreetingFemale(cx: Scope) -> Element {
@@ -96,6 +99,6 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<p>Hello Mrs. Anna</p>", html);
 ```

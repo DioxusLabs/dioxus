@@ -11,6 +11,8 @@ some example content, so we can see the routing in action.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
 
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -34,6 +36,8 @@ web servers.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Index(cx: Scope) -> Element { unimplemented!() }
 #
 fn App(cx: Scope) -> Element {
@@ -57,6 +61,8 @@ regular files work in most web servers.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
 # fn Index(cx: Scope) -> Element { unimplemented!() }
 # fn Other(cx: Scope) -> Element { unimplemented!() }
 #
@@ -77,8 +83,11 @@ fn App(cx: Scope) -> Element {
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::router::history::MemoryHistory;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# use dioxus_router::history::MemoryHistory;
+# extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -114,7 +123,7 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<p>some other content</p>", html);
 ```
 

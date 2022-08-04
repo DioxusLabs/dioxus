@@ -19,6 +19,9 @@ In the following example we will redirect everybody from `/` to `/home`.
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# extern crate dioxus_ssr;
 
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -46,6 +49,6 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus::ssr::render_vdom(&vdom);
+# let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<h1>Home Page</h1>", html);
 ```
