@@ -3,7 +3,7 @@ use std::sync::RwLockReadGuard;
 use dioxus::prelude::*;
 use log::error;
 
-use crate::{helpers::sub_to_router, state::RouterState};
+use crate::{helpers::use_router_subscription, state::RouterState};
 
 /// A hook that allows you access to information about the currently active route.
 ///
@@ -35,7 +35,7 @@ use crate::{helpers::sub_to_router, state::RouterState};
 /// [`Router`]: crate::components::Router
 #[must_use]
 pub fn use_route(cx: &ScopeState) -> Option<RwLockReadGuard<RouterState>> {
-    let router = sub_to_router(cx);
+    let router = use_router_subscription(cx);
 
     match router {
         Some(r) => Some(r.state.read().unwrap()),

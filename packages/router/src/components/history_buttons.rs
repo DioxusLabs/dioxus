@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use log::error;
 
-use crate::{helpers::sub_to_router, service::RouterMessage};
+use crate::{helpers::use_router_subscription, service::RouterMessage};
 
 /// The props for a [`GoBackButton`] or a [`GoForwardButton`].
 #[derive(Debug, Props)]
@@ -32,7 +32,7 @@ pub struct HistoryButtonProps<'a> {
 #[allow(non_snake_case)]
 pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     // hook up to router
-    let router = match sub_to_router(&cx) {
+    let router = match use_router_subscription(&cx) {
         Some(x) => x,
         None => {
             error!(
@@ -81,7 +81,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 #[allow(non_snake_case)]
 pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     // hook up to router
-    let router = match sub_to_router(&cx) {
+    let router = match use_router_subscription(&cx) {
         Some(x) => x,
         None => {
             error!(

@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use log::error;
 
-use crate::{contexts::OutletContext, helpers::sub_to_router};
+use crate::{contexts::OutletContext, helpers::use_router_subscription};
 
 /// Properties for an [`Outlet`].
 #[derive(Debug, PartialEq, Props)]
@@ -53,7 +53,7 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let OutletProps { depth, name } = &cx.props;
 
     // hook up to router
-    let router = match sub_to_router(&cx) {
+    let router = match use_router_subscription(&cx) {
         Some(r) => r,
         None => {
             error!("`Outlet` can only be used as a descendent of a `Router`, will be inactive");

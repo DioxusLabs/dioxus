@@ -9,7 +9,7 @@ use crate::{
     navigation::{NamedNavigationSegment, Query},
 };
 
-/// A private "hook" to subscribe to the router.
+/// A private hook to subscribe to the router.
 ///
 /// Used to reduce redundancy within other components/hooks. Safe to call multiple times for a
 /// single component, but not recommended. Multiple subscriptions will be discarded.
@@ -21,7 +21,7 @@ use crate::{
 /// [`Router`]: crate::components::router
 #[must_use]
 #[allow(clippy::mut_from_ref)]
-pub(crate) fn sub_to_router(cx: &ScopeState) -> &mut Option<RouterContext> {
+pub(crate) fn use_router_subscription(cx: &ScopeState) -> &mut Option<RouterContext> {
     let id = cx.use_hook(|| Arc::new(cx.scope_id()));
 
     cx.use_hook(|| {

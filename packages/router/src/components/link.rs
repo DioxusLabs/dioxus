@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::{
-    helpers::{construct_named_path, sub_to_router},
+    helpers::{construct_named_path, use_router_subscription},
     navigation::{
         NamedNavigationSegment,
         NavigationTarget::{self, *},
@@ -104,7 +104,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     } = cx.props;
 
     // hook up to router
-    let router = match sub_to_router(&cx) {
+    let router = match use_router_subscription(&cx) {
         Some(x) => x,
         None => {
             error!("`Link` can only be used as a descendent of a `Router`, will be inactive");
