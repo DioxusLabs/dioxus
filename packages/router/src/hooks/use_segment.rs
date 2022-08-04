@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use dioxus_core::ScopeState;
+use dioxus::prelude::*;
 
 use crate::route_definition::Segment;
 
@@ -9,6 +9,7 @@ use crate::route_definition::Segment;
 /// # Example
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// fn App(cx: Scope) -> Element {
 ///     // create the routes
 ///     let routes = use_segment(&cx, || {
@@ -27,5 +28,5 @@ use crate::route_definition::Segment;
 ///
 /// [`Router`]: crate::components::Router
 pub fn use_segment(cx: &ScopeState, init: impl FnOnce() -> Segment) -> &'_ Arc<Segment> {
-    cx.use_hook(|_| Arc::new(init()))
+    cx.use_hook(|| Arc::new(init()))
 }

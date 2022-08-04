@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
 
-use dioxus_core::{self as dioxus, prelude::*};
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::{
@@ -70,6 +68,7 @@ pub struct LinkProps<'a> {
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// rsx! {
 ///     // a link to a specific path
 ///     Link {

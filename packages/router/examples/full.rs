@@ -1,8 +1,9 @@
-use dioxus::{prelude::*, router::PATH_FOR_NAMED_NAVIGATION_FAILURE};
+use dioxus::prelude::*;
+use dioxus_router::{prelude::*, PATH_FOR_NAMED_NAVIGATION_FAILURE};
 
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

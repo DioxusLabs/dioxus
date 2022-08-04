@@ -1,11 +1,9 @@
 #![cfg(target_arch = "wasm32")]
+#![allow(non_snake_case)]
 
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use dioxus_router::*;
 use gloo_utils::document;
-use serde::{Deserialize, Serialize};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -49,7 +47,7 @@ fn simple_test() {
     }
 
     fn BlogPost(cx: Scope) -> Element {
-        let id = use_route(&cx).parse_segment::<usize>("id")?;
+        let _id = use_route(&cx).parse_segment::<usize>("id")?;
 
         cx.render(rsx! {
             div {
@@ -60,5 +58,5 @@ fn simple_test() {
 
     main();
 
-    let element = gloo_utils::document();
+    let _ = document();
 }

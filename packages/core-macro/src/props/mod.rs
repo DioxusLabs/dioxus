@@ -83,7 +83,7 @@ mod util {
     }
 
     pub fn expr_to_single_string(expr: &syn::Expr) -> Option<String> {
-        if let syn::Expr::Path(path) = &*expr {
+        if let syn::Expr::Path(path) = expr {
             path_to_single_string(&path.path)
         } else {
             None
@@ -653,7 +653,9 @@ Finally, call `.build()` to create the instance of `{name}`.
                     }
                 }
 
-                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics{
+                impl #impl_generics dioxus::prelude::Properties for #name #ty_generics
+                #b_generics_where_extras_predicates
+                {
                     type Builder = #builder_name #generics_with_empty;
                     const IS_STATIC: bool = #is_static;
                     fn builder() -> Self::Builder {
@@ -777,13 +779,12 @@ Finally, call `.build()` to create the instance of `{name}`.
             // NOTE: both auto_into and strip_option affect `arg_type` and `arg_expr`, but the order of
             // nesting is different so we have to do this little dance.
             let arg_type = if field.builder_attr.strip_option {
-                let internal_type = field.type_from_inside_option(false).ok_or_else(|| {
+                field.type_from_inside_option(false).ok_or_else(|| {
                     Error::new_spanned(
                         &field_type,
                         "can't `strip_option` - field is not `Option<...>`",
                     )
-                })?;
-                internal_type
+                })?
             } else {
                 field_type
             };

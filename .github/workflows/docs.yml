@@ -23,7 +23,6 @@ jobs:
       - name: Build
         run: cd docs &&
           cd guide && mdbook build -d ../nightly/guide && cd .. &&
-          cd reference && mdbook build -d ../nightly/reference && cd .. &&
           cd router && mdbook build -d ../nightly/router  && cd ..
 
       - name: Deploy 🚀

@@ -58,15 +58,16 @@ use std::rc::Rc;
 
 pub use crate::cfg::WebConfig;
 pub use crate::util::use_eval;
-use dioxus::SchedulerMsg;
-use dioxus::VirtualDom;
-pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
+use dioxus_core::SchedulerMsg;
+use dioxus_core::VirtualDom;
 use futures_util::FutureExt;
 
 mod cache;
 mod cfg;
 mod dom;
+#[cfg(feature = "hot-reload")]
+mod hot_reload;
 mod rehydrate;
 mod ric_raf;
 mod util;
@@ -101,7 +102,7 @@ pub fn launch(root_component: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
@@ -172,6 +173,9 @@ pub fn launch_with_props<T>(
 /// ```
 pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
+
+    #[cfg(feature = "hot-reload")]
+    hot_reload::init(&dom);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
         wasm_bindgen::intern(s);

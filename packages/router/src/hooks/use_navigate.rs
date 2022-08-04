@@ -1,4 +1,4 @@
-use dioxus_core::ScopeState;
+use dioxus::prelude::*;
 use futures_channel::mpsc::UnboundedSender;
 use log::error;
 
@@ -15,6 +15,7 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 ///
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// fn SomeComponent(cx: Scope) -> Element {
 ///     let nav = use_navigate(&cx).expect("router as ancestor");
 ///
@@ -34,7 +35,7 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 pub fn use_navigate(cx: &ScopeState) -> Option<Navigator> {
     // use_navigate doesn't provide access to router state and therefore doesn't need to subscribe
     // for updates
-    let router = cx.use_hook(|_| cx.consume_context::<RouterContext>());
+    let router = cx.use_hook(|| cx.consume_context::<RouterContext>());
 
     match router {
         Some(router) => Some(Navigator {

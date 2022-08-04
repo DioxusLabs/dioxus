@@ -2,9 +2,10 @@
 Tiny CRM: A port of the Yew CRM example to Dioxus.
 */
 use dioxus::prelude::*;
+use dioxus_router::{Link, Route, Router};
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 #[derive(Clone, Debug, Default)]

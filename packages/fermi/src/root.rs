@@ -74,6 +74,13 @@ impl AtomRoot {
             }
         } else {
             log::trace!("no atoms found for {:?}", ptr);
+            atoms.insert(
+                ptr,
+                Slot {
+                    value: Rc::new(value),
+                    subscribers: HashSet::new(),
+                },
+            );
         }
     }
 

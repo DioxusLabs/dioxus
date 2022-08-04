@@ -1,4 +1,4 @@
-use dioxus_core::Component;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::navigation::NavigationTarget;
@@ -19,7 +19,7 @@ impl ParameterRoute {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// ParameterRoute::new("key", RcNone);
     /// ```
     pub fn new(key: &'static str, content: impl Into<RouteContent>) -> Self {
@@ -41,7 +41,7 @@ impl ParameterRoute {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// ParameterRoute::new("key", RcNone).name("name");
     /// ```
     ///
@@ -65,7 +65,7 @@ impl ParameterRoute {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// ParameterRoute::new("key", RcNone).nested(Segment::new());
     /// ```
     pub fn nested(mut self, nested: impl Into<Segment>) -> Self {

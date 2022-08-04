@@ -7,10 +7,10 @@ use tokio_util::task::LocalPoolHandle;
 use warp::ws::{Message, WebSocket};
 
 impl crate::Liveview {
-    pub async fn upgrade(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
+    pub async fn upgrade_warp(&self, ws: warp::ws::WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app, ()).await;
     }
-    pub async fn upgrade_with_props<T>(
+    pub async fn upgrade_warp_with_props<T>(
         &self,
         ws: warp::ws::WebSocket,
         app: fn(Scope<T>) -> Element,

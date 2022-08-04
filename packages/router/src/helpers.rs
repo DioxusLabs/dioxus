@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use dioxus_core::ScopeState;
+use dioxus::prelude::*;
 use log::error;
 use urlencoding::encode;
 
@@ -22,9 +22,9 @@ use crate::{
 #[must_use]
 #[allow(clippy::mut_from_ref)]
 pub(crate) fn sub_to_router(cx: &ScopeState) -> &mut Option<RouterContext> {
-    let id = cx.use_hook(|_| Arc::new(cx.scope_id()));
+    let id = cx.use_hook(|| Arc::new(cx.scope_id()));
 
-    cx.use_hook(|_| {
+    cx.use_hook(|| {
         let router = cx.consume_context::<RouterContext>()?;
 
         let _ = router

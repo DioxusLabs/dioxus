@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::history::MemoryHistory;
+use dioxus_router::{history::MemoryHistory, prelude::*};
 
 use crate::{render, test_routes};
 

@@ -1,8 +1,9 @@
 use dioxus::prelude::*;
+use dioxus_router::prelude::*;
 
 fn main() {
     env_logger::init();
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

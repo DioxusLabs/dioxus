@@ -1,4 +1,4 @@
-use crate::innerlude::*;
+use crate::innerlude::{VNode, VirtualDom};
 
 /// An iterator that only yields "real" [`Element`]s. IE only Elements that are
 /// not [`VNode::Component`] or [`VNode::Fragment`], .
@@ -44,11 +44,11 @@ impl<'a> Iterator for ElementIdIterator<'a> {
 
                     // If we get a fragment we push the next child
                     VNode::Fragment(frag) => {
-                        let _count = *count as usize;
-                        if _count >= frag.children.len() {
+                        let count = *count as usize;
+                        if count >= frag.children.len() {
                             should_pop = true;
                         } else {
-                            should_push = Some(&frag.children[_count]);
+                            should_push = Some(&frag.children[count]);
                         }
                     }
 

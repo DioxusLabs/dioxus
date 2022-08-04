@@ -1,13 +1,13 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |cfg| {
+    dioxus_desktop::launch_cfg(app, |cfg| {
         cfg.with_window(|w| w.with_title("BorderLess Demo").with_decorations(false))
     });
 }
 
 fn app(cx: Scope) -> Element {
-    let window = dioxus::desktop::use_window(&cx);
+    let window = dioxus_desktop::use_window(&cx);
 
     // if you want to make window fullscreen, you need close the resizable.
     // window.set_fullscreen(true);

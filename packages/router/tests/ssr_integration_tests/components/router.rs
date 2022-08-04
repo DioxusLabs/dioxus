@@ -1,7 +1,9 @@
-use dioxus::{prelude::*, ssr::render_vdom};
-use dioxus_router::history::{
-    ControlledHistory, HistoryController, HistoryProvider, MemoryHistory,
+use dioxus::prelude::*;
+use dioxus_router::{
+    history::{ControlledHistory, HistoryController, HistoryProvider, MemoryHistory},
+    prelude::*,
 };
+use dioxus_ssr::render_vdom;
 
 use crate::{render, test_routes};
 
@@ -43,7 +45,7 @@ fn render_when_init_only() {
 
     #[allow(non_snake_case)]
     fn App(cx: Scope<AppProps>) -> Element {
-        let history = cx.use_hook(|_| {
+        let history = cx.use_hook(|| {
             let history = cx.props.history.clone();
             return move || -> Box<dyn HistoryProvider> { Box::new(history.clone()) };
         });

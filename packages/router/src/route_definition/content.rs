@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, convert::Infallible, fmt::Debug, str::FromStr};
 
-use dioxus_core::Component;
+use dioxus::prelude::*;
 
 use crate::navigation::NavigationTarget;
 
@@ -113,8 +113,6 @@ impl FromStr for RouteContent {
 
 #[cfg(test)]
 mod tests {
-    use dioxus_core::{Element, Scope};
-
     use super::*;
 
     #[test]

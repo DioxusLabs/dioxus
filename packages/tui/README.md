@@ -85,11 +85,10 @@ Rink features:
 - [x] Flexbox based layout system
 - [ ] CSS selectors
 - [x] inline CSS support
-- [ ] Built-in focusing system
+- [x] Built-in focusing system
 - [ ] high-quality keyboard support
-- [ ] Support for events, hooks, and callbacks
-* [ ] Html tags<sup>1</sup>
+* [ ] Support for events, hooks, and callbacks<sup>1</sup>
+* [ ] Html tags<sup>2</sup>
 
-<sup>1</sup> Currently, HTML tags don't translate into any meaning inside of rink. So an `input` won't really mean anything nor does it have any additional functionality.
-
-
+<sup>1</sup> Basic keyboard and mouse events are implemented.
+<sup>2</sup> Currently, HTML tags don't translate into any meaning inside of rink. So an `input` won't really mean anything nor does it have any additional functionality.

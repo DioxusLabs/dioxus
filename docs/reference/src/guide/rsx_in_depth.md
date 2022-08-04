@@ -2,7 +2,6 @@
 
 The RSX macro makes it very easy to assemble complex UIs with a very natural Rust syntax:
 
-
 ```rust
 rsx!(
     div {
@@ -13,7 +12,7 @@ rsx!(
         ul {
             class: "todo-list",
             todos.iter().map(|(key, todo)| rsx!(
-                li { 
+                li {
                     class: "beautiful-todo"
                     key: "f"
                     h3 { "{todo.title}" }
@@ -25,11 +24,11 @@ rsx!(
 )
 ```
 
-In this section, we'll cover the `rsx!` macro in depth. If you prefer to learn through examples, the  `code reference` guide has plenty of examples on how to use `rsx!` effectively.
+In this section, we'll cover the `rsx!` macro in depth. If you prefer to learn through examples, the `code reference` guide has plenty of examples on how to use `rsx!` effectively.
 
 ### Element structure
 
-Attributes must come before  child elements
+Attributes must come before child elements
 
 ```rust
 div {
@@ -54,7 +53,6 @@ Commas are entirely optional, but might be useful to delineate between elements 
 
 The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena. To push you in the right direction, all text-based attributes take `std::fmt::Arguments` directly, so you'll want to reach for `format_args!` when the built-in `f-string` interpolation just doesn't cut it.
 
-
 ### Ignoring `cx.render` with `rsx!(cx, ...)`
 
 Sometimes, writing `cx.render` is a hassle. The `rsx! macro will accept any token followed by a comma as the target to call "render" on:
@@ -65,12 +63,9 @@ cx.render(rsx!( div {} ))
 rsx!(cx, div {})
 ```
 
-
-
 ### Conditional Rendering
 
 Sometimes, you might not want to render an element given a condition. The rsx! macro will accept any tokens directly contained with curly braces, provided they resolve to a type that implements `IntoIterator<VNode>`. This lets us write any Rust expression that resolves to a VNode:
-
 
 ```rust
 rsx!({
@@ -81,6 +76,7 @@ rsx!({
     }
 })
 ```
+
 A convenient way of hiding/showing an element is returning an `Option<VNode>`. When combined with `and_then`, we can succinctly control the display state given some boolean:
 
 ```rust
@@ -159,6 +155,7 @@ There have been many guides made for keys in React, so we recommend reading up t
 - [Importance of keys (Medium)](https://kentcdodds.com/blog/understanding-reacts-key-prop)
 
 ### Complete Reference
+
 ```rust
 let text = "example";
 
@@ -177,7 +174,7 @@ cx.render(rsx!{
 
             // Anything that implements display can be an attribute
             abc: 123,
-            
+
             enabled: true,
 
             // attributes also supports interpolation

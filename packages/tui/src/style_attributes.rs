@@ -1,6 +1,6 @@
 /*
 - [ ] pub display: Display,
-- [x] pub position_type: PositionType,  --> kinda, stretch doesnt support everything
+- [x] pub position_type: PositionType,  --> kinda, taffy doesnt support everything
 - [ ] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -9,7 +9,7 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [x] pub overflow: Overflow, ---> kinda implemented... stretch doesnt have support for directional overflow
+- [x] pub overflow: Overflow, ---> kinda implemented... taffy doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
 - [x] pub align_self: AlignSelf,
@@ -31,11 +31,12 @@
 
 use dioxus_core::Attribute;
 use dioxus_native_core::{
-    layout_attributes::{parse_value, UnitSystem},
+    layout_attributes::parse_value,
     node_ref::{AttributeMask, NodeMask, NodeView},
     state::ParentDepState,
 };
 use dioxus_native_core_macro::sorted_str_slice;
+use taffy::prelude::*;
 
 use crate::style::{RinkColor, RinkStyle};
 
@@ -127,8 +128,8 @@ impl Borders {
 pub struct BorderEdge {
     pub color: Option<RinkColor>,
     pub style: BorderStyle,
-    pub width: UnitSystem,
-    pub radius: UnitSystem,
+    pub width: Dimension,
+    pub radius: Dimension,
 }
 
 impl Default for BorderEdge {
@@ -136,8 +137,8 @@ impl Default for BorderEdge {
         Self {
             color: None,
             style: BorderStyle::None,
-            width: UnitSystem::Point(0.0),
-            radius: UnitSystem::Point(0.0),
+            width: Dimension::Points(0.0),
+            radius: Dimension::Points(0.0),
         }
     }
 }

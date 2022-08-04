@@ -30,11 +30,11 @@ use std::{
 ///     ))
 /// }
 /// ```
-pub fn use_state<'a, T: 'static>(
-    cx: &'a ScopeState,
+pub fn use_state<T: 'static>(
+    cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,
-) -> &'a UseState<T> {
-    let hook = cx.use_hook(move |_| {
+) -> &UseState<T> {
+    let hook = cx.use_hook(move || {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
@@ -110,8 +110,8 @@ impl<T: 'static> UseState<T> {
     ///
     /// This is useful for passing the setter function to other components.
     ///
-    /// However, for most cases, calling `to_owned` o`UseState`te is the
-    /// preferred way to get "anoth`set_state`tate handle.
+    /// However, for most cases, calling `to_owned` on the state is the
+    /// preferred way to get "another" state handle.
     ///
     ///
     /// # Examples
@@ -140,7 +140,7 @@ impl<T: 'static> UseState<T> {
     /// # Examples
     ///
     /// Basic usage:
-    /// ```rust
+    /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
@@ -236,7 +236,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
@@ -268,7 +268,7 @@ impl<T: Clone> UseState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```rust, ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// *val.make_mut() += 1;
@@ -304,13 +304,13 @@ impl<T: 'static> Clone for UseState<T> {
     }
 }
 
-impl<'a, T: 'static + Display> std::fmt::Display for UseState<T> {
+impl<T: 'static + Display> std::fmt::Display for UseState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.current_val)
     }
 }
 
-impl<'a, T: std::fmt::Binary> std::fmt::Binary for UseState<T> {
+impl<T: std::fmt::Binary> std::fmt::Binary for UseState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:b}", self.current_val.as_ref())
     }
@@ -341,7 +341,7 @@ impl<T: Debug> Debug for UseState<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for UseState<T> {
+impl<T> std::ops::Deref for UseState<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

@@ -15,7 +15,7 @@ dioxus-core = { path = "../core", version = "^0.2.1" }
 dioxus-html = { path = "../html", version = "^0.2.1" }
 dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 
-stretch2 = "0.4.2"
+taffy = "0.1.0"
 smallvec = "1.6"
 fxhash = "0.2"
 anymap = "0.12.1"

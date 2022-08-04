@@ -3,7 +3,7 @@ use std::{
     fmt::Debug,
 };
 
-use dioxus_core::Component;
+use dioxus::prelude::*;
 use serde::Deserialize;
 
 use crate::navigation::NavigationTarget;

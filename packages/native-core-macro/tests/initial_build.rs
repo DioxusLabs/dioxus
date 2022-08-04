@@ -1,9 +1,8 @@
 use std::cell::Cell;
 
-use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::core as dioxus_core;
+use dioxus::core::{ElementId, VElement, VText};
+use dioxus::prelude::*;
 use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::State;
 use dioxus_native_core_macro::State;
@@ -41,7 +40,7 @@ fn initial_build_simple() {
     };
     assert_eq!(dom.size(), 1);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[1].height, 1);
+    assert_eq!(dom[ElementId(1)].height, 1);
 }
 
 #[test]
@@ -120,10 +119,10 @@ fn initial_build_with_children() {
     };
     assert_eq!(dom.size(), 6);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[1].height, 1);
-    assert_eq!(dom[2].height, 2);
-    assert_eq!(dom[3].height, 3);
-    assert_eq!(dom[4].height, 3);
-    assert_eq!(dom[5].height, 4);
-    assert_eq!(dom[6].height, 3);
+    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(dom[ElementId(2)].height, 2);
+    assert_eq!(dom[ElementId(3)].height, 3);
+    assert_eq!(dom[ElementId(4)].height, 3);
+    assert_eq!(dom[ElementId(5)].height, 4);
+    assert_eq!(dom[ElementId(6)].height, 3);
 }

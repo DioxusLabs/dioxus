@@ -1,10 +1,13 @@
+// todo: how does router work in multi-window contexts?
+// does each window have its own router? probably, lol
+
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     sync::{Arc, RwLock, Weak},
 };
 
-use dioxus_core::{Component, ScopeId};
+use dioxus::prelude::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
 use log::{error, warn};
@@ -482,7 +485,6 @@ fn match_segment(
 #[cfg(test)]
 mod tests {
     use crate::route_definition::{ParameterRoute, Route};
-    use dioxus_core::{Element, Scope};
     use regex::Regex;
 
     use super::*;

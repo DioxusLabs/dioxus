@@ -16,7 +16,7 @@ use std::{
 pub fn use_atom_ref<T: 'static>(cx: &ScopeState, atom: AtomRef<T>) -> &UseAtomRef<T> {
     let root = use_atom_root(cx);
 
-    &cx.use_hook(|_| {
+    &cx.use_hook(|| {
         root.initialize(atom);
         (
             UseAtomRef {

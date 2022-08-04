@@ -1,6 +1,4 @@
-use dioxus_core::{self as dioxus, prelude::*};
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::{helpers::sub_to_router, service::RouterMessage};
@@ -24,6 +22,7 @@ pub struct HistoryButtonProps<'a> {
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// rsx! {
 ///     GoBackButton { "Go back" }
 /// };
@@ -72,6 +71,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
 /// # Example
 /// ```rust
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// rsx! {
 ///     GoForwardButton { "Go forward" }
 /// };

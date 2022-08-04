@@ -7,6 +7,7 @@
 //! # Example
 //! ```rust
 //! use dioxus::prelude::*;
+//! use dioxus_router::prelude::*;
 //!
 //! fn App(cx: Scope) -> Element {
 //!     // declare the routes of the app
@@ -42,7 +43,7 @@
 //! #
 //! # let mut vdom = VirtualDom::new(App);
 //! # vdom.rebuild();
-//! # assert_eq!("<h1>Example</h1>", dioxus::ssr::render_vdom(&vdom));
+//! # assert_eq!("<h1>Example</h1>", dioxus_ssr::render_vdom(&vdom));
 //! ```
 //!
 //! [router book]: https://dioxuslabs.com/router/guide

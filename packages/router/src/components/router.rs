@@ -1,8 +1,6 @@
 use std::{fmt::Debug, sync::Arc};
 
-use dioxus_core::{self as dioxus, prelude::*};
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::{
@@ -75,6 +73,7 @@ impl Debug for RouterProps<'_> {
 /// # Example
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// fn App(cx: Scope) -> Element {
 ///     let routes = use_segment(&cx, Segment::new);
 ///
@@ -100,7 +99,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         routes,
     } = cx.props;
 
-    let service = cx.use_hook(|_| {
+    let service = cx.use_hook(|| {
         // make sure no router context exists
         if cx.consume_context::<RouterContext>().is_some() {
             error!("`Router` can not be used as a descendent of a `Router`, inner will be ignored");

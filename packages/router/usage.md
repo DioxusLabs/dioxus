@@ -73,10 +73,10 @@ If the active class is given on both, the `Router` and the `Link`, the one on th
 Router {
     active_class: "custom-active",  // All active links in this router get this class.
     Link { to: "/", "Home" },
-    Link { 
+    Link {
         to: "/blog",
         active_class: "is-active",  // Only for this Link. Overwrites "custom-active" from Router.
-        "Blog" 
+        "Blog"
     },
 }
 ```
@@ -207,7 +207,7 @@ let mut prerendered_pages = dom
         let _ = dom.rebuild();
 
         // render the page and insert it into our map
-        (route, dioxus::ssr::render_vdom(&dom))
+        (route, dioxus_ssr::render_vdom(&dom))
     })
     .collect::<HashMap<_, _>>();
 ```

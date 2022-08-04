@@ -7,6 +7,7 @@ pub struct NodeView<'a> {
     inner: &'a VNode<'a>,
     mask: NodeMask,
 }
+
 impl<'a> NodeView<'a> {
     pub fn new(mut vnode: &'a VNode<'a>, view: NodeMask, vdom: &'a VirtualDom) -> Self {
         if let VNode::Component(sc) = vnode {
@@ -70,7 +71,7 @@ impl<'a> NodeView<'a> {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum AttributeMask {
     All,
     Dynamic(Vec<&'static str>),
@@ -175,7 +176,7 @@ impl Default for AttributeMask {
     }
 }
 
-#[derive(Default, PartialEq, Clone, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct NodeMask {
     // must be sorted
     attritutes: AttributeMask,

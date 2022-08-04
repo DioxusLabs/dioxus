@@ -1,6 +1,6 @@
 use std::sync::RwLockReadGuard;
 
-use dioxus_core::ScopeState;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::{helpers::sub_to_router, state::RouterState};
@@ -21,6 +21,7 @@ use crate::{helpers::sub_to_router, state::RouterState};
 /// # Example
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// fn SomeComponent(cx: Scope) -> Element {
 ///     let route = use_route(&cx).expect("router as ancestor");
 ///     let path = &route.path;

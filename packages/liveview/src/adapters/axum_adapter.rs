@@ -1,4 +1,4 @@
-use crate::{events, Liveview};
+use crate::events;
 use axum::extract::ws::{Message, WebSocket};
 use dioxus_core::prelude::*;
 use futures_util::{
@@ -10,11 +10,16 @@ use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::task::LocalPoolHandle;
 
 impl crate::Liveview {
-    pub async fn upgrade(&self, ws: WebSocket, app: fn(Scope) -> Element) {
+    pub async fn upgrade_axum(&self, ws: WebSocket, app: fn(Scope) -> Element) {
         connect(ws, self.pool.clone(), app, ()).await;
     }
-    pub async fn upgrade_with_props<T>(&self, ws: WebSocket, app: fn(Scope<T>) -> Element, props: T)
-    where
+
+    pub async fn upgrade_axum_with_props<T>(
+        &self,
+        ws: WebSocket,
+        app: fn(Scope<T>) -> Element,
+        props: T,
+    ) where
         T: Send + Sync + 'static,
     {
         connect(ws, self.pool.clone(), app, props).await;

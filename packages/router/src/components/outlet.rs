@@ -1,6 +1,4 @@
-use dioxus_core::{self as dioxus, prelude::*};
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::{contexts::OutletContext, helpers::sub_to_router};
@@ -36,6 +34,7 @@ pub struct OutletProps {
 /// # Example
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
+/// # use dioxus_router::prelude::*;
 /// fn App(cx: Scope) -> Element {
 ///     let routes = use_segment(&cx, Segment::new);
 ///
@@ -67,7 +66,7 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let state = router.state.read().expect("router lock poison");
 
     // get own depth and communicate to nested outlets
-    let depth = cx.use_hook(|_| {
+    let depth = cx.use_hook(|| {
         let mut ctx = cx.consume_context::<OutletContext>().unwrap_or_default();
 
         // allow depth override

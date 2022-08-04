@@ -45,7 +45,7 @@ impl Segment {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Segment::new().fallback(RcNone);
     /// ```
     ///
@@ -80,7 +80,7 @@ impl Segment {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Segment::new().fixed("path", Route::new(RcNone));
     /// ```
     pub fn fixed(mut self, path: &str, route: impl Into<Route>) -> Self {
@@ -108,7 +108,7 @@ impl Segment {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Segment::new().index(RcNone);
     /// ```
     pub fn index(mut self, content: impl Into<RouteContent>) -> Self {
@@ -140,7 +140,7 @@ impl Segment {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// # use regex::Regex;
     /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", RcNone));
     /// ```
@@ -175,7 +175,7 @@ impl Segment {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Segment::new().parameter(ParameterRoute::new("key", RcNone));
     /// ```
     pub fn parameter(mut self, route: impl Into<ParameterRoute>) -> Self {
@@ -193,7 +193,7 @@ impl Segment {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dioxus_core::{Element, Scope};
+    use dioxus::prelude::*;
 
     #[test]
     fn fallback() {

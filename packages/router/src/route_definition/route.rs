@@ -1,6 +1,6 @@
 use std::{convert::Infallible, str::FromStr};
 
-use dioxus_core::Component;
+use dioxus::prelude::*;
 use log::error;
 
 use crate::navigation::NavigationTarget;
@@ -20,7 +20,7 @@ impl Route {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Route::new(RcNone);
     /// ```
     pub fn new(content: impl Into<RouteContent>) -> Self {
@@ -41,7 +41,7 @@ impl Route {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Route::new(RcNone).name("name");
     /// ```
     ///
@@ -65,7 +65,7 @@ impl Route {
     ///
     /// # Example
     /// ```rust
-    /// # use dioxus::prelude::*;
+    /// # use dioxus_router::prelude::*;
     /// Route::new(RcNone).nested(Segment::default());
     /// ```
     pub fn nested(mut self, nested: impl Into<Segment>) -> Self {

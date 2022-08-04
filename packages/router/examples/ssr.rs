@@ -2,9 +2,10 @@
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-use dioxus::{
+use dioxus::prelude::*;
+use dioxus_router::{
+    history::{ControlledHistory, HistoryController, HistoryProvider, MemoryHistory},
     prelude::*,
-    router::history::{ControlledHistory, HistoryController, HistoryProvider, MemoryHistory},
 };
 use hyper::{
     header::{LOCATION, REFERRER_POLICY},
@@ -50,7 +51,7 @@ async fn main() {
         </div>
     </body>
 </html>"#,
-                    app = dioxus::ssr::render_vdom(&vdom)
+                    app = dioxus_ssr::render_vdom(&vdom)
                 ))),
 
                 // if the router has redirected, send a 307 with the new location
@@ -109,7 +110,7 @@ fn App(cx: Scope<AppProps>) -> Element {
             .fallback(RcRedirect(NtName("", vec![], QNone)))
     });
 
-    let history = cx.use_hook(|_| {
+    let history = cx.use_hook(|| {
         let history = cx.props.history.clone();
 
         return move || -> Box<dyn HistoryProvider> { Box::new(history.clone()) };

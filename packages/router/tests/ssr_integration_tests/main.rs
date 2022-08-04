@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_router::prelude::*;
 use std::sync::Arc;
 
 const ADDRESS: &str = "https://dioxuslabs.com/";
@@ -6,7 +7,7 @@ const ADDRESS: &str = "https://dioxuslabs.com/";
 fn render(component: Component) -> String {
     let mut app = VirtualDom::new(component);
     app.rebuild();
-    dioxus::ssr::render_vdom(&app)
+    dioxus_ssr::render_vdom(&app)
 }
 
 fn test_routes(cx: &ScopeState) -> Arc<Segment> {

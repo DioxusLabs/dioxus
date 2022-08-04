@@ -30,10 +30,10 @@ use std::{
 ///     ))
 /// }
 /// ```
-pub fn use_atom_state<'a, T: 'static>(cx: &'a ScopeState, f: impl Writable<T>) -> &'a AtomState<T> {
+pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
-    let inner = cx.use_hook(|_| AtomState {
+    let inner = cx.use_hook(|| AtomState {
         value: None,
         root: root.clone(),
         scope_id: cx.scope_id(),
@@ -92,8 +92,8 @@ impl<T: 'static> AtomState<T> {
     ///
     /// This is useful for passing the setter function to other components.
     ///
-    /// However, for most cases, calling `to_owned` o`AtomState`te is the
-    /// preferred way to get "anoth`set_state`tate handle.
+    /// However, for most cases, calling `to_owned` on the state is the
+    /// preferred way to get "another" state handle.
     ///
     ///
     /// # Examples
@@ -124,7 +124,7 @@ impl<T: 'static> AtomState<T> {
     /// # Examples
     ///
     /// Basic usage:
-    /// ```rust
+    /// ```rust, ignore
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
@@ -219,7 +219,7 @@ impl<T: Clone> AtomState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
@@ -242,7 +242,7 @@ impl<T: Clone> AtomState<T> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let val = use_state(&cx, || 0);
     ///
     /// *val.make_mut() += 1;
@@ -279,13 +279,13 @@ impl<T: 'static> Clone for AtomState<T> {
     }
 }
 
-impl<'a, T: 'static + Display> std::fmt::Display for AtomState<T> {
+impl<T: 'static + Display> std::fmt::Display for AtomState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value.as_ref().unwrap())
     }
 }
 
-impl<'a, T: std::fmt::Binary> std::fmt::Binary for AtomState<T> {
+impl<T: std::fmt::Binary> std::fmt::Binary for AtomState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:b}", self.value.as_ref().unwrap().as_ref())
     }
@@ -316,7 +316,7 @@ impl<T: Debug> Debug for AtomState<T> {
     }
 }
 
-impl<'a, T> std::ops::Deref for AtomState<T> {
+impl<T> std::ops::Deref for AtomState<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {

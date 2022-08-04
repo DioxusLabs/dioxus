@@ -11,9 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
-dioxus-html = { path = "../html", version = "^0.2.1", default-features = false }
+dioxus = {path = "../dioxus"}
 futures-channel = "0.3.21"
 futures-util = "0.3.21"
 log = "0.4.14"
@@ -45,17 +43,20 @@ web-sys = { version = "0.3", features = [
 default = []
 web = ["gloo-events", "js-sys", "wasm-bindgen", "web-sys"]
 wasm_test = []
+hot-reload = ["dioxus/hot-reload"]
 
 [dev-dependencies]
-dioxus = {path = "../..", features = ["desktop", "router", "ssr"]}
+dioxus = { path = "../dioxus" }
+dioxus-ssr = { path = "../ssr" }
 
 [target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+dioxus-desktop = { path = "../desktop" }
 env_logger = "0.9.0"
 hyper = { version = "0.14.18", features = ["full"] }
 tokio = { version = "1.18.2", features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
-dioxus = { path = "../..", features = ["web"] }
+dioxus-web = { path = "../web" }
 gloo-utils = "0.1.2"
 wasm-bindgen-test = "0.3"
 wasm-logger = "0.2.0"

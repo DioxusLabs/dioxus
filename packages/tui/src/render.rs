@@ -1,11 +1,10 @@
-use dioxus_native_core::layout_attributes::UnitSystem;
 use std::io::Stdout;
-use stretch2::{
+use taffy::{
     geometry::Point,
-    prelude::{Layout, Size},
-    Stretch,
+    prelude::{Dimension, Layout, Size},
+    Taffy,
 };
-use tui::{backend::CrosstermBackend, layout::Rect};
+use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
     style::{RinkColor, RinkStyle},
@@ -18,10 +17,11 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
-    layout: &Stretch,
+    layout: &Taffy,
     rdom: &Dom,
     node: &Node,
     cfg: Config,
+    parent_location: Point<f32>,
 ) {
     use dioxus_native_core::real_dom::NodeType;
 
@@ -29,7 +29,11 @@ pub(crate) fn render_vnode(
         return;
     }
 
-    let Layout { location, size, .. } = layout.layout(node.state.layout.node.unwrap()).unwrap();
+    let Layout {
+        mut location, size, ..
+    } = layout.layout(node.state.layout.node.unwrap()).unwrap();
+    location.x += parent_location.x;
+    location.y += parent_location.y;
 
     let Point { x, y } = location;
     let Size { width, height } = size;
@@ -57,7 +61,7 @@ pub(crate) fn render_vnode(
                 text,
                 style: node.state.style.core,
             };
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
@@ -65,7 +69,7 @@ pub(crate) fn render_vnode(
             }
         }
         NodeType::Element { children, .. } => {
-            let area = Rect::new(*x as u16, *y as u16, *width as u16, *height as u16);
+            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
@@ -73,7 +77,7 @@ pub(crate) fn render_vnode(
             }
 
             for c in children {
-                render_vnode(frame, layout, rdom, &rdom[c.0], cfg);
+                render_vnode(frame, layout, rdom, &rdom[*c], cfg, location);
             }
         }
         NodeType::Placeholder => unreachable!(),
@@ -247,8 +251,9 @@ impl RinkWidget for &Node {
                 BorderStyle::Hidden => 0.0,
                 BorderStyle::None => 0.0,
                 _ => match border.radius {
-                    UnitSystem::Percent(p) => p * area.width as f32 / 100.0,
-                    UnitSystem::Point(p) => p,
+                    Dimension::Percent(p) => p * area.width as f32 / 100.0,
+                    Dimension::Points(p) => p,
+                    _ => todo!(),
                 }
                 .abs()
                 .min((area.width as f32 / RADIUS_MULTIPLIER[0]) / 2.0)
@@ -266,6 +271,10 @@ impl RinkWidget for &Node {
                 let mut new_cell = RinkCell::default();
                 if let Some(c) = self.state.style.core.bg {
                     new_cell.bg = c;
+                }
+                if self.state.focused {
+                    new_cell.bg.alpha = 100;
+                    new_cell.bg.color = new_cell.bg.blend(Color::White);
                 }
                 buf.set(x, y, new_cell);
             }
