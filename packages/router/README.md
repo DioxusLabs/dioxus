@@ -41,9 +41,7 @@
   <h3>
     <a href="https://dioxuslabs.com">Website</a>
     <span> | </span>
-    <a href="https://dioxuslabs.com/router/guide">Guide (Release)</a>
-    <span> | </span>
-    <a href="https://dioxuslabs.com/router"> Guide (Latest) </a>
+    <a href="https://dioxuslabs.com/router">Guide (Release)</a>
     <span> | </span>
     <a href="https://dioxuslabs.com/nightly/router"> Guide (Master) </a>
   </h3>
@@ -55,31 +53,22 @@ interface that works anywhere: across the browser, SSR, and natively.
 
 ```rust ,ignore
 fn app() {
-    let routes = cx.use_hook(|_| Segment {
-        index: RcComponent(Home),
-        fixed: vec![(
-          String::from("blog"),
-          Route {
-              content: RcComponent(Blog),
-              sub: Segment {
-                  index: RcComponent(BlogList),
-                  dynamic: DrParameter {
-                      name: None,
-                      key: "id",
-                      content: RcComponent(BlogPost),
-                      sub: None,
-                  }
-                  ..Default::default()
-              }
-              ..Default::default()
-          }
-        )]
-        ..Default::default()
+    let routes = use_segment(||{
+        Segment::new()
+            .index(Home as Component)
+            .fixed(
+                "blog",
+                Route::new(Blog as Component).nested(
+                    Segment::new()
+                    .index(BlogList as Component)
+                    .parameter(("id", BlogPost as Component))
+                )
+            )
     });
 
     cx.render(rsx! {
         Router {
-            routes: routes,
+            routes: routes.clone(),
             Outlet { },
         }
     })
