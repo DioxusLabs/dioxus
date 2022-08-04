@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::{Link, Route, Router};
+use dioxus_router::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);
