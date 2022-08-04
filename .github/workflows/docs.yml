@@ -24,7 +24,7 @@ jobs:
       # NOTE: Delete when the previous one is enabled
       - name: Setup mdBook
         run: |
-          cargo install --git https://github.com/Ruin0x11/mdBook.git --branch localization --locked mdbook
+          cargo install mdbook --git https://github.com/Ruin0x11/mdBook.git --branch localization --rev e74fdb1
 
       - name: Build
         run: cd docs &&
