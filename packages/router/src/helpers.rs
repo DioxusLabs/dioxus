@@ -29,8 +29,7 @@ pub(crate) fn use_router_subscription(cx: &ScopeState) -> &mut Option<RouterCont
 
         let _ = router
             .tx
-            .unbounded_send(crate::service::RouterMessage::Subscribe(id.clone()))
-            .ok();
+            .unbounded_send(crate::service::RouterMessage::Subscribe(id.clone()));
 
         Some(router)
     })

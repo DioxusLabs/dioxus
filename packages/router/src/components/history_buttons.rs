@@ -53,7 +53,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
         button {
             disabled: "{disabled}",
             prevent_default: "onclick",
-            onclick: move |_| {tx.unbounded_send(RouterMessage::GoBack).ok();},
+            onclick: move |_| {let _ = tx.unbounded_send(RouterMessage::GoBack);},
             &cx.props.children
         }
     })
@@ -102,7 +102,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
         button {
             disabled: "{disabled}",
             prevent_default: "onclick",
-            onclick: move |_| {tx.unbounded_send(RouterMessage::GoForward).ok();},
+            onclick: move |_| {let _ = tx.unbounded_send(RouterMessage::GoForward);},
             &cx.props.children
         }
     })

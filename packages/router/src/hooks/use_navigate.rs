@@ -65,7 +65,7 @@ impl Navigator {
     ///
     /// Will fail silently if there is no path to go back to.
     pub fn go_back(&self) {
-        self.tx.unbounded_send(RouterMessage::GoBack).ok();
+        let _ = self.tx.unbounded_send(RouterMessage::GoBack);
     }
 
     /// Go forward to a future path.
@@ -73,21 +73,21 @@ impl Navigator {
     /// This is the inverse operation of [`Navigator::go_back`]. Will fail silently if there is no
     /// path to go forward to.
     pub fn go_forward(&self) {
-        self.tx.unbounded_send(RouterMessage::GoForward).ok();
+        let _ = self.tx.unbounded_send(RouterMessage::GoForward);
     }
 
     /// Push a new path.
     ///
     /// Previous path will be available to go back to.
     pub fn push(&self, target: NavigationTarget) {
-        self.tx.unbounded_send(RouterMessage::Push(target)).ok();
+        let _ = self.tx.unbounded_send(RouterMessage::Push(target));
     }
 
     /// Replace the current path.
     ///
     /// Previous path will **not** be available to go back to.
     pub fn replace(&self, target: NavigationTarget) {
-        self.tx.unbounded_send(RouterMessage::Replace(target)).ok();
+        let _ = self.tx.unbounded_send(RouterMessage::Replace(target));
     }
 }
 

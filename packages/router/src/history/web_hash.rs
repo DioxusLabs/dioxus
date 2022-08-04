@@ -215,6 +215,6 @@ impl HistoryProvider for WebHashHistory {
     }
 
     fn external(&self, url: String) {
-        self.window.location().set_href(&url).ok();
+        let _ = self.window.location().set_href(&url);
     }
 }

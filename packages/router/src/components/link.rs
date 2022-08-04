@@ -154,7 +154,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             prevent_default: "{prevent_default}",
             onclick: move |_| {
                 if is_router_navigation {
-                    tx.unbounded_send(RouterMessage::Push(target.clone())).ok();
+                    let _ = tx.unbounded_send(RouterMessage::Push(target.clone()));
                 }
             },
             class: "{class}",
