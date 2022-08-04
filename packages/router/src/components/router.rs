@@ -106,7 +106,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             #[cfg(debug_assertions)]
             panic!("`Router` can not be used as a descendent of a `Router`");
             #[cfg(not(debug_assertions))]
-            return;
+            return None;
         };
 
         // create custom history provider
@@ -123,7 +123,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         cx.provide_context(context);
 
         match init_only {
-            true => return Some(service),
+            true => Some(service),
             false => {
                 // run service
                 cx.spawn(async move { service.run().await });
