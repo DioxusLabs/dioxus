@@ -121,7 +121,8 @@ pub struct TemplateNodeId(pub usize);
 
 impl Into<u64> for TemplateNodeId {
     fn into(self) -> u64 {
-        self.0 as u64
+        // 9007199254740991 is the max integer in js
+        9007199254740991 / 2 + self.0 as u64
     }
 }
 
@@ -188,7 +189,7 @@ impl Template {
         bump: &'b Bump,
         id: RendererTemplateId,
     ) {
-        mutations.create_templete(id.into());
+        mutations.create_templete(id);
         let empty = match self {
             Template::Static { nodes, .. } => nodes.is_empty(),
             Template::Owned { nodes, .. } => nodes.is_empty(),
@@ -196,14 +197,8 @@ impl Template {
         let mut len = 0;
         if !empty {
             let roots = match self {
-                Template::Static {
-                    root_nodes: root_count,
-                    ..
-                } => *root_count,
-                Template::Owned {
-                    root_nodes: root_count,
-                    ..
-                } => root_count,
+                Template::Static { root_nodes, .. } => *root_nodes,
+                Template::Owned { root_nodes, .. } => root_nodes,
             };
             for root in roots {
                 len += 1;
@@ -448,6 +443,7 @@ where
             template_ref_id: real_id,
             template_node_id: self.id,
         });
+        diff_state.mutations.enter_template_ref(real_id);
         match &self.node_type {
             TemplateNodeType::Element(el) => {
                 let TemplateElement {
@@ -498,6 +494,7 @@ where
                 diff_state.mutations.replace_with(self.id, created as u32);
             }
         }
+        diff_state.mutations.exit_template_ref();
         diff_state.element_stack.pop();
     }
 }

@@ -531,6 +531,8 @@ impl VirtualDom {
             }
         }
 
+        println!("{:#?}", committed_mutations);
+
         committed_mutations
     }
 
@@ -569,6 +571,8 @@ impl VirtualDom {
 
         self.dirty_scopes.clear();
         assert!(self.dirty_scopes.is_empty());
+
+        println!("{:#?}", diff_state.mutations);
 
         diff_state.mutations
     }

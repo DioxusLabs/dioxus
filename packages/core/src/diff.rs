@@ -598,7 +598,7 @@ impl<'b> DiffState<'b> {
 
         self.element_stack.push(GlobalNodeId::VNodeId(root));
 
-        self.mutations.push_root(root);
+        self.mutations.enter_template_ref(root);
 
         let scope_bump = &self.current_scope_bump();
 
@@ -778,8 +778,8 @@ impl<'b> DiffState<'b> {
             template.with_node(node_id, diff_text, diff_text, (self, &new.dynamic_context));
         }
 
+        self.mutations.exit_template_ref();
         self.element_stack.pop();
-        self.mutations.pop_root();
     }
 
     // Diff the given set of old and new children.

@@ -190,6 +190,15 @@ pub enum DomEdit<'bump> {
     /// Manually pop a root node from the stack.
     PopRoot {},
 
+    /// Enter a TemplateRef tree
+    EnterTemplateRef {
+        /// The ID of the node to enter.
+        root: u64,
+    },
+
+    /// Exit a TemplateRef tree
+    ExitTemplateRef {},
+
     /// Create a refrence to a template node.
     CreateTemplateRef {
         /// The ID of the new template refrence.
@@ -279,6 +288,7 @@ impl<'a> Mutations<'a> {
             None => self.edits.push(CreateElement { root: id, tag }),
         }
     }
+
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn create_placeholder(&mut self, id: impl Into<u64>) {
         let id = id.into();
@@ -350,8 +360,8 @@ impl<'a> Mutations<'a> {
         self.dirty_scopes.insert(scope);
     }
 
-    pub(crate) fn create_templete(&mut self, id: u64) {
-        self.edits.push(CreateTemplate { id });
+    pub(crate) fn create_templete(&mut self, id: impl Into<u64>) {
+        self.edits.push(CreateTemplate { id: id.into() });
     }
 
     pub(crate) fn finish_templete(&mut self, len: u64) {
@@ -363,6 +373,14 @@ impl<'a> Mutations<'a> {
             id: id.into(),
             template_id,
         })
+    }
+
+    pub(crate) fn enter_template_ref(&mut self, id: impl Into<u64>) {
+        self.edits.push(EnterTemplateRef { root: id.into() });
+    }
+
+    pub(crate) fn exit_template_ref(&mut self) {
+        self.edits.push(ExitTemplateRef {});
     }
 }
 
