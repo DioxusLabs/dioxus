@@ -15,9 +15,9 @@ dioxus = { .., features = [.., "router"] }
 
 This book is intended to get you up to speed with Dioxus Router. It is split
 into two sections:
-1. The [Topics](./topics/index.md) part explains individual topics in depth. You
-   can read them start to finish, or you can read individual chapters in
-   whatever order you want.
+1. The [Features](./features/index.md) part explains individual features in
+   depth. You can read it start to finish, or you can read individual chapters
+   in whatever order you want.
 2. If you prefer a learning-by-doing approach, you can check ouf the
    _[example project](./example/introduction.md)_. It guides you through
    creating a dioxus app, setting up the router and using some of its
