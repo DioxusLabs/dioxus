@@ -17,6 +17,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
+    rc::Rc,
 };
 
 /// The ID of a node in the vdom that is either standalone or in a template
@@ -372,7 +373,7 @@ pub trait DioxusElement {
 }
 
 /// A discription of the attribute
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AttributeDiscription {
     /// The name of the attribute.
     pub name: &'static str,
@@ -850,10 +851,22 @@ impl<'a> NodeFactory<'a> {
         template: Template,
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
-        let mut borrow = self.scope.templates.borrow_mut();
-        if borrow.insert(id.clone(), template).is_some() {
-            let mut resolver = self.scope.template_resolver.borrow_mut();
-            resolver.mark_dirty(&id);
+        let borrow_ref = self.scope.templates.borrow();
+        if let Some(prev) = borrow_ref.get(&id) {
+            if &template != &*prev.borrow() {
+                drop(prev);
+                drop(borrow_ref);
+                {
+                    let mut borrow_mut = self.scope.templates.borrow_mut();
+                    borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
+                }
+                let mut resolver = self.scope.template_resolver.borrow_mut();
+                resolver.mark_dirty(&id);
+            }
+        } else {
+            drop(borrow_ref);
+            let mut borrow_mut = self.scope.templates.borrow_mut();
+            borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
         }
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {
             id: empty_cell(),

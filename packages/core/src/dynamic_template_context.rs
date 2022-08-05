@@ -18,9 +18,15 @@ impl<T: 'static> AsRef<[T]> for LazyStaticVec<T> {
     }
 }
 
+impl<T> PartialEq for LazyStaticVec<T> {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(self.0, other.0)
+    }
+}
+
 // Stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
 // This makes adding constant template nodes add no additional cost to diffing.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct DynamicNodeMapping<
     Nodes,
     TextOuter,

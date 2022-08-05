@@ -160,7 +160,7 @@ impl<'a> VTemplateRef<'a> {
 }
 
 /// A template used to skip diffing on some static parts of the rsx
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Template {
     /// A template that is createded at compile time
     Static {
@@ -410,7 +410,7 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -489,6 +489,7 @@ where
                     .set_text(scope_bump.alloc(new_text), self.id)
             }
             TemplateNodeType::DynamicNode(idx) => {
+                drop(self);
                 // this will only be triggered for root elements
                 let created = diff_state.create_node(&template_ref.dynamic_context.nodes[*idx]);
                 diff_state.mutations.replace_with(self.id, created as u32);
@@ -500,7 +501,7 @@ where
 }
 
 /// A template for an attribute
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct TemplateAttribute<V: TemplateValue> {
     /// The discription of the attribute
     pub attribute: AttributeDiscription,
@@ -509,7 +510,7 @@ pub struct TemplateAttribute<V: TemplateValue> {
 }
 
 /// A template attribute value that is either dynamic or static
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TemplateAttributeValue<V: TemplateValue> {
     /// A static attribute
     Static(V),
@@ -576,7 +577,7 @@ impl TemplateValue for OwnedTemplateValue {
 }
 
 /// The kind of node the template is.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -596,7 +597,7 @@ where
 }
 
 /// A element template
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TemplateElement<Attributes, V, Children, Listeners>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -648,7 +649,7 @@ where
 }
 
 /// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextTemplate<Segments, Text>
 where
     Segments: AsRef<[TextTemplateSegment<Text>]>,
@@ -674,7 +675,7 @@ where
 }
 
 /// A segment of a text template that may be dynamic or static.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TextTemplateSegment<Text>
 where
     Text: AsRef<str>,
@@ -686,7 +687,7 @@ where
 }
 
 /// A template value that is created at runtime.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum OwnedTemplateValue {
     Text(String),
@@ -739,7 +740,7 @@ impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
 }
 
 /// A template value that is created at compile time that is sync.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum StaticTemplateValue {
     Text(&'static str),

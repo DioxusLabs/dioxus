@@ -43,7 +43,7 @@ pub(crate) struct ScopeArena {
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
     pub template_resolver: Rc<RefCell<TemplateResolver>>,
-    pub templates: Rc<RefCell<FxHashMap<TemplateId, Template>>>,
+    pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
     // todo: this allocates memory without dropping, but only when allocating templates so it should be minimal.
     pub template_bump: Bump,
@@ -352,7 +352,7 @@ impl ScopeArena {
                         if let VNode::TemplateRef(template_ref) = template {
                             let templates = self.templates.borrow();
                             let template = templates.get(&template_ref.template_id).unwrap();
-                            cur_el = template.with_node(
+                            cur_el = template.borrow().with_node(
                                 template_node_id,
                                 bubble_template,
                                 bubble_template,
@@ -593,7 +593,7 @@ pub struct ScopeState {
 
     // templates
     pub(crate) template_resolver: Rc<RefCell<TemplateResolver>>,
-    pub(crate) templates: Rc<RefCell<FxHashMap<TemplateId, Template>>>,
+    pub(crate) templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
 }
 
 pub struct SelfReferentialItems<'a> {

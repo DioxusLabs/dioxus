@@ -62,15 +62,11 @@ class Template {
       roots.push(node);
       this.reconstructRefrences(nodes, node);
     }
-    console.log(nodes);
-    console.log(roots);
     return new TemplateRef(template, nodes, roots, id);
   }
 
   reconstructRefrences(nodes, node) {
-    console.log(this.depthFirstIds);
     const id = this.depthFirstIds[this.reconstructingRefrencesIndex];
-    console.log(id);
     nodes[id] = node;
     this.reconstructingRefrencesIndex++;
     for (let i = 0; i < node.childNodes.length; i++) {
@@ -180,7 +176,6 @@ export class Interpreter {
   SetNode(id, node) {
     if (this.templateInProgress !== null) {
       id -= templateIdLimit;
-      console.log("SetNode", id, node);
       node.tmplId = id;
       this.templates[this.templateInProgress].nodes[id] = node;
     }
@@ -278,7 +273,6 @@ export class Interpreter {
     let node = this.getId(root);
     if (node !== undefined) {
       if (node instanceof TemplateRef) {
-        console.log("Remove", node);
         for (let child of node.roots) {
           this.cleanupNode(child);
           child.remove();
@@ -314,8 +308,6 @@ export class Interpreter {
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.getId(root);
     let currentTemplateRefId = this.currentTemplateId();
-    console.log(element);
-    console.log(1);
     if (currentTemplateRefId) {
       let id = root - templateIdLimit;
       element.setAttribute("data-dioxus-id", `${currentTemplateRefId},${id}`);
@@ -401,7 +393,6 @@ export class Interpreter {
   }
   EnterTemplateRef(id) {
     this.insideTemplateRef.push(this.nodes[id]);
-    console.log(this.insideTemplateRef[this.insideTemplateRef.length - 1]);
   }
   ExitTemplateRef() {
     this.insideTemplateRef.pop();
@@ -413,9 +404,6 @@ export class Interpreter {
     }
   }
   handleEdit(edit) {
-    console.log(edit.type, edit);
-    console.log("stack", ...this.stack);
-    console.log("nodes", ...this.nodes);
     switch (edit.type) {
       case "PushRoot":
         this.PushRoot(edit.root);

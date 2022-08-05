@@ -310,12 +310,15 @@ impl<'b> DiffState<'b> {
             let mut resolver = self.scopes.template_resolver.borrow_mut();
             resolver.get_or_create_client_id(&new.template_id)
         };
-        let templates = self.scopes.templates.borrow();
 
-        let template = templates.get(&new.template_id).unwrap();
+        let template = {
+            let templates = self.scopes.templates.borrow();
+            templates.get(&new.template_id).unwrap().clone()
+        };
+        let template = template.borrow();
 
         if created {
-            self.register_template(template, id);
+            self.register_template(&template, id);
         }
 
         let real_id = self.scopes.reserve_node(node);
@@ -324,7 +327,7 @@ impl<'b> DiffState<'b> {
 
         self.mutations.create_template_ref(real_id, id.into());
 
-        new.hydrate(template, self);
+        new.hydrate(&template, self);
 
         1
     }
@@ -602,8 +605,11 @@ impl<'b> DiffState<'b> {
 
         let scope_bump = &self.current_scope_bump();
 
-        let templates = self.scopes.templates.borrow();
-        let template = templates.get(&new.template_id).unwrap();
+        let template = {
+            let templates = self.scopes.templates.borrow();
+            templates.get(&new.template_id).unwrap().clone()
+        };
+        let template = template.borrow();
 
         fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
@@ -652,7 +658,7 @@ impl<'b> DiffState<'b> {
                 template.with_nodes(
                     diff_attributes,
                     diff_attributes,
-                    (&mut self.mutations, scope_bump, new, template, idx),
+                    (&mut self.mutations, scope_bump, new, &template, idx),
                 );
             }
         }
