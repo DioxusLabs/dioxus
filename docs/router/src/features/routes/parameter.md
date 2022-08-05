@@ -12,13 +12,16 @@ functionality with parameter routes.
 ## Creating a content component
 We start by creating a component that uses the parameters value.
 
-We can get the current state of the router using the [`use_route`] hook.
-However, **it is VERY IMPORTANT** to drop the object returned by the hook when
-rendering is complete, otherwise the router will be frozen. Also, it can only be
-used in components that are nested within a [`Router`] component.
+We can get the current state of the router using the [`use_route`] hook. From
+that state we can extract the current value of our parameter by using a key we
+will later also define on our route.
 
-Once we have the current router state, we can get the parameter by using a key
-we will later also define on our route.
+> It is **VERY IMPORTANT** to dropt the object returned by the [`use_route`]
+> hook once our component finished rendering. Otherwise the entire router will
+> be frozen.
+
+> The [`use_route`] hook can only be used in components nested within a
+> [`Router`] component.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -40,11 +43,14 @@ fn Greeting(cx: Scope) -> Element {
 ```
 
 ## Defining the routes
-Now we can define our routes. Unlike [`Route`], [`ParameterRoute`] takes two
-arguments. The first is the key our components use to access the value.
+Now we can define our route. Unlike a fixed [`Route`], a [`ParameterRoute`]
+needs to arguments to be created.
 
-Also note that each [`Segment`] can have exactly one parameter or
-[fallback route](./fallback.md).
+> Also note that each [`Segment`] can have exactly one parameter or
+> [fallback route](./fallback.md).
+>
+> For that reason, the example below would not work in practice, but showing
+> both forms (explicit and short) is more important for this example.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -53,11 +59,12 @@ Also note that each [`Segment`] can have exactly one parameter or
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 # fn Greeting(cx: Scope) -> Element { unimplemented!() }
-
+#
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .parameter(ParameterRoute::new("name", RcComponent(Greeting)))
+            .parameter(ParameterRoute::new("name", Greeting as Component))
+            .parameter(("name", Greeting as Component)) // same in short
     });
 
     // ...
@@ -69,6 +76,9 @@ fn App(cx: Scope) -> Element {
 Each individual [`Segment`] can only ever have one active route. This means that
 when a [`Segment`] has more than just a parameter route, the router has to
 decide which is active. It does that this way:
+
+0. If the segment is not specified (i.e. `/`), then the index route will be
+   active.
 1. If a [_fixed_](./index.md#fixed-routes) route matches the current path, it
    will be active.
 2. If a [_matching_ route](./matching.md) matches the current path, it will be
@@ -76,15 +86,10 @@ decide which is active. It does that this way:
 3. If neither a _fixed_ nor a _matching_ route is active, the _parameter_ route
    or [_fallback_ route](./fallback.md) will be.
 
-You may have noticed that this list doesn't mention
-[_index_ routes](./index.md#index-routes). This is because those work in an
-entirely different manner. _Index_ routes are active, if their [`Segment`] is
-the first to be not defined by the path.
+Step 0 means that if we want a parameter to be empty, that needs to be specified
+by the path, i.e. `//`.
 
-That means if we want a parameter to be empty, the path needs to explicitly
-define it that way. For our example it would look like this: `//`.
-
-> Be careful with using parameter routes on the root [`Segment`]. Navigations to
+> Be careful with using parameter routes on the root [`Segment`]. Navigating to
 > paths starting with `//` will **NOT** work. This is not a limitation of the
 > router, but rather of how relative URLs work.
 >
@@ -97,7 +102,7 @@ define it that way. For our example it would look like this: `//`.
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
+# use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::{prelude::*, history::MemoryHistory};
 # extern crate dioxus_ssr;
@@ -115,8 +120,7 @@ fn Greeting(cx: Scope) -> Element {
 
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new()
-            .parameter(ParameterRoute::new("name", RcComponent(Greeting)))
+        Segment::new().parameter(("name", Greeting as Component))
     });
 
     // ...
@@ -133,8 +137,10 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus_ssr::render_vdom(&vdom);
-# assert_eq!("<p>Hello, Dioxus!</p>", html);
+# assert_eq!(
+#     "<p>Hello, Dioxus!</p>",
+#     dioxus_ssr::render_vdom(&vdom)
+# );
 ```
 
 [`ParameterRoute`]: https://docs.rs/dioxus-router/latest/dioxus_router/route_definition/struct.ParameterRoute.html

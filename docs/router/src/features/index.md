@@ -4,7 +4,7 @@ In this chapter we will learn how to add the [`Router`] component to our app. By
 itself, it is not very useful. However, it is a prerequisite for all the
 functionality described in the other chapters.
 
-> Make sure you added the `router` feature to Dioxus as explained in the
+> Make sure you added the `dioxus-router` dependency as explained in the
 > [introduction](../index.md).
 
 In most cases we want to add the [`Router`] to the root component of our app.
@@ -41,8 +41,10 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus_ssr::render_vdom(&vdom);
-# assert_eq!("<h1>Our sites title</h1><!--placeholder-->", html);
+# assert_eq!(
+#     "<h1>Our sites title</h1><!--placeholder-->",
+#     dioxus_ssr::render_vdom(&vdom)
+# );
 ```
 
 [`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html

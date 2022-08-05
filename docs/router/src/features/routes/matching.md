@@ -1,22 +1,28 @@
 # Matching Routes
 
-> Matching routes are almost identical to [parameter routes](./parameter.md).
-> Make sure you understand how those work before reading this page.
+> Make sure you understand how [parameter routes](./parameter.md) work before
+> reading this page.
 
-Some complex applications might need to decide what route should be active based
-on the format of a path parameter. _Matching_ routes allow us to that.
+When accepting parameters via the path, some complex applications might need to
+decide what route should be active based on the format of that parameter.
+_Matching_ routes make it easy to implement such behavior.
 
-> The parameter will be decoded, both for checking if the route is active and
-> when it is provided to the application.
+> The parameter will be URL decoded, both for checking if the route is active
+> and when it is provided to the application.
+
+> The example below is only for showing _matching route_ functionality. It is
+> unfit for all other purposes.
 
 ## Code Example
+> Notice that the second parameter of a _matching route_ has the same type as a
+> [_parameter route_](./parameter.md).
+
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
+# use dioxus::prelude::*;
 # extern crate dioxus_router;
-use dioxus_router::prelude::*;
-# use dioxus_router::history::MemoryHistory;
+# use dioxus_router::{prelude::*, history::MemoryHistory};
 # extern crate dioxus_ssr;
 # extern crate regex;
 use regex::Regex;
@@ -72,18 +78,16 @@ fn GreetingKenobi(cx: Scope) -> Element {
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .fixed("kenobi", Route::new(RcComponent(GreetingKenobi)))
+            .fixed("kenobi", GreetingKenobi as Component)
             .matching(
                 Regex::new("^f").unwrap(),
-                ParameterRoute::new("name", RcComponent(GreetingFemale))
+                ParameterRoute::new("name", GreetingFemale as Component)
             )
             .matching(
                 Regex::new("^m").unwrap(),
-                ParameterRoute::new("name", RcComponent(GreetingMale))
+                ("name", GreetingMale as Component)
             )
-            .parameter(
-                ParameterRoute::new("name", RcComponent(GreetingWithoutGender))
-            )
+            .parameter(("name", GreetingWithoutGender as Component))
     });
 
     cx.render(rsx! {

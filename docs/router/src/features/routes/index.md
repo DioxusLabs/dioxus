@@ -28,9 +28,10 @@ fn Other(cx: Scope) -> Element {
 ```
 
 ## Index routes
-The easiest thing to do is to define an index route. Our apps index route will
-be active when we don't specify a route, much like `index.html` works in most
-web servers.
+The easiest thing to do is to define an index route.
+
+Index routes act very similar to `index.html` files in most web servers. They
+are active, when we don't specify a route.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -42,7 +43,7 @@ web servers.
 #
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Index))
+        Segment::new().index(Index as Component)
     });
 
     // ...
@@ -51,9 +52,10 @@ fn App(cx: Scope) -> Element {
 ```
 
 ## Fixed routes
-It is almost as easy to define a fixed route. A fixed route is active, whenever
-we specify it (in this case when the path is `/other`). This is similar to how
-regular files work in most web servers.
+It is almost as easy to define a fixed route.
+
+Fixed routes work similar to how web servers treat files. They are active, when
+specified in the path. In the example, the path must be `/other`.
 
 > The path will be URL decoded before checking if it matches our route.
 
@@ -69,9 +71,9 @@ regular files work in most web servers.
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Index))
+            .index(Index as Component)
             // not the absence of a / prefix
-            .fixed("other", Route::new(RcComponent(Other)))
+            .fixed("other", Other as Component)
     });
 
     // ...
@@ -104,8 +106,8 @@ fn Other(cx: Scope) -> Element {
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Index))
-            .fixed("other", Route::new(RcComponent(Other)))
+            .index(Index as Component)
+            .fixed("other", Other as Component)
     });
 
     cx.render(rsx! {
@@ -123,8 +125,10 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus_ssr::render_vdom(&vdom);
-# assert_eq!("<p>some other content</p>", html);
+# assert_eq!(
+#     "<p>some other content</p>",
+#     dioxus_ssr::render_vdom(&vdom)
+# );
 ```
 
 [`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html

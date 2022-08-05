@@ -3,11 +3,11 @@ Whether or not you are building a website, desktop app, or mobile app,
 splitting your app's views into "pages" can be an effective method for
 organization and maintainability.
 
-For this purpose, Dioxus provides a built-in router. To start utilizing it,
-enable the `router` feature in your `Cargo.toml` file:
+For this purpose, Dioxus provides a router. To start utilizing it, add it as a
+dependency in your `Cargo.toml` file:
 ```toml
 [dependencies]
-dioxus = { .., features = [.., "router"] }
+dioxus-router = "*" # replace * with the current version
 ```
 
 > If you are not familiar with Dioxus itself, check out the [Dioxus book][db]
