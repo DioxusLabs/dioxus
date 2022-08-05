@@ -166,7 +166,8 @@ fn Blog(cx: Scope) -> Element {
 ```
 
 > Note the `Outlet { }` component. For the components of a nested route to be
-> rendered, we need an equally nested outlet.
+> rendered, we need an equally nested outlet. For more details, see the
+> [nested routes](../features/routes/nested.md) chapter of the features section.
 
 Now we'll create another index component, that'll be displayed when no blog post
 is selected:
