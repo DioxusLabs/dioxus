@@ -34,10 +34,10 @@ fn app(cx: Scope) -> Element {
             }
             nav {
                 ul {
-                    Link { target: "/".into(), li { "Home" } }
-                    Link { target: "/games".into(), li { "Games" } }
-                    Link { target: "/play".into(), li { "Play" } }
-                    Link { target: "/settings".into(), li { "Settings" } }
+                    Link { target: "/", li { "Home" } }
+                    Link { target: "/games", li { "Games" } }
+                    Link { target: "/play", li { "Play" } }
+                    Link { target: "/settings", li { "Settings" } }
                 }
             }
 

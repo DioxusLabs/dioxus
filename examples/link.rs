@@ -29,8 +29,8 @@ fn app(cx: Scope) -> Element {
 
                 p { "----"}
                 ul {
-                    Link { target: "/".into(), li { "Router link to home" } },
-                    Link { target: "/settings".into(), li { "Router link to settings" } },
+                    Link { target: "/", li { "Router link to home" } },
+                    Link { target: "/settings", li { "Router link to settings" } },
                 }
             }
         }

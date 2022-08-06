@@ -27,22 +27,22 @@ fn app(cx: Scope) -> Element {
                         .parameter(("name", User as Component)),
                 ),
             )
+            .fallback(RouteNotFound as Component)
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            fallback: RcComponent(RouteNotFound),
 
             ul {
-                Link { target: "/".into(),  li { "Go home!" } }
+                Link { target: "/",  li { "Go home!" } }
 
-                Link { target: "/users".into(),  li { "List all users" } }
-                Link { target: "/users/bill".into(),  li { "Show user \"bill\"" } }
-                Link { target: "/users/franz?bold".into(), li { "Show user \"franz\""}}
+                Link { target: "/users",  li { "List all users" } }
+                Link { target: "/users/bill",  li { "Show user \"bill\"" } }
+                Link { target: "/users/franz?bold", li { "Show user \"franz\""}}
 
-                Link { target: "/blog".into(), li { "List all blog posts" } }
-                Link { target: "/blog/5".into(), li { "Blog post 5" } }
+                Link { target: "/blog", li { "List all blog posts" } }
+                Link { target: "/blog/5", li { "Blog post 5" } }
             }
             Outlet { }
         }
