@@ -8,7 +8,7 @@
   - [Nested Routes](./features/routes/nested.md)
   - [Parameter Routes](./features/routes/parameter.md)
   - [Matching Routes](./features/routes/matching.md)
-  - [Fallback Routes](./features/routes/fallback.md)
+  - [Fallback Routes (404 page)](./features/routes/fallback.md)
   - [Multiple Components & Redirects](./features/routes/multiple-and-redirect.md)
   - [Shortcuts](./features/routes/shortcuts.md)
 - [Outlets](./features/outlets.md)
@@ -22,7 +22,6 @@
   - [External Navigation Failure](./features/failures/external.md)
 - [History Providers](./features/history-providers.md)
 - [History Buttons](./features/history-buttons.md)
-- [Global Fallback (404 page)](./features/global_fallback.md)
 
 # Example Project
 - [Introduction](./example/index.md)

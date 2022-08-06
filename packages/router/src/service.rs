@@ -22,7 +22,7 @@ use crate::{
     helpers::construct_named_path,
     history::HistoryProvider,
     navigation::{NamedNavigationSegment, NavigationTarget},
-    route_definition::{DynamicRoute, RouteContent, Segment},
+    route_definition::{RouteContent, Segment},
     state::RouterState,
     PATH_FOR_EXTERNAL_NAVIGATION_FAILURE, PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
@@ -61,7 +61,6 @@ pub(crate) enum RouterMessage {
 /// The [`RouterService`] provides information about its current state via the `state` field the
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
-    global_fallback: RouteContent,
     history: Box<dyn HistoryProvider>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
     routes: Arc<Segment>,
@@ -80,7 +79,6 @@ impl RouterService {
         routes: Arc<Segment>,
         update: Arc<dyn Fn(ScopeId)>,
         active_class: Option<String>,
-        global_fallback: RouteContent,
         history: Option<Box<dyn HistoryProvider>>,
     ) -> (Self, RouterContext) {
         // create channel
@@ -112,7 +110,6 @@ impl RouterService {
 
         (
             Self {
-                global_fallback,
                 history,
                 named_routes,
                 routes,
@@ -240,7 +237,7 @@ impl RouterService {
                     components,
                     names,
                     parameters,
-                    &self.global_fallback,
+                    &RouteContent::RcNone,
                 )
             };
 
@@ -300,7 +297,6 @@ impl RouterService {
 impl Debug for RouterService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RouterService")
-            .field("global_fallback", &self.global_fallback)
             .field("history", &self.history)
             .field("named_routes", &self.named_routes)
             .field("routes", &self.routes)
@@ -352,7 +348,7 @@ fn construct_named_targets(
         );
     }
 
-    if let DynamicRoute::Parameter(pr) = &segment.dynamic {
+    if let Some(pr) = &segment.parameter {
         add_named_target(
             NamedNavigationSegment::Parameter(pr.key),
             &pr.name,
@@ -372,13 +368,13 @@ fn construct_named_targets(
 ///
 /// Populates `components`, `names` and `vars` with values found while finding all active routes.
 #[must_use]
-fn match_segment(
+fn match_segment<'a>(
     path: &[&str],
-    segment: &Segment,
+    segment: &'a Segment,
     components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     names: &mut BTreeSet<&'static str>,
     parameters: &mut BTreeMap<&'static str, String>,
-    global_fallback: &RouteContent,
+    mut fallback: &'a RouteContent,
 ) -> Option<NavigationTarget> {
     let decoded_path = decode(path[0])
         .map(|path| path.to_string())
@@ -389,7 +385,6 @@ fn match_segment(
             path.to_string()
         });
     let mut found_route = false;
-    let mut prohibit_global_fallback = false;
 
     // routing info
     let content = RouteContent::default();
@@ -414,23 +409,17 @@ fn match_segment(
         key = Some(route.key);
         name = route.name;
         nested = route.nested.as_ref().map(|b| b.as_ref());
-    } else if let DynamicRoute::Parameter(route) = &segment.dynamic {
+    } else if let Some(route) = &segment.parameter {
         found_route = true;
         content = &route.content;
         key = Some(route.key);
         name = route.name;
         nested = route.nested.as_ref().map(|b| b.as_ref());
-    } else if let DynamicRoute::Fallback(fb_content) = &segment.dynamic {
-        found_route = true;
-        prohibit_global_fallback = true;
-        content = fb_content;
     }
 
-    // check if path is too specific
-    if path.len() > 1 && nested.is_none() {
-        if let DynamicRoute::Fallback(content) = &segment.dynamic {
-            return content.add_to_list(components);
-        }
+    // check if fallback is overwritten
+    if !segment.fallback.is_rc_none() {
+        fallback = &segment.fallback;
     }
 
     // content and name
@@ -457,26 +446,19 @@ fn match_segment(
         }
         // nested routes
         else {
-            return match_segment(
-                &path[1..],
-                nested,
-                components,
-                names,
-                parameters,
-                global_fallback,
-            );
+            return match_segment(&path[1..], nested, components, names, parameters, fallback);
         }
     }
 
     // handle:
-    // 1. too specific paths unless the current route is a fallback route
+    // 1. too specific paths
     // 2. the absence of an active route on the current segment
-    if (path.len() > 1 && !prohibit_global_fallback) || !found_route {
+    if path.len() > 1 || !found_route {
         components.0.clear();
         components.1.clear();
         names.clear();
         parameters.clear();
-        return global_fallback.add_to_list(components);
+        return fallback.add_to_list(components);
     }
 
     None
@@ -768,10 +750,9 @@ mod tests {
         assert!(fallback_correct);
 
         // correctly matched values persist
-        assert_eq!(components.0.len(), 1);
+        assert!(components.0.is_empty());
         assert!(components.1.is_empty());
-        assert_eq!(names.len(), 1);
-        assert!(names.contains("nested"));
+        assert!(names.is_empty());
         assert!(parameters.is_empty());
     }
 
@@ -797,10 +778,9 @@ mod tests {
         assert!(fallback_correct);
 
         // correctly matched values persist
-        assert_eq!(components.0.len(), 1);
+        assert!(components.0.is_empty());
         assert!(components.1.is_empty());
-        assert_eq!(names.len(), 1);
-        assert!(names.contains("nested"));
+        assert!(names.is_empty());
         assert!(parameters.is_empty());
     }
 

@@ -145,13 +145,14 @@ Now to tell Dioxus Router to render our new component when no route exists.
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::default().index(RcComponent(Home))
+        Segment::default()
+            .index(Home as Component)
+            .fallback(PageNotFound as Component) // this is new
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            fallback: RcComponent(PageNotFound), // this is new
             Outlet { }
         }
     })

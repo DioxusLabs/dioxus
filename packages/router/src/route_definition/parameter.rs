@@ -100,9 +100,6 @@ impl From<(&'static str, RouteContent)> for ParameterRoute {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(debug_assertions))]
-    use crate::route_definition::DynamicRoute;
-
     use super::*;
 
     #[test]
@@ -152,11 +149,11 @@ mod tests {
     fn nested_override_in_release() {
         let p = ParameterRoute::new("", RouteContent::RcNone)
             .nested(Segment::new())
-            .nested(Segment::new().fallback(RouteContent::RcNone));
+            .nested(Segment::new().fallback("test"));
 
         let is_correct_nested = if let Some(nest) = p.nested {
-            if let DynamicRoute::Fallback(RouteContent::RcNone) = nest.dynamic {
-                true
+            if let RouteContent::RcRedirect(NavigationTarget::NtPath(target)) = nest.fallback {
+                target == "test"
             } else {
                 false
             }

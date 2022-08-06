@@ -121,9 +121,6 @@ pub mod route_definition {
     mod content;
     pub use content::*;
 
-    mod dynamic;
-    pub(crate) use dynamic::*;
-
     mod parameter;
     pub use parameter::*;
 

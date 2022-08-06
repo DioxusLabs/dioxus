@@ -4,9 +4,7 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::{
-    contexts::RouterContext,
-    history::HistoryProvider,
-    route_definition::{RouteContent, Segment},
+    contexts::RouterContext, history::HistoryProvider, route_definition::Segment,
     service::RouterService,
 };
 
@@ -23,12 +21,6 @@ pub struct RouterProps<'a> {
     ///
     /// Usually contains at least one [`Outlet`](crate::components::Outlet).
     pub children: Element<'a>,
-    /// Fallback content.
-    ///
-    /// The router will use this content when no other content is found. It can be used to implement
-    /// a 404 page.
-    #[props(default)]
-    pub fallback: RouteContent,
     /// A function that constructs a history provider.
     ///
     /// When [`None`], a default is used:
@@ -51,7 +43,6 @@ impl Debug for RouterProps<'_> {
         f.debug_struct("RouterProps")
             .field("active_class", &self.active_class)
             .field("children", &self.children)
-            .field("fallback", &self.fallback)
             .field("history", &self.history.is_some())
             .field("init_only", &self.init_only)
             .field("routes", &self.routes)
@@ -93,7 +84,6 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let RouterProps {
         active_class,
         children,
-        fallback,
         history,
         init_only,
         routes,
@@ -117,7 +107,6 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             routes.clone(),
             cx.schedule_update_any(),
             active_class.map(|ac| ac.to_string()),
-            fallback.clone(),
             history,
         );
         cx.provide_context(context);

@@ -12,23 +12,27 @@ fn render(component: Component) -> String {
 
 fn test_routes(cx: &ScopeState) -> Arc<Segment> {
     use_segment(&cx, || {
-        Segment::new().index(RcComponent(TestComponent_0)).fixed(
-            "test",
-            Route::new(RcMulti(
-                TestComponent_1,
-                vec![("other", TestComponent_1_0_other)],
-            ))
-            .name("test")
-            .nested(
-                Segment::new().index(RcComponent(TestComponent_1_0)).fixed(
-                    "nest",
-                    Route::new(RcComponent(TestComponent_1_1)).nested(
-                        Segment::new()
-                            .fixed("double-nest", Route::new(RcComponent(TestComponent_1_1_0))),
+        Segment::new()
+            .index(RcComponent(TestComponent_0))
+            .fixed(
+                "test",
+                Route::new(RcMulti(
+                    TestComponent_1,
+                    vec![("other", TestComponent_1_0_other)],
+                ))
+                .name("test")
+                .nested(
+                    Segment::new().index(RcComponent(TestComponent_1_0)).fixed(
+                        "nest",
+                        Route::new(RcComponent(TestComponent_1_1)).nested(
+                            Segment::new()
+                                .fixed("double-nest", Route::new(RcComponent(TestComponent_1_1_0)))
+                                .fallback(NestedFallback as Component),
+                        ),
                     ),
                 ),
-            ),
-        )
+            )
+            .fallback(RootFallback as Component)
     })
     .clone()
 }
@@ -77,12 +81,30 @@ fn TestComponent_1_1_0(cx: Scope) -> Element {
     })
 }
 
+#[allow(non_snake_case)]
+fn RootFallback(cx: Scope) -> Element {
+    cx.render(rsx! {
+        p { "Root Fallback" }
+    })
+}
+
+#[allow(non_snake_case)]
+fn NestedFallback(cx: Scope) -> Element {
+    cx.render(rsx! {
+        p { "Nested Fallback" }
+    })
+}
+
 mod components {
     mod go_back_button;
     mod go_forward_button;
     mod link;
     mod outlet;
     mod router;
+}
+
+mod usage {
+    mod fallback;
 }
 
 mod hooks {

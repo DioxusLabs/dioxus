@@ -83,13 +83,14 @@ And finally, we add the navbar component in our app component:
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Home))
+        Segment::new()
+            .index(Home as Component)
+            .fallback(PageNotFound as Component)
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            fallback: RcComponent(PageNotFound),
             NavBar { } // this is new
             Outlet { }
         }
@@ -117,13 +118,14 @@ that case.
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Home))
+        Segment::new()
+            .index(Home as Component)
+            .fallback(PageNotFound as Component)
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            fallback: RcComponent(PageNotFound),
             active_class: "active", // this is new
             NavBar { }
             Outlet { }
@@ -248,18 +250,18 @@ fn App(cx: Scope) -> Element {
             .fixed(
                 "blog",
                 Route::new(Blog as Component).nested(
-                    Segment::default().index(BlogList as Component).parameter(
-                        ParameterRoute::new("post_id", BlogPost as Component),
-                    ),
+                    Segment::default()
+                        .index(BlogList as Component)
+                        .parameter(("post_id", BlogPost as Component))
                 ),
             )
             // new stuff ends here
+            .fallback(PageNotFound as Component)
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            fallback: RcComponent(PageNotFound),
             active_class: "active",
             NavBar {}
             Outlet {}

@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use log::error;
 use regex::Regex;
 
-use super::{DynamicRoute, ParameterRoute, Route, RouteContent};
+use super::{ParameterRoute, Route, RouteContent};
 
 /// A collection of routes for a single path segment.
 ///
@@ -11,53 +11,88 @@ use super::{DynamicRoute, ParameterRoute, Route, RouteContent};
 /// segments: `["blog", "1"]`.
 #[derive(Clone, Debug, Default)]
 pub struct Segment {
-    pub(crate) dynamic: DynamicRoute,
+    pub(crate) fallback: RouteContent,
     pub(crate) fixed: BTreeMap<String, Route>,
     pub(crate) index: RouteContent,
     pub(crate) matching: Vec<(Regex, ParameterRoute)>,
+    pub(crate) parameter: Option<ParameterRoute>,
 }
 
 impl Segment {
     /// Add a _fallback_ route.
     ///
-    /// A _fallback_ route is similar to a _parameter_ route. It is active, if these conditions
-    /// apply:
-    /// 1. The [`Segment`] is specified by the path,
-    /// 2. no _fixed_ route is active,
-    /// 3. and no _matching_ route is active.
+    /// A _fallback_ route acts like a `404.html` file (with some web servers). It is active, if
+    /// there is no completely matching route for the specified path.
     ///
-    /// The segments complete value will __not__ be provided as a parameter.
+    /// # A single fallback route
+    /// Consider the following example:
     ///
-    /// A [`Segment`] can have __either__ a _fallback_ route or a _parameter_ route.
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # fn Index(cx: Scope) -> Element { unimplemented!() }
+    /// # fn Fixed(cx: Scope) -> Element { unimplemented!() }
+    /// # fn Fallback(cx: Scope) -> Element { unimplemented!() }
+    /// Segment::new()
+    ///     .index(Index as Component)
+    ///     .fixed("fixed", Fixed as Component)
+    ///     .fallback(Fallback as Component);
+    /// ```
     ///
-    /// # Interaction with a [`Router`] level `fallback`
-    /// The [`Router`] allows you to provide some _fallback_ content. That content will be active if
-    /// the router is unable to find an active route. Some examples:
-    /// - If the path is `/invalid`, but the root segment (the [`Segment`] passed to the [`Router`])
-    ///   has no active route.
-    /// - If the path is `/level1/level2/invalid` but the `level2` segment has no nested segment.
+    /// This would make the following components active for the following paths:
+    /// - `/` -> `Index`
+    /// - `/fixed` -> `Fixed`
+    /// - `/invalid` -> `Fallback`
+    /// - `/fixed/invalid` -> `Fallback`
     ///
-    /// A _fallback_ route inhibits that behavior. In the example above, if a _fallback_ route is
-    /// active on the `level2` segment, the [`Router`] fallback content will not be active.
+    /// # Nested fallback routes
+    /// The fallback route of a nested [`Segment`] takes precedence over the fallback route of an
+    /// outer [`Segment`].
+    ///
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// # use dioxus::prelude::*;
+    /// # fn Index(cx: Scope) -> Element { unimplemented!() }
+    /// # fn Fallback(cx: Scope) -> Element { unimplemented!() }
+    /// # fn Fixed(cx: Scope) -> Element { unimplemented!() }
+    /// # fn NestedIndex(cx: Scope) -> Element { unimplemented!() }
+    /// # fn NestedFallback(cx: Scope) -> Element { unimplemented!() }
+    /// # fn NestedFixed(cx: Scope) -> Element { unimplemented!() }
+    /// Segment::new()
+    ///     .index(Index as Component)
+    ///     .fixed("fixed", Route::new(Fixed as Component).nested(
+    ///         Segment::new()
+    ///             .index(NestedIndex as Component)
+    ///             .fixed("nested", NestedFixed as Component)
+    ///             .fallback(NestedFallback as Component)
+    ///     ))
+    ///     .fallback(Fallback as Component);
+    /// ```
+    ///
+    /// This would make the following components active for the following paths:
+    /// - `/` -> `Index`
+    /// - `/fixed` -> `Fixed` & `NestedIndex`
+    /// - `/fixed/nested` -> `Fixed` & `NestedFixed`
+    /// - `/invalid` -> `Fallback`
+    /// - `/fixed/invalid` -> `NestedFallback`
+    /// - `/fixed/nested/invalid` -> `NestedFallback`
     ///
     /// # Panic
-    /// - If a _fallback_ route or _parameter_ route was already set, but only in debug builds.
+    /// If a _fallback_ route was already set, but only in debug builds.
     ///
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// Segment::new().fallback(RcNone);
     /// ```
-    ///
-    /// [`Router`]: crate::components::Router
     pub fn fallback(mut self, content: impl Into<RouteContent>) -> Self {
-        if !self.dynamic.is_none() {
-            error!("fallback or parameter route already set, later prevails");
+        if !self.fallback.is_rc_none() {
+            error!("fallback route already set, later prevails");
             #[cfg(debug_assertions)]
-            panic!("fallback or parameter route already set");
+            panic!("fallback route already set");
         }
 
-        self.dynamic = DynamicRoute::Fallback(content.into());
+        self.fallback = content.into();
         self
     }
 
@@ -165,13 +200,11 @@ impl Segment {
     /// The segments complete value will be provided as a parameter using the `key` specified in the
     /// `route`.
     ///
-    /// A [`Segment`] can have __either__ a _parameter_ route or a _fallback_ route.
-    ///
     /// # URL decoding
     /// - The segments value will be decoded when providing it as a parameter.
     ///
     /// # Panic
-    /// - If a _parameter_ route or _fallback_ route was already set, but only in debug builds.
+    /// - If a _parameter_ route  was already set, but only in debug builds.
     ///
     /// # Example
     /// ```rust
@@ -179,28 +212,30 @@ impl Segment {
     /// Segment::new().parameter(ParameterRoute::new("key", RcNone));
     /// ```
     pub fn parameter(mut self, route: impl Into<ParameterRoute>) -> Self {
-        if !self.dynamic.is_none() {
-            error!("fallback or parameter route already set, later prevails");
+        if self.parameter.is_some() {
+            error!("parameter route already set, later prevails");
             #[cfg(debug_assertions)]
-            panic!("fallback or parameter route already set");
+            panic!("parameter route already set");
         }
 
-        self.dynamic = DynamicRoute::Parameter(route.into());
+        self.parameter = Some(route.into());
         self
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::prelude::NavigationTarget;
+
     use super::*;
     use dioxus::prelude::*;
 
     #[test]
     fn fallback() {
-        let s = Segment::new().fallback(RouteContent::RcNone);
+        let s = Segment::new().fallback("test");
 
-        let fallback_is_correct = match s.dynamic {
-            DynamicRoute::Fallback(RouteContent::RcNone) => true,
+        let fallback_is_correct = match s.fallback {
+            RouteContent::RcRedirect(NavigationTarget::NtPath(target)) => target == "test",
             _ => false,
         };
         assert!(fallback_is_correct);
@@ -208,10 +243,10 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = "fallback or parameter route already set"]
+    #[should_panic = "fallback route already set"]
     fn fallback_panic_in_debug() {
         Segment::new()
-            .fallback(RouteContent::RcNone)
+            .fallback("test")
             .fallback(RouteContent::RcNone);
     }
 
@@ -219,14 +254,10 @@ mod tests {
     #[test]
     fn fallback_override_in_release() {
         let s = Segment::new()
-            .fallback(RouteContent::RcComponent(TestComponent))
+            .fallback("test")
             .fallback(RouteContent::RcNone);
 
-        let fallback_is_correct = match s.dynamic {
-            DynamicRoute::Fallback(RouteContent::RcNone) => true,
-            _ => false,
-        };
-        assert!(fallback_is_correct);
+        assert!(matches!(s.fallback, RouteContent::RcNone));
     }
 
     #[test]
@@ -295,10 +326,15 @@ mod tests {
 
     #[test]
     fn parameter() {
-        let s = Segment::new().parameter(ParameterRoute::new("", RouteContent::RcNone));
+        let s = Segment::new().parameter(ParameterRoute::new("", "test"));
 
-        let parameter_is_correct = match s.dynamic {
-            DynamicRoute::Parameter(_) => true,
+        let parameter_is_correct = match s.parameter {
+            Some(ParameterRoute {
+                name: _,
+                key: _,
+                content: RouteContent::RcRedirect(NavigationTarget::NtPath(target)),
+                nested: _,
+            }) => target == "test",
             _ => false,
         };
         assert!(parameter_is_correct);
@@ -306,7 +342,7 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = "fallback or parameter route already set"]
+    #[should_panic = "parameter route already set"]
     fn parameter_panic_in_debug() {
         Segment::new()
             .parameter(ParameterRoute::new("", RouteContent::RcNone))
@@ -323,8 +359,8 @@ mod tests {
             ))
             .parameter(ParameterRoute::new("", RouteContent::RcNone));
 
-        let fallback_is_correct = match s.dynamic {
-            DynamicRoute::Parameter(p) => p.content.is_rc_none(),
+        let fallback_is_correct = match s.parameter {
+            Some(p) => p.content.is_rc_none(),
             _ => false,
         };
         assert!(fallback_is_correct);

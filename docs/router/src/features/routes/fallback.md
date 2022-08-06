@@ -1,34 +1,16 @@
 # Fallback Routes
 
-> Fallback routes are almost identical to [parameter routes](./parameter.md).
-> Make sure you understand how those work before reading this page.
->
-> The main differences are:
-> - _Fallback_ routes are for handling invalid paths.
-> - They don't give you easy access to the segments value.
-> - They don't allow nested routes.
+Sometimes the router might be unable to find a route for the provided path. We
+might want it to show a prepared error message to our users in that case.
+Fallback routes allow us to do that.
 
-When defining routes you might want to handle the possibility of invalid paths.
-This is especially important for web apps, where the user can manually change
-the path via the URL bar.
+> This is especially important for use cases where users can manually change the
+> path, like web apps running in the browser.
 
-The router allows you to handle such invalid path using two methods:
-- The [global fallback] allows you to handle invalid
-  paths within your entire application. This is similar to how some web servers
-  treat a `/404.html` file.
-- The fallback routes described in this chapter provide a more local approach.
+## A single global fallback
+To catch all cases of invalid paths within our app, we can simply add a fallback
+route to our root [`Segment`].
 
-> To learn more about the interaction between the [global fallback] and
-> _fallback_ routes, see the [global fallback] chapter.
-
-A fallback route is active in two cases:
-- **No local route is active**: the path specifies the current [`Segment`], but
-  no [_fixed_](./index.md#fixed-routes) or [_matching_](./matching.md) route is
-  active.
-- **Too specific path**: The active route on the current [`Segment`] has no
-  [_nested_ segment](./nested.md), but the path specifies one.
-
-## Example
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
@@ -38,39 +20,34 @@ use dioxus_router::prelude::*;
 # use dioxus_router::history::MemoryHistory;
 # extern crate dioxus_ssr;
 
+#[allow(non_snake_case)]
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Index" }
     })
 }
 
-fn Other(cx: Scope) -> Element {
-    cx.render(rsx! {
-        h1 { "Other" }
-    })
-}
-
+#[allow(non_snake_case)]
 fn Fallback(cx: Scope) -> Element {
     cx.render(rsx! {
-        h1 { "Content not found" }
+        h1 { "Error 404 - Not Found" }
+        p { "The page you asked for doesn't exist." }
     })
 }
 
+#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Index))
-            .fixed("other", Route::new(RcComponent(Other)))
-            .fallback(RcComponent(Fallback))
+            .index(Index as Component)
+            .fallback(Fallback as Component)
     });
 
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
             # init_only: true,
-            # history: &|| {
-            #     MemoryHistory::with_first(String::from("/other/invalid"))
-            # }
+            # history: &|| MemoryHistory::with_first(String::from("/invalid")),
 
             Outlet { }
         }
@@ -79,19 +56,90 @@ fn App(cx: Scope) -> Element {
 #
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
-# let html = dioxus_ssr::render_vdom(&vdom);
-# assert_eq!("<h1>Content not found</h1>", html);
+# assert_eq!(
+#     "<h1>Error 404 - Not Found</h1><p>The page you asked for doesn't exist.</p>",
+#     dioxus_ssr::render_vdom(&vdom)
+# );
 ```
 
-In the above example the following routes will be active when:
-- The [_index_ route](./index.md#index-routes) is active when the path is `/`.
-- The [_fixed_ route](./index.md#fixed-routes) is active when the path is
-  `/other`.
-- The _fallback_ route is active, when the first segment is anything other than
-  `/` or `/other`, e.g. `/test` or `/invalid`.
-- The _fallback_ route is also active, when the path specifies a nested route
-  for `/other`, e.g. `/other/test`, `/other/invalid`, or `/other//` (notice the
-  second slash).
+## More specific fallback routes
+In some cases we might want to show different fallback content depending on what
+section of our app the user is in.
 
-[global fallback]: ../global_fallback.md
+For example, our app might have several settings pages under `/settings`, such
+as the password settings `/settings/password` or the privacy settings
+`/settings/privacy`. When our user is in the settings section, we want to show
+them _"settings not found"_ instead of _"page not found"_.
+
+We can easily do that by setting a fallback route on our nested [`Segment`]. It
+will then replace the global fallback whenever our [`Segment`] was active.
+
+```rust
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+# use dioxus_router::history::MemoryHistory;
+# extern crate dioxus_ssr;
+
+// This example doesn't show the index or settings components. It only shows how
+// to set up several fallback routes.
+# fn Index(cx: Scope) -> Element { unimplemented!() }
+# fn Settings(cx: Scope) -> Element { unimplemented!() }
+# fn GeneralSettings(cx: Scope) -> Element { unimplemented!() }
+# fn PasswordSettings(cx: Scope) -> Element { unimplemented!() }
+# fn PrivacySettings(cx: Scope) -> Element { unimplemented!() }
+
+#[allow(non_snake_case)]
+fn GlobalFallback(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Error 404 - Page Not Found" }
+    })
+}
+
+#[allow(non_snake_case)]
+fn SettingsFallback(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Error 404 - Settings Not Found" }
+    })
+}
+
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, || {
+        Segment::new()
+            .index(GlobalFallback as Component)
+            .fixed(
+                "settings",
+                Route::new(Settings as Component).nested(
+                    Segment::new()
+                        .index(GeneralSettings as Component)
+                        .fixed("password", PasswordSettings as Component)
+                        .fixed("privacy", PrivacySettings as Component)
+                        .fallback(SettingsFallback as Component)
+                )
+            )
+            .fallback(GlobalFallback as Component)
+    });
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            # init_only: true,
+            # history: &|| MemoryHistory::with_first(String::from("/settings/invalid")),
+
+            Outlet { }
+        }
+    })
+}
+#
+# let mut vdom = VirtualDom::new(App);
+# vdom.rebuild();
+# assert_eq!(
+#     "<h1>Error 404 - Settings Not Found</h1>",
+#     dioxus_ssr::render_vdom(&vdom)
+# );
+```
+
 [`Segment`]: https://docs.rs/dioxus-router/latest/dioxus_router/route_definition/struct.Segment.html
