@@ -1,52 +1,7 @@
-//! A router for dioxus.
+#![doc = include_str!("../README.md")]
 //!
 //! You are reading the API documentation, which describes the entirety of the routers API. If you
-//! are looking for a guide-like documentation see the [router book].
-//!
-//!
-//! # Example
-//! ```rust
-//! use dioxus::prelude::*;
-//! use dioxus_router::prelude::*;
-//!
-//! fn App(cx: Scope) -> Element {
-//!     // declare the routes of the app
-//!     let routes = use_segment(&cx, || {
-//!         Segment::new()
-//!             .index(RcComponent(Index)) // when the path is '/'
-//!             .fixed("other", Route::new(RcComponent(Other))) // when the path is `/other`
-//!     });
-//!
-//!     cx.render(rsx! {
-//!         // render the router and give it the routes
-//!         Router {
-//!             routes: routes.clone(),
-//!             # // needed for the test at the end
-//!             # init_only: true,
-//!             // give the router a place to render the content
-//!             Outlet { }
-//!         }
-//!     })
-//! }
-//!
-//! fn Index(cx: Scope) -> Element {
-//!     cx.render(rsx! {
-//!         h1 { "Example" }
-//!     })
-//! }
-//!
-//! fn Other(cx: Scope) -> Element {
-//!     cx.render(rsx! {
-//!         p { "Some content" }
-//!     })
-//! }
-//! #
-//! # let mut vdom = VirtualDom::new(App);
-//! # vdom.rebuild();
-//! # assert_eq!("<h1>Example</h1>", dioxus_ssr::render_vdom(&vdom));
-//! ```
-//!
-//! [router book]: https://dioxuslabs.com/router/guide
+//! are looking for a guide-like documentation see the [router book](https://dioxuslabs.com/router/guide).
 
 #![deny(missing_docs)]
 

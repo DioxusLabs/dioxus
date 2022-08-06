@@ -51,35 +51,38 @@
 Dioxus Router is a first-party Router for all your Dioxus Apps. It provides an
 interface that works anywhere: across the browser, SSR, and natively.
 
-```rust ,ignore
-fn app() {
-    let routes = use_segment(||{
+```rust
+use dioxus::prelude::*;
+use dioxus_router::prelude::*;
+
+fn App(cx: Scope) -> Element {
+    // declare the routes of the app
+    let routes = use_segment(&cx, || {
         Segment::new()
-            .index(Home as Component)
-            .fixed(
-                "blog",
-                Route::new(Blog as Component).nested(
-                    Segment::new()
-                    .index(BlogList as Component)
-                    .parameter(("id", BlogPost as Component))
-                )
-            )
+            .index(RcComponent(Index)) // when the path is '/'
+            .fixed("other", Route::new(RcComponent(Other))) // when the path is `/other`
     });
 
     cx.render(rsx! {
+        // render the router and give it the routes
         Router {
             routes: routes.clone(),
-            Outlet { },
+
+            // give the router a place to render the content
+            Outlet { }
         }
     })
 }
+
+fn Index(cx: Scope) -> Element {
+    cx.render(rsx! {
+        h1 { "Example" }
+    })
+}
+
+fn Other(cx: Scope) -> Element {
+    cx.render(rsx! {
+        p { "Some content" }
+    })
+}
 ```
-
-
-## Resources
-
-- See the [mdbook][guide]
-- The [crates.io API][api]
-
-[api]: https://docs.rs/dioxus-router
-[guide]: https://dioxuslabs.com/router/guide
