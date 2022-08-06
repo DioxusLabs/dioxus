@@ -188,7 +188,7 @@ export class Interpreter {
       }
     }
     else {
-      this.nodes[id] = value;
+      this.nodes[id] = node;
     }
   }
   PushRoot(root) {
@@ -307,10 +307,10 @@ export class Interpreter {
   }
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.getId(root);
-    let currentTemplateRefId = this.currentTemplateId();
-    if (currentTemplateRefId) {
-      let id = root - templateIdLimit;
-      element.setAttribute("data-dioxus-id", `${currentTemplateRefId},${id}`);
+    if (root >= templateIdLimit) {
+      let currentTemplateRefId = this.currentTemplateId();
+      root -= templateIdLimit;
+      element.setAttribute("data-dioxus-id", `${currentTemplateRefId},${root}`);
     }
     else {
       element.setAttribute("data-dioxus-id", `${root}`);
