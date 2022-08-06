@@ -79,15 +79,17 @@ impl Navigator {
     /// Push a new path.
     ///
     /// Previous path will be available to go back to.
-    pub fn push(&self, target: NavigationTarget) {
-        let _ = self.tx.unbounded_send(RouterMessage::Push(target));
+    pub fn push(&self, target: impl Into<NavigationTarget>) {
+        let _ = self.tx.unbounded_send(RouterMessage::Push(target.into()));
     }
 
     /// Replace the current path.
     ///
     /// Previous path will **not** be available to go back to.
-    pub fn replace(&self, target: NavigationTarget) {
-        let _ = self.tx.unbounded_send(RouterMessage::Replace(target));
+    pub fn replace(&self, target: impl Into<NavigationTarget>) {
+        let _ = self
+            .tx
+            .unbounded_send(RouterMessage::Replace(target.into()));
     }
 }
 

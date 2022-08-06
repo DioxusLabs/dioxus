@@ -43,10 +43,10 @@ fn Content(cx: Scope) -> Element {
     let nav = use_navigate(&cx).expect("called inside a router");
 
     // push
-    nav.push(NtPath(String::from("/target")));
+    nav.push("/target");
 
     // replace
-    nav.replace(NtPath(String::from("/target")));
+    nav.replace("/target");
 
     // go back
     nav.go_back();
