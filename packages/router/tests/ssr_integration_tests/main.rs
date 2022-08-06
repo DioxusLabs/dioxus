@@ -32,6 +32,7 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
                     ),
                 ),
             )
+            .fixed("external-navigation-failure", "https://dioxuslabs.com/")
             .fixed(
                 "named-navigation-failure",
                 NamedTarget("invalid name", vec![], None),
@@ -109,7 +110,7 @@ mod components {
 
 mod usage {
     mod fallback;
-
+    mod fallback_external_navigation;
     mod fallback_named_navigation;
 }
 

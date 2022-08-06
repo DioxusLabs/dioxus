@@ -22,6 +22,9 @@ When running a release build, the router can't just `panic`, as that would be a
 horrible user experience. Instead, it changes the path to `/` and shows some
 fallback content.
 
+The default fallback explains to the user that an error occurred and asks them
+to report the bug to the app developer.
+
 We can replace the default error message by setting the
 `fallback_named_navigation` prop on our [`Router`] component.
 
@@ -38,6 +41,7 @@ fn NamedNavigationFallback(cx: Scope) -> Element {
     })
 }
 
+#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, Default::default);
 

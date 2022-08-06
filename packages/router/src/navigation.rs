@@ -30,13 +30,13 @@ pub enum NavigationTarget {
     ),
     /// Navigate to an external page.
     ///
-    /// If the [`HistoryProvider`] used by the [`Router`] doesn't support [`ExternalTarget`], the router
-    /// will navigate to [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]. The URL the [`ExternalTarget`]
-    /// provided will be provided in the query string as `url`.
+    /// If the [`HistoryProvider`] used by the [`Router`] doesn't support [`ExternalTarget`], the
+    /// router will navigate to `/` and show some fallback content. The URL of the target is
+    /// provided via the `url` parameter. The default error message can be replaced by setting the
+    /// `fallback_external_navigation` prop on the [`Router`].
     ///
     /// [`HistoryProvider`]: crate::history::HistoryProvider
     /// [`ExternalTarget`]: NavigationTarget::ExternalTarget
-    /// [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]: crate::PATH_FOR_EXTERNAL_NAVIGATION_FAILURE
     /// [`Router`]: crate::components::Router
     ExternalTarget(String),
 }

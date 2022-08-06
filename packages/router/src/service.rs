@@ -11,7 +11,7 @@ use dioxus::prelude::*;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 use futures_util::StreamExt;
 use log::{error, warn};
-use urlencoding::{decode, encode};
+use urlencoding::decode;
 
 #[cfg(not(all(feature = "web", target_family = "wasm")))]
 use crate::history::MemoryHistory;
@@ -24,7 +24,6 @@ use crate::{
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{RouteContent, Segment},
     state::RouterState,
-    PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -61,6 +60,7 @@ pub(crate) enum RouterMessage {
 /// The [`RouterService`] provides information about its current state via the `state` field the
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
+    fallback_external_navigation: Component,
     fallback_named_navigation: Component,
     history: Box<dyn HistoryProvider>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
@@ -81,6 +81,7 @@ impl RouterService {
         update: Arc<dyn Fn(ScopeId)>,
         active_class: Option<String>,
         history: Option<Box<dyn HistoryProvider>>,
+        fallback_external_navigation: Component,
         fallback_named_navigation: Component,
     ) -> (Self, RouterContext) {
         // create channel
@@ -112,6 +113,7 @@ impl RouterService {
 
         (
             Self {
+                fallback_external_navigation,
                 fallback_named_navigation,
                 history,
                 named_routes,
@@ -156,11 +158,9 @@ impl RouterService {
                         if self.history.can_external() {
                             self.history.external(url);
                         } else {
-                            self.history.push(format!(
-                                "/{path}?url={url}",
-                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
-                                url = encode(&url)
-                            ));
+                            self.failed_external_navigation(url);
+                            self.update_subscribers();
+                            continue; // routing already updated
                         }
                     }
                 },
@@ -180,11 +180,9 @@ impl RouterService {
                         if self.history.can_external() {
                             self.history.external(url);
                         } else {
-                            self.history.replace(format!(
-                                "/{path}?url={url}",
-                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
-                                url = encode(&url)
-                            ));
+                            self.failed_external_navigation(url);
+                            self.update_subscribers();
+                            continue; // routing already updated
                         }
                     }
                 },
@@ -205,6 +203,7 @@ impl RouterService {
     fn update_routing(&mut self) {
         // prepare variables
         let mut state = self.state.write().unwrap();
+        let mut external_navigation_failure = None;
         let mut named_navigation_failure = false;
 
         loop {
@@ -265,11 +264,8 @@ impl RouterService {
                             self.history.external(url);
                             return;
                         } else {
-                            format!(
-                                "/{path}?url={url}",
-                                path = PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
-                                url = encode(&url)
-                            )
+                            external_navigation_failure = Some(url);
+                            break;
                         }
                     }
                 };
@@ -281,6 +277,9 @@ impl RouterService {
         }
 
         drop(state);
+        if let Some(url) = external_navigation_failure {
+            self.failed_external_navigation(url);
+        }
         if named_navigation_failure {
             self.failed_named_navigation();
         }
@@ -309,6 +308,19 @@ impl RouterService {
                 false
             }
         });
+    }
+
+    /// Go to the state for an external navigation failure.
+    fn failed_external_navigation(&mut self, url: String) {
+        self.history.push(String::from("/"));
+
+        // clear state
+        let mut state = self.state.write().unwrap();
+        clear_state(&mut state, &*self.history);
+
+        // show fallback content
+        state.components.0.push(self.fallback_external_navigation);
+        state.parameters.insert("url", url);
     }
 
     /// Go to the state for a named navigation failure.

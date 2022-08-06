@@ -18,14 +18,55 @@ will need to check the [`HistoryController`] to see if an external redirect has
 happened.
 
 ## Failure handling
-When the router encounters an external navigation it cannot fullfil, it will
-navigates to [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`] (a constant the router
-exports) and provides the external URL in a query parameter named `url`. You can
-use this to render a [`Link`] to the target.
+When the router encounters an external navigation it cannot fullfil, it changes
+the path to `/` and shows some fallback content.
+
+The default fallback explains to the user that the navigation was unsuccessful
+and provides them with a [`Link`] to fulfill it manually. It also allows them to
+go back to the previous page.
+
+The default error message can be replaced by setting the
+`fallback_external_navigation` prop on the [`Router`] component. The external
+URL will be provided via the `url` parameter.
+
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+# use dioxus::prelude::*;
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+#[allow(non_snake_case)]
+fn ExternalNavigationFallback(cx: Scope) -> Element {
+    let route = use_route(&cx).expect("is nested within a Router component");
+    let url = route.parameters.get("url").cloned().unwrap_or_default();
+
+    cx.render(rsx! {
+        h1 { "External navigation failure!" }
+        Link {
+            target: ExternalTarget(url),
+            "Go to external site"
+        }
+    })
+}
+
+#[allow(non_snake_case)]
+fn App(cx: Scope) -> Element {
+    let routes = use_segment(&cx, Default::default);
+
+    cx.render(rsx! {
+        Router {
+            routes: routes.clone(),
+            fallback_external_navigation: ExternalNavigationFallback,
+
+            Outlet { }
+        }
+    })
+}
+```
 
 [`ControlledHistory`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.ControlledHistory.html
 [`HistoryController`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.HistoryController.html
 [`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
-[`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]: https://docs.rs/dioxus-router/latest/dioxus_router/constant.PATH_FOR_EXTERNAL_NAVIGATION_FAILURE.html
+[`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html
 [`WebHistory`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.WebHistory.html
 [`WebHashHistory`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.WebHashHistory.html

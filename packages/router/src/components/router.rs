@@ -8,6 +8,8 @@ use crate::{
     route_definition::Segment, service::RouterService,
 };
 
+use super::FallbackExternalNavigation;
+
 /// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
@@ -21,6 +23,14 @@ pub struct RouterProps<'a> {
     ///
     /// Usually contains at least one [`Outlet`](crate::components::Outlet).
     pub children: Element<'a>,
+    /// Fallback content for external navigation failures.
+    ///
+    /// If the router is asked to navigate to an [`ExternalTarget`], but the [`HistoryProvider`]
+    /// doesn't support external targets, it will show this component. If no component is provided,
+    /// a default component will be rendered.
+    ///
+    /// [`ExternalTarget`]: crate::navigation::NavigationTarget::ExternalTarget
+    pub fallback_external_navigation: Option<Component>,
     /// Fallback content for named navigation failures.
     ///
     /// If the router is asked to navigate to a [`NamedTarget`] it has no knowledge about, it will
@@ -96,6 +106,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let RouterProps {
         active_class,
         children,
+        fallback_external_navigation,
         fallback_named_navigation,
         history,
         init_only,
@@ -121,6 +132,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.schedule_update_any(),
             active_class.map(|ac| ac.to_string()),
             history,
+            fallback_external_navigation.unwrap_or(FallbackExternalNavigation),
             fallback_named_navigation.unwrap_or(FallbackNamedNavigation),
         );
         cx.provide_context(context);
