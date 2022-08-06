@@ -7,6 +7,9 @@
 
 /// The components of the router.
 pub mod components {
+    mod fallback_named_navigation;
+    pub(crate) use fallback_named_navigation::*;
+
     mod link;
     pub use link::*;
 
@@ -56,11 +59,6 @@ pub mod navigation;
 ///
 /// [`ExternalTarget`]: navigation::NavigationTarget::ExternalTarget
 pub const PATH_FOR_EXTERNAL_NAVIGATION_FAILURE: &str = "dioxus-router-external-navigation-failure";
-
-/// Fallback path for failed named navigation. See [`NamedTarget`].
-///
-/// [`NamedTarget`]: navigation::NavigationTarget::NamedTarget
-pub const PATH_FOR_NAMED_NAVIGATION_FAILURE: &str = "dioxus-router-named-navigation-failure";
 
 /// Reexports of commonly used elements.
 pub mod prelude {

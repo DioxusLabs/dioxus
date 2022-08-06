@@ -4,8 +4,8 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::{
-    contexts::RouterContext, history::HistoryProvider, route_definition::Segment,
-    service::RouterService,
+    components::FallbackNamedNavigation, contexts::RouterContext, history::HistoryProvider,
+    route_definition::Segment, service::RouterService,
 };
 
 /// The props for a [`Router`].
@@ -21,6 +21,14 @@ pub struct RouterProps<'a> {
     ///
     /// Usually contains at least one [`Outlet`](crate::components::Outlet).
     pub children: Element<'a>,
+    /// Fallback content for named navigation failures.
+    ///
+    /// If the router is asked to navigate to a [`NamedTarget`] it has no knowledge about, it will
+    /// show this component. If no component is provided, a default component will be rendered.
+    ///
+    /// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
+    #[props(default)]
+    pub fallback_named_navigation: Option<Component>,
     /// A function that constructs a history provider.
     ///
     /// When [`None`], a default is used:
@@ -43,6 +51,10 @@ impl Debug for RouterProps<'_> {
         f.debug_struct("RouterProps")
             .field("active_class", &self.active_class)
             .field("children", &self.children)
+            .field(
+                "fallback_named_navigation",
+                &self.fallback_named_navigation.is_some(),
+            )
             .field("history", &self.history.is_some())
             .field("init_only", &self.init_only)
             .field("routes", &self.routes)
@@ -84,6 +96,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let RouterProps {
         active_class,
         children,
+        fallback_named_navigation,
         history,
         init_only,
         routes,
@@ -108,6 +121,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             cx.schedule_update_any(),
             active_class.map(|ac| ac.to_string()),
             history,
+            fallback_named_navigation.unwrap_or(FallbackNamedNavigation),
         );
         cx.provide_context(context);
 

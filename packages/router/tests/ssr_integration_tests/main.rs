@@ -32,6 +32,10 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
                     ),
                 ),
             )
+            .fixed(
+                "named-navigation-failure",
+                NamedTarget("invalid name", vec![], None),
+            )
             .fallback(RootFallback as Component)
     })
     .clone()
@@ -105,6 +109,8 @@ mod components {
 
 mod usage {
     mod fallback;
+
+    mod fallback_named_navigation;
 }
 
 mod hooks {

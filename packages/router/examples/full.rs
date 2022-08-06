@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::{prelude::*, PATH_FOR_NAMED_NAVIGATION_FAILURE};
+use dioxus_router::prelude::*;
 
 fn main() {
     env_logger::init();
@@ -26,10 +26,6 @@ fn app(cx: Scope) -> Element {
                     .name("raspberry"),
             )
             .fixed("the_best_berry", "/raspberry")
-            .fixed(
-                PATH_FOR_NAMED_NAVIGATION_FAILURE,
-                RcComponent(NamedNavigationFallback),
-            )
     });
 
     cx.render(rsx! {
@@ -48,6 +44,8 @@ fn app(cx: Scope) -> Element {
         Router {
             active_class: "active",
             routes: routes.clone(),
+            fallback_named_navigation: NamedNavigationFallback,
+
             header {
                 Link {
                     target: NamedTarget("", vec![], None)

@@ -24,7 +24,7 @@ use crate::{
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{RouteContent, Segment},
     state::RouterState,
-    PATH_FOR_EXTERNAL_NAVIGATION_FAILURE, PATH_FOR_NAMED_NAVIGATION_FAILURE,
+    PATH_FOR_EXTERNAL_NAVIGATION_FAILURE,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -61,6 +61,7 @@ pub(crate) enum RouterMessage {
 /// The [`RouterService`] provides information about its current state via the `state` field the
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
+    fallback_named_navigation: Component,
     history: Box<dyn HistoryProvider>,
     named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
     routes: Arc<Segment>,
@@ -80,6 +81,7 @@ impl RouterService {
         update: Arc<dyn Fn(ScopeId)>,
         active_class: Option<String>,
         history: Option<Box<dyn HistoryProvider>>,
+        fallback_named_navigation: Component,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -110,6 +112,7 @@ impl RouterService {
 
         (
             Self {
+                fallback_named_navigation,
                 history,
                 named_routes,
                 routes,
@@ -139,10 +142,16 @@ impl RouterService {
                 RouterMessage::GoForward => self.history.go_forward(),
                 RouterMessage::Push(target) => match target {
                     NavigationTarget::InternalTarget(path) => self.history.push(path),
-                    NavigationTarget::NamedTarget(name, vars, query) => self.history.push(
-                        construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
-                    ),
+                    NavigationTarget::NamedTarget(name, vars, query) => {
+                        match construct_named_path(name, &vars, &query, &self.named_routes) {
+                            Some(path) => self.history.push(path),
+                            None => {
+                                self.failed_named_navigation();
+                                self.update_subscribers();
+                                continue; // routing already updated
+                            }
+                        }
+                    }
                     NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
@@ -157,10 +166,16 @@ impl RouterService {
                 },
                 RouterMessage::Replace(target) => match target {
                     NavigationTarget::InternalTarget(path) => self.history.replace(path),
-                    NavigationTarget::NamedTarget(name, vars, query) => self.history.replace(
-                        construct_named_path(name, &vars, &query, &self.named_routes)
-                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
-                    ),
+                    NavigationTarget::NamedTarget(name, vars, query) => {
+                        match construct_named_path(name, &vars, &query, &self.named_routes) {
+                            Some(path) => self.history.replace(path),
+                            None => {
+                                self.failed_named_navigation();
+                                self.update_subscribers();
+                                continue; // routing already updated
+                            }
+                        }
+                    }
                     NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
@@ -190,30 +205,22 @@ impl RouterService {
     fn update_routing(&mut self) {
         // prepare variables
         let mut state = self.state.write().unwrap();
-        let RouterState {
-            can_external,
-            can_go_back,
-            can_go_forward,
-            components,
-            names,
-            path,
-            prefix,
-            query,
-            parameters,
-        } = &mut *state;
+        let mut named_navigation_failure = false;
 
         loop {
             // clear state
-            *can_external = self.history.can_external();
-            *can_go_back = self.history.can_go_back();
-            *can_go_forward = self.history.can_go_forward();
-            components.0.clear();
-            components.1.clear();
-            names.clear();
-            *path = self.history.current_path();
-            *prefix = self.history.current_prefix().to_string();
-            *query = self.history.current_query();
-            parameters.clear();
+            clear_state(&mut state, &*self.history);
+            let RouterState {
+                can_external: _,
+                can_go_back: _,
+                can_go_forward: _,
+                components,
+                names,
+                path,
+                prefix: _,
+                query: _,
+                parameters,
+            } = &mut *state;
 
             // normalize and split path
             let mut path = path.clone();
@@ -242,16 +249,21 @@ impl RouterService {
             };
 
             if let Some(target) = next {
-                self.history.replace(match target {
+                let target = match target {
                     NavigationTarget::InternalTarget(p) => p,
                     NavigationTarget::NamedTarget(name, vars, query_params) => {
-                        construct_named_path(name, &vars, &query_params, &self.named_routes)
-                            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"))
+                        match construct_named_path(name, &vars, &query_params, &self.named_routes) {
+                            Some(path) => path,
+                            None => {
+                                named_navigation_failure = true;
+                                break;
+                            }
+                        }
                     }
                     NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
-                            break;
+                            return;
                         } else {
                             format!(
                                 "/{path}?url={url}",
@@ -260,10 +272,17 @@ impl RouterService {
                             )
                         }
                     }
-                })
+                };
+
+                self.history.replace(target);
             } else {
-                break;
+                return;
             }
+        }
+
+        drop(state);
+        if named_navigation_failure {
+            self.failed_named_navigation();
         }
     }
 
@@ -291,6 +310,18 @@ impl RouterService {
             }
         });
     }
+
+    /// Go to the state for a named navigation failure.
+    fn failed_named_navigation(&mut self) {
+        self.history.push(String::from("/"));
+
+        // clear state
+        let mut state = self.state.write().unwrap();
+        clear_state(&mut state, &*self.history);
+
+        // show fallback content
+        state.components.0.push(self.fallback_named_navigation);
+    }
 }
 
 // [`ScopeId`] (in `update`) doesn't implement [`Debug`]
@@ -305,6 +336,20 @@ impl Debug for RouterService {
             .field("subscribers", &self.subscribers)
             .finish_non_exhaustive()
     }
+}
+
+/// Clear `state` using values from `history`.
+fn clear_state(state: &mut RouterState, history: &dyn HistoryProvider) {
+    state.can_external = history.can_external();
+    state.can_go_back = history.can_go_back();
+    state.can_go_forward = history.can_go_forward();
+    state.components.0.clear();
+    state.components.1.clear();
+    state.names.clear();
+    state.path = history.current_path();
+    state.prefix = history.current_prefix().to_string();
+    state.query = history.current_query();
+    state.parameters.clear();
 }
 
 /// Traverse the provided `segment` and populate `named` with the named routes.

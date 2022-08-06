@@ -56,6 +56,7 @@ hyper = { version = "0.14.18", features = ["full"] }
 tokio = { version = "1.18.2", features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
+dioxus-router = { path = ".", features = ["web"] }
 dioxus-web = { path = "../web" }
 gloo-utils = "0.1.2"
 wasm-bindgen-test = "0.3"

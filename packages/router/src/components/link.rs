@@ -10,7 +10,6 @@ use crate::{
         NavigationTarget::{self, *},
     },
     service::RouterMessage,
-    PATH_FOR_NAMED_NAVIGATION_FAILURE,
 };
 
 /// The properties for a [`Link`].
@@ -175,8 +174,8 @@ fn generate_href(
     let href = match target {
         InternalTarget(path) => path.to_string(),
         NamedTarget(name, parameters, query) => {
-            construct_named_path(name, parameters, query, targets)
-                .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"))
+            // construct_named_path already reports failure in debug
+            construct_named_path(name, parameters, query, targets).unwrap_or(String::from("/"))
         }
         ExternalTarget(href) => return href.to_string(),
     };
@@ -241,7 +240,7 @@ mod tests {
     #[test]
     fn href_name_path_in_release() {
         assert_eq!(
-            format!("/prefix/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"),
+            format!("/prefix/"),
             generate_href(
                 &NavigationTarget::NamedTarget("invalid", vec![], None),
                 "/prefix",

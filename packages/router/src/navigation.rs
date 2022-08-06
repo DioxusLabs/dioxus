@@ -13,8 +13,11 @@ pub enum NavigationTarget {
     InternalTarget(String),
     /// Navigate to the route with the corresponding name.
     ///
-    /// If the router doesn't know the provided name, it will navigate to
-    /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`](crate::PATH_FOR_NAMED_NAVIGATION_FAILURE).
+    /// If the router doesn't know the provided name, it will navigate to `/` and show some fallback
+    /// content. The default error message can be replaced by setting the
+    /// `fallback_named_navigation` prop on the [`Router`] component.
+    ///
+    /// [`Router`]: crate::components::Router
     NamedTarget(
         /// The name of the target route.
         &'static str,
