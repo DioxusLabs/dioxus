@@ -11,6 +11,9 @@ forward buttons:
 - [`GoBackButton`](https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.GoBackButton.html)
 - [`GoForwardButton`](https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.GoForwardButton.html)
 
+> If you want to navigate through the history programmatically, take a look at
+> [`programmatic navigation`](./navigation/programmatic.md).
+
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
