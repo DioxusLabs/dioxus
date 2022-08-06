@@ -52,14 +52,14 @@ pub mod hooks {
 /// Navigation information.
 pub mod navigation;
 
-/// Fallback path for failed external navigation. See [`NtExternal`].
+/// Fallback path for failed external navigation. See [`ExternalTarget`].
 ///
-/// [`NtExternal`]: navigation::NavigationTarget::NtExternal
+/// [`ExternalTarget`]: navigation::NavigationTarget::ExternalTarget
 pub const PATH_FOR_EXTERNAL_NAVIGATION_FAILURE: &str = "dioxus-router-external-navigation-failure";
 
-/// Fallback path for failed named navigation. See [`NtName`].
+/// Fallback path for failed named navigation. See [`NamedTarget`].
 ///
-/// [`NtName`]: navigation::NavigationTarget::NtName
+/// [`NamedTarget`]: navigation::NavigationTarget::NamedTarget
 pub const PATH_FOR_NAMED_NAVIGATION_FAILURE: &str = "dioxus-router-named-navigation-failure";
 
 /// Reexports of commonly used elements.

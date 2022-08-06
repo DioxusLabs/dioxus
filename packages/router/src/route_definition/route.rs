@@ -33,8 +33,8 @@ impl Route {
 
     /// Add a name.
     ///
-    /// The name can be used for name based navigation. See [`NtName`] for more details. Make sure
-    /// the name is unique among the routes passed to the [`Router`].
+    /// The name can be used for name based navigation. See [`NamedTarget`] for more details. Make
+    /// sure the name is unique among the routes passed to the [`Router`].
     ///
     /// # Panic
     /// - If the name was already set, but only in debug builds.
@@ -45,7 +45,7 @@ impl Route {
     /// Route::new(RcNone).name("name");
     /// ```
     ///
-    /// [`NtName`]: crate::navigation::NavigationTarget::NtName
+    /// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
     /// [`Router`]: crate::components::Router
     pub fn name(mut self, name: &'static str) -> Self {
         if let Some(existing_name) = self.name {
@@ -162,7 +162,9 @@ mod tests {
             .nested(Segment::new().fallback("test"));
 
         let is_correct_nested = if let Some(nest) = p.nested {
-            if let RouteContent::RcRedirect(NavigationTarget::NtPath(target)) = nest.fallback {
+            if let RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)) =
+                nest.fallback
+            {
                 target == "test"
             } else {
                 false

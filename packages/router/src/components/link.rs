@@ -39,7 +39,7 @@ pub struct LinkProps<'a> {
     pub new_tab: bool,
     /// The `rel` attribute of the generated HTML anchor.
     ///
-    /// Defaults to `"noreferrer noopener"` for [`NtExternal`] targets.
+    /// Defaults to `"noreferrer noopener"` for [`ExternalTarget`] targets.
     pub rel: Option<&'a str>,
     /// The navigation target. Corresponds to the `href` of an HTML anchor.
     #[props(into)]
@@ -58,8 +58,8 @@ pub struct LinkProps<'a> {
 /// as normal.
 ///
 /// # External targets
-/// When the [`Link`]s target is [`NtExternal`], the target is used as the `href` directly. This
-/// means that a [`Link`] can always navigate to [`NtExternal`].
+/// When the [`Link`]s target is [`ExternalTarget`], the target is used as the `href` directly. This
+/// means that a [`Link`] can always navigate to [`ExternalTarget`].
 ///
 /// __TODO:__ explain when this isn't the case
 ///
@@ -73,17 +73,17 @@ pub struct LinkProps<'a> {
 /// rsx! {
 ///     // a link to a specific path
 ///     Link {
-///         target: NtPath(String::from("/some/path")),
+///         target: InternalTarget(String::from("/some/path")),
 ///         "Go to path"
 ///     }
 ///     // a link to a route with a name
 ///     Link {
-///         target: NtName("some_name", vec![], None),
+///         target: NamedTarget("some_name", vec![], None),
 ///         "Go to named target"
 ///     }
 ///     // a link to an external page
 ///     Link {
-///         target: NtExternal(String::from("https://dioxuslabs.com/")),
+///         target: ExternalTarget(String::from("https://dioxuslabs.com/")),
 ///         "Go to external page"
 ///     }
 /// };
@@ -136,14 +136,14 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     };
 
     // prepare prevented defaults
-    let is_router_navigation = !(target.is_nt_external() || *new_tab);
+    let is_router_navigation = !(target.is_external_target() || *new_tab);
     let prevent_default = match is_router_navigation {
         true => "onclick",
         false => "",
     };
 
     // get rel attribute or apply default if external
-    let rel = rel.unwrap_or_else(|| match target.is_nt_external() {
+    let rel = rel.unwrap_or_else(|| match target.is_external_target() {
         true => "noopener noreferrer",
         false => "",
     });
@@ -173,10 +173,12 @@ fn generate_href(
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> String {
     let href = match target {
-        NtPath(path) => path.to_string(),
-        NtName(name, parameters, query) => construct_named_path(name, parameters, query, targets)
-            .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
-        NtExternal(href) => return href.to_string(),
+        InternalTarget(path) => path.to_string(),
+        NamedTarget(name, parameters, query) => {
+            construct_named_path(name, parameters, query, targets)
+                .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"))
+        }
+        ExternalTarget(href) => return href.to_string(),
     };
 
     format!("{prefix}{href}")
@@ -190,7 +192,7 @@ mod tests {
     fn href_path() {
         let path = "/test";
         let prefix = "/pre";
-        let target = NavigationTarget::NtPath(String::from(path));
+        let target = NavigationTarget::InternalTarget(String::from(path));
         let targets = BTreeMap::new();
 
         assert_eq!(path, generate_href(&target, "", &targets));
@@ -204,7 +206,7 @@ mod tests {
     fn href_name() {
         let name = "test";
         let prefix = "/pre";
-        let target = NavigationTarget::NtName(name, vec![], None);
+        let target = NavigationTarget::NamedTarget(name, vec![], None);
         let targets = {
             let mut t = BTreeMap::new();
             t.insert(
@@ -229,7 +231,7 @@ mod tests {
     #[should_panic] // message is checked by `construct_named_path`
     fn href_name_panic_in_debug() {
         generate_href(
-            &NavigationTarget::NtName("invalid", vec![], None),
+            &NavigationTarget::NamedTarget("invalid", vec![], None),
             "",
             &BTreeMap::new(),
         );
@@ -241,7 +243,7 @@ mod tests {
         assert_eq!(
             format!("/prefix/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"),
             generate_href(
-                &NavigationTarget::NtName("invalid", vec![], None),
+                &NavigationTarget::NamedTarget("invalid", vec![], None),
                 "/prefix",
                 &BTreeMap::new(),
             )
@@ -252,7 +254,7 @@ mod tests {
     fn href_external() {
         let href = "test";
         let prefix = "/pre";
-        let target = NavigationTarget::NtExternal(String::from(href));
+        let target = NavigationTarget::ExternalTarget(String::from(href));
         let targets = BTreeMap::new();
 
         assert_eq!(href, generate_href(&target, "", &targets));

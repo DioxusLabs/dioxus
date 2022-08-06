@@ -48,7 +48,7 @@ fn NavBar(cx: Scope) -> Element {
                 // new stuff starts here
                 li {
                     Link {
-                        target: NtPath(String::from("/")),
+                        target: InternalTarget(String::from("/")),
                         "Home"
                     }
                 }

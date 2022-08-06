@@ -102,12 +102,9 @@ fn App(cx: Scope<AppProps>) -> Element {
             .fixed("test", Route::new(RcComponent(Test)).name("test"))
             .fixed(
                 "dioxus",
-                Route::new(RcRedirect(NtExternal(String::from(
-                    "https://dioxuslabs.com",
-                ))))
-                .name("dioxus"),
+                Route::new("https://dioxuslabs.com").name("dioxus"),
             )
-            .fallback(RcRedirect(NtName("", vec![], None)))
+            .fallback(NamedTarget("", vec![], None))
     });
 
     let history = cx.use_hook(|| {
@@ -132,11 +129,11 @@ fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the SSR test!" }
         Link {
-            target: NtName("test", vec![], None),
+            target: NamedTarget("test", vec![], None),
             "Go to test page"
         }
         Link {
-            target: NtName("dioxus", vec![], None),
+            target: NamedTarget("dioxus", vec![], None),
             "Go to dioxus"
         }
     })
@@ -147,7 +144,7 @@ fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }
         Link {
-            target: NtName("", vec![], None),
+            target: NamedTarget("", vec![], None),
             "Return to home page"
         }
     })

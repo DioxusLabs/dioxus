@@ -235,7 +235,7 @@ mod tests {
         let s = Segment::new().fallback("test");
 
         let fallback_is_correct = match s.fallback {
-            RouteContent::RcRedirect(NavigationTarget::NtPath(target)) => target == "test",
+            RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)) => target == "test",
             _ => false,
         };
         assert!(fallback_is_correct);
@@ -332,7 +332,7 @@ mod tests {
             Some(ParameterRoute {
                 name: _,
                 key: _,
-                content: RouteContent::RcRedirect(NavigationTarget::NtPath(target)),
+                content: RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)),
                 nested: _,
             }) => target == "test",
             _ => false,

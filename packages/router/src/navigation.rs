@@ -10,12 +10,12 @@ pub enum NavigationTarget {
     ///
     /// If the path starts with a `/` it is treated as an absolute path. Otherwise it is treated as
     /// relative.
-    NtPath(String),
+    InternalTarget(String),
     /// Navigate to the route with the corresponding name.
     ///
     /// If the router doesn't know the provided name, it will navigate to
     /// [`PATH_FOR_NAMED_NAVIGATION_FAILURE`](crate::PATH_FOR_NAMED_NAVIGATION_FAILURE).
-    NtName(
+    NamedTarget(
         /// The name of the target route.
         &'static str,
         /// A list of parameters.
@@ -27,30 +27,31 @@ pub enum NavigationTarget {
     ),
     /// Navigate to an external page.
     ///
-    /// If the [`HistoryProvider`] used by the [`Router`] doesn't support [`NtExternal`], the router
-    /// will navigate to [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]. The URL the [`NtExternal`]
+    /// If the [`HistoryProvider`] used by the [`Router`] doesn't support [`ExternalTarget`], the router
+    /// will navigate to [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]. The URL the [`ExternalTarget`]
     /// provided will be provided in the query string as `url`.
     ///
     /// [`HistoryProvider`]: crate::history::HistoryProvider
-    /// [`NtExternal`]: NavigationTarget::NtExternal
+    /// [`ExternalTarget`]: NavigationTarget::ExternalTarget
     /// [`PATH_FOR_EXTERNAL_NAVIGATION_FAILURE`]: crate::PATH_FOR_EXTERNAL_NAVIGATION_FAILURE
     /// [`Router`]: crate::components::Router
-    NtExternal(String),
+    ExternalTarget(String),
 }
 
 impl NavigationTarget {
-    /// Returns [`true`] if the navigation target is [`NtExternal`].
+    /// Returns [`true`] if the navigation target is [`ExternalTarget`].
     ///
-    /// [`NtExternal`]: NavigationTarget::NtExternal
+    /// [`ExternalTarget`]: NavigationTarget::ExternalTarget
     #[must_use]
-    pub fn is_nt_external(&self) -> bool {
-        matches!(self, Self::NtExternal(..))
+    pub fn is_external_target(&self) -> bool {
+        matches!(self, Self::ExternalTarget(..))
     }
 }
 
 impl From<&'static str> for NavigationTarget {
     fn from(s: &'static str) -> Self {
-        s.parse().unwrap_or_else(|_| Self::NtPath(s.to_string()))
+        s.parse()
+            .unwrap_or_else(|_| Self::InternalTarget(s.to_string()))
     }
 }
 
@@ -59,8 +60,8 @@ impl FromStr for NavigationTarget {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match Url::parse(s) {
-            Ok(_) => Ok(Self::NtExternal(s.to_string())),
-            Err(ParseError::RelativeUrlWithoutBase) => Ok(Self::NtPath(s.to_string())),
+            Ok(_) => Ok(Self::ExternalTarget(s.to_string())),
+            Err(ParseError::RelativeUrlWithoutBase) => Ok(Self::InternalTarget(s.to_string())),
             Err(e) => Err(e),
         }
     }
@@ -104,8 +105,8 @@ mod tests {
         for t in targets {
             let nt: NavigationTarget = t.parse().unwrap();
 
-            assert!(nt.is_nt_external());
-            if let NavigationTarget::NtExternal(url) = nt {
+            assert!(nt.is_external_target());
+            if let NavigationTarget::ExternalTarget(url) = nt {
                 assert_eq!(url, t);
             }
         }
@@ -116,8 +117,8 @@ mod tests {
         let target = "/some/route";
         let nt: NavigationTarget = target.parse().unwrap();
 
-        assert!(matches!(nt, NavigationTarget::NtPath(_)));
-        if let NavigationTarget::NtPath(path) = nt {
+        assert!(matches!(nt, NavigationTarget::InternalTarget(_)));
+        if let NavigationTarget::InternalTarget(path) = nt {
             assert_eq!(path, target);
         }
     }

@@ -60,8 +60,8 @@ fn Content(cx: Scope) -> Element {
 ```
 
 You might have noticed that, like [`Link`], the [`Navigator`]s `push` and
-`replace` functions take a [`NavigationTarget`]. This means we can use `NtPath`,
-`NtName` and `NtExternal`.
+`replace` functions take a [`NavigationTarget`]. This means we can use
+[`InternalTarget`], [`NamedTarget`] and [`ExternalTarget`].
 
 ## External Navigation Targets
 Unlike a [`Link`], the [`Navigator`] cannot rely on the browser (or webview) to
@@ -71,7 +71,10 @@ This means, that under certain conditions, navigation to external targets can
 fail. See the chapter about
 [external navigation failures](../failures/external.md) for more details.
 
+[`ExternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.ExternalTarget
+[`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
 [`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
+[`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget
 [`NavigationTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html
 [`Navigator`]: https://docs.rs/dioxus-router/latest/dioxus_router/hooks/struct.Navigator.html
 [`use_navigate`]: https://docs.rs/dioxus-router/latest/dioxus_router/hooks/fn.use_navigate.html

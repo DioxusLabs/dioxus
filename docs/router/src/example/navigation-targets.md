@@ -7,12 +7,12 @@ We told them where to go using the `target` property. This property takes a
 A [`NavigationTarget`] is similar to the `href` of an HTML anchor element.It
 tells the router where to navigate to. The Dioxus Router knows three kinds of
 navigation targets:
-- [`NtPath`]: we already saw that. It's basically an `href`, but cannot link to
-  content outside our app.
-- [`NtExternal`]: This works exactly like an HTML anchors `href`. In fact, it is
-  just passed through. Don't use this for in-app navigation as it'll trigger a
-  page reload by the browser.
-- [`NtName`]: this is the most interesting form of navigation target. We'll look
+- [`InternalTarget`]: we already saw that. It's basically an `href`, but cannot
+  link to content outside our app.
+- [`ExternalTarget`]: This works exactly like an HTML anchors `href`. In fact,
+  it is just passed through. Don't use this for in-app navigation as it'll
+  trigger a page reload by the browser.
+- [`NamedTarget`]: this is the most interesting form of navigation target. We'll look
   at it in detail in this chapter.
 
 ## External navigation
@@ -28,20 +28,19 @@ If we need a link to an external page we can do it like this:
 fn GoToDioxus(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtExternal(String::from("https://dioxuslabs.com")),
-            "Explicit NtExternal target"
+            target: ExternalTarget(String::from("https://dioxuslabs.com")),
+            "Explicit ExternalTarget target"
         }
         Link {
             target: "https://dioxuslabs.com",
-            "Implicit NtExternal target"
+            "Implicit ExternalTarget target"
         }
     })
 }
 ```
 
-> Note that we can use a `str` with `.into()`, just like with [`NtPath`]
-> targets. The router will convert a `str` to a [`NtExternal`] only if it starts
-> with either `http://` or `https://`.
+> Note that we can use a `str`, just like with [`InternalTarget`]s. The router
+> will convert a `str` to an [`ExternalTarget`] if the URL is absolute.
 
 ## Named navigation
 When defining our routes, we can optionally give them unique static names. This
@@ -103,13 +102,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NtName("blog_post", vec![("post_id", String::from("1"))], None),
+                    target: NamedTarget("blog_post", vec![("post_id", String::from("1"))], None),
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post", vec![("post_id", String::from("2"))], None),
+                    target: NamedTarget("blog_post", vec![("post_id", String::from("2"))], None),
                     "Read the second blog post"
                 }
             }
@@ -118,7 +117,7 @@ fn BlogList(cx: Scope) -> Element {
 }
 ```
 
-As you can see, [`NtName`] has three fields:
+As you can see, [`NamedTarget`] has three fields:
 1. the name to navigate to.
 2. a `Vec` containing all parameters that need to be inserted into the path
 3. the query string to use. `None` means no query string
@@ -142,7 +141,7 @@ fn NavBar(cx: Scope) -> Element {
             ul {
                 li {
                     Link {
-                        target: NtName("", vec![], None),
+                        target: NamedTarget("", vec![], None),
                         "Home"
                     }
                 }
@@ -159,7 +158,7 @@ fn NavBar(cx: Scope) -> Element {
 ```
 
 
+[`ExternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.ExternalTarget
+[`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
+[`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget
 [`NavigationTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html
-[`NtExternal`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtExternal
-[`NtName`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtName
-[`NtPath`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtPath

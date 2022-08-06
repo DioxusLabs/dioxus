@@ -59,7 +59,7 @@ impl RouterState {
 
     /// Checks if the provided `target` is currently active.
     ///
-    /// # [`NtPath`](crate::navigation::NavigationTarget::NtPath)
+    /// # [`InternalTarget`](crate::navigation::NavigationTarget::InternalTarget)
     /// If the target is a path and `exact` is [`true`], the current path must match the `target`
     /// path exactly.
     ///
@@ -68,7 +68,7 @@ impl RouterState {
     ///
     /// Otherwise, the last segment of the current path must match the `target` path.
     ///
-    /// # [`NtName`](crate::navigation::NavigationTarget::NtName)
+    /// # [`NamedTarget`](crate::navigation::NavigationTarget::NamedTarget)
     /// The `target` name must be in the list of active names.
     ///
     /// If `exact` is [`true`], all `target` parameters must be matched by current parameters. The
@@ -77,12 +77,12 @@ impl RouterState {
     ///
     /// The query is ignored.
     ///
-    /// # [`NtExternal`](crate::navigation::NavigationTarget::NtExternal)
+    /// # [`ExternalTarget`](crate::navigation::NavigationTarget::ExternalTarget)
     /// Always [`false`].
     #[must_use]
     pub fn is_active(&self, target: &NavigationTarget, exact: bool) -> bool {
         match target {
-            NavigationTarget::NtPath(path) => {
+            NavigationTarget::InternalTarget(path) => {
                 if exact {
                     return &self.path == path;
                 }
@@ -99,7 +99,7 @@ impl RouterState {
 
                 false
             }
-            NavigationTarget::NtName(name, vars, _) => {
+            NavigationTarget::NamedTarget(name, vars, _) => {
                 if !self.names.contains(name) {
                     return false;
                 }
@@ -120,7 +120,7 @@ impl RouterState {
 
                 true
             }
-            NavigationTarget::NtExternal(_) => false,
+            NavigationTarget::ExternalTarget(_) => false,
         }
     }
 
@@ -167,42 +167,72 @@ mod tests {
     fn is_active_external() {
         let state = test_state();
 
-        assert!(!state.is_active(&NavigationTarget::NtExternal(String::from("test")), false));
-        assert!(!state.is_active(&NavigationTarget::NtExternal(String::from("test")), true));
+        assert!(!state.is_active(
+            &NavigationTarget::ExternalTarget(String::from("test")),
+            false
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::ExternalTarget(String::from("test")),
+            true
+        ));
     }
 
     #[test]
     fn is_active_path_absolute() {
         let state = test_state();
 
-        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test")), false));
-        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test/nest")), false));
-        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("/invalid")), false));
+        assert!(state.is_active(
+            &NavigationTarget::InternalTarget(String::from("/test")),
+            false
+        ));
+        assert!(state.is_active(
+            &NavigationTarget::InternalTarget(String::from("/test/nest")),
+            false
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::InternalTarget(String::from("/invalid")),
+            false
+        ));
     }
 
     #[test]
     fn is_active_path_exact() {
         let state = test_state();
 
-        assert!(state.is_active(&NavigationTarget::NtPath(String::from("/test/nest")), true));
-        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("test/nest")), true));
+        assert!(state.is_active(
+            &NavigationTarget::InternalTarget(String::from("/test/nest")),
+            true
+        ));
+        assert!(!state.is_active(
+            &NavigationTarget::InternalTarget(String::from("test/nest")),
+            true
+        ));
     }
 
     #[test]
     fn is_active_path_relative() {
         let state = test_state();
 
-        assert!(!state.is_active(&NavigationTarget::NtPath(String::from("test")), false));
-        assert!(state.is_active(&NavigationTarget::NtPath(String::from("nest")), false));
+        assert!(!state.is_active(
+            &NavigationTarget::InternalTarget(String::from("test")),
+            false
+        ));
+        assert!(state.is_active(
+            &NavigationTarget::InternalTarget(String::from("nest")),
+            false
+        ));
     }
 
     #[test]
     fn is_active_name() {
         let state = test_state();
 
-        assert!(state.is_active(&NavigationTarget::NtName("test", vec![], None), false));
-        assert!(state.is_active(&NavigationTarget::NtName("nest", vec![], None), false));
-        assert!(!state.is_active(&NavigationTarget::NtName("invalid", vec![], None), false));
+        assert!(state.is_active(&NavigationTarget::NamedTarget("test", vec![], None), false));
+        assert!(state.is_active(&NavigationTarget::NamedTarget("nest", vec![], None), false));
+        assert!(!state.is_active(
+            &NavigationTarget::NamedTarget("invalid", vec![], None),
+            false
+        ));
     }
 
     #[test]
@@ -210,19 +240,19 @@ mod tests {
         let state = test_state();
 
         assert!(state.is_active(
-            &NavigationTarget::NtName("test", vec![("test", String::from("test"))], None),
+            &NavigationTarget::NamedTarget("test", vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName("invalid", vec![("test", String::from("test"))], None),
+            &NavigationTarget::NamedTarget("invalid", vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName("test", vec![("invalid", String::from("test"))], None),
+            &NavigationTarget::NamedTarget("test", vec![("invalid", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName("test", vec![("test", String::from("invalid"))], None),
+            &NavigationTarget::NamedTarget("test", vec![("test", String::from("invalid"))], None),
             true
         ));
     }

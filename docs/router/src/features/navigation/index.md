@@ -26,8 +26,12 @@ use like this:
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtPath(String::from("/some/path")),
+            target: InternalTarget(String::from("/some/path")),
             "Link text"
+        }
+        Link {
+            target: "/some/path", // short form
+            "Other link text"
         }
     })
 }
@@ -36,14 +40,17 @@ fn SomeComponent(cx: Scope) -> Element {
 The `target` in the example above is similar to the `href` of a regular anchor
 element. However, it tells the router more about what kind of navigation it
 should perform:
-- The example uses `NtPath`. We give it an arbitrary path that will be merged
-  with the current URL.
-- `NtName` allows us to navigate within our app using predefined names. See the
-  chapter about [named navigation](./name.md) for more details.
-- `NtExternal` allows us to navigate to URLs outside of our app. See the chapter
-  about [external navigation](./external.md) for more details.
+- The example uses [`InternalTarget`]. We give it an arbitrary path that will be
+  merged with the current URL.
+- [`NamedTarget`] allows us to navigate within our app using predefined names.
+  See the chapter about [named navigation](./name.md) for more details.
+- [`ExternalTarget`] allows us to navigate to URLs outside of our app. See the
+  chapter about [external navigation](./external.md) for more details.
 
 > The [`Link`] accepts several props that modify its behavior. See the API docs
 > for more details.
 
+[`ExternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.ExternalTarget
+[`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
 [`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
+[`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget

@@ -138,12 +138,12 @@ impl RouterService {
                 RouterMessage::GoBack => self.history.go_back(),
                 RouterMessage::GoForward => self.history.go_forward(),
                 RouterMessage::Push(target) => match target {
-                    NavigationTarget::NtPath(path) => self.history.push(path),
-                    NavigationTarget::NtName(name, vars, query) => self.history.push(
+                    NavigationTarget::InternalTarget(path) => self.history.push(path),
+                    NavigationTarget::NamedTarget(name, vars, query) => self.history.push(
                         construct_named_path(name, &vars, &query, &self.named_routes)
                             .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
                     ),
-                    NavigationTarget::NtExternal(url) => {
+                    NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
                         } else {
@@ -156,12 +156,12 @@ impl RouterService {
                     }
                 },
                 RouterMessage::Replace(target) => match target {
-                    NavigationTarget::NtPath(path) => self.history.replace(path),
-                    NavigationTarget::NtName(name, vars, query) => self.history.replace(
+                    NavigationTarget::InternalTarget(path) => self.history.replace(path),
+                    NavigationTarget::NamedTarget(name, vars, query) => self.history.replace(
                         construct_named_path(name, &vars, &query, &self.named_routes)
                             .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}")),
                     ),
-                    NavigationTarget::NtExternal(url) => {
+                    NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
                         } else {
@@ -243,12 +243,12 @@ impl RouterService {
 
             if let Some(target) = next {
                 self.history.replace(match target {
-                    NavigationTarget::NtPath(p) => p,
-                    NavigationTarget::NtName(name, vars, query_params) => {
+                    NavigationTarget::InternalTarget(p) => p,
+                    NavigationTarget::NamedTarget(name, vars, query_params) => {
                         construct_named_path(name, &vars, &query_params, &self.named_routes)
                             .unwrap_or(format!("/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"))
                     }
-                    NavigationTarget::NtExternal(url) => {
+                    NavigationTarget::ExternalTarget(url) => {
                         if self.history.can_external() {
                             self.history.external(url);
                             break;
@@ -713,7 +713,7 @@ mod tests {
             &RouteContent::RcNone,
         );
 
-        let redirect_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
+        let redirect_correct = if let Some(NavigationTarget::InternalTarget(p)) = ret {
             p == "redirect-path"
         } else {
             false
@@ -744,7 +744,7 @@ mod tests {
         );
 
         let fallback_correct = match ret {
-            Some(NavigationTarget::NtPath(p)) => p == "fallback",
+            Some(NavigationTarget::InternalTarget(p)) => p == "fallback",
             _ => false,
         };
         assert!(fallback_correct);
@@ -772,7 +772,7 @@ mod tests {
         );
 
         let fallback_correct = match ret {
-            Some(NavigationTarget::NtPath(p)) => p == "fallback",
+            Some(NavigationTarget::InternalTarget(p)) => p == "fallback",
             _ => false,
         };
         assert!(fallback_correct);
@@ -796,10 +796,10 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcRedirect(NavigationTarget::NtPath(String::from("global"))),
+            &RouteContent::RcRedirect(NavigationTarget::InternalTarget(String::from("global"))),
         );
 
-        let fallback_correct = if let Some(NavigationTarget::NtPath(p)) = ret {
+        let fallback_correct = if let Some(NavigationTarget::InternalTarget(p)) = ret {
             p == "global"
         } else {
             false
@@ -820,30 +820,20 @@ mod tests {
             )
             .fixed(
                 "nested",
-                Route::new(RouteContent::RcComponent(TestComponent))
+                Route::new(TestComponent as Component)
                     .name("nested")
                     .nested(
                         Segment::new()
-                            .index(RouteContent::RcComponent(TestComponent))
+                            .index(TestComponent as Component)
                             .fixed(
                                 "second-layer",
-                                Route::new(RouteContent::RcComponent(TestComponent))
+                                Route::new(TestComponent as Component)
                                     .name("nested2")
-                                    .nested(
-                                        Segment::new()
-                                            .index(RouteContent::RcComponent(TestComponent)),
-                                    ),
+                                    .nested(Segment::new().index(TestComponent as Component)),
                             )
-                            .fixed(
-                                "redirect",
-                                Route::new(RouteContent::RcRedirect(NavigationTarget::NtPath(
-                                    String::from("redirect-path"),
-                                ))),
-                            )
+                            .fixed("redirect", "redirect-path")
                             .fixed("empty", Route::new(RouteContent::RcNone))
-                            .fallback(RouteContent::RcRedirect(NavigationTarget::NtPath(
-                                String::from("fallback"),
-                            ))),
+                            .fallback("fallback"),
                     ),
             )
             .matching(

@@ -21,7 +21,7 @@ use crate::{contexts::RouterContext, navigation::NavigationTarget, service::Rout
 ///
 ///     # let some_condition = true;
 ///     if some_condition {
-///         nav.push(NtExternal(String::from("https://dioxuslabs.com/")));
+///         nav.push("https://dioxuslabs.com/");
 ///     }
 ///
 ///     cx.render(rsx! {
@@ -98,7 +98,7 @@ mod tests {
     use futures_channel::mpsc::{unbounded, UnboundedReceiver};
 
     use super::*;
-    use NavigationTarget::NtPath;
+    use NavigationTarget::InternalTarget;
 
     #[test]
     fn go_back() {
@@ -119,22 +119,22 @@ mod tests {
     #[test]
     fn push() {
         let (n, mut rx) = prepare();
-        n.push(NtPath(String::from("path")));
+        n.push(InternalTarget(String::from("path")));
 
         assert!(matches!(
             rx.try_next(),
-            Ok(Some(RouterMessage::Push(NtPath(_))))
+            Ok(Some(RouterMessage::Push(InternalTarget(_))))
         ));
     }
 
     #[test]
     fn replace() {
         let (n, mut rx) = prepare();
-        n.replace(NtPath(String::from("path")));
+        n.replace(InternalTarget(String::from("path")));
 
         assert!(matches!(
             rx.try_next(),
-            Ok(Some(RouterMessage::Replace(NtPath(_))))
+            Ok(Some(RouterMessage::Replace(InternalTarget(_))))
         ));
     }
 

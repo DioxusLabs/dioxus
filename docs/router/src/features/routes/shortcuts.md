@@ -15,7 +15,7 @@ let routes = use_segment(&cx, || {
         .fixed(
             "redirect",
             Route::new(
-                RcRedirect(NtExternal(String::from("https://dioxuslabs.com")))
+                RcRedirect(ExternalTarget(String::from("https://dioxuslabs.com")))
             )
         )
 });
@@ -25,7 +25,7 @@ let routes = use_segment(&cx, || {
 
 As we can see, this simple task gets quite long, because we have to:
 - specify we want a [`Route`],
-- create a [`NavigationTarget::NtExternal`],
+- create a [`NavigationTarget::ExternalTarget`],
 - and manually have to convert our value to a `String`.
 
 However, the router allows us to simplify this declaration quite a bit:

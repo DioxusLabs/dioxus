@@ -31,8 +31,9 @@ fn SomeComponent(cx: Scope) -> Element {
 When navigating we can tell the router to change the query. However, the method
 we use to do this is very different, depending on how we specify our target.
 
-### `NtPath` and `NtExternal`
-When using `NtPath` or `NtExternal` we have to append our query manually.
+### [`InternalTarget`] and [`ExternalTarget`]
+When using [`InternalTarget`] or [`ExternalTarget`] we have to append our query
+manually.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -44,18 +45,18 @@ When using `NtPath` or `NtExternal` we have to append our query manually.
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtPath(String::from("/some/path?query=yes")),
+            target: InternalTarget(String::from("/some/path?query=yes")),
             "Internal target"
         }
         Link {
-            target: NtExternal(String::from("https://dioxuslab.com?query=yes")),
+            target: ExternalTarget(String::from("https://dioxuslab.com?query=yes")),
             "External target"
         }
     })
 }
 ```
 
-### `NtName`
+### [`NamedTarget`]
 When using [named navigation](./navigation/name.md) we can pass the query via
 the last tuple field.
 
@@ -71,11 +72,11 @@ We can either provide a query string, or a `Vec<(String, String)>`.
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtName("target", vec![], Some(QueryString(String::from("query=yes")))),
+            target: NamedTarget("target", vec![], Some(QueryString(String::from("query=yes")))),
             "Query String"
         }
         Link {
-            target: NtName(
+            target: NamedTarget(
                 "target",
                 vec![],
                 Some(QueryVec(vec![(String::from("query"), String::from("yes"))]))
@@ -86,5 +87,8 @@ fn SomeComponent(cx: Scope) -> Element {
 }
 ```
 
+[`ExternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.ExternalTarget
+[`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
+[`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget
 [`use_route`]: https://docs.rs/dioxus-router/latest/dioxus_router/hooks/fn.use_route.html
 root_index

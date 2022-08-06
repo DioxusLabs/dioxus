@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn add_to_list_rc_redirect() {
-        let nt = NavigationTarget::NtPath(String::from("test"));
+        let nt = NavigationTarget::InternalTarget(String::from("test"));
         let mut components = (Vec::new(), BTreeMap::new());
         let content = RouteContent::RcRedirect(nt.clone());
 

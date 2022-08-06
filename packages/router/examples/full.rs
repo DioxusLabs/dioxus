@@ -50,7 +50,7 @@ fn app(cx: Scope) -> Element {
             routes: routes.clone(),
             header {
                 Link {
-                    target: NtName("", vec![], None)
+                    target: NamedTarget("", vec![], None)
                     "go home"
                 }
                 GoBackButton {
@@ -74,25 +74,25 @@ fn Home(cx: Scope) -> Element {
         ul {
             li{
                 Link {
-                    target: NtPath(String::from("/blog")),
+                    target: "/blog",
                     "go to blog"
                 }
             }
             li {
                 Link {
-                    target: NtName("nonexisting name", vec![], None),
+                    target: NamedTarget("nonexisting name", vec![], None),
                     "trigger a named navigation error"
                 }
             }
             li {
                 Link {
-                    target: NtExternal(String::from("https://dioxuslabs.com/")),
+                    target: "https://dioxuslabs.com/",
                     "Go to an external website"
                 }
             }
             li {
                 Link {
-                    target: NtName("raspberry", vec![], None),
+                    target: NamedTarget("raspberry", vec![], None),
                     "Go to the page about raspberries"
                 }
             }
@@ -121,19 +121,19 @@ fn BlogWelcome(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NtPath(String::from("/blog/1")),
+                    target: "/blog/1",
                     "Go to first blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("2"))], None),
+                    target: NamedTarget("blog_post",vec![("blog_id", String::from("2"))], None),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))], None),
+                    target: NamedTarget("blog_post",vec![("blog_id", String::from("🎺"))], None),
                     "Go to trumpet blog post 🎺"
                 }
             }
@@ -156,7 +156,7 @@ fn BlogPost(cx: Scope) -> Element {
            "{id:#?}"
         }
         Link {
-            target: NtPath(String::from("..")),
+            target: "..",
             "go to blog list"
         }
     })

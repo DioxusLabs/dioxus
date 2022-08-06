@@ -14,7 +14,7 @@ fn app(cx: Scope) -> Element {
             .fixed("potato", Route::new(RcComponent(Potato)).name("potato"))
             .fixed(
                 "earth_apple",
-                Route::new(RcRedirect(NtName("potato", vec![], None))).name("earth apple"),
+                Route::new(NamedTarget("potato", vec![], None)).name("earth apple"),
             )
     });
 
@@ -34,19 +34,19 @@ fn Home(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NtPath(String::from("/apple")),
+                    target: "/apple",
                     "Read about apples…"
                 }
             }
             li {
                 Link {
-                    target: NtName("potato", vec![], None),
+                    target: NamedTarget("potato", vec![], None),
                     "Read about potatoes…"
                 }
             }
             li {
                 Link {
-                    target: NtName("earth apple", vec![], None),
+                    target: NamedTarget("earth apple", vec![], None),
                     "Read about earth apples (literal translation of a german word for potato)…"
                 }
             }
@@ -61,7 +61,7 @@ fn Apple(cx: Scope) -> Element {
         p { "Apples are fruit that grows on trees."}
         p {
             Link {
-                target: NtName("", vec![], None),
+                target: NamedTarget("", vec![], None),
                 "Go back to home"
             }
         }
@@ -75,7 +75,7 @@ fn Potato(cx: Scope) -> Element {
         p { "Potatoes grow underground. There are many recipes involving potatoes."}
         p {
             Link {
-                target: NtName("", vec![], None),
+                target: NamedTarget("", vec![], None),
                 "Go back to home"
             }
         }

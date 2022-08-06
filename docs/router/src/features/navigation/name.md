@@ -35,11 +35,11 @@ use dioxus_router::prelude::*;
 fn Source(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            // instead of NtPath we use NtName with these parameters:
+            // instead of InternalTarget we use NamedTarget with these parameters:
             // 1. the `name` we want to navigate to
             // 2. a Vec of parameters the router can put in the generated path
             // 3. the query
-            target: NtName("target", vec![], None),
+            target: NamedTarget("target", vec![], None),
             "Go to target"
         }
     })

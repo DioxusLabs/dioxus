@@ -13,7 +13,8 @@ routes.
 > Redirects to external pages only work in certain conditions. For more details
 > see the chapter about [external navigation failures](../failures/external.md).
 
-In the following example we will redirect everybody from `/` to `/home`.
+In the following example we will redirect everybody from `/` and `/start` to
+`/home`.
 
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
@@ -33,8 +34,9 @@ fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
             // notice that we use RcRedirect instead of RcComponent
-            .index(RcRedirect(NtPath(String::from("/home"))))
-            .fixed("home", Route::new(RcComponent(Home)))
+            .index(RcRedirect(InternalTarget(String::from("/home"))))
+            .fixed("start", "/home") // short form
+            .fixed("home", Home as Component)
     });
 
     cx.render(rsx! {
