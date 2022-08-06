@@ -4,8 +4,11 @@ use dioxus::prelude::*;
 use log::error;
 
 use crate::{
-    components::FallbackNamedNavigation, contexts::RouterContext, history::HistoryProvider,
-    route_definition::Segment, service::RouterService,
+    components::FallbackNamedNavigation,
+    contexts::RouterContext,
+    history::{HistoryProvider, MemoryHistory},
+    route_definition::Segment,
+    service::RouterService,
 };
 
 use super::FallbackExternalNavigation;
@@ -51,6 +54,11 @@ pub struct RouterProps<'a> {
     /// Useful for server-side rendering, as the router will not rely on an async task.
     #[props(default)]
     pub init_only: bool,
+    /// Start the router at the specified path.
+    ///
+    /// Implies `init_only` and overrides `history`.
+    #[props(into)]
+    pub initial_path: Option<String>,
     /// The routes of the application.
     pub routes: Arc<Segment>,
 }
@@ -109,7 +117,8 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         fallback_external_navigation,
         fallback_named_navigation,
         history,
-        init_only,
+        mut init_only,
+        initial_path,
         routes,
     } = cx.props;
 
@@ -124,7 +133,13 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         };
 
         // create custom history provider
-        let history = history.map(|x| x());
+        let mut history = history.map(|x| x());
+
+        // apply initial_path
+        if let Some(path) = initial_path {
+            init_only = true;
+            history = Some(MemoryHistory::with_first(path.clone()));
+        }
 
         // create router service and inject context
         let (mut service, context) = RouterService::new(

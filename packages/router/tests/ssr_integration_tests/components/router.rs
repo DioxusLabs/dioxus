@@ -63,6 +63,23 @@ fn render_when_init_only() {
 }
 
 #[test]
+fn with_initial_path() {
+    assert_eq!("<p>0: test</p><p>1: index</p>", render(App));
+
+    #[allow(non_snake_case)]
+    fn App(cx: Scope) -> Element {
+        cx.render(rsx! {
+            Router {
+                routes: test_routes(&cx),
+                initial_path: "/test",
+
+                Outlet { }
+            }
+        })
+    }
+}
+
+#[test]
 fn non_nested_router() {
     render(App);
 
