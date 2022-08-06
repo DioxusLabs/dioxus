@@ -71,14 +71,14 @@ We can either provide a query string, or a `Vec<(String, String)>`.
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NtName("target", vec![], QString(String::from("query=yes"))),
+            target: NtName("target", vec![], Some(QueryString(String::from("query=yes")))),
             "Query String"
         }
         Link {
             target: NtName(
                 "target",
                 vec![],
-                QVec(vec![(String::from("query"), String::from("yes"))])
+                Some(QueryVec(vec![(String::from("query"), String::from("yes"))]))
             ),
             "Query Vec"
         }

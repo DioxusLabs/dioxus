@@ -39,7 +39,7 @@ fn Source(cx: Scope) -> Element {
             // 1. the `name` we want to navigate to
             // 2. a Vec of parameters the router can put in the generated path
             // 3. the query
-            target: NtName("target", vec![], QNone),
+            target: NtName("target", vec![], None),
             "Go to target"
         }
     })

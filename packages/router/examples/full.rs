@@ -50,7 +50,7 @@ fn app(cx: Scope) -> Element {
             routes: routes.clone(),
             header {
                 Link {
-                    target: NtName("", vec![], QNone)
+                    target: NtName("", vec![], None)
                     "go home"
                 }
                 GoBackButton {
@@ -80,7 +80,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("nonexisting name", vec![], QNone),
+                    target: NtName("nonexisting name", vec![], None),
                     "trigger a named navigation error"
                 }
             }
@@ -92,7 +92,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("raspberry", vec![], QNone),
+                    target: NtName("raspberry", vec![], None),
                     "Go to the page about raspberries"
                 }
             }
@@ -127,13 +127,13 @@ fn BlogWelcome(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("2"))], QNone),
+                    target: NtName("blog_post",vec![("blog_id", String::from("2"))], None),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))], QNone),
+                    target: NtName("blog_post",vec![("blog_id", String::from("🎺"))], None),
                     "Go to trumpet blog post 🎺"
                 }
             }

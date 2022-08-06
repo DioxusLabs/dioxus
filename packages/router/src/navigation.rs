@@ -22,8 +22,8 @@ pub enum NavigationTarget {
         ///
         /// The contained values will be used to construct the actual path as needed.
         Vec<(&'static str, String)>,
-        /// The query string.
-        Query,
+        /// The query.
+        Option<Query>,
     ),
     /// Navigate to an external page.
     ///
@@ -69,19 +69,17 @@ impl FromStr for NavigationTarget {
 /// A query string.
 #[derive(Clone, Debug)]
 pub enum Query {
-    /// No query string.
-    QNone,
     /// The query string is the provided string.
-    QString(String),
+    QueryString(String),
     /// Construct a new query string from the provided key value pairs.
-    QVec(Vec<(String, String)>),
+    QueryVec(Vec<(String, String)>),
 }
 
 impl Query {
     /// Create a [`Query`] from a [`Serialize`]able value.
     #[must_use]
     pub fn from_serde(query: impl Serialize) -> Result<Self, serde_urlencoded::ser::Error> {
-        serde_urlencoded::to_string(query).map(|q| Self::QString(q))
+        serde_urlencoded::to_string(query).map(|q| Self::QueryString(q))
     }
 }
 

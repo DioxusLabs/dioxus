@@ -38,7 +38,7 @@ fn with_id() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtName("test", vec![], QNone),
+                    target: NtName("test", vec![], None),
                     id: "test_id",
                     "Test Link"
                 }
@@ -61,7 +61,7 @@ fn with_class() {
                 init_only: true,
                 routes: test_routes(&cx),
                 Link {
-                    target: NtName("test", vec![], QNone),
+                    target: NtName("test", vec![], None),
                     class: "test_class",
                     "Test Link"
                 }
@@ -85,7 +85,7 @@ fn with_class_and_router_active() {
                 init_only: true,
                 active_class: "active_router",
                 Link {
-                    target: NtName("", vec![], QNone),
+                    target: NtName("", vec![], None),
                     class: "test_class",
                     "Test Link"
                 }
@@ -109,7 +109,7 @@ fn with_class_and_overridden_active() {
                 init_only: true,
                 active_class: "active_router",
                 Link {
-                    target: NtName("", vec![], QNone),
+                    target: NtName("", vec![], None),
                     class: "test_class",
                     active_class: "active_link",
                     "Test Link"
@@ -182,7 +182,7 @@ fn with_new_tab() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtName("test", vec![], QNone),
+                    target: NtName("test", vec![], None),
                     new_tab: true,
                     "Test Link"
                 }
@@ -205,7 +205,7 @@ fn with_rel() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NtName("test", vec![], QNone),
+                    target: NtName("test", vec![], None),
                     rel: "custom",
                     "Test Link"
                 }

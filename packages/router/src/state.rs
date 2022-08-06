@@ -163,8 +163,6 @@ impl Debug for RouterState {
 mod tests {
     use super::*;
 
-    use crate::navigation::Query;
-
     #[test]
     fn is_active_external() {
         let state = test_state();
@@ -202,18 +200,9 @@ mod tests {
     fn is_active_name() {
         let state = test_state();
 
-        assert!(state.is_active(
-            &NavigationTarget::NtName("test", vec![], Query::QNone),
-            false
-        ));
-        assert!(state.is_active(
-            &NavigationTarget::NtName("nest", vec![], Query::QNone),
-            false
-        ));
-        assert!(!state.is_active(
-            &NavigationTarget::NtName("invalid", vec![], Query::QNone),
-            false
-        ));
+        assert!(state.is_active(&NavigationTarget::NtName("test", vec![], None), false));
+        assert!(state.is_active(&NavigationTarget::NtName("nest", vec![], None), false));
+        assert!(!state.is_active(&NavigationTarget::NtName("invalid", vec![], None), false));
     }
 
     #[test]
@@ -221,31 +210,19 @@ mod tests {
         let state = test_state();
 
         assert!(state.is_active(
-            &NavigationTarget::NtName("test", vec![("test", String::from("test"))], Query::QNone),
+            &NavigationTarget::NtName("test", vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName(
-                "invalid",
-                vec![("test", String::from("test"))],
-                Query::QNone
-            ),
+            &NavigationTarget::NtName("invalid", vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName(
-                "test",
-                vec![("invalid", String::from("test"))],
-                Query::QNone
-            ),
+            &NavigationTarget::NtName("test", vec![("invalid", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NtName(
-                "test",
-                vec![("test", String::from("invalid"))],
-                Query::QNone
-            ),
+            &NavigationTarget::NtName("test", vec![("test", String::from("invalid"))], None),
             true
         ));
     }

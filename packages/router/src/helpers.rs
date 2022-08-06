@@ -53,7 +53,7 @@ pub(crate) fn use_router_subscription(cx: &ScopeState) -> &mut Option<RouterCont
 pub(crate) fn construct_named_path(
     name: &'static str,
     parameters: &[(&'static str, String)],
-    query: &Query,
+    query: &Option<Query>,
     targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
     // find path layout
@@ -91,8 +91,8 @@ pub(crate) fn construct_named_path(
 
     // add query
     match query {
-        Query::QNone => {}
-        Query::QString(qs) => {
+        None => {}
+        Some(Query::QueryString(qs)) => {
             if qs.is_empty() {
                 // do nothing
             } else if qs.starts_with('?') {
@@ -101,7 +101,7 @@ pub(crate) fn construct_named_path(
                 path = format!("{path}?{qs}")
             }
         }
-        Query::QVec(vals) => {
+        Some(Query::QueryVec(vals)) => {
             if let Ok(q) = serde_urlencoded::to_string(vals) {
                 path = format!("{path}?{q}")
             }
@@ -119,7 +119,7 @@ mod tests {
     fn named_path_fixed() {
         assert_eq!(
             Some(String::from("/test/nest/")),
-            construct_named_path("fixed", &[], &Query::QNone, &test_targets())
+            construct_named_path("fixed", &[], &None, &test_targets())
         );
     }
 
@@ -130,7 +130,7 @@ mod tests {
             construct_named_path(
                 "parameter",
                 &vec![("para", String::from("value"))],
-                &Query::QNone,
+                &None,
                 &test_targets()
             )
         );
@@ -140,7 +140,7 @@ mod tests {
     fn named_path_root() {
         assert_eq!(
             Some(String::from("/")),
-            construct_named_path("", &[], &Query::QNone, &test_targets())
+            construct_named_path("", &[], &None, &test_targets())
         );
     }
 
@@ -151,7 +151,7 @@ mod tests {
             construct_named_path(
                 "fixed",
                 &[],
-                &Query::QString(String::from("?query=works")),
+                &Some(Query::QueryString(String::from("?query=works"))),
                 &test_targets()
             )
         )
@@ -164,7 +164,7 @@ mod tests {
             construct_named_path(
                 "fixed",
                 &[],
-                &Query::QString(String::from("query=works")),
+                &Some(Query::QueryString(String::from("query=works"))),
                 &test_targets()
             )
         )
@@ -177,7 +177,10 @@ mod tests {
             construct_named_path(
                 "fixed",
                 &[],
-                &Query::QVec(vec![(String::from("query"), String::from("works"))]),
+                &Some(Query::QueryVec(vec![(
+                    String::from("query"),
+                    String::from("works")
+                )])),
                 &test_targets()
             )
         )
@@ -187,7 +190,7 @@ mod tests {
     #[test]
     #[should_panic = r#"no route for name "invalid""#]
     fn named_path_not_found_panic_in_debug() {
-        let _ = construct_named_path("invalid", &[], &Query::QNone, &test_targets());
+        let _ = construct_named_path("invalid", &[], &None, &test_targets());
     }
 
     #[cfg(not(debug_assertions))]
@@ -195,7 +198,7 @@ mod tests {
     fn named_path_not_found_none_in_release() {
         assert_eq!(
             None,
-            construct_named_path("invalid", &[], &Query::QNone, &test_targets())
+            construct_named_path("invalid", &[], &None, &test_targets())
         );
     }
 
@@ -203,7 +206,7 @@ mod tests {
     #[test]
     #[should_panic = r#"no value for parameter "para""#]
     fn named_path_missing_parameter_panic_in_debug() {
-        let _ = construct_named_path("parameter", &[], &Query::QNone, &test_targets());
+        let _ = construct_named_path("parameter", &[], &None, &test_targets());
     }
 
     #[cfg(not(debug_assertions))]
@@ -211,7 +214,7 @@ mod tests {
     fn named_path_missing_parameter_none_in_release() {
         assert_eq!(
             None,
-            construct_named_path("parameter", &[], &Query::QNone, &test_targets())
+            construct_named_path("parameter", &[], &None, &test_targets())
         );
     }
 

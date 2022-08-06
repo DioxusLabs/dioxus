@@ -107,7 +107,7 @@ fn App(cx: Scope<AppProps>) -> Element {
                 ))))
                 .name("dioxus"),
             )
-            .fallback(RcRedirect(NtName("", vec![], QNone)))
+            .fallback(RcRedirect(NtName("", vec![], None)))
     });
 
     let history = cx.use_hook(|| {
@@ -132,11 +132,11 @@ fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the SSR test!" }
         Link {
-            target: NtName("test", vec![], QNone),
+            target: NtName("test", vec![], None),
             "Go to test page"
         }
         Link {
-            target: NtName("dioxus", vec![], QNone),
+            target: NtName("dioxus", vec![], None),
             "Go to dioxus"
         }
     })
@@ -147,7 +147,7 @@ fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }
         Link {
-            target: NtName("", vec![], QNone),
+            target: NtName("", vec![], None),
             "Return to home page"
         }
     })

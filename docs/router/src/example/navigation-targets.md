@@ -103,13 +103,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NtName("blog_post", vec![("post_id", String::from("1"))], QNone),
+                    target: NtName("blog_post", vec![("post_id", String::from("1"))], None),
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: NtName("blog_post", vec![("post_id", String::from("2"))], QNone),
+                    target: NtName("blog_post", vec![("post_id", String::from("2"))], None),
                     "Read the second blog post"
                 }
             }
@@ -121,7 +121,7 @@ fn BlogList(cx: Scope) -> Element {
 As you can see, [`NtName`] has three fields:
 1. the name to navigate to.
 2. a `Vec` containing all parameters that need to be inserted into the path
-3. the query string to use. [`QNone`] means no query string
+3. the query string to use. `None` means no query string
 
 
 ### The special root index name
@@ -142,7 +142,7 @@ fn NavBar(cx: Scope) -> Element {
             ul {
                 li {
                     Link {
-                        target: NtName("", vec![], QNone),
+                        target: NtName("", vec![], None),
                         "Home"
                     }
                 }
@@ -163,4 +163,3 @@ fn NavBar(cx: Scope) -> Element {
 [`NtExternal`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtExternal
 [`NtName`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtName
 [`NtPath`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NtPath
-[`QNone`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.Query.html#variant.QNone

@@ -78,7 +78,7 @@ pub struct LinkProps<'a> {
 ///     }
 ///     // a link to a route with a name
 ///     Link {
-///         target: NtName("some_name", vec![], QNone),
+///         target: NtName("some_name", vec![], None),
 ///         "Go to named target"
 ///     }
 ///     // a link to an external page
@@ -186,8 +186,6 @@ fn generate_href(
 mod tests {
     use super::*;
 
-    use crate::navigation::Query;
-
     #[test]
     fn href_path() {
         let path = "/test";
@@ -206,7 +204,7 @@ mod tests {
     fn href_name() {
         let name = "test";
         let prefix = "/pre";
-        let target = NavigationTarget::NtName(name, vec![], Query::QNone);
+        let target = NavigationTarget::NtName(name, vec![], None);
         let targets = {
             let mut t = BTreeMap::new();
             t.insert(
@@ -231,7 +229,7 @@ mod tests {
     #[should_panic] // message is checked by `construct_named_path`
     fn href_name_panic_in_debug() {
         generate_href(
-            &NavigationTarget::NtName("invalid", vec![], Query::QNone),
+            &NavigationTarget::NtName("invalid", vec![], None),
             "",
             &BTreeMap::new(),
         );
@@ -243,7 +241,7 @@ mod tests {
         assert_eq!(
             format!("/prefix/{PATH_FOR_NAMED_NAVIGATION_FAILURE}"),
             generate_href(
-                &NavigationTarget::NtName("invalid", vec![], Query::QNone),
+                &NavigationTarget::NtName("invalid", vec![], None),
                 "/prefix",
                 &BTreeMap::new(),
             )
