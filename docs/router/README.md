@@ -5,5 +5,3 @@
 - Run `cargo clean`
 - Run `cargo build --all --features web`
 - Run `mdbook test -L ../../target/debug/deps/`
-
-I don't know if there is a better way, but it works for me.
