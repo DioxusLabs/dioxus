@@ -102,8 +102,8 @@ you should seamlessly travel between pages.
 
 ### Active Link Styling
 You might want to style links differently, when their page is currently open.
-To achieve this, we can tell the router to give the internal `a` tag a class in
-that case.
+To achieve this, we can tell the [`Link`] to give its internal `a` tag a class
+in that case.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -111,24 +111,27 @@ that case.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-# fn Home(cx: Scope) -> Element { unimplemented!() }
-# fn NavBar(cx: Scope) -> Element { unimplemented!() }
-# fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
 #[allow(non_snake_case)]
-fn App(cx: Scope) -> Element {
-    let routes = use_segment(&cx, || {
-        Segment::new()
-            .index(Home as Component)
-            .fallback(PageNotFound as Component)
-    });
-
+fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
-        Router {
-            routes: routes.clone(),
-            active_class: "active", // this is new
-            NavBar { }
-            Outlet { }
+        nav {
+            ul {
+                li {
+                    Link {
+                        target: InternalTarget(String::from("/")),
+                        active_class: "active", // new stuff
+                        "Home"
+                    }
+                }
+                li {
+                    Link {
+                        target: "/blog",
+                        active_class: "active", // new stuff
+                        "Blog"
+                    }
+                }
+            }
         }
     })
 }
@@ -262,7 +265,6 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            active_class: "active",
             NavBar {}
             Outlet {}
         }
