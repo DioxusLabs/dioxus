@@ -318,6 +318,7 @@ impl RouterService {
 
         // show fallback content
         state.components.0.push(self.fallback_external_navigation);
+        state.names.insert("");
         state.parameters.insert("url", url);
     }
 
@@ -331,6 +332,7 @@ impl RouterService {
 
         // show fallback content
         state.components.0.push(self.fallback_named_navigation);
+        state.names.insert("");
     }
 }
 
