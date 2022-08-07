@@ -12,8 +12,6 @@ use crate::{navigation::NamedNavigationSegment, service::RouterMessage, state::R
 /// [router service]: crate::service::RouterService
 #[derive(Clone, Debug)]
 pub(crate) struct RouterContext {
-    /// A class to apply to active links.
-    pub(crate) active_class: Option<String>,
     /// A sender to send messages to the [router service].
     ///
     /// [router service]: crate::service::RouterService

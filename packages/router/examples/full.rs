@@ -42,7 +42,6 @@ fn app(cx: Scope) -> Element {
             "#
         }
         Router {
-            active_class: "active",
             routes: routes.clone(),
             fallback_named_navigation: NamedNavigationFallback,
 
@@ -50,6 +49,7 @@ fn app(cx: Scope) -> Element {
                 Link {
                     target: NamedTarget("", vec![], None)
                     "go home"
+                    active_class: "active",
                 }
                 GoBackButton {
                     "go back"
@@ -119,7 +119,7 @@ fn BlogWelcome(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: "/blog/1",
+                    target: "/blog/1/",
                     "Go to first blog post"
                 }
             }

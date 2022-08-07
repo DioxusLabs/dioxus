@@ -79,7 +79,6 @@ impl RouterService {
     pub(crate) fn new(
         routes: Arc<Segment>,
         update: Arc<dyn Fn(ScopeId)>,
-        active_class: Option<String>,
         history: Option<Box<dyn HistoryProvider>>,
         fallback_external_navigation: Component,
         fallback_named_navigation: Component,
@@ -96,7 +95,6 @@ impl RouterService {
         // create state and context
         let state = Arc::new(RwLock::new(RouterState::new()));
         let context = RouterContext {
-            active_class,
             tx: tx.clone(),
             state: state.clone(),
             named_routes: named_routes.clone(),

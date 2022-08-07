@@ -16,12 +16,6 @@ use super::FallbackExternalNavigation;
 /// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
-    /// A class to apply to active [`Link`]s.
-    ///
-    /// Individual [`Link`]s can override this via a prop with the same name.
-    ///
-    /// [`Link`]: crate::components::Link
-    pub active_class: Option<&'a str>,
     /// The components to render where the [`Router`] itself is.
     ///
     /// Usually contains at least one [`Outlet`](crate::components::Outlet).
@@ -69,7 +63,6 @@ pub struct RouterProps<'a> {
 impl Debug for RouterProps<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RouterProps")
-            .field("active_class", &self.active_class)
             .field("children", &self.children)
             .field(
                 "fallback_external_navigation",
@@ -118,7 +111,6 @@ impl Debug for RouterProps<'_> {
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let RouterProps {
-        active_class,
         children,
         fallback_external_navigation,
         fallback_named_navigation,
@@ -151,7 +143,6 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         let (mut service, context) = RouterService::new(
             routes.clone(),
             cx.schedule_update_any(),
-            active_class.map(|ac| ac.to_string()),
             history,
             fallback_external_navigation.unwrap_or(FallbackExternalNavigation),
             fallback_named_navigation.unwrap_or(FallbackNamedNavigation),

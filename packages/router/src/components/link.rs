@@ -122,7 +122,6 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     // check if route is active
     let active_class = active_class
         .map(|ac| ac.to_string())
-        .or_else(|| router.active_class.clone())
         .and_then(|ac| state.is_active(target, *exact).then(|| format!(" {ac}")))
         .unwrap_or_default();
 
