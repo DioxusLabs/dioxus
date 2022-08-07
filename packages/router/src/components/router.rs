@@ -63,12 +63,18 @@ pub struct RouterProps<'a> {
     pub routes: Arc<Segment>,
 }
 
-// [`Fn() -> Box<dyn HistoryProvider>`] (in `history`) doesn't implement [`Debug`]
+// - [`Fn() -> Box<dyn HistoryProvider>`] (in `history`) doesn't implement [`Debug`]
+// - [`Option<Component>`] (in `fallback_external_navigation` and `fallback_named_navigation`)
+//   doesn't implement [`Debug`]
 impl Debug for RouterProps<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RouterProps")
             .field("active_class", &self.active_class)
             .field("children", &self.children)
+            .field(
+                "fallback_external_navigation",
+                &self.fallback_external_navigation.is_some(),
+            )
             .field(
                 "fallback_named_navigation",
                 &self.fallback_named_navigation.is_some(),
