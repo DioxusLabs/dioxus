@@ -68,16 +68,17 @@ We can either provide a query string, or a `Vec<(String, String)>`.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
+# struct Target;
 #
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: NamedTarget("target", vec![], Some(QueryString(String::from("query=yes")))),
+            target: (Target, vec![], Some(QueryString(String::from("query=yes")))),
             "Query String"
         }
         Link {
-            target: NamedTarget(
-                "target",
+            target: (
+                Target,
                 vec![],
                 Some(QueryVec(vec![(String::from("query"), String::from("yes"))]))
             ),

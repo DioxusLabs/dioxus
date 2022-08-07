@@ -4,6 +4,8 @@ use std::sync::Arc;
 
 const ADDRESS: &str = "https://dioxuslabs.com/";
 
+struct TestName;
+
 fn render(component: Component) -> String {
     let mut app = VirtualDom::new(component);
     app.rebuild();
@@ -20,7 +22,7 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
                     TestComponent_1,
                     vec![("other", TestComponent_1_0_other)],
                 ))
-                .name("test")
+                .name(TestName)
                 .nested(
                     Segment::new().index(RcComponent(TestComponent_1_0)).fixed(
                         "nest",
@@ -35,7 +37,7 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
             .fixed("external-navigation-failure", "https://dioxuslabs.com/")
             .fixed(
                 "named-navigation-failure",
-                NamedTarget("invalid name", vec![], None),
+                Route::new(("invalid name", vec![], None)),
             )
             .fallback(RootFallback as Component)
     })

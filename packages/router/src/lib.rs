@@ -62,6 +62,7 @@ pub mod prelude {
     pub use crate::navigation::{NavigationTarget::*, Query::*, *};
     pub use crate::route_definition::{RouteContent::*, *};
     pub use crate::state::RouterState;
+    pub use crate::RootIndex;
 }
 
 /// Application-defined routing information.
@@ -84,3 +85,6 @@ mod service;
 
 /// Information about the current route.
 pub mod state;
+
+/// The name the router will automatically assign to the index route of the root segment.
+pub struct RootIndex;

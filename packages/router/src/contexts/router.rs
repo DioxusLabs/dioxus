@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     collections::BTreeMap,
     sync::{Arc, RwLock},
 };
@@ -21,5 +22,5 @@ pub(crate) struct RouterContext {
     /// [router service]: crate::service::RouterService
     pub(crate) state: Arc<RwLock<RouterState>>,
     /// The named routes the router knows about.
-    pub(crate) named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
+    pub(crate) named_routes: Arc<BTreeMap<TypeId, Vec<NamedNavigationSegment>>>,
 }

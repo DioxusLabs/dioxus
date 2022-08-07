@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    any::{type_name, TypeId},
+    collections::BTreeMap,
+    sync::Arc,
+};
 
 use dioxus::prelude::*;
 use log::error;
@@ -51,13 +55,13 @@ pub(crate) fn use_router_subscription(cx: &ScopeState) -> &mut Option<RouterCont
 /// - In debug builds, when the release build would return [`None`].
 #[must_use]
 pub(crate) fn construct_named_path(
-    name: &'static str,
+    (id, name): &(TypeId, &'static str),
     parameters: &[(&'static str, String)],
     query: &Option<Query>,
-    targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+    targets: &BTreeMap<TypeId, Vec<NamedNavigationSegment>>,
 ) -> Option<String> {
     // find path layout
-    let segments = match targets.get(name) {
+    let segments = match targets.get(id) {
         Some(x) => x,
         None => {
             error!(r#"no route for name "{name}""#);
@@ -111,15 +115,29 @@ pub(crate) fn construct_named_path(
     Some(path)
 }
 
+/// Create a tuple for [`NamedTarget`]s.
+///
+/// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
+#[must_use]
+pub(crate) fn named_tuple<T: 'static>(_: T) -> (TypeId, &'static str) {
+    (TypeId::of::<T>(), type_name::<T>())
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::RootIndex;
+
     use super::*;
+
+    struct Fixed;
+    struct Invalid;
+    struct Parameter;
 
     #[test]
     fn named_path_fixed() {
         assert_eq!(
             Some(String::from("/test/nest/")),
-            construct_named_path("fixed", &[], &None, &test_targets())
+            construct_named_path(&named_tuple(Fixed), &[], &None, &test_targets())
         );
     }
 
@@ -128,7 +146,7 @@ mod tests {
         assert_eq!(
             Some(String::from("/test/value/")),
             construct_named_path(
-                "parameter",
+                &named_tuple(Parameter),
                 &vec![("para", String::from("value"))],
                 &None,
                 &test_targets()
@@ -140,7 +158,7 @@ mod tests {
     fn named_path_root() {
         assert_eq!(
             Some(String::from("/")),
-            construct_named_path("", &[], &None, &test_targets())
+            construct_named_path(&named_tuple(RootIndex), &[], &None, &test_targets())
         );
     }
 
@@ -149,7 +167,7 @@ mod tests {
         assert_eq!(
             Some(String::from("/test/nest/?query=works")),
             construct_named_path(
-                "fixed",
+                &named_tuple(Fixed),
                 &[],
                 &Some(Query::QueryString(String::from("?query=works"))),
                 &test_targets()
@@ -162,7 +180,7 @@ mod tests {
         assert_eq!(
             Some(String::from("/test/nest/?query=works")),
             construct_named_path(
-                "fixed",
+                &named_tuple(Fixed),
                 &[],
                 &Some(Query::QueryString(String::from("query=works"))),
                 &test_targets()
@@ -175,7 +193,7 @@ mod tests {
         assert_eq!(
             Some(String::from("/test/nest/?query=works")),
             construct_named_path(
-                "fixed",
+                &named_tuple(Fixed),
                 &[],
                 &Some(Query::QueryVec(vec![(
                     String::from("query"),
@@ -188,9 +206,10 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#"no route for name "invalid""#]
+    // TODO: find a better way to test this panic message; see docs for std::any::type_name
+    #[should_panic = r#"no route for name "dioxus_router::helpers::tests::Invalid""#]
     fn named_path_not_found_panic_in_debug() {
-        let _ = construct_named_path("invalid", &[], &None, &test_targets());
+        let _ = construct_named_path(&named_tuple(Invalid), &[], &None, &test_targets());
     }
 
     #[cfg(not(debug_assertions))]
@@ -198,7 +217,7 @@ mod tests {
     fn named_path_not_found_none_in_release() {
         assert_eq!(
             None,
-            construct_named_path("invalid", &[], &None, &test_targets())
+            construct_named_path(&named_tuple(Invalid), &[], &None, &test_targets())
         );
     }
 
@@ -206,7 +225,7 @@ mod tests {
     #[test]
     #[should_panic = r#"no value for parameter "para""#]
     fn named_path_missing_parameter_panic_in_debug() {
-        let _ = construct_named_path("parameter", &[], &None, &test_targets());
+        let _ = construct_named_path(&named_tuple(Parameter), &[], &None, &test_targets());
     }
 
     #[cfg(not(debug_assertions))]
@@ -214,28 +233,28 @@ mod tests {
     fn named_path_missing_parameter_none_in_release() {
         assert_eq!(
             None,
-            construct_named_path("parameter", &[], &None, &test_targets())
+            construct_named_path(&named_tuple(Parameter), &[], &None, &test_targets())
         );
     }
 
-    fn test_targets() -> BTreeMap<&'static str, Vec<NamedNavigationSegment>> {
+    fn test_targets() -> BTreeMap<TypeId, Vec<NamedNavigationSegment>> {
         let mut targets = BTreeMap::new();
 
         targets.insert(
-            "fixed",
+            TypeId::of::<Fixed>(),
             vec![
                 NamedNavigationSegment::Fixed(String::from("test")),
                 NamedNavigationSegment::Fixed(String::from("nest")),
             ],
         );
         targets.insert(
-            "parameter",
+            TypeId::of::<Parameter>(),
             vec![
                 NamedNavigationSegment::Fixed(String::from("test")),
                 NamedNavigationSegment::Parameter("para"),
             ],
         );
-        targets.insert("", vec![]);
+        targets.insert(TypeId::of::<RootIndex>(), vec![]);
 
         targets
     }

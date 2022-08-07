@@ -67,6 +67,8 @@ Let's try that now! First, we give our blog post route a name.
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
+struct BlogPostName;
+
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
@@ -77,7 +79,7 @@ fn App(cx: Scope) -> Element {
                 Route::new(Blog as Component).nested(
                     Segment::default().index(BlogList as Component).parameter(
                         // notice the name at the end of the line
-                        ParameterRoute::new("post_id", BlogPost as Component).name("blog_post"),
+                        ParameterRoute::new("post_id", BlogPost as Component).name(BlogPostName),
                     ),
                 ),
             )
@@ -95,6 +97,7 @@ Now we can change the targets of the links in our `BlogList` component.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
+# struct BlogPostName;
 #[allow(non_snake_case)]
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -102,13 +105,13 @@ fn BlogList(cx: Scope) -> Element {
         ul {
             li {
                 Link {
-                    target: NamedTarget("blog_post", vec![("post_id", String::from("1"))], None),
+                    target: (BlogPostName, vec![("post_id", String::from("1"))], None),
                     "Read the first blog post"
                 }
             }
             li {
                 Link {
-                    target: NamedTarget("blog_post", vec![("post_id", String::from("2"))], None),
+                    target: (BlogPostName, vec![("post_id", String::from("2"))], None),
                     "Read the second blog post"
                 }
             }
@@ -117,15 +120,15 @@ fn BlogList(cx: Scope) -> Element {
 }
 ```
 
-As you can see, [`NamedTarget`] has three fields:
-1. the name to navigate to.
+As you can see, a [`NamedTarget`] requires three fields:
+1. the name to navigate to
 2. a `Vec` containing all parameters that need to be inserted into the path
 3. the query string to use. `None` means no query string
 
 
 ### The special root index name
 Whether we define any names or not, the router always knows about the
-`""` (empty string) name. Navigating to it tells the router to go to `/`.
+[`RootIndex`] name. Navigating to it tells the router to go to `/`.
 
 We can change the link in our `NavBar` component to take advantage of that.
 ```rust,no_run
@@ -141,7 +144,7 @@ fn NavBar(cx: Scope) -> Element {
             ul {
                 li {
                     Link {
-                        target: NamedTarget("", vec![], None),
+                        target: (RootIndex, vec![], None),
                         "Home"
                     }
                 }
@@ -162,3 +165,4 @@ fn NavBar(cx: Scope) -> Element {
 [`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
 [`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget
 [`NavigationTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html
+[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/struct.RootIndex.html

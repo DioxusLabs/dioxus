@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, convert::Infallible, fmt::Debug, str::FromStr};
 
 use dioxus::prelude::*;
 
-use crate::navigation::NavigationTarget;
+use crate::{navigation::NavigationTarget, prelude::Query};
 
 /// The content of a [`Route`] or [`ParameterRoute`].
 ///
@@ -82,6 +82,12 @@ impl Debug for RouteContent {
 impl Default for RouteContent {
     fn default() -> Self {
         Self::RcNone
+    }
+}
+
+impl<T: 'static> From<(T, Vec<(&'static str, String)>, Option<Query>)> for RouteContent {
+    fn from(nt: (T, Vec<(&'static str, String)>, Option<Query>)) -> Self {
+        Self::RcRedirect(nt.into())
     }
 }
 

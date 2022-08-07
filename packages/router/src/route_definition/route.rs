@@ -1,4 +1,8 @@
-use std::{convert::Infallible, str::FromStr};
+use std::{
+    any::{type_name, TypeId},
+    convert::Infallible,
+    str::FromStr,
+};
 
 use dioxus::prelude::*;
 use log::error;
@@ -11,7 +15,7 @@ use super::{RouteContent, Segment};
 #[derive(Clone, Debug)]
 pub struct Route {
     pub(crate) content: RouteContent,
-    pub(crate) name: Option<&'static str>,
+    pub(crate) name: Option<(TypeId, &'static str)>,
     pub(crate) nested: Option<Segment>,
 }
 
@@ -36,25 +40,30 @@ impl Route {
     /// The name can be used for name based navigation. See [`NamedTarget`] for more details. Make
     /// sure the name is unique among the routes passed to the [`Router`].
     ///
+    /// **IMPORTANT:** the actual value of the argument is ignored. The only important factor is its
+    /// type.
+    ///
     /// # Panic
     /// - If the name was already set, but only in debug builds.
     ///
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Route::new(RcNone).name("name");
+    /// struct Name;
+    /// Route::new(RcNone).name(Name);
     /// ```
     ///
     /// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
     /// [`Router`]: crate::components::Router
-    pub fn name(mut self, name: &'static str) -> Self {
-        if let Some(existing_name) = self.name {
+    pub fn name<T: 'static>(mut self, _: T) -> Self {
+        let name = type_name::<T>();
+        if let Some((_, existing_name)) = self.name {
             error!(r#"name already set: "{existing_name}" to "{name}", later prevails"#);
             #[cfg(debug_assertions)]
             panic!(r#"name already set: "{existing_name}" to "{name}""#);
         }
 
-        self.name = Some(name);
+        self.name = Some((TypeId::of::<T>(), name));
         self
     }
 
@@ -115,27 +124,31 @@ impl FromStr for Route {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helpers::named_tuple;
+
+    struct Test;
+    struct Test2;
 
     #[test]
     fn name() {
-        let r = Route::new(RouteContent::RcNone).name("test");
+        let r = Route::new(RouteContent::RcNone).name(Test);
 
-        assert_eq!(r.name, Some("test"));
+        assert_eq!(r.name, Some(named_tuple(Test)));
     }
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#"name already set: "test" to "test2""#]
+    #[should_panic = r#"name already set: "dioxus_router::route_definition::route::tests::Test" to "dioxus_router::route_definition::route::tests::Test2""#]
     fn name_panic_in_debug() {
-        Route::new(RouteContent::RcNone).name("test").name("test2");
+        Route::new(RouteContent::RcNone).name(Test).name(Test2);
     }
 
     #[cfg(not(debug_assertions))]
     #[test]
     fn name_override_in_release() {
-        let p = Route::new(RouteContent::RcNone).name("test").name("test2");
+        let p = Route::new(RouteContent::RcNone).name(Test).name(Test2);
 
-        assert_eq!(p.name, Some("test2"));
+        assert_eq!(p.name, Some(named_tuple(Test2)));
     }
 
     #[test]

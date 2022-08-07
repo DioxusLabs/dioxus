@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dioxus_router::{history::MemoryHistory, prelude::*};
 
-use crate::{render, test_routes, ADDRESS};
+use crate::{render, test_routes, TestName, ADDRESS};
 
 #[test]
 fn basic() {
@@ -38,7 +38,7 @@ fn with_id() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NamedTarget("test", vec![], None),
+                    target: (TestName, vec![], None),
                     id: "test_id",
                     "Test Link"
                 }
@@ -61,7 +61,7 @@ fn with_class() {
                 init_only: true,
                 routes: test_routes(&cx),
                 Link {
-                    target: NamedTarget("test", vec![], None),
+                    target: (TestName, vec![], None),
                     class: "test_class",
                     "Test Link"
                 }
@@ -84,7 +84,7 @@ fn with_class_and_active() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NamedTarget("", vec![], None),
+                    target: (RootIndex, vec![], None),
                     active_class: "active",
                     class: "test_class",
                     "Test Link"
@@ -160,7 +160,7 @@ fn with_new_tab() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NamedTarget("test", vec![], None),
+                    target: (TestName, vec![], None),
                     new_tab: true,
                     "Test Link"
                 }
@@ -183,7 +183,7 @@ fn with_rel() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: NamedTarget("test", vec![], None),
+                    target: (TestName, vec![], None),
                     rel: "custom",
                     "Test Link"
                 }

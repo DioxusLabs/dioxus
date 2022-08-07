@@ -2,6 +2,7 @@
 // does each window have its own router? probably, lol
 
 use std::{
+    any::TypeId,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
     sync::{Arc, RwLock, Weak},
@@ -24,6 +25,7 @@ use crate::{
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{RouteContent, Segment},
     state::RouterState,
+    RootIndex,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -63,7 +65,7 @@ pub(crate) struct RouterService {
     fallback_external_navigation: Component,
     fallback_named_navigation: Component,
     history: Box<dyn HistoryProvider>,
-    named_routes: Arc<BTreeMap<&'static str, Vec<NamedNavigationSegment>>>,
+    named_routes: Arc<BTreeMap<TypeId, Vec<NamedNavigationSegment>>>,
     routes: Arc<Segment>,
     rx: UnboundedReceiver<RouterMessage>,
     state: Arc<RwLock<RouterState>>,
@@ -89,7 +91,7 @@ impl RouterService {
         // create named navigation targets
         let mut named_routes = BTreeMap::new();
         construct_named_targets(&routes, &Vec::new(), &mut named_routes);
-        named_routes.insert("", Vec::new());
+        named_routes.insert(TypeId::of::<RootIndex>(), Vec::new());
         let named_routes = Arc::new(named_routes);
 
         // create state and context
@@ -143,7 +145,7 @@ impl RouterService {
                 RouterMessage::Push(target) => match target {
                     NavigationTarget::InternalTarget(path) => self.history.push(path),
                     NavigationTarget::NamedTarget(name, vars, query) => {
-                        match construct_named_path(name, &vars, &query, &self.named_routes) {
+                        match construct_named_path(&name, &vars, &query, &self.named_routes) {
                             Some(path) => self.history.push(path),
                             None => {
                                 self.failed_named_navigation();
@@ -165,7 +167,7 @@ impl RouterService {
                 RouterMessage::Replace(target) => match target {
                     NavigationTarget::InternalTarget(path) => self.history.replace(path),
                     NavigationTarget::NamedTarget(name, vars, query) => {
-                        match construct_named_path(name, &vars, &query, &self.named_routes) {
+                        match construct_named_path(&name, &vars, &query, &self.named_routes) {
                             Some(path) => self.history.replace(path),
                             None => {
                                 self.failed_named_navigation();
@@ -230,7 +232,7 @@ impl RouterService {
 
             // index on root
             let next = if path.is_empty() && !empty_root {
-                names.insert("");
+                names.insert(TypeId::of::<RootIndex>());
                 self.routes.index.add_to_list(components)
             }
             // all other cases
@@ -249,7 +251,8 @@ impl RouterService {
                 let target = match target {
                     NavigationTarget::InternalTarget(p) => p,
                     NavigationTarget::NamedTarget(name, vars, query_params) => {
-                        match construct_named_path(name, &vars, &query_params, &self.named_routes) {
+                        match construct_named_path(&name, &vars, &query_params, &self.named_routes)
+                        {
                             Some(path) => path,
                             None => {
                                 named_navigation_failure = true;
@@ -318,7 +321,7 @@ impl RouterService {
 
         // show fallback content
         state.components.0.push(self.fallback_external_navigation);
-        state.names.insert("");
+        state.names.insert(TypeId::of::<RootIndex>());
         state.parameters.insert("url", url);
     }
 
@@ -332,7 +335,7 @@ impl RouterService {
 
         // show fallback content
         state.components.0.push(self.fallback_named_navigation);
-        state.names.insert("");
+        state.names.insert(TypeId::of::<RootIndex>());
     }
 }
 
@@ -368,10 +371,10 @@ fn clear_state(state: &mut RouterState, history: &dyn HistoryProvider) {
 fn construct_named_targets(
     segment: &Segment,
     ancestors: &[NamedNavigationSegment],
-    targets: &mut BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+    targets: &mut BTreeMap<TypeId, Vec<NamedNavigationSegment>>,
 ) {
     let mut add_named_target = |segment: NamedNavigationSegment,
-                                name: &Option<&'static str>,
+                                name: &Option<(TypeId, &'static str)>,
                                 nested: Option<&Segment>| {
         let mut ancestors = Vec::from(ancestors);
         ancestors.push(segment);
@@ -380,11 +383,11 @@ fn construct_named_targets(
             construct_named_targets(nested, &ancestors, targets);
         }
 
-        if let Some(name) = name {
-            if targets.insert(name, ancestors).is_some() {
+        if let Some((id, name)) = name {
+            if targets.insert(*id, ancestors).is_some() {
                 error!(r#"route names must be unique, later prevails; duplicate name: "{name}""#);
                 #[cfg(debug_assertions)]
-                panic!(r#"route names must be unique; duplicate name: "{name}""#);
+                panic!(r#"route names must be unique; duplicate name: "{name}""#,);
             }
         }
     };
@@ -414,10 +417,10 @@ fn construct_named_targets(
     }
 
     // add root name
-    if ancestors.is_empty() && targets.insert("", vec![]).is_some() {
-        error!(r#"root route name ("" -> "/") is provided by router, custom is overwritten"#);
+    if ancestors.is_empty() && targets.insert(TypeId::of::<RootIndex>(), vec![]).is_some() {
+        error!(r#"root index route name ("/") is provided by router, custom is overwritten"#);
         #[cfg(debug_assertions)]
-        panic!(r#"root route name ("" -> "/") is provided by router"#);
+        panic!(r#"root index route name ("/") is provided by router"#);
     }
 }
 
@@ -429,7 +432,7 @@ fn match_segment<'a>(
     path: &[&str],
     segment: &'a Segment,
     components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
-    names: &mut BTreeSet<&'static str>,
+    names: &mut BTreeSet<TypeId>,
     parameters: &mut BTreeMap<&'static str, String>,
     mut fallback: &'a RouteContent,
 ) -> Option<NavigationTarget> {
@@ -483,7 +486,7 @@ fn match_segment<'a>(
     if let Some(target) = content.add_to_list(components) {
         return Some(target);
     }
-    if let Some(name) = name {
+    if let Some((name, _)) = name {
         names.insert(name);
     }
 
@@ -523,10 +526,20 @@ fn match_segment<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::route_definition::{ParameterRoute, Route};
+    use crate::{
+        route_definition::{ParameterRoute, Route},
+        RootIndex,
+    };
     use regex::Regex;
 
     use super::*;
+
+    struct Fixed;
+    struct FixedEncoded;
+    struct Nested;
+    struct Nested2;
+    struct Match;
+    struct Parameter;
 
     #[test]
     fn named_targets() {
@@ -534,20 +547,20 @@ mod tests {
         construct_named_targets(&prepare_segment(), &[], &mut targets);
 
         assert_eq!(targets.len(), 7);
-        assert_eq!(targets["fixed"].len(), 1);
-        assert_eq!(targets["nested"].len(), 1);
-        assert_eq!(targets["nested2"].len(), 2);
-        assert_eq!(targets["match"].len(), 1);
-        assert_eq!(targets["parameter"].len(), 1);
-        assert!(targets[""].is_empty());
+        assert_eq!(targets[&TypeId::of::<Fixed>()].len(), 1);
+        assert_eq!(targets[&TypeId::of::<Nested>()].len(), 1);
+        assert_eq!(targets[&TypeId::of::<Nested2>()].len(), 2);
+        assert_eq!(targets[&TypeId::of::<Match>()].len(), 1);
+        assert_eq!(targets[&TypeId::of::<Parameter>()].len(), 1);
+        assert!(targets[&TypeId::of::<RootIndex>()].is_empty());
     }
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#"route names must be unique; duplicate name: "nested2""#]
+    #[should_panic = r#"route names must be unique; duplicate name: "dioxus_router::service::tests::Nested2""#]
     fn named_targets_duplicate_panic_in_debug() {
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("nested2")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(Nested2)),
             &[],
             &mut BTreeMap::new(),
         );
@@ -558,20 +571,20 @@ mod tests {
     fn named_targets_duplicate_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("nested2")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(Nested2)),
             &[],
             &mut targets,
         );
 
-        assert_eq!(targets["nested2"].len(), 1);
+        assert_eq!(targets[&TypeId::of::<Nested2>()].len(), 1);
     }
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#"root route name ("" -> "/") is provided by router"#]
+    #[should_panic = r#"root index route name ("/") is provided by router"#]
     fn named_targets_root_panic_in_debug() {
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(RootIndex)),
             &[],
             &mut BTreeMap::new(),
         );
@@ -582,12 +595,12 @@ mod tests {
     fn named_targets_root_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name("")),
+            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(RootIndex)),
             &[],
             &mut targets,
         );
 
-        assert!(targets[""].is_empty());
+        assert!(targets[&TypeId::of::<RootIndex>()].is_empty());
     }
 
     #[test]
@@ -609,7 +622,7 @@ mod tests {
         assert!(components.0.is_empty());
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("fixed"));
+        assert!(names.contains(&TypeId::of::<Fixed>()));
         assert!(parameters.is_empty());
     }
 
@@ -632,7 +645,7 @@ mod tests {
         assert!(components.0.is_empty());
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("fixed-encoded"));
+        assert!(names.contains(&TypeId::of::<FixedEncoded>()));
         assert!(parameters.is_empty());
     }
 
@@ -655,7 +668,7 @@ mod tests {
         assert_eq!(components.0.len(), 2);
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("nested"));
+        assert!(names.contains(&TypeId::of::<Nested>()));
         assert!(parameters.is_empty());
     }
 
@@ -678,8 +691,8 @@ mod tests {
         assert_eq!(components.0.len(), 3);
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 2);
-        assert!(names.contains("nested"));
-        assert!(names.contains("nested2"));
+        assert!(names.contains(&TypeId::of::<Nested>()));
+        assert!(names.contains(&TypeId::of::<Nested2>()));
         assert!(parameters.is_empty());
     }
 
@@ -702,7 +715,7 @@ mod tests {
         assert!(components.0.is_empty());
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("match"));
+        assert!(names.contains(&TypeId::of::<Match>()));
         assert_eq!(parameters.len(), 1);
         assert_eq!(parameters["m1-parameter"], "m1test");
     }
@@ -726,7 +739,7 @@ mod tests {
         assert!(components.0.is_empty());
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("match"));
+        assert!(names.contains(&TypeId::of::<Match>()));
         assert_eq!(parameters.len(), 1);
         assert_eq!(parameters["m1-parameter"], "m1ÄÖÜ");
     }
@@ -750,7 +763,7 @@ mod tests {
         assert!(components.0.is_empty());
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("parameter"));
+        assert!(names.contains(&TypeId::of::<Parameter>()));
         assert_eq!(parameters.len(), 1);
         assert_eq!(parameters["p-parameter"], "test");
     }
@@ -781,7 +794,7 @@ mod tests {
         assert_eq!(components.0.len(), 1);
         assert!(components.1.is_empty());
         assert_eq!(names.len(), 1);
-        assert!(names.contains("nested"));
+        assert!(names.contains(&TypeId::of::<Nested>()));
         assert!(parameters.is_empty());
     }
 
@@ -870,34 +883,32 @@ mod tests {
 
     fn prepare_segment() -> Segment {
         Segment::new()
-            .fixed("fixed", Route::new(RouteContent::RcNone).name("fixed"))
+            .fixed("fixed", Route::new(RouteContent::RcNone).name(Fixed))
             .fixed(
                 "fixed-ÄÖÜ",
-                Route::new(RouteContent::RcNone).name("fixed-encoded"),
+                Route::new(RouteContent::RcNone).name(FixedEncoded),
             )
             .fixed(
                 "nested",
-                Route::new(TestComponent as Component)
-                    .name("nested")
-                    .nested(
-                        Segment::new()
-                            .index(TestComponent as Component)
-                            .fixed(
-                                "second-layer",
-                                Route::new(TestComponent as Component)
-                                    .name("nested2")
-                                    .nested(Segment::new().index(TestComponent as Component)),
-                            )
-                            .fixed("redirect", "redirect-path")
-                            .fixed("empty", Route::new(RouteContent::RcNone))
-                            .fallback("fallback"),
-                    ),
+                Route::new(TestComponent as Component).name(Nested).nested(
+                    Segment::new()
+                        .index(TestComponent as Component)
+                        .fixed(
+                            "second-layer",
+                            Route::new(TestComponent as Component)
+                                .name(Nested2)
+                                .nested(Segment::new().index(TestComponent as Component)),
+                        )
+                        .fixed("redirect", "redirect-path")
+                        .fixed("empty", Route::new(RouteContent::RcNone))
+                        .fallback("fallback"),
+                ),
             )
             .matching(
                 Regex::new("^m1.*$").unwrap(),
-                ParameterRoute::new("m1-parameter", RouteContent::RcNone).name("match"),
+                ParameterRoute::new("m1-parameter", RouteContent::RcNone).name(Match),
             )
-            .parameter(ParameterRoute::new("p-parameter", RouteContent::RcNone).name("parameter"))
+            .parameter(ParameterRoute::new("p-parameter", RouteContent::RcNone).name(Parameter))
     }
 
     #[allow(non_snake_case)]

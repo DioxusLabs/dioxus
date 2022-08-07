@@ -5,7 +5,7 @@ use crate::{render, test_routes};
 
 #[cfg(debug_assertions)]
 #[test]
-#[should_panic = "no route for name \"invalid name\""]
+#[should_panic = "no route for name \"&str\""]
 fn panic_in_debug() {
     render(App);
 

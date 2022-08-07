@@ -1,7 +1,9 @@
-use std::str::FromStr;
+use std::{any::TypeId, str::FromStr};
 
 use serde::Serialize;
 use url::{ParseError, Url};
+
+use crate::helpers::named_tuple;
 
 /// A target for the router to navigate to.
 #[derive(Clone, Debug)]
@@ -19,8 +21,8 @@ pub enum NavigationTarget {
     ///
     /// [`Router`]: crate::components::Router
     NamedTarget(
-        /// The name of the target route.
-        &'static str,
+        /// The name (type id and readable name) of the target route.
+        (TypeId, &'static str),
         /// A list of parameters.
         ///
         /// The contained values will be used to construct the actual path as needed.
@@ -48,6 +50,12 @@ impl NavigationTarget {
     #[must_use]
     pub fn is_external_target(&self) -> bool {
         matches!(self, Self::ExternalTarget(..))
+    }
+}
+
+impl<T: 'static> From<(T, Vec<(&'static str, String)>, Option<Query>)> for NavigationTarget {
+    fn from((name, parameters, query): (T, Vec<(&'static str, String)>, Option<Query>)) -> Self {
+        Self::NamedTarget(named_tuple(name), parameters, query)
     }
 }
 

@@ -20,7 +20,7 @@ _Named_ navigation has a few advantages over _path-based_ navigation:
 > message. See the chapter about
 > [named navigation failures](../failures/named.md).
 
-> The router will automatically define the name `""` (empty string) to refer to
+> The router will automatically define the name [`RootIndex`] to refer to
 > the root index route (`/`).
 
 ## Code Example
@@ -32,14 +32,18 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 # extern crate dioxus_ssr;
 
+// we define a unit struct which will serve as our name
+struct TargetName;
+
 fn Source(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            // instead of InternalTarget we use NamedTarget with these parameters:
+            // instead of InternalTarget we use NamedTarget (via Into) with
+            // these parameters:
             // 1. the `name` we want to navigate to
             // 2. a Vec of parameters the router can put in the generated path
             // 3. the query
-            target: NamedTarget("target", vec![], None),
+            target: (TargetName, vec![], None),
             "Go to target"
         }
     })
@@ -57,7 +61,7 @@ fn App(cx: Scope) -> Element {
             .index(RcComponent(Source))
             .fixed(
                 "target_path",
-                Route::new(RcComponent(Target)).name("target")
+                Route::new(RcComponent(Target)).name(TargetName)
             )
     });
 
@@ -83,3 +87,5 @@ fn App(cx: Scope) -> Element {
 #     html
 # )
 ```
+
+[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/struct.RootIndex.html

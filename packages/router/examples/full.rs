@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
+struct BlogPostName;
+struct Raspberry;
+
 fn main() {
     env_logger::init();
     dioxus_desktop::launch(app);
@@ -16,14 +19,14 @@ fn app(cx: Scope) -> Element {
                     Segment::default()
                         .index(RcComponent(BlogWelcome))
                         .parameter(
-                            ParameterRoute::new("blog_id", RcComponent(BlogPost)).name("blog_post"),
+                            ParameterRoute::new("blog_id", RcComponent(BlogPost))
+                                .name(BlogPostName),
                         ),
                 ),
             )
             .fixed(
                 "raspberry",
-                Route::new(RcMulti(RaspberryPage, vec![("other", StrawberryPage)]))
-                    .name("raspberry"),
+                Route::new(RcMulti(RaspberryPage, vec![("other", StrawberryPage)])).name(Raspberry),
             )
             .fixed("the_best_berry", "/raspberry")
     });
@@ -47,7 +50,7 @@ fn app(cx: Scope) -> Element {
 
             header {
                 Link {
-                    target: NamedTarget("", vec![], None)
+                    target: (RootIndex, vec![], None)
                     "go home"
                     active_class: "active",
                 }
@@ -78,7 +81,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NamedTarget("nonexisting name", vec![], None),
+                    target: ("nonexisting name", vec![], None),
                     "trigger a named navigation error"
                 }
             }
@@ -90,7 +93,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NamedTarget("raspberry", vec![], None),
+                    target: (Raspberry, vec![], None),
                     "Go to the page about raspberries"
                 }
             }
@@ -125,13 +128,13 @@ fn BlogWelcome(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NamedTarget("blog_post",vec![("blog_id", String::from("2"))], None),
+                    target: (BlogPostName, vec![("blog_id", String::from("2"))], None),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: NamedTarget("blog_post",vec![("blog_id", String::from("🎺"))], None),
+                    target: (BlogPostName, vec![("blog_id", String::from("🎺"))], None),
                     "Go to trumpet blog post 🎺"
                 }
             }

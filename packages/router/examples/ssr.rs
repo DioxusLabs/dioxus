@@ -14,6 +14,9 @@ use hyper::{
 };
 use log::{error, info};
 
+struct TestName;
+struct DioxusName;
+
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -99,12 +102,12 @@ fn App(cx: Scope<AppProps>) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
             .index(RcComponent(Index))
-            .fixed("test", Route::new(RcComponent(Test)).name("test"))
+            .fixed("test", Route::new(RcComponent(Test)).name(TestName))
             .fixed(
                 "dioxus",
-                Route::new("https://dioxuslabs.com").name("dioxus"),
+                Route::new("https://dioxuslabs.com").name(DioxusName),
             )
-            .fallback(NamedTarget("", vec![], None))
+            .fallback((RootIndex, vec![], None))
     });
 
     let history = cx.use_hook(|| {
@@ -129,11 +132,11 @@ fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the SSR test!" }
         Link {
-            target: NamedTarget("test", vec![], None),
+            target: (TestName, vec![], None),
             "Go to test page"
         }
         Link {
-            target: NamedTarget("dioxus", vec![], None),
+            target: (DioxusName, vec![], None),
             "Go to dioxus"
         }
     })
@@ -144,7 +147,7 @@ fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }
         Link {
-            target: NamedTarget("", vec![], None),
+            target: (RootIndex, vec![], None),
             "Return to home page"
         }
     })

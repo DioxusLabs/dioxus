@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
 };
@@ -27,7 +28,7 @@ pub struct RouterState {
     pub(crate) components: (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
 
     /// The names of the currently active routes.
-    pub names: BTreeSet<&'static str>,
+    pub names: BTreeSet<TypeId>,
 
     /// The current path.
     pub path: String,
@@ -100,7 +101,7 @@ impl RouterState {
                 false
             }
             NavigationTarget::NamedTarget(name, vars, _) => {
-                if !self.names.contains(name) {
+                if !self.names.contains(&name.0) {
                     return false;
                 }
 
@@ -162,6 +163,11 @@ impl Debug for RouterState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helpers::named_tuple;
+
+    struct Invalid;
+    struct Nest;
+    struct Test;
 
     #[test]
     fn is_active_external() {
@@ -227,10 +233,16 @@ mod tests {
     fn is_active_name() {
         let state = test_state();
 
-        assert!(state.is_active(&NavigationTarget::NamedTarget("test", vec![], None), false));
-        assert!(state.is_active(&NavigationTarget::NamedTarget("nest", vec![], None), false));
+        assert!(state.is_active(
+            &NavigationTarget::NamedTarget(named_tuple(Test), vec![], None),
+            false
+        ));
+        assert!(state.is_active(
+            &NavigationTarget::NamedTarget(named_tuple(Nest), vec![], None),
+            false
+        ));
         assert!(!state.is_active(
-            &NavigationTarget::NamedTarget("invalid", vec![], None),
+            &NavigationTarget::NamedTarget(named_tuple(Invalid), vec![], None),
             false
         ));
     }
@@ -240,19 +252,19 @@ mod tests {
         let state = test_state();
 
         assert!(state.is_active(
-            &NavigationTarget::NamedTarget("test", vec![("test", String::from("test"))], None),
+            &NavigationTarget::NamedTarget(named_tuple(Test), vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NamedTarget("invalid", vec![("test", String::from("test"))], None),
+            &NavigationTarget::NamedTarget(named_tuple(Invalid), vec![("test", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NamedTarget("test", vec![("invalid", String::from("test"))], None),
+            &NavigationTarget::NamedTarget(named_tuple(Test), vec![("invalid", String::from("test"))], None),
             true
         ));
         assert!(!state.is_active(
-            &NavigationTarget::NamedTarget("test", vec![("test", String::from("invalid"))], None),
+            &NavigationTarget::NamedTarget(named_tuple(Test), vec![("test", String::from("invalid"))], None),
             true
         ));
     }
@@ -265,8 +277,8 @@ mod tests {
             components: (vec![], BTreeMap::new()),
             names: {
                 let mut names = BTreeSet::new();
-                names.insert("test");
-                names.insert("nest");
+                names.insert(TypeId::of::<Test>());
+                names.insert(TypeId::of::<Nest>());
                 names
             },
             path: String::from("/test/nest"),

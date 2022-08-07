@@ -1,6 +1,9 @@
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
+struct PotatoName;
+struct EarthAppleName;
+
 fn main() {
     env_logger::init();
     dioxus_desktop::launch(app);
@@ -11,10 +14,10 @@ fn app(cx: Scope) -> Element {
         Segment::default()
             .index(RcComponent(Home))
             .fixed("apple", Route::new(RcComponent(Apple)))
-            .fixed("potato", Route::new(RcComponent(Potato)).name("potato"))
+            .fixed("potato", Route::new(RcComponent(Potato)).name(PotatoName))
             .fixed(
                 "earth_apple",
-                Route::new(NamedTarget("potato", vec![], None)).name("earth apple"),
+                Route::new((PotatoName, vec![], None)).name(EarthAppleName),
             )
     });
 
@@ -40,13 +43,13 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: NamedTarget("potato", vec![], None),
+                    target: (PotatoName, vec![], None),
                     "Read about potatoes…"
                 }
             }
             li {
                 Link {
-                    target: NamedTarget("earth apple", vec![], None),
+                    target: (EarthAppleName, vec![], None),
                     "Read about earth apples (literal translation of a german word for potato)…"
                 }
             }
@@ -61,7 +64,7 @@ fn Apple(cx: Scope) -> Element {
         p { "Apples are fruit that grows on trees."}
         p {
             Link {
-                target: NamedTarget("", vec![], None),
+                target: (RootIndex, vec![], None),
                 "Go back to home"
             }
         }
@@ -75,7 +78,7 @@ fn Potato(cx: Scope) -> Element {
         p { "Potatoes grow underground. There are many recipes involving potatoes."}
         p {
             Link {
-                target: NamedTarget("", vec![], None),
+                target: (RootIndex, vec![], None),
                 "Go back to home"
             }
         }

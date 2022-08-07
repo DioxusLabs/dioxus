@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{any::TypeId, collections::BTreeMap};
 
 use dioxus::prelude::*;
 use log::error;
@@ -69,6 +69,7 @@ pub struct LinkProps<'a> {
 /// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
+/// # struct SomeName;
 /// rsx! {
 ///     // a link to a specific path
 ///     Link {
@@ -77,7 +78,7 @@ pub struct LinkProps<'a> {
 ///     }
 ///     // a link to a route with a name
 ///     Link {
-///         target: NamedTarget("some_name", vec![], None),
+///         target: (SomeName, vec![], None),
 ///         "Go to named target"
 ///     }
 ///     // a link to an external page
@@ -168,7 +169,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
 fn generate_href(
     target: &NavigationTarget,
     prefix: &str,
-    targets: &BTreeMap<&'static str, Vec<NamedNavigationSegment>>,
+    targets: &BTreeMap<TypeId, Vec<NamedNavigationSegment>>,
 ) -> String {
     let href = match target {
         InternalTarget(path) => path.to_string(),
@@ -185,6 +186,10 @@ fn generate_href(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::helpers::named_tuple;
+
+    struct Invalid;
+    struct Test;
 
     #[test]
     fn href_path() {
@@ -202,13 +207,12 @@ mod tests {
 
     #[test]
     fn href_name() {
-        let name = "test";
         let prefix = "/pre";
-        let target = NavigationTarget::NamedTarget(name, vec![], None);
+        let target = NavigationTarget::NamedTarget(named_tuple(Test), vec![], None);
         let targets = {
             let mut t = BTreeMap::new();
             t.insert(
-                name,
+                TypeId::of::<Test>(),
                 vec![
                     NamedNavigationSegment::Fixed(String::from("test")),
                     NamedNavigationSegment::Fixed(String::from("nest")),
@@ -229,7 +233,7 @@ mod tests {
     #[should_panic] // message is checked by `construct_named_path`
     fn href_name_panic_in_debug() {
         generate_href(
-            &NavigationTarget::NamedTarget("invalid", vec![], None),
+            &NavigationTarget::NamedTarget(named_tuple(Invalid), vec![], None),
             "",
             &BTreeMap::new(),
         );
@@ -241,7 +245,7 @@ mod tests {
         assert_eq!(
             format!("/prefix/"),
             generate_href(
-                &NavigationTarget::NamedTarget("invalid", vec![], None),
+                &NavigationTarget::NamedTarget(named_tuple(Invalid), vec![], None),
                 "/prefix",
                 &BTreeMap::new(),
             )
