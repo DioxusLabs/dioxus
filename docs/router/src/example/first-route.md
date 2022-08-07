@@ -1,22 +1,18 @@
 # Creating Our First Route
-In this chapter, we will continue off of our new Dioxus project to create a
-homepage and start utilizing Dioxus Router!
+In this chapter, we will start utilizing Dioxus Router and add a homepage and a
+404 page to our project.
 
 ## Fundamentals
 Dioxus Router works based on a [`Router`] component, a route definition in
 regular rust and [`Outlet`] components. If you've ever used [Vue Router],
 you should feel at home with Dioxus Router.
 
-In the previous chapter we imported the dioxus prelude. When the `router`
-feature is active, this also imports the components and types we need for the
-router.
-
-We also need an actual page to route to! Add a homepage component:
+First we need an actual page to route to! Let's add a homepage component:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
-#
+
 #[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
@@ -26,7 +22,7 @@ fn Home(cx: Scope) -> Element {
 ```
 
 ## To Route or Not to Route
-We want to use Dioxus Router to seperate our application into different "pages".
+We want to use Dioxus Router to separate our application into different "pages".
 Dioxus Router will then determine which page to render based on the URL path.
 
 To start using Dioxus Router, we need to use the [`Router`] component. All hooks
@@ -38,38 +34,38 @@ type it can understand:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::prelude::*;
+use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::prelude::*;
+use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
-#
+
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
-    // this is new
+
     let routes = use_segment(&cx, || {
         // we want our home page component to render as an index
         Segment::default().index(Home as Component)
     });
 
     cx.render(rsx! {
-        p { "Hello, wasm!"}
+        p { "Hello, Dioxus!"}
     })
 }
 ```
 
-Now we can replace the `p { "Hello, wasm!" }` with our [`Router`]:
+Now we can replace the `p { "Hello, Dioxus!" }` with our [`Router`]:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::prelude::*;
+use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::prelude::*;
+use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
-#
+
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::default().index(RcComponent(Home))
+        Segment::default().index(Home as Component)
     });
 
     cx.render(rsx! {
@@ -85,15 +81,15 @@ route:
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-# use dioxus::prelude::*;
+use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::prelude::*;
+use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
-#
+
 #[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::default().index(RcComponent(Home))
+        Segment::default().index(Home as Component)
     });
 
     cx.render(rsx! {

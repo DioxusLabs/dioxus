@@ -24,8 +24,7 @@
 - [History Buttons](./features/history-buttons.md)
 
 # Example Project
-- [Introduction](./example/index.md)
-- [Getting Started](./example/getting-started.md)
+- [Overview](./example/index.md)
 - [Creating Our First Route](./example/first-route.md)
 - [Building a Nest](./example/building-a-nest.md)
 - [Navigation Targets](./example/navigation-targets.md)

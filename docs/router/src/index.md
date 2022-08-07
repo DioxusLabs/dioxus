@@ -7,7 +7,18 @@ For this purpose, Dioxus provides a router. To start utilizing it, add it as a
 dependency in your `Cargo.toml` file:
 ```toml
 [dependencies]
-dioxus-router = "*" # replace * with the current version
+# use this for native apps
+dioxus-router = "*"
+#use this for web apps
+dioxus-router = { version = "*", features = ["web"] }
+
+# in both cases replace * with the current version
+```
+
+You can also use the `cargo` command to add the dependency:
+```sh
+$ cargo add dioxus-router
+$ cargo add dioxus-router --features web
 ```
 
 > If you are not familiar with Dioxus itself, check out the [Dioxus book][db]
