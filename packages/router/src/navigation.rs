@@ -59,8 +59,14 @@ impl<T: 'static> From<(T, Vec<(&'static str, String)>, Option<Query>)> for Navig
     }
 }
 
-impl From<&'static str> for NavigationTarget {
-    fn from(s: &'static str) -> Self {
+impl From<String> for NavigationTarget {
+    fn from(s: String) -> Self {
+        s.as_str().into()
+    }
+}
+
+impl From<&str> for NavigationTarget {
+    fn from(s: &str) -> Self {
         s.parse()
             .unwrap_or_else(|_| Self::InternalTarget(s.to_string()))
     }

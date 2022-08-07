@@ -1,8 +1,8 @@
-use std::{collections::BTreeMap, convert::Infallible, fmt::Debug, str::FromStr};
+use std::{collections::BTreeMap, fmt::Debug};
 
 use dioxus::prelude::*;
 
-use crate::{navigation::NavigationTarget, prelude::Query};
+use crate::navigation::NavigationTarget;
 
 /// The content of a [`Route`] or [`ParameterRoute`].
 ///
@@ -85,35 +85,15 @@ impl Default for RouteContent {
     }
 }
 
-impl<T: 'static> From<(T, Vec<(&'static str, String)>, Option<Query>)> for RouteContent {
-    fn from(nt: (T, Vec<(&'static str, String)>, Option<Query>)) -> Self {
-        Self::RcRedirect(nt.into())
-    }
-}
-
 impl From<Component> for RouteContent {
     fn from(c: Component) -> Self {
         Self::RcComponent(c)
     }
 }
 
-impl From<NavigationTarget> for RouteContent {
-    fn from(nt: NavigationTarget) -> Self {
-        Self::RcRedirect(nt)
-    }
-}
-
-impl From<&'static str> for RouteContent {
-    fn from(s: &'static str) -> Self {
-        s.parse().unwrap()
-    }
-}
-
-impl FromStr for RouteContent {
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::RcRedirect(s.parse().unwrap()))
+impl<T: Into<NavigationTarget>> From<T> for RouteContent {
+    fn from(nt: T) -> Self {
+        Self::RcRedirect(nt.into())
     }
 }
 

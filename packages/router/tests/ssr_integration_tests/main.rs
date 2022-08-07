@@ -15,7 +15,7 @@ fn render(component: Component) -> String {
 fn test_routes(cx: &ScopeState) -> Arc<Segment> {
     use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(TestComponent_0))
+            .index(TestComponent_0 as Component)
             .fixed(
                 "test",
                 Route::new(RcMulti(
@@ -24,21 +24,18 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
                 ))
                 .name(TestName)
                 .nested(
-                    Segment::new().index(RcComponent(TestComponent_1_0)).fixed(
+                    Segment::new().index(TestComponent_1_0 as Component).fixed(
                         "nest",
-                        Route::new(RcComponent(TestComponent_1_1)).nested(
+                        Route::new(TestComponent_1_1 as Component).nested(
                             Segment::new()
-                                .fixed("double-nest", Route::new(RcComponent(TestComponent_1_1_0)))
+                                .fixed("double-nest", TestComponent_1_1_0 as Component)
                                 .fallback(NestedFallback as Component),
                         ),
                     ),
                 ),
             )
             .fixed("external-navigation-failure", "https://dioxuslabs.com/")
-            .fixed(
-                "named-navigation-failure",
-                Route::new(("invalid name", vec![], None)),
-            )
+            .fixed("named-navigation-failure", ("invalid name", vec![], None))
             .fallback(RootFallback as Component)
     })
     .clone()

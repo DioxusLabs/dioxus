@@ -1,13 +1,6 @@
-use std::{
-    any::{type_name, TypeId},
-    convert::Infallible,
-    str::FromStr,
-};
+use std::any::{type_name, TypeId};
 
-use dioxus::prelude::*;
 use log::error;
-
-use crate::navigation::NavigationTarget;
 
 use super::{RouteContent, Segment};
 
@@ -89,35 +82,9 @@ impl Route {
     }
 }
 
-impl From<Component> for Route {
-    fn from(c: Component) -> Self {
-        Self::new(c)
-    }
-}
-
-impl From<NavigationTarget> for Route {
-    fn from(nt: NavigationTarget) -> Self {
-        Self::new(nt)
-    }
-}
-
-impl From<RouteContent> for Route {
-    fn from(rc: RouteContent) -> Self {
-        Self::new(rc)
-    }
-}
-
-impl From<&'static str> for Route {
-    fn from(s: &'static str) -> Self {
-        s.parse().unwrap()
-    }
-}
-
-impl FromStr for Route {
-    type Err = Infallible;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ok(Self::new(s.parse::<RouteContent>().unwrap()))
+impl<T: Into<RouteContent>> From<T> for Route {
+    fn from(c: T) -> Self {
+        Self::new(c.into())
     }
 }
 
@@ -125,6 +92,8 @@ impl FromStr for Route {
 mod tests {
     use super::*;
     use crate::helpers::named_tuple;
+    #[cfg(not(debug_assertions))]
+    use crate::navigation::NavigationTarget;
 
     struct Test;
     struct Test2;

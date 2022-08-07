@@ -1,9 +1,6 @@
 use std::any::{type_name, TypeId};
 
-use dioxus::prelude::*;
 use log::error;
-
-use crate::navigation::NavigationTarget;
 
 use super::{RouteContent, Segment};
 
@@ -87,21 +84,9 @@ impl ParameterRoute {
     }
 }
 
-impl From<(&'static str, Component)> for ParameterRoute {
-    fn from((key, c): (&'static str, Component)) -> Self {
-        Self::new(key, c)
-    }
-}
-
-impl From<(&'static str, NavigationTarget)> for ParameterRoute {
-    fn from((key, nt): (&'static str, NavigationTarget)) -> Self {
-        Self::new(key, nt)
-    }
-}
-
-impl From<(&'static str, RouteContent)> for ParameterRoute {
-    fn from((key, rc): (&'static str, RouteContent)) -> Self {
-        Self::new(key, rc)
+impl<T: Into<RouteContent>> From<(&'static str, T)> for ParameterRoute {
+    fn from((key, c): (&'static str, T)) -> Self {
+        Self::new(key, c.into())
     }
 }
 
@@ -109,6 +94,8 @@ impl From<(&'static str, RouteContent)> for ParameterRoute {
 mod tests {
     use super::*;
     use crate::helpers::named_tuple;
+    #[cfg(not(debug_assertions))]
+    use crate::navigation::NavigationTarget;
 
     struct Test;
     struct Test2;
