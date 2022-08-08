@@ -74,7 +74,17 @@ impl Parse for CallBody {
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let template = TemplateBuilder::from_roots(self.roots.clone());
-        let inner = quote! { #template };
+        let inner = if let Some(template) = template {
+            quote! { #template }
+        } else {
+            let children = &self.roots;
+            if children.len() == 1 {
+                let inner = &self.roots[0];
+                quote! { #inner }
+            } else {
+                quote! { __cx.fragment_root([ #(#children),* ]) }
+            }
+        };
 
         match &self.custom_context {
             // The `in cx` pattern allows directly rendering

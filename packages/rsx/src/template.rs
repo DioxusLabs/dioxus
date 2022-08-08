@@ -179,7 +179,8 @@ pub(crate) struct TemplateBuilder {
 }
 
 impl TemplateBuilder {
-    pub fn from_roots(roots: Vec<BodyNode>) -> Self {
+    /// Create a template builder from nodes if it would improve performance to do so.
+    pub fn from_roots(roots: Vec<BodyNode>) -> Option<Self> {
         let mut builder = Self::default();
 
         for root in roots {
@@ -187,7 +188,18 @@ impl TemplateBuilder {
             builder.root_nodes.push(id);
         }
 
-        builder
+        // only build a template if there is at least one static node
+        if builder.nodes.iter().all(|r| {
+            if let TemplateNodeTypeBuilder::DynamicNode(_) = &r.node_type {
+                true
+            } else {
+                false
+            }
+        }) {
+            None
+        } else {
+            Some(builder)
+        }
     }
 
     fn build_node(&mut self, node: BodyNode, parent: Option<TemplateNodeId>) -> TemplateNodeId {

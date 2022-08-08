@@ -1184,6 +1184,10 @@ impl<'b> DiffState<'b> {
 
     fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
         let nodes_created = self.create_node(new);
+        if let VNode::TemplateRef(..) = old {
+            println!("Replacing template ref {:?}", old);
+            println!("with {:?}", new);
+        }
         self.replace_inner(old, nodes_created);
     }
 
@@ -1239,7 +1243,7 @@ impl<'b> DiffState<'b> {
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
 
                 self.mutations.replace_with(id, nodes_created as u32);
-                self.remove_nodes(t.dynamic_context.nodes, false);
+                self.remove_nodes(t.dynamic_context.nodes, true);
                 self.scopes.collect_garbage(id);
             }
         }
@@ -1312,7 +1316,7 @@ impl<'b> DiffState<'b> {
                     self.scopes.collect_garbage(id);
                     t.id.set(None);
 
-                    self.remove_nodes(t.dynamic_context.nodes, false);
+                    self.remove_nodes(t.dynamic_context.nodes, gen_muts);
                 }
             }
         }

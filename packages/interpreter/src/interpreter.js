@@ -262,7 +262,7 @@ export class Interpreter {
     if (old instanceof TemplateRef) {
       const parent = old.parent();
       for (let node of new_nodes) {
-        parent.insertBefore(node, old.nodes[0]);
+        parent.insertBefore(node, old.get(0));
       }
     }
     else {
