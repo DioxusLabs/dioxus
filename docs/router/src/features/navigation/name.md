@@ -108,7 +108,7 @@ struct SomeName;
 fn Content(cx: Scope) -> Element {
     let route = use_route(&cx).expect("needs to be in router");
 
-    if route.names.contains(TypeId::of::<SomeName>()) {
+    if route.names.contains(&TypeId::of::<SomeName>()) {
         // do something
     }
 
