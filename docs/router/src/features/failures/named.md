@@ -23,7 +23,8 @@ horrible user experience. Instead, it changes the path to `/` and shows some
 fallback content.
 
 > You can detect if the router is in the named navigation failure handling state
-> by checking if the [`FailureNamedNavigation`] name is present.
+> by [checking](../navigation/name.md#check-if-a-name-is-present) if the
+> [`FallbackNamedNavigation`] name is present.
 
 The default fallback explains to the user that an error occurred and asks them
 to report the bug to the app developer.

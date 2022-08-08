@@ -42,7 +42,7 @@ fn App(cx: Scope) -> Element {
         }
     })
 }
-
+#
 # let mut vdom = VirtualDom::new(App);
 # vdom.rebuild();
 # let html = dioxus_ssr::render_vdom(&vdom);
@@ -51,7 +51,7 @@ fn App(cx: Scope) -> Element {
 #         "<a {attr1} {attr2}>{text}</a><a {attr1} {attr2}>{text} 2</a>",
 #         attr1 = r#"href="https://dioxuslabs.com/" dioxus-prevent-default="""#,
 #         attr2 = r#"class="" id="" rel="noopener noreferrer" target="""#,
-          text = "Go to the dioxus home page"
+#         text = "Go to the dioxus home page"
 #     ),
 #     html
 # )

@@ -22,7 +22,8 @@ When the router encounters an external navigation it cannot fullfil, it changes
 the path to `/` and shows some fallback content.
 
 > You can detect if the router is in the external navigation failure handling
-> state by checking if the [`FailureExternalNavigation`] name is present.
+> state by [checking](../navigation/name.md#check-if-a-name-is-present) if the
+> [`FallbackExternalNavigation`] name is present.
 
 The default fallback explains to the user that the navigation was unsuccessful
 and provides them with a [`Link`] to fulfill it manually. It also allows them to

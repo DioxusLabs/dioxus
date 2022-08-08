@@ -91,5 +91,31 @@ fn App(cx: Scope) -> Element {
 # )
 ```
 
+## Check if a name is present
+You can check if a specific name is present for the current route. This works
+similar to getting the value of a [parameter route](../routes/parameter.md) and
+the same restrictions apply.
+
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus;
+use std::any::TypeId;
+use dioxus::prelude::*;
+# extern crate dioxus_router;
+use dioxus_router::prelude::*;
+struct SomeName;
+
+fn Content(cx: Scope) -> Element {
+    let route = use_route(&cx).expect("needs to be in router");
+
+    if route.names.contains(TypeId::of::<SomeName>()) {
+        // do something
+    }
+
+    // ...
+    # None
+}
+```
+
 [`names`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/
 [`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/struct.RootIndex.html
