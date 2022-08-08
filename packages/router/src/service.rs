@@ -22,10 +22,10 @@ use crate::{
     contexts::RouterContext,
     helpers::construct_named_path,
     history::HistoryProvider,
+    names::RootIndex,
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{RouteContent, Segment},
     state::RouterState,
-    RootIndex,
 };
 
 /// A set of messages that the [`RouterService`] can handle.
@@ -384,6 +384,16 @@ fn construct_named_targets(
         }
 
         if let Some((id, name)) = name {
+            // check for router internal names
+            if [TypeId::of::<RootIndex>()].contains(id) {
+                error!(r#"route names cannot be defined by dioxus_router, ignore; name: "{name}""#);
+                #[cfg(debug_assertions)]
+                panic!(r#"route names cannot be defined by dioxus_router; name: "{name}""#);
+                #[cfg(not(debug_assertions))]
+                return;
+            }
+
+            // check if name is already used
             if targets.insert(*id, ancestors).is_some() {
                 error!(r#"route names must be unique, later prevails; duplicate name: "{name}""#);
                 #[cfg(debug_assertions)]
@@ -417,10 +427,8 @@ fn construct_named_targets(
     }
 
     // add root name
-    if ancestors.is_empty() && targets.insert(TypeId::of::<RootIndex>(), vec![]).is_some() {
-        error!(r#"root index route name ("/") is provided by router, custom is overwritten"#);
-        #[cfg(debug_assertions)]
-        panic!(r#"root index route name ("/") is provided by router"#);
+    if ancestors.is_empty() {
+        targets.insert(TypeId::of::<RootIndex>(), vec![]);
     }
 }
 
@@ -526,10 +534,7 @@ fn match_segment<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        route_definition::{ParameterRoute, Route},
-        RootIndex,
-    };
+    use crate::route_definition::{ParameterRoute, Route};
     use regex::Regex;
 
     use super::*;
@@ -581,8 +586,8 @@ mod tests {
 
     #[cfg(debug_assertions)]
     #[test]
-    #[should_panic = r#"root index route name ("/") is provided by router"#]
-    fn named_targets_root_panic_in_debug() {
+    #[should_panic = r#"route names cannot be defined by dioxus_router; name: "dioxus_router::names::RootIndex""#]
+    fn named_targets_internal_name_panic_in_debug_root_index() {
         construct_named_targets(
             &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(RootIndex)),
             &[],
@@ -592,10 +597,13 @@ mod tests {
 
     #[cfg(not(debug_assertions))]
     #[test]
-    fn named_targets_root_override_in_release() {
+    fn named_targets_internal_name_ignore_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(RootIndex)),
+            &prepare_segment().fixed(
+                "root_index",
+                Route::new(RouteContent::RcNone).name(RootIndex),
+            ),
             &[],
             &mut targets,
         );

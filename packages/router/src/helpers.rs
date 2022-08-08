@@ -125,7 +125,7 @@ pub(crate) fn named_tuple<T: 'static>(_: T) -> (TypeId, &'static str) {
 
 #[cfg(test)]
 mod tests {
-    use crate::RootIndex;
+    use crate::names::RootIndex;
 
     use super::*;
 

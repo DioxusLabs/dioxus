@@ -59,10 +59,10 @@ pub mod navigation;
 pub mod prelude {
     pub use crate::components::*;
     pub use crate::hooks::*;
+    pub use crate::names::*;
     pub use crate::navigation::{NavigationTarget::*, Query::*, *};
     pub use crate::route_definition::{RouteContent::*, *};
     pub use crate::state::RouterState;
-    pub use crate::RootIndex;
 }
 
 /// Application-defined routing information.
@@ -80,11 +80,27 @@ pub mod route_definition {
     pub use segment::*;
 }
 
+/// Route names used by the router itself.
+pub mod names {
+    /// The name the router will automatically assign to the index route of the root segment.
+    pub struct RootIndex;
+
+    // CAUTION!!
+    // =========
+    // When adding new names, make sure to check for them when extracting all named routes.
+    // This is currently done by `construct_named_targets` in `service.rs`.
+
+    // TODO: All TypeIds of router names could be added to an array here, which would be easier to
+    //       maintain. However, this currently results in a compiler error:
+    //       "`TypeId::of` is not yet stable as a const fn"
+    //
+    // const ROUTER_NAME_TYPE_IDS: [TypeId; 1] = [
+    //     TypeId::of::<RootIndex>(),
+    // ];
+}
+
 /// The core of the router.
 mod service;
 
 /// Information about the current route.
 pub mod state;
-
-/// The name the router will automatically assign to the index route of the root segment.
-pub struct RootIndex;
