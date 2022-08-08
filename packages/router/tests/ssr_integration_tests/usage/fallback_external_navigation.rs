@@ -1,3 +1,5 @@
+use std::any::TypeId;
+
 use dioxus::prelude::*;
 use dioxus_router::{history::MemoryHistory, prelude::*};
 
@@ -6,7 +8,7 @@ use crate::{render, test_routes};
 #[test]
 fn show_fallback_content() {
     let message = format!(
-        "{title}{link}{link2}{link3}{p1}{p2}{p3}{button}",
+        "{title}{link}{link2}{link3}{p1}{p2}{p3}{button}<!--placeholder-->",
         title = "<h1>Oops, you weren't meant to go here!</h1>",
         link = "<p><a href=\"https://dioxuslabs.com/\" dioxus-prevent-default=\"\" class=\"\" ",
         link2 = "id=\"\" rel=\"noopener noreferrer\" target=\"\">Click here to get back on track!",
@@ -27,7 +29,21 @@ fn show_fallback_content() {
                 history: &||MemoryHistory::with_first(String::from("/external-navigation-failure")),
 
                 Outlet { }
+                Content { }
             }
         })
+    }
+
+    #[allow(non_snake_case)]
+    fn Content(cx: Scope) -> Element {
+        let route = use_route(&cx).expect("in router");
+
+        assert_eq!(route.names.len(), 2);
+        assert!(route.names.contains(&TypeId::of::<RootIndex>()));
+        assert!(route
+            .names
+            .contains(&TypeId::of::<FallbackExternalNavigation>()));
+
+        None
     }
 }

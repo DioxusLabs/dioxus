@@ -165,4 +165,4 @@ fn NavBar(cx: Scope) -> Element {
 [`InternalTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.InternalTarget
 [`NamedTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html#variant.NamedTarget
 [`NavigationTarget`]: https://docs.rs/dioxus-router/latest/dioxus_router/navigation/enum.NavigationTarget.html
-[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/struct.RootIndex.html
+[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/struct.RootIndex.html

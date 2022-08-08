@@ -22,6 +22,9 @@ When running a release build, the router can't just `panic`, as that would be a
 horrible user experience. Instead, it changes the path to `/` and shows some
 fallback content.
 
+> You can detect if the router is in the named navigation failure handling state
+> by checking if the [`FailureNamedNavigation`] name is present.
+
 The default fallback explains to the user that an error occurred and asks them
 to report the bug to the app developer.
 
@@ -56,4 +59,5 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
+[`FallbackNamedNavigation`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/struct.FallbackNamedNavigation.html
 [`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html

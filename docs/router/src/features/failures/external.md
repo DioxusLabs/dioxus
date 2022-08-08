@@ -21,6 +21,9 @@ happened.
 When the router encounters an external navigation it cannot fullfil, it changes
 the path to `/` and shows some fallback content.
 
+> You can detect if the router is in the external navigation failure handling
+> state by checking if the [`FailureExternalNavigation`] name is present.
+
 The default fallback explains to the user that the navigation was unsuccessful
 and provides them with a [`Link`] to fulfill it manually. It also allows them to
 go back to the previous page.
@@ -65,6 +68,7 @@ fn App(cx: Scope) -> Element {
 ```
 
 [`ControlledHistory`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.ControlledHistory.html
+[`FallbackExternalNavigation`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/struct.FallbackExternalNavigation.html
 [`HistoryController`]: https://docs.rs/dioxus-router/latest/dioxus_router/history/struct.HistoryController.html
 [`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
 [`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html

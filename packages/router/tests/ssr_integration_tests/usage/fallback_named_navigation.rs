@@ -1,3 +1,6 @@
+#[cfg(not(debug_assertions))]
+use std::any::TypeId;
+
 use dioxus::prelude::*;
 use dioxus_router::{history::MemoryHistory, prelude::*};
 
@@ -25,7 +28,7 @@ fn panic_in_debug() {
 #[test]
 fn default_content_in_release() {
     let message = format!(
-        "<h1>{title}</h1><p>{p1}{p2}<strong>Thank you!</strong></p>",
+        "<h1>{title}</h1><p>{p1}{p2}<strong>Thank you!</strong></p><!--placeholder-->",
         title = "A named navigation error has occurred!",
         p1 = "If you see this message, the application you are using has a bug. ",
         p2 = "Please report it to <!--spacer-->the developer so they can fix it."
@@ -41,7 +44,21 @@ fn default_content_in_release() {
                 history: &||MemoryHistory::with_first(String::from("/named-navigation-failure")),
 
                 Outlet { }
+                Content { }
             }
         })
+    }
+
+    #[allow(non_snake_case)]
+    fn Content(cx: Scope) -> Element {
+        let route = use_route(&cx).expect("in router");
+
+        assert_eq!(route.names.len(), 2);
+        assert!(route.names.contains(&TypeId::of::<RootIndex>()));
+        assert!(route
+            .names
+            .contains(&TypeId::of::<FallbackNamedNavigation>()));
+
+        None
     }
 }

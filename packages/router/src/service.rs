@@ -22,7 +22,7 @@ use crate::{
     contexts::RouterContext,
     helpers::construct_named_path,
     history::HistoryProvider,
-    names::RootIndex,
+    names::{FallbackExternalNavigation, FallbackNamedNavigation, RootIndex},
     navigation::{NamedNavigationSegment, NavigationTarget},
     route_definition::{RouteContent, Segment},
     state::RouterState,
@@ -322,6 +322,9 @@ impl RouterService {
         // show fallback content
         state.components.0.push(self.fallback_external_navigation);
         state.names.insert(TypeId::of::<RootIndex>());
+        state
+            .names
+            .insert(TypeId::of::<FallbackExternalNavigation>());
         state.parameters.insert("url", url);
     }
 
@@ -336,6 +339,7 @@ impl RouterService {
         // show fallback content
         state.components.0.push(self.fallback_named_navigation);
         state.names.insert(TypeId::of::<RootIndex>());
+        state.names.insert(TypeId::of::<FallbackNamedNavigation>());
     }
 }
 
@@ -385,7 +389,13 @@ fn construct_named_targets(
 
         if let Some((id, name)) = name {
             // check for router internal names
-            if [TypeId::of::<RootIndex>()].contains(id) {
+            if [
+                TypeId::of::<RootIndex>(),
+                TypeId::of::<FallbackExternalNavigation>(),
+                TypeId::of::<FallbackNamedNavigation>(),
+            ]
+            .contains(id)
+            {
                 error!(r#"route names cannot be defined by dioxus_router, ignore; name: "{name}""#);
                 #[cfg(debug_assertions)]
                 panic!(r#"route names cannot be defined by dioxus_router; name: "{name}""#);
@@ -595,15 +605,52 @@ mod tests {
         );
     }
 
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic = r#"route names cannot be defined by dioxus_router; name: "dioxus_router::names::FallbackExternalNavigation""#]
+    fn named_targets_internal_name_panic_in_debug_fallback_external_navigation() {
+        construct_named_targets(
+            &prepare_segment().fixed(
+                "test",
+                Route::new(RouteContent::RcNone).name(FallbackExternalNavigation),
+            ),
+            &[],
+            &mut BTreeMap::new(),
+        );
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic = r#"route names cannot be defined by dioxus_router; name: "dioxus_router::names::FallbackNamedNavigation""#]
+    fn named_targets_internal_name_panic_in_debug_fallback_named_navigation() {
+        construct_named_targets(
+            &prepare_segment().fixed(
+                "test",
+                Route::new(RouteContent::RcNone).name(FallbackNamedNavigation),
+            ),
+            &[],
+            &mut BTreeMap::new(),
+        );
+    }
+
     #[cfg(not(debug_assertions))]
     #[test]
     fn named_targets_internal_name_ignore_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed(
-                "root_index",
-                Route::new(RouteContent::RcNone).name(RootIndex),
-            ),
+            &prepare_segment()
+                .fixed(
+                    "root_index",
+                    Route::new(RouteContent::RcNone).name(RootIndex),
+                )
+                .fixed(
+                    "fallback_external",
+                    Route::new(RouteContent::RcNone).name(FallbackExternalNavigation),
+                )
+                .fixed(
+                    "fallback_named",
+                    Route::new(RouteContent::RcNone).name(FallbackNamedNavigation),
+                ),
             &[],
             &mut targets,
         );

@@ -20,8 +20,11 @@ _Named_ navigation has a few advantages over _path-based_ navigation:
 > message. See the chapter about
 > [named navigation failures](../failures/named.md).
 
-> The router will automatically define the name [`RootIndex`] to refer to
-> the root index route (`/`).
+> The router will automatically define the name [`RootIndex`] to refer to the
+> root index route (`/`).
+>
+> It will also add other names (all of them are in the [`names`] module) in
+> certain conditions. None of these names can be used for app defined routes.
 
 ## Code Example
 ```rust
@@ -88,4 +91,5 @@ fn App(cx: Scope) -> Element {
 # )
 ```
 
-[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/struct.RootIndex.html
+[`names`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/
+[`RootIndex`]: https://docs.rs/dioxus-router/latest/dioxus_router/names/struct.RootIndex.html

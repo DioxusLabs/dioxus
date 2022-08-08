@@ -85,6 +85,20 @@ pub mod names {
     /// The name the router will automatically assign to the index route of the root segment.
     pub struct RootIndex;
 
+    /// Indicator for failed external navigation.
+    ///
+    /// Will be added to the names list when the router is handling a failed external navigation.
+    ///
+    /// **IMPORTANT:** This name cannot be navigated to.
+    pub struct FallbackExternalNavigation;
+
+    /// Indicator for a failed named navigation.
+    ///
+    /// Will be added to the names list when the router is handling a failed named navigation.
+    ///
+    /// **IMPORTANT:** This name cannot be navigated to.
+    pub struct FallbackNamedNavigation;
+
     // CAUTION!!
     // =========
     // When adding new names, make sure to check for them when extracting all named routes.
@@ -94,8 +108,10 @@ pub mod names {
     //       maintain. However, this currently results in a compiler error:
     //       "`TypeId::of` is not yet stable as a const fn"
     //
-    // const ROUTER_NAME_TYPE_IDS: [TypeId; 1] = [
+    // const ROUTER_NAME_TYPE_IDS: [TypeId; 3] = [
     //     TypeId::of::<RootIndex>(),
+    //     TypeId::of::<FallbackExternalNavigation>(),
+    //     TypeId::of::<FallbackNamedNavigation>(),
     // ];
 }
 
