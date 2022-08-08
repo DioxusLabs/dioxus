@@ -17,7 +17,9 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
+    num::ParseIntError,
     rc::Rc,
+    str::FromStr,
 };
 
 /// The ID of a node in the vdom that is either standalone or in a template
@@ -34,6 +36,21 @@ pub enum GlobalNodeId {
     },
     /// The ID of a regular node
     VNodeId(ElementId),
+}
+
+impl FromStr for GlobalNodeId {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Some((tmpl_id, node_id)) = s.split_once(',') {
+            Ok(GlobalNodeId::TemplateId {
+                template_ref_id: ElementId(tmpl_id.parse()?),
+                template_node_id: TemplateNodeId(node_id.parse()?),
+            })
+        } else {
+            Ok(GlobalNodeId::VNodeId(ElementId(s.parse()?)))
+        }
+    }
 }
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.

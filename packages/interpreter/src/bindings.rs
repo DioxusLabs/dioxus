@@ -81,7 +81,7 @@ extern "C" {
     pub fn CreateTemplate(this: &Interpreter, id: u64);
 
     #[wasm_bindgen(method)]
-    pub fn FinishTemplate(this: &Interpreter);
+    pub fn FinishTemplate(this: &Interpreter, len: u32);
 
     #[wasm_bindgen(method)]
     pub fn EnterTemplateRef(this: &Interpreter, id: u64);

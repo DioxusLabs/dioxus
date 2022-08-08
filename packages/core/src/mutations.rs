@@ -219,7 +219,7 @@ pub enum DomEdit<'bump> {
     /// Finish a templete
     FinishTemplate {
         /// The number of root nodes in the template
-        len: u64,
+        len: u32,
     },
 }
 
@@ -364,7 +364,7 @@ impl<'a> Mutations<'a> {
         self.edits.push(CreateTemplate { id: id.into() });
     }
 
-    pub(crate) fn finish_templete(&mut self, len: u64) {
+    pub(crate) fn finish_templete(&mut self, len: u32) {
         self.edits.push(FinishTemplate { len });
     }
 

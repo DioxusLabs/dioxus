@@ -1,6 +1,6 @@
 // id > Number.MAX_SAFE_INTEGER/2 in template ref
 // id <= Number.MAX_SAFE_INTEGER/2 in global nodes
-const templateIdLimit = (Number.MAX_SAFE_INTEGER - 1) / 2;
+const templateIdLimit = BigInt((Number.MAX_SAFE_INTEGER - 1) / 2);
 
 export function main() {
   let root = window.document.getElementById("main");

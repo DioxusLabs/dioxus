@@ -7,7 +7,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_core::{DomEdit, SchedulerMsg, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
@@ -43,7 +43,7 @@ impl WebsysDom {
                         break Ok(UserEvent {
                             name: event_name_from_typ(&typ),
                             data: virtual_event_from_websys_event(event.clone(), target.clone()),
-                            element: Some(ElementId(id)),
+                            element: Some(id),
                             scope_id: None,
                             priority: dioxus_core::EventPriority::Medium,
                             bubbles: event.bubbles(),
@@ -161,7 +161,9 @@ impl WebsysDom {
                     self.interpreter.CreateTemplateRef(id, template_id)
                 }
                 DomEdit::CreateTemplate { id } => self.interpreter.CreateTemplate(id),
-                DomEdit::FinishTemplate {} => self.interpreter.FinishTemplate(),
+                DomEdit::FinishTemplate { len } => self.interpreter.FinishTemplate(len),
+                DomEdit::EnterTemplateRef { root } => self.interpreter.EnterTemplateRef(root),
+                DomEdit::ExitTemplateRef {} => self.interpreter.ExitTemplateRef(),
             }
         }
     }

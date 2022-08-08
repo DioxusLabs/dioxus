@@ -205,7 +205,7 @@ impl Template {
                 self.create_node(mutations, bump, *root);
             }
         }
-        mutations.finish_templete(len as u64);
+        mutations.finish_templete(len as u32);
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
