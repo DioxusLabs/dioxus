@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use log::error;
 use regex::Regex;
+use urlencoding::encode;
 
 use super::{ParameterRoute, Route, RouteContent};
 
@@ -220,6 +221,116 @@ impl Segment {
 
         self.parameter = Some(route.into());
         self
+    }
+
+    /// Generate a sitemap.
+    ///
+    /// This function will create a `Vec` that contains all paths the router can handle. Segments
+    /// accepting a parameter will be prefixed with `\`.
+    ///
+    /// All strings will be URL encoded. As `\` is not a valid characters for URLs, the escaping
+    /// explained in the previous paragraph is unambiguous, but parameter URLs must be filtered out
+    /// if valid URLs are required.
+    pub fn sitemap(&self) -> Vec<String> {
+        self.sitemap_internal(None, None)
+    }
+
+    /// Generate a sitemap with the provided parameters.
+    ///
+    /// This function will create a `Vec` that contains all paths the router can handle. Segments
+    /// accepting a parameter will inserted once for every parameter. Duplicates are later removed.
+    ///
+    /// For a matching route to be included, a parameter must be valid.
+    ///
+    /// All strings will be URL encoded.
+    pub fn sitemap_with_parameters(
+        &self,
+        params: &BTreeMap<&'static str, HashSet<String>>,
+    ) -> HashSet<String> {
+        self.sitemap_internal(Some(params), None)
+            .into_iter()
+            .collect()
+    }
+
+    /// Generate a full sitemap with the provided parameters / parent path.
+    fn sitemap_internal(
+        &self,
+        params: Option<&BTreeMap<&'static str, HashSet<String>>>,
+        parents: Option<&str>,
+    ) -> Vec<String> {
+        let parents = parents.unwrap_or("/");
+        let mut res = Vec::new();
+
+        // insert index
+        if parents == "/" {
+            res.push(String::from("/"));
+        }
+
+        // insert fixed routes
+        for (name, route) in &self.fixed {
+            let parents = format!("{parents}{}/", encode(name));
+            res.push(parents.clone());
+
+            if let Some(n) = &route.nested {
+                res.append(&mut n.sitemap_internal(params, Some(&parents)));
+            }
+        }
+
+        // insert matching routes
+        for (regex, route) in &self.matching {
+            match params {
+                None => {
+                    let parents = format!("{parents}\\{}/", encode(route.key));
+                    res.push(parents.clone());
+
+                    if let Some(n) = &route.nested {
+                        res.append(&mut n.sitemap_internal(params, Some(&parents)));
+                    }
+                }
+                Some(p) => {
+                    if let Some(p) = p.get(route.key) {
+                        for p in p {
+                            if regex.is_match(p) {
+                                let parents = format!("{parents}{}/", encode(p));
+                                res.push(parents.clone());
+
+                                if let Some(n) = &route.nested {
+                                    res.append(&mut n.sitemap_internal(params, Some(&parents)));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // insert parameter route
+        if let Some(route) = &self.parameter {
+            match params {
+                None => {
+                    let parents = format!("{parents}\\{}/", encode(route.key));
+                    res.push(parents.clone());
+
+                    if let Some(n) = &route.nested {
+                        res.append(&mut n.sitemap_internal(params, Some(&parents)));
+                    }
+                }
+                Some(p) => {
+                    if let Some(p) = p.get(route.key) {
+                        for p in p {
+                            let parents = format!("{parents}{}/", encode(p));
+                            res.push(parents.clone());
+
+                            if let Some(n) = &route.nested {
+                                res.append(&mut n.sitemap_internal(params, Some(&parents)));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        res
     }
 }
 

@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use regex::Regex;
 use std::sync::Arc;
 
 const ADDRESS: &str = "https://dioxuslabs.com/";
@@ -13,33 +14,38 @@ fn render(component: Component) -> String {
 }
 
 fn test_routes(cx: &ScopeState) -> Arc<Segment> {
-    use_segment(&cx, || {
-        Segment::new()
-            .index(TestComponent_0 as Component)
-            .fixed(
-                "test",
-                Route::new(RcMulti(
-                    TestComponent_1,
-                    vec![("other", TestComponent_1_0_other)],
-                ))
-                .name(TestName)
-                .nested(
-                    Segment::new().index(TestComponent_1_0 as Component).fixed(
+    use_segment(&cx, test_routes_segment).clone()
+}
+
+fn test_routes_segment() -> Segment {
+    Segment::new()
+        .index(TestComponent_0 as Component)
+        .fixed(
+            "test",
+            Route::new(RcMulti(
+                TestComponent_1,
+                vec![("other", TestComponent_1_0_other)],
+            ))
+            .name(TestName)
+            .nested(
+                Segment::new()
+                    .index(TestComponent_1_0 as Component)
+                    .fixed(
                         "nest",
                         Route::new(TestComponent_1_1 as Component).nested(
                             Segment::new()
                                 .fixed("double-nest", TestComponent_1_1_0 as Component)
                                 .fallback(NestedFallback as Component),
                         ),
-                    ),
-                ),
-            )
-            .fixed("external-navigation-failure", "https://dioxuslabs.com/")
-            .fixed("named-navigation-failure", ("invalid name", vec![], None))
-            .fixed("redirect", "/test")
-            .fallback(RootFallback as Component)
-    })
-    .clone()
+                    )
+                    .parameter(("parameter", "/")),
+            ),
+        )
+        .fixed("external-navigation-failure", "https://dioxuslabs.com/")
+        .fixed("named-navigation-failure", ("invalid name", vec![], None))
+        .fixed("redirect", "/test")
+        .matching(Regex::new("other").unwrap(), ("matching-parameter", "/"))
+        .fallback(RootFallback as Component)
 }
 
 #[allow(non_snake_case)]
@@ -112,6 +118,7 @@ mod usage {
     mod fallback;
     mod fallback_external_navigation;
     mod fallback_named_navigation;
+    mod sitemap;
 }
 
 mod hooks {
