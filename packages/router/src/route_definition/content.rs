@@ -85,6 +85,12 @@ impl Default for RouteContent {
     }
 }
 
+impl From<()> for RouteContent {
+    fn from(_: ()) -> Self {
+        Self::RcNone
+    }
+}
+
 impl From<Component> for RouteContent {
     fn from(c: Component) -> Self {
         Self::RcComponent(c)
