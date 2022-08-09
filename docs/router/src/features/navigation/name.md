@@ -99,7 +99,6 @@ the same restrictions apply.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use std::any::TypeId;
 use dioxus::prelude::*;
 # extern crate dioxus_router;
 use dioxus_router::prelude::*;
@@ -108,7 +107,7 @@ struct SomeName;
 fn Content(cx: Scope) -> Element {
     let route = use_route(&cx).expect("needs to be in router");
 
-    if route.names.contains(&TypeId::of::<SomeName>()) {
+    if route.is_active(&(SomeName, vec![], None).into(), false) {
         // do something
     }
 
