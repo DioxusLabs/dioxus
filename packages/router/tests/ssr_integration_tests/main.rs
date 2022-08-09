@@ -36,6 +36,7 @@ fn test_routes(cx: &ScopeState) -> Arc<Segment> {
             )
             .fixed("external-navigation-failure", "https://dioxuslabs.com/")
             .fixed("named-navigation-failure", ("invalid name", vec![], None))
+            .fixed("redirect", "/test")
             .fallback(RootFallback as Component)
     })
     .clone()

@@ -5,7 +5,7 @@ use std::{
     any::TypeId,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    sync::{Arc, RwLock, Weak},
+    sync::{Arc, RwLock, RwLockReadGuard, Weak},
 };
 
 use dioxus::prelude::*;
@@ -71,6 +71,7 @@ pub(crate) struct RouterService {
     state: Arc<RwLock<RouterState>>,
     subscribers: Vec<Weak<ScopeId>>,
     update: Arc<dyn Fn(ScopeId)>,
+    update_callback: Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>,
 }
 
 impl RouterService {
@@ -84,6 +85,9 @@ impl RouterService {
         history: Option<Box<dyn HistoryProvider>>,
         fallback_external_navigation: Component,
         fallback_named_navigation: Component,
+        update_callback: Option<
+            Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>,
+        >,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -117,6 +121,7 @@ impl RouterService {
                 fallback_named_navigation,
                 history,
                 named_routes,
+                update_callback,
                 routes,
                 rx,
                 state,
@@ -130,6 +135,7 @@ impl RouterService {
     /// Perform a single routing operation. Doesn't trigger updates.
     pub(crate) fn single_routing(&mut self) {
         self.update_routing();
+        self.complete_update_callback();
     }
 
     /// The routers event loop.
@@ -142,50 +148,16 @@ impl RouterService {
             match x {
                 RouterMessage::GoBack => self.history.go_back(),
                 RouterMessage::GoForward => self.history.go_forward(),
-                RouterMessage::Push(target) => match target {
-                    NavigationTarget::InternalTarget(path) => self.history.push(path),
-                    NavigationTarget::NamedTarget(name, vars, query) => {
-                        match construct_named_path(&name, &vars, &query, &self.named_routes) {
-                            Some(path) => self.history.push(path),
-                            None => {
-                                self.failed_named_navigation();
-                                self.update_subscribers();
-                                continue; // routing already updated
-                            }
-                        }
+                RouterMessage::Push(target) => {
+                    if self.push_with_navigation_target(target) {
+                        continue; // navigation failure
                     }
-                    NavigationTarget::ExternalTarget(url) => {
-                        if self.history.can_external() {
-                            self.history.external(url);
-                        } else {
-                            self.failed_external_navigation(url);
-                            self.update_subscribers();
-                            continue; // routing already updated
-                        }
+                }
+                RouterMessage::Replace(target) => {
+                    if self.replace_with_navigation_target(target) {
+                        continue; // navigation failure
                     }
-                },
-                RouterMessage::Replace(target) => match target {
-                    NavigationTarget::InternalTarget(path) => self.history.replace(path),
-                    NavigationTarget::NamedTarget(name, vars, query) => {
-                        match construct_named_path(&name, &vars, &query, &self.named_routes) {
-                            Some(path) => self.history.replace(path),
-                            None => {
-                                self.failed_named_navigation();
-                                self.update_subscribers();
-                                continue; // routing already updated
-                            }
-                        }
-                    }
-                    NavigationTarget::ExternalTarget(url) => {
-                        if self.history.can_external() {
-                            self.history.external(url);
-                        } else {
-                            self.failed_external_navigation(url);
-                            self.update_subscribers();
-                            continue; // routing already updated
-                        }
-                    }
-                },
+                }
                 RouterMessage::Subscribe(id) => {
                     self.subscribers.push(Arc::downgrade(&id));
                     (self.update)(*id);
@@ -195,6 +167,11 @@ impl RouterService {
             }
 
             self.update_routing();
+
+            if self.complete_update_callback() {
+                continue; // navigation failure
+            }
+
             self.update_subscribers();
         }
     }
@@ -311,6 +288,63 @@ impl RouterService {
         });
     }
 
+    /// Create a full path from a [`NavigationTarget`] and handle navigation failures.
+    ///
+    /// # Returns
+    /// - [`None`] if an external or named navigation failure occurred.
+    /// - [`Some`] in all other cases.
+    fn navigation_target_to_path(&mut self, target: NavigationTarget) -> Option<String> {
+        match target {
+            NavigationTarget::InternalTarget(path) => Some(path),
+            NavigationTarget::NamedTarget(name, vars, query) => {
+                match construct_named_path(&name, &vars, &query, &self.named_routes) {
+                    Some(path) => Some(path),
+                    None => {
+                        self.failed_named_navigation();
+                        self.update_subscribers();
+                        None
+                    }
+                }
+            }
+            NavigationTarget::ExternalTarget(url) => match self.history.can_external() {
+                true => Some(url),
+                false => {
+                    self.failed_external_navigation(url);
+                    self.update_subscribers();
+                    None
+                }
+            },
+        }
+    }
+
+    /// Push the `target` onto the history and handle navigation failures.
+    ///
+    /// # Returns
+    /// - [`true`] if a navigation failure occurred.
+    /// - [`false`] in all other cases.
+    fn push_with_navigation_target(&mut self, target: NavigationTarget) -> bool {
+        if let Some(target) = self.navigation_target_to_path(target) {
+            self.history.push(target);
+            return false;
+        }
+
+        true
+    }
+
+    /// Replace the current location with `target` and handle navigation failures.
+    ///
+    /// # Returns
+    /// - [`true`] if a navigation failure occurred.
+    /// - [`fasle`] in all other cases.
+    fn replace_with_navigation_target(&mut self, target: NavigationTarget) -> bool {
+        if let Some(target) = self.navigation_target_to_path(target) {
+            self.history.replace(target);
+            return false;
+        }
+
+        true
+    }
+
     /// Go to the state for an external navigation failure.
     fn failed_external_navigation(&mut self, url: String) {
         self.history.push(String::from("/"));
@@ -341,9 +375,41 @@ impl RouterService {
         state.names.insert(TypeId::of::<RootIndex>());
         state.names.insert(TypeId::of::<FallbackNamedNavigation>());
     }
+
+    /// Call `update_callback` until completion.
+    ///
+    /// 1. Checks if `update_callback` is present.
+    /// 2. Calls the `update_callback`.
+    /// 3. If [`None`] was returned, return.
+    /// 4. Otherwise, replace current location with returned target and update routing.
+    /// 5. Repeat from 2.
+    ///
+    /// # Returns
+    /// - Never, if `update_callback` is not [`None`] and never returns [`None`].
+    /// - [`true`] if a navigation failure occurred.
+    /// - [`false`] in all other cases
+    fn complete_update_callback(&mut self) -> bool {
+        if self.update_callback.is_none() {
+            return false;
+        }
+
+        while let Some(target) = self.update_callback.as_ref().unwrap()(self.state.read().unwrap())
+        {
+            if self.replace_with_navigation_target(target) {
+                return true;
+            }
+            self.update_routing();
+        }
+
+        false
+    }
 }
 
-// [`ScopeId`] (in `update`) doesn't implement [`Debug`]
+// - [`Component`] (in `fallback_external_navigation` and `fallback_named_navigation`) doesn't
+//   implement [`Debug`]
+// - [`ScopeId`] (in `update`) doesn't implement [`Debug`]
+// - [`Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>`] (in
+//   `update_callback`) doesn't implement [`Debug`]
 impl Debug for RouterService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RouterService")

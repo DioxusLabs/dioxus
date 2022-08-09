@@ -22,6 +22,7 @@
   - [External Navigation Failure](./features/failures/external.md)
 - [History Providers](./features/history-providers.md)
 - [History Buttons](./features/history-buttons.md)
+- [Routing Update Callback](./features/routing-update-callback.md)
 
 # Example Project
 - [Overview](./example/index.md)

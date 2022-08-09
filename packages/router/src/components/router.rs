@@ -1,4 +1,7 @@
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    fmt::Debug,
+    sync::{Arc, RwLockReadGuard},
+};
 
 use dioxus::prelude::*;
 use log::error;
@@ -7,8 +10,10 @@ use crate::{
     components::FallbackNamedNavigation,
     contexts::RouterContext,
     history::{HistoryProvider, MemoryHistory},
+    navigation::NavigationTarget,
     route_definition::Segment,
     service::RouterService,
+    state::RouterState,
 };
 
 use super::FallbackExternalNavigation;
@@ -55,11 +60,27 @@ pub struct RouterProps<'a> {
     pub initial_path: Option<String>,
     /// The routes of the application.
     pub routes: Arc<Segment>,
+    /// A function that will be called anytime the current route updates.
+    ///
+    /// The function is called after the routing state is updated, but before components and hooks
+    /// are updated.
+    ///
+    /// If the callback returns a [`NavigationTarget`] the router will replace the current location
+    /// with the specified target. If no navigation failure was triggered, the router will then
+    /// update the current route and call the callback again, which will continue until the
+    /// callback returns [`None`]. Once that happens, the router will update components and hooks.
+    ///
+    /// The callback is not called when a navigation failure is encountered.
+    // TODO: find a more ergonomic way to expose this feature
+    pub update_callback:
+        Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>,
 }
 
 // - [`Fn() -> Box<dyn HistoryProvider>`] (in `history`) doesn't implement [`Debug`]
 // - [`Option<Component>`] (in `fallback_external_navigation` and `fallback_named_navigation`)
 //   doesn't implement [`Debug`]
+// - [`Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>] (in
+//   `update_callback`) doesn't implement [`Debug`]
 impl Debug for RouterProps<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RouterProps")
@@ -75,6 +96,7 @@ impl Debug for RouterProps<'_> {
             .field("history", &self.history.is_some())
             .field("init_only", &self.init_only)
             .field("routes", &self.routes)
+            .field("update_callback", &self.update_callback.is_some())
             .finish()
     }
 }
@@ -117,6 +139,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
         history,
         mut init_only,
         initial_path,
+        update_callback: on_update,
         routes,
     } = cx.props;
 
@@ -146,6 +169,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             history,
             fallback_external_navigation.unwrap_or(FallbackExternalNavigation),
             fallback_named_navigation.unwrap_or(FallbackNamedNavigation),
+            on_update.clone(),
         );
         cx.provide_context(context);
 

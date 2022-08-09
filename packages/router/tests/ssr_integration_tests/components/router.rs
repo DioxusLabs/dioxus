@@ -1,3 +1,5 @@
+use std::sync::{Arc, RwLockReadGuard};
+
 use dioxus::prelude::*;
 use dioxus_router::{
     history::{ControlledHistory, HistoryController, HistoryProvider, MemoryHistory},
@@ -72,6 +74,32 @@ fn with_initial_path() {
             Router {
                 routes: test_routes(&cx),
                 initial_path: "/test",
+
+                Outlet { }
+            }
+        })
+    }
+}
+
+#[test]
+fn with_update_callback() {
+    assert_eq!("<p>0: test</p><p>1: index</p>", render(App));
+
+    #[allow(non_snake_case)]
+    fn App(cx: Scope) -> Element {
+        let update_fn = cx.use_hook(|| {
+            Arc::new(
+                |state: RwLockReadGuard<RouterState>| -> Option<NavigationTarget> {
+                    (state.path == "/").then(|| "/redirect".into())
+                },
+            )
+        });
+
+        cx.render(rsx! {
+            Router {
+                routes: test_routes(&cx),
+                update_callback: update_fn.clone(),
+                init_only: true,
 
                 Outlet { }
             }

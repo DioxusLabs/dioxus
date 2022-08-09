@@ -1,5 +1,8 @@
+use std::sync::{Arc, RwLockReadGuard};
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
+use log::info;
 
 struct BlogPostName;
 struct Raspberry;
@@ -31,6 +34,13 @@ fn app(cx: Scope) -> Element {
             .fixed("the_best_berry", "/raspberry")
     });
 
+    let update_fn = cx.use_hook(|| {
+        Arc::new(|state: RwLockReadGuard<RouterState>| -> Option<_> {
+            info!("current path: {}", state.path);
+            None
+        })
+    });
+
     cx.render(rsx! {
         style {
             r#"
@@ -47,6 +57,7 @@ fn app(cx: Scope) -> Element {
         Router {
             routes: routes.clone(),
             fallback_named_navigation: NamedNavigationFallback,
+            update_callback: update_fn.clone(),
 
             header {
                 Link {
