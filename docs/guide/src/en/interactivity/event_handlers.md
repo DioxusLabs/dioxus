@@ -30,7 +30,7 @@ To learn what the different event types provide, read the [events module docs](h
 When you have e.g. a `button` inside a `div`, any click on the `button` is also a click on the `div`. For this reason, Dioxus propagates the click event: first, it is triggered on the target element, then on parent elements. If you want to prevent this behavior, you can call `cancel_bubble()` on the event:
 
 ```rust
-{{#include ../../../examples/event_click.rs:rsx}}
+{{#include ../../../examples/event_nested.rs:rsx}}
 ```
 
 ## Prevent Default
