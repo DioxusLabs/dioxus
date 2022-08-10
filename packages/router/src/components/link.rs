@@ -175,7 +175,8 @@ fn generate_href(
         InternalTarget(path) => path.to_string(),
         NamedTarget(name, parameters, query) => {
             // construct_named_path already reports failure in debug
-            construct_named_path(name, parameters, query, targets).unwrap_or(String::from("/"))
+            construct_named_path(name, parameters, query, targets)
+                .unwrap_or_else(|| String::from("/"))
         }
         ExternalTarget(href) => return href.to_string(),
     };

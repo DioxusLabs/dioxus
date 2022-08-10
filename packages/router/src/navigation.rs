@@ -95,9 +95,8 @@ pub enum Query {
 
 impl Query {
     /// Create a [`Query`] from a [`Serialize`]able value.
-    #[must_use]
     pub fn from_serde(query: impl Serialize) -> Result<Self, serde_urlencoded::ser::Error> {
-        serde_urlencoded::to_string(query).map(|q| Self::QueryString(q))
+        serde_urlencoded::to_string(query).map(Self::QueryString)
     }
 }
 

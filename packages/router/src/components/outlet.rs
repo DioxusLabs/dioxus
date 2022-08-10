@@ -4,7 +4,7 @@ use log::error;
 use crate::{contexts::OutletContext, helpers::use_router_subscription};
 
 /// Properties for an [`Outlet`].
-#[derive(Debug, PartialEq, Props)]
+#[derive(Debug, Eq, PartialEq, Props)]
 pub struct OutletProps {
     /// Override the [`Outlet`]s nesting depth.
     ///

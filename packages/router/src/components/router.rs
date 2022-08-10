@@ -18,6 +18,10 @@ use crate::{
 
 use super::FallbackExternalNavigation;
 
+/// A callback allowing users to hook into the navigation process.
+pub type RouterUpdateCallback =
+    Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>;
+
 /// The props for a [`Router`].
 #[derive(Props)]
 pub struct RouterProps<'a> {
@@ -72,8 +76,7 @@ pub struct RouterProps<'a> {
     ///
     /// The callback is not called when a navigation failure is encountered.
     // TODO: find a more ergonomic way to expose this feature
-    pub update_callback:
-        Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>,
+    pub update_callback: Option<RouterUpdateCallback>,
 }
 
 // - [`Fn() -> Box<dyn HistoryProvider>`] (in `history`) doesn't implement [`Debug`]

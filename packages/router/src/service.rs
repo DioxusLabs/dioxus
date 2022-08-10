@@ -5,7 +5,7 @@ use std::{
     any::TypeId,
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
-    sync::{Arc, RwLock, RwLockReadGuard, Weak},
+    sync::{Arc, RwLock, Weak},
 };
 
 use dioxus::prelude::*;
@@ -19,6 +19,7 @@ use crate::history::MemoryHistory;
 #[cfg(all(feature = "web", target_family = "wasm"))]
 use crate::history::WebHistory;
 use crate::{
+    components::RouterUpdateCallback,
     contexts::RouterContext,
     helpers::construct_named_path,
     history::HistoryProvider,
@@ -93,7 +94,7 @@ pub(crate) struct RouterService {
     /// [`NavigationTarget`], which the router will navigate to. It will then call this callback
     /// again. This will continue until [`None`] is returned. Only then will `subscribers` be
     /// updated.
-    update_callback: Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>,
+    update_callback: Option<RouterUpdateCallback>,
 }
 
 impl RouterService {
@@ -107,9 +108,7 @@ impl RouterService {
         history: Option<Box<dyn HistoryProvider>>,
         fallback_external_navigation: Component,
         fallback_named_navigation: Component,
-        update_callback: Option<
-            Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>,
-        >,
+        update_callback: Option<RouterUpdateCallback>,
     ) -> (Self, RouterContext) {
         // create channel
         let (tx, rx) = unbounded();
@@ -454,7 +453,7 @@ fn clear_state(state: &mut RouterState, history: &dyn HistoryProvider) {
     state.components.1.clear();
     state.names.clear();
     state.path = history.current_path();
-    state.prefix = history.current_prefix().to_string();
+    state.prefix = history.current_prefix();
     state.query = history.current_query();
     state.parameters.clear();
 }
