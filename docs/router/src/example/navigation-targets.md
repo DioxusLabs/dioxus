@@ -24,7 +24,6 @@ If we need a link to an external page we can do it like this:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn GoToDioxus(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
@@ -32,7 +31,7 @@ fn GoToDioxus(cx: Scope) -> Element {
             "Explicit ExternalTarget target"
         }
         Link {
-            target: "https://dioxuslabs.com",
+            target: "https://dioxuslabs.com", // short form
             "Implicit ExternalTarget target"
         }
     })
@@ -55,7 +54,8 @@ This has several advantages:
 - changing paths later on won't break internal links
 - paths can easily be localized without affecting app logic
 
-Let's try that now! First, we give our blog post route a name.
+Let's try that now! First, we give our blog post route a name. We can reuse our
+`BlogPost` component as a name.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
@@ -67,9 +67,6 @@ Let's try that now! First, we give our blog post route a name.
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 #
-struct BlogPostName;
-
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
@@ -79,7 +76,7 @@ fn App(cx: Scope) -> Element {
                 Route::new(Blog as Component).nested(
                     Segment::default().index(BlogList as Component).parameter(
                         // notice the name at the end of the line
-                        ParameterRoute::new("post_id", BlogPost as Component).name(BlogPostName),
+                        ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost),
                     ),
                 ),
             )
@@ -97,24 +94,20 @@ Now we can change the targets of the links in our `BlogList` component.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-# struct BlogPostName;
-#[allow(non_snake_case)]
+# fn BlogPost(cx: Scope) -> Element { unimplemented!() }
+#
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "Choose a post" }
         ul {
-            li {
-                Link {
-                    target: (BlogPostName, vec![("post_id", String::from("1"))], None),
-                    "Read the first blog post"
-                }
-            }
-            li {
-                Link {
-                    target: (BlogPostName, vec![("post_id", String::from("2"))], None),
-                    "Read the second blog post"
-                }
-            }
+            li { Link {
+                target: (BlogPost, vec![("post_id", String::from("1"))], None),
+                "Read the first blog post"
+            } }
+            li { Link {
+                target: (BlogPost, vec![("post_id", String::from("2"))], None),
+                "Read the second blog post"
+            } }
         }
     })
 }
@@ -137,23 +130,13 @@ We can change the link in our `NavBar` component to take advantage of that.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-#[allow(non_snake_case)]
+#
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
-                li {
-                    Link {
-                        target: (RootIndex, vec![], None),
-                        "Home"
-                    }
-                }
-                li {
-                    Link {
-                        target: "/blog",
-                        "Blog"
-                    }
-                }
+                li { Link { target: (RootIndex, vec![], None), "Home" } }
+                li { Link { target: "/blog", "Blog" } }
             }
         }
     })

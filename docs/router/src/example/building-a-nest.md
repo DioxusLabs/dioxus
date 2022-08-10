@@ -16,7 +16,6 @@ Let's create a new `NavBar` component:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
@@ -40,24 +39,16 @@ more on other targets later) and an element. Let's add our links
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
                 // new stuff starts here
-                li {
-                    Link {
-                        target: InternalTarget(String::from("/")),
-                        "Home"
-                    }
-                }
-                li {
-                    Link {
-                        target: "/blog", //short form
+                li { Link { target: InternalTarget(String::from("/")), "Home" } }
+                li { Link {
+                        target: "/blog", // short form
                         "Blog"
-                    }
-                }
+                } }
                 // new stuff ends here
             }
         }
@@ -80,7 +71,6 @@ And finally, we add the navbar component in our app component:
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
@@ -112,30 +102,27 @@ in that case.
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
-                li {
-                    Link {
-                        target: InternalTarget(String::from("/")),
-                        active_class: "active", // new stuff
-                        "Home"
-                    }
-                }
-                li {
-                    Link {
-                        target: "/blog",
-                        active_class: "active", // new stuff
-                        "Blog"
-                    }
-                }
+                li { Link {
+                    target: InternalTarget(String::from("/")),
+                    active_class: "active", // this is new
+                    "Home"
+                } }
+                li { Link {
+                    target: "/blog",
+                    active_class: "active", // this is new
+                    "Blog"
+                } }
             }
         }
     })
 }
 ```
+
+> This will not be reflected in the [full example code](./full-code.md).
 
 ## URL Parameters and Nested Routes
 Many websites such as GitHub put parameters in their URL. For example,
@@ -161,7 +148,6 @@ us to add a heading that tells the user they are on the blog.
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn Blog(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Blog" }
@@ -183,23 +169,18 @@ is selected:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn BlogList(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "Choose a post" }
         ul {
-            li {
-                Link {
-                    target: "/blog/1",
-                    "Read the first blog post"
-                }
-            }
-            li {
-                Link {
-                    target: "/blog/2",
-                    "Read the second blog post"
-                }
-            }
+            li { Link {
+                target: "/blog/1",
+                "Read the first blog post"
+            } }
+            li { Link {
+                target: "/blog/2",
+                "Read the second blog post"
+            } }
         }
     })
 }
@@ -215,7 +196,6 @@ parameters:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
-#[allow(non_snake_case)]
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).unwrap();
 
@@ -244,7 +224,6 @@ Finally, let's tell our router about those components.
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
@@ -265,8 +244,8 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            NavBar {}
-            Outlet {}
+            NavBar { }
+            Outlet { }
         }
     })
 }

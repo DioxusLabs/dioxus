@@ -12,8 +12,7 @@ First we need an actual page to route to! Let's add a homepage component:
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
 # use dioxus::prelude::*;
-
-#[allow(non_snake_case)]
+#
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the Dioxus Blog!" }
@@ -39,9 +38,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
-
     let routes = use_segment(&cx, || {
         // we want our home page component to render as an index
         Segment::default().index(Home as Component)
@@ -53,7 +50,9 @@ fn App(cx: Scope) -> Element {
 }
 ```
 
-Now we can replace the `p { "Hello, Dioxus!" }` with our [`Router`]:
+Now we can replace the `p { "Hello, Dioxus!" }` with our [`Router`]. We also
+need to tell it where to render the content of the active route. Therefore we
+nest an [`Outlet`] inside it.
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
@@ -62,41 +61,18 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default().index(Home as Component)
     });
 
     cx.render(rsx! {
-        Router { // this is new
-            routes: routes.clone() // pass in the routes we prepared before
-        }
-    })
-}
-```
-
-At last, we need to tell the router where to render the component for the active
-route:
-```rust,no_run
-# // Hidden lines (like this one) make the documentation tests work.
-# extern crate dioxus;
-use dioxus::prelude::*;
-# extern crate dioxus_router;
-use dioxus_router::prelude::*;
-# fn Home(cx: Scope) -> Element { unimplemented!() }
-
-#[allow(non_snake_case)]
-fn App(cx: Scope) -> Element {
-    let routes = use_segment(&cx, || {
-        Segment::default().index(Home as Component)
-    });
-
-    cx.render(rsx! {
+        // new stuff starts here
         Router {
-            routes: routes.clone(),
-            Outlet { } // this is new
+            routes: routes.clone() // pass in the routes we prepared before
+            Outlet { }
         }
+        // new stuff ends here
     })
 }
 ```
@@ -119,7 +95,6 @@ First, we create a new `PageNotFound` component.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 #
-#[allow(non_snake_case)]
 fn PageNotFound(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Page not found" }

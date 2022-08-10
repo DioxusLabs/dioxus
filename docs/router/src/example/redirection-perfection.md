@@ -28,18 +28,17 @@ All we need to do is update our route definition in our app component:
 # fn App(cx: Scope) -> Element {
 let routes = use_segment(&cx, || {
     Segment::new()
-        .index(RcComponent(Home))
+        .index(Home as Component)
         .fixed(
             "blog",
-            Route::new(RcComponent(Blog)).nested(
-                Segment::new()
-                    .index(RcComponent(BlogList))
-                    .parameter(
-                        ParameterRoute::new("post_id", RcComponent(BlogPost))
-                    )
-            )
+            Route::new(Blog as Component).nested(
+                Segment::new().index(BlogList as Component).parameter(
+                    ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost)
+                ),
+            ),
         )
         .fixed("myblog", "/blog") // this is new
+        .fallback(PageNotFound as Component)
 });
 # unimplemented!()
 # }
