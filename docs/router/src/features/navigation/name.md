@@ -44,9 +44,9 @@ fn Source(cx: Scope) -> Element {
             // instead of InternalTarget we use NamedTarget (via Into) with
             // these parameters:
             // 1. the `name` we want to navigate to
-            // 2. a Vec of parameters the router can put in the generated path
-            // 3. the query
-            target: (TargetName, vec![], None),
+            // 2. a list of parameters the router can put in the generated path
+            // 3. we could also provide a query as an optional third parameter
+            target: (TargetName, [], "query"),
             "Go to target"
         }
     })
@@ -61,10 +61,10 @@ fn Target(cx: Scope) -> Element {
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Source))
+            .index(Source as Component)
             .fixed(
                 "target_path",
-                Route::new(RcComponent(Target)).name(TargetName)
+                Route::new(Target as Component).name(TargetName)
             )
     });
 
@@ -84,7 +84,7 @@ fn App(cx: Scope) -> Element {
 # assert_eq!(
 #     format!(
 #         "<a {attr1} {attr2}>Go to target</a>",
-#         attr1 = r#"href="/target_path/" dioxus-prevent-default="onclick""#,
+#         attr1 = r#"href="/target_path/?query" dioxus-prevent-default="onclick""#,
 #         attr2 = r#"class="" id="" rel="" target="""#
 #     ),
 #     html
@@ -107,7 +107,7 @@ struct SomeName;
 fn Content(cx: Scope) -> Element {
     let route = use_route(&cx).expect("needs to be in router");
 
-    if route.is_active(&(SomeName, vec![], None).into(), false) {
+    if route.is_active(&(SomeName, []).into(), false) {
         // do something
     }
 

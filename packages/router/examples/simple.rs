@@ -17,7 +17,7 @@ fn app(cx: Scope) -> Element {
             .fixed("potato", Route::new(RcComponent(Potato)).name(PotatoName))
             .fixed(
                 "earth_apple",
-                Route::new((PotatoName, vec![], None)).name(EarthAppleName),
+                Route::new((PotatoName, [])).name(EarthAppleName),
             )
     });
 
@@ -43,13 +43,13 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: (PotatoName, vec![], None),
+                    target: (PotatoName, []),
                     "Read about potatoes…"
                 }
             }
             li {
                 Link {
-                    target: (EarthAppleName, vec![], None),
+                    target: (EarthAppleName, []),
                     "Read about earth apples (literal translation of a german word for potato)…"
                 }
             }
@@ -64,7 +64,7 @@ fn Apple(cx: Scope) -> Element {
         p { "Apples are fruit that grows on trees."}
         p {
             Link {
-                target: (RootIndex, vec![], None),
+                target: (RootIndex, []),
                 "Go back to home"
             }
         }
@@ -78,7 +78,7 @@ fn Potato(cx: Scope) -> Element {
         p { "Potatoes grow underground. There are many recipes involving potatoes."}
         p {
             Link {
-                target: (RootIndex, vec![], None),
+                target: (RootIndex, []),
                 "Go back to home"
             }
         }

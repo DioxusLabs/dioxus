@@ -78,7 +78,7 @@ pub struct LinkProps<'a> {
 ///     }
 ///     // a link to a route with a name
 ///     Link {
-///         target: (SomeName, vec![], None),
+///         target: (SomeName, []),
 ///         "Go to named target"
 ///     }
 ///     // a link to an external page

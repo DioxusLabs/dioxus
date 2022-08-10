@@ -107,7 +107,7 @@ fn App(cx: Scope<AppProps>) -> Element {
                 "dioxus",
                 Route::new("https://dioxuslabs.com").name(DioxusName),
             )
-            .fallback((RootIndex, vec![], None))
+            .fallback((RootIndex, []))
     });
 
     let history = cx.use_hook(|| {
@@ -132,11 +132,11 @@ fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the SSR test!" }
         Link {
-            target: (TestName, vec![], None),
+            target: (TestName, []),
             "Go to test page"
         }
         Link {
-            target: (DioxusName, vec![], None),
+            target: (DioxusName, []),
             "Go to dioxus"
         }
     })
@@ -147,7 +147,7 @@ fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }
         Link {
-            target: (RootIndex, vec![], None),
+            target: (RootIndex, []),
             "Return to home page"
         }
     })

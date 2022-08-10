@@ -42,7 +42,7 @@ fn test_routes_segment() -> Segment {
             ),
         )
         .fixed("external-navigation-failure", "https://dioxuslabs.com/")
-        .fixed("named-navigation-failure", ("invalid name", vec![], None))
+        .fixed("named-navigation-failure", ("invalid name", []))
         .fixed("redirect", "/test")
         .matching(Regex::new("other").unwrap(), ("matching-parameter", "/"))
         .fallback(RootFallback as Component)

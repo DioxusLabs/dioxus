@@ -60,7 +60,9 @@ fn SomeComponent(cx: Scope) -> Element {
 When using [named navigation](./navigation/name.md) we can pass the query via
 the last tuple field.
 
-We can either provide a query string, or a `Vec<(String, String)>`.
+Just like with [`NamedTarget`] itself, we can rely on automatic conversion from
+various types. We can either provide a `String` or a `Vec` of key-value pairs.
+When using a `String`, it doesn't matter if it is prefixed with a `?`.
 
 ```rust,no_run
 # // Hidden lines (like this one) make the documentation tests work.
@@ -73,15 +75,11 @@ We can either provide a query string, or a `Vec<(String, String)>`.
 fn SomeComponent(cx: Scope) -> Element {
     cx.render(rsx! {
         Link {
-            target: (Target, vec![], Some(QueryString(String::from("query=yes")))),
+            target: (Target, [], "query=yes"),
             "Query String"
         }
         Link {
-            target: (
-                Target,
-                vec![],
-                Some(QueryVec(vec![(String::from("query"), String::from("yes"))]))
-            ),
+            target: (Target, [], vec![("query", "yes")]),
             "Query Vec"
         }
     })

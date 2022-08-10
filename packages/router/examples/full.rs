@@ -61,7 +61,7 @@ fn app(cx: Scope) -> Element {
 
             header {
                 Link {
-                    target: (RootIndex, vec![], None)
+                    target: (RootIndex, [])
                     "go home"
                     active_class: "active",
                 }
@@ -92,7 +92,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: ("nonexisting name", vec![], None),
+                    target: ("nonexisting name", []),
                     "trigger a named navigation error"
                 }
             }
@@ -104,7 +104,7 @@ fn Home(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: (Raspberry, vec![], None),
+                    target: (Raspberry, []),
                     "Go to the page about raspberries"
                 }
             }
@@ -139,13 +139,13 @@ fn BlogWelcome(cx: Scope) -> Element {
             }
             li {
                 Link {
-                    target: (BlogPostName, vec![("blog_id", String::from("2"))], None),
+                    target: (BlogPostName, [("blog_id", String::from("2"))]),
                     "Go to second blog post"
                 }
             }
             li {
                 Link {
-                    target: (BlogPostName, vec![("blog_id", String::from("🎺"))], None),
+                    target: (BlogPostName, [("blog_id", String::from("🎺"))]),
                     "Go to trumpet blog post 🎺"
                 }
             }

@@ -34,7 +34,7 @@ fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
-                li { Link { target: (RootIndex, vec![], None), "Home" } }
+                li { Link { target: (RootIndex, []), "Home" } }
                 li { Link { target: "/blog", "Blog" } }
             }
         }
@@ -59,11 +59,11 @@ fn BlogList(cx: Scope) -> Element {
         h2 { "Choose a post" }
         ul {
             li { Link {
-                target: (BlogPost, vec![("post_id", String::from("1"))], None),
+                target: (BlogPost, [("post_id", String::from("1"))]),
                 "Read the first blog post"
             } }
             li { Link {
-                target: (BlogPost, vec![("post_id", String::from("2"))], None),
+                target: (BlogPost, [("post_id", String::from("2"))]),
                 "Read the second blog post"
             } }
         }

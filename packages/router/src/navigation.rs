@@ -53,12 +53,6 @@ impl NavigationTarget {
     }
 }
 
-impl<T: 'static> From<(T, Vec<(&'static str, String)>, Option<Query>)> for NavigationTarget {
-    fn from((name, parameters, query): (T, Vec<(&'static str, String)>, Option<Query>)) -> Self {
-        Self::NamedTarget(named_tuple(name), parameters, query)
-    }
-}
-
 impl From<String> for NavigationTarget {
     fn from(s: String) -> Self {
         s.as_str().into()
@@ -84,6 +78,42 @@ impl FromStr for NavigationTarget {
     }
 }
 
+impl<T, P> From<(T, P)> for NavigationTarget
+where
+    T: 'static,
+    P: IntoIterator<Item = (&'static str, String)>,
+{
+    fn from((name, parameters): (T, P)) -> Self {
+        Self::NamedTarget(named_tuple(name), parameters.into_iter().collect(), None)
+    }
+}
+
+impl<T, P, Q> From<(T, P, Q)> for NavigationTarget
+where
+    T: 'static,
+    P: IntoIterator<Item = (&'static str, String)>,
+    Q: Into<Query>,
+{
+    fn from((name, parameters, query): (T, P, Q)) -> Self {
+        (name, parameters, Some(query)).into()
+    }
+}
+
+impl<T, P, Q> From<(T, P, Option<Q>)> for NavigationTarget
+where
+    T: 'static,
+    P: IntoIterator<Item = (&'static str, String)>,
+    Q: Into<Query>,
+{
+    fn from((name, parameters, query): (T, P, Option<Q>)) -> Self {
+        Self::NamedTarget(
+            named_tuple(name),
+            parameters.into_iter().collect(),
+            query.map(Into::into),
+        )
+    }
+}
+
 /// A query string.
 #[derive(Clone, Debug)]
 pub enum Query {
@@ -97,6 +127,32 @@ impl Query {
     /// Create a [`Query`] from a [`Serialize`]able value.
     pub fn from_serde(query: impl Serialize) -> Result<Self, serde_urlencoded::ser::Error> {
         serde_urlencoded::to_string(query).map(Self::QueryString)
+    }
+}
+
+impl From<String> for Query {
+    fn from(query: String) -> Self {
+        Self::QueryString(query)
+    }
+}
+
+impl From<&str> for Query {
+    fn from(query: &str) -> Self {
+        query.to_string().into()
+    }
+}
+
+impl<T> From<Vec<(T, T)>> for Query
+where
+    T: Into<String>,
+{
+    fn from(params: Vec<(T, T)>) -> Self {
+        Self::QueryVec(
+            params
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect(),
+        )
     }
 }
 

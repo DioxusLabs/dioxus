@@ -38,7 +38,7 @@ fn with_id() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: (TestName, vec![], None),
+                    target: (TestName, []),
                     id: "test_id",
                     "Test Link"
                 }
@@ -61,7 +61,7 @@ fn with_class() {
                 init_only: true,
                 routes: test_routes(&cx),
                 Link {
-                    target: (TestName, vec![], None),
+                    target: (TestName, []),
                     class: "test_class",
                     "Test Link"
                 }
@@ -84,7 +84,7 @@ fn with_class_and_active() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: (RootIndex, vec![], None),
+                    target: (RootIndex, []),
                     active_class: "active",
                     class: "test_class",
                     "Test Link"
@@ -160,7 +160,7 @@ fn with_new_tab() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: (TestName, vec![], None),
+                    target: (TestName, []),
                     new_tab: true,
                     "Test Link"
                 }
@@ -183,7 +183,7 @@ fn with_rel() {
                 routes: test_routes(&cx),
                 init_only: true,
                 Link {
-                    target: (TestName, vec![], None),
+                    target: (TestName, []),
                     rel: "custom",
                     "Test Link"
                 }

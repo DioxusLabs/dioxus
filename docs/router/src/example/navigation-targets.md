@@ -101,11 +101,11 @@ fn BlogList(cx: Scope) -> Element {
         h2 { "Choose a post" }
         ul {
             li { Link {
-                target: (BlogPost, vec![("post_id", String::from("1"))], None),
+                target: (BlogPost, [("post_id", String::from("1"))]),
                 "Read the first blog post"
             } }
             li { Link {
-                target: (BlogPost, vec![("post_id", String::from("2"))], None),
+                target: (BlogPost, [("post_id", String::from("2"))], "query"),
                 "Read the second blog post"
             } }
         }
@@ -116,7 +116,7 @@ fn BlogList(cx: Scope) -> Element {
 As you can see, a [`NamedTarget`] requires three fields:
 1. the name to navigate to
 2. a `Vec` containing all parameters that need to be inserted into the path
-3. the query string to use. `None` means no query string
+3. optionally a query string to use.
 
 
 ### The special root index name
@@ -135,7 +135,7 @@ fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
-                li { Link { target: (RootIndex, vec![], None), "Home" } }
+                li { Link { target: (RootIndex, []), "Home" } }
                 li { Link { target: "/blog", "Blog" } }
             }
         }

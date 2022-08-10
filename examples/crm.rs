@@ -57,12 +57,12 @@ fn ClientList(cx: Scope) -> Element {
         h2 { "List of Clients" }
 
         Link {
-            target: (ClientAdd, vec![], None),
+            target: (ClientAdd, []),
             class: "pure-button pure-button-primary",
             "Add Client"
         }
         Link {
-            target: (Settings, vec![], None),
+            target: (Settings, []),
             class: "pure-button",
             "Settings"
         }
@@ -100,7 +100,7 @@ fn ClientAdd(cx: Scope) -> Element {
                     description: description.to_string(),
                 });
 
-                navigator.push((RootIndex, vec![], None));
+                navigator.push((RootIndex, []));
             },
 
             fieldset {
@@ -158,7 +158,7 @@ fn ClientAdd(cx: Scope) -> Element {
                         "Save"
                     }
                     Link {
-                        target: (RootIndex, vec![], None),
+                        target: (RootIndex, []),
                         class: "pure-button pure-button-primary red",
                         "Cancel"
                     }
@@ -184,7 +184,7 @@ fn Settings(cx: Scope) -> Element {
         }
 
         Link {
-            target: (RootIndex, vec![], None),
+            target: (RootIndex, []),
             class: "pure-button",
             "Go back"
         }
