@@ -24,6 +24,7 @@ website with a blog, homepage, and more!
 > a single file, this is not the recommended way of doing things with a real
 > application.
 
-You can find the complete application [here](https://github.com/TeFiLeDo/dioxus-router-example).
+You can find the complete application in the [full code](./full-code.md)
+chapter.
 
 [db]: https://dioxuslabs.com/guide/
