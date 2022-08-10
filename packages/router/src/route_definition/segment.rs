@@ -84,10 +84,10 @@ impl Segment {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Segment::new().fallback(RcNone);
+    /// Segment::new().fallback(());
     /// ```
     pub fn fallback(mut self, content: impl Into<RouteContent>) -> Self {
-        if !self.fallback.is_rc_none() {
+        if !self.fallback.is_empty() {
             error!("fallback route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("fallback route already set");
@@ -117,7 +117,7 @@ impl Segment {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Segment::new().fixed("path", Route::new(RcNone));
+    /// Segment::new().fixed("path", Route::new(()));
     /// ```
     pub fn fixed(mut self, path: &str, route: impl Into<Route>) -> Self {
         if self.fixed.insert(path.to_string(), route.into()).is_some() {
@@ -145,10 +145,10 @@ impl Segment {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Segment::new().index(RcNone);
+    /// Segment::new().index(());
     /// ```
     pub fn index(mut self, content: impl Into<RouteContent>) -> Self {
-        if !self.index.is_rc_none() {
+        if !self.index.is_empty() {
             error!("index route already set, later prevails");
             #[cfg(debug_assertions)]
             panic!("index route already set");
@@ -178,7 +178,7 @@ impl Segment {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// # use regex::Regex;
-    /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", RcNone));
+    /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", ()));
     /// ```
     pub fn matching(mut self, regex: Regex, route: impl Into<ParameterRoute>) -> Self {
         self.matching.push((regex, route.into()));
@@ -210,7 +210,7 @@ impl Segment {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Segment::new().parameter(ParameterRoute::new("key", RcNone));
+    /// Segment::new().parameter(ParameterRoute::new("key", ()));
     /// ```
     pub fn parameter(mut self, route: impl Into<ParameterRoute>) -> Self {
         if self.parameter.is_some() {
@@ -346,7 +346,7 @@ mod tests {
         let s = Segment::new().fallback("test");
 
         let fallback_is_correct = match s.fallback {
-            RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)) => target == "test",
+            RouteContent::Redirect(NavigationTarget::InternalTarget(target)) => target == "test",
             _ => false,
         };
         assert!(fallback_is_correct);
@@ -358,7 +358,7 @@ mod tests {
     fn fallback_panic_in_debug() {
         Segment::new()
             .fallback("test")
-            .fallback(RouteContent::RcNone);
+            .fallback(RouteContent::Empty);
     }
 
     #[cfg(not(debug_assertions))]
@@ -366,14 +366,14 @@ mod tests {
     fn fallback_override_in_release() {
         let s = Segment::new()
             .fallback("test")
-            .fallback(RouteContent::RcNone);
+            .fallback(RouteContent::Empty);
 
-        assert!(matches!(s.fallback, RouteContent::RcNone));
+        assert!(matches!(s.fallback, RouteContent::Empty));
     }
 
     #[test]
     fn fixed() {
-        let s = Segment::new().fixed("test", Route::new(RouteContent::RcNone));
+        let s = Segment::new().fixed("test", Route::new(RouteContent::Empty));
 
         assert_eq!(s.fixed.len(), 1);
     }
@@ -383,29 +383,29 @@ mod tests {
     #[should_panic = r#"two fixed routes with identical path: "test""#]
     fn fixed_panic_in_debug() {
         Segment::new()
-            .fixed("test", Route::new(RouteContent::RcNone))
-            .fixed("test", Route::new(RouteContent::RcNone));
+            .fixed("test", Route::new(RouteContent::Empty))
+            .fixed("test", Route::new(RouteContent::Empty));
     }
 
     #[cfg(not(debug_assertions))]
     #[test]
     fn fixed_override_in_release() {
         let s = Segment::new()
-            .fixed("test", Route::new(RouteContent::RcComponent(TestComponent)))
-            .fixed("test", Route::new(RouteContent::RcNone));
+            .fixed("test", Route::new(RouteContent::Component(TestComponent)))
+            .fixed("test", Route::new(RouteContent::Empty));
 
         assert_eq!(s.fixed.len(), 1);
         let r = &s.fixed["test"];
-        assert!(r.content.is_rc_none());
+        assert!(r.content.is_empty());
         assert!(r.name.is_none());
         assert!(r.nested.is_none());
     }
 
     #[test]
     fn index() {
-        let s = Segment::new().index(RouteContent::RcComponent(TestComponent));
+        let s = Segment::new().index(RouteContent::Component(TestComponent));
 
-        assert!(!s.index.is_rc_none());
+        assert!(!s.index.is_empty());
     }
 
     #[cfg(debug_assertions)]
@@ -413,24 +413,24 @@ mod tests {
     #[should_panic = "index route already set"]
     fn index_panic_in_debug() {
         Segment::new()
-            .index(RouteContent::RcComponent(TestComponent))
-            .index(RouteContent::RcNone);
+            .index(RouteContent::Component(TestComponent))
+            .index(RouteContent::Empty);
     }
 
     #[cfg(not(debug_assertions))]
     #[test]
     fn index_override_in_release() {
         let s = Segment::new()
-            .index(RouteContent::RcComponent(TestComponent))
-            .index(RouteContent::RcNone);
+            .index(RouteContent::Component(TestComponent))
+            .index(RouteContent::Empty);
 
-        assert!(s.index.is_rc_none());
+        assert!(s.index.is_empty());
     }
 
     #[test]
     fn matching() {
         let regex = Regex::new("").unwrap();
-        let s = Segment::new().matching(regex, ParameterRoute::new("", RouteContent::RcNone));
+        let s = Segment::new().matching(regex, ParameterRoute::new("", RouteContent::Empty));
 
         assert_eq!(s.matching.len(), 1);
     }
@@ -443,7 +443,7 @@ mod tests {
             Some(ParameterRoute {
                 name: _,
                 key: _,
-                content: RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)),
+                content: RouteContent::Redirect(NavigationTarget::InternalTarget(target)),
                 nested: _,
             }) => target == "test",
             _ => false,
@@ -456,8 +456,8 @@ mod tests {
     #[should_panic = "parameter route already set"]
     fn parameter_panic_in_debug() {
         Segment::new()
-            .parameter(ParameterRoute::new("", RouteContent::RcNone))
-            .parameter(ParameterRoute::new("", RouteContent::RcNone));
+            .parameter(ParameterRoute::new("", RouteContent::Empty))
+            .parameter(ParameterRoute::new("", RouteContent::Empty));
     }
 
     #[cfg(not(debug_assertions))]
@@ -466,12 +466,12 @@ mod tests {
         let s = Segment::new()
             .parameter(ParameterRoute::new(
                 "",
-                RouteContent::RcComponent(TestComponent),
+                RouteContent::Component(TestComponent),
             ))
-            .parameter(ParameterRoute::new("", RouteContent::RcNone));
+            .parameter(ParameterRoute::new("", RouteContent::Empty));
 
         let fallback_is_correct = match s.parameter {
-            Some(p) => p.content.is_rc_none(),
+            Some(p) => p.content.is_empty(),
             _ => false,
         };
         assert!(fallback_is_correct);

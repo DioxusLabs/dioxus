@@ -33,8 +33,9 @@ fn Home(cx: Scope) -> Element {
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            // notice that we use RcRedirect instead of RcComponent
-            .index(RcRedirect(InternalTarget(String::from("/home"))))
+            // notice that we use RouteContent::Redirect instead of
+            // RouteContent::Component (which we have been using indirectly)
+            .index(RouteContent::Redirect(InternalTarget(String::from("/home"))))
             .fixed("start", "/home") // short form
             .fixed("home", Home as Component)
     });

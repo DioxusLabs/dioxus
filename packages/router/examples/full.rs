@@ -18,18 +18,22 @@ fn app(cx: Scope) -> Element {
             .index(Home as Component)
             .fixed(
                 "blog",
-                Route::new(RcComponent(Blog)).nested(
+                Route::new(Blog as Component).nested(
                     Segment::default()
-                        .index(RcComponent(BlogWelcome))
+                        .index(BlogWelcome as Component)
                         .parameter(
-                            ParameterRoute::new("blog_id", RcComponent(BlogPost))
+                            ParameterRoute::new("blog_id", BlogPost as Component)
                                 .name(BlogPostName),
                         ),
                 ),
             )
             .fixed(
                 "raspberry",
-                Route::new(RcMulti(RaspberryPage, vec![("other", StrawberryPage)])).name(Raspberry),
+                Route::new(RouteContent::Multi(
+                    RaspberryPage,
+                    vec![("other", StrawberryPage)],
+                ))
+                .name(Raspberry),
             )
             .fixed("the_best_berry", "/raspberry")
     });

@@ -59,8 +59,8 @@ fn App(cx: Scope) -> Element {
     // declare the routes of the app
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Index)) // when the path is '/'
-            .fixed("other", Route::new(RcComponent(Other))) // when the path is `/other`
+            .index(Index as Component) // when the path is '/'
+            .fixed("other", Route::new(Other as Component)) // when the path is `/other`
     });
 
     cx.render(rsx! {

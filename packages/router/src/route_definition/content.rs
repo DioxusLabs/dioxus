@@ -14,11 +14,11 @@ pub enum RouteContent {
     ///
     /// Can be used to make a route transparent and have its nested routes be nested one level less
     /// deep.
-    RcNone,
+    Empty,
     /// A single component.
-    RcComponent(Component),
+    Component(Component),
     /// One main and several side components.
-    RcMulti(Component, Vec<(&'static str, Component)>),
+    Multi(Component, Vec<(&'static str, Component)>),
     /// Causes a redirect when the route is matched.
     ///
     /// Redirects are performed as a _replace_ operation. This means that the original path won't be
@@ -29,7 +29,7 @@ pub enum RouteContent {
     ///
     /// [`HistoryProvider`]: crate::history::HistoryProvider
     /// [`MemoryHistory`]: crate::history::MemoryHistory
-    RcRedirect(NavigationTarget),
+    Redirect(NavigationTarget),
 }
 
 impl RouteContent {
@@ -40,9 +40,9 @@ impl RouteContent {
         components: &mut (Vec<Component>, BTreeMap<&'static str, Vec<Component>>),
     ) -> Option<NavigationTarget> {
         match self {
-            RouteContent::RcNone => {}
-            RouteContent::RcComponent(comp) => components.0.push(*comp),
-            RouteContent::RcMulti(main, side) => {
+            RouteContent::Empty => {}
+            RouteContent::Component(comp) => components.0.push(*comp),
+            RouteContent::Multi(main, side) => {
                 components.0.push(*main);
                 for (name, comp) in side {
                     if let Some(x) = components.1.get_mut(name) {
@@ -52,54 +52,54 @@ impl RouteContent {
                     }
                 }
             }
-            RouteContent::RcRedirect(t) => return Some(t.clone()),
+            RouteContent::Redirect(t) => return Some(t.clone()),
         }
 
         None
     }
 
-    /// Returns [`true`] if the route content is [`RcNone`].
+    /// Returns [`true`] if the route content is [`Empty`].
     ///
-    /// [`RcNone`]: RouteContent::RcNone
+    /// [`Empty`]: RouteContent::Empty
     #[must_use]
-    pub fn is_rc_none(&self) -> bool {
-        matches!(self, Self::RcNone)
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
     }
 }
 
-// [`Component`] (in [`RcComponent`] and [`RcMulti`]) doesn't implement [`Debug`]
+// [`Component`] (in [`Component`] and [`Multi`]) doesn't implement [`Debug`]
 impl Debug for RouteContent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::RcNone => write!(f, "RcNone"),
-            Self::RcComponent(_) => f.debug_tuple("RcComponent").finish(),
-            Self::RcMulti(_, _) => f.debug_tuple("RcMulti").finish(),
-            Self::RcRedirect(arg0) => f.debug_tuple("RcRedirect").field(arg0).finish(),
+            Self::Empty => write!(f, "Empty"),
+            Self::Component(_) => f.debug_tuple("Component").finish(),
+            Self::Multi(_, _) => f.debug_tuple("Multi").finish(),
+            Self::Redirect(arg0) => f.debug_tuple("Redirect").field(arg0).finish(),
         }
     }
 }
 
 impl Default for RouteContent {
     fn default() -> Self {
-        Self::RcNone
+        Self::Empty
     }
 }
 
 impl From<()> for RouteContent {
     fn from(_: ()) -> Self {
-        Self::RcNone
+        Self::Empty
     }
 }
 
 impl From<Component> for RouteContent {
     fn from(c: Component) -> Self {
-        Self::RcComponent(c)
+        Self::Component(c)
     }
 }
 
 impl<T: Into<NavigationTarget>> From<T> for RouteContent {
     fn from(nt: T) -> Self {
-        Self::RcRedirect(nt.into())
+        Self::Redirect(nt.into())
     }
 }
 
@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn add_to_list_rc_none() {
         let mut components = (Vec::new(), BTreeMap::new());
-        let content = RouteContent::RcNone;
+        let content = RouteContent::Empty;
 
         let res = content.add_to_list(&mut components);
 
@@ -122,7 +122,7 @@ mod tests {
     #[test]
     fn add_to_list_rc_component() {
         let mut components = (Vec::new(), BTreeMap::new());
-        let content = RouteContent::RcComponent(TestComponent);
+        let content = RouteContent::Component(TestComponent);
 
         let res = content.add_to_list(&mut components);
 
@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn add_to_list_rc_multi() {
         let mut components = (Vec::new(), BTreeMap::new());
-        let content = RouteContent::RcMulti(TestComponent, vec![("test", TestComponent)]);
+        let content = RouteContent::Multi(TestComponent, vec![("test", TestComponent)]);
 
         let res = content.add_to_list(&mut components);
 
@@ -151,7 +151,7 @@ mod tests {
     fn add_to_list_rc_redirect() {
         let nt = NavigationTarget::InternalTarget(String::from("test"));
         let mut components = (Vec::new(), BTreeMap::new());
-        let content = RouteContent::RcRedirect(nt.clone());
+        let content = RouteContent::Redirect(nt.clone());
 
         let res = content.add_to_list(&mut components);
 

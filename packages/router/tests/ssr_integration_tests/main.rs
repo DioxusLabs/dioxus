@@ -22,7 +22,7 @@ fn test_routes_segment() -> Segment {
         .index(TestComponent_0 as Component)
         .fixed(
             "test",
-            Route::new(RcMulti(
+            Route::new(RouteContent::Multi(
                 TestComponent_1,
                 vec![("other", TestComponent_1_0_other)],
             ))

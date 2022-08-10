@@ -18,7 +18,7 @@ impl Route {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Route::new(RcNone);
+    /// Route::new(());
     /// ```
     pub fn new(content: impl Into<RouteContent>) -> Self {
         Self {
@@ -43,7 +43,7 @@ impl Route {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// struct Name;
-    /// Route::new(RcNone).name(Name);
+    /// Route::new(()).name(Name);
     /// ```
     ///
     /// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
@@ -68,7 +68,7 @@ impl Route {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// Route::new(RcNone).nested(Segment::default());
+    /// Route::new(()).nested(Segment::default());
     /// ```
     pub fn nested(mut self, nested: impl Into<Segment>) -> Self {
         if self.nested.is_some() {
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn name() {
-        let r = Route::new(RouteContent::RcNone).name(Test);
+        let r = Route::new(RouteContent::Empty).name(Test);
 
         assert_eq!(r.name, Some(named_tuple(Test)));
     }
@@ -109,20 +109,20 @@ mod tests {
     #[test]
     #[should_panic = r#"name already set: "dioxus_router::route_definition::route::tests::Test" to "dioxus_router::route_definition::route::tests::Test2""#]
     fn name_panic_in_debug() {
-        Route::new(RouteContent::RcNone).name(Test).name(Test2);
+        Route::new(RouteContent::Empty).name(Test).name(Test2);
     }
 
     #[cfg(not(debug_assertions))]
     #[test]
     fn name_override_in_release() {
-        let p = Route::new(RouteContent::RcNone).name(Test).name(Test2);
+        let p = Route::new(RouteContent::Empty).name(Test).name(Test2);
 
         assert_eq!(p.name, Some(named_tuple(Test2)));
     }
 
     #[test]
     fn nested() {
-        let r = Route::new(RouteContent::RcNone).nested(Segment::new());
+        let r = Route::new(RouteContent::Empty).nested(Segment::new());
 
         assert!(r.nested.is_some());
     }
@@ -131,7 +131,7 @@ mod tests {
     #[test]
     #[should_panic = "nested already set"]
     fn nested_panic_in_debug() {
-        Route::new(RouteContent::RcNone)
+        Route::new(RouteContent::Empty)
             .nested(Segment::new())
             .nested(Segment::new());
     }
@@ -139,13 +139,12 @@ mod tests {
     #[cfg(not(debug_assertions))]
     #[test]
     fn nested_override_in_release() {
-        let p = Route::new(RouteContent::RcNone)
+        let p = Route::new(RouteContent::Empty)
             .nested(Segment::new())
             .nested(Segment::new().fallback("test"));
 
         let is_correct_nested = if let Some(nest) = p.nested {
-            if let RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)) =
-                nest.fallback
+            if let RouteContent::Redirect(NavigationTarget::InternalTarget(target)) = nest.fallback
             {
                 target == "test"
             } else {

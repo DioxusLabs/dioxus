@@ -12,9 +12,9 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
-            .index(RcComponent(Home))
-            .fixed("apple", Route::new(RcComponent(Apple)))
-            .fixed("potato", Route::new(RcComponent(Potato)).name(PotatoName))
+            .index(Home as Component)
+            .fixed("apple", Route::new(Apple as Component))
+            .fixed("potato", Route::new(Potato as Component).name(PotatoName))
             .fixed(
                 "earth_apple",
                 Route::new((PotatoName, [])).name(EarthAppleName),

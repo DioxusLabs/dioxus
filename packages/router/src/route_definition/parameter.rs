@@ -19,7 +19,7 @@ impl ParameterRoute {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// ParameterRoute::new("key", RcNone);
+    /// ParameterRoute::new("key", ());
     /// ```
     pub fn new(key: &'static str, content: impl Into<RouteContent>) -> Self {
         Self {
@@ -45,7 +45,7 @@ impl ParameterRoute {
     /// ```rust
     /// # use dioxus_router::prelude::*;
     /// struct Name;
-    /// ParameterRoute::new("key", RcNone).name(Name);
+    /// ParameterRoute::new("key", ()).name(Name);
     /// ```
     ///
     /// [`NamedTarget`]: crate::navigation::NavigationTarget::NamedTarget
@@ -70,7 +70,7 @@ impl ParameterRoute {
     /// # Example
     /// ```rust
     /// # use dioxus_router::prelude::*;
-    /// ParameterRoute::new("key", RcNone).nested(Segment::new());
+    /// ParameterRoute::new("key", ()).nested(Segment::new());
     /// ```
     pub fn nested(mut self, nested: impl Into<Segment>) -> Self {
         if self.nested.is_some() {
@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn name() {
-        let r = ParameterRoute::new("", RouteContent::RcNone).name(Test);
+        let r = ParameterRoute::new("", RouteContent::Empty).name(Test);
 
         assert_eq!(r.name, Some(named_tuple(Test)));
     }
@@ -111,7 +111,7 @@ mod tests {
     #[test]
     #[should_panic = r#"name already set: "dioxus_router::route_definition::parameter::tests::Test" to "dioxus_router::route_definition::parameter::tests::Test2""#]
     fn name_panic_in_debug() {
-        ParameterRoute::new("", RouteContent::RcNone)
+        ParameterRoute::new("", RouteContent::Empty)
             .name(Test)
             .name(Test2);
     }
@@ -119,7 +119,7 @@ mod tests {
     #[cfg(not(debug_assertions))]
     #[test]
     fn name_override_in_release() {
-        let p = ParameterRoute::new("", RouteContent::RcNone)
+        let p = ParameterRoute::new("", RouteContent::Empty)
             .name(Test)
             .name(Test2);
 
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn nested() {
-        let r = ParameterRoute::new("", RouteContent::RcNone).nested(Segment::new());
+        let r = ParameterRoute::new("", RouteContent::Empty).nested(Segment::new());
 
         assert!(r.nested.is_some());
     }
@@ -137,7 +137,7 @@ mod tests {
     #[test]
     #[should_panic = "nested already set"]
     fn nested_panic_in_debug() {
-        ParameterRoute::new("", RouteContent::RcNone)
+        ParameterRoute::new("", RouteContent::Empty)
             .nested(Segment::new())
             .nested(Segment::new());
     }
@@ -145,13 +145,12 @@ mod tests {
     #[cfg(not(debug_assertions))]
     #[test]
     fn nested_override_in_release() {
-        let p = ParameterRoute::new("", RouteContent::RcNone)
+        let p = ParameterRoute::new("", RouteContent::Empty)
             .nested(Segment::new())
             .nested(Segment::new().fallback("test"));
 
         let is_correct_nested = if let Some(nest) = p.nested {
-            if let RouteContent::RcRedirect(NavigationTarget::InternalTarget(target)) =
-                nest.fallback
+            if let RouteContent::Redirect(NavigationTarget::InternalTarget(target)) = nest.fallback
             {
                 target == "test"
             } else {

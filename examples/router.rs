@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
             .index(Home as Component)
             .fixed(
                 "blog",
-                Route::new(RcNone).nested(
+                Route::new(()).nested(
                     Segment::new()
                         .index(BlogList as Component)
                         .parameter(("post", BlogPost as Component)),
@@ -21,7 +21,7 @@ fn app(cx: Scope) -> Element {
             )
             .fixed(
                 "users",
-                Route::new(RcNone).nested(
+                Route::new(()).nested(
                     Segment::new()
                         .index(UserList as Component)
                         .parameter(("name", User as Component)),

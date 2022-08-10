@@ -241,7 +241,7 @@ impl RouterService {
                     components,
                     names,
                     parameters,
-                    &RouteContent::RcNone,
+                    &RouteContent::Empty,
                 )
             };
 
@@ -583,7 +583,7 @@ fn match_segment<'a>(
     }
 
     // check if fallback is overwritten
-    if !segment.fallback.is_rc_none() {
+    if !segment.fallback.is_empty() {
         fallback = &segment.fallback;
     }
 
@@ -662,7 +662,7 @@ mod tests {
     #[should_panic = r#"route names must be unique; duplicate name: "dioxus_router::service::tests::Nested2""#]
     fn named_targets_duplicate_panic_in_debug() {
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(Nested2)),
+            &prepare_segment().fixed("test", Route::new(RouteContent::Empty).name(Nested2)),
             &[],
             &mut BTreeMap::new(),
         );
@@ -673,7 +673,7 @@ mod tests {
     fn named_targets_duplicate_override_in_release() {
         let mut targets = BTreeMap::new();
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(Nested2)),
+            &prepare_segment().fixed("test", Route::new(RouteContent::Empty).name(Nested2)),
             &[],
             &mut targets,
         );
@@ -686,7 +686,7 @@ mod tests {
     #[should_panic = r#"route names cannot be defined by dioxus_router; name: "dioxus_router::names::RootIndex""#]
     fn named_targets_internal_name_panic_in_debug_root_index() {
         construct_named_targets(
-            &prepare_segment().fixed("test", Route::new(RouteContent::RcNone).name(RootIndex)),
+            &prepare_segment().fixed("test", Route::new(RouteContent::Empty).name(RootIndex)),
             &[],
             &mut BTreeMap::new(),
         );
@@ -699,7 +699,7 @@ mod tests {
         construct_named_targets(
             &prepare_segment().fixed(
                 "test",
-                Route::new(RouteContent::RcNone).name(FallbackExternalNavigation),
+                Route::new(RouteContent::Empty).name(FallbackExternalNavigation),
             ),
             &[],
             &mut BTreeMap::new(),
@@ -713,7 +713,7 @@ mod tests {
         construct_named_targets(
             &prepare_segment().fixed(
                 "test",
-                Route::new(RouteContent::RcNone).name(FallbackNamedNavigation),
+                Route::new(RouteContent::Empty).name(FallbackNamedNavigation),
             ),
             &[],
             &mut BTreeMap::new(),
@@ -728,15 +728,15 @@ mod tests {
             &prepare_segment()
                 .fixed(
                     "root_index",
-                    Route::new(RouteContent::RcNone).name(RootIndex),
+                    Route::new(RouteContent::Empty).name(RootIndex),
                 )
                 .fixed(
                     "fallback_external",
-                    Route::new(RouteContent::RcNone).name(FallbackExternalNavigation),
+                    Route::new(RouteContent::Empty).name(FallbackExternalNavigation),
                 )
                 .fixed(
                     "fallback_named",
-                    Route::new(RouteContent::RcNone).name(FallbackNamedNavigation),
+                    Route::new(RouteContent::Empty).name(FallbackNamedNavigation),
                 ),
             &[],
             &mut targets,
@@ -757,7 +757,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -780,7 +780,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -803,7 +803,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -826,7 +826,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -850,7 +850,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -874,7 +874,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -898,7 +898,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         assert!(ret.is_none());
@@ -922,7 +922,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         let redirect_correct = if let Some(NavigationTarget::InternalTarget(p)) = ret {
@@ -952,7 +952,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         let fallback_correct = match ret {
@@ -980,7 +980,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcNone,
+            &RouteContent::Empty,
         );
 
         let fallback_correct = match ret {
@@ -1008,7 +1008,7 @@ mod tests {
             &mut components,
             &mut names,
             &mut parameters,
-            &RouteContent::RcRedirect(NavigationTarget::InternalTarget(String::from("global"))),
+            &RouteContent::Redirect(NavigationTarget::InternalTarget(String::from("global"))),
         );
 
         let fallback_correct = if let Some(NavigationTarget::InternalTarget(p)) = ret {
@@ -1025,10 +1025,10 @@ mod tests {
 
     fn prepare_segment() -> Segment {
         Segment::new()
-            .fixed("fixed", Route::new(RouteContent::RcNone).name(Fixed))
+            .fixed("fixed", Route::new(RouteContent::Empty).name(Fixed))
             .fixed(
                 "fixed-ÄÖÜ",
-                Route::new(RouteContent::RcNone).name(FixedEncoded),
+                Route::new(RouteContent::Empty).name(FixedEncoded),
             )
             .fixed(
                 "nested",
@@ -1042,15 +1042,15 @@ mod tests {
                                 .nested(Segment::new().index(TestComponent as Component)),
                         )
                         .fixed("redirect", "redirect-path")
-                        .fixed("empty", Route::new(RouteContent::RcNone))
+                        .fixed("empty", Route::new(RouteContent::Empty))
                         .fallback("fallback"),
                 ),
             )
             .matching(
                 Regex::new("^m1.*$").unwrap(),
-                ParameterRoute::new("m1-parameter", RouteContent::RcNone).name(Match),
+                ParameterRoute::new("m1-parameter", RouteContent::Empty).name(Match),
             )
-            .parameter(ParameterRoute::new("p-parameter", RouteContent::RcNone).name(Parameter))
+            .parameter(ParameterRoute::new("p-parameter", RouteContent::Empty).name(Parameter))
     }
 
     #[allow(non_snake_case)]

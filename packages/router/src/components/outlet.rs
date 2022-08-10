@@ -17,7 +17,7 @@ pub struct OutletProps {
     /// Set a side content name.
     ///
     /// By default an [`Outlet`] will only render main content. This will make it render side
-    /// content defined via [`RcMulti`](crate::route_definition::RouteContent::RcMulti).
+    /// content defined via [`RouteContent::Multi`](crate::route_definition::RouteContent::Multi).
     pub name: Option<&'static str>,
 }
 

@@ -10,7 +10,6 @@
   - [Matching Routes](./features/routes/matching.md)
   - [Fallback Routes (404 page)](./features/routes/fallback.md)
   - [Multiple Components & Redirects](./features/routes/multiple-and-redirect.md)
-  - [Shortcuts](./features/routes/shortcuts.md)
 - [Outlets](./features/outlets.md)
 - [Links & Navigation](./features/navigation/index.md)
   - [Named Navigation](./features/navigation/name.md)

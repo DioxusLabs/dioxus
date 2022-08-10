@@ -61,7 +61,7 @@ pub mod prelude {
     pub use crate::hooks::*;
     pub use crate::names::*;
     pub use crate::navigation::{NavigationTarget::*, Query::*, *};
-    pub use crate::route_definition::{RouteContent::*, *};
+    pub use crate::route_definition::*;
     pub use crate::state::RouterState;
 }
 

@@ -101,8 +101,8 @@ impl PartialEq for AppProps {
 fn App(cx: Scope<AppProps>) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcComponent(Index))
-            .fixed("test", Route::new(RcComponent(Test)).name(TestName))
+            .index(Index as Component)
+            .fixed("test", Route::new(Test as Component).name(TestName))
             .fixed(
                 "dioxus",
                 Route::new("https://dioxuslabs.com").name(DioxusName),

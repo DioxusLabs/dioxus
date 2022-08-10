@@ -19,7 +19,7 @@ fn Index(cx: Scope) -> Element {
 
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().index(RcComponent(Index))
+        Segment::new().index(Index as Component)
     });
 
     cx.render(rsx! {
@@ -67,8 +67,9 @@ When building complex apps, we often need to display multiple pieces of content
 simultaneously. For example, we might have a sidebar that changes its content in
 sync with the main part of the page.
 
-When defining our routes, we can use `RcMulti` instead of `RcComponent` to tell
-the router about our content.
+When defining our routes, we can use `RouteContentMulti` instead of
+`RouteContent::Component` (we've been using this through the `Into` trait) to
+tell the router about our content.
 
 We then can use a named [`Outlet`] in our output, to tell the router where to
 put the side content.
@@ -96,7 +97,7 @@ fn Aside(cx: Scope) -> Element {
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .index(RcMulti(Main, vec![("side", Aside)]))
+            .index(RouteContent::Multi(Main, vec![("side", Aside)]))
     });
 
     cx.render(rsx! {
@@ -161,8 +162,8 @@ fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new().fixed(
             "root",
-            Route::new(RcComponent(RootContent)).nested(
-                Segment::new().index(RcComponent(NestedContent))
+            Route::new(RootContent as Component).nested(
+                Segment::new().index(NestedContent as Component)
             )
         )
     });
