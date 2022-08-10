@@ -62,15 +62,37 @@ pub(crate) enum RouterMessage {
 /// The [`RouterService`] provides information about its current state via the `state` field the
 /// [`RouterContext`] it returns when it is constructed.
 pub(crate) struct RouterService {
+    /// The component to render when an external navigation failed.
     fallback_external_navigation: Component,
+    /// The component to render when a named navigation failed.
     fallback_named_navigation: Component,
+    /// The [`HistoryProvider`].
     history: Box<dyn HistoryProvider>,
+    /// All known named routes.
     named_routes: Arc<BTreeMap<TypeId, Vec<NamedNavigationSegment>>>,
+    /// All routes.
     routes: Arc<Segment>,
+    /// The receiving end of the channel components, hooks and [`HistoryProvider`]s will send
+    /// updates to.
     rx: UnboundedReceiver<RouterMessage>,
+    /// The current state of the router. Shared with components and hooks.
     state: Arc<RwLock<RouterState>>,
+    /// The components to update when the routing `state` changes.
+    ///
+    /// The same component might subscribe multiple times (i.e. by using multiple hooks), so
+    /// duplicates will be filtered out.
+    ///
+    /// When components unmount, they drop their [`Arc`], thus making the corresponding [`Weak`]
+    /// fail upgrades. Unmounted components will be filtered out.
     subscribers: Vec<Weak<ScopeId>>,
+    /// A closure allowing the service to request for subscribing components to be updated.
     update: Arc<dyn Fn(ScopeId)>,
+    /// A callback defined by users, allowing them to act when the router updates its `state`.
+    ///
+    /// Will be called before updating `subscribers`, but after updating `state`. Can return a
+    /// [`NavigationTarget`], which the router will navigate to. It will then call this callback
+    /// again. This will continue until [`None`] is returned. Only then will `subscribers` be
+    /// updated.
     update_callback: Option<Arc<dyn Fn(RwLockReadGuard<RouterState>) -> Option<NavigationTarget>>>,
 }
 
