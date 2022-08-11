@@ -25,6 +25,14 @@ class TemplateRef {
   parent() {
     return this.roots[0].parentNode;
   }
+
+  first() {
+    return this.roots[0];
+  }
+
+  last() {
+    return this.roots[this.roots.length - 1];
+  }
 }
 
 class Template {
@@ -58,19 +66,24 @@ class Template {
     let nodes = [];
     let roots = [];
     this.reconstructingRefrencesIndex = 0;
-    for (let node of template.childNodes) {
+    for (let node = template.firstChild; node != null; node = node.nextSibling) {
       roots.push(node);
-      this.reconstructRefrences(nodes, node);
+      nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
+      this.reconstructingRefrencesIndex++;
+      if (node.nodeType == 1) {
+        this.reconstructRefrences(nodes, node);
+      }
     }
     return new TemplateRef(template, nodes, roots, id);
   }
 
-  reconstructRefrences(nodes, node) {
-    const id = this.depthFirstIds[this.reconstructingRefrencesIndex];
-    nodes[id] = node;
-    this.reconstructingRefrencesIndex++;
-    for (let i = 0; i < node.childNodes.length; i++) {
-      this.reconstructRefrences(nodes, node.childNodes[i]);
+  reconstructRefrences(nodes, root) {
+    for (let node = root.firstChild; node != null; node = node.nextSibling) {
+      nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
+      this.reconstructingRefrencesIndex++;
+      if (node.nodeType == 1) {
+        this.reconstructRefrences(nodes, node);
+      }
     }
   }
 }
@@ -149,7 +162,7 @@ export class Interpreter {
   cleanupNode(node) {
     if (is_element_node(node)) {
       this.listeners.removeAllNonBubbling(node);
-      for (let child of node.childNodes) {
+      for (let child = node.firstChild; child != null; child = child.nextSibling) {
         this.cleanupNode(child);
       }
     }
@@ -231,8 +244,8 @@ export class Interpreter {
     }
   }
   InsertAfter(root, n) {
-    let old = this.getId(root);
-    let new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
+    const old = this.getId(root);
+    const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
       if (el instanceof TemplateRef) {
         return el.fragment;
       }
@@ -241,17 +254,16 @@ export class Interpreter {
       }
     });
     if (old instanceof TemplateRef) {
-      for (let node of new_nodes) {
-        old.parent().insertBefore(node, old.nextSibling);
-      }
+      const last = old.last();
+      last.after(...new_nodes);
     }
     else {
       old.after(...new_nodes);
     }
   }
   InsertBefore(root, n) {
-    let old = this.getId(root);
-    let new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
+    const old = this.getId(root);
+    const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
       if (el instanceof TemplateRef) {
         return el.fragment;
       }
@@ -260,10 +272,8 @@ export class Interpreter {
       }
     });
     if (old instanceof TemplateRef) {
-      const parent = old.parent();
-      for (let node of new_nodes) {
-        parent.insertBefore(node, old.get(0));
-      }
+      const first = old.first();
+      first.before(...new_nodes);
     }
     else {
       old.before(...new_nodes);
