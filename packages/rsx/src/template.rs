@@ -1,18 +1,71 @@
+use std::{convert::TryInto, panic::Location};
+
 use dioxus_core::{
-    OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
+    prelude::TemplateNode, AttributeDiscription, CodeLocation, OwnedDynamicNodeMapping,
+    OwnedTemplateNode, OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue,
+    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
 };
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{Expr, Ident, LitStr};
 
-use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
+use crate::{
+    attributes::attrbute_to_static_str,
+    elements::element_to_static_str,
+    error::{Error, ParseError, RecompileReason},
+    BodyNode, ElementAttr, FormattedSegment, Segment,
+};
 
 struct TemplateElementBuilder {
-    tag: String,
+    tag: Ident,
     attributes: Vec<TemplateAttributeBuilder>,
     children: Vec<TemplateNodeId>,
     listeners: Vec<usize>,
     parent: Option<TemplateNodeId>,
+}
+
+impl TemplateElementBuilder {
+    fn try_into_owned(
+        self,
+        location: &CodeLocation,
+    ) -> Result<
+        TemplateElement<
+            Vec<TemplateAttribute<OwnedTemplateValue>>,
+            OwnedTemplateValue,
+            Vec<TemplateNodeId>,
+            Vec<usize>,
+        >,
+        Error,
+    > {
+        let Self {
+            tag,
+            attributes,
+            children,
+            listeners,
+            parent,
+        } = self;
+        let (element_tag, element_ns) =
+            element_to_static_str(&tag.to_string()).ok_or_else(|| {
+                Error::ParseError(ParseError::new(
+                    syn::Error::new(tag.span(), format!("unknown element: {}", tag)),
+                    location.clone(),
+                ))
+            })?;
+
+        let mut owned_attributes = Vec::new();
+        for a in attributes {
+            owned_attributes.push(a.try_into_owned(location, element_tag, element_ns)?);
+        }
+
+        Ok(TemplateElement::new(
+            element_tag,
+            element_ns,
+            owned_attributes,
+            children,
+            listeners,
+            parent,
+        ))
+    }
 }
 
 impl ToTokens for TemplateElementBuilder {
@@ -35,11 +88,10 @@ impl ToTokens for TemplateElementBuilder {
             }
             None => quote! {None},
         };
-        let tag_ident = syn::parse_str::<Ident>(&tag).expect(&tag);
         tokens.append_all(quote! {
             TemplateElement::new(
-                dioxus_elements::#tag_ident::TAG_NAME,
-                dioxus_elements::#tag_ident::NAME_SPACE,
+                dioxus_elements::#tag::TAG_NAME,
+                dioxus_elements::#tag::NAME_SPACE,
                 &[#(#attributes),*],
                 &[#(#children),*],
                 &[#(#listeners),*],
@@ -55,9 +107,44 @@ enum AttributeName {
 }
 
 struct TemplateAttributeBuilder {
-    element_tag: String,
+    element_tag: Ident,
     name: AttributeName,
     value: TemplateAttributeValue<OwnedTemplateValue>,
+}
+
+impl TemplateAttributeBuilder {
+    fn try_into_owned(
+        self,
+        location: &CodeLocation,
+        element_tag: &'static str,
+        element_ns: Option<&'static str>,
+    ) -> Result<TemplateAttribute<OwnedTemplateValue>, Error> {
+        let Self { name, value, .. } = self;
+        let (name, span, literal) = match name {
+            AttributeName::Ident(name) => (name.to_string(), name.span(), false),
+            AttributeName::Str(name) => (name.value(), name.span(), true),
+        };
+        let (name, namespace, volatile) = attrbute_to_static_str(&name, element_tag, element_ns)
+            .ok_or_else(|| {
+                if literal {
+                    // literals will be captured when a full recompile is triggered
+                    Error::RecompileRequiredError(RecompileReason::CapturedAttribute(
+                        name.to_string(),
+                    ))
+                } else {
+                    Error::ParseError(ParseError::new(
+                        syn::Error::new(span, format!("unknown attribute: {}", name)),
+                        location.clone(),
+                    ))
+                }
+            })?;
+        let attribute = AttributeDiscription {
+            name,
+            namespace,
+            volatile,
+        };
+        Ok(TemplateAttribute { value, attribute })
+    }
 }
 
 impl ToTokens for TemplateAttributeBuilder {
@@ -102,11 +189,10 @@ impl ToTokens for TemplateAttributeBuilder {
             }
             TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
-        let tag = syn::parse_str::<Ident>(&element_tag).expect(&element_tag);
         match name {
             AttributeName::Ident(name) => tokens.append_all(quote! {
                 TemplateAttribute{
-                    attribute: dioxus_elements::#tag::#name,
+                    attribute: dioxus_elements::#element_tag::#name,
                     value: #value,
                 }
             }),
@@ -128,6 +214,31 @@ enum TemplateNodeTypeBuilder {
     Element(TemplateElementBuilder),
     Text(TextTemplate<Vec<TextTemplateSegment<String>>, String>),
     DynamicNode(usize),
+}
+
+impl TemplateNodeTypeBuilder {
+    fn try_into_owned(
+        self,
+        location: &CodeLocation,
+    ) -> Result<
+        TemplateNodeType<
+            Vec<TemplateAttribute<OwnedTemplateValue>>,
+            OwnedTemplateValue,
+            Vec<TemplateNodeId>,
+            Vec<usize>,
+            Vec<TextTemplateSegment<String>>,
+            String,
+        >,
+        Error,
+    > {
+        match self {
+            TemplateNodeTypeBuilder::Element(el) => {
+                Ok(TemplateNodeType::Element(el.try_into_owned(location)?))
+            }
+            TemplateNodeTypeBuilder::Text(txt) => Ok(TemplateNodeType::Text(txt)),
+            TemplateNodeTypeBuilder::DynamicNode(idx) => Ok(TemplateNodeType::DynamicNode(idx)),
+        }
+    }
 }
 
 impl ToTokens for TemplateNodeTypeBuilder {
@@ -155,6 +266,19 @@ impl ToTokens for TemplateNodeTypeBuilder {
 struct TemplateNodeBuilder {
     id: TemplateNodeId,
     node_type: TemplateNodeTypeBuilder,
+}
+
+impl TemplateNodeBuilder {
+    fn try_into_owned(self, location: &CodeLocation) -> Result<OwnedTemplateNode, Error> {
+        let TemplateNodeBuilder { id, node_type } = self;
+        let node_type = node_type.try_into_owned(location)?;
+        Ok(OwnedTemplateNode {
+            id,
+            node_type,
+            locally_static: false,
+            fully_static: false,
+        })
+    }
 }
 
 impl ToTokens for TemplateNodeBuilder {
@@ -213,7 +337,7 @@ impl TemplateBuilder {
                         ElementAttr::AttrText { name, value } => {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
-                                    element_tag: el.name.to_string(),
+                                    element_tag: el.name.clone(),
                                     name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
@@ -221,7 +345,7 @@ impl TemplateBuilder {
                                 })
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
-                                    element_tag: el.name.to_string(),
+                                    element_tag: el.name.clone(),
                                     name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Dynamic(
                                         self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
@@ -232,7 +356,7 @@ impl TemplateBuilder {
                         ElementAttr::CustomAttrText { name, value } => {
                             if let Some(static_value) = value.to_static() {
                                 attributes.push(TemplateAttributeBuilder {
-                                    element_tag: el.name.to_string(),
+                                    element_tag: el.name.clone(),
                                     name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Static(
                                         OwnedTemplateValue::Text(static_value),
@@ -240,7 +364,7 @@ impl TemplateBuilder {
                                 })
                             } else {
                                 attributes.push(TemplateAttributeBuilder {
-                                    element_tag: el.name.to_string(),
+                                    element_tag: el.name.clone(),
                                     name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Dynamic(
                                         self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
@@ -250,7 +374,7 @@ impl TemplateBuilder {
                         }
                         ElementAttr::AttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
-                                element_tag: el.name.to_string(),
+                                element_tag: el.name.clone(),
                                 name: AttributeName::Ident(name),
                                 value: TemplateAttributeValue::Dynamic(
                                     self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
@@ -259,7 +383,7 @@ impl TemplateBuilder {
                         }
                         ElementAttr::CustomAttrExpression { name, value } => {
                             attributes.push(TemplateAttributeBuilder {
-                                element_tag: el.name.to_string(),
+                                element_tag: el.name.clone(),
                                 name: AttributeName::Str(name),
                                 value: TemplateAttributeValue::Dynamic(
                                     self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
@@ -274,7 +398,7 @@ impl TemplateBuilder {
                 self.nodes.push(TemplateNodeBuilder {
                     id,
                     node_type: TemplateNodeTypeBuilder::Element(TemplateElementBuilder {
-                        tag: el.name.to_string(),
+                        tag: el.name,
                         attributes,
                         children: Vec::new(),
                         listeners,
@@ -331,36 +455,17 @@ impl TemplateBuilder {
         }
         id
     }
-}
 
-impl ToTokens for TemplateBuilder {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Self {
-            nodes,
-            root_nodes,
-            dynamic_context,
-        } = self;
-
-        let root_nodes = root_nodes.iter().map(|id| {
-            let raw = id.0;
-            quote! { TemplateNodeId(#raw) }
-        });
-
+    fn try_into_owned(self, location: &CodeLocation) -> Result<Template, Error> {
+        let dynamic_context = self.dynamic_context;
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
+        let nodes = &self.nodes;
         for n in nodes {
             match &n.node_type {
                 TemplateNodeTypeBuilder::DynamicNode(idx) => node_mapping[*idx] = Some(n.id),
                 _ => (),
             }
         }
-        let node_mapping_quoted = node_mapping.iter().map(|op| match op {
-            Some(id) => {
-                let raw_id = id.0;
-                quote! {Some(TemplateNodeId(#raw_id))}
-            }
-            None => quote! {None},
-        });
-
         let mut text_mapping = vec![Vec::new(); dynamic_context.text.len()];
         for n in nodes {
             match &n.node_type {
@@ -375,11 +480,6 @@ impl ToTokens for TemplateBuilder {
                 _ => (),
             }
         }
-        let text_mapping_quoted = text_mapping.iter().map(|inner| {
-            let raw = inner.iter().map(|id| id.0);
-            quote! {&[#(TemplateNodeId(#raw)),*]}
-        });
-
         let mut attribute_mapping = vec![Vec::new(); dynamic_context.attributes.len()];
         for n in nodes {
             match &n.node_type {
@@ -396,24 +496,128 @@ impl ToTokens for TemplateBuilder {
                 _ => (),
             }
         }
-        let attribute_mapping_quoted = attribute_mapping.iter().map(|inner| {
-            let raw = inner.iter().map(|(id, _)| id.0);
-            let indecies = inner.iter().map(|(_, idx)| idx);
-            quote! {&[#((TemplateNodeId(#raw), #indecies)),*]}
-        });
-
         let mut listener_mapping = Vec::new();
         for n in nodes {
             match &n.node_type {
                 TemplateNodeTypeBuilder::Element(el) => {
                     if !el.listeners.is_empty() {
-                        let raw = n.id.0;
-                        listener_mapping.push(quote! {TemplateNodeId(#raw)});
+                        listener_mapping.push(n.id);
                     }
                 }
                 _ => (),
             }
         }
+        let mut nodes = Vec::new();
+        for node in self.nodes {
+            nodes.push(node.try_into_owned(location)?);
+        }
+
+        let mut volatile_mapping = Vec::new();
+        for n in &nodes {
+            if let TemplateNodeType::Element(el) = &n.node_type {
+                for (i, attr) in el.attributes.iter().enumerate() {
+                    if attr.attribute.volatile {
+                        volatile_mapping.push((n.id, i));
+                    }
+                }
+            }
+        }
+
+        Ok(Template::Owned {
+            nodes,
+            root_nodes: self.root_nodes,
+            dynamic_mapping: OwnedDynamicNodeMapping::new(
+                node_mapping,
+                text_mapping,
+                attribute_mapping,
+                volatile_mapping,
+                listener_mapping,
+            ),
+        })
+    }
+}
+
+impl ToTokens for TemplateBuilder {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Self {
+            nodes,
+            root_nodes,
+            dynamic_context,
+        } = self;
+
+        let mut node_mapping = vec![None; dynamic_context.nodes.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::DynamicNode(idx) => node_mapping[*idx] = Some(n.id),
+                _ => (),
+            }
+        }
+        let mut text_mapping = vec![Vec::new(); dynamic_context.text.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Text(txt) => {
+                    for seg in &txt.segments {
+                        match seg {
+                            TextTemplateSegment::Static(_) => (),
+                            TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        let mut attribute_mapping = vec![Vec::new(); dynamic_context.attributes.len()];
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Element(el) => {
+                    for (i, attr) in el.attributes.iter().enumerate() {
+                        match attr.value {
+                            TemplateAttributeValue::Static(_) => (),
+                            TemplateAttributeValue::Dynamic(idx) => {
+                                attribute_mapping[idx].push((n.id, i));
+                            }
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        let mut listener_mapping = Vec::new();
+        for n in nodes {
+            match &n.node_type {
+                TemplateNodeTypeBuilder::Element(el) => {
+                    if !el.listeners.is_empty() {
+                        listener_mapping.push(n.id);
+                    }
+                }
+                _ => (),
+            }
+        }
+
+        let root_nodes = root_nodes.iter().map(|id| {
+            let raw = id.0;
+            quote! { TemplateNodeId(#raw) }
+        });
+        let node_mapping_quoted = node_mapping.iter().map(|op| match op {
+            Some(id) => {
+                let raw_id = id.0;
+                quote! {Some(TemplateNodeId(#raw_id))}
+            }
+            None => quote! {None},
+        });
+        let text_mapping_quoted = text_mapping.iter().map(|inner| {
+            let raw = inner.iter().map(|id| id.0);
+            quote! {&[#(TemplateNodeId(#raw)),*]}
+        });
+        let attribute_mapping_quoted = attribute_mapping.iter().map(|inner| {
+            let raw = inner.iter().map(|(id, _)| id.0);
+            let indecies = inner.iter().map(|(_, idx)| idx);
+            quote! {&[#((TemplateNodeId(#raw), #indecies)),*]}
+        });
+        let listener_mapping_quoted = listener_mapping.iter().map(|id| {
+            let raw = id.0;
+            quote! {TemplateNodeId(#raw)}
+        });
 
         let quoted = quote! {
             {
@@ -422,7 +626,7 @@ impl ToTokens for TemplateBuilder {
                 const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
                 const __ROOT_NODES: &'static [dioxus::prelude::TemplateNodeId] = &[#(#root_nodes),*];
                 const __NODE_MAPPING: &'static [Option<dioxus::prelude::TemplateNodeId>] = &[#(#node_mapping_quoted),*];
-                const __NODES_WITH_LISTENERS: &'static [dioxus::prelude::TemplateNodeId] = &[#(#listener_mapping),*];
+                const __NODES_WITH_LISTENERS: &'static [dioxus::prelude::TemplateNodeId] = &[#(#listener_mapping_quoted),*];
                 static __VOLITALE_MAPPING_INNER: dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = dioxus::core::exports::once_cell::sync::Lazy::new(||{
                     // check each property to see if it is volatile
                     let mut volatile = Vec::new();

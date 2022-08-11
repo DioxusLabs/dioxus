@@ -65,14 +65,22 @@ macro_rules! builder_constructors {
         ];
     };
 }
-pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: &[(&str, &[(&str, &str)])] = &[
-    ("script", &[("r#type", "type"), ("r#script", "script")]),
-    ("button", &[("r#type", "type")]),
-    ("select", &[("value", "value")]),
-    ("option", &[("selected", "selected")]),
-    ("textarea", &[("value", "value")]),
-    ("label", &[("r#for", "for")]),
-    ("input", &[("r#type", "type"), ("value", "value")]),
+
+/// All attributes that are tied to a specific element that either have a different name, or are volitile
+pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: &[(&str, &[(&str, &str, bool)])] = &[
+    (
+        "script",
+        &[("r#type", "type", false), ("r#script", "script", false)],
+    ),
+    ("button", &[("r#type", "type", false)]),
+    ("select", &[("value", "value", true)]),
+    ("option", &[("selected", "selected", true)]),
+    ("textarea", &[("value", "value", true)]),
+    ("label", &[("r#for", "for", false)]),
+    (
+        "input",
+        &[("r#type", "type", false), ("value", "value", true)],
+    ),
 ];
 
 // Organized in the same order as

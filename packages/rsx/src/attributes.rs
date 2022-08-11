@@ -1,32 +1,32 @@
 use crate::elements::*;
 
-// map the rsx name of the attribute to the html name of the attribute and the namespace that contains it
+// map the rsx name of the attribute to the html name of the attribute, the namespace that contains it, and if the attribute is volitile
 pub fn attrbute_to_static_str(
     attr: &str,
     element: &'static str,
     namespace: Option<&'static str>,
-) -> Option<(&'static str, Option<&'static str>)> {
+) -> Option<(&'static str, Option<&'static str>, bool)> {
     if namespace == Some("http://www.w3.org/2000/svg") {
         svg::MAPPED_ATTRIBUTES
             .iter()
             .find(|(a, _)| *a == attr)
-            .map(|(_, b)| (*b, None))
+            .map(|(_, b)| (*b, None, false))
     } else {
         NO_NAMESPACE_ATTRIBUTES
             .iter()
             .find(|&a| *a == attr)
-            .map(|a| (*a, None))
+            .map(|a| (*a, None, false))
             .or_else(|| {
                 STYLE_ATTRIBUTES
                     .iter()
                     .find(|(a, _)| *a == attr)
-                    .map(|(_, b)| (*b, Some("style")))
+                    .map(|(_, b)| (*b, Some("style"), false))
             })
             .or_else(|| {
                 MAPPED_ATTRIBUTES
                     .iter()
                     .find(|(a, _)| *a == attr)
-                    .map(|(_, b)| (*b, None))
+                    .map(|(_, b)| (*b, None, false))
             })
     }
     .or_else(|| {
@@ -37,8 +37,8 @@ pub fn attrbute_to_static_str(
                     .then(|| {
                         attrs
                             .iter()
-                            .find(|(a, _)| *a == attr)
-                            .map(|(_, b)| (*b, None))
+                            .find(|(a, _, _)| *a == attr)
+                            .map(|(_, b, volitile)| (*b, None, *volitile))
                     })
                     .flatten()
             })
@@ -46,14 +46,24 @@ pub fn attrbute_to_static_str(
     .or_else(|| {
         ELEMENTS_WITH_NAMESPACE.iter().find_map(|(el, ns, attrs)| {
             (element == *el && namespace == Some(*ns))
-                .then(|| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
+                .then(|| {
+                    attrs
+                        .iter()
+                        .find(|a| **a == attr)
+                        .map(|a| (*a, None, false))
+                })
                 .flatten()
         })
     })
     .or_else(|| {
         ELEMENTS_WITHOUT_NAMESPACE.iter().find_map(|(el, attrs)| {
             (element == *el)
-                .then(|| attrs.iter().find(|a| **a == attr).map(|a| (*a, None)))
+                .then(|| {
+                    attrs
+                        .iter()
+                        .find(|a| **a == attr)
+                        .map(|a| (*a, None, false))
+                })
                 .flatten()
         })
     })
@@ -628,7 +638,6 @@ mapped_trait_methods! {
 }
 
 pub mod svg {
-
     mapped_trait_methods! {
         accent_height: "accent-height",
         accumulate: "accumulate",

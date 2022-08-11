@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
+use dioxus_core::CodeLocation;
 use serde::{Deserialize, Serialize};
-
-use crate::CodeLocation;
 
 /// An error produced when interperting the rsx
 #[derive(Debug, Serialize, Deserialize)]
