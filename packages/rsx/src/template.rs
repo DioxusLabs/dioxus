@@ -1,13 +1,13 @@
-use std::{convert::TryInto, panic::Location};
-
 use dioxus_core::{
     prelude::TemplateNode, AttributeDiscription, CodeLocation, OwnedDynamicNodeMapping,
     OwnedTemplateNode, OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue,
     TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
 };
 use proc_macro2::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
-use syn::{Expr, Ident, LitStr};
+use quote::TokenStreamExt;
+use quote::{quote, ToTokens};
+use std::{convert::TryInto, ops::Index, panic::Location};
+use syn::{Expr, Ident, LitStr, Token};
 
 use crate::{
     attributes::attrbute_to_static_str,
@@ -279,17 +279,47 @@ impl TemplateNodeBuilder {
             fully_static: false,
         })
     }
-}
 
-impl ToTokens for TemplateNodeBuilder {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn is_fully_static(&self, nodes: &Vec<TemplateNodeBuilder>) -> bool {
+        self.is_locally_static()
+            && match &self.node_type {
+                TemplateNodeTypeBuilder::Element(el) => el
+                    .children
+                    .iter()
+                    .all(|child| nodes[child.0].is_fully_static(nodes)),
+                TemplateNodeTypeBuilder::Text(_) => true,
+                TemplateNodeTypeBuilder::DynamicNode(_) => unreachable!(),
+            }
+    }
+
+    fn is_locally_static(&self) -> bool {
+        match &self.node_type {
+            TemplateNodeTypeBuilder::Element(el) => {
+                el.attributes.iter().all(|attr| match &attr.value {
+                    TemplateAttributeValue::Static(_) => true,
+                    TemplateAttributeValue::Dynamic(_) => false,
+                }) && el.listeners.is_empty()
+            }
+            TemplateNodeTypeBuilder::Text(txt) => txt.segments.iter().all(|seg| match seg {
+                TextTemplateSegment::Static(_) => true,
+                TextTemplateSegment::Dynamic(_) => false,
+            }),
+            TemplateNodeTypeBuilder::DynamicNode(_) => false,
+        }
+    }
+
+    fn to_tokens(&self, tokens: &mut TokenStream, nodes: &Vec<TemplateNodeBuilder>) {
         let Self { id, node_type } = self;
         let raw_id = id.0;
+        let fully_static = self.is_fully_static(nodes);
+        let locally_static = self.is_locally_static();
 
         tokens.append_all(quote! {
             TemplateNode {
                 id: TemplateNodeId(#raw_id),
                 node_type: #node_type,
+                locally_static: #locally_static,
+                fully_static: #fully_static,
             }
         })
     }
@@ -618,10 +648,15 @@ impl ToTokens for TemplateBuilder {
             let raw = id.0;
             quote! {TemplateNodeId(#raw)}
         });
+        let mut nodes_quoted = TokenStream::new();
+        for n in nodes {
+            n.to_tokens(&mut nodes_quoted, nodes);
+            quote! {,}.to_tokens(&mut nodes_quoted);
+        }
 
         let quoted = quote! {
             {
-                const __NODES: dioxus::prelude::StaticTemplateNodes = &[#(#nodes),*];
+                const __NODES: dioxus::prelude::StaticTemplateNodes = &[#nodes_quoted];
                 const __TEXT_MAPPING: &'static [&'static [dioxus::prelude::TemplateNodeId]] = &[#(#text_mapping_quoted),*];
                 const __ATTRIBUTE_MAPPING: &'static [&'static [(dioxus::prelude::TemplateNodeId, usize)]] = &[#(#attribute_mapping_quoted),*];
                 const __ROOT_NODES: &'static [dioxus::prelude::TemplateNodeId] = &[#(#root_nodes),*];

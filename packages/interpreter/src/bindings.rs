@@ -88,4 +88,29 @@ extern "C" {
 
     #[wasm_bindgen(method)]
     pub fn ExitTemplateRef(this: &Interpreter);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateElementTemplate(
+        this: &Interpreter,
+        tag: &str,
+        root: u64,
+        locally_static: bool,
+        fully_static: bool,
+    );
+
+    #[wasm_bindgen(method)]
+    pub fn CreateElementNsTemplate(
+        this: &Interpreter,
+        tag: &str,
+        id: u64,
+        ns: &str,
+        locally_static: bool,
+        fully_static: bool,
+    );
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTextNodeTemplate(this: &Interpreter, text: &str, root: u64, locally_static: bool);
+
+    #[wasm_bindgen(method)]
+    pub fn CreatePlaceholderTemplate(this: &Interpreter, root: u64);
 }

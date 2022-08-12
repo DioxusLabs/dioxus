@@ -4,7 +4,7 @@ use dioxus_core::CodeLocation;
 use serde::{Deserialize, Serialize};
 
 /// An error produced when interperting the rsx
-#[derive(Debug, Serialize, Deserialize)]
+// #[derive(Debug, Serialize, Deserialize)]
 pub enum Error {
     ParseError(ParseError),
     RecompileRequiredError(RecompileReason),
@@ -19,7 +19,7 @@ pub enum RecompileReason {
     CapturedAttribute(String),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+// #[derive(Debug, Serialize, Deserialize)]
 pub struct ParseError {
     pub message: String,
     pub location: CodeLocation,

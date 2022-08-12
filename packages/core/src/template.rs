@@ -51,7 +51,7 @@
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 
 use fxhash::FxHashMap;
-use std::{cell::Cell, hash::Hash, marker::PhantomData};
+use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;
 
@@ -63,12 +63,12 @@ use crate::{
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+// #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct CodeLocation {
     /// the path to the crate that contains the location
-    pub crate_path: String,
+    pub crate_path: &'static str,
     /// the path within the crate to the file that contains the location
-    pub file_path: String,
+    pub file_path: &'static str,
     /// the line number of the location
     pub line: u32,
     /// the column number of the location
@@ -79,17 +79,20 @@ pub struct CodeLocation {
 #[macro_export]
 macro_rules! get_line_num {
     () => {{
-        let line = line!();
-        let column = column!();
-        let file_path = file!().to_string();
-        let crate_path = env!("CARGO_MANIFEST_DIR").to_string();
+        const LOC: &'static CodeLocation = {
+            let line = line!();
+            let column = column!();
+            let file_path = file!();
+            let crate_path = env!("CARGO_MANIFEST_DIR");
 
-        CodeLocation {
-            crate_path,
-            file_path,
-            line: line,
-            column: column,
-        }
+            &CodeLocation {
+                crate_path,
+                file_path,
+                line: line,
+                column: column,
+            }
+        };
+        LOC
     }};
 }
 
@@ -97,7 +100,7 @@ macro_rules! get_line_num {
 ///
 /// `TemplateId` is a refrence to the location in the code the template was created.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TemplateId(pub CodeLocation);
+pub struct TemplateId(pub &'static CodeLocation);
 
 /// An Template's unique identifier within the renderer.
 ///
@@ -166,7 +169,7 @@ pub enum Template {
     Static {
         /// The nodes in the template
         nodes: StaticTemplateNodes,
-        /// The number of root nodes the template has
+        /// The ids of the root nodes in the template
         root_nodes: StaticRootNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: StaticDynamicNodeMapping,
@@ -175,7 +178,7 @@ pub enum Template {
     Owned {
         /// The nodes in the template
         nodes: OwnedTemplateNodes,
-        /// The number of root nodes the template has
+        /// The ids of the root nodes in the template
         root_nodes: OwnedRootNodes,
         /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
         dynamic_mapping: OwnedDynamicNodeMapping,
@@ -222,6 +225,8 @@ impl Template {
         {
             let (mutations, bump, template) = ctx;
             let id = node.id;
+            let locally_static = node.locally_static;
+            let fully_static = node.fully_static;
             match &node.node_type {
                 TemplateNodeType::Element(el) => {
                     let TemplateElement {
@@ -231,7 +236,13 @@ impl Template {
                         children,
                         ..
                     } = el;
-                    mutations.create_element(tag, *namespace, id);
+                    mutations.create_element_template(
+                        tag,
+                        *namespace,
+                        id,
+                        locally_static,
+                        fully_static,
+                    );
                     for attr in attributes.as_ref() {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
                             let val: AttributeValue<'b> = val.allocate(bump);
@@ -256,13 +267,17 @@ impl Template {
                     if let (Some(TextTemplateSegment::Static(txt)), None) =
                         (text_iter.next(), text_iter.next())
                     {
-                        mutations.create_text_node(bump.alloc_str(txt.as_ref()), id);
+                        mutations.create_text_node_template(
+                            bump.alloc_str(txt.as_ref()),
+                            id,
+                            locally_static,
+                        );
                     } else {
-                        mutations.create_text_node("", id);
+                        mutations.create_text_node_template("", id, locally_static);
                     }
                 }
                 TemplateNodeType::DynamicNode(_) => {
-                    mutations.create_placeholder(id);
+                    mutations.create_placeholder_template(id);
                 }
             }
         }
@@ -422,6 +437,10 @@ where
 {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
+    /// If the id of the node must be kept in the refrences
+    pub locally_static: bool,
+    /// If any children of this node must be kept in the references
+    pub fully_static: bool,
     /// The type of the [`TemplateNode`].
     pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
 }
@@ -594,6 +613,48 @@ where
     /// A dynamic node (e.g. (0..10).map(|i| cx.render(rsx!{div{}})))
     /// The index in the dynamic node array this node should be replaced with
     DynamicNode(usize),
+}
+
+impl<Attributes, V, Children, Listeners, TextSegments, Text>
+    TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
+where
+    Attributes: AsRef<[TemplateAttribute<V>]>,
+    Children: AsRef<[TemplateNodeId]>,
+    Listeners: AsRef<[usize]>,
+    V: TemplateValue,
+    TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+    Text: AsRef<str>,
+{
+    /// Returns if this node, and its children, are static.
+    pub fn fully_static<Nodes: Index<usize, Output = Self>>(&self, nodes: &Nodes) -> bool {
+        self.locally_static()
+            && match self {
+                TemplateNodeType::Element(e) => e
+                    .children
+                    .as_ref()
+                    .iter()
+                    .all(|c| nodes[c.0].fully_static(nodes)),
+                TemplateNodeType::Text(_) => true,
+                TemplateNodeType::DynamicNode(_) => unreachable!(),
+            }
+    }
+
+    /// Returns if this node is static.
+    pub fn locally_static(&self) -> bool {
+        match self {
+            TemplateNodeType::Element(e) => {
+                e.attributes.as_ref().iter().all(|a| match a.value {
+                    TemplateAttributeValue::Static(_) => true,
+                    TemplateAttributeValue::Dynamic(_) => false,
+                }) && e.listeners.as_ref().is_empty()
+            }
+            TemplateNodeType::Text(t) => t.segments.as_ref().iter().all(|seg| match seg {
+                TextTemplateSegment::Static(_) => true,
+                TextTemplateSegment::Dynamic(_) => false,
+            }),
+            TemplateNodeType::DynamicNode(_) => false,
+        }
+    }
 }
 
 /// A element template

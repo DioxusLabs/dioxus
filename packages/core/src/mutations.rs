@@ -128,6 +128,59 @@ pub enum DomEdit<'bump> {
         root: u64,
     },
 
+    /// Create a new purely-text node in a template
+    CreateTextNodeTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The textcontent of the noden
+        text: &'bump str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+    },
+
+    /// Create a new purely-element node in a template
+    CreateElementTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The tagname of the node
+        tag: &'bump str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+
+        /// If any children of this node must be kept in the references
+        fully_static: bool,
+    },
+
+    /// Create a new purely-comment node with a given namespace in a template
+    CreateElementNsTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The namespace of the node
+        tag: &'bump str,
+
+        /// The namespace of the node (like `SVG`)
+        ns: &'static str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+
+        /// If any children of this node must be kept in the references
+        fully_static: bool,
+    },
+
+    /// Create a new placeholder node.
+    /// In most implementations, this will either be a hidden div or a comment node. in a template
+    /// Always both locally and fully static
+    CreatePlaceholderTemplate {
+        /// The ID the new node should have.
+        root: u64,
+    },
+
     /// Create a new Event Listener.
     NewEventListener {
         /// The name of the event to listen for.
@@ -293,6 +346,53 @@ impl<'a> Mutations<'a> {
     pub(crate) fn create_placeholder(&mut self, id: impl Into<u64>) {
         let id = id.into();
         self.edits.push(CreatePlaceholder { root: id });
+    }
+
+    // Create
+    pub(crate) fn create_text_node_template(
+        &mut self,
+        text: &'a str,
+        id: impl Into<u64>,
+        locally_static: bool,
+    ) {
+        let id = id.into();
+        self.edits.push(CreateTextNodeTemplate {
+            text,
+            root: id,
+            locally_static,
+        });
+    }
+
+    pub(crate) fn create_element_template(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: impl Into<u64>,
+        locally_static: bool,
+        fully_static: bool,
+    ) {
+        let id = id.into();
+        match ns {
+            Some(ns) => self.edits.push(CreateElementNsTemplate {
+                root: id,
+                ns,
+                tag,
+                locally_static,
+                fully_static,
+            }),
+            None => self.edits.push(CreateElementTemplate {
+                root: id,
+                tag,
+                locally_static,
+                fully_static,
+            }),
+        }
+    }
+
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    pub(crate) fn create_placeholder_template(&mut self, id: impl Into<u64>) {
+        let id = id.into();
+        self.edits.push(CreatePlaceholderTemplate { root: id });
     }
 
     // events

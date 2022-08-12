@@ -14,8 +14,11 @@
 #[macro_use]
 mod errors;
 
+mod attributes;
 mod component;
 mod element;
+mod elements;
+mod error;
 mod ifmt;
 mod node;
 mod template;

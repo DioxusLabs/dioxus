@@ -48,16 +48,28 @@ class Template {
   finalize(roots) {
     for (let i = 0; i < roots.length; i++) {
       let node = roots[i];
+      const is_element = node.nodeType == 1;
+      const locally_static = is_element && node.getAttribute("data-dioxus-locally-static");
+      if (!locally_static) {
+        this.depthFirstIds.push(node.tmplId);
+      }
       this.createIds(node);
       this.template.content.appendChild(node);
     }
     document.head.appendChild(this.template);
   }
 
-  createIds(node) {
-    this.depthFirstIds.push(node.tmplId);
-    for (let i = 0; i < node.childNodes.length; i++) {
-      this.createIds(node.childNodes[i]);
+  createIds(root) {
+    for (let node = root.firstChild; node != null; node = node.nextSibling) {
+      const is_element = node.nodeType == 1;
+      const locally_static = is_element && node.hasAttribute("data-dioxus-locally-static");
+      if (!locally_static) {
+        this.depthFirstIds.push(node.tmplId);
+      }
+      const traverse_children = is_element && !node.hasAttribute("data-dioxus-fully-static");
+      if (traverse_children) {
+        this.createIds(node);
+      }
     }
   }
 
@@ -68,9 +80,12 @@ class Template {
     this.reconstructingRefrencesIndex = 0;
     for (let node = template.firstChild; node != null; node = node.nextSibling) {
       roots.push(node);
-      nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
-      this.reconstructingRefrencesIndex++;
-      if (node.nodeType == 1) {
+      const is_element = node.nodeType == 1;
+      if (!is_element || !node.hasAttribute("data-dioxus-locally-static")) {
+        nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
+        this.reconstructingRefrencesIndex++;
+      }
+      if (is_element && !node.hasAttribute("data-dioxus-fully-static")) {
         this.reconstructRefrences(nodes, node);
       }
     }
@@ -79,9 +94,12 @@ class Template {
 
   reconstructRefrences(nodes, root) {
     for (let node = root.firstChild; node != null; node = node.nextSibling) {
-      nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
-      this.reconstructingRefrencesIndex++;
-      if (node.nodeType == 1) {
+      const is_element = node.nodeType == 1;
+      if (!is_element || !node.hasAttribute("data-dioxus-locally-static")) {
+        nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
+        this.reconstructingRefrencesIndex++;
+      }
+      if (is_element && !node.hasAttribute("data-dioxus-fully-static")) {
         this.reconstructRefrences(nodes, node);
       }
     }
@@ -333,7 +351,7 @@ export class Interpreter {
     this.listeners.remove(element, event_name, bubbles);
   }
   SetText(root, text) {
-    this.getId(root).textContent = text;
+    this.getId(root).data = text;
   }
   SetAttribute(root, field, value, ns) {
     const name = field;
@@ -412,6 +430,41 @@ export class Interpreter {
     for (let edit of edits) {
       this.handleEdit(edit);
     }
+  }
+  CreateElementTemplate(tag, root, locally_static, fully_static) {
+    const el = document.createElement(tag);
+    this.stack.push(el);
+    this.SetNode(root, el);
+    if (locally_static)
+      el.setAttribute("data-dioxus-locally-static", locally_static);
+    if (fully_static)
+      el.setAttribute("data-dioxus-fully-static", fully_static);
+    // el.locally_static = locally_static;
+    // el.fully_static = fully_static;
+  }
+  CreateElementNsTemplate(tag, root, ns, locally_static, fully_static) {
+    const el = document.createElementNS(ns, tag);
+    this.stack.push(el);
+    this.SetNode(root, el);
+    if (locally_static)
+      el.setAttribute("data-dioxus-locally-static", locally_static);
+    if (fully_static)
+      el.setAttribute("data-dioxus-fully-static", fully_static);
+    // el.locally_static = locally_static;
+    // el.fully_static = fully_static;
+  }
+  CreateTextNodeTemplate(text, root, locally_static) {
+    const node = document.createTextNode(text);
+    this.stack.push(node);
+    this.SetNode(root, node);
+    // node.setAttribute("data-dioxus-locally-static", locally_static);
+    // node.locally_static = locally_static;
+  }
+  CreatePlaceholderTemplate(root) {
+    const el = document.createElement("pre");
+    el.hidden = true;
+    this.stack.push(el);
+    this.SetNode(root, el);
   }
   handleEdit(edit) {
     switch (edit.type) {
@@ -578,6 +631,18 @@ export class Interpreter {
         break;
       case "ExitTemplateRef":
         this.ExitTemplateRef();
+        break;
+      case "CreateElementTemplate":
+        this.CreateElementTemplate(edit.tag, edit.root, edit.locally_static, edit.fully_static);
+        break;
+      case "CreateElementNsTemplate":
+        this.CreateElementNsTemplate(edit.tag, edit.root, edit.ns, edit.locally_static, edit.fully_static);
+        break;
+      case "CreateTextNodeTemplate":
+        this.CreateTextNodeTemplate(edit.text, edit.root, edit.locally_static);
+        break;
+      case "CreatePlaceholderTemplate":
+        this.CreatePlaceholderTemplate(edit.root);
         break;
     }
   }

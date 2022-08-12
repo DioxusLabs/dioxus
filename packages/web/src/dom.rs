@@ -164,6 +164,38 @@ impl WebsysDom {
                 DomEdit::FinishTemplate { len } => self.interpreter.FinishTemplate(len),
                 DomEdit::EnterTemplateRef { root } => self.interpreter.EnterTemplateRef(root),
                 DomEdit::ExitTemplateRef {} => self.interpreter.ExitTemplateRef(),
+                DomEdit::CreateTextNodeTemplate {
+                    root,
+                    text,
+                    locally_static,
+                } => self
+                    .interpreter
+                    .CreateTextNodeTemplate(text, root, locally_static),
+                DomEdit::CreateElementTemplate {
+                    root,
+                    tag,
+                    locally_static,
+                    fully_static,
+                } => {
+                    self.interpreter
+                        .CreateElementTemplate(tag, root, locally_static, fully_static)
+                }
+                DomEdit::CreateElementNsTemplate {
+                    root,
+                    tag,
+                    ns,
+                    locally_static,
+                    fully_static,
+                } => self.interpreter.CreateElementNsTemplate(
+                    tag,
+                    root,
+                    ns,
+                    locally_static,
+                    fully_static,
+                ),
+                DomEdit::CreatePlaceholderTemplate { root } => {
+                    self.interpreter.CreatePlaceholderTemplate(root)
+                }
             }
         }
     }
