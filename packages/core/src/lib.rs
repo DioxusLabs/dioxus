@@ -85,10 +85,10 @@ pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
         DioxusElement, Element, EventHandler, Fragment, LazyNodes, LazyStaticVec, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, StaticDynamicNodeMapping, StaticTemplateNodes,
-        StaticTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateContext,
-        TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType, TextTemplate,
-        TextTemplateSegment, VNode, VirtualDom,
+        OwnedTemplate, Properties, Scope, ScopeId, ScopeState, StaticDynamicNodeMapping,
+        StaticTemplate, StaticTemplateNodes, StaticTemplateValue, Template, TemplateAttribute,
+        TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId, TemplateNode,
+        TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, VNode, VirtualDom,
     };
 }
 

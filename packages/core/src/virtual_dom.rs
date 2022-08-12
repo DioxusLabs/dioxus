@@ -413,11 +413,11 @@ impl VirtualDom {
                     .borrow_mut()
                     .insert(
                         id.clone(),
-                        Rc::new(RefCell::new(Template::Owned {
+                        Rc::new(RefCell::new(Template::Owned(OwnedTemplate {
                             nodes,
                             root_nodes: root_count,
                             dynamic_mapping,
-                        })),
+                        }))),
                     )
                     .is_some()
                 {

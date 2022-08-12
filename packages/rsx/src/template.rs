@@ -1,3 +1,4 @@
+use dioxus_core::prelude::OwnedTemplate;
 use dioxus_core::{
     prelude::TemplateNode, AttributeDiscription, CodeLocation, OwnedDynamicNodeMapping,
     OwnedTemplateNode, OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue,
@@ -553,7 +554,7 @@ impl TemplateBuilder {
             }
         }
 
-        Ok(Template::Owned {
+        Ok(Template::Owned(OwnedTemplate {
             nodes,
             root_nodes: self.root_nodes,
             dynamic_mapping: OwnedDynamicNodeMapping::new(
@@ -563,7 +564,7 @@ impl TemplateBuilder {
                 volatile_mapping,
                 listener_mapping,
             ),
-        })
+        }))
     }
 }
 
@@ -678,11 +679,11 @@ impl ToTokens for TemplateBuilder {
                 });
                 static __VOLITALE_MAPPING: &'static dioxus::core::exports::once_cell::sync::Lazy<Vec<(dioxus::prelude::TemplateNodeId, usize)>> = &__VOLITALE_MAPPING_INNER;
                 static __STATIC_VOLITALE_MAPPING: dioxus::prelude::LazyStaticVec<(dioxus::prelude::TemplateNodeId, usize)> = LazyStaticVec(__VOLITALE_MAPPING);
-                static __TEMPLATE: dioxus::prelude::Template = Template::Static {
+                static __TEMPLATE: dioxus::prelude::Template = Template::Static(&StaticTemplate {
                     nodes: __NODES,
                     root_nodes: __ROOT_NODES,
                     dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING, __NODES_WITH_LISTENERS),
-                };
+                });
 
                 __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
             }

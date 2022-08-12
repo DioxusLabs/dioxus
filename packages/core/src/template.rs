@@ -162,27 +162,35 @@ impl<'a> VTemplateRef<'a> {
     }
 }
 
+/// A template that is created at compile time
+#[derive(Debug, PartialEq)]
+pub struct StaticTemplate {
+    /// The nodes in the template
+    pub nodes: StaticTemplateNodes,
+    /// The ids of the root nodes in the template
+    pub root_nodes: StaticRootNodes,
+    /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
+    pub dynamic_mapping: StaticDynamicNodeMapping,
+}
+
+/// A template that is created at runtime
+#[derive(Debug, Clone, PartialEq)]
+pub struct OwnedTemplate {
+    /// The nodes in the template
+    pub nodes: OwnedTemplateNodes,
+    /// The ids of the root nodes in the template
+    pub root_nodes: OwnedRootNodes,
+    /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
+    pub dynamic_mapping: OwnedDynamicNodeMapping,
+}
+
 /// A template used to skip diffing on some static parts of the rsx
 #[derive(Debug, Clone, PartialEq)]
 pub enum Template {
     /// A template that is createded at compile time
-    Static {
-        /// The nodes in the template
-        nodes: StaticTemplateNodes,
-        /// The ids of the root nodes in the template
-        root_nodes: StaticRootNodes,
-        /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-        dynamic_mapping: StaticDynamicNodeMapping,
-    },
+    Static(&'static StaticTemplate),
     /// A template that is created at runtime
-    Owned {
-        /// The nodes in the template
-        nodes: OwnedTemplateNodes,
-        /// The ids of the root nodes in the template
-        root_nodes: OwnedRootNodes,
-        /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-        dynamic_mapping: OwnedDynamicNodeMapping,
-    },
+    Owned(OwnedTemplate),
 }
 
 impl Template {
@@ -194,14 +202,14 @@ impl Template {
     ) {
         mutations.create_templete(id);
         let empty = match self {
-            Template::Static { nodes, .. } => nodes.is_empty(),
-            Template::Owned { nodes, .. } => nodes.is_empty(),
+            Template::Static(s) => s.nodes.is_empty(),
+            Template::Owned(o) => o.nodes.is_empty(),
         };
         let mut len = 0;
         if !empty {
             let roots = match self {
-                Template::Static { root_nodes, .. } => *root_nodes,
-                Template::Owned { root_nodes, .. } => root_nodes,
+                Template::Static(s) => s.root_nodes,
+                Template::Owned(o) => &o.root_nodes,
             };
             for root in roots {
                 len += 1;
@@ -301,8 +309,8 @@ impl Template {
         F2: FnMut(&OwnedTemplateNode, Ctx) -> R,
     {
         match self {
-            Template::Static { nodes, .. } => f1(&nodes[id.0], ctx),
-            Template::Owned { nodes, .. } => f2(&nodes[id.0], ctx),
+            Template::Static(s) => f1(&s.nodes[id.0], ctx),
+            Template::Owned(o) => f2(&o.nodes[id.0], ctx),
         }
     }
 
@@ -312,21 +320,15 @@ impl Template {
         F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx),
     {
         match self {
-            Template::Static { nodes, .. } => f1(&nodes, ctx),
-            Template::Owned { nodes, .. } => f2(&nodes, ctx),
+            Template::Static(s) => f1(&s.nodes, ctx),
+            Template::Owned(o) => f2(&o.nodes, ctx),
         }
     }
 
     pub(crate) fn all_dynamic<'a>(&'a self) -> Box<dyn Iterator<Item = TemplateNodeId> + 'a> {
         match self {
-            Template::Static {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => Box::new(dynamic_ids.all_dynamic()),
-            Template::Owned {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => Box::new(dynamic_ids.all_dynamic()),
+            Template::Static(s) => Box::new(s.dynamic_mapping.all_dynamic()),
+            Template::Owned(o) => Box::new(o.dynamic_mapping.all_dynamic()),
         }
     }
 
@@ -334,27 +336,21 @@ impl Template {
         &'a self,
     ) -> Box<dyn Iterator<Item = (TemplateNodeId, usize)> + 'a> {
         match self {
-            Template::Static {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => Box::new(dynamic_ids.volatile_attributes.as_ref().iter().copied()),
-            Template::Owned {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => Box::new(dynamic_ids.volatile_attributes.iter().copied()),
+            Template::Static(s) => Box::new(
+                s.dynamic_mapping
+                    .volatile_attributes
+                    .as_ref()
+                    .iter()
+                    .copied(),
+            ),
+            Template::Owned(o) => Box::new(o.dynamic_mapping.volatile_attributes.iter().copied()),
         }
     }
 
     pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
         match self {
-            Template::Static {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.nodes[idx],
-            Template::Owned {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.nodes[idx],
+            Template::Static(s) => s.dynamic_mapping.nodes[idx],
+            Template::Owned(o) => o.dynamic_mapping.nodes[idx],
         }
     }
 
@@ -363,14 +359,8 @@ impl Template {
         idx: usize,
     ) -> &'a [TemplateNodeId] {
         match self {
-            Template::Static {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.text[idx].as_ref(),
-            Template::Owned {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.text[idx].as_ref(),
+            Template::Static(s) => s.dynamic_mapping.text[idx].as_ref(),
+            Template::Owned(o) => o.dynamic_mapping.text[idx].as_ref(),
         }
     }
 
@@ -379,14 +369,8 @@ impl Template {
         idx: usize,
     ) -> &'a [(TemplateNodeId, usize)] {
         match self {
-            Template::Static {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.attributes[idx].as_ref(),
-            Template::Owned {
-                dynamic_mapping: dynamic_ids,
-                ..
-            } => dynamic_ids.attributes[idx].as_ref(),
+            Template::Static(s) => s.dynamic_mapping.attributes[idx].as_ref(),
+            Template::Owned(o) => o.dynamic_mapping.attributes[idx].as_ref(),
         }
     }
 }
