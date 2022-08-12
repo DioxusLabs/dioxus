@@ -56,7 +56,6 @@ class Template {
       this.createIds(node);
       this.template.content.appendChild(node);
     }
-    document.head.appendChild(this.template);
   }
 
   createIds(root) {
@@ -153,11 +152,6 @@ class ListenerMap {
       element.removeEventListener(event_name, handler);
     }
   }
-
-  removeAllNonBubbling(element) {
-    const id = element.getAttribute("data-dioxus-id");
-    delete this.local[id];
-  }
 }
 
 export class Interpreter {
@@ -176,14 +170,6 @@ export class Interpreter {
   }
   pop() {
     return this.stack.pop();
-  }
-  cleanupNode(node) {
-    if (is_element_node(node)) {
-      this.listeners.removeAllNonBubbling(node);
-      for (let child = node.firstChild; child != null; child = child.nextSibling) {
-        this.cleanupNode(child);
-      }
-    }
   }
   currentTemplateId() {
     if (this.insideTemplateRef.length) {
@@ -257,7 +243,6 @@ export class Interpreter {
           return el;
         }
       });
-      this.cleanupNode(root);
       root.replaceWith(...els);
     }
   }
@@ -302,12 +287,10 @@ export class Interpreter {
     if (node !== undefined) {
       if (node instanceof TemplateRef) {
         for (let child of node.roots) {
-          this.cleanupNode(child);
           child.remove();
         }
       }
       else {
-        this.cleanupNode(node);
         node.remove();
       }
     }
