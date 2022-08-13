@@ -51,7 +51,6 @@
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 
 use fxhash::FxHashMap;
-use serde::{Serialize, Serializer};
 use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;

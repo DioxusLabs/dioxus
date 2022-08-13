@@ -428,7 +428,6 @@ export class Interpreter {
     this.insideTemplateRef.pop();
   }
   handleEdits(edits) {
-    // this.stack.push(this.root);
     for (let edit of edits) {
       this.handleEdit(edit);
     }
@@ -441,8 +440,6 @@ export class Interpreter {
       el.setAttribute("data-dioxus-locally-static", locally_static);
     if (fully_static)
       el.setAttribute("data-dioxus-fully-static", fully_static);
-    // el.locally_static = locally_static;
-    // el.fully_static = fully_static;
   }
   CreateElementNsTemplate(tag, root, ns, locally_static, fully_static) {
     const el = document.createElementNS(ns, tag);
@@ -452,15 +449,11 @@ export class Interpreter {
       el.setAttribute("data-dioxus-locally-static", locally_static);
     if (fully_static)
       el.setAttribute("data-dioxus-fully-static", fully_static);
-    // el.locally_static = locally_static;
-    // el.fully_static = fully_static;
   }
   CreateTextNodeTemplate(text, root, locally_static) {
     const node = document.createTextNode(text);
     this.stack.push(node);
     this.SetNode(root, node);
-    // node.setAttribute("data-dioxus-locally-static", locally_static);
-    // node.locally_static = locally_static;
   }
   CreatePlaceholderTemplate(root) {
     const el = document.createElement("pre");
@@ -471,37 +464,37 @@ export class Interpreter {
   handleEdit(edit) {
     switch (edit.type) {
       case "PushRoot":
-        this.PushRoot(edit.root);
+        this.PushRoot(BigInt(edit.root));
         break;
       case "AppendChildren":
         this.AppendChildren(edit.many);
         break;
       case "ReplaceWith":
-        this.ReplaceWith(edit.root, edit.m);
+        this.ReplaceWith(BigInt(edit.root), edit.m);
         break;
       case "InsertAfter":
-        this.InsertAfter(edit.root, edit.n);
+        this.InsertAfter(BigInt(edit.root), edit.n);
         break;
       case "InsertBefore":
-        this.InsertBefore(edit.root, edit.n);
+        this.InsertBefore(BigInt(edit.root), edit.n);
         break;
       case "Remove":
-        this.Remove(edit.root);
+        this.Remove(BigInt(edit.root));
         break;
       case "CreateTextNode":
-        this.CreateTextNode(edit.text, edit.root);
+        this.CreateTextNode(edit.text, BigInt(edit.root));
         break;
       case "CreateElement":
-        this.CreateElement(edit.tag, edit.root);
+        this.CreateElement(edit.tag, BigInt(edit.root));
         break;
       case "CreateElementNs":
-        this.CreateElementNs(edit.tag, edit.root, edit.ns);
+        this.CreateElementNs(edit.tag, BigInt(edit.root), edit.ns);
         break;
       case "CreatePlaceholder":
-        this.CreatePlaceholder(edit.root);
+        this.CreatePlaceholder(BigInt(edit.root));
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(edit.root, edit.event_name);
+        this.RemoveEventListener(BigInt(edit.root), edit.event_name);
         break;
       case "NewEventListener":
         // this handler is only provided on desktop implementations since this
@@ -604,47 +597,47 @@ export class Interpreter {
             );
           }
         };
-        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
+        this.NewEventListener(edit.event_name, BigInt(edit.root), handler, event_bubbles(edit.event_name));
 
         break;
       case "SetText":
-        this.SetText(edit.root, edit.text);
+        this.SetText(BigInt(edit.root), edit.text);
         break;
       case "SetAttribute":
-        this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
+        this.SetAttribute(BigInt(edit.root), edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name, edit.ns);
+        this.RemoveAttribute(BigInt(edit.root), edit.name, edit.ns);
         break;
       case "PopRoot":
         this.PopRoot();
         break;
       case "CreateTemplateRef":
-        this.CreateTemplateRef(edit.id, edit.template_id);
+        this.CreateTemplateRef(BigInt(edit.id), edit.template_id);
         break;
       case "CreateTemplate":
-        this.CreateTemplate(edit.id);
+        this.CreateTemplate(BigInt(edit.id));
         break;
       case "FinishTemplate":
         this.FinishTemplate(edit.len);
         break;
       case "EnterTemplateRef":
-        this.EnterTemplateRef(edit.root);
+        this.EnterTemplateRef(BigInt(edit.root));
         break;
       case "ExitTemplateRef":
         this.ExitTemplateRef();
         break;
       case "CreateElementTemplate":
-        this.CreateElementTemplate(edit.tag, edit.root, edit.locally_static, edit.fully_static);
+        this.CreateElementTemplate(edit.tag, BigInt(edit.root), edit.locally_static, edit.fully_static);
         break;
       case "CreateElementNsTemplate":
-        this.CreateElementNsTemplate(edit.tag, edit.root, edit.ns, edit.locally_static, edit.fully_static);
+        this.CreateElementNsTemplate(edit.tag, BigInt(edit.root), edit.ns, edit.locally_static, edit.fully_static);
         break;
       case "CreateTextNodeTemplate":
-        this.CreateTextNodeTemplate(edit.text, edit.root, edit.locally_static);
+        this.CreateTextNodeTemplate(edit.text, BigInt(edit.root), edit.locally_static);
         break;
       case "CreatePlaceholderTemplate":
-        this.CreatePlaceholderTemplate(edit.root);
+        this.CreatePlaceholderTemplate(BigInt(edit.root));
         break;
     }
   }
