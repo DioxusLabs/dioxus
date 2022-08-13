@@ -313,7 +313,7 @@ impl Tool {
     }
 }
 
-fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     let zip_file = std::fs::File::open(&file)?;
     let mut zip = zip::ZipArchive::new(zip_file)?;
 

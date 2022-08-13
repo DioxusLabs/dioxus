@@ -5,6 +5,8 @@ use std::{
 
 use mlua::UserData;
 
+use crate::tools::extract_zip;
+
 pub struct PluginFileSystem;
 impl UserData for PluginFileSystem {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
@@ -52,6 +54,15 @@ impl UserData for PluginFileSystem {
             let path = PathBuf::from(path);
             let mut file = std::fs::File::create(path)?;
             file.write_all(content.as_bytes())?;
+            Ok(())
+        });
+        methods.add_function("unzip_file", |_, args: (String, String)| {
+            let file = PathBuf::from(args.0);
+            let target = PathBuf::from(args.1);
+            let res = extract_zip(&file, &target);
+            if let Err(e) = res {
+                return Err(mlua::Error::RuntimeError(e.to_string()));
+            }
             Ok(())
         });
     }
