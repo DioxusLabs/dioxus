@@ -219,7 +219,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    // let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
@@ -230,13 +230,14 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         log::trace!("working..");
 
         // wait for the mainthread to schedule us in
-        let mut deadline = work_loop.wait_for_idle_time().await;
+        // let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| false);
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         for edit in mutations {
             // actually apply our changes during the animation frame

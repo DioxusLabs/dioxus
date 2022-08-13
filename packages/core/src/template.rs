@@ -51,6 +51,7 @@
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 
 use fxhash::FxHashMap;
+use serde::{Serialize, Serializer};
 use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;
@@ -63,8 +64,8 @@ use crate::{
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-// #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-pub struct CodeLocation {
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+pub struct StaticCodeLocation {
     /// the path to the crate that contains the location
     pub crate_path: &'static str,
     /// the path within the crate to the file that contains the location
@@ -75,23 +76,75 @@ pub struct CodeLocation {
     pub column: u32,
 }
 
+/// The location of a charicter. Used to track the location of rsx calls for hot reloading.
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+pub struct OwnedCodeLocation {
+    /// the path to the crate that contains the location
+    pub crate_path: String,
+    /// the path within the crate to the file that contains the location
+    pub file_path: String,
+    /// the line number of the location
+    pub line: u32,
+    /// the column number of the location
+    pub column: u32,
+}
+
+/// The location of a charicter. Used to track the location of rsx calls for hot reloading.
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
+pub enum CodeLocation {
+    /// A loctation that is created at compile time.
+    Static(&'static StaticCodeLocation),
+    /// A loctation that is created at runtime.
+    Dynamic(Box<OwnedCodeLocation>),
+}
+
+impl CodeLocation {
+    /// Get the line number of the location.
+    pub fn line(&self) -> u32 {
+        match self {
+            CodeLocation::Static(loc) => loc.line,
+            CodeLocation::Dynamic(loc) => loc.line,
+        }
+    }
+
+    /// Get the column number of the location.
+    pub fn column(&self) -> u32 {
+        match self {
+            CodeLocation::Static(loc) => loc.column,
+            CodeLocation::Dynamic(loc) => loc.column,
+        }
+    }
+
+    /// Get the path within the crate to the location.
+    pub fn file_path(&self) -> &str {
+        match self {
+            CodeLocation::Static(loc) => loc.file_path,
+            CodeLocation::Dynamic(loc) => loc.file_path.as_str(),
+        }
+    }
+
+    /// Get the path of the crate to the location.
+    pub fn crate_path(&self) -> &str {
+        match self {
+            CodeLocation::Static(loc) => loc.crate_path,
+            CodeLocation::Dynamic(loc) => loc.crate_path.as_str(),
+        }
+    }
+}
+
 /// get the code location of the code that called this function
 #[macro_export]
 macro_rules! get_line_num {
     () => {{
-        const LOC: &'static CodeLocation = {
-            let line = line!();
-            let column = column!();
-            let file_path = file!();
-            let crate_path = env!("CARGO_MANIFEST_DIR");
-
-            &CodeLocation {
-                crate_path,
-                file_path,
-                line: line,
-                column: column,
-            }
-        };
+        const LOC: CodeLocation = CodeLocation::Static(&StaticCodeLocation {
+            crate_path: env!("CARGO_MANIFEST_DIR"),
+            file_path: file!(),
+            line: line!(),
+            column: column!(),
+        });
         LOC
     }};
 }
@@ -100,7 +153,7 @@ macro_rules! get_line_num {
 ///
 /// `TemplateId` is a refrence to the location in the code the template was created.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct TemplateId(pub &'static CodeLocation);
+pub struct TemplateId(pub CodeLocation);
 
 /// An Template's unique identifier within the renderer.
 ///

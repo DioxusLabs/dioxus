@@ -1,14 +1,13 @@
 use dioxus_core::prelude::OwnedTemplate;
 use dioxus_core::{
-    prelude::TemplateNode, AttributeDiscription, CodeLocation, OwnedDynamicNodeMapping,
-    OwnedTemplateNode, OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue,
-    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
+    AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
+    OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
+    TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
 };
 use proc_macro2::TokenStream;
 use quote::TokenStreamExt;
 use quote::{quote, ToTokens};
-use std::{convert::TryInto, ops::Index, panic::Location};
-use syn::{Expr, Ident, LitStr, Token};
+use syn::{Expr, Ident, LitStr};
 
 use crate::{
     attributes::attrbute_to_static_str,
@@ -28,7 +27,7 @@ struct TemplateElementBuilder {
 impl TemplateElementBuilder {
     fn try_into_owned(
         self,
-        location: &CodeLocation,
+        location: &OwnedCodeLocation,
     ) -> Result<
         TemplateElement<
             Vec<TemplateAttribute<OwnedTemplateValue>>,
@@ -116,7 +115,7 @@ struct TemplateAttributeBuilder {
 impl TemplateAttributeBuilder {
     fn try_into_owned(
         self,
-        location: &CodeLocation,
+        location: &OwnedCodeLocation,
         element_tag: &'static str,
         element_ns: Option<&'static str>,
     ) -> Result<TemplateAttribute<OwnedTemplateValue>, Error> {
@@ -220,7 +219,7 @@ enum TemplateNodeTypeBuilder {
 impl TemplateNodeTypeBuilder {
     fn try_into_owned(
         self,
-        location: &CodeLocation,
+        location: &OwnedCodeLocation,
     ) -> Result<
         TemplateNodeType<
             Vec<TemplateAttribute<OwnedTemplateValue>>,
@@ -270,7 +269,7 @@ struct TemplateNodeBuilder {
 }
 
 impl TemplateNodeBuilder {
-    fn try_into_owned(self, location: &CodeLocation) -> Result<OwnedTemplateNode, Error> {
+    fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNode, Error> {
         let TemplateNodeBuilder { id, node_type } = self;
         let node_type = node_type.try_into_owned(location)?;
         Ok(OwnedTemplateNode {
@@ -487,7 +486,7 @@ impl TemplateBuilder {
         id
     }
 
-    fn try_into_owned(self, location: &CodeLocation) -> Result<Template, Error> {
+    fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<Template, Error> {
         let dynamic_context = self.dynamic_context;
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         let nodes = &self.nodes;
