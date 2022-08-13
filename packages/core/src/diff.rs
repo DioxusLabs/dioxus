@@ -1184,10 +1184,6 @@ impl<'b> DiffState<'b> {
 
     fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
         let nodes_created = self.create_node(new);
-        if let VNode::TemplateRef(..) = old {
-            println!("Replacing template ref {:?}", old);
-            println!("with {:?}", new);
-        }
         self.replace_inner(old, nodes_created);
     }
 
