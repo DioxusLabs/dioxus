@@ -23,7 +23,7 @@ pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-enum DependancyKind {
+enum DependencyKind {
     Node,
     Child,
     Parent,
@@ -40,25 +40,25 @@ enum DependancyKind {
 /// ```rust, ignore
 /// #[derive(State)]
 /// struct MyStruct {
-///     // MyDependancy implements ChildDepState<()>
+///     // MyDependency implements ChildDepState<()>
 ///     #[node_dep_state()]
-///     my_dependancy_1: MyDependancy,
-///     // MyDependancy2 implements ChildDepState<(MyDependancy,)>
-///     #[node_dep_state(my_dependancy_1)]
-///     my_dependancy_2: MyDependancy2,
+///     my_dependency_1: MyDependency,
+///     // MyDependency2 implements ChildDepState<(MyDependency,)>
+///     #[node_dep_state(my_dependency_1)]
+///     my_dependency_2: MyDependency2,
 /// }
 /// // or
 /// #[derive(State)]
 /// struct MyStruct {
 ///     // MyDependnancy implements NodeDepState<()>
 ///     #[node_dep_state()]
-///     my_dependancy_1: MyDependancy,
-///     // MyDependancy2 implements NodeDepState<()>
+///     my_dependency_1: MyDependency,
+///     // MyDependency2 implements NodeDepState<()>
 ///     #[node_dep_state()]
-///     my_dependancy_2: MyDependancy2,
-///     // MyDependancy3 implements NodeDepState<(MyDependancy, MyDependancy2)> with Ctx = f32
-///     #[node_dep_state((my_dependancy_1, my_dependancy_2), f32)]
-///     my_dependancy_3: MyDependancy2,
+///     my_dependency_2: MyDependency2,
+///     // MyDependency3 implements NodeDepState<(MyDependency, MyDependency2)> with Ctx = f32
+///     #[node_dep_state((my_dependency_1, my_dependency_2), f32)]
+///     my_dependency_3: MyDependency2,
 /// }
 /// ```
 /// # The child_dep_state attribute
@@ -67,18 +67,18 @@ enum DependancyKind {
 /// #[derive(State)]
 /// struct MyStruct {
 ///     // MyDependnacy implements ChildDepState with DepState = Self
-///     #[child_dep_state(my_dependancy_1)]
-///     my_dependancy_1: MyDependancy,
+///     #[child_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
 /// }
 /// // or
 /// #[derive(State)]
 /// struct MyStruct {
 ///     // MyDependnacy implements ChildDepState with DepState = Self
-///     #[child_dep_state(my_dependancy_1)]
-///     my_dependancy_1: MyDependancy,
-///     // MyDependnacy2 implements ChildDepState with DepState = MyDependancy and Ctx = f32
-///     #[child_dep_state(my_dependancy_1, f32)]
-///     my_dependancy_2: MyDependancy2,
+///     #[child_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+///     // MyDependnacy2 implements ChildDepState with DepState = MyDependency and Ctx = f32
+///     #[child_dep_state(my_dependency_1, f32)]
+///     my_dependency_2: MyDependency2,
 /// }
 /// ```
 /// # The parent_dep_state attribute
@@ -88,18 +88,18 @@ enum DependancyKind {
 /// #[derive(State)]
 /// struct MyStruct {
 ///     // MyDependnacy implements ParentDepState with DepState = Self
-///     #[parent_dep_state(my_dependancy_1)]
-///     my_dependancy_1: MyDependancy,
+///     #[parent_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
 /// }
 /// // or
 /// #[derive(State)]
 /// struct MyStruct {
 ///     // MyDependnacy implements ParentDepState with DepState = Self
-///     #[parent_dep_state(my_dependancy_1)]
-///     my_dependancy_1: MyDependancy,
-///     // MyDependnacy2 implements ParentDepState with DepState = MyDependancy and Ctx = f32
-///     #[parent_dep_state(my_dependancy_1, f32)]
-///     my_dependancy_2: MyDependancy2,
+///     #[parent_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+///     // MyDependnacy2 implements ParentDepState with DepState = MyDependency and Ctx = f32
+///     #[parent_dep_state(my_dependency_1, f32)]
+///     my_dependency_2: MyDependency2,
 /// }
 /// ```
 ///
@@ -309,10 +309,10 @@ impl<'a> StateStruct<'a> {
                 let mem = &mut unordered_state_members[i];
                 // if this member has all of its dependancies resolved other than itself, resolve it next.
                 if mem.dep_mems.iter().all(|(dep, resolved)| {
-                    *resolved || (*dep == mem.mem && mem.dep_kind != DependancyKind::Node)
+                    *resolved || (*dep == mem.mem && mem.dep_kind != DependencyKind::Node)
                 }) {
                     let mem = unordered_state_members.remove(i);
-                    // mark any dependancy that depends on this member as resolved
+                    // mark any dependency that depends on this member as resolved
                     for member in unordered_state_members.iter_mut() {
                         for (dep, resolved) in &mut member.dep_mems {
                             *resolved |= *dep == mem.mem;
@@ -369,9 +369,9 @@ impl<'a> StateStruct<'a> {
             for (dep, _) in &member.dep_mems {
                 if *dep == mem {
                     match member.dep_kind {
-                        DependancyKind::Node => dependants.node.push(member.mem),
-                        DependancyKind::Child => dependants.child.push(member.mem),
-                        DependancyKind::Parent => dependants.parent.push(member.mem),
+                        DependencyKind::Node => dependants.node.push(member.mem),
+                        DependencyKind::Child => dependants.child.push(member.mem),
+                        DependencyKind::Parent => dependants.parent.push(member.mem),
                     }
                 }
             }
@@ -485,7 +485,7 @@ impl<'a> StateStruct<'a> {
         let member = &mem.mem.ident;
 
         match mem.dep_kind {
-            DependancyKind::Parent => {
+            DependencyKind::Parent => {
                 quote! {
                     // resolve parent dependant state
                     let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
@@ -505,7 +505,7 @@ impl<'a> StateStruct<'a> {
                     }
                 }
             }
-            DependancyKind::Child => {
+            DependencyKind::Child => {
                 quote! {
                     // resolve child dependant state
                     let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
@@ -527,7 +527,7 @@ impl<'a> StateStruct<'a> {
                     }
                 }
             }
-            DependancyKind::Node => {
+            DependencyKind::Node => {
                 quote! {
                     // resolve node dependant state
                     let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
@@ -555,12 +555,12 @@ fn try_parenthesized(input: ParseStream) -> Result<ParseBuffer> {
     Ok(inside)
 }
 
-struct Dependancy {
+struct Dependency {
     ctx_ty: Option<Type>,
     deps: Vec<Ident>,
 }
 
-impl Parse for Dependancy {
+impl Parse for Dependency {
     fn parse(input: ParseStream) -> Result<Self> {
         let deps: Option<Punctuated<Ident, Token![,]>> = {
             try_parenthesized(input)
@@ -606,7 +606,7 @@ impl Member {
 struct StateMember<'a> {
     mem: &'a Member,
     // the kind of dependncies this state has
-    dep_kind: DependancyKind,
+    dep_kind: DependencyKind,
     // the depenancy and if it is satified
     dep_mems: Vec<(&'a Member, bool)>,
     // the context this state requires
@@ -625,14 +625,14 @@ impl<'a> StateMember<'a> {
                 .path
                 .get_ident()
                 .and_then(|i| match i.to_string().as_str() {
-                    "node_dep_state" => Some(DependancyKind::Node),
-                    "child_dep_state" => Some(DependancyKind::Child),
-                    "parent_dep_state" => Some(DependancyKind::Parent),
+                    "node_dep_state" => Some(DependencyKind::Node),
+                    "child_dep_state" => Some(DependencyKind::Child),
+                    "parent_dep_state" => Some(DependencyKind::Parent),
                     _ => None,
                 })?;
-            match a.parse_args::<Dependancy>() {
-                Ok(dependancy) => {
-                    let dep_mems = dependancy
+            match a.parse_args::<Dependency>() {
+                Ok(dependency) => {
+                    let dep_mems = dependency
                         .deps
                         .iter()
                         .filter_map(|name| {
@@ -651,7 +651,7 @@ impl<'a> StateMember<'a> {
                         mem,
                         dep_kind,
                         dep_mems,
-                        ctx_ty: dependancy.ctx_ty,
+                        ctx_ty: dependency.ctx_ty,
                     })
                 }
                 Err(e) => {
@@ -683,17 +683,17 @@ impl<'a> StateMember<'a> {
             quote!(dioxus_native_core::node_ref::NodeView::new(vnode, #ty::NODE_MASK, vdom));
         let dep_idents = self.dep_mems.iter().map(|m| &m.0.ident);
         match self.dep_kind {
-            DependancyKind::Node => {
+            DependencyKind::Node => {
                 quote!({
                     current_state.#ident.reduce(#node_view, (#(&current_state.#dep_idents,)*), #get_ctx)
                 })
             }
-            DependancyKind::Child => {
+            DependencyKind::Child => {
                 quote!({
                     current_state.#ident.reduce(#node_view, children.iter().map(|c| (#(&c.#dep_idents)*)), #get_ctx)
                 })
             }
-            DependancyKind::Parent => {
+            DependencyKind::Parent => {
                 quote!({
                     current_state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.#dep_idents)*)), #get_ctx)
                 })
