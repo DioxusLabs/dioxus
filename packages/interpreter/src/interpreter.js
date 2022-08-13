@@ -16,6 +16,7 @@ class TemplateRef {
     this.nodes = nodes;
     this.roots = roots;
     this.id = id;
+    this.placed = false;
   }
 
   get(id) {
@@ -32,6 +33,24 @@ class TemplateRef {
 
   last() {
     return this.roots[this.roots.length - 1];
+  }
+
+  move() {
+    // move the root nodes into a new template
+    this.fragment = new DocumentFragment();
+    for (let n of this.roots) {
+      this.fragment.appendChild(n);
+    }
+  }
+
+  getFragment() {
+    if (!this.placed) {
+      this.placed = true;
+    }
+    else {
+      this.move();
+    }
+    return this.fragment;
   }
 }
 
@@ -221,7 +240,7 @@ export class Interpreter {
     for (let i = 0; i < many; i++) {
       const child = to_add[i];
       if (child instanceof TemplateRef) {
-        root.appendChild(child.fragment);
+        root.appendChild(child.getFragment());
       }
       else {
         root.appendChild(child);
@@ -237,7 +256,7 @@ export class Interpreter {
     else {
       let els = this.stack.splice(this.stack.length - m).map(function (el) {
         if (el instanceof TemplateRef) {
-          return el.fragment;
+          return el.getFragment();
         }
         else {
           return el;
@@ -250,7 +269,7 @@ export class Interpreter {
     const old = this.getId(root);
     const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
       if (el instanceof TemplateRef) {
-        return el.fragment;
+        return el.getFragment();
       }
       else {
         return el;
@@ -268,7 +287,7 @@ export class Interpreter {
     const old = this.getId(root);
     const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
       if (el instanceof TemplateRef) {
-        return el.fragment;
+        return el.getFragment();
       }
       else {
         return el;
