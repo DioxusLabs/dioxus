@@ -5,7 +5,9 @@ use crate::{
 use dioxus_core::{DomEdit, ElementId, Mutations};
 
 pub enum ElementProduced {
+    /// The iterator produced an element by progressing to the next node in a depth first order.
     Progressed(ElementId),
+    /// The iterator reached the end of the tree and looped back to the root
     Looped(ElementId),
 }
 impl ElementProduced {
@@ -42,8 +44,9 @@ impl NodePosition {
     }
 }
 
-/// The focus system needs a iterator that can persist through changes in the [VirtualDom].
-/// Iterate through it with [ElementIter::next] [ElementIter::prev], and update it with [ElementIter::update] (with data from [`VirtualDom::work_with_deadline`]).
+/// Focus systems need a iterator that can persist through changes in the [dioxus_core::VirtualDom].
+/// This iterator traverses the tree depth first.
+/// Iterate through it with [PersistantElementIter::next] [PersistantElementIter::prev], and update it with [PersistantElementIter::prune] (with data from [`dioxus_core::prelude::VirtualDom::work_with_deadline`]).
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
     // stack of elements and fragments
