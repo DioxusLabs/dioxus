@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_desktop::tao::dpi::LogicalSize;
 use dioxus_router::prelude::*;
@@ -45,28 +47,24 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         "Home"
     })
 }
 
-#[allow(non_snake_case)]
 fn Games(cx: Scope) -> Element {
     cx.render(rsx! {
         "Games"
     })
 }
 
-#[allow(non_snake_case)]
 fn Play(cx: Scope) -> Element {
     cx.render(rsx! {
         "Play"
     })
 }
 
-#[allow(non_snake_case)]
 fn Settings(cx: Scope) -> Element {
     cx.render(rsx! {
         "Settings"

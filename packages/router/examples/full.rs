@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::sync::{Arc, RwLockReadGuard};
 
 use dioxus::prelude::*;
@@ -9,10 +11,10 @@ struct Raspberry;
 
 fn main() {
     env_logger::init();
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
             .index(Home as Component)
@@ -83,7 +85,6 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Home" }
@@ -122,7 +123,6 @@ fn Home(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Blog(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Blog" }
@@ -130,7 +130,6 @@ fn Blog(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn BlogWelcome(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "Welcome to the Blog!" }
@@ -157,7 +156,6 @@ fn BlogWelcome(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).expect("called in router");
 
@@ -178,7 +176,6 @@ fn BlogPost(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn NamedNavigationFallback(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Named navigation error" }
@@ -189,7 +186,6 @@ fn NamedNavigationFallback(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn PathDisplay(cx: Scope) -> Element {
     let route = use_route(&cx).expect("called in router");
 
@@ -203,14 +199,12 @@ fn PathDisplay(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn RaspberryPage(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Raspberries are very tasty!" }
     })
 }
 
-#[allow(non_snake_case)]
 fn StrawberryPage(cx: Scope) -> Element {
     cx.render(rsx! {
         span {

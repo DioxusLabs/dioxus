@@ -1,3 +1,4 @@
+#![allow(non_snake_case)]
 #![cfg(not(target_family = "wasm"))]
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -97,7 +98,6 @@ impl PartialEq for AppProps {
     }
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope<AppProps>) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
@@ -127,7 +127,6 @@ fn App(cx: Scope<AppProps>) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Welcome to the SSR test!" }
@@ -142,7 +141,6 @@ fn Index(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Test(cx: Scope) -> Element {
     cx.render(rsx! {
         h2 { "This is the test page." }

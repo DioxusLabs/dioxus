@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -37,14 +39,12 @@ fn app(cx: Scope) -> Element {
     ))
 }
 
-#[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         "Home"
     })
 }
 
-#[allow(non_snake_case)]
 fn Settings(cx: Scope) -> Element {
     cx.render(rsx! {
         "Settings"

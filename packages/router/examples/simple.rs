@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -6,10 +8,10 @@ struct EarthAppleName;
 
 fn main() {
     env_logger::init();
-    dioxus_desktop::launch(app);
+    dioxus_desktop::launch(App);
 }
 
-fn app(cx: Scope) -> Element {
+fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()
             .index(Home as Component)
@@ -29,7 +31,6 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Home" }
@@ -57,7 +58,6 @@ fn Home(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Apple(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Apples" }
@@ -71,7 +71,6 @@ fn Apple(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Potato(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Potatoes" }

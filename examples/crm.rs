@@ -1,6 +1,9 @@
 /*
 Tiny CRM: A port of the Yew CRM example to Dioxus.
 */
+
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
@@ -15,7 +18,6 @@ pub struct Client {
     pub description: String,
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
@@ -49,7 +51,6 @@ fn App(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn ClientList(cx: Scope) -> Element {
     let clients = use_context::<Vec<Client>>(&cx).unwrap();
 
@@ -79,7 +80,6 @@ fn ClientList(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn ClientAdd(cx: Scope) -> Element {
     let clients = use_context::<Vec<Client>>(&cx).unwrap();
     let first_name = use_state(&cx, String::new);
@@ -170,7 +170,6 @@ fn ClientAdd(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn Settings(cx: Scope) -> Element {
     let clients = use_context::<Vec<Client>>(&cx).unwrap();
 
