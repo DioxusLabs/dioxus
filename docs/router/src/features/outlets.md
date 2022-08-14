@@ -6,7 +6,7 @@ the active routes content will be rendered within the [`Outlet`].
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
 # extern crate dioxus;
-use dioxus::prelude::*;
+# use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 # extern crate dioxus_ssr;
@@ -142,7 +142,7 @@ easy to create an unterminated recursion. See below for an example of that.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::{prelude::*, history::MemoryHistory};
+# use dioxus_router::prelude::*;
 # extern crate dioxus_ssr;
 #
 fn RootContent(cx: Scope) -> Element {
@@ -171,8 +171,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| MemoryHistory::with_first(String::from("/root"))
+            # initial_path: "/root",
 
             Outlet {
                 depth: 1

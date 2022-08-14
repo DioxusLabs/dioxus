@@ -104,9 +104,9 @@ by the path, i.e. `//`.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::{prelude::*, history::MemoryHistory};
+# use dioxus_router::prelude::*;
 # extern crate dioxus_ssr;
-
+#
 fn Greeting(cx: Scope) -> Element {
     let route = use_route(&cx).expect("is nested within a Router component");
     let name = route.parameters.get("name")
@@ -127,8 +127,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| MemoryHistory::with_first(String::from("/Dioxus")),
+            # initial_path: "/Dioxus",
 
             Outlet { }
         }

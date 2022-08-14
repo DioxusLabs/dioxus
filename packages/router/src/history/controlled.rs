@@ -125,8 +125,8 @@ impl HistoryProvider for ControlledHistory {
 /// navigated to. This is always reset when triggering a navigation from the outside.
 ///
 /// If the internal [`HistoryProvider`] doesn't support external navigation targets (e.g. the
-/// [`MemoryHistory`](crate::history::MemoryHistory)), application developers can handle the external navigation. The router may
-/// render an incomplete page if this is not done.
+/// [`MemoryHistory`](crate::history::MemoryHistory)), application developers can handle the
+/// external navigation. The router may render an incomplete page if this is not done.
 ///
 /// [`Router`]: crate::components::Router
 #[derive(Clone, Debug)]

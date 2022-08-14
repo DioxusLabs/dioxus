@@ -113,7 +113,6 @@ Now to tell Dioxus Router to render our new component when no route exists.
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::default()

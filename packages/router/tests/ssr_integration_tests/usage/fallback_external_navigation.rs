@@ -1,7 +1,7 @@
 use std::any::TypeId;
 
 use dioxus::prelude::*;
-use dioxus_router::{history::MemoryHistory, prelude::*};
+use dioxus_router::prelude::*;
 
 use crate::{render, test_routes};
 
@@ -25,8 +25,7 @@ fn show_fallback_content() {
         cx.render(rsx! {
             Router {
                 routes: test_routes(&cx),
-                init_only: true,
-                history: &||MemoryHistory::with_first(String::from("/external-navigation-failure")),
+                initial_path: "/external-navigation-failure",
 
                 Outlet { }
                 Content { }

@@ -46,7 +46,7 @@ the first one, and will in turn render our nested content.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-
+#
 fn Settings(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Settings" }
@@ -140,9 +140,8 @@ fn App(cx: Scope) -> Element {
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-# use dioxus_router::history::MemoryHistory;
 # extern crate dioxus_ssr;
-
+#
 fn Settings(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Settings" }
@@ -182,10 +181,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| {
-            #     MemoryHistory::with_first(String::from("/settings/privacy"))
-            # },
+            # initial_path: "/settings/privacy",
 
             Outlet { }
         }

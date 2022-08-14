@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_router::{history::MemoryHistory, prelude::*};
+use dioxus_router::prelude::*;
 
 use crate::{render, test_routes, TestName, ADDRESS};
 
@@ -112,8 +112,7 @@ fn with_class_and_exact_active() {
         cx.render(rsx! {
             Router {
                 routes: test_routes(&cx),
-                init_only: true,
-                history: &|| MemoryHistory::with_first(String::from("/test/")),
+                initial_path: "/test/",
 
                 Link {
                     target: "/",

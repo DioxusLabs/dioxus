@@ -39,7 +39,6 @@ URL will be provided via the `url` parameter.
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-#[allow(non_snake_case)]
 fn ExternalNavigationFallback(cx: Scope) -> Element {
     let route = use_route(&cx).expect("is nested within a Router component");
     let url = route.parameters.get("url").cloned().unwrap_or_default();
@@ -53,7 +52,6 @@ fn ExternalNavigationFallback(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, Default::default);
 

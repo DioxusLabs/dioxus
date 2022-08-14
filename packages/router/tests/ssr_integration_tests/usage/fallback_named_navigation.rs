@@ -2,7 +2,7 @@
 use std::any::TypeId;
 
 use dioxus::prelude::*;
-use dioxus_router::{history::MemoryHistory, prelude::*};
+use dioxus_router::prelude::*;
 
 use crate::{render, test_routes};
 
@@ -17,8 +17,7 @@ fn panic_in_debug() {
         cx.render(rsx! {
             Router {
                 routes: test_routes(&cx),
-                init_only: true,
-                history: &||MemoryHistory::with_first(String::from("/named-navigation-failure")),
+                initial_path: "/named-navigation-failure",
             }
         })
     }
@@ -40,8 +39,7 @@ fn default_content_in_release() {
         cx.render(rsx! {
             Router {
                 routes: test_routes(&cx),
-                init_only: true,
-                history: &||MemoryHistory::with_first(String::from("/named-navigation-failure")),
+                initial_path: "/named-navigation-failure",
 
                 Outlet { }
                 Content { }

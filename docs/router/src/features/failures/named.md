@@ -38,14 +38,12 @@ We can replace the default error message by setting the
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-#[allow(non_snake_case)]
 fn NamedNavigationFallback(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Named navigation failure!" }
     })
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, Default::default);
 

@@ -22,7 +22,7 @@ _Matching_ routes make it easy to implement such behavior.
 # extern crate dioxus;
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
-# use dioxus_router::{prelude::*, history::MemoryHistory};
+# use dioxus_router::prelude::*;
 # extern crate dioxus_ssr;
 # extern crate regex;
 use regex::Regex;
@@ -93,8 +93,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| MemoryHistory::with_first(String::from("/fAnna")),
+            # initial_path: "/fAnna",
 
             Outlet { }
         }

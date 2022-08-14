@@ -88,7 +88,6 @@ fn App(cx: Scope) -> Element {
 use dioxus::prelude::*;
 # extern crate dioxus_router;
 use dioxus_router::prelude::*;
-# use dioxus_router::history::MemoryHistory;
 # extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
@@ -113,8 +112,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # history: &|| MemoryHistory::with_first(String::from("/other")),
-            # init_only: true,
+            # initial_path: "/other"
 
             // This tells the router where to put the content of the active
             // route.

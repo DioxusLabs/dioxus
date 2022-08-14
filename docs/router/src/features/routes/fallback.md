@@ -17,17 +17,14 @@ route to our root [`Segment`].
 use dioxus::prelude::*;
 # extern crate dioxus_router;
 use dioxus_router::prelude::*;
-# use dioxus_router::history::MemoryHistory;
 # extern crate dioxus_ssr;
 
-#[allow(non_snake_case)]
 fn Index(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Index" }
     })
 }
 
-#[allow(non_snake_case)]
 fn Fallback(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Error 404 - Not Found" }
@@ -35,7 +32,6 @@ fn Fallback(cx: Scope) -> Element {
     })
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
@@ -46,8 +42,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| MemoryHistory::with_first(String::from("/invalid")),
+            # initial_path: "/invalid",
 
             Outlet { }
         }
@@ -80,7 +75,6 @@ will then replace the global fallback whenever our [`Segment`] was active.
 use dioxus::prelude::*;
 # extern crate dioxus_router;
 use dioxus_router::prelude::*;
-# use dioxus_router::history::MemoryHistory;
 # extern crate dioxus_ssr;
 
 // This example doesn't show the index or settings components. It only shows how
@@ -91,21 +85,18 @@ use dioxus_router::prelude::*;
 # fn PasswordSettings(cx: Scope) -> Element { unimplemented!() }
 # fn PrivacySettings(cx: Scope) -> Element { unimplemented!() }
 
-#[allow(non_snake_case)]
 fn GlobalFallback(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Error 404 - Page Not Found" }
     })
 }
 
-#[allow(non_snake_case)]
 fn SettingsFallback(cx: Scope) -> Element {
     cx.render(rsx! {
         h1 { "Error 404 - Settings Not Found" }
     })
 }
 
-#[allow(non_snake_case)]
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
@@ -126,8 +117,7 @@ fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         Router {
             routes: routes.clone(),
-            # init_only: true,
-            # history: &|| MemoryHistory::with_first(String::from("/settings/invalid")),
+            # initial_path: "/settings/invalid",
 
             Outlet { }
         }

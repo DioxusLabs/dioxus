@@ -38,7 +38,7 @@ We can use the [`Navigator`] to trigger four different kinds of navigation:
 # use dioxus::prelude::*;
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
-
+#
 fn Content(cx: Scope) -> Element {
     let nav = use_navigate(&cx).expect("called inside a router");
 
