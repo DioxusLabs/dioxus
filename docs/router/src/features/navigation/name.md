@@ -45,7 +45,7 @@ fn Source(cx: Scope) -> Element {
             // these parameters:
             // 1. the `name` we want to navigate to
             // 2. a list of parameters the router can put in the generated path
-            // 3. we could also provide a query as an optional third parameter
+            // 3. we can also provide a query as an optional third parameter
             target: (TargetName, [], "query"),
             "Go to target"
         }
