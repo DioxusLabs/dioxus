@@ -25,7 +25,7 @@ toml = "0.5.8"
 fs_extra = "1.2.0"
 cargo_toml = "0.11.4"
 futures = "0.3.21"
-notify = { version = "5.0.0-pre.13", features = ["serde"] }
+notify = { version = "5.0.0-pre.16", features = ["serde"] }
 html_parser = "0.6.2"
 binary-install = "0.0.2"
 convert_case = "0.5.0"

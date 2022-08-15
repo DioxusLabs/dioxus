@@ -98,100 +98,104 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
-        let config = watcher_config.clone();
-        if chrono::Local::now().timestamp() > last_update_time {
-            // Give time for the change to take effect before reading the file
-            std::thread::sleep(std::time::Duration::from_millis(100));
-            if let Ok(evt) = evt {
-                let mut messages = Vec::new();
-                let mut needs_rebuild = false;
-                for path in evt.paths.clone() {
-                    let mut file = File::open(path.clone()).unwrap();
-                    if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
-                        continue;
-                    }
-                    let mut src = String::new();
-                    file.read_to_string(&mut src).expect("Unable to read file");
-                    // find changes to the rsx in the file
-                    if let Ok(syntax) = syn::parse_file(&src) {
-                        let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
-                        if let Some(old_str) = last_file_rebuild.map.get(&path) {
-                            if let Ok(old) = syn::parse_file(&old_str) {
-                                match find_rsx(&syntax, &old) {
-                                    DiffResult::CodeChanged => {
-                                        needs_rebuild = true;
-                                        last_file_rebuild.map.insert(path, src);
-                                    }
-                                    DiffResult::RsxChanged(changed) => {
-                                        log::info!("🪁 reloading rsx");
-                                        for (old, new) in changed.into_iter() {
-                                            let hr = get_location(
-                                                &crate_dir,
-                                                &path.to_path_buf(),
-                                                old.to_token_stream(),
-                                            );
-                                            // get the original source code to preserve whitespace
-                                            let span = new.span();
-                                            let start = span.start();
-                                            let end = span.end();
-                                            let mut lines: Vec<_> = src
-                                                .lines()
-                                                .skip(start.line - 1)
-                                                .take(end.line - start.line + 1)
-                                                .collect();
-                                            if let Some(first) = lines.first_mut() {
-                                                *first = first.split_at(start.column).1;
-                                            }
-                                            if let Some(last) = lines.last_mut() {
-                                                // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                                if start.line == end.line {
-                                                    *last =
-                                                        last.split_at(end.column - start.column).0;
-                                                } else {
-                                                    *last = last.split_at(end.column).0;
+    let mut watcher = RecommendedWatcher::new(
+        move |evt: notify::Result<notify::Event>| {
+            let config = watcher_config.clone();
+            if chrono::Local::now().timestamp() > last_update_time {
+                // Give time for the change to take effect before reading the file
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                if let Ok(evt) = evt {
+                    let mut messages = Vec::new();
+                    let mut needs_rebuild = false;
+                    for path in evt.paths.clone() {
+                        let mut file = File::open(path.clone()).unwrap();
+                        if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
+                            continue;
+                        }
+                        let mut src = String::new();
+                        file.read_to_string(&mut src).expect("Unable to read file");
+                        // find changes to the rsx in the file
+                        if let Ok(syntax) = syn::parse_file(&src) {
+                            let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
+                            if let Some(old_str) = last_file_rebuild.map.get(&path) {
+                                if let Ok(old) = syn::parse_file(&old_str) {
+                                    match find_rsx(&syntax, &old) {
+                                        DiffResult::CodeChanged => {
+                                            needs_rebuild = true;
+                                            last_file_rebuild.map.insert(path, src);
+                                        }
+                                        DiffResult::RsxChanged(changed) => {
+                                            log::info!("🪁 reloading rsx");
+                                            for (old, new) in changed.into_iter() {
+                                                let hr = get_location(
+                                                    &crate_dir,
+                                                    &path.to_path_buf(),
+                                                    old.to_token_stream(),
+                                                );
+                                                // get the original source code to preserve whitespace
+                                                let span = new.span();
+                                                let start = span.start();
+                                                let end = span.end();
+                                                let mut lines: Vec<_> = src
+                                                    .lines()
+                                                    .skip(start.line - 1)
+                                                    .take(end.line - start.line + 1)
+                                                    .collect();
+                                                if let Some(first) = lines.first_mut() {
+                                                    *first = first.split_at(start.column).1;
                                                 }
+                                                if let Some(last) = lines.last_mut() {
+                                                    // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
+                                                    if start.line == end.line {
+                                                        *last = last
+                                                            .split_at(end.column - start.column)
+                                                            .0;
+                                                    } else {
+                                                        *last = last.split_at(end.column).0;
+                                                    }
+                                                }
+                                                let rsx = lines.join("\n");
+                                                messages.push(SetRsxMessage {
+                                                    location: hr,
+                                                    new_text: rsx,
+                                                });
                                             }
-                                            let rsx = lines.join("\n");
-                                            messages.push(SetRsxMessage {
-                                                location: hr,
-                                                new_text: rsx,
-                                            });
                                         }
                                     }
                                 }
+                            } else {
+                                // if this is a new file, rebuild the project
+                                *last_file_rebuild = FileMap::new(crate_dir.clone());
                             }
-                        } else {
-                            // if this is a new file, rebuild the project
-                            *last_file_rebuild = FileMap::new(crate_dir.clone());
                         }
                     }
-                }
-                if needs_rebuild {
-                    match build_manager.rebuild() {
-                        Ok(res) => {
-                            print_console_info(
-                                port,
-                                &config,
-                                PrettierOptions {
-                                    changed: evt.paths,
-                                    warnings: res.warnings,
-                                    elapsed_time: res.elapsed_time,
-                                },
-                            );
-                        }
-                        Err(err) => {
-                            log::error!("{}", err);
+                    if needs_rebuild {
+                        match build_manager.rebuild() {
+                            Ok(res) => {
+                                print_console_info(
+                                    port,
+                                    &config,
+                                    PrettierOptions {
+                                        changed: evt.paths,
+                                        warnings: res.warnings,
+                                        elapsed_time: res.elapsed_time,
+                                    },
+                                );
+                            }
+                            Err(err) => {
+                                log::error!("{}", err);
+                            }
                         }
                     }
+                    if !messages.is_empty() {
+                        let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
+                    }
                 }
-                if !messages.is_empty() {
-                    let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
-                }
+                last_update_time = chrono::Local::now().timestamp();
             }
-            last_update_time = chrono::Local::now().timestamp();
-        }
-    })
+        },
+        notify::Config::default(),
+    )
     .unwrap();
 
     for sub_path in allow_watch_path {
@@ -304,28 +308,31 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
-        let config = watcher_config.clone();
-        if info.is_ok() {
-            if chrono::Local::now().timestamp() > last_update_time {
-                match build_manager.rebuild() {
-                    Ok(res) => {
-                        last_update_time = chrono::Local::now().timestamp();
-                        print_console_info(
-                            port,
-                            &config,
-                            PrettierOptions {
-                                changed: info.unwrap().paths,
-                                warnings: res.warnings,
-                                elapsed_time: res.elapsed_time,
-                            },
-                        );
+    let mut watcher = RecommendedWatcher::new(
+        move |info: notify::Result<notify::Event>| {
+            let config = watcher_config.clone();
+            if info.is_ok() {
+                if chrono::Local::now().timestamp() > last_update_time {
+                    match build_manager.rebuild() {
+                        Ok(res) => {
+                            last_update_time = chrono::Local::now().timestamp();
+                            print_console_info(
+                                port,
+                                &config,
+                                PrettierOptions {
+                                    changed: info.unwrap().paths,
+                                    warnings: res.warnings,
+                                    elapsed_time: res.elapsed_time,
+                                },
+                            );
+                        }
+                        Err(e) => log::error!("{}", e),
                     }
-                    Err(e) => log::error!("{}", e),
                 }
             }
-        }
-    })
+        },
+        notify::Config::default(),
+    )
     .unwrap();
 
     for sub_path in allow_watch_path {
