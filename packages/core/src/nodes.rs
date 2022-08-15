@@ -869,18 +869,8 @@ impl<'a> NodeFactory<'a> {
         dynamic_context: TemplateContext<'a>,
     ) -> VNode<'a> {
         let borrow_ref = self.scope.templates.borrow();
-        if let Some(prev) = borrow_ref.get(&id) {
-            if &template != &*prev.borrow() {
-                drop(prev);
-                drop(borrow_ref);
-                {
-                    let mut borrow_mut = self.scope.templates.borrow_mut();
-                    borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
-                }
-                let mut resolver = self.scope.template_resolver.borrow_mut();
-                resolver.mark_dirty(&id);
-            }
-        } else {
+        // We only create the template if it doesn't already exist to allow for hot reloading
+        if !borrow_ref.contains_key(&id) {
             drop(borrow_ref);
             let mut borrow_mut = self.scope.templates.borrow_mut();
             borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));

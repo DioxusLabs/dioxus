@@ -584,7 +584,13 @@ impl<'b> DiffState<'b> {
         }
 
         // if the templates are different, just rebuild it
-        if old.template_id != new.template_id {
+        if old.template_id != new.template_id
+            || self
+                .scopes
+                .template_resolver
+                .borrow()
+                .is_dirty(&new.template_id)
+        {
             self.replace_node(old_node, new_node);
             return;
         }

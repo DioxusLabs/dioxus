@@ -62,7 +62,7 @@ use crate::{
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub struct StaticCodeLocation {
     /// the path to the crate that contains the location
@@ -76,7 +76,7 @@ pub struct StaticCodeLocation {
 }
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct OwnedCodeLocation {
     /// the path to the crate that contains the location
@@ -90,7 +90,7 @@ pub struct OwnedCodeLocation {
 }
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Eq, Debug)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "serialize", serde(untagged))]
 pub enum CodeLocation {
@@ -98,6 +98,46 @@ pub enum CodeLocation {
     Static(&'static StaticCodeLocation),
     /// A loctation that is created at runtime.
     Dynamic(Box<OwnedCodeLocation>),
+}
+
+impl Hash for CodeLocation {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            CodeLocation::Static(loc) => {
+                loc.crate_path.hash(state);
+                loc.file_path.hash(state);
+                state.write_u32(loc.line);
+                state.write_u32(loc.column);
+            }
+            CodeLocation::Dynamic(loc) => {
+                let (crate_path, file_path): (&str, &str) = (&loc.crate_path, &loc.file_path);
+                crate_path.hash(state);
+                file_path.hash(state);
+                state.write_u32(loc.line);
+                state.write_u32(loc.column);
+            }
+        }
+    }
+}
+
+impl PartialEq for CodeLocation {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Static(l), Self::Static(r)) => l == r,
+            (Self::Dynamic(l), Self::Dynamic(r)) => l == r,
+            (Self::Static(l), Self::Dynamic(r)) => **r == **l,
+            (Self::Dynamic(l), Self::Static(r)) => **l == **r,
+        }
+    }
+}
+
+impl PartialEq<StaticCodeLocation> for OwnedCodeLocation {
+    fn eq(&self, other: &StaticCodeLocation) -> bool {
+        self.crate_path == other.crate_path
+            && self.file_path == other.file_path
+            && self.line == other.line
+            && self.column == other.column
+    }
 }
 
 impl CodeLocation {
@@ -870,7 +910,18 @@ pub(crate) struct TemplateResolver {
 impl TemplateResolver {
     pub fn mark_dirty(&mut self, id: &TemplateId) {
         if let Some((_, dirty)) = self.template_id_mapping.get_mut(id) {
+            println!("marking dirty {:?}", id);
             *dirty = true;
+        } else {
+            println!("failed {:?}", id);
+        }
+    }
+
+    pub fn is_dirty(&self, id: &TemplateId) -> bool {
+        if let Some((_, true)) = self.template_id_mapping.get(id) {
+            true
+        } else {
+            false
         }
     }
 
@@ -900,7 +951,7 @@ pub struct SetTemplateMsg {
     /// The nodes of the new template
     pub nodes: OwnedTemplateNodes,
     /// The number of root nodes in the new template
-    pub root_count: OwnedRootNodes,
+    pub roots: OwnedRootNodes,
     /// The mapping from dynamic parts to the ids that depend on them
     pub dynamic_mapping: OwnedDynamicNodeMapping,
 }

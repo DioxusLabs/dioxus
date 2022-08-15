@@ -404,7 +404,7 @@ impl VirtualDom {
                 let SetTemplateMsg {
                     id,
                     nodes,
-                    root_count,
+                    roots,
                     dynamic_mapping,
                 } = *msg;
                 if self
@@ -415,7 +415,7 @@ impl VirtualDom {
                         id.clone(),
                         Rc::new(RefCell::new(Template::Owned(OwnedTemplate {
                             nodes,
-                            root_nodes: root_count,
+                            root_nodes: roots,
                             dynamic_mapping,
                         }))),
                     )

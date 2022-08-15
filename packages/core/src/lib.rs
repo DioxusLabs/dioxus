@@ -71,11 +71,11 @@ pub use crate::innerlude::{
     DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority,
     GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedCodeLocation,
     OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes, OwnedTemplateValue, Properties,
-    SchedulerMsg, Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping,
-    StaticTemplateNode, StaticTemplateNodes, TaskId, Template, TemplateAttribute,
-    TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate,
-    TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
-    VText, VirtualDom,
+    SchedulerMsg, Scope, ScopeId, ScopeState, SetTemplateMsg, StaticCodeLocation,
+    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, Template,
+    TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType,
+    TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
+    VPlaceholder, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
