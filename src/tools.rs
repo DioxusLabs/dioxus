@@ -1,8 +1,8 @@
 use std::{
     fs::{create_dir_all, File},
+    io::{Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    io::{Read, Write}
 };
 
 use anyhow::Context;
@@ -121,15 +121,9 @@ impl Tool {
     /// get tool version
     pub fn tool_version(&self) -> &str {
         match self {
-            Self::Binaryen => {
-                "version_105"
-            }
-            Self::Sass => {
-                "1.51.0"
-            }
-            Self::Tailwind => {
-                "v3.1.6"
-            }
+            Self::Binaryen => "version_105",
+            Self::Sass => "1.51.0",
+            Self::Tailwind => "v3.1.6",
         }
     }
 
@@ -154,7 +148,7 @@ impl Tool {
             Self::Tailwind => {
                 let windows_extension = match self.target_platform() {
                     "windows" => ".exe",
-                    _ => ""
+                    _ => "",
                 };
                 format!(
                     "https://github.com/tailwindlabs/tailwindcss/releases/download/{version}/tailwindcss-{target}-x64{optional_ext}",
@@ -177,7 +171,7 @@ impl Tool {
                     "tar.gz"
                 }
             }
-            Self::Tailwind => "bin"
+            Self::Tailwind => "bin",
         }
     }
 
@@ -218,7 +212,7 @@ impl Tool {
         let dir_name = match self {
             Self::Binaryen => format!("binaryen-{}", self.tool_version()),
             Self::Sass => "dart-sass".to_string(),
-            Self::Tailwind => self.name().to_string()
+            Self::Tailwind => self.name().to_string(),
         };
 
         if self.extension() == "tar.gz" {
@@ -234,14 +228,14 @@ impl Tool {
         } else if self.extension() == "bin" {
             let bin_path = match self.target_platform() {
                 "windows" => tool_path.join(&dir_name).join(self.name()).join(".exe"),
-                _ => tool_path.join(&dir_name).join(self.name())
-            } ;
+                _ => tool_path.join(&dir_name).join(self.name()),
+            };
             // Manualy creating tool directory because we directly download the binary via Github
-            std::fs::create_dir( tool_path.join(dir_name))?;
+            std::fs::create_dir(tool_path.join(dir_name))?;
 
             let mut final_file = std::fs::File::create(&bin_path)?;
             let mut temp_file = File::open(&temp_path)?;
-            let mut content = Vec::new(); 
+            let mut content = Vec::new();
 
             temp_file.read_to_end(&mut content)?;
             final_file.write_all(&content)?;
