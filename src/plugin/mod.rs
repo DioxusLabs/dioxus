@@ -12,8 +12,8 @@ use crate::tools::{app_path, clone_repo};
 use self::{
     interface::PluginInfo,
     interface::{
-        command::PluginCommander, dirs::PluginDirs, download::PluginDownloader,
-        fs::PluginFileSystem, logger::PluginLogger,
+        command::PluginCommander, dirs::PluginDirs, fs::PluginFileSystem, log::PluginLogger,
+        network::PluginNetwork,
     },
 };
 
@@ -39,15 +39,25 @@ impl PluginManager {
 
         let manager = lua.create_table().unwrap();
 
-        lua.globals().set("PLUGIN_LOGGER", PluginLogger).unwrap();
-        lua.globals()
-            .set("PLUGIN_COMMAND", PluginCommander)
-            .unwrap();
-        lua.globals().set("PLUGIN_FS", PluginFileSystem).unwrap();
-        lua.globals()
-            .set("PLUGIN_DOWNLOAD", PluginDownloader)
-            .unwrap();
-        lua.globals().set("PLUGIN_DIRS", PluginDirs).unwrap();
+        let api = lua.create_table().unwrap();
+
+        api.set("log", PluginLogger).unwrap();
+        api.set("command", PluginCommander).unwrap();
+        api.set("network", PluginNetwork).unwrap();
+        api.set("dirs", PluginDirs).unwrap();
+        api.set("fs", PluginFileSystem).unwrap();
+
+        lua.globals().set("plugin_lib", api).unwrap();
+
+        // lua.globals().set("PLUGIN_LOGGER", PluginLogger).unwrap();
+        // lua.globals()
+        //     .set("PLUGIN_COMMAND", PluginCommander)
+        //     .unwrap();
+        // lua.globals().set("PLUGIN_FS", PluginFileSystem).unwrap();
+        // lua.globals()
+        //     .set("PLUGIN_DOWNLOAD", PluginDownloader)
+        //     .unwrap();
+        // lua.globals().set("PLUGIN_DIRS", PluginDirs).unwrap();
 
         let plugin_dir = Self::init_plugin_dir();
         let mut index: u32 = 1;

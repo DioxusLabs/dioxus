@@ -2,8 +2,8 @@ use std::{io::Cursor, path::PathBuf};
 
 use mlua::UserData;
 
-pub struct PluginDownloader;
-impl UserData for PluginDownloader {
+pub struct PluginNetwork;
+impl UserData for PluginNetwork {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
         methods.add_async_function("download_file", |_, args: (String, String)| async move {
             let url = args.0;

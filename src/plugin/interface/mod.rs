@@ -1,10 +1,12 @@
 use mlua::{FromLua, Function, ToLua};
 
-pub mod logger;
+pub mod log;
 pub mod command;
 pub mod fs;
-pub mod download;
+pub mod network;
 pub mod dirs;
+pub mod path;
+pub mod os;
 
 #[derive(Debug, Clone)]
 pub struct PluginInfo<'lua> {
