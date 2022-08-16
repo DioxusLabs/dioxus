@@ -13,7 +13,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
     pub segments: Vec<Segment>,
 }
@@ -160,13 +160,13 @@ impl ToTokens for IfmtInput {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum Segment {
     Literal(String),
     Formatted(FormattedSegment),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct FormattedSegment {
     format_args: String,
     segment: FormattedSegmentType,
@@ -182,7 +182,7 @@ impl ToTokens for FormattedSegment {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub enum FormattedSegmentType {
     Expr(Box<Expr>),
     Ident(Ident),

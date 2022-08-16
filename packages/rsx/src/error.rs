@@ -1,10 +1,10 @@
 use std::fmt::Display;
 
-use dioxus_core::{CodeLocation, OwnedCodeLocation};
+use dioxus_core::OwnedCodeLocation;
 use serde::{Deserialize, Serialize};
 
 /// An error produced when interperting the rsx
-// #[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Error {
     ParseError(ParseError),
     RecompileRequiredError(RecompileReason),

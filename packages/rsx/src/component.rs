@@ -23,7 +23,7 @@ use syn::{
     Token,
 };
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
@@ -197,13 +197,13 @@ impl ToTokens for Component {
 }
 
 // the struct's fields info
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ComponentField {
     pub name: Ident,
     pub content: ContentField,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ContentField {
     ManExpr(Expr),
     Formatted(IfmtInput),

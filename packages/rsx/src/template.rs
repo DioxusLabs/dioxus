@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use dioxus_core::prelude::OwnedTemplate;
 use dioxus_core::{
     AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
@@ -486,8 +488,82 @@ impl TemplateBuilder {
         id
     }
 
+    fn try_switch_dynamic_context(
+        mut self,
+        dynamic_context: DynamicTemplateContextBuilder,
+    ) -> Option<Self> {
+        let attribute_mapping: HashMap<String, usize> = dynamic_context
+            .attributes
+            .iter()
+            .enumerate()
+            .map(|(i, ts)| (ts.to_string(), i))
+            .collect();
+        let text_mapping: HashMap<&FormattedSegment, usize> = dynamic_context
+            .text
+            .iter()
+            .enumerate()
+            .map(|(i, ts)| (ts, i))
+            .collect();
+        let listener_mapping: HashMap<&(String, Expr), usize> = dynamic_context
+            .listeners
+            .iter()
+            .enumerate()
+            .map(|(i, ts)| (ts, i))
+            .collect();
+        let node_mapping: HashMap<&BodyNode, usize> = dynamic_context
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(i, ts)| (ts, i))
+            .collect();
+
+        for node in &mut self.nodes {
+            match &mut node.node_type {
+                TemplateNodeTypeBuilder::Element(element) => {
+                    for listener in &mut element.listeners {
+                        *listener =
+                            *listener_mapping.get(&self.dynamic_context.listeners[*listener])?;
+                    }
+                    for attribute in &mut element.attributes {
+                        if let TemplateAttributeValue::Dynamic(idx) = &mut attribute.value {
+                            *idx = *attribute_mapping
+                                .get(&self.dynamic_context.attributes[*idx].to_string())?;
+                        }
+                    }
+                }
+                TemplateNodeTypeBuilder::Text(txt) => {
+                    for seg in &mut txt.segments {
+                        if let TextTemplateSegment::Dynamic(idx) = seg {
+                            *idx = *text_mapping.get(&self.dynamic_context.text[*idx])?;
+                        }
+                    }
+                }
+                TemplateNodeTypeBuilder::DynamicNode(idx) => {
+                    *idx = *node_mapping.get(&self.dynamic_context.nodes[*idx])?;
+                }
+            }
+        }
+        self.dynamic_context = dynamic_context;
+
+        Some(self)
+    }
+
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<Template, Error> {
-        let dynamic_context = self.dynamic_context;
+        let mut nodes = Vec::new();
+        let dynamic_mapping = self.dynamic_mapping(&nodes);
+        for node in self.nodes {
+            nodes.push(node.try_into_owned(location)?);
+        }
+
+        Ok(Template::Owned(OwnedTemplate {
+            nodes,
+            root_nodes: self.root_nodes,
+            dynamic_mapping,
+        }))
+    }
+
+    fn dynamic_mapping(&self, resolved_nodes: &Vec<OwnedTemplateNode>) -> OwnedDynamicNodeMapping {
+        let dynamic_context = &self.dynamic_context;
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         let nodes = &self.nodes;
         for n in nodes {
@@ -537,13 +613,9 @@ impl TemplateBuilder {
                 _ => (),
             }
         }
-        let mut nodes = Vec::new();
-        for node in self.nodes {
-            nodes.push(node.try_into_owned(location)?);
-        }
 
         let mut volatile_mapping = Vec::new();
-        for n in &nodes {
+        for n in resolved_nodes {
             if let TemplateNodeType::Element(el) = &n.node_type {
                 for (i, attr) in el.attributes.iter().enumerate() {
                     if attr.attribute.volatile {
@@ -553,17 +625,13 @@ impl TemplateBuilder {
             }
         }
 
-        Ok(Template::Owned(OwnedTemplate {
-            nodes,
-            root_nodes: self.root_nodes,
-            dynamic_mapping: OwnedDynamicNodeMapping::new(
-                node_mapping,
-                text_mapping,
-                attribute_mapping,
-                volatile_mapping,
-                listener_mapping,
-            ),
-        }))
+        OwnedDynamicNodeMapping::new(
+            node_mapping,
+            text_mapping,
+            attribute_mapping,
+            volatile_mapping,
+            listener_mapping,
+        )
     }
 }
 
