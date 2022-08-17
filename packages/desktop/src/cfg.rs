@@ -2,23 +2,21 @@ use std::path::PathBuf;
 
 use wry::application::window::Icon;
 use wry::{
-    application::{
-        event_loop::EventLoop,
-        window::{Window, WindowBuilder},
-    },
+    application::window::{Window, WindowBuilder},
     http::{Request as HttpRequest, Response as HttpResponse},
-    webview::{FileDropEvent, WebView},
+    webview::FileDropEvent,
     Result as WryResult,
 };
 
-pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
+// pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
+/// The configuration for the desktop application.
 pub struct DesktopConfig {
     pub(crate) window: WindowBuilder,
     pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
-    pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
+    // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
@@ -37,7 +35,7 @@ impl DesktopConfig {
         let window = WindowBuilder::new().with_title("Dioxus app");
 
         Self {
-            event_handler: None,
+            // event_handler: None,
             window,
             protocols: Vec::new(),
             file_drop_handler: None,
@@ -50,7 +48,7 @@ impl DesktopConfig {
     }
 
     /// set the directory from which assets will be searched in release mode
-    pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
+    pub fn with_resource_directory(&mut self, path: impl Into<PathBuf>) -> &mut Self {
         self.resource_dir = Some(path.into());
         self
     }
@@ -61,12 +59,13 @@ impl DesktopConfig {
         self
     }
 
-    /// With pre-rendered HTML content
+    /// Set the pre-rendered HTML content
     pub fn with_prerendered(&mut self, content: String) -> &mut Self {
         self.pre_rendered = Some(content);
         self
     }
 
+    /// Set the configuration for the window.
     pub fn with_window(
         &mut self,
         configure: impl FnOnce(WindowBuilder) -> WindowBuilder,
@@ -80,14 +79,16 @@ impl DesktopConfig {
         self
     }
 
-    pub fn with_event_handler(
-        &mut self,
-        handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
-    ) -> &mut Self {
-        self.event_handler = Some(Box::new(handler));
-        self
-    }
+    // /// Set a custom event handler
+    // pub fn with_event_handler(
+    //     &mut self,
+    //     handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
+    // ) -> &mut Self {
+    //     self.event_handler = Some(Box::new(handler));
+    //     self
+    // }
 
+    /// Set a file drop handler
     pub fn with_file_drop_handler(
         &mut self,
         handler: impl Fn(&Window, FileDropEvent) -> bool + 'static,
@@ -96,6 +97,7 @@ impl DesktopConfig {
         self
     }
 
+    /// Set a custom protocol
     pub fn with_custom_protocol<F>(&mut self, name: String, handler: F) -> &mut Self
     where
         F: Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static,
@@ -104,7 +106,7 @@ impl DesktopConfig {
         self
     }
 
-    /// Add a custom icon for this application
+    /// Set a custom icon for this application
     pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
         self.window.window.window_icon = Some(icon);
         self
