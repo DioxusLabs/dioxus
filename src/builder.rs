@@ -152,10 +152,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                         if config.release == true {
                             args.push("-Oz");
                         }
-                        binaryen.call(
-                            "wasm-opt",
-                            args,
-                        )?;
+                        binaryen.call("wasm-opt", args)?;
                     }
                 }
             }
@@ -177,11 +174,11 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
 
                 let input_path = match sub.get("input") {
                     Some(val) => val.as_str().unwrap(),
-                    None => "./public"
+                    None => "./public",
                 };
                 let config_path = match sub.get("config") {
                     Some(val) => val.as_str().unwrap(),
-                    None => "./src/tailwind.config.js"
+                    None => "./src/tailwind.config.js",
                 };
                 let mut args = vec![
                     "-i",
@@ -189,13 +186,13 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
                     "-o",
                     "dist/tailwind.css",
                     "-c",
-                    config_path
+                    config_path,
                 ];
 
                 if config.release == true {
                     args.push("--minify");
                 }
-                
+
                 tailwind.call("tailwindcss", args)?;
             }
         } else {
@@ -459,7 +456,13 @@ pub fn gen_page(config: &DioxusConfig, serve: bool) -> String {
             &style.to_str().unwrap(),
         ))
     }
-    if config.application.tools.clone().unwrap_or_default().contains_key("tailwindcss") {
+    if config
+        .application
+        .tools
+        .clone()
+        .unwrap_or_default()
+        .contains_key("tailwindcss")
+    {
         style_str.push_str("<link rel=\"stylesheet\" href=\"tailwind.css\">\n");
     }
     html = html.replace("{style_include}", &style_str);
