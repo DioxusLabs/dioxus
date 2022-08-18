@@ -1,3 +1,5 @@
+use crate::plugin::PluginManager;
+
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
@@ -9,7 +11,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn build(self) -> Result<()> {
+    pub fn build(self, plugin_manager: PluginManager) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the release state.
@@ -31,6 +33,8 @@ impl Build {
                 .default_platform
                 .clone()
         });
+
+        let _ = plugin_manager.on_build_event(&crate_config, &platform);
 
         match platform.as_str() {
             "web" => {

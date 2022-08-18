@@ -9,7 +9,7 @@ use axum::{
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
 use dioxus_rsx_interpreter::SetRsxMessage;
-use notify::{RecommendedWatcher, Watcher};
+use notify::Watcher;
 use syn::spanned::Spanned;
 
 use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
@@ -98,7 +98,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let mut watcher = RecommendedWatcher::new(move |evt: notify::Result<notify::Event>| {
+    let mut watcher = notify::recommended_watcher(move |evt: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if chrono::Local::now().timestamp() > last_update_time {
             // Give time for the change to take effect before reading the file
@@ -304,7 +304,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let mut watcher = RecommendedWatcher::new(move |info: notify::Result<notify::Event>| {
+    let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if info.is_ok() {
             if chrono::Local::now().timestamp() > last_update_time {

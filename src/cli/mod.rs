@@ -56,3 +56,17 @@ pub enum Commands {
     #[clap(subcommand)]
     Tool(tool::Tool),
 }
+
+impl Commands {
+    pub fn to_string(&self) -> String {
+        match self {
+            Commands::Build(_) => "build",
+            Commands::Translate(_) => "translate",
+            Commands::Serve(_) => "sevre",
+            Commands::Create(_) => "create",
+            Commands::Clean(_) => "clean",
+            Commands::Config(_) => "config",
+            Commands::Tool(_) => "tool",
+        }.to_string()
+    }
+}

@@ -11,8 +11,6 @@ async fn main() -> Result<()> {
         required: vec![],
     }).unwrap();
 
-    plugin_manager.load_all_plugins().unwrap();
-
     match args.action {
         Commands::Translate(opts) => {
             if let Err(e) = opts.translate() {
@@ -21,7 +19,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Build(opts) => {
-            if let Err(e) = opts.build() {
+            if let Err(e) = opts.build(plugin_manager) {
                 log::error!("🚫 Build project failed: {}", e);
             }
         }

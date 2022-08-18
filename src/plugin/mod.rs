@@ -3,20 +3,21 @@ use std::{
     path::PathBuf,
 };
 
-use mlua::{Lua, Table};
+use mlua::{AsChunk, Lua, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::tools::{app_path, clone_repo};
+use crate::{tools::{app_path, clone_repo}, CrateConfig};
 
 use self::{
     interface::PluginInfo,
     interface::{
         command::PluginCommander, dirs::PluginDirs, fs::PluginFileSystem, log::PluginLogger,
-        network::PluginNetwork,
+        network::PluginNetwork, os::PluginOS, path::PluginPath,
     },
 };
 
+pub mod argument;
 pub mod interface;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +39,7 @@ impl PluginManager {
         let lua = Lua::new();
 
         let manager = lua.create_table().unwrap();
+        let plugin_dir = Self::init_plugin_dir();
 
         let api = lua.create_table().unwrap();
 
@@ -46,20 +48,14 @@ impl PluginManager {
         api.set("network", PluginNetwork).unwrap();
         api.set("dirs", PluginDirs).unwrap();
         api.set("fs", PluginFileSystem).unwrap();
+        api.set("path", PluginPath).unwrap();
+        api.set("os", PluginOS).unwrap();
 
         lua.globals().set("plugin_lib", api).unwrap();
+        lua.globals()
+            .set("library_dir", plugin_dir.to_str().unwrap())
+            .unwrap();
 
-        // lua.globals().set("PLUGIN_LOGGER", PluginLogger).unwrap();
-        // lua.globals()
-        //     .set("PLUGIN_COMMAND", PluginCommander)
-        //     .unwrap();
-        // lua.globals().set("PLUGIN_FS", PluginFileSystem).unwrap();
-        // lua.globals()
-        //     .set("PLUGIN_DOWNLOAD", PluginDownloader)
-        //     .unwrap();
-        // lua.globals().set("PLUGIN_DIRS", PluginDirs).unwrap();
-
-        let plugin_dir = Self::init_plugin_dir();
         let mut index: u32 = 1;
         let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
         for entry in std::fs::read_dir(&plugin_dir).ok()? {
@@ -77,6 +73,9 @@ impl PluginManager {
                     let info = lua.load(&buffer).eval::<PluginInfo>().unwrap();
                     let _ = manager.set(index, info.clone());
 
+                    let dir_name_str = plugin_dir.name().unwrap().to_string();
+                    lua.globals().set("current_dir_name", dir_name_str).unwrap();
+
                     // call `on_init` if file "dcp.json" not exists
                     let dcp_file = plugin_dir.join("dcp.json");
                     if !dcp_file.is_file() {
@@ -88,9 +87,6 @@ impl PluginManager {
             }
         }
 
-        lua.globals()
-            .set("LIBDIR", plugin_dir.join("library").to_str().unwrap())
-            .unwrap();
         lua.globals().set("manager", manager).unwrap();
 
         for (idx, path, info) in init_list {
@@ -113,14 +109,35 @@ impl PluginManager {
         Some(Self { lua })
     }
 
-    pub fn load_all_plugins(&self) -> anyhow::Result<()> {
+    // pub fn load_all_plugins(&self) -> anyhow::Result<()> {
+    //     let lua = &self.lua;
+    //     let manager = lua.globals().get::<_, Table>("manager")?;
+    //     for i in 1..(manager.len()? as i32 + 1) {
+    //         let _ = manager.get::<i32, PluginInfo>(i)?;
+    //         let code = format!("manager[{i}].on_load()");
+    //         lua.load(&code).exec()?;
+    //     }
+    //     Ok(())
+    // }
+
+    pub fn on_build_event(&self, crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
         let lua = &self.lua;
+
         let manager = lua.globals().get::<_, Table>("manager")?;
+
+        let info = json!({
+            "name": crate_config.dioxus_config.application.name,
+            "platform": platform,
+            "out_dir": crate_config.out_dir.to_str().unwrap(),
+            "asset_dir": crate_config.asset_dir.to_str().unwrap(),
+        });
+
         for i in 1..(manager.len()? as i32 + 1) {
             let _ = manager.get::<i32, PluginInfo>(i)?;
-            let code = format!("manager[{i}].on_load()");
+            let code = format!("manager[{i}].build.on_start({})", info.to_string());
             lua.load(&code).exec()?;
         }
+
         Ok(())
     }
 

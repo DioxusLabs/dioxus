@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use mlua::UserData;
 
 pub struct PluginOS;
