@@ -1,4 +1,5 @@
 use mlua::{FromLua, Function, ToLua};
+use serde::Serialize;
 
 pub mod command;
 pub mod dirs;
@@ -47,6 +48,11 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             if let Ok(v) = tab.get::<_, Function>("on_init") {
                 res.on_init = Some(v);
             }
+
+            if let Ok(v) = tab.get::<_, PluginBuildInfo>("build") {
+                res.build = v;
+            }
+
         }
 
         Ok(res)
@@ -113,4 +119,13 @@ impl<'lua> ToLua<'lua> for PluginBuildInfo<'lua> {
 
         Ok(mlua::Value::Table(res))
     }
+}
+
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct PluginServeInfo<'lua> {
+
+    pub interval: i32,
+
+    pub on_start: Option<Function<'lua>>,
+    pub on_interval: Option<Function<'lua>>,
 }

@@ -34,7 +34,7 @@ impl Build {
                 .clone()
         });
 
-        let _ = plugin_manager.on_build_event(&crate_config, &platform);
+        let _ = plugin_manager.on_build_start(&crate_config, &platform);
 
         match platform.as_str() {
             "web" => {
@@ -64,6 +64,8 @@ impl Build {
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;
+
+        let _ = plugin_manager.on_build_finish(&crate_config, &platform);
 
         Ok(())
     }

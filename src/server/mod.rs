@@ -151,58 +151,47 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                                 } else {
                                                     *last = last.split_at(end.column).0;
                                                 }
-                                                if let Some(last) = lines.last_mut() {
-                                                    // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                                    if start.line == end.line {
-                                                        *last = last
-                                                            .split_at(end.column - start.column)
-                                                            .0;
-                                                    } else {
-                                                        *last = last.split_at(end.column).0;
-                                                    }
-                                                }
-                                                let rsx = lines.join("\n");
-                                                messages.push(SetRsxMessage {
-                                                    location: hr,
-                                                    new_text: rsx,
-                                                });
                                             }
+                                            let rsx = lines.join("\n");
+                                            messages.push(SetRsxMessage {
+                                                location: hr,
+                                                new_text: rsx,
+                                            });
                                         }
                                     }
                                 }
-                            } else {
-                                // if this is a new file, rebuild the project
-                                *last_file_rebuild = FileMap::new(crate_dir.clone());
                             }
+                        } else {
+                            // if this is a new file, rebuild the project
+                            *last_file_rebuild = FileMap::new(crate_dir.clone());
                         }
-                    }
-                    if needs_rebuild {
-                        match build_manager.rebuild() {
-                            Ok(res) => {
-                                print_console_info(
-                                    port,
-                                    &config,
-                                    PrettierOptions {
-                                        changed: evt.paths,
-                                        warnings: res.warnings,
-                                        elapsed_time: res.elapsed_time,
-                                    },
-                                );
-                            }
-                            Err(err) => {
-                                log::error!("{}", err);
-                            }
-                        }
-                    }
-                    if !messages.is_empty() {
-                        let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
                     }
                 }
-                last_update_time = chrono::Local::now().timestamp();
+                if needs_rebuild {
+                    match build_manager.rebuild() {
+                        Ok(res) => {
+                            print_console_info(
+                                port,
+                                &config,
+                                PrettierOptions {
+                                    changed: evt.paths,
+                                    warnings: res.warnings,
+                                    elapsed_time: res.elapsed_time,
+                                },
+                            );
+                        }
+                        Err(err) => {
+                            log::error!("{}", err);
+                        }
+                    }
+                }
+                if !messages.is_empty() {
+                    let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
+                }
             }
-        },
-        notify::Config::default(),
-    )
+            last_update_time = chrono::Local::now().timestamp();
+        }
+    })
     .unwrap();
 
     for sub_path in allow_watch_path {
@@ -332,11 +321,11 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
                             },
                         );
                     }
+                    Err(e) => log::error!("{}", e),
                 }
             }
-        },
-        notify::Config::default(),
-    )
+        }
+    })
     .unwrap();
 
     for sub_path in allow_watch_path {

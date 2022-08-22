@@ -3,11 +3,14 @@ use std::{
     path::PathBuf,
 };
 
-use mlua::{AsChunk, Lua, Table};
+use mlua::{AsChunk, Lua, Table, ToLuaMulti};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use crate::{tools::{app_path, clone_repo}, CrateConfig};
+use crate::{
+    tools::{app_path, clone_repo},
+    CrateConfig,
+};
 
 use self::{
     interface::PluginInfo,
@@ -70,19 +73,28 @@ impl PluginManager {
                     let mut file = std::fs::File::open(init_file).unwrap();
                     let mut buffer = String::new();
                     file.read_to_string(&mut buffer).unwrap();
-                    let info = lua.load(&buffer).eval::<PluginInfo>().unwrap();
-                    let _ = manager.set(index, info.clone());
 
-                    let dir_name_str = plugin_dir.name().unwrap().to_string();
-                    lua.globals().set("current_dir_name", dir_name_str).unwrap();
+                    let info = lua.load(&buffer).eval::<PluginInfo>();
+                    match info {
+                        Ok(info) => {
+                            let _ = manager.set(index, info.clone());
 
-                    // call `on_init` if file "dcp.json" not exists
-                    let dcp_file = plugin_dir.join("dcp.json");
-                    if !dcp_file.is_file() {
-                        init_list.push((index, dcp_file, info));
+                            let dir_name_str = plugin_dir.name().unwrap().to_string();
+                            lua.globals().set("current_dir_name", dir_name_str).unwrap();
+
+                            // call `on_init` if file "dcp.json" not exists
+                            let dcp_file = plugin_dir.join("dcp.json");
+                            if !dcp_file.is_file() {
+                                init_list.push((index, dcp_file, info));
+                            }
+
+                            index += 1;
+                        }
+                        Err(_e) => {
+                            let dir_name = plugin_dir.file_name().unwrap().to_str().unwrap();
+                            log::error!("Plugin '{dir_name}' load failed.");
+                        }
                     }
-
-                    index += 1;
                 }
             }
         }
@@ -109,33 +121,68 @@ impl PluginManager {
         Some(Self { lua })
     }
 
-    // pub fn load_all_plugins(&self) -> anyhow::Result<()> {
-    //     let lua = &self.lua;
-    //     let manager = lua.globals().get::<_, Table>("manager")?;
-    //     for i in 1..(manager.len()? as i32 + 1) {
-    //         let _ = manager.get::<i32, PluginInfo>(i)?;
-    //         let code = format!("manager[{i}].on_load()");
-    //         lua.load(&code).exec()?;
-    //     }
-    //     Ok(())
-    // }
-
-    pub fn on_build_event(&self, crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
+    pub fn on_build_start(&self, crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
         let lua = &self.lua;
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 
-        let info = json!({
-            "name": crate_config.dioxus_config.application.name,
-            "platform": platform,
-            "out_dir": crate_config.out_dir.to_str().unwrap(),
-            "asset_dir": crate_config.asset_dir.to_str().unwrap(),
-        });
+        let args = lua.create_table()?;
+        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+        args.set("platform", platform)?;
+        args.set("out_dir", crate_config.out_dir.to_str().unwrap())?;
+        args.set("asset_dir", crate_config.asset_dir.to_str().unwrap())?;
 
         for i in 1..(manager.len()? as i32 + 1) {
-            let _ = manager.get::<i32, PluginInfo>(i)?;
-            let code = format!("manager[{i}].build.on_start({})", info.to_string());
-            lua.load(&code).exec()?;
+            let info = manager.get::<i32, PluginInfo>(i)?;
+            if let Some(func) = info.build.on_start {
+                func.call::<Table, ()>(args.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_build_finish(
+        &self,
+        crate_config: &CrateConfig,
+        platform: &str,
+    ) -> anyhow::Result<()> {
+        let lua = &self.lua;
+
+        let manager = lua.globals().get::<_, Table>("manager")?;
+
+        let args = lua.create_table()?;
+        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+        args.set("platform", platform)?;
+        args.set("out_dir", crate_config.out_dir.to_str().unwrap())?;
+        args.set("asset_dir", crate_config.asset_dir.to_str().unwrap())?;
+
+        for i in 1..(manager.len()? as i32 + 1) {
+            let info = manager.get::<i32, PluginInfo>(i)?;
+            if let Some(func) = info.build.on_finish {
+                func.call::<Table, ()>(args.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn call_event<'lua>(&self, event: &str, args: impl ToLuaMulti<'lua>) -> anyhow::Result<()> {
+        let lua = &self.lua;
+
+        let manager = lua.globals().get::<_, Table>("manager")?;
+
+        for i in 1..(manager.len()? as i32 + 1) {
+            let info = manager.get::<_, PluginInfo>(i)?;
+            let func = match event {
+                "on_init" => info.on_init,
+                "build.on_start" => info.build.on_start,
+                _ => None,
+            };
+
+            if let Some(func) = func {
+                func.call(args)?;
+            }
         }
 
         Ok(())
