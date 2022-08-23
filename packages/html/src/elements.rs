@@ -1013,7 +1013,7 @@ builder_constructors! {
     /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
     /// element.
     dialog {
-        open: bool,
+        open: Bool,
     };
 
     /// Build a
