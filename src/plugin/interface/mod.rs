@@ -1,5 +1,4 @@
 use mlua::{FromLua, Function, ToLua};
-use serde::Serialize;
 
 pub mod command;
 pub mod dirs;
@@ -52,7 +51,6 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             if let Ok(v) = tab.get::<_, PluginBuildInfo>("build") {
                 res.build = v;
             }
-
         }
 
         Ok(res)
@@ -105,9 +103,7 @@ impl<'lua> FromLua<'lua> for PluginBuildInfo<'lua> {
 
 impl<'lua> ToLua<'lua> for PluginBuildInfo<'lua> {
     fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
-
         let res = lua.create_table()?;
-
 
         if let Some(v) = self.on_start {
             res.set("on_start", v)?;
@@ -121,11 +117,64 @@ impl<'lua> ToLua<'lua> for PluginBuildInfo<'lua> {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default)]
 pub struct PluginServeInfo<'lua> {
-
     pub interval: i32,
 
     pub on_start: Option<Function<'lua>>,
     pub on_interval: Option<Function<'lua>>,
+    pub on_rebuild: Option<Function<'lua>>,
+    pub on_shutdown: Option<Function<'lua>>,
+}
+
+impl<'lua> FromLua<'lua> for PluginServeInfo<'lua> {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua mlua::Lua) -> mlua::Result<Self> {
+        let mut res = Self::default();
+
+        if let mlua::Value::Table(tab) = lua_value {
+            if let Ok(v) = tab.get::<_, i32>("interval") {
+                res.interval = v;
+            }
+            if let Ok(v) = tab.get::<_, Function>("on_start") {
+                res.on_start = Some(v);
+            }
+            if let Ok(v) = tab.get::<_, Function>("on_interval") {
+                res.on_interval = Some(v);
+            }
+            if let Ok(v) = tab.get::<_, Function>("on_rebuild") {
+                res.on_rebuild = Some(v);
+            }
+            if let Ok(v) = tab.get::<_, Function>("on_shutdown") {
+                res.on_shutdown = Some(v);
+            }
+        }
+
+        Ok(res)
+    }
+}
+
+impl<'lua> ToLua<'lua> for PluginServeInfo<'lua> {
+    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+        let res = lua.create_table()?;
+
+        res.set("interval", self.interval)?;
+
+        if let Some(v) = self.on_start {
+            res.set("on_start", v)?;
+        }
+
+        if let Some(v) = self.on_interval {
+            res.set("on_interval", v)?;
+        }
+
+        if let Some(v) = self.on_rebuild {
+            res.set("on_rebuild", v)?;
+        }
+
+        if let Some(v) = self.on_shutdown {
+            res.set("on_shutdown", v)?;
+        }
+
+        Ok(mlua::Value::Table(res))
+    }
 }

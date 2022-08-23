@@ -167,27 +167,6 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn call_event<'lua>(&self, event: &str, args: impl ToLuaMulti<'lua>) -> anyhow::Result<()> {
-        let lua = &self.lua;
-
-        let manager = lua.globals().get::<_, Table>("manager")?;
-
-        for i in 1..(manager.len()? as i32 + 1) {
-            let info = manager.get::<_, PluginInfo>(i)?;
-            let func = match event {
-                "on_init" => info.on_init,
-                "build.on_start" => info.build.on_start,
-                _ => None,
-            };
-
-            if let Some(func) = func {
-                func.call(args)?;
-            }
-        }
-
-        Ok(())
-    }
-
     fn init_plugin_dir() -> PathBuf {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");
