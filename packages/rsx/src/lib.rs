@@ -13,11 +13,13 @@
 
 #[macro_use]
 mod errors;
-
+#[cfg(feature = "hot-reload")]
 mod attributes;
 mod component;
 mod element;
+#[cfg(feature = "hot-reload")]
 mod elements;
+#[cfg(feature = "hot-reload")]
 mod error;
 mod ifmt;
 mod node;

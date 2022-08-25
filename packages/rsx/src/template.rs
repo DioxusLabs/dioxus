@@ -1,22 +1,29 @@
-use std::collections::HashMap;
-
-use dioxus_core::prelude::OwnedTemplate;
 use dioxus_core::{
-    AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
-    OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
-    TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
+    OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
 };
 use proc_macro2::TokenStream;
 use quote::TokenStreamExt;
 use quote::{quote, ToTokens};
 use syn::{Expr, Ident, LitStr};
 
-use crate::{
-    attributes::attrbute_to_static_str,
-    elements::element_to_static_str,
-    error::{Error, ParseError, RecompileReason},
-    BodyNode, ElementAttr, FormattedSegment, Segment,
-};
+#[cfg(feature = "hot-reload")]
+use hot_reload_imports::*;
+#[cfg(feature = "hot-reload")]
+mod hot_reload_imports {
+    use crate::{
+        attributes::attrbute_to_static_str,
+        elements::element_to_static_str,
+        error::{Error, ParseError, RecompileReason},
+    };
+    use dioxus_core::prelude::OwnedTemplate;
+    use dioxus_core::{
+        AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
+        OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
+        TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
+    };
+    use std::collections::HashMap;
+}
+use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
 
 struct TemplateElementBuilder {
     tag: Ident,
@@ -27,6 +34,7 @@ struct TemplateElementBuilder {
 }
 
 impl TemplateElementBuilder {
+    #[cfg(feature = "hot-reload")]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -115,6 +123,7 @@ struct TemplateAttributeBuilder {
 }
 
 impl TemplateAttributeBuilder {
+    #[cfg(feature = "hot-reload")]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -219,6 +228,7 @@ enum TemplateNodeTypeBuilder {
 }
 
 impl TemplateNodeTypeBuilder {
+    #[cfg(feature = "hot-reload")]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -271,6 +281,7 @@ struct TemplateNodeBuilder {
 }
 
 impl TemplateNodeBuilder {
+    #[cfg(feature = "hot-reload")]
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNode, Error> {
         let TemplateNodeBuilder { id, node_type } = self;
         let node_type = node_type.try_into_owned(location)?;
@@ -488,6 +499,7 @@ impl TemplateBuilder {
         id
     }
 
+    #[cfg(feature = "hot-reload")]
     fn try_switch_dynamic_context(
         mut self,
         dynamic_context: DynamicTemplateContextBuilder,
@@ -548,6 +560,7 @@ impl TemplateBuilder {
         Some(self)
     }
 
+    #[cfg(feature = "hot-reload")]
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<Template, Error> {
         let mut nodes = Vec::new();
         let dynamic_mapping = self.dynamic_mapping(&nodes);
@@ -562,6 +575,7 @@ impl TemplateBuilder {
         }))
     }
 
+    #[cfg(feature = "hot-reload")]
     fn dynamic_mapping(&self, resolved_nodes: &Vec<OwnedTemplateNode>) -> OwnedDynamicNodeMapping {
         let dynamic_context = &self.dynamic_context;
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
