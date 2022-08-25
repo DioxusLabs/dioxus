@@ -1,3 +1,8 @@
+use std::sync::Mutex;
+
+use fxhash::FxHashSet;
+use once_cell::sync::Lazy;
+
 use crate::innerlude::{VNode, VirtualDom};
 
 /// An iterator that only yields "real" [`Element`]s. IE only Elements that are
@@ -84,3 +89,40 @@ impl<'a> Iterator for ElementIdIterator<'a> {
         returned_node
     }
 }
+
+/// This intentionally leaks once per element name to allow more flexability when hot reloding templetes
+#[cfg(feature = "hot-reload")]
+mod leaky {
+    use super::*;
+    static STATIC_CACHE: Lazy<Mutex<FxHashSet<&'static str>>> =
+        Lazy::new(|| Mutex::new(FxHashSet::default()));
+
+    pub fn deserialize_static_leaky<'de, D>(d: D) -> Result<&'static str, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize;
+        let s = <&str>::deserialize(d)?;
+        Ok(if let Some(stat) = STATIC_CACHE.lock().unwrap().get(s) {
+            *stat
+        } else {
+            Box::leak(s.into())
+        })
+    }
+
+    pub fn deserialize_static_leaky_ns<'de, D>(d: D) -> Result<Option<&'static str>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize;
+        Ok(<Option<&str>>::deserialize(d)?.map(|s| {
+            if let Some(stat) = STATIC_CACHE.lock().unwrap().get(s) {
+                *stat
+            } else {
+                Box::leak(s.into())
+            }
+        }))
+    }
+}
+
+pub use leaky::*;

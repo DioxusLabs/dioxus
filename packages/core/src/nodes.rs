@@ -389,17 +389,32 @@ pub trait DioxusElement {
     }
 }
 
+type StaticStr = &'static str;
+
 /// A discription of the attribute
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Deserialize)
+)]
 pub struct AttributeDiscription {
     /// The name of the attribute.
-    pub name: &'static str,
+    #[cfg_attr(
+        all(feature = "serialize", feature = "hot-reload"),
+        serde(deserialize_with = "crate::util::deserialize_static_leaky")
+    )]
+    pub name: StaticStr,
 
     /// The namespace of the attribute.
     ///
     /// Doesn't exist in the html spec.
     /// Used in Dioxus to denote "style" tags and other attribute groups.
-    pub namespace: Option<&'static str>,
+    #[cfg_attr(
+        all(feature = "serialize", feature = "hot-reload"),
+        serde(deserialize_with = "crate::util::deserialize_static_leaky_ns")
+    )]
+    pub namespace: Option<StaticStr>,
 
     /// An indication of we should always try and set the attribute.
     /// Used in controlled components to ensure changes are propagated.

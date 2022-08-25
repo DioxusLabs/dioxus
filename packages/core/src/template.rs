@@ -63,7 +63,10 @@ use crate::{
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize)
+)]
 pub struct StaticCodeLocation {
     /// the path to the crate that contains the location
     pub crate_path: &'static str,
@@ -77,7 +80,10 @@ pub struct StaticCodeLocation {
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct OwnedCodeLocation {
     /// the path to the crate that contains the location
     pub crate_path: String,
@@ -91,13 +97,28 @@ pub struct OwnedCodeLocation {
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Clone, Eq, Debug)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(all(feature = "serialize", feature = "hot-reload"), serde(untagged))]
 pub enum CodeLocation {
     /// A loctation that is created at compile time.
     Static(&'static StaticCodeLocation),
     /// A loctation that is created at runtime.
     Dynamic(Box<OwnedCodeLocation>),
+}
+
+#[cfg(all(feature = "serialize", feature = "hot-reload"))]
+impl<'de> serde::Deserialize<'de> for CodeLocation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self::Dynamic(Box::new(OwnedCodeLocation::deserialize(
+            deserializer,
+        )?)))
+    }
 }
 
 impl Hash for CodeLocation {
@@ -172,6 +193,19 @@ impl CodeLocation {
             CodeLocation::Dynamic(loc) => loc.crate_path.as_str(),
         }
     }
+
+    /// Create an owned code location from a code location.
+    pub fn to_owned(&self) -> OwnedCodeLocation {
+        match self {
+            CodeLocation::Static(loc) => OwnedCodeLocation {
+                crate_path: loc.crate_path.to_owned(),
+                file_path: loc.file_path.to_owned(),
+                line: loc.line,
+                column: loc.column,
+            },
+            CodeLocation::Dynamic(loc) => *loc.clone(),
+        }
+    }
 }
 
 /// get the code location of the code that called this function
@@ -192,6 +226,10 @@ macro_rules! get_line_num {
 ///
 /// `TemplateId` is a refrence to the location in the code the template was created.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TemplateId(pub CodeLocation);
 
 /// An Template's unique identifier within the renderer.
@@ -502,6 +540,10 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -597,6 +639,10 @@ where
 
 /// A template for an attribute
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TemplateAttribute<V: TemplateValue> {
     /// The discription of the attribute
     pub attribute: AttributeDiscription,
@@ -606,6 +652,10 @@ pub struct TemplateAttribute<V: TemplateValue> {
 
 /// A template attribute value that is either dynamic or static
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum TemplateAttributeValue<V: TemplateValue> {
     /// A static attribute
     Static(V),
@@ -673,6 +723,10 @@ impl TemplateValue for OwnedTemplateValue {
 
 /// The kind of node the template is.
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -733,8 +787,14 @@ where
     }
 }
 
+type StaticStr = &'static str;
+
 /// A element template
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TemplateElement<Attributes, V, Children, Listeners>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -743,9 +803,17 @@ where
     V: TemplateValue,
 {
     /// The tag name of the element
-    pub tag: &'static str,
+    #[cfg_attr(
+        all(feature = "serialize", feature = "hot-reload"),
+        serde(deserialize_with = "crate::util::deserialize_static_leaky")
+    )]
+    pub tag: StaticStr,
     /// The namespace of the element
-    pub namespace: Option<&'static str>,
+    #[cfg_attr(
+        all(feature = "serialize", feature = "hot-reload"),
+        serde(deserialize_with = "crate::util::deserialize_static_leaky_ns")
+    )]
+    pub namespace: Option<StaticStr>,
     /// The attributes that modify the element
     pub attributes: Attributes,
     /// The ids of the children of the element
@@ -787,6 +855,10 @@ where
 
 /// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct TextTemplate<Segments, Text>
 where
     Segments: AsRef<[TextTemplateSegment<Text>]>,
@@ -813,6 +885,10 @@ where
 
 /// A segment of a text template that may be dynamic or static.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub enum TextTemplateSegment<Text>
 where
     Text: AsRef<str>,
@@ -825,6 +901,10 @@ where
 
 /// A template value that is created at runtime.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 #[allow(missing_docs)]
 pub enum OwnedTemplateValue {
     Text(String),
@@ -945,6 +1025,10 @@ impl TemplateResolver {
 
 /// A message telling the virtual dom to set a template
 #[derive(Debug)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct SetTemplateMsg {
     /// The id of the template
     pub id: TemplateId,
