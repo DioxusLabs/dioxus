@@ -41,7 +41,7 @@ rust-version = "1.60.0"
 
 [dev-dependencies]
 dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop" }
+dioxus-desktop = { path = "./packages/desktop", features = ["hot-reload"] }
 dioxus-ssr = { path = "./packages/ssr" }
 dioxus-router = { path = "./packages/router" }
 fermi = { path = "./packages/fermi" }

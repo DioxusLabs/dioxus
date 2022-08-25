@@ -76,7 +76,7 @@ features = [
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
-hot-reload = ["web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json"]
+hot-reload = ["web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json", "dioxus/hot-reload"]
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

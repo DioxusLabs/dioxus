@@ -15,7 +15,6 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 dioxus-html = { path = "../html", features = ["serialize"], version = "^0.2.1" }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1" }
-dioxus-rsx-interpreter = { path = "../rsx_interpreter", optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
@@ -44,7 +43,7 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot-reload = ["dioxus-rsx-interpreter", "interprocess"]
+hot-reload = ["interprocess", "dioxus-core/hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
