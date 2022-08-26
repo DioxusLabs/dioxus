@@ -56,7 +56,7 @@ impl Serve {
             }
             return Ok(());
         } else if platform != "web" {
-            return custom_error!("Unsoppurt platform target.");
+            return custom_error!("Unsupported platform target.");
         }
 
         // generate dev-index page

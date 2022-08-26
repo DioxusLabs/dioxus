@@ -2,14 +2,14 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
-use dioxus_rsx_interpreter::SetRsxMessage;
+use dioxus_core::{prelude::TemplateId, CodeLocation, OwnedCodeLocation, SetTemplateMsg};
+use dioxus_rsx::try_parse_template;
 
 use std::{path::PathBuf, sync::Arc};
 
 use super::BuildManager;
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
-pub use dioxus_rsx_interpreter::{error::Error, CodeLocation, SetManyRsxMessage};
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
@@ -21,7 +21,7 @@ use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<SetManyRsxMessage>,
+    pub messages: broadcast::Sender<SetTemplateMsg>,
     pub build_manager: Arc<BuildManager>,
     pub last_file_rebuild: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
@@ -91,10 +91,12 @@ pub async fn hot_reload_handler(
                         }
                     }
                     let mut new_str = String::new();
-                    file.read_to_string(&mut new_str).expect("Unable to read file");
+                    file.read_to_string(&mut new_str)
+                        .expect("Unable to read file");
                     if let Ok(new_file) = syn::parse_file(&new_str) {
                         if let Ok(old_file) = syn::parse_file(&v) {
-                            if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file) {
+                            if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file)
+                            {
                                 for (old, new) in changed.into_iter() {
                                     let hr = get_location(
                                         &state.watcher_config.crate_dir,
@@ -116,72 +118,54 @@ pub async fn hot_reload_handler(
                                     if let Some(last) = lines.last_mut() {
                                         // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
                                         if start.line == end.line {
-                                            *last =
-                                                last.split_at(end.column - start.column).0;
+                                            *last = last.split_at(end.column - start.column).0;
                                         } else {
                                             *last = last.split_at(end.column).0;
                                         }
                                     }
                                     let rsx = lines.join("\n");
-                                    messages.push(SetRsxMessage {
-                                        location: hr,
-                                        new_text: rsx,
-                                    });
+
+                                    let old_dyn_ctx = try_parse_template(
+                                        &format!("{}", old.tokens),
+                                        hr.to_owned(),
+                                        None,
+                                    )
+                                    .map(|(_, old_dyn_ctx)| old_dyn_ctx);
+                                    if let Ok((template, _)) =
+                                        try_parse_template(&rsx, hr.to_owned(), old_dyn_ctx.ok())
+                                    {
+                                        messages.push(SetTemplateMsg(TemplateId(hr), template));
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                log::info!("finished");
             }
-
-            let msg = SetManyRsxMessage(messages);
-            if socket
-                .send(Message::Text(serde_json::to_string(&msg).unwrap()))
-                .await
-                .is_err()
-            {
-                return;
+            for msg in messages {
+                if socket
+                    .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+                    .await
+                    .is_err()
+                {
+                    return;
+                }
             }
+            log::info!("finished");
         }
 
         let mut rx = state.messages.subscribe();
         let hot_reload_handle = tokio::spawn(async move {
             loop {
-                let read_set_rsx = rx.recv();
-                let read_err = socket.recv();
-                tokio::select! {
-                    err = read_err => {
-                        if let Some(Ok(err)) = err {
-                            if let Message::Text(err) = err {
-                                let error: Error = serde_json::from_str(&err).unwrap();
-                                match error{
-                                    Error::ParseError(parse_error) => {
-                                        log::error!("parse error:\n--> at {}:{}:{}\n\t{:?}", parse_error.location.file_path, parse_error.location.line, parse_error.location.column, parse_error.message);
-                                    },
-                                    Error::RecompileRequiredError(_) => {
-                                        if let Err(err) = state.build_manager.rebuild(){
-                                            log::error!("{}", err);
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            break;
-                        }
-                    },
-                    set_rsx = read_set_rsx => {
-                        if let Ok(rsx) = set_rsx {
-                            if socket
-                                .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
-                                .await
-                                .is_err()
-                            {
-                                break;
-                            };
-                        }
-                    }
-                };
+                if let Ok(rsx) = rx.recv().await {
+                    if socket
+                        .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    };
+                }
             }
         });
 
@@ -192,10 +176,10 @@ pub async fn hot_reload_handler(
 pub fn get_location(crate_path: &Path, path: &Path, ts: TokenStream) -> CodeLocation {
     let span = ts.span().start();
     let relative = path.strip_prefix(crate_path).unwrap();
-    CodeLocation {
+    CodeLocation::Dynamic(Box::new(OwnedCodeLocation {
         file_path: relative.display().to_string(),
         crate_path: crate_path.display().to_string(),
         line: span.line as u32,
         column: span.column as u32 + 1,
-    }
+    }))
 }
