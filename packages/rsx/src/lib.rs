@@ -30,6 +30,8 @@ pub use component::*;
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
+#[cfg(feature = "hot-reload")]
+pub use template::{try_parse_template, DynamicTemplateContextBuilder};
 
 // imports
 use proc_macro2::TokenStream as TokenStream2;

@@ -1,8 +1,3 @@
-use std::sync::Mutex;
-
-use fxhash::FxHashSet;
-use once_cell::sync::Lazy;
-
 use crate::innerlude::{VNode, VirtualDom};
 
 /// An iterator that only yields "real" [`Element`]s. IE only Elements that are
@@ -91,9 +86,12 @@ impl<'a> Iterator for ElementIdIterator<'a> {
 }
 
 /// This intentionally leaks once per element name to allow more flexability when hot reloding templetes
-#[cfg(feature = "hot-reload")]
+#[cfg(all(feature = "hot-reload", feature = "serde"))]
 mod leaky {
-    use super::*;
+    use std::sync::Mutex;
+
+    use fxhash::FxHashSet;
+    use once_cell::sync::Lazy;
     static STATIC_CACHE: Lazy<Mutex<FxHashSet<&'static str>>> =
         Lazy::new(|| Mutex::new(FxHashSet::default()));
 
@@ -125,4 +123,5 @@ mod leaky {
     }
 }
 
+#[cfg(all(feature = "hot-reload", feature = "serde"))]
 pub use leaky::*;

@@ -305,6 +305,10 @@ pub struct StaticTemplate {
 
 /// A template that is created at runtime
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    all(feature = "serialize", feature = "hot-reload"),
+    derive(serde::Serialize, serde::Deserialize)
+)]
 pub struct OwnedTemplate {
     /// The nodes in the template
     pub nodes: OwnedTemplateNodes,
@@ -1024,18 +1028,9 @@ impl TemplateResolver {
 }
 
 /// A message telling the virtual dom to set a template
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(
     all(feature = "serialize", feature = "hot-reload"),
     derive(serde::Serialize, serde::Deserialize)
 )]
-pub struct SetTemplateMsg {
-    /// The id of the template
-    pub id: TemplateId,
-    /// The nodes of the new template
-    pub nodes: OwnedTemplateNodes,
-    /// The number of root nodes in the new template
-    pub roots: OwnedRootNodes,
-    /// The mapping from dynamic parts to the ids that depend on them
-    pub dynamic_mapping: OwnedDynamicNodeMapping,
-}
+pub struct SetTemplateMsg(pub TemplateId, pub OwnedTemplate);

@@ -401,24 +401,12 @@ impl VirtualDom {
                 }
             }
             SchedulerMsg::SetTemplate(msg) => {
-                let SetTemplateMsg {
-                    id,
-                    nodes,
-                    roots,
-                    dynamic_mapping,
-                } = *msg;
+                let SetTemplateMsg(id, tmpl) = *msg;
                 if self
                     .scopes
                     .templates
                     .borrow_mut()
-                    .insert(
-                        id.clone(),
-                        Rc::new(RefCell::new(Template::Owned(OwnedTemplate {
-                            nodes,
-                            root_nodes: roots,
-                            dynamic_mapping,
-                        }))),
-                    )
+                    .insert(id.clone(), Rc::new(RefCell::new(Template::Owned(tmpl))))
                     .is_some()
                 {
                     self.scopes.template_resolver.borrow_mut().mark_dirty(&id)

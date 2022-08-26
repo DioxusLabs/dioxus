@@ -7,21 +7,45 @@ use quote::{quote, ToTokens};
 use syn::{Expr, Ident, LitStr};
 
 #[cfg(feature = "hot-reload")]
+pub fn try_parse_template(
+    rsx: &str,
+    location: OwnedCodeLocation,
+    previous_template: Option<DynamicTemplateContextBuilder>,
+) -> Result<(OwnedTemplate, DynamicTemplateContextBuilder), Error> {
+    use crate::CallBody;
+
+    let call_body: CallBody =
+        syn::parse_str(rsx).map_err(|e| Error::ParseError(ParseError::new(e, location.clone())))?;
+    let mut template_builder = TemplateBuilder::from_roots_always(call_body.roots);
+    if let Some(prev) = previous_template {
+        template_builder = template_builder
+            .try_switch_dynamic_context(prev)
+            .ok_or_else(|| {
+                Error::RecompileRequiredError(RecompileReason::CapturedVariable(
+                    "dynamic context updated".to_string(),
+                ))
+            })?;
+    }
+    let dyn_ctx = template_builder.dynamic_context.clone();
+    Ok((template_builder.try_into_owned(&location)?, dyn_ctx))
+}
+
+#[cfg(feature = "hot-reload")]
 use hot_reload_imports::*;
 #[cfg(feature = "hot-reload")]
 mod hot_reload_imports {
-    use crate::{
+    pub use crate::{
         attributes::attrbute_to_static_str,
         elements::element_to_static_str,
         error::{Error, ParseError, RecompileReason},
     };
-    use dioxus_core::prelude::OwnedTemplate;
-    use dioxus_core::{
+    pub use dioxus_core::prelude::OwnedTemplate;
+    pub use dioxus_core::{
         AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
         OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
         TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
     };
-    use std::collections::HashMap;
+    pub use std::collections::HashMap;
 }
 use crate::{BodyNode, ElementAttr, FormattedSegment, Segment};
 
@@ -339,7 +363,7 @@ impl TemplateNodeBuilder {
 }
 
 #[derive(Default)]
-pub(crate) struct TemplateBuilder {
+pub struct TemplateBuilder {
     nodes: Vec<TemplateNodeBuilder>,
     root_nodes: Vec<TemplateNodeId>,
     dynamic_context: DynamicTemplateContextBuilder,
@@ -367,6 +391,19 @@ impl TemplateBuilder {
         } else {
             Some(builder)
         }
+    }
+
+    /// Create a template builder from nodes regardless of performance.
+    #[cfg(feature = "hot-reload")]
+    fn from_roots_always(roots: Vec<BodyNode>) -> Self {
+        let mut builder = Self::default();
+
+        for root in roots {
+            let id = builder.build_node(root, None);
+            builder.root_nodes.push(id);
+        }
+
+        builder
     }
 
     fn build_node(&mut self, node: BodyNode, parent: Option<TemplateNodeId>) -> TemplateNodeId {
@@ -500,7 +537,7 @@ impl TemplateBuilder {
     }
 
     #[cfg(feature = "hot-reload")]
-    fn try_switch_dynamic_context(
+    pub fn try_switch_dynamic_context(
         mut self,
         dynamic_context: DynamicTemplateContextBuilder,
     ) -> Option<Self> {
@@ -510,23 +547,23 @@ impl TemplateBuilder {
             .enumerate()
             .map(|(i, ts)| (ts.to_string(), i))
             .collect();
-        let text_mapping: HashMap<&FormattedSegment, usize> = dynamic_context
+        let text_mapping: HashMap<String, usize> = dynamic_context
             .text
             .iter()
             .enumerate()
-            .map(|(i, ts)| (ts, i))
+            .map(|(i, ts)| (ts.to_token_stream().to_string(), i))
             .collect();
-        let listener_mapping: HashMap<&(String, Expr), usize> = dynamic_context
+        let listener_mapping: HashMap<(String, Expr), usize> = dynamic_context
             .listeners
             .iter()
             .enumerate()
-            .map(|(i, ts)| (ts, i))
+            .map(|(i, ts)| (ts.clone(), i))
             .collect();
-        let node_mapping: HashMap<&BodyNode, usize> = dynamic_context
+        let node_mapping: HashMap<String, usize> = dynamic_context
             .nodes
             .iter()
             .enumerate()
-            .map(|(i, ts)| (ts, i))
+            .map(|(i, ts)| (ts.to_token_stream().to_string(), i))
             .collect();
 
         for node in &mut self.nodes {
@@ -546,12 +583,20 @@ impl TemplateBuilder {
                 TemplateNodeTypeBuilder::Text(txt) => {
                     for seg in &mut txt.segments {
                         if let TextTemplateSegment::Dynamic(idx) = seg {
-                            *idx = *text_mapping.get(&self.dynamic_context.text[*idx])?;
+                            *idx = *text_mapping.get(
+                                &self.dynamic_context.text[*idx]
+                                    .to_token_stream()
+                                    .to_string(),
+                            )?;
                         }
                     }
                 }
                 TemplateNodeTypeBuilder::DynamicNode(idx) => {
-                    *idx = *node_mapping.get(&self.dynamic_context.nodes[*idx])?;
+                    *idx = *node_mapping.get(
+                        &self.dynamic_context.nodes[*idx]
+                            .to_token_stream()
+                            .to_string(),
+                    )?;
                 }
             }
         }
@@ -561,22 +606,25 @@ impl TemplateBuilder {
     }
 
     #[cfg(feature = "hot-reload")]
-    fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<Template, Error> {
+    pub fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplate, Error> {
         let mut nodes = Vec::new();
         let dynamic_mapping = self.dynamic_mapping(&nodes);
         for node in self.nodes {
             nodes.push(node.try_into_owned(location)?);
         }
 
-        Ok(Template::Owned(OwnedTemplate {
+        Ok(OwnedTemplate {
             nodes,
             root_nodes: self.root_nodes,
             dynamic_mapping,
-        }))
+        })
     }
 
     #[cfg(feature = "hot-reload")]
-    fn dynamic_mapping(&self, resolved_nodes: &Vec<OwnedTemplateNode>) -> OwnedDynamicNodeMapping {
+    pub fn dynamic_mapping(
+        &self,
+        resolved_nodes: &Vec<OwnedTemplateNode>,
+    ) -> OwnedDynamicNodeMapping {
         let dynamic_context = &self.dynamic_context;
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         let nodes = &self.nodes;
@@ -774,8 +822,8 @@ impl ToTokens for TemplateBuilder {
     }
 }
 
-#[derive(Default)]
-struct DynamicTemplateContextBuilder {
+#[derive(Default, Clone, Debug)]
+pub struct DynamicTemplateContextBuilder {
     nodes: Vec<BodyNode>,
     text: Vec<FormattedSegment>,
     attributes: Vec<TokenStream>,
