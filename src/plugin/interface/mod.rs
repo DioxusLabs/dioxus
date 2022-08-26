@@ -17,6 +17,7 @@ pub struct PluginInfo<'lua> {
 
     pub on_init: Option<Function<'lua>>,
     pub build: PluginBuildInfo<'lua>,
+    pub serve: PluginServeInfo<'lua>,
 }
 
 impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
@@ -29,6 +30,7 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
 
             on_init: None,
             build: Default::default(),
+            serve: Default::default(),
         };
         if let mlua::Value::Table(tab) = lua_value {
             if let Ok(v) = tab.get::<_, String>("name") {
@@ -51,6 +53,10 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             if let Ok(v) = tab.get::<_, PluginBuildInfo>("build") {
                 res.build = v;
             }
+
+            if let Ok(v) = tab.get::<_, PluginServeInfo>("serve") {
+                res.serve = v;
+            }
         }
 
         Ok(res)
@@ -70,6 +76,7 @@ impl<'lua> ToLua<'lua> for PluginInfo<'lua> {
             res.set("on_init", e)?;
         }
         res.set("build", self.build)?;
+        res.set("serve", self.serve)?;
 
         Ok(mlua::Value::Table(res))
     }

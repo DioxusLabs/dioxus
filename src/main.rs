@@ -48,9 +48,9 @@ async fn main() -> Result<()> {
             }
         }
 
-        Commands::Tool(opts) => {
-            if let Err(e) = opts.tool().await {
-                log::error!("tool error: {}", e);
+        Commands::Plugin(opts) => {
+            if let Err(e) = opts.plugin().await {
+                log::error!("plugin error: {}", e);
             }
         }
     }

@@ -4,7 +4,7 @@ pub mod clean;
 pub mod config;
 pub mod create;
 pub mod serve;
-pub mod tool;
+pub mod plugin;
 pub mod translate;
 
 use crate::{
@@ -52,9 +52,9 @@ pub enum Commands {
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
-    /// Install  & Manage tools for Dioxus-cli.
     #[clap(subcommand)]
-    Tool(tool::Tool),
+    /// Manage plugins for dioxus cli
+    Plugin(plugin::Plugin),
 }
 
 impl Commands {
@@ -66,7 +66,7 @@ impl Commands {
             Commands::Create(_) => "create",
             Commands::Clean(_) => "clean",
             Commands::Config(_) => "config",
-            Commands::Tool(_) => "tool",
+            Commands::Plugin(_) => "plugin",
         }.to_string()
     }
 }

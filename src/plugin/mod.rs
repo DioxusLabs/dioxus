@@ -3,7 +3,7 @@ use std::{
     path::PathBuf,
 };
 
-use mlua::{AsChunk, Lua, Table, ToLuaMulti};
+use mlua::{AsChunk, Lua, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
