@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Serve(opts) => {
-            if let Err(e) = opts.serve().await {
+            if let Err(e) = opts.serve(plugin_manager).await {
                 log::error!("🚫 Serve startup failed: {}", e);
             }
         }
