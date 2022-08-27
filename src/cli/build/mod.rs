@@ -40,7 +40,7 @@ impl Build {
                 crate::builder::build_desktop(&crate_config, false)?;
             }
             _ => {
-                return custom_error!("Unsoppurt platform target.");
+                return custom_error!("Unsupported platform target.");
             }
         }
 
