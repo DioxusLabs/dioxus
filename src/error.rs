@@ -63,7 +63,7 @@ impl From<hyper::Error> for Error {
 #[macro_export]
 macro_rules! custom_error {
     ($msg:literal $(,)?) => {
-        Err(Error::CustomError($msg.to_string()))
+        Err(Error::CustomError(format!($msg)))
     };
     ($err:expr $(,)?) => {
         Err(Error::from($err))

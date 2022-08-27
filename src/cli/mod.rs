@@ -22,7 +22,7 @@ use std::{
     fs::{remove_dir_all, File},
     io::{Read, Write},
     path::PathBuf,
-    process::{exit, Command, Stdio},
+    process::{Command, Stdio},
 };
 
 /// Build, bundle, & ship your Dioxus app.
