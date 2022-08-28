@@ -167,6 +167,65 @@ impl PluginManager {
         Ok(())
     }
 
+    pub fn on_serve_start(&self, crate_config: &CrateConfig) -> anyhow::Result<()> {
+        let lua = &self.lua;
+
+        let manager = lua.globals().get::<_, Table>("manager")?;
+
+        let args = lua.create_table()?;
+        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+
+        for i in 1..(manager.len()? as i32 + 1) {
+            let info = manager.get::<i32, PluginInfo>(i)?;
+            if let Some(func) = info.serve.on_start {
+                func.call::<Table, ()>(args.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_serve_rebuild(&self, timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
+        let lua = &self.lua;
+
+        let manager = lua.globals().get::<_, Table>("manager")?;
+
+        let args = lua.create_table()?;
+        args.set("timestamp", timestamp)?;
+        let files: Vec<String> = files
+            .iter()
+            .map(|v| v.to_str().unwrap().to_string())
+            .collect();
+        args.set("changed_files", files)?;
+
+        for i in 1..(manager.len()? as i32 + 1) {
+            let info = manager.get::<i32, PluginInfo>(i)?;
+            if let Some(func) = info.serve.on_rebuild {
+                func.call::<Table, ()>(args.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn on_serve_shutdown(&self, crate_config: &CrateConfig) -> anyhow::Result<()> {
+        let lua = &self.lua;
+
+        let manager = lua.globals().get::<_, Table>("manager")?;
+
+        let args = lua.create_table()?;
+        args.set("name", crate_config.dioxus_config.application.name.clone())?;
+
+        for i in 1..(manager.len()? as i32 + 1) {
+            let info = manager.get::<i32, PluginInfo>(i)?;
+            if let Some(func) = info.serve.on_shutdown {
+                func.call::<Table, ()>(args.clone())?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn init_plugin_dir() -> PathBuf {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");

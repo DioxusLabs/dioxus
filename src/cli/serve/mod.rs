@@ -65,7 +65,7 @@ impl Serve {
         Serve::regen_dev_page(&crate_config)?;
 
         // start the develop server
-        server::startup(self.serve.port, crate_config.clone()).await?;
+        server::startup(self.serve.port, crate_config.clone(), plugin_manager).await?;
 
         Ok(())
     }
