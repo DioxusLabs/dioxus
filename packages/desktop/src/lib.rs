@@ -18,10 +18,11 @@ pub use wry;
 pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
-use cfg::DesktopConfig;
+pub use cfg::DesktopConfig;
 use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
+pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},

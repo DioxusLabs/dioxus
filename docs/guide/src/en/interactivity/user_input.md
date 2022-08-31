@@ -7,7 +7,7 @@ Interfaces often need to provide a way to input data: e.g. text, numbers, checkb
 With controlled inputs, you are directly in charge of the state of the input. This gives you a lot of flexibility, and makes it easy to keep things in sync. For example, this is how you would create a controlled text input:
 
 ```rust
-{{#include ../../examples/input_controlled.rs:component}}
+{{#include ../../../examples/input_controlled.rs:component}}
 ```
 
 Notice the flexibility – you can:
@@ -24,7 +24,7 @@ As an alternative to controlled inputs, you can simply let the platform keep tra
 Since you don't necessarily have the current value of the uncontrolled input in state, you can access it either by listening to `oninput` events (similarly to controlled components), or, if the input is part of a form, you can access the form data in the form events (e.g. `oninput` or `onsubmit`):
 
 ```rust
-{{#include ../../examples/input_uncontrolled.rs:component}}
+{{#include ../../../examples/input_uncontrolled.rs:component}}
 ```
 ```
 Submitted! UiEvent { data: FormData { value: "", values: {"age": "very old", "date": "1966", "name": "Fred"} } }

@@ -252,7 +252,7 @@ The `RealDom` is a higher level abstraction over updating the Dom. It updates wi
 ### Example
 
 Let's build a toy renderer with borders, size, and text color.
-Before we start lets take a look at an exaple element we can render:
+Before we start lets take a look at an example element we can render:
 ```rust
 cx.render(rsx!{
     div{
@@ -312,7 +312,7 @@ In the following diagram arrows represent dataflow:
 [//]: # "        end"
 [//]: # "    end"
 
-To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to discribe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
+To help in building a Dom, native core provides four traits: State, ChildDepState, ParentDepState, and NodeDepState and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to describe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
 
 ```rust
 use dioxus_native_core::node_ref::*;
@@ -344,21 +344,25 @@ impl ChildDepState for Size {
         if let Some(text) = node.text() {
             // if the node has text, use the text to size our object
             width = text.len() as f32 * ctx;
-            height = ctx;
+            height = *ctx;
         } else {
             // otherwise, the size is the maximum size of the children
-            width = *children
-                .reduce(|accum, item| if accum >= item.0 { accum } else { item.0 })
-                .unwrap_or(0.0));
-            height = *children
-                .reduce(|accum, item| if accum >= item.1 { accum } else { item.1 })
-                .unwrap_or(&0.0);
+            width = children
+                .by_ref()
+                .map(|item| item.0)
+                .reduce(|accum, item| if accum >= item { accum } else { item })
+                .unwrap_or(0.0);
+
+            height = children
+                .map(|item| item.1)
+                .reduce(|accum, item| if accum >= item { accum } else { item })
+                .unwrap_or(0.0);
         }
         // if the node contains a width or height attribute it overrides the other size
-        for a in node.attibutes(){
+        for a in node.attributes(){
             match a.name{
-                "width" => width = a.value.parse().unwrap(),
-                "height" => height = a.value.parse().unwrap(),
+                "width" => width = a.value.as_float32().unwrap(),
+                "height" => height = a.value.as_float32().unwrap(),
                 // because Size only depends on the width and height, no other attributes will be passed to the member
                 _ => panic!()
             }
@@ -390,7 +394,7 @@ impl ParentDepState for TextColor {
         _ctx: &Self::Ctx,
     ) -> bool {
         // TextColor only depends on the color tag, so getting the first tag is equivilent to looking through all tags
-        let new = match node.attributes().next() {
+        let new = match node.attributes().next().map(|attr| attr.name) {
             // if there is a color tag, translate it
             Some("red") => TextColor { r: 255, g: 0, b: 0 },
             Some("green") => TextColor { r: 0, g: 255, b: 0 },
@@ -412,14 +416,13 @@ impl ParentDepState for TextColor {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Border(bool);
 // TextColor only depends on the current node, so it implements NodeDepState
-impl NodeDepState for Border {
+impl NodeDepState<()> for Border {
     type Ctx = ();
-    // Border does not depended on any other member in the current node
-    type DepState = ();
+   
     // Border does not depended on any other member in the current node
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(&["border"]));
-    fn reduce(&mut self, node: NodeView, _sibling: &Self::DepState, _ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         // check if the node contians a border attribute
         let new = Self(node.attributes().next().map(|a| a.name == "border").is_some());
         // check if the member has changed
@@ -463,7 +466,7 @@ fn main(){
     let to_update = rdom.apply_mutations(vec![mutations]);
     let mut ctx = AnyMap::new();
     // set the font size to 3.3
-    ctx.insert(3.3);
+    ctx.insert(3.3f32);
     // update the ToyState for nodes in the real_dom tree
     let _to_rerender = rdom.update_state(&dom, to_update, ctx).unwrap();
 

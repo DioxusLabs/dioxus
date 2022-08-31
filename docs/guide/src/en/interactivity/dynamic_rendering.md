@@ -7,7 +7,7 @@ Sometimes you want to render different things depending on the state/props. With
 To render different elements based on a condition, you could use an `if-else` statement:
 
 ```rust
-{{#include ../../examples/conditional_rendering.rs:if_else}}
+{{#include ../../../examples/conditional_rendering.rs:if_else}}
 ```
 
 > You could also use `match` statements, or any Rust function to conditionally render different things.
@@ -18,7 +18,7 @@ To render different elements based on a condition, you could use an `if-else` st
 Since `Element` is a `Option<VNode>`, components accepting `Element` as a prop can actually inspect its contents, and render different things based on that. Example:
 
 ```rust
-{{#include ../../examples/component_children_inspect.rs:Clickable}}
+{{#include ../../../examples/component_children_inspect.rs:Clickable}}
 ```
 
 You can't mutate the `Element`, but if you need a modified version of it, you can construct a new one based on its attributes/children/etc.
@@ -29,7 +29,7 @@ You can't mutate the `Element`, but if you need a modified version of it, you ca
 To render nothing, you can return `None` from a component. This is useful if you want to conditionally hide something:
 
 ```rust
-{{#include ../../examples/conditional_rendering.rs:conditional_none}}
+{{#include ../../../examples/conditional_rendering.rs:conditional_none}}
 ```
 
 This works because the `Element` type is just an alias for `Option<VNode>`
@@ -50,7 +50,7 @@ For this, Dioxus accepts iterators that produce `Element`s. So we need to:
 Example: suppose you have a list of comments you want to render. Then, you can render them like this:
 
 ```rust
-{{#include ../../examples/rendering_lists.rs:render_list}}
+{{#include ../../../examples/rendering_lists.rs:render_list}}
 ```
 
 ### The `key` Attribute

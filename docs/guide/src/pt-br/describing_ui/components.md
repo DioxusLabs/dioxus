@@ -5,7 +5,7 @@ Assim como você não gostaria de escrever um programa complexo em uma única e 
 Um componente é uma função Rust, nomeada em _UpperCammelCase_, que recebe um parâmetro `Scope` e retorna um `Element` descrevendo a interface do usuário que deseja renderizar. Na verdade, nossa função `App` é um componente!
 
 ```rust
-{{#include ../../examples/hello_world_desktop.rs:component}}
+{{#include ../../../examples/hello_world_desktop.rs:component}}
 ```
 
 > Você provavelmente desejará adicionar `#![allow(non_snake_case)]` no topo de sua caixa para evitar avisos sobre o nome da função
@@ -13,13 +13,13 @@ Um componente é uma função Rust, nomeada em _UpperCammelCase_, que recebe um 
 Um Componente é responsável por alguma tarefa de renderização – normalmente, renderizando uma parte isolada da interface do usuário. Por exemplo, você pode ter um componente `About` que renderiza uma breve descrição do Dioxus Labs:
 
 ```rust
-{{#include ../../examples/components.rs:About}}
+{{#include ../../../examples/components.rs:About}}
 ```
 
 Em seguida, você pode renderizar seu componente em outro componente, da mesma forma que os elementos são renderizados:
 
 ```rust
-{{#include ../../examples/components.rs:App}}
+{{#include ../../../examples/components.rs:App}}
 ```
 
 ![Captura de tela contendo o componente Sobre duas vezes](./images/screenshot_about_component.png)

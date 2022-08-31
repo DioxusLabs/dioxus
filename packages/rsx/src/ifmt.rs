@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use proc_macro2::{Span, TokenStream};
 
@@ -48,17 +48,25 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
         }
     });
 
-    let named_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted {
-            segment: FormattedSegment::Ident(ident),
-            ..
-        } = seg
-        {
-            Some(quote! {#ident = #ident})
-        } else {
-            None
-        }
-    });
+    // remove duplicate idents
+    let named_args_idents: HashSet<_> = input
+        .segments
+        .iter()
+        .filter_map(|seg| {
+            if let Segment::Formatted {
+                segment: FormattedSegment::Ident(ident),
+                ..
+            } = seg
+            {
+                Some(ident)
+            } else {
+                None
+            }
+        })
+        .collect();
+    let named_args = named_args_idents
+        .iter()
+        .map(|ident| quote!(#ident = #ident));
 
     Ok(quote! {
         format_args!(
