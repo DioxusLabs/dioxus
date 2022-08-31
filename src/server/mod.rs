@@ -289,8 +289,6 @@ pub async fn startup_default(
 
     log::info!("🚀 Starting development server...");
 
-    plugin_manager.on_serve_start(&config)?;
-
     let dist_path = config.out_dir.clone();
 
     let (reload_tx, _) = broadcast::channel(100);
@@ -316,6 +314,7 @@ pub async fn startup_default(
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
+    let wacher_plugin_manager = plugin_manager;
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if let Ok(e) = info {
@@ -361,6 +360,8 @@ pub async fn startup_default(
             elapsed_time: first_build_result.elapsed_time,
         },
     );
+
+    plugin_manager.on_serve_start(&config)?;
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()
