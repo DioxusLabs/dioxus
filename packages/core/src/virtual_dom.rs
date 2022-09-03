@@ -128,6 +128,7 @@ pub enum SchedulerMsg {
     /// Mark all components as dirty and update them
     DirtyAll,
 
+    #[cfg(feature = "hot-reload")]
     /// Mark a template as dirty, used for hot reloading
     SetTemplate(Box<SetTemplateMsg>),
 
@@ -400,6 +401,7 @@ impl VirtualDom {
                     self.dirty_scopes.insert(*id);
                 }
             }
+            #[cfg(feature = "hot-reload")]
             SchedulerMsg::SetTemplate(msg) => {
                 let SetTemplateMsg(id, tmpl) = *msg;
                 if self

@@ -69,13 +69,16 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyEvent, Attribute, AttributeDiscription, AttributeValue, CodeLocation, Component,
     DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority,
-    GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedCodeLocation,
-    OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes, OwnedTemplateValue, Properties,
-    SchedulerMsg, Scope, ScopeId, ScopeState, SetTemplateMsg, StaticCodeLocation,
-    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, Template,
-    TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType,
-    TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
-    VPlaceholder, VText, VirtualDom,
+    GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg,
+    Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping, StaticTemplateNode,
+    StaticTemplateNodes, TaskId, Template, TemplateAttribute, TemplateAttributeValue,
+    TemplateElement, TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, UiEvent,
+    UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+};
+#[cfg(feature = "hot-reload")]
+pub use crate::innerlude::{
+    OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
+    OwnedTemplateValue, SetTemplateMsg,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -83,14 +86,15 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::get_line_num;
+    #[cfg(feature = "hot-reload")]
+    pub use crate::innerlude::OwnedTemplate;
     pub use crate::innerlude::{
         fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
         DioxusElement, Element, EventHandler, Fragment, LazyNodes, LazyStaticVec, NodeFactory,
-        OwnedTemplate, Properties, Scope, ScopeId, ScopeState, StaticCodeLocation,
-        StaticDynamicNodeMapping, StaticTemplate, StaticTemplateNodes, StaticTemplateValue,
-        Template, TemplateAttribute, TemplateAttributeValue, TemplateContext, TemplateElement,
-        TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType, TextTemplate,
-        TextTemplateSegment, VNode, VirtualDom,
+        Properties, Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping,
+        StaticTemplate, StaticTemplateNodes, StaticTemplateValue, Template, TemplateAttribute,
+        TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId, TemplateNode,
+        TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, VNode, VirtualDom,
     };
 }
 

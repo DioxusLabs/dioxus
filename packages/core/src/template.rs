@@ -58,7 +58,7 @@ use bumpalo::Bump;
 use crate::{
     diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
     nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
-    OwnedDynamicNodeMapping, StaticDynamicNodeMapping,
+    StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -80,6 +80,7 @@ pub struct StaticCodeLocation {
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg(feature = "hot-reload")]
 #[cfg_attr(
     all(feature = "serialize", feature = "hot-reload"),
     derive(serde::Serialize, serde::Deserialize)
@@ -105,6 +106,7 @@ pub struct OwnedCodeLocation {
 pub enum CodeLocation {
     /// A loctation that is created at compile time.
     Static(&'static StaticCodeLocation),
+    #[cfg(feature = "hot-reload")]
     /// A loctation that is created at runtime.
     Dynamic(Box<OwnedCodeLocation>),
 }
@@ -130,6 +132,7 @@ impl Hash for CodeLocation {
                 state.write_u32(loc.line);
                 state.write_u32(loc.column);
             }
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => {
                 let (crate_path, file_path): (&str, &str) = (&loc.crate_path, &loc.file_path);
                 crate_path.hash(state);
@@ -145,13 +148,17 @@ impl PartialEq for CodeLocation {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Static(l), Self::Static(r)) => l == r,
+            #[cfg(feature = "hot-reload")]
             (Self::Dynamic(l), Self::Dynamic(r)) => l == r,
+            #[cfg(feature = "hot-reload")]
             (Self::Static(l), Self::Dynamic(r)) => **r == **l,
+            #[cfg(feature = "hot-reload")]
             (Self::Dynamic(l), Self::Static(r)) => **l == **r,
         }
     }
 }
 
+#[cfg(feature = "hot-reload")]
 impl PartialEq<StaticCodeLocation> for OwnedCodeLocation {
     fn eq(&self, other: &StaticCodeLocation) -> bool {
         self.crate_path == other.crate_path
@@ -166,6 +173,7 @@ impl CodeLocation {
     pub fn line(&self) -> u32 {
         match self {
             CodeLocation::Static(loc) => loc.line,
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => loc.line,
         }
     }
@@ -174,6 +182,7 @@ impl CodeLocation {
     pub fn column(&self) -> u32 {
         match self {
             CodeLocation::Static(loc) => loc.column,
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => loc.column,
         }
     }
@@ -182,6 +191,7 @@ impl CodeLocation {
     pub fn file_path(&self) -> &str {
         match self {
             CodeLocation::Static(loc) => loc.file_path,
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => loc.file_path.as_str(),
         }
     }
@@ -190,10 +200,12 @@ impl CodeLocation {
     pub fn crate_path(&self) -> &str {
         match self {
             CodeLocation::Static(loc) => loc.crate_path,
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => loc.crate_path.as_str(),
         }
     }
 
+    #[cfg(feature = "hot-reload")]
     /// Create an owned code location from a code location.
     pub fn to_owned(&self) -> OwnedCodeLocation {
         match self {
@@ -203,6 +215,7 @@ impl CodeLocation {
                 line: loc.line,
                 column: loc.column,
             },
+            #[cfg(feature = "hot-reload")]
             CodeLocation::Dynamic(loc) => *loc.clone(),
         }
     }
@@ -309,13 +322,14 @@ pub struct StaticTemplate {
     all(feature = "serialize", feature = "hot-reload"),
     derive(serde::Serialize, serde::Deserialize)
 )]
+#[cfg(feature = "hot-reload")]
 pub struct OwnedTemplate {
     /// The nodes in the template
     pub nodes: OwnedTemplateNodes,
     /// The ids of the root nodes in the template
     pub root_nodes: OwnedRootNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub dynamic_mapping: OwnedDynamicNodeMapping,
+    pub dynamic_mapping: crate::OwnedDynamicNodeMapping,
 }
 
 /// A template used to skip diffing on some static parts of the rsx
@@ -323,6 +337,7 @@ pub struct OwnedTemplate {
 pub enum Template {
     /// A template that is createded at compile time
     Static(&'static StaticTemplate),
+    #[cfg(feature = "hot-reload")]
     /// A template that is created at runtime
     Owned(OwnedTemplate),
 }
@@ -337,12 +352,14 @@ impl Template {
         mutations.create_templete(id);
         let empty = match self {
             Template::Static(s) => s.nodes.is_empty(),
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => o.nodes.is_empty(),
         };
         let mut len = 0;
         if !empty {
             let roots = match self {
                 Template::Static(s) => s.root_nodes,
+                #[cfg(feature = "hot-reload")]
                 Template::Owned(o) => &o.root_nodes,
             };
             for root in roots {
@@ -431,6 +448,7 @@ impl Template {
         );
     }
 
+    #[cfg(feature = "hot-reload")]
     pub(crate) fn with_node<F1, F2, Ctx, R>(
         &self,
         id: TemplateNodeId,
@@ -448,6 +466,35 @@ impl Template {
         }
     }
 
+    #[cfg(not(feature = "hot-reload"))]
+    pub(crate) fn with_node<F1, F2, Ctx, R>(
+        &self,
+        id: TemplateNodeId,
+        mut f1: F1,
+        mut f2: F2,
+        ctx: Ctx,
+    ) -> R
+    where
+        F1: FnMut(&StaticTemplateNode, Ctx) -> R,
+        F2: FnMut(&StaticTemplateNode, Ctx) -> R,
+    {
+        match self {
+            Template::Static(s) => f1(&s.nodes[id.0], ctx),
+        }
+    }
+
+    #[cfg(not(feature = "hot-reload"))]
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
+    where
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+    {
+        match self {
+            Template::Static(s) => f1(&s.nodes, ctx),
+        }
+    }
+
+    #[cfg(feature = "hot-reload")]
     pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
     where
         F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
@@ -462,6 +509,7 @@ impl Template {
     pub(crate) fn all_dynamic<'a>(&'a self) -> Box<dyn Iterator<Item = TemplateNodeId> + 'a> {
         match self {
             Template::Static(s) => Box::new(s.dynamic_mapping.all_dynamic()),
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => Box::new(o.dynamic_mapping.all_dynamic()),
         }
     }
@@ -477,6 +525,7 @@ impl Template {
                     .iter()
                     .copied(),
             ),
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => Box::new(o.dynamic_mapping.volatile_attributes.iter().copied()),
         }
     }
@@ -484,6 +533,7 @@ impl Template {
     pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
         match self {
             Template::Static(s) => s.dynamic_mapping.nodes[idx],
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => o.dynamic_mapping.nodes[idx],
         }
     }
@@ -494,6 +544,7 @@ impl Template {
     ) -> &'a [TemplateNodeId] {
         match self {
             Template::Static(s) => s.dynamic_mapping.text[idx].as_ref(),
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => o.dynamic_mapping.text[idx].as_ref(),
         }
     }
@@ -504,6 +555,7 @@ impl Template {
     ) -> &'a [(TemplateNodeId, usize)] {
         match self {
             Template::Static(s) => s.dynamic_mapping.attributes[idx].as_ref(),
+            #[cfg(feature = "hot-reload")]
             Template::Owned(o) => o.dynamic_mapping.attributes[idx].as_ref(),
         }
     }
@@ -511,6 +563,7 @@ impl Template {
 
 /// A array of stack allocated Template nodes
 pub type StaticTemplateNodes = &'static [StaticTemplateNode];
+#[cfg(feature = "hot-reload")]
 /// A vec of heep allocated Template nodes
 pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
@@ -524,6 +577,7 @@ pub type StaticTemplateNode = TemplateNode<
     &'static str,
 >;
 
+#[cfg(feature = "hot-reload")]
 /// A heap allocated Template node
 pub type OwnedTemplateNode = TemplateNode<
     Vec<TemplateAttribute<OwnedTemplateValue>>,
@@ -537,6 +591,7 @@ pub type OwnedTemplateNode = TemplateNode<
 /// A stack allocated list of root Template nodes
 pub type StaticRootNodes = &'static [TemplateNodeId];
 
+#[cfg(feature = "hot-reload")]
 /// A heap allocated list of root Template nodes
 pub type OwnedRootNodes = Vec<TemplateNodeId>;
 
@@ -699,6 +754,7 @@ impl TemplateValue for StaticTemplateValue {
     }
 }
 
+#[cfg(feature = "hot-reload")]
 impl TemplateValue for OwnedTemplateValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b> {
         match self.clone() {
@@ -903,6 +959,7 @@ where
     Dynamic(usize),
 }
 
+#[cfg(feature = "hot-reload")]
 /// A template value that is created at runtime.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(
@@ -933,6 +990,7 @@ pub enum OwnedTemplateValue {
     // Any(ArbitraryAttributeValue<'a>),
 }
 
+#[cfg(feature = "hot-reload")]
 impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
     fn from(attr: AttributeValue<'a>) -> Self {
         match attr {
@@ -1027,10 +1085,8 @@ impl TemplateResolver {
     }
 }
 
+#[cfg(feature = "hot-reload")]
 /// A message telling the virtual dom to set a template
 #[derive(Debug, Clone)]
-#[cfg_attr(
-    all(feature = "serialize", feature = "hot-reload"),
-    derive(serde::Serialize, serde::Deserialize)
-)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct SetTemplateMsg(pub TemplateId, pub OwnedTemplate);
