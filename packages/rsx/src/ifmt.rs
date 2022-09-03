@@ -15,6 +15,7 @@ pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
+    pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
 }
 
@@ -92,7 +93,10 @@ impl FromStr for IfmtInput {
         if !current_literal.is_empty() {
             segments.push(Segment::Literal(current_literal));
         }
-        Ok(Self { segments })
+        Ok(Self {
+            segments,
+            source: None,
+        })
     }
 }
 
@@ -219,6 +223,8 @@ impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let input: LitStr = input.parse()?;
         let input_str = input.value();
-        IfmtInput::from_str(&input_str)
+        let mut ifmt = IfmtInput::from_str(&input_str)?;
+        ifmt.source = Some(input);
+        Ok(ifmt)
     }
 }

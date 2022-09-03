@@ -3,7 +3,7 @@ use std::{
     fmt::{Result, Write},
 };
 
-use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed};
+use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed, IfmtInput};
 use proc_macro2::{LineColumn, Span};
 use syn::{spanned::Spanned, Expr};
 
@@ -72,8 +72,8 @@ impl Buffer {
         }
     }
 
-    pub fn write_text(&mut self, text: &syn::LitStr) -> Result {
-        write!(self.buf, "\"{}\"", text.value())
+    pub fn write_text(&mut self, text: &IfmtInput) -> Result {
+        write!(self.buf, "\"{}\"", text.source.as_ref().unwrap().value())
     }
 
     pub fn consume(self) -> Option<String> {
@@ -155,13 +155,13 @@ impl Buffer {
 
             total += match &attr.attr {
                 ElementAttr::AttrText { value, name } => {
-                    value.value().len() + name.span().line_length() + 3
+                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 3
                 }
                 ElementAttr::AttrExpression { name, value } => {
                     value.span().line_length() + name.span().line_length() + 3
                 }
                 ElementAttr::CustomAttrText { value, name } => {
-                    value.value().len() + name.value().len() + 3
+                    value.source.as_ref().unwrap().value().len() + name.value().len() + 3
                 }
                 ElementAttr::CustomAttrExpression { name, value } => {
                     name.value().len() + value.span().line_length() + 3
