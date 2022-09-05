@@ -8,7 +8,7 @@ use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
 use fxhash::FxHashSet;
 use indexmap::IndexSet;
-use std::{cell::RefCell, collections::VecDeque, iter::FromIterator, rc::Rc, task::Poll};
+use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -408,7 +408,10 @@ impl VirtualDom {
                     .scopes
                     .templates
                     .borrow_mut()
-                    .insert(id.clone(), Rc::new(RefCell::new(Template::Owned(tmpl))))
+                    .insert(
+                        id.clone(),
+                        std::rc::Rc::new(std::cell::RefCell::new(Template::Owned(tmpl))),
+                    )
                     .is_some()
                 {
                     self.scopes.template_resolver.borrow_mut().mark_dirty(&id)

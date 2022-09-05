@@ -2,10 +2,11 @@ use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
-use dioxus_core::{ElementId, Mutations, VNode, VirtualDom};
+use dioxus_core::{ElementId, Mutations, RendererTemplateId, VNode, VirtualDom, JS_MAX_INT};
 
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
+use crate::template::{NativeTemplate, TemplateRefOrNode};
 use crate::traversable::Traversable;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
@@ -14,8 +15,11 @@ use crate::traversable::Traversable;
 #[derive(Debug)]
 pub struct RealDom<S: State> {
     root: usize,
-    nodes: Vec<Option<Node<S>>>,
+    nodes: Vec<Option<TemplateRefOrNode<S>>>,
     nodes_listening: FxHashMap<&'static str, FxHashSet<ElementId>>,
+    templates: FxHashMap<RendererTemplateId, NativeTemplate<S>>,
+    template_stack: smallvec::SmallVec<[ElementId; 5]>,
+    template_in_progress: Option<RendererTemplateId>,
     node_stack: smallvec::SmallVec<[usize; 10]>,
 }
 
@@ -30,18 +34,21 @@ impl<S: State> RealDom<S> {
         RealDom {
             root: 0,
             nodes: {
-                let v = vec![Some(Node::new(
+                let v = vec![Some(TemplateRefOrNode::Node(Node::new(
                     0,
                     NodeType::Element {
                         tag: "Root".to_string(),
                         namespace: Some("Root"),
                         children: Vec::new(),
                     },
-                ))];
+                )))];
                 v
             },
             nodes_listening: FxHashMap::default(),
             node_stack: smallvec::SmallVec::new(),
+            templates: FxHashMap::default(),
+            template_stack: smallvec::SmallVec::new(),
+            template_in_progress: None,
         }
     }
 
@@ -116,6 +123,20 @@ impl<S: State> RealDom<S> {
                         self.insert(n);
                         self.node_stack.push(root as usize)
                     }
+                    CreateTextNodeTemplate {
+                        root,
+                        text,
+                        locally_static: _,
+                    } => {
+                        let n = Node::new(
+                            root,
+                            NodeType::Text {
+                                text: text.to_string(),
+                            },
+                        );
+                        self.current_template_mut().unwrap().insert(n);
+                        self.node_stack.push(root as usize)
+                    }
                     CreateElement { root, tag } => {
                         let n = Node::new(
                             root,
@@ -128,7 +149,42 @@ impl<S: State> RealDom<S> {
                         self.insert(n);
                         self.node_stack.push(root as usize)
                     }
+                    CreateElementTemplate {
+                        root,
+                        tag,
+                        locally_static: _,
+                        fully_static: _,
+                    } => {
+                        let n = Node::new(
+                            root,
+                            NodeType::Element {
+                                tag: tag.to_string(),
+                                namespace: None,
+                                children: Vec::new(),
+                            },
+                        );
+                        self.current_template_mut().unwrap().insert(n);
+                        self.node_stack.push(root as usize)
+                    }
                     CreateElementNs { root, tag, ns } => {
+                        let n = Node::new(
+                            root,
+                            NodeType::Element {
+                                tag: tag.to_string(),
+                                namespace: Some(ns),
+                                children: Vec::new(),
+                            },
+                        );
+                        self.insert(n);
+                        self.node_stack.push(root as usize)
+                    }
+                    CreateElementNsTemplate {
+                        root,
+                        tag,
+                        ns,
+                        locally_static: _,
+                        fully_static: _,
+                    } => {
                         let n = Node::new(
                             root,
                             NodeType::Element {
@@ -145,7 +201,11 @@ impl<S: State> RealDom<S> {
                         self.insert(n);
                         self.node_stack.push(root as usize)
                     }
-
+                    CreatePlaceholderTemplate { root } => {
+                        let n = Node::new(root, NodeType::Placeholder);
+                        self.current_template_mut().unwrap().insert(n);
+                        self.node_stack.push(root as usize)
+                    }
                     NewEventListener {
                         event_name,
                         scope: _,
@@ -200,13 +260,39 @@ impl<S: State> RealDom<S> {
                         id: _,
                         template_id: _,
                     } => todo!(),
-                    CreateTemplate { id: _ } => todo!(),
-                    FinishTemplate {} => todo!(),
+                    CreateTemplate { id } => {
+                        let id = RendererTemplateId(id as usize);
+                        self.templates.insert(id, NativeTemplate::default());
+                        self.template_in_progress = Some(id);
+                    }
+                    FinishTemplate { len } => {
+                        let len = len as usize;
+                        self.current_template_mut().unwrap().roots = self
+                            .node_stack
+                            .drain((self.node_stack.len() - len)..)
+                            .collect();
+                        self.template_in_progress = None;
+                    }
+                    EnterTemplateRef { root } => self.template_stack.push(ElementId(root as usize)),
+                    ExitTemplateRef {} => {
+                        self.template_stack.pop();
+                    }
                 }
             }
         }
 
+        debug_assert!(self.template_stack.is_empty());
+        debug_assert_eq!(self.template_in_progress, None);
+
         nodes_updated
+    }
+
+    fn current_template_mut(&mut self) -> Option<&mut NativeTemplate<S>> {
+        self.templates.get_mut(self.template_in_progress.as_ref()?)
+    }
+
+    fn current_template(&self) -> Option<&NativeTemplate<S>> {
+        self.templates.get(self.template_in_progress.as_ref()?)
     }
 
     pub fn update_state(
@@ -385,6 +471,14 @@ impl<S: State> RealDom<S> {
             }
         }
     }
+
+    fn get_node(&self, id: usize) -> &Node<S> {
+        if id as u64 > JS_MAX_INT / 2 {
+            &self[*self.template_stack.last().unwrap()]
+        } else {
+            &self[ElementId(id)]
+        }
+    }
 }
 
 impl<S: State> Index<ElementId> for RealDom<S> {
@@ -471,11 +565,23 @@ impl<T: State> Traversable for RealDom<T> {
     }
 
     fn get(&self, id: Self::Id) -> Option<&Self::Node> {
-        self.nodes.get(id.0)?.as_ref()
+        if let Some(template) = self.current_template() {
+            template.nodes.get(id.0)?.as_ref()
+        } else {
+            self.nodes.get(id.0)?.as_ref()
+        }
     }
 
     fn get_mut(&mut self, id: Self::Id) -> Option<&mut Self::Node> {
-        self.nodes.get_mut(id.0)?.as_mut()
+        if self.template_stack.is_empty() {
+            self.nodes.get_mut(id.0).unwrap().as_mut()
+        } else {
+            self.current_template_mut()
+                .unwrap()
+                .nodes
+                .get_mut(id.0)?
+                .as_mut()
+        }
     }
 
     fn children(&self, id: Self::Id) -> &[Self::Id] {

@@ -128,6 +128,7 @@ pub type StaticDynamicNodeMapping = DynamicNodeMapping<
     &'static [TemplateNodeId],
 >;
 
+#[cfg(feature = "hot-reload")]
 /// A dynamic node mapping that is heap allocated
 pub type OwnedDynamicNodeMapping = DynamicNodeMapping<
     Vec<Option<TemplateNodeId>>,

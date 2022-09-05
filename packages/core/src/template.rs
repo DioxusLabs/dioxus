@@ -50,6 +50,9 @@
 //! Notice how the indecies are no longer in depth first traversal order, and indecies are no longer unique. Attributes and dynamic parts of the text can be duplicated, but dynamic vnodes and componets cannot.
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 
+/// The maxiumum integer in JS
+pub const JS_MAX_INT: u64 = 9007199254740991;
+
 use fxhash::FxHashMap;
 use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
@@ -247,7 +250,7 @@ pub struct TemplateId(pub CodeLocation);
 
 /// An Template's unique identifier within the renderer.
 ///
-/// `ClientTemplateId` is a unique id of the template sent to the renderer. It is unique across time.
+/// `RendererTemplateId` is a unique id of the template sent to the renderer. It is unique across time.
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct RendererTemplateId(pub usize);
 
@@ -267,8 +270,7 @@ pub struct TemplateNodeId(pub usize);
 
 impl Into<u64> for TemplateNodeId {
     fn into(self) -> u64 {
-        // 9007199254740991 is the max integer in js
-        9007199254740991 / 2 + self.0 as u64
+        JS_MAX_INT / 2 + self.0 as u64
     }
 }
 
@@ -471,7 +473,7 @@ impl Template {
         &self,
         id: TemplateNodeId,
         mut f1: F1,
-        mut f2: F2,
+        _f2: F2,
         ctx: Ctx,
     ) -> R
     where
@@ -484,7 +486,7 @@ impl Template {
     }
 
     #[cfg(not(feature = "hot-reload"))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx)
     where
         F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
         F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
@@ -1050,6 +1052,7 @@ pub(crate) struct TemplateResolver {
 }
 
 impl TemplateResolver {
+    #[cfg(feature = "hot-reload")]
     pub fn mark_dirty(&mut self, id: &TemplateId) {
         if let Some((_, dirty)) = self.template_id_mapping.get_mut(id) {
             println!("marking dirty {:?}", id);
