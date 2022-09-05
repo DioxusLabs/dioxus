@@ -15,10 +15,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      # NOTE: Comment out when https://github.com/rust-lang/mdBook/pull/1306 is merged and released
+      # - name: Setup mdBook
+      #   uses: peaceiris/actions-mdbook@v1
+      #   with:
+      #     mdbook-version: "0.4.10"
+
+      # NOTE: Delete when the previous one is enabled
       - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
-        with:
-          mdbook-version: "0.4.10"
+        run: |
+          cargo install mdbook --git https://github.com/Ruin0x11/mdBook.git --branch localization --rev e74fdb1
 
       - name: Build
         run: cd docs &&

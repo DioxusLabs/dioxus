@@ -31,11 +31,12 @@
 
 use dioxus_core::Attribute;
 use dioxus_native_core::{
-    layout_attributes::{parse_value, UnitSystem},
+    layout_attributes::parse_value,
     node_ref::{AttributeMask, NodeMask, NodeView},
     state::ParentDepState,
 };
 use dioxus_native_core_macro::sorted_str_slice;
+use taffy::prelude::*;
 
 use crate::style::{RinkColor, RinkStyle};
 
@@ -127,8 +128,8 @@ impl Borders {
 pub struct BorderEdge {
     pub color: Option<RinkColor>,
     pub style: BorderStyle,
-    pub width: UnitSystem,
-    pub radius: UnitSystem,
+    pub width: Dimension,
+    pub radius: Dimension,
 }
 
 impl Default for BorderEdge {
@@ -136,8 +137,8 @@ impl Default for BorderEdge {
         Self {
             color: None,
             style: BorderStyle::None,
-            width: UnitSystem::Point(0.0),
-            radius: UnitSystem::Point(0.0),
+            width: Dimension::Points(0.0),
+            radius: Dimension::Points(0.0),
         }
     }
 }

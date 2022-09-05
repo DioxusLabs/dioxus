@@ -234,13 +234,15 @@ impl Parse for ComponentField {
             let content = ContentField::ManExpr(input.parse()?);
             return Ok(Self { name, content });
         }
-
-        if input.peek(LitStr) && input.peek2(Token![,]) {
-            let t: LitStr = input.fork().parse()?;
-
-            if is_literal_foramtted(&t) {
-                let content = ContentField::Formatted(input.parse()?);
-                return Ok(Self { name, content });
+        if input.peek(LitStr) {
+            let forked = input.fork();
+            let t: LitStr = forked.parse()?;
+            // the string literal must either be the end of the input or a followed by a comma
+            if forked.is_empty() || forked.peek(Token![,]) {
+                if is_literal_foramtted(&t) {
+                    let content = ContentField::Formatted(input.parse()?);
+                    return Ok(Self { name, content });
+                }
             }
         }
 

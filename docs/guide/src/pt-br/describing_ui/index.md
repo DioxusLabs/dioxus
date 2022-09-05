@@ -5,7 +5,7 @@ Dioxus é uma estrutura _declarativa_. Isso significa que, em vez de dizer ao Di
 Você já viu um exemplo simples ou sintaxe `RSX` no aplicativo "hello world":
 
 ```rust
-{{#include ../../examples/hello_world_desktop.rs:component}}
+{{#include ../../../examples/hello_world_desktop.rs:component}}
 ```
 
 Aqui, usamos a macro `rsx!` para _declarar_ que queremos um elemento `div`, contendo o texto `"Hello, world!"`. Dioxus pega o RSX e constrói uma interface do usuário a partir dele.
@@ -15,7 +15,7 @@ Aqui, usamos a macro `rsx!` para _declarar_ que queremos um elemento `div`, cont
 O RSX é muito semelhante ao HTML, pois descreve elementos com atributos e filhos. Aqui está um elemento `div` vazio no RSX, bem como o HTML resultante:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:empty}}
+{{#include ../../../examples/rsx_overview.rs:empty}}
 ```
 
 ```html
@@ -27,7 +27,7 @@ O RSX é muito semelhante ao HTML, pois descreve elementos com atributos e filho
 Para adicionar filhos a um elemento, coloque-os dentro dos colchetes `{}`. Eles podem ser outros elementos ou texto. Por exemplo, você pode ter um elemento `ol` (lista ordenada), contendo 3 elementos `li` (item da lista), cada um dos quais contém algum texto:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:children}}
+{{#include ../../../examples/rsx_overview.rs:children}}
 ```
 
 ```html
@@ -45,7 +45,7 @@ Você também pode "agrupar" elementos envolvendo-os em `Fragment {}`. Isso não
 > Nota: você também pode renderizar vários elementos no nível superior de `rsx!` e eles serão agrupados automaticamente – não há necessidade de um `Fragment {}` explícito lá.
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:fragments}}
+{{#include ../../../examples/rsx_overview.rs:fragments}}
 ```
 
 ```html
@@ -61,7 +61,7 @@ Você também pode "agrupar" elementos envolvendo-os em `Fragment {}`. Isso não
 Os atributos também são especificados dentro dos colchetes `{}`, usando a sintaxe `name: value`. Você pode fornecer o valor como um literal no RSX:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:attributes}}
+{{#include ../../../examples/rsx_overview.rs:attributes}}
 ```
 
 ```html
@@ -80,7 +80,7 @@ Os atributos também são especificados dentro dos colchetes `{}`, usando a sint
 Dioxus tem um conjunto pré-configurado de atributos que você pode usar. O RSX é validado em tempo de compilação para garantir que você não especificou um atributo inválido. Se você quiser substituir esse comportamento por um nome de atributo personalizado, especifique o atributo entre aspas:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:custom_attributes}}
+{{#include ../../../examples/rsx_overview.rs:custom_attributes}}
 ```
 
 ```html
@@ -92,7 +92,7 @@ Dioxus tem um conjunto pré-configurado de atributos que você pode usar. O RSX 
 Da mesma forma que você pode [formatar](https://doc.rust-lang.org/rust-by-example/hello/print/fmt.html) Rust _strings_, você também pode interpolar no texto RSX. Use `{variable}` para exibir o valor de uma variável em uma _string_, ou `{variable:?}` para usar a representação `Debug`:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:formatting}}
+{{#include ../../../examples/rsx_overview.rs:formatting}}
 ```
 
 ```html
@@ -108,7 +108,7 @@ Da mesma forma que você pode [formatar](https://doc.rust-lang.org/rust-by-examp
 Você pode incluir expressões Rust arbitrárias dentro do RSX, mas deve escapá-las entre colchetes `[]`:
 
 ```rust
-{{#include ../../examples/rsx_overview.rs:expression}}
+{{#include ../../../examples/rsx_overview.rs:expression}}
 ```
 
 ```html

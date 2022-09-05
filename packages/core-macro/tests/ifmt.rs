@@ -23,4 +23,10 @@ fn formatting_compiles() {
         format_args_f!("{x.borrow():?}").to_string(),
         format!("{:?}", x.borrow())
     );
+
+    // allows duplicate format args
+    assert_eq!(
+        format_args_f!("{x:?} {x:?}").to_string(),
+        format!("{:?} {:?}", x, x)
+    );
 }

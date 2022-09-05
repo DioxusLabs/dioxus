@@ -21,10 +21,10 @@ cd demo
 cargo add dioxus --features tui
 ```
 
-Then, edit your `main.rs` with the basic template. 
+Then, edit your `main.rs` with the basic template.
 
 ```rust
-{{#include ../../examples/hello_world_tui.rs}}
+{{#include ../../../examples/hello_world_tui.rs}}
 ```
 
 To run our app:
@@ -36,7 +36,7 @@ cargo run
 Press "ctrl-c" to close the app. To switch from "ctrl-c" to  just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
 
 ```rust
-{{#include ../../examples/hello_world_tui_no_ctrl_c.rs}}
+{{#include ../../../examples/hello_world_tui_no_ctrl_c.rs}}
 ```
 
 ## Notes

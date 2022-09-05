@@ -5,7 +5,7 @@
 Por exemplo, podemos fazer uma solicitação de API dentro de `use_future`:
 
 ```rust
-{{#include ../../examples/use_future.rs:use_future}}
+{{#include ../../../examples/use_future.rs:use_future}}
 ```
 
 O código dentro de `use_future` será enviado ao agendador do Dioxus assim que o componente for renderizado.
@@ -15,7 +15,7 @@ Podemos usar `.value()` para obter o resultado do `Future`. Na primeira execuç�
 Podemos então renderizar esse resultado:
 
 ```rust
-{{#include ../../examples/use_future.rs:render}}
+{{#include ../../../examples/use_future.rs:render}}
 ```
 
 ## Reiniciando o `Future`
@@ -27,5 +27,5 @@ O identificador `UseFuture` fornece um método `restart`. Ele pode ser usado par
 Muitas vezes, você precisará executar o `Future` novamente toda vez que algum valor (por exemplo, uma prop) mudar. Ao invés de `.restart` manualmente, você pode fornecer uma tupla de "dependências" para o gancho. Ele executará automaticamente o `Future` quando qualquer uma dessas dependências for alterada. Exemplo:
 
 ```rust
-{{#include ../../examples/use_future.rs:dependency}}
+{{#include ../../../examples/use_future.rs:dependency}}
 ```
