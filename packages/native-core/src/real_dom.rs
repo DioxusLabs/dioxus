@@ -45,7 +45,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    /// Updates the dom, up and down state and return a set of nodes that were updated pass this to update_state.
+    /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
     pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> Vec<(ElementId, NodeMask)> {
         let mut nodes_updated = Vec::new();
         for mutations in mutations_vec {
@@ -203,6 +203,7 @@ impl<S: State> RealDom<S> {
         nodes_updated
     }
 
+    /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
         vdom: &VirtualDom,
@@ -217,6 +218,7 @@ impl<S: State> RealDom<S> {
         )
     }
 
+    /// Link a child and parent together
     fn link_child(&mut self, child_id: ElementId, parent_id: ElementId) -> Option<()> {
         debug_assert_ne!(child_id, parent_id);
         let parent = &mut self[parent_id];
@@ -227,6 +229,7 @@ impl<S: State> RealDom<S> {
         Some(())
     }
 
+    /// Recursively increase the height of a node and its children
     fn increase_height(&mut self, id: ElementId, amount: u16) {
         let n = &mut self[id];
         n.height += amount;
@@ -262,16 +265,18 @@ impl<S: State> RealDom<S> {
         Some(node)
     }
 
+    /// Create a node
     fn insert(&mut self, node: Node<S>) {
         let current_len = self.nodes.len();
         let id = node.id.0;
         if current_len - 1 < node.id.0 {
-            // self.nodes.reserve(1 + id - current_len);
             self.nodes.extend((0..1 + id - current_len).map(|_| None));
         }
         self.nodes[id] = Some(node);
     }
 
+    /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
+    /// This can be useful to avoid creating duplicate events.
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
@@ -409,6 +414,7 @@ pub struct Node<S: State> {
     pub height: u16,
 }
 
+/// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
 #[derive(Debug, Clone)]
 pub enum NodeType {
     Text {
@@ -438,18 +444,21 @@ impl<S: State> Node<S> {
         vdom.get_element(self.id).unwrap()
     }
 
+    /// link a child node
     fn add_child(&mut self, child: ElementId) {
         if let NodeType::Element { children, .. } = &mut self.node_type {
             children.push(child);
         }
     }
 
+    /// remove a child node
     fn remove_child(&mut self, child: ElementId) {
         if let NodeType::Element { children, .. } = &mut self.node_type {
             children.retain(|c| c != &child);
         }
     }
 
+    /// link the parent node
     fn set_parent(&mut self, parent: ElementId) {
         self.parent = Some(parent);
     }

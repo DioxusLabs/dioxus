@@ -1,3 +1,4 @@
+/// This is a interface for a tree with the ability to jump to a specific node
 pub trait Traversable {
     type Id: Copy;
     type Node;
@@ -55,6 +56,7 @@ pub trait Traversable {
     }
 }
 
+/// Maps one type of tree to another. Similar to [std::iter::Map].
 pub struct Map<
     'a,
     T: Traversable,
