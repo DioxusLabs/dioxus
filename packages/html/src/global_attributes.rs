@@ -59,7 +59,8 @@ pub trait GlobalAttributes {
 
     no_namespace_trait_methods! {
         accesskey;
-
+        autocapitalize;
+        autofocus;
         /// The HTML class attribute is used to specify a class for an HTML element.
         ///
         /// ## Details
@@ -93,16 +94,27 @@ pub trait GlobalAttributes {
         data;
         dir;
         draggable;
+        enterkeyhint;
+        exportparts;
         hidden;
         id;
+        inputmode;
+        is;
+        itemid;
+        itemprop;
+        itemref;
+        itemscope;
+        itemtype;
         lang;
+        nonce;
+        part;
+        role;
+        slot;
         spellcheck;
         style;
         tabindex;
         title;
         translate;
-
-        role;
 
         /// dangerous_inner_html is Dioxus's replacement for using innerHTML in the browser DOM. In general, setting
         /// HTML from code is risky because it’s easy to inadvertently expose your users to a cross-site scripting (XSS)
