@@ -12,8 +12,11 @@ mod events;
 mod hot_reload;
 mod protocol;
 
+use std::{cell::Cell, rc::Rc};
+
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_eval, use_window, DesktopContext};
+use dioxus_html::event_data::drag::DragData;
 pub use wry;
 pub use wry::application as tao;
 
@@ -48,7 +51,7 @@ use wry::webview::WebViewBuilder;
 /// }
 /// ```
 pub fn launch(root: Component) {
-    launch_with_props(root, (), |c| c)
+    launch_with_props(root, (), DesktopConfig::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -70,11 +73,8 @@ pub fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(
-    root: Component,
-    config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
-    launch_with_props(root, (), config_builder)
+pub fn launch_cfg(root: Component, config: DesktopConfig) {
+    launch_with_props(root, (), config)
 }
 
 /// Launch the WebView and run the event loop, with configuration and root props.
@@ -100,18 +100,13 @@ pub fn launch_cfg(
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(
-    root: Component<P>,
-    props: P,
-    builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
-    let mut cfg = DesktopConfig::default().with_default_icon();
-    builder(&mut cfg);
-
+pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: DesktopConfig) {
     let event_loop = EventLoop::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
+
+    let last_file_event = Rc::new(Cell::new(None));
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -127,7 +122,8 @@ pub fn launch_with_props<P: 'static + Send>(
 
                 let proxy = proxy.clone();
 
-                let file_handler = cfg.file_drop_handler.take();
+                let last_file_event = last_file_event.clone();
+                let last_file_event_state = last_file_event.clone();
                 let custom_head = cfg.custom_head.clone();
                 let resource_dir = cfg.resource_dir.clone();
                 let index_file = cfg.custom_index.clone();
@@ -141,7 +137,11 @@ pub fn launch_with_props<P: 'static + Send>(
                         parse_ipc_message(&payload)
                             .map(|message| match message.method() {
                                 "user_event" => {
-                                    let event = trigger_from_serialized(message.params());
+                                    let event = trigger_from_serialized(
+                                        message.params(),
+                                        last_file_event_state.as_ref(),
+                                    );
+
                                     log::trace!("User event: {:?}", event);
                                     sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                                 }
@@ -176,10 +176,9 @@ pub fn launch_with_props<P: 'static + Send>(
                         )
                     })
                     .with_file_drop_handler(move |window, evet| {
-                        file_handler
-                            .as_ref()
-                            .map(|handler| handler(window, evet))
-                            .unwrap_or_default()
+                        last_file_event.replace(Some(evet));
+
+                        true
                     });
 
                 for (name, handler) in cfg.protocols.drain(..) {

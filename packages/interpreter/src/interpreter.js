@@ -25,8 +25,7 @@ class ListenerMap {
       } else {
         this.global[event_name].active++;
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       if (!this.local[id]) {
         this.local[id] = {};
@@ -40,11 +39,13 @@ class ListenerMap {
     if (bubbles) {
       this.global[event_name].active--;
       if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        this.root.removeEventListener(
+          event_name,
+          this.global[event_name].callback
+        );
         delete this.global[event_name];
       }
-    }
-    else {
+    } else {
       const id = element.getAttribute("data-dioxus-id");
       delete this.local[id][event_name];
       if (this.local[id].length === 0) {
@@ -251,7 +252,6 @@ export class Interpreter {
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -327,9 +327,14 @@ export class Interpreter {
               }
             }
 
+            // handle ondrag events
+            if (event.type == "drag") {
+            }
+
             if (realId === null) {
               return;
             }
+
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,
@@ -339,7 +344,12 @@ export class Interpreter {
             );
           }
         };
-        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
+        this.NewEventListener(
+          edit.event_name,
+          edit.root,
+          handler,
+          event_bubbles(edit.event_name)
+        );
 
         break;
       case "SetText":
@@ -433,10 +443,7 @@ export function serialize_event(event) {
         values: {},
       };
     }
-    case "click":
-    case "contextmenu":
-    case "doubleclick":
-    case "dblclick":
+
     case "drag":
     case "dragend":
     case "dragenter":
@@ -445,6 +452,59 @@ export function serialize_event(event) {
     case "dragover":
     case "dragstart":
     case "drop":
+      const {
+        altKey,
+        button,
+        buttons,
+        clientX,
+        clientY,
+        ctrlKey,
+        metaKey,
+        offsetX,
+        offsetY,
+        pageX,
+        pageY,
+        screenX,
+        screenY,
+        shiftKey,
+      } = event;
+
+      let files = [];
+
+      // on the web, we want to keep the files around
+      // on the desktop, we want to let the OS handle the files
+
+      // let event = event as DragEvent;
+      // if (event.dataTransfer) {
+      //   for (let file in event.dataTransfer.files) {
+      //   }
+      // }
+
+      return {
+        transfer: {
+          files: files,
+        },
+        mouse_data: {
+          alt_key: altKey,
+          button: button,
+          buttons: buttons,
+          client_x: clientX,
+          client_y: clientY,
+          ctrl_key: ctrlKey,
+          meta_key: metaKey,
+          offset_x: offsetX,
+          offset_y: offsetY,
+          page_x: pageX,
+          page_y: pageY,
+          screen_x: screenX,
+          screen_y: screenY,
+          shift_key: shiftKey,
+        },
+      };
+    case "click":
+    case "contextmenu":
+    case "doubleclick":
+    case "dblclick":
     case "mousedown":
     case "mouseenter":
     case "mouseleave":

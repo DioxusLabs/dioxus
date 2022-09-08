@@ -2,9 +2,14 @@ use bumpalo::boxed::Box as BumpBox;
 use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
 
+pub mod event_data {
+    pub mod drag;
+    pub mod mouse;
+}
+
 pub mod on {
     //! Input events and associated data
-
+    pub use crate::event_data::drag::*;
     use crate::geometry::{
         ClientPoint, Coordinates, ElementPoint, LinesVector, PagePoint, PagesVector, PixelsVector,
         ScreenPoint, WheelDelta,
@@ -211,30 +216,6 @@ pub mod on {
             /// ondoubleclick
             ondblclick
 
-            /// ondrag
-            ondrag
-
-            /// ondragend
-            ondragend
-
-            /// ondragenter
-            ondragenter
-
-            /// ondragexit
-            ondragexit
-
-            /// ondragleave
-            ondragleave
-
-            /// ondragover
-            ondragover
-
-            /// ondragstart
-            ondragstart
-
-            /// ondrop
-            ondrop
-
             /// onmousedown
             onmousedown
 
@@ -260,6 +241,32 @@ pub mod on {
 
             /// onmouseup
             onmouseup
+        ];
+
+        DragEvent(DragData): [
+            /// ondrag
+            ondrag
+
+            /// ondragend
+            ondragend
+
+            /// ondragenter
+            ondragenter
+
+            /// ondragexit
+            ondragexit
+
+            /// ondragleave
+            ondragleave
+
+            /// ondragover
+            ondragover
+
+            /// ondragstart
+            ondragstart
+
+            /// ondrop
+            ondrop
         ];
 
         PointerEvent(PointerData): [
@@ -771,7 +778,7 @@ pub mod on {
             f.debug_struct("MouseData")
                 .field("coordinates", &self.coordinates())
                 .field("modifiers", &self.modifiers())
-                .field("held_buttons", &self.held_buttons())
+                .field("held_buttons", &self.held_buttons() as &dyn Debug)
                 .field("trigger_button", &self.trigger_button())
                 .finish()
         }
