@@ -774,49 +774,49 @@ function event_bubbles(event) {
     case "abort":
       return false;
     case "canplay":
-      return true;
+      return false;
     case "canplaythrough":
-      return true;
+      return false;
     case "durationchange":
-      return true;
+      return false;
     case "emptied":
-      return true;
+      return false;
     case "encrypted":
       return true;
     case "ended":
-      return true;
+      return false;
     case "error":
       return false;
     case "loadeddata":
-      return true;
+      return false;
     case "loadedmetadata":
-      return true;
+      return false;
     case "loadstart":
       return false;
     case "pause":
-      return true;
+      return false;
     case "play":
-      return true;
+      return false;
     case "playing":
-      return true;
+      return false;
     case "progress":
       return false;
     case "ratechange":
-      return true;
+      return false;
     case "seeked":
-      return true;
+      return false;
     case "seeking":
-      return true;
+      return false;
     case "stalled":
-      return true;
+      return false;
     case "suspend":
-      return true;
+      return false;
     case "timeupdate":
-      return true;
+      return false;
     case "volumechange":
-      return true;
+      return false;
     case "waiting":
-      return true;
+      return false;
     case "animationstart":
       return true;
     case "animationend":
