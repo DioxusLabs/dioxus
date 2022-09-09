@@ -16,12 +16,14 @@ class ListenerMap {
   }
 
   create(event_name, element, handler, bubbles) {
+    console.log("create", event_name, element, handler, bubbles);
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = {};
         this.global[event_name].active = 1;
         this.global[event_name].callback = handler;
-        this.root.addEventListener(event_name, handler);
+        element.addEventListener(event_name, handler);
+        // this.root.addEventListener(event_name, handler);
       } else {
         this.global[event_name].active++;
       }
@@ -253,6 +255,7 @@ export class Interpreter {
         // method is not used by the web implementation
         let handler = (event) => {
           let target = event.target;
+          console.log(event);
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
             let shouldPreventDefault = target.getAttribute(
@@ -293,10 +296,19 @@ export class Interpreter {
               `dioxus-prevent-default`
             );
 
+            // event.preventDefault();
+
             let contents = serialize_event(event);
 
             if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
+            }
+
+            if (event.type == "dragenter" || event.type == "dragover" || event.type == "dragleave" || event.type == "drop") {
+              console.log("canceled dragover/dragenter");
+              event.dataTransfer.dropEffect = "copy";
+              event.preventDefault();
+              console.log(event);
             }
 
             if (event.type === "submit") {

@@ -9,4 +9,10 @@
     <div id="main"></div>
     <!-- MODULE LOADER -->
   </body>
+  <script>
+    // Prevent the default behavior of the browser when the user drops a file
+    // This prevents the browser from navigating to the file
+    window.ondragover = function(e) { e.preventDefault(); return false };
+    window.ondrop = function(e) { e.preventDefault(); return false };
+  </script>
 </html>

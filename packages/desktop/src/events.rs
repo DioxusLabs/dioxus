@@ -1,9 +1,7 @@
 //! Convert a serialized event to an event trigger
 
-use std::any::Any;
-use std::cell::Cell;
-use std::rc::Rc;
 use std::sync::Arc;
+use std::{any::Any, cell::RefCell};
 
 use dioxus_core::{ElementId, EventPriority, UserEvent};
 use dioxus_html::event_bubbles;
@@ -47,7 +45,7 @@ struct ImEvent {
 
 pub fn trigger_from_serialized(
     val: serde_json::Value,
-    last_file_event_state: &Cell<Option<FileDropEvent>>,
+    last_file_event_state: &RefCell<Option<FileDropEvent>>,
 ) -> UserEvent {
     let ImEvent {
         event,
@@ -73,7 +71,7 @@ pub fn trigger_from_serialized(
 fn make_synthetic_event(
     name: &str,
     val: serde_json::Value,
-    last_file_event_state: &Cell<Option<FileDropEvent>>,
+    last_file_event_state: &RefCell<Option<FileDropEvent>>,
 ) -> Arc<dyn Any + Send + Sync> {
     match name {
         "copy" | "cut" | "paste" => {
@@ -102,11 +100,12 @@ fn make_synthetic_event(
         | "drop" => {
             let mut val = serde_json::from_value::<DragData>(val).unwrap();
 
-            if let Some(last_file_event_state) = last_file_event_state.take() {
+            let state = last_file_event_state.borrow();
+            if let Some(last_file_event_state) = state.as_ref() {
                 match last_file_event_state {
                     FileDropEvent::Dropped(files) | FileDropEvent::Hovered(files) => {
                         for file in files {
-                            val.transfer.files.push(file);
+                            val.transfer.files.push(file.clone());
                         }
                     }
                     FileDropEvent::Cancelled => {

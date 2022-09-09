@@ -12,11 +12,11 @@ mod events;
 mod hot_reload;
 mod protocol;
 
-use std::{cell::Cell, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_eval, use_window, DesktopContext};
-use dioxus_html::event_data::drag::DragData;
+
 pub use wry;
 pub use wry::application as tao;
 
@@ -106,7 +106,7 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
 
-    let last_file_event = Rc::new(Cell::new(None));
+    let last_file_event = Rc::new(RefCell::new(None));
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -175,10 +175,13 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                             index_file.clone(),
                         )
                     })
-                    .with_file_drop_handler(move |window, evet| {
+                    .with_file_drop_handler(move |_window, evet| {
                         last_file_event.replace(Some(evet));
 
-                        true
+                        // NB: if we set this to true, then the window doesn't receive drop events
+                        // If we set it to false, then we can accidentally navigate the page.
+                        // The way to workaround this is by preventing default on the window itself from within the JS
+                        false
                     });
 
                 for (name, handler) in cfg.protocols.drain(..) {
