@@ -480,7 +480,11 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn exit_template_ref(&mut self) {
-        self.edits.push(ExitTemplateRef {});
+        if let Some(&DomEdit::EnterTemplateRef { .. }) = self.edits.last() {
+            self.edits.pop();
+        } else {
+            self.edits.push(ExitTemplateRef {});
+        }
     }
 }
 
