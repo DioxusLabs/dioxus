@@ -68,13 +68,9 @@ pub(super) fn desktop_handler(
                 .body(String::from("Not Found").into_bytes());
         }
 
-        let mime = mime_guess::from_path(&asset).first_or_octet_stream();
-
-        // do not let path searching to go two layers beyond the caller level
-        let data = std::fs::read(asset)?;
-        let meta = format!("{}", mime);
-
-        ResponseBuilder::new().mimetype(&meta).body(data)
+        ResponseBuilder::new()
+            .mimetype(get_mime_from_path(trimmed)?)
+            .body(std::fs::read(asset)?)
     }
 }
 
@@ -109,4 +105,43 @@ fn get_asset_root() -> Option<PathBuf> {
     }
 
     None
+}
+
+/// Get the mime type from a path-like string
+fn get_mime_from_path(trimmed: &str) -> Result<&str> {
+    if trimmed.ends_with(".svg") {
+        return Ok("image/svg+xml");
+    }
+
+    let res = match infer::get_from_path(&trimmed)?.map(|f| f.mime_type()) {
+        Some(t) if t == "text/plain" => get_mime_by_ext(trimmed),
+        Some(f) => f,
+        None => get_mime_by_ext(trimmed),
+    };
+
+    Ok(res)
+}
+
+/// Get the mime type from a URI using its extension
+fn get_mime_by_ext(trimmed: &str) -> &str {
+    let suffix = trimmed.split('.').last();
+    match suffix {
+        Some("bin") => "application/octet-stream",
+        Some("css") => "text/css",
+        Some("csv") => "text/csv",
+        Some("html") => "text/html",
+        Some("ico") => "image/vnd.microsoft.icon",
+        Some("js") => "text/javascript",
+        Some("json") => "application/json",
+        Some("jsonld") => "application/ld+json",
+        Some("mjs") => "text/javascript",
+        Some("rtf") => "application/rtf",
+        Some("svg") => "image/svg+xml",
+        Some("mp4") => "video/mp4",
+        // Assume HTML when a TLD is found for eg. `dioxus:://dioxuslabs.app` | `dioxus://hello.com`
+        Some(_) => "text/html",
+        // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
+        // using octet stream according to this:
+        None => "application/octet-stream",
+    }
 }
