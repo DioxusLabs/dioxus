@@ -10,7 +10,6 @@ mod escape;
 mod events;
 #[cfg(feature = "hot-reload")]
 mod hot_reload;
-mod mime;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
