@@ -428,7 +428,10 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                .into_bump_str()
+                                        ))),
                                     ),
                                 })
                             }
@@ -447,7 +450,10 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                .into_bump_str()
+                                        ))),
                                     ),
                                 })
                             }
@@ -457,7 +463,10 @@ impl TemplateBuilder {
                                 element_tag: el.name.clone(),
                                 name: AttributeName::Ident(name),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(
+                                        dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                            .into_bump_str()
+                                    ))),
                                 ),
                             })
                         }
@@ -466,7 +475,10 @@ impl TemplateBuilder {
                                 element_tag: el.name.clone(),
                                 name: AttributeName::Str(name),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(__cx.bump().alloc(#value.to_string())))),
+                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(
+                                        dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                            .into_bump_str()
+                                    ))),
                                 ),
                             })
                         }
@@ -814,6 +826,7 @@ impl ToTokens for TemplateBuilder {
                     dynamic_mapping: StaticDynamicNodeMapping::new(__NODE_MAPPING, __TEXT_MAPPING, __ATTRIBUTE_MAPPING, __STATIC_VOLITALE_MAPPING, __NODES_WITH_LISTENERS),
                 });
 
+                let __bump = __cx.bump();
                 __cx.template_ref(dioxus::prelude::TemplateId(get_line_num!()), __TEMPLATE.clone(), #dynamic_context)
             }
         };
@@ -877,7 +890,7 @@ impl ToTokens for DynamicTemplateContextBuilder {
         tokens.append_all(quote! {
             TemplateContext {
                 nodes: __cx.bump().alloc([#(#nodes),*]),
-                text_segments: __cx.bump().alloc([#(&*__cx.bump().alloc_str(&#text.to_string())),*]),
+                text_segments: __cx.bump().alloc([#(&*dioxus::core::exports::bumpalo::format!(in __bump, "{}", #text).into_bump_str()),*]),
                 attributes: __cx.bump().alloc([#(#attributes),*]),
                 listeners: __cx.bump().alloc([#(dioxus_elements::on::#listeners_names(__cx, #listeners_exprs)),*]),
             }
