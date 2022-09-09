@@ -11,15 +11,32 @@ export function main() {
 }
 
 class TemplateRef {
-  constructor(fragment, nodes, roots, id) {
+  constructor(fragment, dynamicNodePaths, roots, id) {
     this.fragment = fragment;
-    this.nodes = nodes;
+    this.dynamicNodePaths = dynamicNodePaths;
     this.roots = roots;
     this.id = id;
     this.placed = false;
+    this.nodes = [];
+  }
+
+  build(id) {
+    if (!this.nodes[id]) {
+      let current = this.fragment;
+      const path = this.dynamicNodePaths[id];
+      for (let i = 0; i < path.length; i++) {
+        const idx = path[i];
+        current = current.firstChild;
+        for (let i2 = 0; i2 < idx; i2++) {
+          current = current.nextSibling;
+        }
+      }
+      this.nodes[id] = current;
+    }
   }
 
   get(id) {
+    this.build(id);
     return this.nodes[id];
   }
 
@@ -57,7 +74,7 @@ class TemplateRef {
 class Template {
   constructor(template_id, id) {
     this.nodes = [];
-    this.depthFirstIds = [];
+    this.dynamicNodePaths = [];
     this.template_id = template_id;
     this.id = id;
     this.template = document.createElement("template");
@@ -67,60 +84,46 @@ class Template {
   finalize(roots) {
     for (let i = 0; i < roots.length; i++) {
       let node = roots[i];
+      let path = [i];
       const is_element = node.nodeType == 1;
-      const locally_static = is_element && node.getAttribute("data-dioxus-locally-static");
+      const locally_static = is_element && !node.hasAttribute("data-dioxus-dynamic");
       if (!locally_static) {
-        this.depthFirstIds.push(node.tmplId);
-      }
-      this.createIds(node);
-      this.template.content.appendChild(node);
-    }
-  }
-
-  createIds(root) {
-    for (let node = root.firstChild; node != null; node = node.nextSibling) {
-      const is_element = node.nodeType == 1;
-      const locally_static = is_element && node.hasAttribute("data-dioxus-locally-static");
-      if (!locally_static) {
-        this.depthFirstIds.push(node.tmplId);
+        this.dynamicNodePaths[node.tmplId] = [...path];
       }
       const traverse_children = is_element && !node.hasAttribute("data-dioxus-fully-static");
       if (traverse_children) {
-        this.createIds(node);
+        this.createIds(path, node);
       }
+      this.template.content.appendChild(node);
+    }
+    document.head.appendChild(this.template);
+  }
+
+  createIds(path, root) {
+    let i = 0;
+    for (let node = root.firstChild; node != null; node = node.nextSibling) {
+      let new_path = [...path, i];
+      const is_element = node.nodeType == 1;
+      const locally_static = is_element && !node.hasAttribute("data-dioxus-dynamic");
+      if (!locally_static) {
+        this.dynamicNodePaths[node.tmplId] = [...new_path];
+      }
+      const traverse_children = is_element && !node.hasAttribute("data-dioxus-fully-static");
+      if (traverse_children) {
+        this.createIds(new_path, node);
+      }
+      i++;
     }
   }
 
   ref(id) {
     const template = this.template.content.cloneNode(true);
-    let nodes = [];
     let roots = [];
     this.reconstructingRefrencesIndex = 0;
     for (let node = template.firstChild; node != null; node = node.nextSibling) {
       roots.push(node);
-      const is_element = node.nodeType == 1;
-      if (!is_element || !node.hasAttribute("data-dioxus-locally-static")) {
-        nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
-        this.reconstructingRefrencesIndex++;
-      }
-      if (is_element && !node.hasAttribute("data-dioxus-fully-static")) {
-        this.reconstructRefrences(nodes, node);
-      }
     }
-    return new TemplateRef(template, nodes, roots, id);
-  }
-
-  reconstructRefrences(nodes, root) {
-    for (let node = root.firstChild; node != null; node = node.nextSibling) {
-      const is_element = node.nodeType == 1;
-      if (!is_element || !node.hasAttribute("data-dioxus-locally-static")) {
-        nodes[this.depthFirstIds[this.reconstructingRefrencesIndex]] = node;
-        this.reconstructingRefrencesIndex++;
-      }
-      if (is_element && !node.hasAttribute("data-dioxus-fully-static")) {
-        this.reconstructRefrences(nodes, node);
-      }
-    }
+    return new TemplateRef(template, this.dynamicNodePaths, roots, id);
   }
 }
 
@@ -436,8 +439,8 @@ export class Interpreter {
     const el = document.createElement(tag);
     this.stack.push(el);
     this.SetNode(root, el);
-    if (locally_static)
-      el.setAttribute("data-dioxus-locally-static", locally_static);
+    if (!locally_static)
+      el.setAttribute("data-dioxus-dynamic", "true");
     if (fully_static)
       el.setAttribute("data-dioxus-fully-static", fully_static);
   }
@@ -445,8 +448,8 @@ export class Interpreter {
     const el = document.createElementNS(ns, tag);
     this.stack.push(el);
     this.SetNode(root, el);
-    if (locally_static)
-      el.setAttribute("data-dioxus-locally-static", locally_static);
+    if (!locally_static)
+      el.setAttribute("data-dioxus-dynamic", "true");
     if (fully_static)
       el.setAttribute("data-dioxus-fully-static", fully_static);
   }
@@ -457,6 +460,7 @@ export class Interpreter {
   }
   CreatePlaceholderTemplate(root) {
     const el = document.createElement("pre");
+    el.setAttribute("data-dioxus-dynamic", "true");
     el.hidden = true;
     this.stack.push(el);
     this.SetNode(root, el);
