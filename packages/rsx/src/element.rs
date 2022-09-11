@@ -39,15 +39,23 @@ impl Parse for Element {
         // abc: 123,
         loop {
             // Parse the raw literal fields
-            if content.peek(LitStr) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+            if content.peek(LitStr)
+                && ((content.peek2(Token![?]) && content.peek3(Token![:]))
+                    || content.peek2(Token![:]))
+            {
                 let name = content.parse::<LitStr>()?;
                 let ident = name.clone();
+                let maybe = content.peek(Token![?]);
+                if maybe {
+                    content.parse::<Token![?]>()?;
+                }
 
                 content.parse::<Token![:]>()?;
 
                 if content.peek(LitStr) && content.peek2(Token![,]) {
                     let value = content.parse::<LitStr>()?;
                     attributes.push(ElementAttrNamed {
+                        maybe,
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrText { name, value },
                     });
@@ -55,6 +63,7 @@ impl Parse for Element {
                     let value = content.parse::<Expr>()?;
 
                     attributes.push(ElementAttrNamed {
+                        maybe,
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrExpression { name, value },
                     });
@@ -70,8 +79,16 @@ impl Parse for Element {
                 continue;
             }
 
-            if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
+            if content.peek(Ident)
+                && ((content.peek2(Token![?]) && content.peek3(Token![:]))
+                    || content.peek2(Token![:]))
+            {
                 let name = content.parse::<Ident>()?;
+                let maybe = content.peek(Token![?]);
+                if maybe {
+                    content.parse::<Token![?]>()?;
+                }
+
                 let ident = name.clone();
 
                 let name_str = name.to_string();
@@ -79,6 +96,7 @@ impl Parse for Element {
 
                 if name_str.starts_with("on") {
                     attributes.push(ElementAttrNamed {
+                        maybe,
                         el_name: el_name.clone(),
                         attr: ElementAttr::EventTokens {
                             name,
@@ -98,6 +116,7 @@ impl Parse for Element {
                         _ => {
                             if content.peek(LitStr) {
                                 attributes.push(ElementAttrNamed {
+                                    maybe,
                                     el_name: el_name.clone(),
                                     attr: ElementAttr::AttrText {
                                         name,
@@ -106,6 +125,7 @@ impl Parse for Element {
                                 });
                             } else {
                                 attributes.push(ElementAttrNamed {
+                                    maybe,
                                     el_name: el_name.clone(),
                                     attr: ElementAttr::AttrExpression {
                                         name,
@@ -211,7 +231,7 @@ pub enum ElementAttr {
 }
 
 impl ElementAttr {
-    pub fn flart(&self) -> Span {
+    pub fn start(&self) -> Span {
         match self {
             ElementAttr::AttrText { name, .. } => name.span(),
             ElementAttr::AttrExpression { name, .. } => name.span(),
@@ -233,23 +253,40 @@ impl ElementAttr {
 
 #[derive(PartialEq, Eq)]
 pub struct ElementAttrNamed {
+    pub maybe: bool,
     pub el_name: Ident,
     pub attr: ElementAttr,
 }
 
 impl ToTokens for ElementAttrNamed {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
-        let ElementAttrNamed { el_name, attr } = self;
+        let ElementAttrNamed {
+            el_name,
+            attr,
+            maybe,
+        } = self;
 
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
-                quote! {
-                    dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
+                if *maybe{
+                    quote!{compile_error!("Expected Option because of the ? in {}?, found formatted string literal.", stringify!(#name));}
+                }else{
+                    quote! {
+                        dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
+                    }
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
-                quote! {
-                    dioxus_elements::#el_name.#name(__cx, #value)
+                if *maybe{
+                    quote! {
+                        if let Some(value) = #value {
+                            dioxus_elements::#el_name.#name(__cx, value)
+                        }
+                    }
+                }else{
+                    quote! {
+                        dioxus_elements::#el_name.#name(__cx, #value)
+                    }
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
@@ -258,8 +295,16 @@ impl ToTokens for ElementAttrNamed {
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                if *maybe{
+                    quote! {
+                        if let Some(value) = #value {
+                            __cx.custom_attr( #name, value, None, false )
+                        }
+                    }
+                }else{
+                    quote! {
+                        __cx.custom_attr( #name, #value, None, false )
+                    }
                 }
             }
             // ElementAttr::EventClosure { name, closure } => {
