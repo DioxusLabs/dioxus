@@ -708,7 +708,7 @@ impl<'a> NodeFactory<'a> {
     }
 
     /// Create a new [`VNode::Fragment`] from any iterator
-    pub fn fragment_from_iter<'b, 'c>(self, node_iter: impl IntoVNode<'a> + 'c) -> VNode<'a> {
+    pub fn fragment_from_iter<'c, I>(self, node_iter: impl IntoVNode<'a, I> + 'c) -> VNode<'a> {
         node_iter.into_vnode(self)
     }
 
@@ -790,25 +790,24 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 }
 
 // Conveniently, we also support "null" (nothing) passed in
-
-impl IntoVNode<'_> for () {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
+// impl IntoVNode<'_> for () {
+//     fn into_vnode(self, cx: NodeFactory) -> VNode {
+//         cx.fragment_from_iter(None as Option<VNode>)
+//     }
+// }
 
 // Conveniently, we also support "None"
-impl IntoVNode<'_> for Option<()> {
-    fn into_vnode(self, cx: NodeFactory) -> VNode {
-        cx.fragment_from_iter(None as Option<VNode>)
-    }
-}
+// impl IntoVNode<'_> for Option<()> {
+//     fn into_vnode(self, cx: NodeFactory) -> VNode {
+//         cx.fragment_from_iter(None as Option<VNode>)
+//     }
+// }
 
-impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
-    }
-}
+// impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
+//     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
+//     }
+// }
 
 impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
@@ -858,7 +857,7 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
     }
 }
 
-struct FromNodeIterator;
+pub struct FromNodeIterator;
 impl<'a, T, I> IntoVNode<'a, FromNodeIterator> for T
 where
     T: IntoIterator<Item = I>,
