@@ -684,6 +684,8 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
+    // pub fn from_anything(self, node: impl IntoVNode) {}
+
     /// Create a new [`VNode::Fragment`] from a root of the rsx! call
     pub fn fragment_root<'b, 'c>(
         self,
@@ -706,43 +708,8 @@ impl<'a> NodeFactory<'a> {
     }
 
     /// Create a new [`VNode::Fragment`] from any iterator
-    pub fn fragment_from_iter<'b, 'c>(
-        self,
-        node_iter: impl IntoIterator<Item = impl IntoVNode<'a> + 'c> + 'b,
-    ) -> VNode<'a> {
-        let mut nodes = bumpalo::collections::Vec::new_in(self.bump);
-
-        for node in node_iter {
-            nodes.push(node.into_vnode(self));
-        }
-
-        if nodes.is_empty() {
-            VNode::Placeholder(self.bump.alloc(VPlaceholder { id: empty_cell() }))
-        } else {
-            let children = nodes.into_bump_slice();
-
-            if cfg!(debug_assertions)
-                && children.len() > 1
-                && children.last().unwrap().key().is_none()
-            {
-                // todo: make the backtrace prettier or remove it altogether
-                log::error!(
-                    r#"
-                Warning: Each child in an array or iterator should have a unique "key" prop.
-                Not providing a key will lead to poor performance with lists.
-                See docs.rs/dioxus for more information.
-                -------------
-                {:?}
-                "#,
-                    backtrace::Backtrace::new()
-                );
-            }
-
-            VNode::Fragment(self.bump.alloc(VFragment {
-                children,
-                key: None,
-            }))
-        }
+    pub fn fragment_from_iter<'b, 'c>(self, node_iter: impl IntoVNode<'a> + 'c) -> VNode<'a> {
+        node_iter.into_vnode(self)
     }
 
     /// Create a new [`VNode`] from any iterator of children
@@ -800,7 +767,7 @@ impl Debug for NodeFactory<'_> {
 ///
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
-pub trait IntoVNode<'a> {
+pub trait IntoVNode<'a, I = ()> {
     /// Convert this into a [`VNode`], using the [`NodeFactory`] as a source of allocation
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
@@ -823,6 +790,7 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 }
 
 // Conveniently, we also support "null" (nothing) passed in
+
 impl IntoVNode<'_> for () {
     fn into_vnode(self, cx: NodeFactory) -> VNode {
         cx.fragment_from_iter(None as Option<VNode>)
@@ -848,14 +816,6 @@ impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
             Some(lazy) => lazy.call(cx),
             None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
         }
-    }
-}
-
-impl<'a, 'b> IntoIterator for LazyNodes<'a, 'b> {
-    type Item = LazyNodes<'a, 'b>;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
     }
 }
 
@@ -895,5 +855,48 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
         // borrowed nodes are strange
         self.decouple()
+    }
+}
+
+struct FromNodeIterator;
+impl<'a, T, I> IntoVNode<'a, FromNodeIterator> for T
+where
+    T: IntoIterator<Item = I>,
+    I: IntoVNode<'a>,
+{
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump);
+
+        for node in self {
+            nodes.push(node.into_vnode(cx));
+        }
+
+        if nodes.is_empty() {
+            VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() }))
+        } else {
+            let children = nodes.into_bump_slice();
+
+            if cfg!(debug_assertions)
+                && children.len() > 1
+                && children.last().unwrap().key().is_none()
+            {
+                // todo: make the backtrace prettier or remove it altogether
+                log::error!(
+                    r#"
+                Warning: Each child in an array or iterator should have a unique "key" prop.
+                Not providing a key will lead to poor performance with lists.
+                See docs.rs/dioxus for more information.
+                -------------
+                {:?}
+                "#,
+                    backtrace::Backtrace::new()
+                );
+            }
+
+            VNode::Fragment(cx.bump.alloc(VFragment {
+                children,
+                key: None,
+            }))
+        }
     }
 }
