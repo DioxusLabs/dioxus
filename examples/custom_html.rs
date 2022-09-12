@@ -2,14 +2,18 @@
 //! to add things like stylesheets, scripts, and third-party JS libraries.
 
 use dioxus::prelude::*;
+use dioxus_desktop::DesktopConfig;
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |c| {
-        c.with_custom_head("<style>body { background-color: red; }</style>".into())
-    });
+    dioxus_desktop::launch_cfg(
+        app,
+        DesktopConfig::new()
+            .with_custom_head("<style>body { background-color: red; }</style>".into()),
+    );
 
-    dioxus_desktop::launch_cfg(app, |c| {
-        c.with_custom_index(
+    dioxus_desktop::launch_cfg(
+        app,
+        DesktopConfig::new().with_custom_index(
             r#"
 <!DOCTYPE html>
 <html>
@@ -23,9 +27,9 @@ fn main() {
   </body>
 </html>
         "#
-            .into(),
-        )
-    });
+            .to_string(),
+        ),
+    );
 }
 
 fn app(cx: Scope) -> Element {

@@ -6,16 +6,20 @@ This calculator version uses React-style state management. All state is held as 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
+use dioxus_desktop::{DesktopConfig, WindowBuilder};
 
 fn main() {
     use dioxus_desktop::tao::dpi::LogicalSize;
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Calculator Demo")
+
+    dioxus_desktop::launch_cfg(
+        app,
+        DesktopConfig::new().with_window(
+            WindowBuilder::new()
+                .with_title("Calculator Demo")
                 .with_resizable(false)
-                .with_inner_size(LogicalSize::new(320.0, 530.0))
-        })
-    });
+                .with_inner_size(LogicalSize::new(320.0, 530.0)),
+        ),
+    );
 }
 
 fn app(cx: Scope) -> Element {

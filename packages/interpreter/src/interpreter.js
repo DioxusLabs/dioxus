@@ -2,9 +2,31 @@ export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
+
+    // // Catch all file input clicks
+    // root.addEventListener("click", function (event) {
+    //   let target = event.target;
+
+    //   if (target !== null) {
+    //     if (target.tagName === "INPUT" && target.type === "file") {
+    //       let realId = target.getAttribute(`data-dioxus-id`);
+    //       if (realId !== null) {
+    //         event.preventDefault();
+    //         let contents = serialize_event(event);
+    //         window.ipc.postMessage(serializeIpcMessage("file_input", {
+    //           mounted_dom_id: parseInt(realId),
+    //           contents,
+    //         }));
+    //       }
+    //     }
+    //   }
+    // });
+
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
+
+
 
 class ListenerMap {
   constructor(root) {
@@ -296,7 +318,6 @@ export class Interpreter {
               `dioxus-prevent-default`
             );
 
-            // event.preventDefault();
 
             let contents = serialize_event(event);
 
@@ -304,11 +325,10 @@ export class Interpreter {
               event.preventDefault();
             }
 
+            // Handle drag
             if (event.type == "dragenter" || event.type == "dragover" || event.type == "dragleave" || event.type == "drop") {
-              console.log("canceled dragover/dragenter");
               event.dataTransfer.dropEffect = "copy";
               event.preventDefault();
-              console.log(event);
             }
 
             if (event.type === "submit") {

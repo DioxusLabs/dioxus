@@ -11,6 +11,7 @@ mod events;
 #[cfg(feature = "hot-reload")]
 mod hot_reload;
 mod protocol;
+mod topic;
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -149,6 +150,24 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                     let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
+                                // "file_input" => {
+                                //     match nfd::open_file_multiple_dialog(None, None) {
+                                //         Ok(f) => match f {
+                                //             nfd::Response::Okay(f) => {
+                                //                 dbg!("Okay", f);
+                                //             }
+                                //             nfd::Response::OkayMultiple(f) => {
+                                //                 dbg!("OkayMultiple", f);
+                                //             }
+                                //             nfd::Response::Cancel => {
+                                //                 dbg!("Cancel");
+                                //             }
+                                //         },
+                                //         Err(f) => {
+                                //             dbg!(f);
+                                //         }
+                                //     };
+                                // }
                                 "browser_open" => {
                                     let data = message.params();
                                     log::trace!("Open browser: {:?}", data);

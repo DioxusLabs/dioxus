@@ -1,6 +1,5 @@
 use dioxus::events::DragEvent;
 use dioxus::prelude::*;
-use dioxus_desktop::DesktopConfig;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -16,15 +15,16 @@ fn app(cx: Scope) -> Element {
                 background: "green",
                 draggable: "true",
             }
+            input {
+                "type": "file",
+                multiple: "true",
+                oninput: move |evt| println!("input event: {:?}", evt),
+            }
             div {
                 id: "dropzone",
                 height: "500px",
                 width: "500px",
                 background: "red",
-                // prevent_default: "ondragover",
-                // prevent_default: "ondragleave",
-                // prevent_default: "ondragenter",
-                // "ondragover": "return false;",
                 ondragover: move |evt| {},
                 ondragenter: move |evt: DragEvent| {
                     println!("drag enter {:?}", evt.files());

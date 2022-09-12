@@ -39,7 +39,6 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.60.0"
 
-
 [dev-dependencies]
 dioxus = { path = "./packages/dioxus" }
 dioxus-desktop = { path = "./packages/desktop" }
