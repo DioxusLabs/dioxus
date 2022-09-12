@@ -5,10 +5,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let a = 10;
-
     cx.render(rsx! (
         div { "Hello, world!" }
-        format_args!("asdasdasd {a}")
     ))
 }
