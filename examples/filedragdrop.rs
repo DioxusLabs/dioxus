@@ -1,12 +1,13 @@
 use dioxus::prelude::*;
+use dioxus_desktop::DesktopConfig;
 
 fn main() {
-    dioxus_desktop::launch_with_props(app, (), |c| {
-        c.with_file_drop_handler(|_w, e| {
-            println!("{:?}", e);
-            true
-        })
+    let cfg = DesktopConfig::new().with_file_drop_handler(|_w, e| {
+        println!("{:?}", e);
+        true
     });
+
+    dioxus_desktop::launch_with_props(app, (), cfg);
 }
 
 fn app(cx: Scope) -> Element {

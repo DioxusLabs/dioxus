@@ -22,6 +22,7 @@ pub use cfg::DesktopConfig;
 use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
+pub use tao::dpi::{LogicalSize, PhysicalSize};
 pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
@@ -48,7 +49,7 @@ use wry::webview::WebViewBuilder;
 /// }
 /// ```
 pub fn launch(root: Component) {
-    launch_with_props(root, (), |c| c)
+    launch_with_props(root, (), DesktopConfig::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -70,10 +71,7 @@ pub fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(
-    root: Component,
-    config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
+pub fn launch_cfg(root: Component, config_builder: DesktopConfig) {
     launch_with_props(root, (), config_builder)
 }
 
@@ -100,18 +98,23 @@ pub fn launch_cfg(
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(
-    root: Component<P>,
-    props: P,
-    builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
-    let mut cfg = DesktopConfig::default().with_default_icon();
-    builder(&mut cfg);
-
+pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: DesktopConfig) {
     let event_loop = EventLoop::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
+
+    // We assume that if the icon is None, then the user just didnt set it
+    if cfg.window.window.window_icon.is_none() {
+        cfg.window.window.window_icon = Some(
+            tao::window::Icon::from_rgba(
+                include_bytes!("./assets/default_icon.bin").to_vec(),
+                460,
+                460,
+            )
+            .expect("image parse failed"),
+        );
+    }
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
