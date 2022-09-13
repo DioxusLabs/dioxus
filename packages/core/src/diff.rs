@@ -104,6 +104,9 @@ pub(crate) struct DiffState<'bump> {
     pub(crate) force_diff: bool,
     pub(crate) element_stack: SmallVec<[ElementId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
+
+    // wht's causing the diff machine to be running?
+    pub(crate) originator: ScopeId,
 }
 
 impl<'b> DiffState<'b> {
@@ -114,6 +117,7 @@ impl<'b> DiffState<'b> {
             force_diff: false,
             element_stack: smallvec![],
             scope_stack: smallvec![],
+            originator: ScopeId(0),
         }
     }
 
@@ -273,7 +277,8 @@ impl<'b> DiffState<'b> {
 
         let created = {
             // Run the scope for one iteration to initialize it
-            self.scopes.run_scope(new_idx);
+            self.scopes
+                .run_scope(new_idx, crate::innerlude::WhyDidYouRender::Mounted);
             self.mutations.mark_dirty_scope(new_idx);
 
             // Take the node that was just generated from running the component
@@ -488,7 +493,12 @@ impl<'b> DiffState<'b> {
                         .replace(unsafe { std::mem::transmute(Some(new_props)) });
 
                     // this should auto drop the previous props
-                    self.scopes.run_scope(scope_addr);
+                    self.scopes.run_scope(
+                        scope_addr,
+                        crate::innerlude::WhyDidYouRender::Parent {
+                            parent: self.originator,
+                        },
+                    );
                     self.mutations.mark_dirty_scope(scope_addr);
 
                     self.diff_node(

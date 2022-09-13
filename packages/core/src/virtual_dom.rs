@@ -470,8 +470,14 @@ impl VirtualDom {
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
 
-                    self.scopes.run_scope(scopeid);
+                    self.scopes.run_scope(
+                        scopeid,
+                        WhyDidYouRender::Explicit {
+                            originator: Some(scopeid),
+                        },
+                    );
 
+                    diff_state.originator = scopeid;
                     diff_state.diff_scope(scopeid);
 
                     let DiffState { mutations, .. } = diff_state;
@@ -526,7 +532,8 @@ impl VirtualDom {
         let scope_id = ScopeId(0);
         let mut diff_state = DiffState::new(&self.scopes);
 
-        self.scopes.run_scope(scope_id);
+        self.scopes
+            .run_scope(scope_id, WhyDidYouRender::Explicit { originator: None });
 
         diff_state.element_stack.push(ElementId(0));
         diff_state.scope_stack.push(scope_id);
@@ -574,7 +581,8 @@ impl VirtualDom {
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let mut diff_machine = DiffState::new(&self.scopes);
-        self.scopes.run_scope(scope_id);
+        self.scopes
+            .run_scope(scope_id, WhyDidYouRender::Explicit { originator: None });
 
         let (old, new) = (
             diff_machine.scopes.wip_head(scope_id),

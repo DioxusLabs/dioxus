@@ -169,6 +169,8 @@ impl ScopeArena {
                         borrowed_props: Vec::default(),
                     }),
 
+                    render_reason: Cell::new(WhyDidYouRender::Mounted),
+
                     hook_arena: Bump::new(),
                     hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
                     hook_idx: Cell::default(),
@@ -254,7 +256,7 @@ impl ScopeArena {
         }
     }
 
-    pub(crate) fn run_scope(&self, id: ScopeId) {
+    pub(crate) fn run_scope(&self, id: ScopeId, reason: WhyDidYouRender) {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -292,6 +294,8 @@ impl ScopeArena {
         Also, the way we implement hooks allows us to cut rendering short before the next hook is recalled.
         I'm not sure if React lets you abort the component early, but we let you do that.
         */
+
+        scope.render_reason.set(reason);
 
         let props = scope.props.borrow();
         let render = props.as_ref().unwrap();
@@ -482,10 +486,32 @@ pub struct ScopeState {
     pub(crate) hook_arena: Bump,
     pub(crate) hook_vals: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
+    pub(crate) render_reason: Cell<WhyDidYouRender>,
 
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
+}
+
+pub enum WhyDidYouRender {
+    /// A distant parent is causing a partial reflow of the tree
+    ///
+    /// The originator is the highest-level parent responsible for the re-render
+    Parent { parent: ScopeId },
+
+    /// The component is being mounted for the first time
+    ///
+    /// The originator is the component that was also mounted.
+    ///
+    /// When the ScopeId is 0, the component is being mounted for the very first time.
+    /// When the ScopeId is nopt 0, the component is being mounted as a result of some change in the tree
+    Mounted,
+
+    /// A hook or external force directly called this component to be re-rendered
+    ///
+    /// If the originator is set, then the update came from a callback that assigned it. Not every kick has an originator,
+    /// so don't depend on it always being available
+    Explicit { originator: Option<ScopeId> },
 }
 
 pub struct SelfReferentialItems<'a> {
