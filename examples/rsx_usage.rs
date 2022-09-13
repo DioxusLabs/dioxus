@@ -223,7 +223,7 @@ fn lowercase_helper(cx: Scope) -> Element {
 
 mod baller {
     use super::*;
-    #[derive(Props, PartialEq)]
+    #[derive(Props, PartialEq, Eq)]
     pub struct BallerProps {}
 
     #[allow(non_snake_case)]
@@ -252,7 +252,7 @@ pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     })
 }
 
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Eq)]
 pub struct TypedInputProps<T> {
     #[props(optional, default)]
     initial: Option<T>,

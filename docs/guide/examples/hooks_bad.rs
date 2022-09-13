@@ -55,7 +55,7 @@ fn App(cx: Scope) -> Element {
     }
 
     // ✅ Instead, use a hashmap with use_ref
-    let selection_map = use_ref(&cx, || HashMap::<&str, bool>::new());
+    let selection_map = use_ref(&cx, HashMap::<&str, bool>::new);
 
     for name in &names {
         let is_selected = selection_map.read()[name];

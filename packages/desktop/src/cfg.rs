@@ -13,7 +13,7 @@ use wry::{
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
-    pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
+    pub(crate) file_drop_handler: Option<DropHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
@@ -22,6 +22,8 @@ pub struct Config {
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
 }
+
+type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
 
 pub(crate) type WryProtocol = (
     String,

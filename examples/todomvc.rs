@@ -5,14 +5,14 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum FilterState {
     All,
     Active,
     Completed,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TodoItem {
     pub id: u32,
     pub checked: bool,
