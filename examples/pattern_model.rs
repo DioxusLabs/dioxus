@@ -21,15 +21,17 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 use dioxus_desktop::wry::application::dpi::LogicalSize;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Calculator Demo")
-                .with_resizable(false)
-                .with_inner_size(LogicalSize::new(320.0, 530.0))
-        })
-    });
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Calculator Demo")
+            .with_resizable(false)
+            .with_inner_size(LogicalSize::new(320.0, 530.0)),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 fn app(cx: Scope) -> Element {

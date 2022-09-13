@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_web::Config;
 use web_sys::window;
 
 fn app(cx: Scope) -> Element {
@@ -59,5 +60,5 @@ fn main() {
         .set_inner_html(&pre);
 
     // now rehydtrate
-    dioxus_web::launch_with_props(app, (), |c| c.hydrate(true));
+    dioxus_web::launch_with_props(app, (), Config::new().hydrate(true));
 }

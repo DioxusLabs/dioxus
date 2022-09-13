@@ -1,9 +1,14 @@
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| w.with_title("BorderLess Demo").with_decorations(false))
-    });
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Borderless Window")
+            .with_decorations(false),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 fn app(cx: Scope) -> Element {

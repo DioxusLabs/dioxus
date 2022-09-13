@@ -11,9 +11,9 @@ use wry::{
 // pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 /// The configuration for the desktop application.
-pub struct DesktopConfig {
+pub struct Config {
     pub(crate) window: WindowBuilder,
-    pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
+    pub(crate) file_drop_handler: Option<DropHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
@@ -23,12 +23,14 @@ pub struct DesktopConfig {
     pub(crate) custom_index: Option<String>,
 }
 
+type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
+
 pub(crate) type WryProtocol = (
     String,
     Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
 );
 
-impl DesktopConfig {
+impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
@@ -48,57 +50,51 @@ impl DesktopConfig {
     }
 
     /// set the directory from which assets will be searched in release mode
-    pub fn with_resource_directory(&mut self, path: impl Into<PathBuf>) -> &mut Self {
+    pub fn with_resource_directory(mut self, path: impl Into<PathBuf>) -> Self {
         self.resource_dir = Some(path.into());
         self
     }
 
     /// Set whether or not the right-click context menu should be disabled.
-    pub fn with_disable_context_menu(&mut self, disable: bool) -> &mut Self {
+    pub fn with_disable_context_menu(mut self, disable: bool) -> Self {
         self.disable_context_menu = disable;
         self
     }
 
     /// Set the pre-rendered HTML content
-    pub fn with_prerendered(&mut self, content: String) -> &mut Self {
+    pub fn with_prerendered(mut self, content: String) -> Self {
         self.pre_rendered = Some(content);
         self
     }
 
     /// Set the configuration for the window.
-    pub fn with_window(
-        &mut self,
-        configure: impl FnOnce(WindowBuilder) -> WindowBuilder,
-    ) -> &mut Self {
+    pub fn with_window(mut self, window: WindowBuilder) -> Self {
         // gots to do a swap because the window builder only takes itself as muy self
         // I wish more people knew about returning &mut Self
-        let mut builder = WindowBuilder::default().with_title("Dioxus App");
-        std::mem::swap(&mut self.window, &mut builder);
-        builder = configure(builder);
-        std::mem::swap(&mut self.window, &mut builder);
+        self.window = window;
         self
     }
 
     // /// Set a custom event handler
     // pub fn with_event_handler(
-    //     &mut self,
+    //     mut self,
     //     handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
-    // ) -> &mut Self {
+    // ) -> Self {
     //     self.event_handler = Some(Box::new(handler));
     //     self
     // }
 
     /// Set a file drop handler
     pub fn with_file_drop_handler(
-        &mut self,
+        mut self,
         handler: impl Fn(&Window, FileDropEvent) -> bool + 'static,
-    ) -> &mut Self {
+    ) -> Self {
         self.file_drop_handler = Some(Box::new(handler));
         self
     }
 
     /// Set a custom protocol
-    pub fn with_custom_protocol<F>(&mut self, name: String, handler: F) -> &mut Self
+    pub fn with_custom_protocol<F>(mut self, name: String, handler: F) -> Self
     where
         F: Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static,
     {
@@ -107,7 +103,7 @@ impl DesktopConfig {
     }
 
     /// Set a custom icon for this application
-    pub fn with_icon(&mut self, icon: Icon) -> &mut Self {
+    pub fn with_icon(mut self, icon: Icon) -> Self {
         self.window.window.window_icon = Some(icon);
         self
     }
@@ -115,7 +111,7 @@ impl DesktopConfig {
     /// Inject additional content into the document's HEAD.
     ///
     /// This is useful for loading CSS libraries, JS libraries, etc.
-    pub fn with_custom_head(&mut self, head: String) -> &mut Self {
+    pub fn with_custom_head(mut self, head: String) -> Self {
         self.custom_head = Some(head);
         self
     }
@@ -126,22 +122,13 @@ impl DesktopConfig {
     ///
     /// Dioxus injects some loader code into the closing body tag. Your document
     /// must include a body element!
-    pub fn with_custom_index(&mut self, index: String) -> &mut Self {
+    pub fn with_custom_index(mut self, index: String) -> Self {
         self.custom_index = Some(index);
         self
     }
 }
 
-impl DesktopConfig {
-    pub(crate) fn with_default_icon(mut self) -> Self {
-        let bin: &[u8] = include_bytes!("./assets/default_icon.bin");
-        let rgba = Icon::from_rgba(bin.to_owned(), 460, 460).expect("image parse failed");
-        self.window.window.window_icon = Some(rgba);
-        self
-    }
-}
-
-impl Default for DesktopConfig {
+impl Default for Config {
     fn default() -> Self {
         Self::new()
     }

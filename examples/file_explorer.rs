@@ -9,9 +9,13 @@
 //! we dont need to clutter our code with `read` commands.
 
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_resizable(true)));
+    dioxus_desktop::launch_cfg(
+        app,
+        Config::new().with_window(WindowBuilder::new().with_resizable(true)),
+    );
 }
 
 fn app(cx: Scope) -> Element {

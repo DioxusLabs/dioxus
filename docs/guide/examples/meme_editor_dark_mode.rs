@@ -37,7 +37,7 @@ pub fn App(cx: Scope) -> Element {
 
 pub fn use_is_dark_mode(cx: &ScopeState) -> bool {
     // ANCHOR: use_context
-    let dark_mode_context = use_context::<DarkMode>(&cx);
+    let dark_mode_context = use_context::<DarkMode>(cx);
     // ANCHOR_END: use_context
 
     dark_mode_context

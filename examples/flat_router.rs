@@ -1,17 +1,18 @@
 use dioxus::prelude::*;
-use dioxus_desktop::tao::dpi::LogicalSize;
+use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus_router::{Link, Route, Router};
 
 fn main() {
     env_logger::init();
 
-    dioxus_desktop::launch_cfg(app, |c| {
-        c.with_window(|c| {
-            c.with_title("Spinsense Client")
-                .with_inner_size(LogicalSize::new(600, 1000))
-                .with_resizable(false)
-        })
-    })
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Spinsense Client")
+            .with_inner_size(LogicalSize::new(600, 1000))
+            .with_resizable(false),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg)
 }
 
 fn app(cx: Scope) -> Element {

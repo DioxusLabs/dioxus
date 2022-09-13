@@ -9,11 +9,14 @@
 //!     https://dev.to/arctic_hen7/how-to-set-up-tailwind-css-with-yew-and-trunk-il9
 
 use dioxus::prelude::*;
+use dioxus_desktop::Config;
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |c| {
-        c.with_custom_head("<script src=\"https://cdn.tailwindcss.com\"></script>".to_string())
-    });
+    dioxus_desktop::launch_cfg(
+        app,
+        Config::new()
+            .with_custom_head("<script src=\"https://cdn.tailwindcss.com\"></script>".to_string()),
+    );
 }
 
 pub fn app(cx: Scope) -> Element {

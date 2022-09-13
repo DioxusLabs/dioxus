@@ -60,10 +60,10 @@ struct OptionalProps<'a> {
 }
 
 fn Title<'a>(cx: Scope<'a, OptionalProps>) -> Element<'a> {
-    return cx.render(rsx!(h1{
+    cx.render(rsx!(h1{
         "{cx.props.title}: ",
-        [cx.props.subtitle.unwrap_or("No subtitle provided")],
-    }));
+        cx.props.subtitle.unwrap_or("No subtitle provided"),
+    }))
 }
 // ANCHOR_END: OptionalProps
 
@@ -76,10 +76,10 @@ struct ExplicitOptionProps<'a> {
 }
 
 fn ExplicitOption<'a>(cx: Scope<'a, ExplicitOptionProps>) -> Element<'a> {
-    return cx.render(rsx!(h1{
+    cx.render(rsx!(h1 {
         "{cx.props.title}: ",
-        [cx.props.subtitle.unwrap_or("No subtitle provided")],
-    }));
+        cx.props.subtitle.unwrap_or("No subtitle provided"),
+    }))
 }
 // ANCHOR_END: ExplicitOption
 
@@ -92,9 +92,7 @@ struct DefaultProps {
 }
 
 fn DefaultComponent(cx: Scope<DefaultProps>) -> Element {
-    return cx.render(rsx!(h1{
-        "{cx.props.number}",
-    }));
+    cx.render(rsx!(h1 { "{cx.props.number}" }))
 }
 // ANCHOR_END: DefaultComponent
 
@@ -106,8 +104,6 @@ struct IntoProps {
 }
 
 fn IntoComponent(cx: Scope<IntoProps>) -> Element {
-    return cx.render(rsx!(h1{
-        "{cx.props.string}",
-    }));
+    cx.render(rsx!(h1 { "{cx.props.string}" }))
 }
 // ANCHOR_END: IntoComponent
