@@ -198,11 +198,26 @@ impl ToTokens for Element {
             .iter()
             .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
 
+        let has_optional_attributes = self.attributes.iter().any(|f| f.maybe);
+
+        let attributes = if has_optional_attributes {
+            let attrs = attr.map(|attr| {
+                if attr.maybe {
+                    quote! {#attr}
+                } else {
+                    quote! {Some(#attr)}
+                }
+            });
+            quote! {__cx.bump().alloc([ #(#attrs),* ].into_iter().filter_map(|a|a).collect::<Vec<_>>())}
+        } else {
+            quote! {__cx.bump().alloc([ #(#attr),* ])}
+        };
+
         tokens.append_all(quote! {
             __cx.element(
                 dioxus_elements::#name,
                 __cx.bump().alloc([ #(#listeners),* ]),
-                __cx.bump().alloc([ #(#attr),* ]),
+                #attributes,
                 __cx.bump().alloc([ #(#children),* ]),
                 #key,
             )
@@ -270,7 +285,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrText { name, value } => {
                 if *maybe{
                     quote!{compile_error!("Expected Option because of the ? in {}?, found formatted string literal.", stringify!(#name));}
-                }else{
+                } else{
                     quote! {
                         dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
                     }
@@ -279,29 +294,29 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrExpression { name, value } => {
                 if *maybe{
                     quote! {
-                        if let Some(value) = #value {
-                            dioxus_elements::#el_name.#name(__cx, value)
-                        }
+                        {#value}.map(|value| dioxus_elements::#el_name.#name(__cx, value))
                     }
-                }else{
+                } else{
                     quote! {
                         dioxus_elements::#el_name.#name(__cx, #value)
                     }
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
-                quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                if *maybe{
+                    quote!{compile_error!("Expected Option because of the ? in {}?, found formatted string literal.", stringify!(#name));}
+                } else{
+                    quote! {
+                        __cx.attr( #name, format_args_f!(#value), None, false )
+                    }
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
                 if *maybe{
                     quote! {
-                        if let Some(value) = #value {
-                            __cx.custom_attr( #name, value, None, false )
-                        }
+                        {#value}.map(|value| __cx.custom_attr( #name, value, None, false ) )
                     }
-                }else{
+                } else{
                     quote! {
                         __cx.custom_attr( #name, #value, None, false )
                     }
