@@ -203,7 +203,7 @@ fn app(cx: Scope) -> Element {
             self::lowercase_helper {}
 
             // helper functions
-            // Single values must be wrapped in curly or `Some` to satisfy `IntoIterator`
+            // Anything that implements IntoVnode can be dropped directly into Rsx
             helper(&cx, "hello world!")
         }
     })
