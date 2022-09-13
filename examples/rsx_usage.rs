@@ -200,8 +200,10 @@ fn app(cx: Scope) -> Element {
             label(text: 99.9)
 
             // helper functions
-            // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
-            [helper(&cx, "hello world!")]
+            // Single values must be wrapped in curly or `Some` to satisfy `IntoIterator`
+            {
+                helper(&cx, "hello world!")
+            }
         }
     })
 }

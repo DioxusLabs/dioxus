@@ -12,6 +12,7 @@ use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
+    marker::PhantomData,
 };
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
@@ -772,15 +773,6 @@ pub trait IntoVNode<'a, I = ()> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
 
-// For the case where a rendered VNode is passed into the rsx! macro through curly braces
-impl<'a> IntoIterator for VNode<'a> {
-    type Item = VNode<'a>;
-    type IntoIter = std::iter::Once<Self::Item>;
-    fn into_iter(self) -> Self::IntoIter {
-        std::iter::once(self)
-    }
-}
-
 // TODO: do we even need this? It almost seems better not to
 // // For the case where a rendered VNode is passed into the rsx! macro through curly braces
 impl<'a> IntoVNode<'a> for VNode<'a> {
@@ -790,11 +782,11 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 }
 
 // Conveniently, we also support "null" (nothing) passed in
-// impl IntoVNode<'_> for () {
-//     fn into_vnode(self, cx: NodeFactory) -> VNode {
-//         cx.fragment_from_iter(None as Option<VNode>)
-//     }
-// }
+impl IntoVNode<'_> for () {
+    fn into_vnode(self, cx: NodeFactory) -> VNode {
+        VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() }))
+    }
+}
 
 // Conveniently, we also support "None"
 // impl IntoVNode<'_> for Option<()> {
@@ -808,15 +800,6 @@ impl<'a> IntoVNode<'a> for VNode<'a> {
 //         self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
 //     }
 // }
-
-impl<'a> IntoVNode<'a> for Option<LazyNodes<'a, '_>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        match self {
-            Some(lazy) => lazy.call(cx),
-            None => VNode::Placeholder(cx.bump.alloc(VPlaceholder { id: empty_cell() })),
-        }
-    }
-}
 
 impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
@@ -842,14 +825,6 @@ impl IntoVNode<'_> for Arguments<'_> {
     }
 }
 
-impl<'a> IntoVNode<'a> for &Option<VNode<'a>> {
-    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-        self.as_ref()
-            .map(|f| f.into_vnode(cx))
-            .unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
-    }
-}
-
 impl<'a> IntoVNode<'a> for &VNode<'a> {
     fn into_vnode(self, _cx: NodeFactory<'a>) -> VNode<'a> {
         // borrowed nodes are strange
@@ -857,11 +832,13 @@ impl<'a> IntoVNode<'a> for &VNode<'a> {
     }
 }
 
-pub struct FromNodeIterator;
-impl<'a, T, I> IntoVNode<'a, FromNodeIterator> for T
+// Note that we're using the E as a generic but this is never crafted anyways.
+pub struct FromNodeIterator<E>(PhantomData<E>);
+
+impl<'a, T, I, E> IntoVNode<'a, FromNodeIterator<E>> for T
 where
     T: IntoIterator<Item = I>,
-    I: IntoVNode<'a>,
+    I: IntoVNode<'a, E>,
 {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         let mut nodes = bumpalo::collections::Vec::new_in(cx.bump);
