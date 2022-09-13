@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! A tour of the rsx! macro
 //! ------------------------
 //!
@@ -42,10 +44,6 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-/// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
-/// This type alias specifies the type for you so you don't need to write "None as Option<()>"
-const NONE_ELEMENT: Option<()> = None;
-
 use core::{fmt, str::FromStr};
 use std::fmt::Display;
 
@@ -63,7 +61,7 @@ fn app(cx: Scope) -> Element {
             h1 {"Some text"}
             h1 {"Some text with {formatting}"}
             h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
-            h1 {"Formatting without interpolation " [formatting_tuple.0] "and" [formatting_tuple.1] }
+            h1 {"Formatting without interpolation " formatting_tuple.0 "and" formatting_tuple.1 }
             h2 {
                 "Multiple"
                 "Text"
@@ -131,12 +129,8 @@ fn app(cx: Scope) -> Element {
                 None
             }
 
-
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
             None as Option<()>,
-
-            // Use the Dioxus type-alias for less noise
-            NONE_ELEMENT,
 
             // can also just use empty fragments
             Fragment {}
@@ -160,7 +154,7 @@ fn app(cx: Scope) -> Element {
             // Can accept any paths
             // Notice how you still get syntax highlighting and IDE support :)
             Baller {}
-            baller::Baller { }
+            baller::Baller {}
             crate::baller::Baller {}
 
             // Can take properties
@@ -187,11 +181,13 @@ fn app(cx: Scope) -> Element {
             // This component's props are defined *inline* with the `inline_props` macro
             WithInline { text: "using functionc all syntax" }
 
-            // Components can be geneirc too
+            // Components can be generic too
             // This component takes i32 type to give you typed input
             TypedInput::<TypedInputProps<i32>> {}
+
             // Type inference can be used too
             TypedInput { initial: 10.0 }
+
             // geneircs with the `inline_props` macro
             Label { text: "hello geneirc world!" }
             Label { text: 99.9 }
@@ -205,8 +201,21 @@ fn app(cx: Scope) -> Element {
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
             helper(&cx, "hello world!")
+
+            // Strings can be supplied directly
+            String::from("Hello world!")
+
+            // So can format_args
+            format_args!("Hello {}!", "world")
+
+            // Or we can shell out to a helper function
+            format_dollars(10, 50)
         }
     })
+}
+
+fn format_dollars(dollars: u32, cents: u32) -> String {
+    format!("${}.{:02}", dollars, cents)
 }
 
 fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
@@ -223,7 +232,7 @@ fn lowercase_helper(cx: Scope) -> Element {
 
 mod baller {
     use super::*;
-    #[derive(Props, PartialEq)]
+    #[derive(Props, PartialEq, Eq)]
     pub struct BallerProps {}
 
     #[allow(non_snake_case)]
@@ -252,7 +261,7 @@ pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     })
 }
 
-#[derive(Props, PartialEq)]
+#[derive(Props, PartialEq, Eq)]
 pub struct TypedInputProps<T> {
     #[props(optional, default)]
     initial: Option<T>,

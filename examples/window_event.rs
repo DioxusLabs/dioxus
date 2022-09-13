@@ -84,9 +84,7 @@ fn app(cx: Scope) -> Element {
                     button {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.cancel_bubble(),
-                        onclick: move |_| {
-                            window.set_title("Dioxus Application");
-                        },
+                        onclick: move |_| window.set_title("Dioxus Application"),
                         "Change Title"
                     }
                 }

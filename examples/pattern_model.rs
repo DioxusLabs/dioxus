@@ -36,18 +36,18 @@ fn app(cx: Scope) -> Element {
     let state = use_ref(&cx, Calculator::new);
 
     cx.render(rsx! {
-        style { [include_str!("./assets/calculator.css")] }
+        style { include_str!("./assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
-                    div { class: "calculator-display", [state.read().formatted_display()]}
+                    div { class: "calculator-display", state.read().formatted_display() }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
                                 CalculatorKey {
                                     name: "key-clear",
                                     onclick: move |_| state.write().clear_display(),
-                                    [if state.read().display_value == "0" { "C" } else { "AC" }]
+                                    if state.read().display_value == "0" { "C" } else { "AC" }
                                 }
                                 CalculatorKey {
                                     name: "key-sign",
