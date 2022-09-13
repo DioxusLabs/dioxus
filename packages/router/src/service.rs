@@ -9,6 +9,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     rc::Rc,
+    str::FromStr,
     sync::Arc,
 };
 use url::Url;
@@ -84,7 +85,19 @@ impl RouterCore {
         #[cfg(not(feature = "web"))]
         let history = Box::new(hash::new());
 
-        let route = Arc::new(history.init_location());
+        let route = match &cfg.initial_url {
+            Some(url) => Arc::new(ParsedRoute {
+                url: Url::from_str(&url).expect(
+                    format!(
+                        "RouterCfg expects a valid initial_url, but got '{}'. Example: '{{scheme}}://{{?authority}}/{{?path}}'",
+                        &url
+                    ).as_str()
+                ),
+                title: None,
+                serialized_state: None,
+            }),
+            None => Arc::new(history.init_location()),
+        };
 
         let svc = Arc::new(Self {
             cfg,

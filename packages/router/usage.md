@@ -81,6 +81,20 @@ Router {
 }
 ```
 
+#### Initial url
+
+When working with ssr specially is crucial to have the ability to set an initial url. This is an optional property and defaults to `app:///` for desktop, mobile and ssr, and for web retrieves the url from the window current location.
+
+You must provide a valid URL `{scheme}://{?authority}/{?path}`.
+
+```rust
+Router {
+    initial_url: "https://dioxuslab.com/blog",  // Set the initial url. 
+    Link { to: "/", "Home" },
+    Link { to: "/blog", "Blog" }, // The router will render this route.
+}
+```
+
 ### Segments
 
 Each route in your app is comprised of segments and queries. Segments are the portions of the route delimited by forward slashes.
@@ -125,11 +139,7 @@ fn BlogPost(cx: Scope) -> Element {
 }
 ```
 
-
 ### Queries
-
-
-
 
 ### Listeners
 
@@ -154,7 +164,6 @@ fn app() {
 }
 ```
 
-
 Listeners can also be attached downstream in your app with the `RouteListener` handler component:
 
 ```rust
@@ -169,7 +178,6 @@ fn TitleCard(cx: Scope) -> Element {
 }
 ```
 
-
 ### Working with Github Pages and other static hosts
 
 Most "static" hosts will have issues with single-page-app (SPA) routers. To get around this, you can either generate an index.html for each route or hijack the 404 page.
@@ -178,7 +186,7 @@ For generating a static index.html, see `Generating a Route List`.
 
 To hijack the 404 page, we can simply make a copy of our index.html page and call it 404.html. When Github Pages serves this 404 page, your app will be served instead and the router will render the right corresponding route.
 
-https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-custom-404-page-for-your-github-pages-site
+<https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-custom-404-page-for-your-github-pages-site>
 
 ### Generating a SiteMap or Route List
 
