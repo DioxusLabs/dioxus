@@ -403,11 +403,18 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 /// }
 ///
 /// ```
-#[derive(Default)]
 pub struct EventHandler<'bump, T = ()> {
     /// The (optional) callback that the user specified
     /// Uses a `RefCell` to allow for interior mutability, and FnMut closures.
     pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+}
+
+impl<'a, T> Default for EventHandler<'a, T> {
+    fn default() -> Self {
+        Self {
+            callback: RefCell::new(None),
+        }
+    }
 }
 
 impl<T> EventHandler<'_, T> {
