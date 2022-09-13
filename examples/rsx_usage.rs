@@ -204,9 +204,7 @@ fn app(cx: Scope) -> Element {
 
             // helper functions
             // Single values must be wrapped in curly or `Some` to satisfy `IntoIterator`
-            {
-                helper(&cx, "hello world!")
-            }
+            helper(&cx, "hello world!")
         }
     })
 }
