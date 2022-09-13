@@ -169,7 +169,7 @@ impl ScopeArena {
                         borrowed_props: Vec::default(),
                     }),
 
-                    render_reason: Cell::new(WhyDidYouRender::Mounted),
+                    render_reason: Cell::new(RenderReason::Mounted),
 
                     hook_arena: Bump::new(),
                     hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
@@ -256,7 +256,7 @@ impl ScopeArena {
         }
     }
 
-    pub(crate) fn run_scope(&self, id: ScopeId, reason: WhyDidYouRender) {
+    pub(crate) fn run_scope(&self, id: ScopeId, reason: RenderReason) {
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -486,14 +486,15 @@ pub struct ScopeState {
     pub(crate) hook_arena: Bump,
     pub(crate) hook_vals: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
-    pub(crate) render_reason: Cell<WhyDidYouRender>,
+    pub(crate) render_reason: Cell<RenderReason>,
 
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
 }
 
-pub enum WhyDidYouRender {
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
+pub enum RenderReason {
     /// A distant parent is causing a partial reflow of the tree
     ///
     /// The originator is the highest-level parent responsible for the re-render
@@ -555,6 +556,8 @@ impl ScopeState {
     /// ```rust, ignore
     /// fn App(cx: Scope) -> Element {
     ///     rsx!(cx, div { "Subtree {id}"})
+    ///
+    ///
     /// };
     /// ```
     ///
@@ -565,6 +568,28 @@ impl ScopeState {
         } else {
             todo!()
         }
+    }
+
+    /// Why did this component re-render?
+    ///
+    /// Every component re-renders for a specific reason as per the theory of reactivity.
+    ///
+    /// This can be one of:
+    /// - The component is being mounted for the first time, forced by another component also being mounted
+    /// - The component is being re-rendered
+    /// - The component was marked dirty by its own handlers
+    ///
+    /// ```rust, ignore
+    /// fn App(cx: Scope) -> Element {
+    ///     cx.render(match cx.why_did_you_render() {
+    ///         RenderReason::Mounted => rsx!{ "Mounted for the first time" }
+    ///         RenderReason::Parent { orginator } => rsx!{ "Parent {originator} is causing a re-render" }
+    ///         RenderReason::Explicit { orginator } => rsx!{ "Component {originator} is forcing is to re-render" }
+    ///     })
+    /// }
+    /// ```
+    pub fn why_did_you_render(&self) -> RenderReason {
+        self.render_reason.get()
     }
 
     /// Get the height of this Scope - IE the number of scopes above it.

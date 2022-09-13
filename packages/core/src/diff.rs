@@ -278,7 +278,7 @@ impl<'b> DiffState<'b> {
         let created = {
             // Run the scope for one iteration to initialize it
             self.scopes
-                .run_scope(new_idx, crate::innerlude::WhyDidYouRender::Mounted);
+                .run_scope(new_idx, crate::innerlude::RenderReason::Mounted);
             self.mutations.mark_dirty_scope(new_idx);
 
             // Take the node that was just generated from running the component
@@ -495,7 +495,7 @@ impl<'b> DiffState<'b> {
                     // this should auto drop the previous props
                     self.scopes.run_scope(
                         scope_addr,
-                        crate::innerlude::WhyDidYouRender::Parent {
+                        crate::innerlude::RenderReason::Parent {
                             parent: self.originator,
                         },
                     );
