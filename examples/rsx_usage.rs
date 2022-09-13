@@ -199,6 +199,9 @@ fn app(cx: Scope) -> Element {
             // Lowercase components work too, as long as they are access using a path
             baller::lowercase_component {}
 
+            // For in-scope lowercase components, use the `self` keyword
+            self::lowercase_helper {}
+
             // helper functions
             // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
             [helper(&cx, "hello world!")]
@@ -209,6 +212,12 @@ fn app(cx: Scope) -> Element {
 fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
     cx.render(rsx! {
         p { "{text}" }
+    })
+}
+
+fn lowercase_helper(cx: Scope) -> Element {
+    cx.render(rsx! {
+        "asd"
     })
 }
 
