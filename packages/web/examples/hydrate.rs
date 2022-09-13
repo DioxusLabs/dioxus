@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
             h2 { "thing 2"}
             "asd"
             "asd"
-            bapp()
+            Bapp {}
         }
         (0..10).map(|f| rsx!{
             div {
@@ -23,7 +23,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-fn bapp(cx: Scope) -> Element {
+fn Bapp(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             h1 { "thing 1" }
