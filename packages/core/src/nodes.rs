@@ -788,19 +788,6 @@ impl IntoVNode<'_> for () {
     }
 }
 
-// Conveniently, we also support "None"
-// impl IntoVNode<'_> for Option<()> {
-//     fn into_vnode(self, cx: NodeFactory) -> VNode {
-//         cx.fragment_from_iter(None as Option<VNode>)
-//     }
-// }
-
-// impl<'a> IntoVNode<'a> for Option<VNode<'a>> {
-//     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
-//         self.unwrap_or_else(|| cx.fragment_from_iter(None as Option<VNode>))
-//     }
-// }
-
 impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
         self.call(cx)
