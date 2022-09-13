@@ -184,11 +184,8 @@ fn app(cx: Scope) -> Element {
             // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
 
-            // Components can be used with the `call` syntax
             // This component's props are defined *inline* with the `inline_props` macro
-            with_inline(
-                text: "using functionc all syntax"
-            )
+            WithInline { text: "using functionc all syntax" }
 
             // Components can be geneirc too
             // This component takes i32 type to give you typed input
@@ -196,8 +193,14 @@ fn app(cx: Scope) -> Element {
             // Type inference can be used too
             TypedInput { initial: 10.0 }
             // geneircs with the `inline_props` macro
-            label(text: "hello geneirc world!")
-            label(text: 99.9)
+            Label { text: "hello geneirc world!" }
+            Label { text: 99.9 }
+
+            // Lowercase components work too, as long as they are access using a path
+            baller::lowercase_component {}
+
+            // For in-scope lowercase components, use the `self` keyword
+            self::lowercase_helper {}
 
             // helper functions
             // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
@@ -212,6 +215,12 @@ fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
     })
 }
 
+fn lowercase_helper(cx: Scope) -> Element {
+    cx.render(rsx! {
+        "asd"
+    })
+}
+
 mod baller {
     use super::*;
     #[derive(Props, PartialEq)]
@@ -221,6 +230,10 @@ mod baller {
     /// This component totally balls
     pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
+    }
+
+    pub fn lowercase_component(cx: Scope) -> Element {
+        cx.render(rsx! { "look ma, no uppercase" })
     }
 }
 
@@ -255,7 +268,7 @@ where
 }
 
 #[inline_props]
-fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
+fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
     cx.render(rsx! {
         p { "{text}" }
     })
@@ -263,7 +276,7 @@ fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
 
 // generic component with inline_props too
 #[inline_props]
-fn label<T>(cx: Scope, text: T) -> Element
+fn Label<T>(cx: Scope, text: T) -> Element
 where
     T: Display,
 {
