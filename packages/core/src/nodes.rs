@@ -704,7 +704,10 @@ impl<'a> NodeFactory<'a> {
     }
 
     /// Create a new [`VNode::Fragment`] from any iterator
-    pub fn fragment_from_iter<'c, I>(self, node_iter: impl IntoVNode<'a, I> + 'c) -> VNode<'a> {
+    pub fn fragment_from_iter<'c, I, J>(
+        self,
+        node_iter: impl IntoVNode<'a, I, J> + 'c,
+    ) -> VNode<'a> {
         node_iter.into_vnode(self)
     }
 
