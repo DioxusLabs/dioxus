@@ -15,7 +15,6 @@ fn app(cx: Scope) -> Element {
         div {
             onclick: move |_| println!("clicked! top"),
             "- div"
-
             button {
                 onclick: move |_| println!("clicked! bottom propoate"),
                 "Propogate"

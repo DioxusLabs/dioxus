@@ -19,10 +19,10 @@ fn app(cx: Scope) -> Element {
 
     rsx!(cx, div {
         link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
-        style { [include_str!("./assets/fileexplorer.css")] }
+        style { include_str!("./assets/fileexplorer.css") }
         header {
             i { class: "material-icons icon-menu", "menu" }
-            h1 { "Files: " [files.read().current()] }
+            h1 { "Files: ", files.read().current() }
             span { }
             i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
         }
