@@ -682,8 +682,6 @@ impl<'a> NodeFactory<'a> {
         }
     }
 
-    // pub fn from_anything(self, node: impl IntoVNode) {}
-
     /// Create a new [`VNode::Fragment`] from a root of the rsx! call
     pub fn fragment_root<'b, 'c>(
         self,
