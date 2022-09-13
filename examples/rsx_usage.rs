@@ -196,6 +196,9 @@ fn app(cx: Scope) -> Element {
             Label { text: "hello geneirc world!" }
             Label { text: 99.9 }
 
+            // Lowercase components work too, as long as they are access using a path
+            baller::lowercase_component {}
+
             // helper functions
             // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
             [helper(&cx, "hello world!")]
@@ -218,6 +221,10 @@ mod baller {
     /// This component totally balls
     pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
+    }
+
+    pub fn lowercase_component(cx: Scope) -> Element {
+        cx.render(rsx! { "look ma, no uppercase" })
     }
 }
 
