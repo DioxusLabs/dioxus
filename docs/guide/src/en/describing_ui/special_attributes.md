@@ -10,7 +10,7 @@ For example, shipping a markdown-to-Dioxus converter might significantly bloat y
 
 
 ```rust
-{{#include ../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
+{{#include ../../../examples/dangerous_inner_html.rs:dangerous_inner_html}}
 ```
 
 > Note! This attribute is called "dangerous_inner_html" because it is **dangerous** to pass it data you don't trust. If you're not careful, you can easily expose [cross-site scripting (XSS)](https://en.wikipedia.org/wiki/Cross-site_scripting) attacks to your users.
@@ -25,7 +25,7 @@ Most attributes, when rendered, will be rendered exactly as the input you provid
 So this RSX wouldn't actually render the `hidden` attribute:
 
 ```rust
-{{#include ../../examples/boolean_attribute.rs:boolean_attribute}}
+{{#include ../../../examples/boolean_attribute.rs:boolean_attribute}}
 ```
 ```html
 <div>hello</div>

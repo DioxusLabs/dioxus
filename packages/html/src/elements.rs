@@ -188,7 +188,6 @@ builder_constructors! {
     /// ```
     h1 {};
 
-
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
     /// element.
@@ -208,7 +207,6 @@ builder_constructors! {
     /// ```
     h2 {};
 
-
     /// Build a
     /// [`<h3>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h3)
     /// element.
@@ -220,14 +218,17 @@ builder_constructors! {
     /// - The <h1> heading is the first heading in the document.
     /// - The <h1> heading is usually a large bolded font.
     h3 {};
+
     /// Build a
     /// [`<h4>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h4)
     /// element.
     h4 {};
+
     /// Build a
     /// [`<h5>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h5)
     /// element.
     h5 {};
+
     /// Build a
     /// [`<h6>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h6)
     /// element.
@@ -237,10 +238,12 @@ builder_constructors! {
     /// [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
     /// element.
     main {};
+
     /// Build a
     /// [`<nav>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/nav)
     /// element.
     nav {};
+
     /// Build a
     /// [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
     /// element.
@@ -1006,7 +1009,12 @@ builder_constructors! {
         open: Bool,
     };
 
-
+    /// Build dialog
+    /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
+    /// element.
+    dialog {
+        open: Bool,
+    };
 
     /// Build a
     /// [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)

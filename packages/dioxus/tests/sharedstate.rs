@@ -36,7 +36,7 @@ fn swap_test() {
     struct MySharedState(&'static str);
 
     fn app(cx: Scope) -> Element {
-        let val = cx.use_hook(|_| 0);
+        let val = cx.use_hook(|| 0);
         *val += 1;
 
         cx.provide_context(Rc::new(MySharedState("world!")));

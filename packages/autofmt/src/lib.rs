@@ -16,7 +16,7 @@ mod util;
 ///
 /// Note that this is tailored to VSCode's TextEdit API and not a general Diff API. Line numbers are not accurate if
 /// multiple edits are applied in a single file without tracking text shifts.
-#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Hash)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FormattedBlock {
     /// The new contents of the block
     pub formatted: String,

@@ -126,14 +126,18 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
         | "flex-shrink"
         | "flex-wrap" => apply_flex(name, value, style),
 
-        "float" => {}
+        "float" => {},
+
+        "font-style"
+        | "font-variant"
+        | "font-weight"
+        | "font-size"
+        | "line-height"
+        | "font-family" => apply_font(name, value, style),
 
         "height" => {
             if let Some(v) = parse_value(value){
-                style.size.height = match v {
-                    UnitSystem::Percent(v)=> Dimension::Percent(v/100.0),
-                    UnitSystem::Point(v)=> Dimension::Points(v),
-                };
+                style.size.height = v;
             }
         }
         "justify-content" => {
@@ -150,7 +154,6 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
         }
         "left" => {}
         "letter-spacing" => {}
-        "line-height" => {}
 
         "list-style"
         | "list-style-image"
@@ -231,10 +234,7 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
         "white-space" => {}
         "width" => {
             if let Some(v) = parse_value(value){
-                style.size.width = match v {
-                    UnitSystem::Percent(v)=> Dimension::Percent(v/100.0),
-                    UnitSystem::Point(v)=> Dimension::Points(v),
-                };
+                style.size.width = v;
             }
         }
         "word-break" => {}
@@ -245,33 +245,34 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
     }
 }
 
-/// a relative or absolute size
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum UnitSystem {
-    Percent(f32),
-    Point(f32),
-}
-
-impl From<UnitSystem> for Dimension {
-    fn from(other: UnitSystem) -> Dimension {
-        match other {
-            UnitSystem::Percent(v) => Dimension::Percent(v),
-            UnitSystem::Point(v) => Dimension::Points(v),
+fn apply_font(name: &str, value: &str, style: &mut Style) {
+    match name {
+        "font-style" => {}
+        "font-variant" => {}
+        "font-weight" => {}
+        "font-size" => {}
+        "line-height" => {
+            style.size = Size {
+                width: style.size.width,
+                height: parse_value(value).unwrap_or(Dimension::Points(12.0)),
+            }
         }
+        "font-family" => {}
+        _ => {}
     }
 }
 
 /// parse relative or absolute value
-pub fn parse_value(value: &str) -> Option<UnitSystem> {
+pub fn parse_value(value: &str) -> Option<Dimension> {
     if value.ends_with("px") {
         if let Ok(px) = value.trim_end_matches("px").parse::<f32>() {
-            Some(UnitSystem::Point(px))
+            Some(Dimension::Points(px))
         } else {
             None
         }
     } else if value.ends_with('%') {
         if let Ok(pct) = value.trim_end_matches('%').parse::<f32>() {
-            Some(UnitSystem::Percent(pct))
+            Some(Dimension::Percent(pct / 100.0))
         } else {
             None
         }
@@ -328,7 +329,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         }
         "border-bottom-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.bottom = v.into();
+                style.border.bottom = v;
             }
         }
         "border-collapse" => {}
@@ -349,7 +350,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         }
         "border-left-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.start = v.into();
+                style.border.start = v;
             }
         }
         "border-radius" => {}
@@ -361,7 +362,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         }
         "border-right-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.end = v.into();
+                style.border.end = v;
             }
         }
         "border-spacing" => {}
@@ -395,17 +396,19 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         }
         "border-top-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.top = v.into();
+                style.border.top = v;
             }
         }
         "border-width" => {
             let values: Vec<_> = value.split(' ').collect();
             if values.len() == 1 {
-                if let Some(w) = parse_value(values[0]) {
-                    style.border.top = w.into();
-                    style.border.bottom = w.into();
-                    style.border.start = w.into();
-                    style.border.end = w.into();
+                if let Some(dim) = parse_value(values[0]) {
+                    style.border = Rect {
+                        start: dim,
+                        end: dim,
+                        top: dim,
+                        bottom: dim,
+                    };
                 }
             } else {
                 let border_widths = [
@@ -416,7 +419,7 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
                 ];
                 for (v, width) in values.into_iter().zip(border_widths) {
                     if let Some(w) = parse_value(v) {
-                        *width = w.into();
+                        *width = w;
                     }
                 }
             }
@@ -476,10 +479,7 @@ fn apply_flex(name: &str, value: &str, style: &mut Style) {
         }
         "flex-basis" => {
             if let Some(v) = parse_value(value) {
-                style.flex_basis = match v {
-                    UnitSystem::Percent(v) => Dimension::Percent(v / 100.0),
-                    UnitSystem::Point(v) => Dimension::Points(v),
-                };
+                style.flex_basis = v;
             }
         }
         "flex-flow" => {}
@@ -507,35 +507,20 @@ fn apply_flex(name: &str, value: &str, style: &mut Style) {
 }
 
 fn apply_padding(name: &str, value: &str, style: &mut Style) {
-    match parse_value(value) {
-        Some(UnitSystem::Percent(v)) => match name {
+    if let Some(v) = parse_value(value) {
+        match name {
             "padding" => {
-                let v = Dimension::Percent(v / 100.0);
                 style.padding.top = v;
                 style.padding.bottom = v;
                 style.padding.start = v;
                 style.padding.end = v;
             }
-            "padding-bottom" => style.padding.bottom = Dimension::Percent(v / 100.0),
-            "padding-left" => style.padding.start = Dimension::Percent(v / 100.0),
-            "padding-right" => style.padding.end = Dimension::Percent(v / 100.0),
-            "padding-top" => style.padding.top = Dimension::Percent(v / 100.0),
+            "padding-bottom" => style.padding.bottom = v,
+            "padding-left" => style.padding.start = v,
+            "padding-right" => style.padding.end = v,
+            "padding-top" => style.padding.top = v,
             _ => {}
-        },
-        Some(UnitSystem::Point(v)) => match name {
-            "padding" => {
-                style.padding.top = Dimension::Points(v);
-                style.padding.bottom = Dimension::Points(v);
-                style.padding.start = Dimension::Points(v);
-                style.padding.end = Dimension::Points(v);
-            }
-            "padding-bottom" => style.padding.bottom = Dimension::Points(v),
-            "padding-left" => style.padding.start = Dimension::Points(v),
-            "padding-right" => style.padding.end = Dimension::Points(v),
-            "padding-top" => style.padding.top = Dimension::Points(v),
-            _ => {}
-        },
-        None => {}
+        }
     }
 }
 
@@ -588,34 +573,19 @@ fn apply_align(name: &str, value: &str, style: &mut Style) {
 }
 
 fn apply_margin(name: &str, value: &str, style: &mut Style) {
-    match parse_value(value) {
-        Some(UnitSystem::Percent(v)) => match name {
+    if let Some(dim) = parse_value(value) {
+        match name {
             "margin" => {
-                let v = Dimension::Percent(v / 100.0);
-                style.margin.top = v;
-                style.margin.bottom = v;
-                style.margin.start = v;
-                style.margin.end = v;
+                style.margin.top = dim;
+                style.margin.bottom = dim;
+                style.margin.start = dim;
+                style.margin.end = dim;
             }
-            "margin-top" => style.margin.top = Dimension::Percent(v / 100.0),
-            "margin-bottom" => style.margin.bottom = Dimension::Percent(v / 100.0),
-            "margin-left" => style.margin.start = Dimension::Percent(v / 100.0),
-            "margin-right" => style.margin.end = Dimension::Percent(v / 100.0),
+            "margin-top" => style.margin.top = dim,
+            "margin-bottom" => style.margin.bottom = dim,
+            "margin-left" => style.margin.start = dim,
+            "margin-right" => style.margin.end = dim,
             _ => {}
-        },
-        Some(UnitSystem::Point(v)) => match name {
-            "margin" => {
-                style.margin.top = Dimension::Points(v);
-                style.margin.bottom = Dimension::Points(v);
-                style.margin.start = Dimension::Points(v);
-                style.margin.end = Dimension::Points(v);
-            }
-            "margin-top" => style.margin.top = Dimension::Points(v),
-            "margin-bottom" => style.margin.bottom = Dimension::Points(v),
-            "margin-left" => style.margin.start = Dimension::Points(v),
-            "margin-right" => style.margin.end = Dimension::Points(v),
-            _ => {}
-        },
-        None => {}
+        }
     }
 }

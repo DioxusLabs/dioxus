@@ -7,6 +7,7 @@ use syn::{
     parse::{Parse, ParseStream, Result},
     LitStr, Token,
 };
+
 pub struct StrSlice {
     pub map: BTreeMap<String, LitStr>,
 }

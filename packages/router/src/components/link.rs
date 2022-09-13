@@ -77,7 +77,7 @@ pub struct LinkProps<'a> {
 /// }
 /// ```
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let svc = cx.use_hook(|_| cx.consume_context::<Arc<RouterCore>>());
+    let svc = cx.use_hook(|| cx.consume_context::<Arc<RouterCore>>());
 
     let LinkProps {
         to,

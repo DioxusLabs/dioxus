@@ -73,7 +73,7 @@ pub fn app(cx: Scope<()>) -> Element {
                     }
                 }
                 ul { class: "todo-list",
-                    filtered_todos.iter().map(|id| rsx!(todo_entry( key: "{id}", id: *id, todos: todos  )))
+                    filtered_todos.iter().map(|id| rsx!(TodoEntry { key: "{id}", id: *id, todos: todos }))
                 }
                 (!todos.is_empty()).then(|| rsx!(
                     footer { class: "footer",
@@ -111,7 +111,7 @@ pub struct TodoEntryProps<'a> {
     id: u32,
 }
 
-pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
+pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let is_editing = use_state(&cx, || false);
 
     let todos = cx.props.todos.get();

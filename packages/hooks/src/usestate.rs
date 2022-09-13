@@ -34,7 +34,7 @@ pub fn use_state<T: 'static>(
     cx: &ScopeState,
     initial_state_fn: impl FnOnce() -> T,
 ) -> &UseState<T> {
-    let hook = cx.use_hook(move |_| {
+    let hook = cx.use_hook(move || {
         let current_val = Rc::new(initial_state_fn());
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
@@ -110,8 +110,8 @@ impl<T: 'static> UseState<T> {
     ///
     /// This is useful for passing the setter function to other components.
     ///
-    /// However, for most cases, calling `to_owned` o`UseState`te is the
-    /// preferred way to get "anoth`set_state`tate handle.
+    /// However, for most cases, calling `to_owned` on the state is the
+    /// preferred way to get "another" state handle.
     ///
     ///
     /// # Examples

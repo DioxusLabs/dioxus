@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 pub fn use_set<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &Rc<dyn Fn(T)> {
     let root = use_atom_root(cx);
-    cx.use_hook(|_| {
+    cx.use_hook(|| {
         let id = f.unique_id();
         let root = root.clone();
         root.initialize(f);

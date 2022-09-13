@@ -14,6 +14,7 @@ use syn::{
     parse_macro_input, parse_quote, Error, Field, Ident, Token, Type,
 };
 
+/// Sorts a slice of string literals at compile time.
 #[proc_macro]
 pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
     let slice: StrSlice = parse_macro_input!(input as StrSlice);
@@ -22,12 +23,107 @@ pub fn sorted_str_slice(input: TokenStream) -> TokenStream {
 }
 
 #[derive(PartialEq, Debug, Clone)]
-enum DepKind {
+enum DependencyKind {
     Node,
     Child,
     Parent,
 }
 
+/// Derive's the state from any elements that have a node_dep_state, child_dep_state, parent_dep_state, or state attribute.
+///
+/// # Declaring elements
+/// Each of the attributes require specifying the members of the struct it depends on to allow the macro to find the optimal resultion order.
+/// These dependencies should match the types declared in the trait the member implements.
+///
+/// # The node_dep_state attribute
+/// The node_dep_state attribute declares a member that implements the NodeDepState trait.
+/// ```rust, ignore
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependency implements ChildDepState<()>
+///     #[node_dep_state()]
+///     my_dependency_1: MyDependency,
+///     // MyDependency2 implements ChildDepState<(MyDependency,)>
+///     #[node_dep_state(my_dependency_1)]
+///     my_dependency_2: MyDependency2,
+/// }
+/// // or
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependnancy implements NodeDepState<()>
+///     #[node_dep_state()]
+///     my_dependency_1: MyDependency,
+///     // MyDependency2 implements NodeDepState<()>
+///     #[node_dep_state()]
+///     my_dependency_2: MyDependency2,
+///     // MyDependency3 implements NodeDepState<(MyDependency, MyDependency2)> with Ctx = f32
+///     #[node_dep_state((my_dependency_1, my_dependency_2), f32)]
+///     my_dependency_3: MyDependency2,
+/// }
+/// ```
+/// # The child_dep_state attribute
+/// The child_dep_state attribute declares a member that implements the ChildDepState trait.
+/// ```rust, ignore
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependnacy implements ChildDepState with DepState = Self
+///     #[child_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+/// }
+/// // or
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependnacy implements ChildDepState with DepState = Self
+///     #[child_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+///     // MyDependnacy2 implements ChildDepState with DepState = MyDependency and Ctx = f32
+///     #[child_dep_state(my_dependency_1, f32)]
+///     my_dependency_2: MyDependency2,
+/// }
+/// ```
+/// # The parent_dep_state attribute
+/// The parent_dep_state attribute declares a member that implements the ParentDepState trait.
+/// The parent_dep_state attribute can be called in the forms:
+/// ```rust, ignore
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependnacy implements ParentDepState with DepState = Self
+///     #[parent_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+/// }
+/// // or
+/// #[derive(State)]
+/// struct MyStruct {
+///     // MyDependnacy implements ParentDepState with DepState = Self
+///     #[parent_dep_state(my_dependency_1)]
+///     my_dependency_1: MyDependency,
+///     // MyDependnacy2 implements ParentDepState with DepState = MyDependency and Ctx = f32
+///     #[parent_dep_state(my_dependency_1, f32)]
+///     my_dependency_2: MyDependency2,
+/// }
+/// ```
+///
+/// # Combining dependancies
+/// The node_dep_state, parent_dep_state, and child_dep_state attributes can be combined to allow for more complex dependancies.
+/// For example if we wanted to combine the font that is passed from the parent to the child and the layout of the size children to find the size of the current node we could do:
+/// ```rust, ignore
+/// #[derive(State)]
+/// struct MyStruct {
+///     // ChildrenSize implements ChildDepState with DepState = Size
+///     #[child_dep_state(size)]
+///     children_size: ChildrenSize,
+///     // FontSize implements ParentDepState with DepState = Self
+///     #[parent_dep_state(font_size)]
+///     font_size: FontSize,
+///     // Size implements NodeDepState<(ChildrenSize, FontSize)>
+///     #[parent_dep_state((children_size, font_size))]
+///     size: Size,
+/// }
+/// ```
+///
+/// # The state attribute
+/// The state macro declares a member that implements the State trait. This allows you to organize your state into multiple isolated components.
+/// Unlike the other attributes, the state attribute does not accept any arguments, because a nested state cannot depend on any other part of the state.
 #[proc_macro_derive(
     State,
     attributes(node_dep_state, child_dep_state, parent_dep_state, state)
@@ -101,6 +197,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                             }
                         }
 
+                        #[derive(Clone, Copy)]
                         struct MembersDirty {
                             #(#members: bool, )*
                         }
@@ -113,18 +210,27 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                             fn any(&self) -> bool {
                                 #(self.#members || )* false
                             }
+
+                            fn union(self, other: Self) -> Self {
+                                Self {#(#members: self.#members || other.#members),*}
+                            }
                         }
 
                         let mut dirty_elements = fxhash::FxHashSet::default();
                         // the states of any elements that are dirty
-                        let mut states = fxhash::FxHashMap::default();
+                        let mut states: fxhash::FxHashMap<dioxus_core::ElementId, MembersDirty> = fxhash::FxHashMap::default();
 
                         for (id, mask) in dirty {
                             let members_dirty = MembersDirty {
                                 #(#members: #member_types::NODE_MASK.overlaps(mask),)*
                             };
                             if members_dirty.any(){
-                                states.insert(*id, members_dirty);
+                                if let Some(state) = states.get_mut(id){
+                                    *state = state.union(members_dirty);
+                                }
+                                else{
+                                    states.insert(*id, members_dirty);
+                                }
                             }
                             dirty_elements.insert(*id);
                         }
@@ -178,6 +284,7 @@ struct StateStruct<'a> {
 }
 
 impl<'a> StateStruct<'a> {
+    /// Parse the state structure, and find a resolution order that will allow us to update the state for each node in after the state(s) it depends on have been resolved.
     fn parse(fields: &[&'a Field], strct: &'a Struct) -> Result<Self> {
         let mut parse_err = Ok(());
         let mut unordered_state_members: Vec<_> = strct
@@ -195,15 +302,17 @@ impl<'a> StateStruct<'a> {
         parse_err?;
 
         let mut state_members = Vec::new();
+        // Keep adding members that have had all of there dependancies resolved until there are no more members left.
         while !unordered_state_members.is_empty() {
             let mut resolved = false;
             for i in 0..unordered_state_members.len() {
                 let mem = &mut unordered_state_members[i];
+                // if this member has all of its dependancies resolved other than itself, resolve it next.
                 if mem.dep_mems.iter().all(|(dep, resolved)| {
-                    *resolved || (*dep == mem.mem && mem.dep_kind != DepKind::Node)
+                    *resolved || (*dep == mem.mem && mem.dep_kind != DependencyKind::Node)
                 }) {
                     let mem = unordered_state_members.remove(i);
-                    // mark any dependancy that depends on this member as resolved
+                    // mark any dependency that depends on this member as resolved
                     for member in unordered_state_members.iter_mut() {
                         for (dep, resolved) in &mut member.dep_mems {
                             *resolved |= *dep == mem.mem;
@@ -260,9 +369,9 @@ impl<'a> StateStruct<'a> {
             for (dep, _) in &member.dep_mems {
                 if *dep == mem {
                     match member.dep_kind {
-                        DepKind::Node => dependants.node.push(member.mem),
-                        DepKind::Child => dependants.child.push(member.mem),
-                        DepKind::Parent => dependants.parent.push(member.mem),
+                        DependencyKind::Node => dependants.node.push(member.mem),
+                        DependencyKind::Child => dependants.child.push(member.mem),
+                        DependencyKind::Parent => dependants.parent.push(member.mem),
                     }
                 }
             }
@@ -270,6 +379,7 @@ impl<'a> StateStruct<'a> {
         dependants
     }
 
+    // Mark the states that depend on the current state as dirty
     fn update_dependants(&self, mem: &Member) -> impl ToTokens {
         let dep = self.get_depenadants(mem);
         let update_child_dependants = if dep.child.is_empty() {
@@ -368,13 +478,14 @@ impl<'a> StateStruct<'a> {
         }
     }
 
+    // Generate code to resolve this state
     fn resolve(&self, mem: &StateMember) -> impl ToTokens {
         let reduce_member = mem.reduce_self();
         let update_dependant = self.update_dependants(mem.mem);
         let member = &mem.mem.ident;
 
         match mem.dep_kind {
-            DepKind::Parent => {
+            DependencyKind::Parent => {
                 quote! {
                     // resolve parent dependant state
                     let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
@@ -394,7 +505,7 @@ impl<'a> StateStruct<'a> {
                     }
                 }
             }
-            DepKind::Child => {
+            DependencyKind::Child => {
                 quote! {
                     // resolve child dependant state
                     let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
@@ -416,7 +527,7 @@ impl<'a> StateStruct<'a> {
                     }
                 }
             }
-            DepKind::Node => {
+            DependencyKind::Node => {
                 quote! {
                     // resolve node dependant state
                     let mut resolution_order = states.keys().copied().collect::<Vec<_>>();
@@ -444,12 +555,12 @@ fn try_parenthesized(input: ParseStream) -> Result<ParseBuffer> {
     Ok(inside)
 }
 
-struct Dependancy {
+struct Dependency {
     ctx_ty: Option<Type>,
     deps: Vec<Ident>,
 }
 
-impl Parse for Dependancy {
+impl Parse for Dependency {
     fn parse(input: ParseStream) -> Result<Self> {
         let deps: Option<Punctuated<Ident, Token![,]>> = {
             try_parenthesized(input)
@@ -475,6 +586,7 @@ impl Parse for Dependancy {
     }
 }
 
+/// The type of the member and the ident of the member
 #[derive(PartialEq, Debug)]
 struct Member {
     ty: Type,
@@ -493,9 +605,11 @@ impl Member {
 #[derive(Debug, Clone)]
 struct StateMember<'a> {
     mem: &'a Member,
-    dep_kind: DepKind,
+    // the kind of dependncies this state has
+    dep_kind: DependencyKind,
     // the depenancy and if it is satified
     dep_mems: Vec<(&'a Member, bool)>,
+    // the context this state requires
     ctx_ty: Option<Type>,
 }
 
@@ -511,14 +625,14 @@ impl<'a> StateMember<'a> {
                 .path
                 .get_ident()
                 .and_then(|i| match i.to_string().as_str() {
-                    "node_dep_state" => Some(DepKind::Node),
-                    "child_dep_state" => Some(DepKind::Child),
-                    "parent_dep_state" => Some(DepKind::Parent),
+                    "node_dep_state" => Some(DependencyKind::Node),
+                    "child_dep_state" => Some(DependencyKind::Child),
+                    "parent_dep_state" => Some(DependencyKind::Parent),
                     _ => None,
                 })?;
-            match a.parse_args::<Dependancy>() {
-                Ok(dependancy) => {
-                    let dep_mems = dependancy
+            match a.parse_args::<Dependency>() {
+                Ok(dependency) => {
+                    let dep_mems = dependency
                         .deps
                         .iter()
                         .filter_map(|name| {
@@ -537,7 +651,7 @@ impl<'a> StateMember<'a> {
                         mem,
                         dep_kind,
                         dep_mems,
-                        ctx_ty: dependancy.ctx_ty,
+                        ctx_ty: dependency.ctx_ty,
                     })
                 }
                 Err(e) => {
@@ -550,6 +664,7 @@ impl<'a> StateMember<'a> {
         Ok(member)
     }
 
+    /// generate code to call the resolve function for the state. This does not handle checking if resolving the state is necessary, or marking the states that depend on this state as dirty.
     fn reduce_self(&self) -> quote::__private::TokenStream {
         let ident = &self.mem.ident;
         let get_ctx = if let Some(ctx_ty) = &self.ctx_ty {
@@ -568,17 +683,17 @@ impl<'a> StateMember<'a> {
             quote!(dioxus_native_core::node_ref::NodeView::new(vnode, #ty::NODE_MASK, vdom));
         let dep_idents = self.dep_mems.iter().map(|m| &m.0.ident);
         match self.dep_kind {
-            DepKind::Node => {
+            DependencyKind::Node => {
                 quote!({
                     current_state.#ident.reduce(#node_view, (#(&current_state.#dep_idents,)*), #get_ctx)
                 })
             }
-            DepKind::Child => {
+            DependencyKind::Child => {
                 quote!({
                     current_state.#ident.reduce(#node_view, children.iter().map(|c| (#(&c.#dep_idents)*)), #get_ctx)
                 })
             }
-            DepKind::Parent => {
+            DependencyKind::Parent => {
                 quote!({
                     current_state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.#dep_idents)*)), #get_ctx)
                 })

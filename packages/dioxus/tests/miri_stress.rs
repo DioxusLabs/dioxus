@@ -22,7 +22,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 #[test]
 fn test_memory_leak() {
     fn app(cx: Scope) -> Element {
-        let val = cx.use_hook(|_| 0);
+        let val = cx.use_hook(|| 0);
 
         *val += 1;
 
@@ -30,21 +30,21 @@ fn test_memory_leak() {
             return None;
         }
 
-        let name = cx.use_hook(|_| String::from("asd"));
+        let name = cx.use_hook(|| String::from("asd"));
 
         cx.render(rsx!(
             div { "Hello, world!" }
-            child()
-            child()
-            child()
-            child()
-            child()
-            child()
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
         ))
     }
 
@@ -53,15 +53,15 @@ fn test_memory_leak() {
         na: &'a str,
     }
 
-    fn borrowed_child<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
+    fn BorrowedChild<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
         rsx!(cx, div {
             "goodbye {cx.props.na}"
-            child()
-            child()
+            Child {}
+            Child {}
         })
     }
 
-    fn child(cx: Scope) -> Element {
+    fn Child(cx: Scope) -> Element {
         rsx!(cx, div { "goodbye world" })
     }
 
@@ -79,7 +79,7 @@ fn test_memory_leak() {
 #[test]
 fn memo_works_properly() {
     fn app(cx: Scope) -> Element {
-        let val = cx.use_hook(|_| 0);
+        let val = cx.use_hook(|| 0);
 
         *val += 1;
 
@@ -87,11 +87,11 @@ fn memo_works_properly() {
             return None;
         }
 
-        let name = cx.use_hook(|_| String::from("asd"));
+        let name = cx.use_hook(|| String::from("asd"));
 
         cx.render(rsx!(
             div { "Hello, world! {name}" }
-            child(na: "asdfg".to_string() )
+            Child { na: "asdfg".to_string() }
         ))
     }
 
@@ -100,7 +100,7 @@ fn memo_works_properly() {
         na: String,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         rsx!(cx, div { "goodbye world" })
     }
 
@@ -120,10 +120,10 @@ fn memo_works_properly() {
 fn free_works_on_root_props() {
     fn app(cx: Scope<Custom>) -> Element {
         cx.render(rsx! {
-            child(a: "alpha")
-            child(a: "beta")
-            child(a: "gamma")
-            child(a: "delta")
+            Child { a: "alpha"}
+            Child { a: "beta"}
+            Child { a: "gamma"}
+            Child { a: "delta"}
         })
     }
 
@@ -132,7 +132,7 @@ fn free_works_on_root_props() {
         a: &'static str,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         rsx!(cx, "child {cx.props.a}")
     }
 
@@ -154,7 +154,7 @@ fn free_works_on_root_props() {
 fn free_works_on_borrowed() {
     fn app(cx: Scope) -> Element {
         cx.render(rsx! {
-            child(a: "alpha", b: "asd".to_string())
+            Child { a: "alpha", b: "asd".to_string() }
         })
     }
     #[derive(Props)]
@@ -163,7 +163,7 @@ fn free_works_on_borrowed() {
         b: String,
     }
 
-    fn child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
+    fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
         dbg!("rendering child");
         rsx!(cx, "child {cx.props.a}, {cx.props.b}")
     }
@@ -192,7 +192,7 @@ fn free_works_on_root_hooks() {
     }
 
     fn app(cx: Scope) -> Element {
-        let name = cx.use_hook(|_| Droppable(String::from("asd")));
+        let name = cx.use_hook(|| Droppable(String::from("asd")));
         rsx!(cx, div { "{name.0}" })
     }
 
@@ -204,13 +204,13 @@ fn free_works_on_root_hooks() {
 fn old_props_arent_stale() {
     fn app(cx: Scope) -> Element {
         dbg!("rendering parent");
-        let cnt = cx.use_hook(|_| 0);
+        let cnt = cx.use_hook(|| 0);
         *cnt += 1;
 
         if *cnt == 1 {
-            rsx!(cx, div { child(a: "abcdef".to_string()) })
+            rsx!(cx, div { Child { a: "abcdef".to_string() } })
         } else {
-            rsx!(cx, div { child(a: "abcdef".to_string()) })
+            rsx!(cx, div { Child { a: "abcdef".to_string() } })
         }
     }
 
@@ -218,7 +218,7 @@ fn old_props_arent_stale() {
     struct ChildProps {
         a: String,
     }
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         dbg!("rendering child", &cx.props.a);
         rsx!(cx, div { "child {cx.props.a}" })
     }
@@ -251,7 +251,7 @@ fn old_props_arent_stale() {
 fn basic() {
     fn app(cx: Scope) -> Element {
         rsx!(cx, div {
-            child(a: "abcdef".to_string())
+            Child { a: "abcdef".to_string() }
         })
     }
 
@@ -260,7 +260,7 @@ fn basic() {
         a: String,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         dbg!("rendering child", &cx.props.a);
         rsx!(cx, div { "child {cx.props.a}" })
     }

@@ -9,7 +9,7 @@ Fragments don't mount a physical element to the DOM immediately, so Dioxus must 
 Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigates this with components by providing an API for registering shared state without the Context Provider pattern.
 
 ```rust
-{{#include ../../examples/anti_patterns.rs:nested_fragments}}
+{{#include ../../../examples/anti_patterns.rs:nested_fragments}}
 ```
 
 ## Incorrect Iterator Keys
@@ -17,7 +17,7 @@ Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigate
 As described in the conditional rendering chapter, list items must have unique keys that are associated with the same items across renders. This helps Dioxus associate state with the contained components, and ensures good diffing performance. Do not omit keys, unless you know that the list is static and will never change.
 
 ```rust
-{{#include ../../examples/anti_patterns.rs:iter_keys}}
+{{#include ../../../examples/anti_patterns.rs:iter_keys}}
 ```
 
 ## Avoid Interior Mutability in Props

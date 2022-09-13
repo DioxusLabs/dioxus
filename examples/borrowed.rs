@@ -23,7 +23,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let text = cx.use_hook(|_| vec![String::from("abc=def")]);
+    let text = cx.use_hook(|| vec![String::from("abc=def")]);
 
     let first = text.get_mut(0).unwrap();
 
