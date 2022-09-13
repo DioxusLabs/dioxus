@@ -3,7 +3,7 @@ use crate::{AtomId, AtomRoot, Readable, Writable};
 pub type Atom<T> = fn(AtomBuilder) -> T;
 pub struct AtomBuilder;
 
-impl<V> Readable<V> for Atom<V> {
+impl<V: 'static> Readable<V> for Atom<V> {
     fn read(&self, _root: AtomRoot) -> Option<V> {
         todo!()
     }
@@ -11,11 +11,14 @@ impl<V> Readable<V> for Atom<V> {
         (*self)(AtomBuilder)
     }
     fn unique_id(&self) -> AtomId {
-        *self as *const ()
+        AtomId {
+            ptr: *self as *const (),
+            type_id: std::any::TypeId::of::<V>(),
+        }
     }
 }
 
-impl<V> Writable<V> for Atom<V> {
+impl<V: 'static> Writable<V> for Atom<V> {
     fn write(&self, _root: AtomRoot, _value: V) {
         todo!()
     }
