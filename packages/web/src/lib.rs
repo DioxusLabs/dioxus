@@ -56,7 +56,7 @@
 
 use std::rc::Rc;
 
-pub use crate::cfg::WebConfig;
+pub use crate::cfg::Config;
 pub use crate::util::use_eval;
 use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
@@ -93,7 +93,7 @@ mod util;
 /// }
 /// ```
 pub fn launch(root_component: Component) {
-    launch_with_props(root_component, (), WebConfig::default());
+    launch_with_props(root_component, (), Config::default());
 }
 
 /// Launch your app and run the event loop, with configuration.
@@ -106,7 +106,7 @@ pub fn launch(root_component: Component) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_web::launch_with_props(App, WebConfig::new().pre_render(true));
+///     dioxus_web::launch_with_props(App, Config::new().pre_render(true));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -115,7 +115,7 @@ pub fn launch(root_component: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config: WebConfig) {
+pub fn launch_cfg(root: Component, config: Config) {
     launch_with_props(root, (), config)
 }
 
@@ -130,7 +130,7 @@ pub fn launch_cfg(root: Component, config: WebConfig) {
 ///     dioxus_web::launch_with_props(
 ///         App,
 ///         RootProps { name: String::from("joe") },
-///         WebConfig::new()
+///         Config::new()
 ///     );
 /// }
 ///
@@ -143,7 +143,7 @@ pub fn launch_cfg(root: Component, config: WebConfig) {
 ///     rsx!(cx, div {"hello {cx.props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T>(root_component: Component<T>, root_properties: T, config: WebConfig)
+pub fn launch_with_props<T>(root_component: Component<T>, root_properties: T, config: Config)
 where
     T: Send + 'static,
 {
@@ -162,7 +162,7 @@ where
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
+pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: Config) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     if cfg!(feature = "panic_hook") && cfg.default_panic_hook {

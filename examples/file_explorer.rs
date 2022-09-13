@@ -9,12 +9,12 @@
 //! we dont need to clutter our code with `read` commands.
 
 use dioxus::prelude::*;
-use dioxus_desktop::{DesktopConfig, WindowBuilder};
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
     dioxus_desktop::launch_cfg(
         app,
-        DesktopConfig::new().with_window(WindowBuilder::new().with_resizable(true)),
+        Config::new().with_window(WindowBuilder::new().with_resizable(true)),
     );
 }
 

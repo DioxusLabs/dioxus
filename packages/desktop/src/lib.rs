@@ -18,7 +18,7 @@ pub use wry;
 pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
-pub use cfg::DesktopConfig;
+pub use cfg::Config;
 use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
@@ -49,7 +49,7 @@ use wry::webview::WebViewBuilder;
 /// }
 /// ```
 pub fn launch(root: Component) {
-    launch_with_props(root, (), DesktopConfig::default())
+    launch_with_props(root, (), Config::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -71,7 +71,7 @@ pub fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config_builder: DesktopConfig) {
+pub fn launch_cfg(root: Component, config_builder: Config) {
     launch_with_props(root, (), config_builder)
 }
 
@@ -98,7 +98,7 @@ pub fn launch_cfg(root: Component, config_builder: DesktopConfig) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: DesktopConfig) {
+pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());

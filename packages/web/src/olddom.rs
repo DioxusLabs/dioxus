@@ -16,7 +16,7 @@ use web_sys::{
     HtmlOptionElement, HtmlTextAreaElement, Node,
 };
 
-use crate::{nodeslab::NodeSlab, WebConfig};
+use crate::{nodeslab::NodeSlab, Config};
 
 pub struct WebsysDom {
     stack: Stack,
@@ -39,7 +39,7 @@ pub struct WebsysDom {
 type ListenerEntry = (usize, Closure<dyn FnMut(&Event)>);
 
 impl WebsysDom {
-    pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
+    pub fn new(cfg: Config, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         let document = load_document();
 
         let nodes = NodeSlab::new(2000);

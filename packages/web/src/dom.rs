@@ -15,7 +15,7 @@ use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
 
-use crate::WebConfig;
+use crate::Config;
 
 pub struct WebsysDom {
     pub interpreter: Interpreter,
@@ -26,7 +26,7 @@ pub struct WebsysDom {
 }
 
 impl WebsysDom {
-    pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
+    pub fn new(cfg: Config, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
             let mut target = event

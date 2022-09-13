@@ -1,11 +1,11 @@
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::LogicalSize, DesktopConfig, WindowBuilder};
+use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
 use dioxus_router::{Link, Route, Router};
 
 fn main() {
     env_logger::init();
 
-    let cfg = DesktopConfig::new().with_window(
+    let cfg = Config::new().with_window(
         WindowBuilder::new()
             .with_title("Spinsense Client")
             .with_inner_size(LogicalSize::new(600, 1000))

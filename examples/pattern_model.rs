@@ -21,10 +21,10 @@ use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
 use dioxus_desktop::wry::application::dpi::LogicalSize;
-use dioxus_desktop::{DesktopConfig, WindowBuilder};
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    let cfg = DesktopConfig::new().with_window(
+    let cfg = Config::new().with_window(
         WindowBuilder::new()
             .with_title("Calculator Demo")
             .with_resizable(false)

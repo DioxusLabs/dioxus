@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
-use dioxus_desktop::DesktopConfig;
+use dioxus_desktop::Config;
 
 fn main() {
-    let cfg = DesktopConfig::new().with_file_drop_handler(|_w, e| {
+    let cfg = Config::new().with_file_drop_handler(|_w, e| {
         println!("{:?}", e);
         true
     });

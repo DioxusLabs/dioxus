@@ -14,10 +14,10 @@
 //! primitives in our own custom components.
 
 use dioxus::prelude::*;
-use dioxus_desktop::{DesktopConfig, LogicalSize, WindowBuilder};
+use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    let cfg = DesktopConfig::new().with_window(
+    let cfg = Config::new().with_window(
         WindowBuilder::new()
             .with_title("Doggo Fetcher")
             .with_inner_size(LogicalSize::new(600.0, 800.0)),

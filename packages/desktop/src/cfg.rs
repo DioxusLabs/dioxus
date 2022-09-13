@@ -11,7 +11,7 @@ use wry::{
 // pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 /// The configuration for the desktop application.
-pub struct DesktopConfig {
+pub struct Config {
     pub(crate) window: WindowBuilder,
     pub(crate) file_drop_handler: Option<Box<dyn Fn(&Window, FileDropEvent) -> bool>>,
     pub(crate) protocols: Vec<WryProtocol>,
@@ -28,7 +28,7 @@ pub(crate) type WryProtocol = (
     Box<dyn Fn(&HttpRequest) -> WryResult<HttpResponse> + 'static>,
 );
 
-impl DesktopConfig {
+impl Config {
     /// Initializes a new `WindowBuilder` with default values.
     #[inline]
     pub fn new() -> Self {
@@ -126,7 +126,7 @@ impl DesktopConfig {
     }
 }
 
-impl Default for DesktopConfig {
+impl Default for Config {
     fn default() -> Self {
         Self::new()
     }

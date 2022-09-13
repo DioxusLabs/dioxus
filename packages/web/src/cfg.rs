@@ -5,16 +5,16 @@
 /// # Example
 ///
 /// ```rust, ignore
-/// dioxus_web::launch(App, WebConfig::new().hydrate(true).root_name("myroot"))
+/// dioxus_web::launch(App, Config::new().hydrate(true).root_name("myroot"))
 /// ```
-pub struct WebConfig {
+pub struct Config {
     pub(crate) hydrate: bool,
     pub(crate) rootname: String,
     pub(crate) cached_strings: Vec<String>,
     pub(crate) default_panic_hook: bool,
 }
 
-impl Default for WebConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             hydrate: false,
@@ -25,10 +25,10 @@ impl Default for WebConfig {
     }
 }
 
-impl WebConfig {
-    /// Create a new Default instance of the WebConfig.
+impl Config {
+    /// Create a new Default instance of the Config.
     ///
-    /// This is no different than calling `WebConfig::default()`
+    /// This is no different than calling `Config::default()`
     pub fn new() -> Self {
         Self::default()
     }
