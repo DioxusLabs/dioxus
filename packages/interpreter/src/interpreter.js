@@ -44,8 +44,7 @@ class ListenerMap {
         this.global[event_name] = {};
         this.global[event_name].active = 1;
         this.global[event_name].callback = handler;
-        element.addEventListener(event_name, handler);
-        // this.root.addEventListener(event_name, handler);
+        this.root.addEventListener(event_name, handler);
       } else {
         this.global[event_name].active++;
       }
@@ -277,7 +276,6 @@ export class Interpreter {
         // method is not used by the web implementation
         let handler = (event) => {
           let target = event.target;
-          console.log(event);
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
             let shouldPreventDefault = target.getAttribute(
@@ -357,10 +355,6 @@ export class Interpreter {
                   }
                 }
               }
-            }
-
-            // handle ondrag events
-            if (event.type == "drag") {
             }
 
             if (realId === null) {
