@@ -9,7 +9,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let val = use_state(&cx, || 5);
 
-    cx.render(rsx! {
+    render! {
         div {
             user_select: "none",
             webkit_user_select: "none",
@@ -31,7 +31,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-    })
+    }
 }
 
 #[derive(Props)]
@@ -78,7 +78,7 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
             })
         });
 
-    rsx!(cx,
+    render! {
       svg {
         onclick: move |e| cx.props.onclick.call(e),
         prevent_default: "onclick",
@@ -97,5 +97,5 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
 
         dots
       }
-    )
+    }
 }
