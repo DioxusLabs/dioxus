@@ -262,10 +262,19 @@ impl<S: State> RealDom<S> {
                     PopRoot {} => {
                         self.node_stack.pop();
                     }
-                    CreateTemplateRef {
-                        id: _,
-                        template_id: _,
-                    } => todo!(),
+                    CreateTemplateRef { id, template_id } => {
+                        let template_id = RendererTemplateId(template_id as usize);
+                        let template = self.templates.get(&template_id).unwrap();
+                        let nodes = template.nodes.clone();
+                        let id = ElementId(id as usize);
+                        let template_ref = TemplateRefOrNode::Ref {
+                            id,
+                            nodes,
+                            parent: None,
+                        };
+                        self.nodes[id.0] = Some(Box::new(template_ref));
+                        self.node_stack.push(dioxus_core::GlobalNodeId::VNodeId(id));
+                    }
                     CreateTemplate { id } => {
                         let id = RendererTemplateId(id as usize);
                         self.templates.insert(id, NativeTemplate::default());
@@ -561,6 +570,14 @@ impl<S: State> RealDom<S> {
     }
 }
 
+impl<S: State> Index<ElementId> for RealDom<S> {
+    type Output = Node<S>;
+
+    fn index(&self, idx: ElementId) -> &Self::Output {
+        self.get(GlobalNodeId::VNodeId(idx)).unwrap()
+    }
+}
+
 impl<S: State> Index<GlobalNodeId> for RealDom<S> {
     type Output = Node<S>;
 
@@ -578,6 +595,12 @@ impl<S: State> Index<usize> for RealDom<S> {
         } else {
             &self[GlobalNodeId::VNodeId(dioxus_core::ElementId(idx))]
         }
+    }
+}
+
+impl<S: State> IndexMut<ElementId> for RealDom<S> {
+    fn index_mut(&mut self, idx: ElementId) -> &mut Self::Output {
+        self.get_mut(GlobalNodeId::VNodeId(idx)).unwrap()
     }
 }
 
