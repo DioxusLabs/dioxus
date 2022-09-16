@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::{ElementId, GlobalNodeId};
+use dioxus_core::GlobalNodeId;
 use fxhash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};

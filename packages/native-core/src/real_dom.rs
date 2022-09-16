@@ -9,7 +9,7 @@ use dioxus_core::{
 
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
-use crate::template::{self, NativeTemplate, TemplateRefOrNode};
+use crate::template::{NativeTemplate, TemplateRefOrNode};
 use crate::traversable::Traversable;
 
 pub(crate) type TemplateMapping<S> = FxHashMap<RendererTemplateId, NativeTemplate<S>>;
@@ -273,14 +273,12 @@ impl<S: State> RealDom<S> {
                     }
                     FinishTemplate { len } => {
                         let len = len as usize;
-                        let current_template = self.current_template_mut();
-                        current_template.unwrap().roots = self
+                        let roots = self
                             .node_stack
                             .drain((self.node_stack.len() - len)..)
                             .map(|id| {
                                 if let GlobalNodeId::TemplateId {
-                                    template_node_id,
-                                    template_ref_id,
+                                    template_node_id, ..
                                 } = id
                                 {
                                     template_node_id.0
@@ -289,6 +287,8 @@ impl<S: State> RealDom<S> {
                                 }
                             })
                             .collect();
+                        let current_template = self.current_template_mut();
+                        current_template.unwrap().roots = roots;
                         self.template_in_progress = None;
                     }
                     EnterTemplateRef { root } => self.template_stack.push(ElementId(root as usize)),
@@ -355,21 +355,21 @@ impl<S: State> RealDom<S> {
     fn remove(&mut self, id: GlobalNodeId) -> Option<TemplateRefOrNode<S>> {
         // We do not need to remove the node from the parent's children list for children.
         fn inner<S: State>(dom: &mut RealDom<S>, id: GlobalNodeId) -> Option<TemplateRefOrNode<S>> {
-            let either = match id {
+            let mut either = match id {
                 GlobalNodeId::VNodeId(id) => *dom.nodes[id.0].take()?,
                 GlobalNodeId::TemplateId {
                     template_ref_id,
                     template_node_id,
                 } => {
-                    let template_ref = &mut dom.nodes[template_ref_id.0].unwrap();
-                    if let TemplateRefOrNode::Ref { id, nodes, parent } = template_ref.as_mut() {
+                    let template_ref = &mut dom.nodes[template_ref_id.0].as_mut().unwrap();
+                    if let TemplateRefOrNode::Ref { nodes, .. } = template_ref.as_mut() {
                         TemplateRefOrNode::Node(*nodes[template_node_id.0].take().unwrap())
                     } else {
                         unreachable!()
                     }
                 }
             };
-            match either {
+            match &mut either {
                 TemplateRefOrNode::Node(node) => {
                     if let NodeType::Element { children, .. } = &mut node.node_type {
                         for c in children {
@@ -381,14 +381,14 @@ impl<S: State> RealDom<S> {
                 TemplateRefOrNode::Ref { .. } => Some(either),
             }
         }
-        let node = match id {
+        let mut node = match id {
             GlobalNodeId::VNodeId(id) => *self.nodes[id.0].take()?,
             GlobalNodeId::TemplateId {
                 template_ref_id,
                 template_node_id,
             } => {
-                let template_ref = &mut self.nodes[template_ref_id.0].unwrap();
-                if let TemplateRefOrNode::Ref { id, nodes, parent } = template_ref.as_mut() {
+                let template_ref = &mut self.nodes[template_ref_id.0].as_mut().unwrap();
+                if let TemplateRefOrNode::Ref { nodes, .. } = template_ref.as_mut() {
                     TemplateRefOrNode::Node(*nodes[template_node_id.0].take().unwrap())
                 } else {
                     unreachable!()
@@ -399,7 +399,7 @@ impl<S: State> RealDom<S> {
             let parent = &mut self[parent];
             parent.remove_child(id);
         }
-        match node {
+        match &mut node {
             TemplateRefOrNode::Ref { .. } => {}
             TemplateRefOrNode::Node(node) => {
                 if let NodeType::Element { children, .. } = &mut node.node_type {
@@ -574,7 +574,7 @@ impl<S: State> Index<usize> for RealDom<S> {
 
     fn index(&self, idx: usize) -> &Self::Output {
         if let Some(template) = self.current_template() {
-            &template.nodes[idx].unwrap()
+            template.nodes[idx].as_ref().unwrap()
         } else {
             &self[GlobalNodeId::VNodeId(dioxus_core::ElementId(idx))]
         }

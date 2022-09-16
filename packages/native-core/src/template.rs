@@ -1,4 +1,4 @@
-use dioxus_core::{ElementId, GlobalNodeId, RendererTemplateId};
+use dioxus_core::{ElementId, GlobalNodeId};
 
 use crate::{real_dom::Node, state::State};
 
