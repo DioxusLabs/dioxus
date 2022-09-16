@@ -23,7 +23,7 @@ use std::{
 };
 
 /// The ID of a node in the vdom that is either standalone or in a template
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(untagged))]
 pub enum GlobalNodeId {
@@ -36,6 +36,15 @@ pub enum GlobalNodeId {
     },
     /// The ID of a regular node
     VNodeId(ElementId),
+}
+
+impl PartialEq<ElementId> for GlobalNodeId {
+    fn eq(&self, other: &ElementId) -> bool {
+        match self {
+            GlobalNodeId::TemplateId { .. } => false,
+            GlobalNodeId::VNodeId(id) => id == other,
+        }
+    }
 }
 
 impl FromStr for GlobalNodeId {

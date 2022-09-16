@@ -1,7 +1,7 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::ElementId;
+use dioxus_core::{ElementId, GlobalNodeId};
 use fxhash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};
@@ -136,12 +136,12 @@ pub trait NodeDepState<DepState> {
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
 pub trait State: Default + Clone {
     #[doc(hidden)]
-    fn update<'a, T: Traversable<Node = Self, Id = ElementId>>(
-        dirty: &[(ElementId, NodeMask)],
+    fn update<'a, T: Traversable<Node = Self, Id = GlobalNodeId>>(
+        dirty: &[(GlobalNodeId, NodeMask)],
         state_tree: &'a mut T,
         vdom: &'a dioxus_core::VirtualDom,
         ctx: &AnyMap,
-    ) -> FxHashSet<ElementId>;
+    ) -> FxHashSet<GlobalNodeId>;
 }
 
 // Todo: once GATs land we can model multable dependencies

@@ -2,14 +2,14 @@ use crate::{
     real_dom::{NodeType, RealDom},
     state::State,
 };
-use dioxus_core::{DomEdit, ElementId, Mutations};
+use dioxus_core::{DomEdit, ElementId, GlobalNodeId, Mutations};
 
 pub enum ElementProduced {
-    Progressed(ElementId),
-    Looped(ElementId),
+    Progressed(GlobalNodeId),
+    Looped(GlobalNodeId),
 }
 impl ElementProduced {
-    pub fn id(&self) -> ElementId {
+    pub fn id(&self) -> GlobalNodeId {
         match self {
             ElementProduced::Progressed(id) => *id,
             ElementProduced::Looped(id) => *id,
@@ -47,13 +47,16 @@ impl NodePosition {
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
     // stack of elements and fragments
-    stack: smallvec::SmallVec<[(ElementId, NodePosition); 5]>,
+    stack: smallvec::SmallVec<[(GlobalNodeId, NodePosition); 5]>,
 }
 
 impl Default for PersistantElementIter {
     fn default() -> Self {
         PersistantElementIter {
-            stack: smallvec::smallvec![(ElementId(0), NodePosition::AtNode)],
+            stack: smallvec::smallvec![(
+                GlobalNodeId::VNodeId(dioxus_core::ElementId(0)),
+                NodePosition::AtNode
+            )],
         }
     }
 }
@@ -71,8 +74,10 @@ impl PersistantElementIter {
             .edits
             .iter()
             .filter_map(|e| {
+                // nodes within templates will never be removed
                 if let DomEdit::Remove { root } = e {
-                    Some(*root)
+                    let id = rdom.decode_id(*root);
+                    Some(id)
                 } else {
                     None
                 }
@@ -82,7 +87,7 @@ impl PersistantElementIter {
         if let Some(r) = self
             .stack
             .iter()
-            .position(|(el_id, _)| ids_removed.iter().any(|id| el_id.as_u64() == *id))
+            .position(|(el_id, _)| ids_removed.iter().any(|id| el_id == id))
         {
             self.stack.truncate(r);
             changed = true;
@@ -94,29 +99,20 @@ impl PersistantElementIter {
                     for m in &mutations.edits {
                         match m {
                             DomEdit::Remove { root } => {
-                                if children
-                                    .iter()
-                                    .take(*child_idx + 1)
-                                    .any(|c| c.as_u64() == *root)
-                                {
+                                let id = rdom.decode_id(*root);
+                                if children.iter().take(*child_idx + 1).any(|c| *c == id) {
                                     *child_idx -= 1;
                                 }
                             }
                             DomEdit::InsertBefore { root, n } => {
-                                if children
-                                    .iter()
-                                    .take(*child_idx + 1)
-                                    .any(|c| c.as_u64() == *root)
-                                {
+                                let id = rdom.decode_id(*root);
+                                if children.iter().take(*child_idx + 1).any(|c| *c == id) {
                                     *child_idx += *n as usize;
                                 }
                             }
                             DomEdit::InsertAfter { root, n } => {
-                                if children
-                                    .iter()
-                                    .take(*child_idx)
-                                    .any(|c| c.as_u64() == *root)
-                                {
+                                let id = rdom.decode_id(*root);
+                                if children.iter().take(*child_idx).any(|c| *c == id) {
                                     *child_idx += *n as usize;
                                 }
                             }
@@ -132,7 +128,7 @@ impl PersistantElementIter {
     /// get the next element
     pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         if self.stack.is_empty() {
-            let id = ElementId(0);
+            let id = GlobalNodeId::VNodeId(ElementId(0));
             let new = (id, NodePosition::AtNode);
             self.stack.push(new);
             ElementProduced::Looped(id)
@@ -168,10 +164,10 @@ impl PersistantElementIter {
     pub fn prev<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         // recursively add the last child element to the stack
         fn push_back<S: State>(
-            stack: &mut smallvec::SmallVec<[(ElementId, NodePosition); 5]>,
-            new_node: ElementId,
+            stack: &mut smallvec::SmallVec<[(GlobalNodeId, NodePosition); 5]>,
+            new_node: GlobalNodeId,
             rdom: &RealDom<S>,
-        ) -> ElementId {
+        ) -> GlobalNodeId {
             match &rdom[new_node].node_type {
                 NodeType::Element { children, .. } => {
                     if children.is_empty() {
@@ -185,7 +181,7 @@ impl PersistantElementIter {
             }
         }
         if self.stack.is_empty() {
-            let new_node = ElementId(0);
+            let new_node = GlobalNodeId::VNodeId(ElementId(0));
             ElementProduced::Looped(push_back(&mut self.stack, new_node, rdom))
         } else {
             let (last, o_child_idx) = self.stack.last_mut().unwrap();
@@ -224,7 +220,7 @@ impl PersistantElementIter {
         }
     }
 
-    fn pop(&mut self) -> ElementId {
+    fn pop(&mut self) -> GlobalNodeId {
         self.stack.pop().unwrap().0
     }
 }
