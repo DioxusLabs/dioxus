@@ -49,6 +49,13 @@
 //! ```
 //! Notice how the indecies are no longer in depth first traversal order, and indecies are no longer unique. Attributes and dynamic parts of the text can be duplicated, but dynamic vnodes and componets cannot.
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
+//!
+//! Notes:
+//! 1) Why does the template need to exist outside of the virtual dom?
+//! The main use of the template is skipping diffing on static parts of the dom, but it is also used to make renderes more efficient. Renderers can create a template once and the clone it into place.
+//! When the renderers clone the template we could those new nodes as normal vnodes, but that would interfere with the passive memory management of the nodes. This would mean that static nodes memory must be managed by the virtual dom even though those static nodes do not exist in the virtual dom.
+//! 2) The template allow diffing to scale with reactivity.
+//! With a virtual dom the diffing cost scales with the number of nodes in the dom. With templates the cost scales with the number of dynamic parts of the dom. The dynamic template context links any parts of the template that can change which allows the diffing algorithm to skip traversing the template and find what part to hydrate in constant time.
 
 /// The maxiumum integer in JS
 pub const JS_MAX_INT: u64 = 9007199254740991;
