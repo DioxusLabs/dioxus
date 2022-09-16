@@ -142,8 +142,11 @@ impl NodeDepState<()> for NodeStateTester {
         *self = NodeStateTester(
             node.tag().map(|s| s.to_string()),
             node.attributes()
-                .map(|a| (a.name.to_string(), a.value.to_string()))
-                .collect(),
+                .map(|iter| {
+                    iter.map(|a| (a.attribute.name.to_string(), format!("{:?}", a.value)))
+                        .collect()
+                })
+                .unwrap_or_default(),
         );
         true
     }
@@ -185,7 +188,7 @@ fn state_initial() {
     let nodes_updated = dom.apply_mutations(vec![mutations]);
     let mut ctx = AnyMap::new();
     ctx.insert(42u32);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, ctx);
+    let _to_rerender = dom.update_state(nodes_updated, ctx);
 
     let root_div = &dom[ElementId(1)];
     assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
@@ -284,7 +287,7 @@ fn state_reduce_parent_called_minimally_on_update() {
     let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 1,
@@ -295,7 +298,7 @@ fn state_reduce_parent_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
         assert_eq!(n.state.part2.parent_counter.0, 2);
@@ -353,7 +356,7 @@ fn state_reduce_child_called_minimally_on_update() {
     let mut dom: RealDom<CallCounterState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
             root: 4,
@@ -364,15 +367,18 @@ fn state_reduce_child_called_minimally_on_update() {
         dirty_scopes: fxhash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
     dom.traverse_depth_first(|n| {
         println!("{:?}", n);
         assert_eq!(
             n.state.part1.child_counter.0,
-            if n.id.0 > 4 { 1 } else { 2 }
+            if n.node_data.id.0 > 4 { 1 } else { 2 }
         );
-        assert_eq!(n.state.child_counter.0, if n.id.0 > 4 { 1 } else { 2 });
+        assert_eq!(
+            n.state.child_counter.0,
+            if n.node_data.id.0 > 4 { 1 } else { 2 }
+        );
     });
 }
 
@@ -457,7 +463,7 @@ fn dependancies_order_independant() {
     let mut dom: RealDom<UnorderedDependanciesState> = RealDom::new();
 
     let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
     let c = CDepCallCounter(1);
     let b = BDepCallCounter(1, c.clone());

@@ -1,72 +1,81 @@
 use dioxus_core::*;
 
-use crate::state::union_ordered_iter;
+use crate::{
+    real_dom::{NodeData, NodeType, OwnedAttributeView},
+    state::union_ordered_iter,
+};
 
 #[derive(Debug)]
 pub struct NodeView<'a> {
-    inner: &'a VNode<'a>,
+    inner: &'a NodeData,
     mask: NodeMask,
 }
 
 impl<'a> NodeView<'a> {
-    pub fn new(mut vnode: &'a VNode<'a>, view: NodeMask, vdom: &'a VirtualDom) -> Self {
-        if let VNode::Component(sc) = vnode {
-            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
-            vnode = scope.root_node();
-        }
+    pub fn new(node: &'a NodeData, view: NodeMask) -> Self {
         Self {
-            inner: vnode,
+            inner: node,
             mask: view,
         }
     }
 
     pub fn id(&self) -> ElementId {
-        self.inner.mounted_id()
+        self.inner.id
     }
 
     pub fn tag(&self) -> Option<&'a str> {
-        self.mask.tag.then(|| self.el().map(|el| el.tag)).flatten()
+        self.mask
+            .tag
+            .then(|| match &self.inner.node_type {
+                NodeType::Element { tag, .. } => Some(&**tag),
+                _ => None,
+            })
+            .flatten()
     }
 
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then(|| self.el().and_then(|el| el.namespace))
+            .then(|| match &self.inner.node_type {
+                NodeType::Element { namespace, .. } => namespace.map(|s| &*s),
+                _ => None,
+            })
             .flatten()
     }
 
-    pub fn attributes(&self) -> impl Iterator<Item = &Attribute<'a>> {
-        self.el()
-            .map(|el| el.attributes)
-            .unwrap_or_default()
-            .iter()
-            .filter(|a| self.mask.attritutes.contains_attribute(a.attribute.name))
+    pub fn attributes<'b>(&'b self) -> Option<impl Iterator<Item = OwnedAttributeView<'a>> + 'b> {
+        match &self.inner.node_type {
+            NodeType::Element { attributes, .. } => Some(
+                attributes
+                    .iter()
+                    .filter(move |(attr, _)| self.mask.attritutes.contains_attribute(&attr.name))
+                    .map(|(attr, val)| OwnedAttributeView {
+                        attribute: attr,
+                        value: val,
+                    }),
+            ),
+            _ => None,
+        }
     }
 
     pub fn text(&self) -> Option<&str> {
         self.mask
             .text
-            .then(|| self.txt().map(|txt| txt.text))
+            .then(|| match &self.inner.node_type {
+                NodeType::Text { text } => Some(&**text),
+                _ => None,
+            })
             .flatten()
     }
 
-    pub fn listeners(&self) -> &'a [Listener<'a>] {
-        self.el().map(|el| el.listeners).unwrap_or_default()
-    }
-
-    fn el(&self) -> Option<&'a VElement<'a>> {
-        if let VNode::Element(el) = &self.inner {
-            Some(el)
+    pub fn listeners(&self) -> &'a [&'static str] {
+        if self.mask.listeners {
+            match &self.inner.node_type {
+                NodeType::Element { listeners, .. } => listeners,
+                _ => &[],
+            }
         } else {
-            None
-        }
-    }
-
-    fn txt(&self) -> Option<&'a VText<'a>> {
-        if let VNode::Text(txt) = &self.inner {
-            Some(txt)
-        } else {
-            None
+            &[]
         }
     }
 }
@@ -81,7 +90,7 @@ pub enum AttributeMask {
 impl AttributeMask {
     pub const NONE: Self = Self::Static(&[]);
 
-    fn contains_attribute(&self, attr: &'static str) -> bool {
+    fn contains_attribute(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
             AttributeMask::Dynamic(l) => l.binary_search(&attr).is_ok(),

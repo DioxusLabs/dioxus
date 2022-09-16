@@ -37,68 +37,68 @@ fn traverse() {
     let mut iter = PersistantElementIter::new();
     let div_tag = "div".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     let text1 = "hello".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text1, .. }
     ));
     let p_tag = "p".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text2 = "world".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text2, .. }
     ));
     let text3 = "hello world".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
 
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text2, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text1, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
 }
@@ -177,16 +177,19 @@ fn persist_removes() {
     let p_tag = "p".to_string();
     let idx = iter1.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text = "hello world".to_string();
     let idx = iter1.next(&rdom).id();
-    assert!(matches!(&rdom[idx].node_type, NodeType::Text { text, .. }));
+    assert!(matches!(
+        &rdom[idx].node_data.node_type,
+        NodeType::Text { text, .. }
+    ));
     let div_tag = "div".to_string();
     let idx = iter2.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
 }
@@ -252,7 +255,7 @@ fn persist_instertions_before() {
     let p_tag = "div".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
 }
@@ -318,10 +321,13 @@ fn persist_instertions_after() {
     let p_tag = "p".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text = "hello world".to_string();
     let idx = iter.next(&rdom).id();
-    assert!(matches!(&rdom[idx].node_type, NodeType::Text { text, .. }));
+    assert!(matches!(
+        &rdom[idx].node_data.node_type,
+        NodeType::Text { text, .. }
+    ));
 }

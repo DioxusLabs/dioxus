@@ -243,13 +243,14 @@ impl InnerInputState {
         fn try_create_event(
             name: &'static str,
             data: Arc<dyn Any + Send + Sync>,
-            will_bubble: &mut FxHashSet<ElementId>,
+            will_bubble: &mut FxHashSet<GlobalNodeId>,
             resolved_events: &mut Vec<UserEvent>,
             node: &Node,
             dom: &Dom,
         ) {
             // only trigger event if the event was not triggered already by a child
-            if will_bubble.insert(node.id) {
+            let id = dioxus_core::GlobalNodeId::VNodeId(node.id);
+            if will_bubble.insert(id) {
                 let mut parent = node.parent;
                 while let Some(parent_id) = parent {
                     will_bubble.insert(parent_id);
@@ -259,7 +260,7 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name,
-                    element: Some(node.id),
+                    element: Some(id),
                     data,
                     bubbles: event_bubbles(name),
                 })
@@ -546,7 +547,7 @@ impl InnerInputState {
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && node.state.focus.level.focusable() {
-                        focus_id = Some(node.id);
+                        focus_id = Some(GlobalNodeId::VNodeId(node.id));
                     }
                 });
                 if let Some(id) = focus_id {
@@ -664,7 +665,7 @@ impl RinkInputHandler {
                             scope_id: None,
                             priority: EventPriority::Medium,
                             name: event,
-                            element: Some(node.id),
+                            element: Some(dioxus_core::GlobalNodeId::VNodeId(node.id)),
                             data: data.clone(),
                             bubbles: event_bubbles(event),
                         });

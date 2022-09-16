@@ -38,6 +38,12 @@ pub enum GlobalNodeId {
     VNodeId(ElementId),
 }
 
+impl Into<GlobalNodeId> for ElementId {
+    fn into(self) -> GlobalNodeId {
+        GlobalNodeId::VNodeId(self)
+    }
+}
+
 impl PartialEq<ElementId> for GlobalNodeId {
     fn eq(&self, other: &ElementId) -> bool {
         match self {
@@ -401,7 +407,7 @@ pub trait DioxusElement {
 type StaticStr = &'static str;
 
 /// A discription of the attribute
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(
     all(feature = "serialize", feature = "hot-reload"),

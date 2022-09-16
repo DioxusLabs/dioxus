@@ -1,4 +1,4 @@
-use dioxus::core as dioxus_core;
+use dioxus::core::{self as dioxus_core, GlobalNodeId};
 use dioxus::core::{ElementId, VElement};
 use dioxus::prelude::*;
 use dioxus_native_core::real_dom::RealDom;
@@ -32,7 +32,7 @@ fn remove_node() {
         key: None,
         tag: "div",
         namespace: None,
-        parent: Cell::new(Some(ElementId(1))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(1)))),
         listeners: &[],
         attributes: &[],
         children: &[],
@@ -43,7 +43,7 @@ fn remove_node() {
         key: None,
         tag: "div",
         namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(0)))),
         listeners: &[],
         attributes: &[],
         children: &[child_div_el],
@@ -51,8 +51,8 @@ fn remove_node() {
 
     assert_eq!(dom.size(), 2);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
-    assert_eq!(dom[ElementId(2)].height, 2);
+    assert_eq!(dom[ElementId(1)].node_data.height, 1);
+    assert_eq!(dom[ElementId(2)].node_data.height, 2);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -72,7 +72,7 @@ fn remove_node() {
         key: None,
         tag: "div",
         namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(0)))),
         listeners: &[],
         attributes: &[],
         children: &[],
@@ -80,7 +80,7 @@ fn remove_node() {
 
     assert_eq!(dom.size(), 1);
     assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(dom[ElementId(1)].node_data.height, 1);
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn add_node() {
         key: None,
         tag: "div",
         namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(0)))),
         listeners: &[],
         attributes: &[],
         children: &[],
@@ -113,7 +113,7 @@ fn add_node() {
 
     assert_eq!(dom.size(), 1);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(dom[ElementId(1)].node_data.height, 1);
 
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.diff_lazynodes(
@@ -133,7 +133,7 @@ fn add_node() {
         key: None,
         tag: "p",
         namespace: None,
-        parent: Cell::new(Some(ElementId(1))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(1)))),
         listeners: &[],
         attributes: &[],
         children: &[],
@@ -144,7 +144,7 @@ fn add_node() {
         key: None,
         tag: "div",
         namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
+        parent: Cell::new(Some(GlobalNodeId::VNodeId(ElementId(0)))),
         listeners: &[],
         attributes: &[],
         children: &[child_div_el],
@@ -152,6 +152,6 @@ fn add_node() {
 
     assert_eq!(dom.size(), 2);
     assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
-    assert_eq!(dom[ElementId(2)].height, 2);
+    assert_eq!(dom[ElementId(1)].node_data.height, 1);
+    assert_eq!(dom[ElementId(2)].node_data.height, 2);
 }

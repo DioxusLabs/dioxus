@@ -1,4 +1,4 @@
-use dioxus_core::{ElementId, GlobalNodeId};
+use dioxus_core::GlobalNodeId;
 
 use crate::{real_dom::Node, state::State};
 
@@ -10,7 +10,7 @@ pub struct NativeTemplate<S: State> {
 
 impl<S: State> NativeTemplate<S> {
     pub fn insert(&mut self, node: Node<S>) {
-        let id = node.id.0;
+        let id = node.node_data.id.0;
         self.nodes.resize(id, None);
         self.nodes[id] = Some(Box::new(node));
     }
@@ -19,7 +19,6 @@ impl<S: State> NativeTemplate<S> {
 #[derive(Debug)]
 pub(crate) enum TemplateRefOrNode<S: State> {
     Ref {
-        id: ElementId,
         nodes: Vec<Option<Box<Node<S>>>>,
         parent: Option<GlobalNodeId>,
     },
@@ -30,7 +29,7 @@ impl<S: State> TemplateRefOrNode<S> {
     pub fn parent(&self) -> Option<GlobalNodeId> {
         match self {
             TemplateRefOrNode::Ref { parent, .. } => *parent,
-            TemplateRefOrNode::Node(node) => node.parent,
+            TemplateRefOrNode::Node(node) => node.node_data.parent,
         }
     }
 }

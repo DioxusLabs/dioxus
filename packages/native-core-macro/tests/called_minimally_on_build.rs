@@ -109,7 +109,7 @@ macro_rules! test_state{
             let mut dom: RealDom<$s> = RealDom::new();
 
             let nodes_updated = dom.apply_mutations(vec![mutations]);
-            let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+            let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
             dom.traverse_depth_first(|n| {
                 $(

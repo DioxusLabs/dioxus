@@ -95,7 +95,7 @@ impl PersistantElementIter {
         // if a child is removed or inserted before or at the current element, update the child index
         for (el_id, child_idx) in self.stack.iter_mut() {
             if let NodePosition::InChild(child_idx) = child_idx {
-                if let NodeType::Element { children, .. } = &rdom[*el_id].node_type {
+                if let NodeType::Element { children, .. } = &rdom[*el_id].node_data.node_type {
                     for m in &mutations.edits {
                         match m {
                             DomEdit::Remove { root } => {
@@ -135,7 +135,7 @@ impl PersistantElementIter {
         } else {
             let (last, o_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
-            match &node.node_type {
+            match &node.node_data.node_type {
                 NodeType::Element { children, .. } => {
                     *o_child_idx = o_child_idx.map(|i| i + 1);
                     // if we have children, go to the next child
@@ -145,7 +145,7 @@ impl PersistantElementIter {
                         self.next(rdom)
                     } else {
                         let id = children[child_idx];
-                        if let NodeType::Element { .. } = &rdom[id].node_type {
+                        if let NodeType::Element { .. } = &rdom[id].node_data.node_type {
                             self.stack.push((id, NodePosition::AtNode));
                         }
                         ElementProduced::Progressed(id)
@@ -168,7 +168,7 @@ impl PersistantElementIter {
             new_node: GlobalNodeId,
             rdom: &RealDom<S>,
         ) -> GlobalNodeId {
-            match &rdom[new_node].node_type {
+            match &rdom[new_node].node_data.node_type {
                 NodeType::Element { children, .. } => {
                     if children.is_empty() {
                         new_node
@@ -186,7 +186,7 @@ impl PersistantElementIter {
         } else {
             let (last, o_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
-            match &node.node_type {
+            match &node.node_data.node_type {
                 NodeType::Element { children, .. } => {
                     // if we have children, go to the next child
                     if let NodePosition::InChild(0) = o_child_idx {

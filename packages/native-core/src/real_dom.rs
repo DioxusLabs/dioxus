@@ -3,8 +3,8 @@ use fxhash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
 use dioxus_core::{
-    ElementId, GlobalNodeId, Mutations, RendererTemplateId, TemplateNodeId, VNode, VirtualDom,
-    JS_MAX_INT,
+    AttributeDiscription, ElementId, GlobalNodeId, Mutations, OwnedAttributeValue,
+    RendererTemplateId, TemplateNodeId, VNode, VirtualDom, JS_MAX_INT,
 };
 
 use crate::node_ref::{AttributeMask, NodeMask};
@@ -44,6 +44,8 @@ impl<S: State> RealDom<S> {
                     NodeType::Element {
                         tag: "Root".to_string(),
                         namespace: Some("Root"),
+                        attributes: FxHashMap::default(),
+                        listeners: Vec::new(),
                         children: Vec::new(),
                     },
                 ))))];
@@ -97,7 +99,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     InsertAfter { root, n } => {
-                        let target = self[root as usize].parent.unwrap();
+                        let target = self[root as usize].node_data.parent.unwrap();
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for id in drained {
                             nodes_updated.push((id, NodeMask::ALL));
@@ -105,7 +107,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     InsertBefore { root, n } => {
-                        let target = self[root as usize].parent.unwrap();
+                        let target = self[root as usize].node_data.parent.unwrap();
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for id in drained {
                             nodes_updated.push((id, NodeMask::ALL));
@@ -113,7 +115,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     Remove { root } => {
-                        if let Some(parent) = self[root as usize].parent {
+                        if let Some(parent) = self[root as usize].node_data.parent {
                             nodes_updated.push((parent, NodeMask::NONE));
                         }
                         let id = self.decode_id(root);
@@ -149,6 +151,8 @@ impl<S: State> RealDom<S> {
                             NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: None,
+                                attributes: FxHashMap::default(),
+                                listeners: Vec::new(),
                                 children: Vec::new(),
                             },
                         );
@@ -166,6 +170,8 @@ impl<S: State> RealDom<S> {
                             NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: None,
+                                attributes: FxHashMap::default(),
+                                listeners: Vec::new(),
                                 children: Vec::new(),
                             },
                         );
@@ -178,6 +184,8 @@ impl<S: State> RealDom<S> {
                             NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: Some(ns),
+                                attributes: FxHashMap::default(),
+                                listeners: Vec::new(),
                                 children: Vec::new(),
                             },
                         );
@@ -196,6 +204,8 @@ impl<S: State> RealDom<S> {
                             NodeType::Element {
                                 tag: tag.to_string(),
                                 namespace: Some(ns),
+                                attributes: FxHashMap::default(),
+                                listeners: Vec::new(),
                                 children: Vec::new(),
                             },
                         );
@@ -240,15 +250,34 @@ impl<S: State> RealDom<S> {
                         let id = self.decode_id(root);
                         let target = &mut self[id];
                         nodes_updated.push((id, NodeMask::new().with_text()));
-                        match &mut target.node_type {
+                        match &mut target.node_data.node_type {
                             NodeType::Text { text } => {
                                 *text = new_text.to_string();
                             }
                             _ => unreachable!(),
                         }
                     }
-                    SetAttribute { root, field, .. } => {
+                    SetAttribute {
+                        root,
+                        field,
+                        ns,
+                        value,
+                    } => {
                         let id = self.decode_id(root);
+                        if let NodeType::Element { attributes, .. } =
+                            &mut self[id].node_data.node_type
+                        {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: field.to_owned(),
+                                    namespace: ns.map(|a| a.to_owned()),
+                                    volatile: false,
+                                },
+                                value.into(),
+                            );
+                        } else {
+                            panic!("tried to call set attribute on a non element");
+                        }
                         nodes_updated
                             .push((id, NodeMask::new_with_attrs(AttributeMask::single(field))));
                     }
@@ -268,7 +297,6 @@ impl<S: State> RealDom<S> {
                         let nodes = template.nodes.clone();
                         let id = ElementId(id as usize);
                         let template_ref = TemplateRefOrNode::Ref {
-                            id,
                             nodes,
                             parent: None,
                         };
@@ -324,23 +352,18 @@ impl<S: State> RealDom<S> {
 
     pub fn update_state(
         &mut self,
-        vdom: &VirtualDom,
         nodes_updated: Vec<(GlobalNodeId, NodeMask)>,
         ctx: AnyMap,
     ) -> FxHashSet<GlobalNodeId> {
-        S::update(
-            &nodes_updated,
-            &mut self.map(|n| &n.state, |n| &mut n.state),
-            vdom,
-            &ctx,
-        )
+        let (mut state_tree, node_tree) = self.split();
+        S::update(&nodes_updated, &mut state_tree, &node_tree, &ctx)
     }
 
     fn link_child(&mut self, child_id: GlobalNodeId, parent_id: GlobalNodeId) -> Option<()> {
         debug_assert_ne!(child_id, parent_id);
         let parent = &mut self[parent_id];
         parent.add_child(child_id);
-        let parent_height = parent.height + 1;
+        let parent_height = parent.node_data.height + 1;
         self[child_id].set_parent(parent_id);
         if let GlobalNodeId::VNodeId(child_id) = child_id {
             self.increase_height(child_id, parent_height);
@@ -350,8 +373,8 @@ impl<S: State> RealDom<S> {
 
     fn increase_height(&mut self, id: ElementId, amount: u16) {
         let n = &mut self[GlobalNodeId::VNodeId(id)];
-        n.height += amount;
-        if let NodeType::Element { children, .. } = &n.node_type {
+        n.node_data.height += amount;
+        if let NodeType::Element { children, .. } = &n.node_data.node_type {
             for c in children.clone() {
                 if let GlobalNodeId::VNodeId(c) = c {
                     self.increase_height(c, amount);
@@ -380,7 +403,7 @@ impl<S: State> RealDom<S> {
             };
             match &mut either {
                 TemplateRefOrNode::Node(node) => {
-                    if let NodeType::Element { children, .. } = &mut node.node_type {
+                    if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
                         for c in children {
                             inner(dom, *c);
                         }
@@ -411,7 +434,7 @@ impl<S: State> RealDom<S> {
         match &mut node {
             TemplateRefOrNode::Ref { .. } => {}
             TemplateRefOrNode::Node(node) => {
-                if let NodeType::Element { children, .. } = &mut node.node_type {
+                if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
                     for c in children {
                         inner(self, *c)?;
                     }
@@ -423,8 +446,8 @@ impl<S: State> RealDom<S> {
 
     fn insert(&mut self, node: Node<S>) {
         let current_len = self.nodes.len();
-        let id = node.id.0;
-        if current_len - 1 < node.id.0 {
+        let id = node.node_data.id.0;
+        if current_len - 1 < node.node_data.id.0 {
             // self.nodes.reserve(1 + id - current_len);
             self.nodes.extend((0..1 + id - current_len).map(|_| None));
         }
@@ -434,7 +457,7 @@ impl<S: State> RealDom<S> {
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
-            listening.sort_by(|n1, n2| (n1.height).cmp(&n2.height).reverse());
+            listening.sort_by(|n1, n2| (n1.node_data.height).cmp(&n2.node_data.height).reverse());
             listening
         } else {
             Vec::new()
@@ -450,24 +473,39 @@ impl<S: State> RealDom<S> {
             VNode::Element(e) => {
                 if let Some(id) = e.id.get() {
                     let dom_node = &self[GlobalNodeId::VNodeId(id)];
-                    match &dom_node.node_type {
+                    match &dom_node.node_data.node_type {
                         NodeType::Element {
                             tag,
                             namespace,
                             children,
+                            attributes,
+                            listeners,
                         } => {
                             tag == e.tag
                                 && namespace == &e.namespace
-                                && children.iter().copied().collect::<FxHashSet<_>>()
-                                    == e.children
-                                        .iter()
-                                        .map(|c| GlobalNodeId::VNodeId(c.mounted_id()))
-                                        .collect::<FxHashSet<_>>()
+                                && children
+                                    .iter()
+                                    .zip(
+                                        e.children
+                                            .iter()
+                                            .map(|c| GlobalNodeId::VNodeId(c.mounted_id())),
+                                    )
+                                    .all(|(c1, c2)| *c1 == c2)
                                 && e.children.iter().all(|c| {
                                     self.contains_node(c)
-                                        && self[GlobalNodeId::VNodeId(c.mounted_id())].parent
+                                        && self[GlobalNodeId::VNodeId(c.mounted_id())]
+                                            .node_data
+                                            .parent
                                             == e.id.get().map(|id| GlobalNodeId::VNodeId(id))
                                 })
+                                && attributes
+                                    .iter()
+                                    .zip(e.attributes.iter())
+                                    .all(|((disc, val), b)| *disc == b.attribute && *val == b.value)
+                                && listeners
+                                    .iter()
+                                    .zip(e.listeners.iter())
+                                    .all(|(a, b)| *a == b.event)
                         }
                         _ => false,
                     }
@@ -480,7 +518,7 @@ impl<S: State> RealDom<S> {
             VNode::Text(t) => {
                 if let Some(id) = t.id.get() {
                     let dom_node = &self[GlobalNodeId::VNodeId(id)];
-                    match &dom_node.node_type {
+                    match &dom_node.node_data.node_type {
                         NodeType::Text { text } => t.text == text,
                         _ => false,
                     }
@@ -508,14 +546,16 @@ impl<S: State> RealDom<S> {
         fn inner<S: State>(dom: &RealDom<S>, id: GlobalNodeId, f: &mut impl FnMut(&Node<S>)) {
             let node = &dom[id];
             f(node);
-            if let NodeType::Element { children, .. } = &node.node_type {
+            if let NodeType::Element { children, .. } = &node.node_data.node_type {
                 for c in children {
                     inner(dom, *c, f);
                 }
             }
         }
-        if let NodeType::Element { children, .. } =
-            &self[GlobalNodeId::VNodeId(ElementId(self.root))].node_type
+        if let NodeType::Element { children, .. } = &self
+            [GlobalNodeId::VNodeId(ElementId(self.root))]
+        .node_data
+        .node_type
         {
             for c in children {
                 inner(self, *c, &mut f);
@@ -532,15 +572,17 @@ impl<S: State> RealDom<S> {
         ) {
             let node = &mut dom[id];
             f(node);
-            if let NodeType::Element { children, .. } = &mut node.node_type {
+            if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
                 for c in children.clone() {
                     inner(dom, c, f);
                 }
             }
         }
         let root = self.root;
-        if let NodeType::Element { children, .. } =
-            &mut self[GlobalNodeId::VNodeId(ElementId(root))].node_type
+        if let NodeType::Element { children, .. } = &mut self
+            [GlobalNodeId::VNodeId(ElementId(root))]
+        .node_data
+        .node_type
         {
             for c in children.clone() {
                 inner(self, c, &mut f);
@@ -548,7 +590,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    pub(crate) fn decode_id(&self, id: impl Into<u64>) -> GlobalNodeId {
+    pub fn decode_id(&self, id: impl Into<u64>) -> GlobalNodeId {
         let id = id.into();
         if id > JS_MAX_INT / 2 {
             if self.current_template().is_some() {
@@ -567,6 +609,20 @@ impl<S: State> RealDom<S> {
         } else {
             GlobalNodeId::VNodeId(ElementId(id as usize))
         }
+    }
+
+    pub fn split<'a>(
+        &'a mut self,
+    ) -> (
+        impl Traversable<Id = GlobalNodeId, Node = S> + 'a,
+        impl Traversable<Id = GlobalNodeId, Node = NodeData> + 'a,
+    ) {
+        let raw = self as *mut Self;
+        // this is safe beacuse the traversable trait does not allow mutation of the position of elements, and within elements the access is disjoint.
+        (
+            unsafe { &mut *raw }.map(|n| &n.state, |n| &mut n.state),
+            unsafe { &mut *raw }.map(|n| &n.node_data, |n| &mut n.node_data),
+        )
     }
 }
 
@@ -629,12 +685,18 @@ impl<S: State> IndexMut<usize> for RealDom<S> {
 /// The node is stored client side and stores only basic data about the node.
 #[derive(Debug, Clone)]
 pub struct Node<S: State> {
+    /// The transformed state of the node.
+    pub state: S,
+    /// The raw data for the node
+    pub node_data: NodeData,
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeData {
     /// The id of the node this node was created from.
     pub id: ElementId,
     /// The parent id of the node.
     pub parent: Option<GlobalNodeId>,
-    /// State of the node.
-    pub state: S,
     /// Additional inforation specific to the node type
     pub node_type: NodeType,
     /// The number of parents before the root node. The root node has height 1.
@@ -649,6 +711,8 @@ pub enum NodeType {
     Element {
         tag: String,
         namespace: Option<&'static str>,
+        attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
+        listeners: Vec<&'static str>,
         children: Vec<GlobalNodeId>,
     },
     Placeholder,
@@ -657,33 +721,35 @@ pub enum NodeType {
 impl<S: State> Node<S> {
     fn new(id: u64, node_type: NodeType) -> Self {
         Node {
-            id: ElementId(id as usize),
-            parent: None,
-            node_type,
             state: S::default(),
-            height: 0,
+            node_data: NodeData {
+                id: ElementId(id as usize),
+                parent: None,
+                node_type,
+                height: 0,
+            },
         }
     }
 
     /// Returns a reference to the element that this node refrences.
     pub fn element<'b>(&self, vdom: &'b VirtualDom) -> &'b VNode<'b> {
-        vdom.get_element(self.id).unwrap()
+        vdom.get_element(self.node_data.id).unwrap()
     }
 
     fn add_child(&mut self, child: GlobalNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_type {
+        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
             children.push(child);
         }
     }
 
     fn remove_child(&mut self, child: GlobalNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_type {
+        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
             children.retain(|c| c != &child);
         }
     }
 
     fn set_parent(&mut self, parent: GlobalNodeId) {
-        self.parent = Some(parent);
+        self.node_data.parent = Some(parent);
     }
 }
 
@@ -692,7 +758,7 @@ impl<T: State> Traversable for RealDom<T> {
     type Node = Node<T>;
 
     fn height(&self, id: Self::Id) -> Option<u16> {
-        Some(<Self as Traversable>::get(self, id)?.height)
+        Some(<Self as Traversable>::get(self, id)?.node_data.height)
     }
 
     fn get(&self, id: Self::Id) -> Option<&Self::Node> {
@@ -745,7 +811,7 @@ impl<T: State> Traversable for RealDom<T> {
 
     fn children(&self, id: Self::Id) -> &[Self::Id] {
         if let Some(node) = <Self as Traversable>::get(self, id) {
-            match &node.node_type {
+            match &node.node_data.node_type {
                 NodeType::Element { children, .. } => &children,
                 _ => &[],
             }
@@ -755,6 +821,36 @@ impl<T: State> Traversable for RealDom<T> {
     }
 
     fn parent(&self, id: Self::Id) -> Option<Self::Id> {
-        <Self as Traversable>::get(self, id).and_then(|n| n.parent)
+        <Self as Traversable>::get(self, id).and_then(|n| n.node_data.parent)
     }
+}
+
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct OwnedAttributeDiscription {
+    pub name: String,
+    pub namespace: Option<String>,
+    pub volatile: bool,
+}
+
+impl PartialEq<AttributeDiscription> for OwnedAttributeDiscription {
+    fn eq(&self, other: &AttributeDiscription) -> bool {
+        self.name == other.name
+            && match (&self.namespace, other.namespace) {
+                (Some(a), Some(b)) => a == b,
+                (None, None) => true,
+                _ => false,
+            }
+            && self.volatile == other.volatile
+    }
+}
+
+/// An attribute on a DOM node, such as `id="my-thing"` or
+/// `href="https://example.com"`.
+#[derive(Clone, Debug)]
+pub struct OwnedAttributeView<'a> {
+    /// The discription of the attribute.
+    pub attribute: &'a OwnedAttributeDiscription,
+
+    /// The value of the attribute.
+    pub value: &'a OwnedAttributeValue,
 }

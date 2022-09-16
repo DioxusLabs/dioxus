@@ -133,8 +133,10 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: fxhash::FxHashSet<ElementId> =
-                vec![ElementId(0)].into_iter().collect();
+            let mut to_rerender: fxhash::FxHashSet<GlobalNodeId> =
+                vec![GlobalNodeId::VNodeId(ElementId(0))]
+                    .into_iter()
+                    .collect();
             let mut updated = true;
 
             loop {

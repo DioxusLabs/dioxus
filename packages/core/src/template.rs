@@ -68,7 +68,7 @@ use bumpalo::Bump;
 use crate::{
     diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
     nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
-    StaticDynamicNodeMapping,
+    OwnedAttributeValue, StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -578,8 +578,8 @@ pub type OwnedTemplateNodes = Vec<OwnedTemplateNode>;
 
 /// A stack allocated Template node
 pub type StaticTemplateNode = TemplateNode<
-    &'static [TemplateAttribute<StaticTemplateValue>],
-    StaticTemplateValue,
+    &'static [TemplateAttribute<StaticAttributeValue>],
+    StaticAttributeValue,
     &'static [TemplateNodeId],
     &'static [usize],
     &'static [TextTemplateSegment<&'static str>],
@@ -589,8 +589,8 @@ pub type StaticTemplateNode = TemplateNode<
 #[cfg(feature = "hot-reload")]
 /// A heap allocated Template node
 pub type OwnedTemplateNode = TemplateNode<
-    Vec<TemplateAttribute<OwnedTemplateValue>>,
-    OwnedTemplateValue,
+    Vec<TemplateAttribute<OwnedAttributeValue>>,
+    OwnedAttributeValue,
     Vec<TemplateNodeId>,
     Vec<usize>,
     Vec<TextTemplateSegment<String>>,
@@ -735,28 +735,30 @@ pub trait TemplateValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b>;
 }
 
-impl TemplateValue for StaticTemplateValue {
+impl TemplateValue for StaticAttributeValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b> {
         match self.clone() {
-            StaticTemplateValue::Text(txt) => AttributeValue::Text(bump.alloc_str(&txt)),
-            StaticTemplateValue::Bytes(bytes) => {
+            StaticAttributeValue::Text(txt) => AttributeValue::Text(bump.alloc_str(&txt)),
+            StaticAttributeValue::Bytes(bytes) => {
                 AttributeValue::Bytes(bump.alloc_slice_copy(&bytes))
             }
-            StaticTemplateValue::Float32(f) => AttributeValue::Float32(f),
-            StaticTemplateValue::Float64(f) => AttributeValue::Float64(f),
-            StaticTemplateValue::Int32(i) => AttributeValue::Int32(i),
-            StaticTemplateValue::Int64(i) => AttributeValue::Int64(i),
-            StaticTemplateValue::Uint32(u) => AttributeValue::Uint32(u),
-            StaticTemplateValue::Uint64(u) => AttributeValue::Uint64(u),
-            StaticTemplateValue::Bool(b) => AttributeValue::Bool(b),
-            StaticTemplateValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
-            StaticTemplateValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
-            StaticTemplateValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
-            StaticTemplateValue::Vec4Float(f1, f2, f3, f4) => {
+            StaticAttributeValue::Float32(f) => AttributeValue::Float32(f),
+            StaticAttributeValue::Float64(f) => AttributeValue::Float64(f),
+            StaticAttributeValue::Int32(i) => AttributeValue::Int32(i),
+            StaticAttributeValue::Int64(i) => AttributeValue::Int64(i),
+            StaticAttributeValue::Uint32(u) => AttributeValue::Uint32(u),
+            StaticAttributeValue::Uint64(u) => AttributeValue::Uint64(u),
+            StaticAttributeValue::Bool(b) => AttributeValue::Bool(b),
+            StaticAttributeValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
+            StaticAttributeValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
+            StaticAttributeValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
+            StaticAttributeValue::Vec4Float(f1, f2, f3, f4) => {
                 AttributeValue::Vec4Float(f1, f2, f3, f4)
             }
-            StaticTemplateValue::Vec4Int(i1, i2, i3, i4) => AttributeValue::Vec4Int(i1, i2, i3, i4),
-            StaticTemplateValue::Vec4Uint(u1, u2, u3, u4) => {
+            StaticAttributeValue::Vec4Int(i1, i2, i3, i4) => {
+                AttributeValue::Vec4Int(i1, i2, i3, i4)
+            }
+            StaticAttributeValue::Vec4Uint(u1, u2, u3, u4) => {
                 AttributeValue::Vec4Uint(u1, u2, u3, u4)
             }
         }
@@ -764,26 +766,26 @@ impl TemplateValue for StaticTemplateValue {
 }
 
 #[cfg(feature = "hot-reload")]
-impl TemplateValue for OwnedTemplateValue {
+impl TemplateValue for OwnedAttributeValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b> {
         match self.clone() {
-            OwnedTemplateValue::Text(txt) => AttributeValue::Text(bump.alloc(txt)),
-            OwnedTemplateValue::Bytes(bytes) => AttributeValue::Bytes(bump.alloc(bytes)),
-            OwnedTemplateValue::Float32(f) => AttributeValue::Float32(f),
-            OwnedTemplateValue::Float64(f) => AttributeValue::Float64(f),
-            OwnedTemplateValue::Int32(i) => AttributeValue::Int32(i),
-            OwnedTemplateValue::Int64(i) => AttributeValue::Int64(i),
-            OwnedTemplateValue::Uint32(u) => AttributeValue::Uint32(u),
-            OwnedTemplateValue::Uint64(u) => AttributeValue::Uint64(u),
-            OwnedTemplateValue::Bool(b) => AttributeValue::Bool(b),
-            OwnedTemplateValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
-            OwnedTemplateValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
-            OwnedTemplateValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
-            OwnedTemplateValue::Vec4Float(f1, f2, f3, f4) => {
+            OwnedAttributeValue::Text(txt) => AttributeValue::Text(bump.alloc(txt)),
+            OwnedAttributeValue::Bytes(bytes) => AttributeValue::Bytes(bump.alloc(bytes)),
+            OwnedAttributeValue::Float32(f) => AttributeValue::Float32(f),
+            OwnedAttributeValue::Float64(f) => AttributeValue::Float64(f),
+            OwnedAttributeValue::Int32(i) => AttributeValue::Int32(i),
+            OwnedAttributeValue::Int64(i) => AttributeValue::Int64(i),
+            OwnedAttributeValue::Uint32(u) => AttributeValue::Uint32(u),
+            OwnedAttributeValue::Uint64(u) => AttributeValue::Uint64(u),
+            OwnedAttributeValue::Bool(b) => AttributeValue::Bool(b),
+            OwnedAttributeValue::Vec3Float(f1, f2, f3) => AttributeValue::Vec3Float(f1, f2, f3),
+            OwnedAttributeValue::Vec3Int(i1, i2, i3) => AttributeValue::Vec3Int(i1, i2, i3),
+            OwnedAttributeValue::Vec3Uint(u1, u2, u3) => AttributeValue::Vec3Uint(u1, u2, u3),
+            OwnedAttributeValue::Vec4Float(f1, f2, f3, f4) => {
                 AttributeValue::Vec4Float(f1, f2, f3, f4)
             }
-            OwnedTemplateValue::Vec4Int(i1, i2, i3, i4) => AttributeValue::Vec4Int(i1, i2, i3, i4),
-            OwnedTemplateValue::Vec4Uint(u1, u2, u3, u4) => {
+            OwnedAttributeValue::Vec4Int(i1, i2, i3, i4) => AttributeValue::Vec4Int(i1, i2, i3, i4),
+            OwnedAttributeValue::Vec4Uint(u1, u2, u3, u4) => {
                 AttributeValue::Vec4Uint(u1, u2, u3, u4)
             }
         }
@@ -968,69 +970,10 @@ where
     Dynamic(usize),
 }
 
-#[cfg(feature = "hot-reload")]
-/// A template value that is created at runtime.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(
-    all(feature = "serialize", feature = "hot-reload"),
-    derive(serde::Serialize, serde::Deserialize)
-)]
-#[allow(missing_docs)]
-pub enum OwnedTemplateValue {
-    Text(String),
-    Float32(f32),
-    Float64(f64),
-    Int32(i32),
-    Int64(i64),
-    Uint32(u32),
-    Uint64(u64),
-    Bool(bool),
-
-    Vec3Float(f32, f32, f32),
-    Vec3Int(i32, i32, i32),
-    Vec3Uint(u32, u32, u32),
-
-    Vec4Float(f32, f32, f32, f32),
-    Vec4Int(i32, i32, i32, i32),
-    Vec4Uint(u32, u32, u32, u32),
-
-    Bytes(Vec<u8>),
-    // TODO: support other types
-    // Any(ArbitraryAttributeValue<'a>),
-}
-
-#[cfg(feature = "hot-reload")]
-impl<'a> From<AttributeValue<'a>> for OwnedTemplateValue {
-    fn from(attr: AttributeValue<'a>) -> Self {
-        match attr {
-            AttributeValue::Text(t) => OwnedTemplateValue::Text(t.to_owned()),
-            AttributeValue::Float32(f) => OwnedTemplateValue::Float32(f),
-            AttributeValue::Float64(f) => OwnedTemplateValue::Float64(f),
-            AttributeValue::Int32(i) => OwnedTemplateValue::Int32(i),
-            AttributeValue::Int64(i) => OwnedTemplateValue::Int64(i),
-            AttributeValue::Uint32(u) => OwnedTemplateValue::Uint32(u),
-            AttributeValue::Uint64(u) => OwnedTemplateValue::Uint64(u),
-            AttributeValue::Bool(b) => OwnedTemplateValue::Bool(b),
-            AttributeValue::Vec3Float(f1, f2, f3) => OwnedTemplateValue::Vec3Float(f1, f2, f3),
-            AttributeValue::Vec3Int(f1, f2, f3) => OwnedTemplateValue::Vec3Int(f1, f2, f3),
-            AttributeValue::Vec3Uint(f1, f2, f3) => OwnedTemplateValue::Vec3Uint(f1, f2, f3),
-            AttributeValue::Vec4Float(f1, f2, f3, f4) => {
-                OwnedTemplateValue::Vec4Float(f1, f2, f3, f4)
-            }
-            AttributeValue::Vec4Int(f1, f2, f3, f4) => OwnedTemplateValue::Vec4Int(f1, f2, f3, f4),
-            AttributeValue::Vec4Uint(f1, f2, f3, f4) => {
-                OwnedTemplateValue::Vec4Uint(f1, f2, f3, f4)
-            }
-            AttributeValue::Bytes(b) => OwnedTemplateValue::Bytes(b.to_owned()),
-            AttributeValue::Any(_) => todo!(),
-        }
-    }
-}
-
 /// A template value that is created at compile time that is sync.
 #[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
-pub enum StaticTemplateValue {
+pub enum StaticAttributeValue {
     Text(&'static str),
     Float32(f32),
     Float64(f64),

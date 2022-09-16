@@ -1,5 +1,5 @@
 use dioxus_core::{
-    OwnedTemplateValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
+    OwnedAttributeValue, TemplateAttributeValue, TemplateNodeId, TextTemplate, TextTemplateSegment,
 };
 use proc_macro2::TokenStream;
 use quote::TokenStreamExt;
@@ -41,8 +41,8 @@ mod hot_reload_imports {
     };
     pub use dioxus_core::prelude::OwnedTemplate;
     pub use dioxus_core::{
-        AttributeDiscription, OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode,
-        OwnedTemplateValue, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
+        AttributeDiscription, OwnedAttributeValue, OwnedCodeLocation, OwnedDynamicNodeMapping,
+        OwnedTemplateNode, Template, TemplateAttribute, TemplateAttributeValue, TemplateElement,
         TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment,
     };
     pub use std::collections::HashMap;
@@ -64,8 +64,8 @@ impl TemplateElementBuilder {
         location: &OwnedCodeLocation,
     ) -> Result<
         TemplateElement<
-            Vec<TemplateAttribute<OwnedTemplateValue>>,
-            OwnedTemplateValue,
+            Vec<TemplateAttribute<OwnedAttributeValue>>,
+            OwnedAttributeValue,
             Vec<TemplateNodeId>,
             Vec<usize>,
         >,
@@ -143,7 +143,7 @@ enum AttributeName {
 struct TemplateAttributeBuilder {
     element_tag: Ident,
     name: AttributeName,
-    value: TemplateAttributeValue<OwnedTemplateValue>,
+    value: TemplateAttributeValue<OwnedAttributeValue>,
 }
 
 impl TemplateAttributeBuilder {
@@ -153,7 +153,7 @@ impl TemplateAttributeBuilder {
         location: &OwnedCodeLocation,
         element_tag: &'static str,
         element_ns: Option<&'static str>,
-    ) -> Result<TemplateAttribute<OwnedTemplateValue>, Error> {
+    ) -> Result<TemplateAttribute<OwnedAttributeValue>, Error> {
         let Self { name, value, .. } = self;
         let (name, span, literal) = match name {
             AttributeName::Ident(name) => (name.to_string(), name.span(), false),
@@ -192,33 +192,35 @@ impl ToTokens for TemplateAttributeBuilder {
         let value = match value {
             TemplateAttributeValue::Static(val) => {
                 let val = match val {
-                    OwnedTemplateValue::Text(txt) => quote! {StaticTemplateValue::Text(#txt)},
-                    OwnedTemplateValue::Float32(f) => quote! {StaticTemplateValue::Float32(#f)},
-                    OwnedTemplateValue::Float64(f) => quote! {StaticTemplateValue::Float64(#f)},
-                    OwnedTemplateValue::Int32(i) => quote! {StaticTemplateValue::Int32(#i)},
-                    OwnedTemplateValue::Int64(i) => quote! {StaticTemplateValue::Int64(#i)},
-                    OwnedTemplateValue::Uint32(u) => quote! {StaticTemplateValue::Uint32(#u)},
-                    OwnedTemplateValue::Uint64(u) => quote! {StaticTemplateValue::Uint64(#u)},
-                    OwnedTemplateValue::Bool(b) => quote! {StaticTemplateValue::Bool(#b)},
-                    OwnedTemplateValue::Vec3Float(f1, f2, f3) => {
-                        quote! {StaticTemplateValue::Vec3Float(#f1, #f2, #f3)}
+                    OwnedAttributeValue::Text(txt) => quote! {StaticAttributeValue::Text(#txt)},
+                    OwnedAttributeValue::Float32(f) => quote! {StaticAttributeValue::Float32(#f)},
+                    OwnedAttributeValue::Float64(f) => quote! {StaticAttributeValue::Float64(#f)},
+                    OwnedAttributeValue::Int32(i) => quote! {StaticAttributeValue::Int32(#i)},
+                    OwnedAttributeValue::Int64(i) => quote! {StaticAttributeValue::Int64(#i)},
+                    OwnedAttributeValue::Uint32(u) => quote! {StaticAttributeValue::Uint32(#u)},
+                    OwnedAttributeValue::Uint64(u) => quote! {StaticAttributeValue::Uint64(#u)},
+                    OwnedAttributeValue::Bool(b) => quote! {StaticAttributeValue::Bool(#b)},
+                    OwnedAttributeValue::Vec3Float(f1, f2, f3) => {
+                        quote! {StaticAttributeValue::Vec3Float(#f1, #f2, #f3)}
                     }
-                    OwnedTemplateValue::Vec3Int(f1, f2, f3) => {
-                        quote! {StaticTemplateValue::Vec3Int(#f1, #f2, #f3)}
+                    OwnedAttributeValue::Vec3Int(f1, f2, f3) => {
+                        quote! {StaticAttributeValue::Vec3Int(#f1, #f2, #f3)}
                     }
-                    OwnedTemplateValue::Vec3Uint(f1, f2, f3) => {
-                        quote! {StaticTemplateValue::Vec3Uint(#f1, #f2, #f3)}
+                    OwnedAttributeValue::Vec3Uint(f1, f2, f3) => {
+                        quote! {StaticAttributeValue::Vec3Uint(#f1, #f2, #f3)}
                     }
-                    OwnedTemplateValue::Vec4Float(f1, f2, f3, f4) => {
-                        quote! {StaticTemplateValue::Vec4Float(#f1, #f2, #f3, #f4)}
+                    OwnedAttributeValue::Vec4Float(f1, f2, f3, f4) => {
+                        quote! {StaticAttributeValue::Vec4Float(#f1, #f2, #f3, #f4)}
                     }
-                    OwnedTemplateValue::Vec4Int(f1, f2, f3, f4) => {
-                        quote! {StaticTemplateValue::Vec4Int(#f1, #f2, #f3, #f4)}
+                    OwnedAttributeValue::Vec4Int(f1, f2, f3, f4) => {
+                        quote! {StaticAttributeValue::Vec4Int(#f1, #f2, #f3, #f4)}
                     }
-                    OwnedTemplateValue::Vec4Uint(f1, f2, f3, f4) => {
-                        quote! {StaticTemplateValue::Vec4Uint(#f1, #f2, #f3, #f4)}
+                    OwnedAttributeValue::Vec4Uint(f1, f2, f3, f4) => {
+                        quote! {StaticAttributeValue::Vec4Uint(#f1, #f2, #f3, #f4)}
                     }
-                    OwnedTemplateValue::Bytes(b) => quote! {StaticTemplateValue::Bytes(&[#(#b),*])},
+                    OwnedAttributeValue::Bytes(b) => {
+                        quote! {StaticAttributeValue::Bytes(&[#(#b),*])}
+                    }
                 };
                 quote! {TemplateAttributeValue::Static(#val)}
             }
@@ -258,8 +260,8 @@ impl TemplateNodeTypeBuilder {
         location: &OwnedCodeLocation,
     ) -> Result<
         TemplateNodeType<
-            Vec<TemplateAttribute<OwnedTemplateValue>>,
-            OwnedTemplateValue,
+            Vec<TemplateAttribute<OwnedAttributeValue>>,
+            OwnedAttributeValue,
             Vec<TemplateNodeId>,
             Vec<usize>,
             Vec<TextTemplateSegment<String>>,
@@ -420,7 +422,7 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Static(
-                                        OwnedTemplateValue::Text(static_value),
+                                        OwnedAttributeValue::Text(static_value),
                                     ),
                                 })
                             } else {
@@ -442,7 +444,7 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Static(
-                                        OwnedTemplateValue::Text(static_value),
+                                        OwnedAttributeValue::Text(static_value),
                                     ),
                                 })
                             } else {
