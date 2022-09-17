@@ -49,7 +49,6 @@ fn remove_node() {
         children: &[child_div_el],
     };
 
-    assert_eq!(dom.size(), 2);
     assert!(&dom.contains_node(&VNode::Element(&root_div)));
     assert_eq!(dom[ElementId(1)].node_data.height, 1);
     assert_eq!(dom[ElementId(2)].node_data.height, 2);

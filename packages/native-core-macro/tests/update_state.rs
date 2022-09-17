@@ -57,7 +57,12 @@ impl ChildDepState for ChildDepCallCounter {
     where
         Self::DepState: 'a,
     {
-        println!("{self:?} {:?}: {} {:?}", node.tag(), node.id(), node.text());
+        println!(
+            "{self:?} {:?}: {:?} {:?}",
+            node.tag(),
+            node.id(),
+            node.text()
+        );
         self.0 += 1;
         true
     }
@@ -369,17 +374,18 @@ fn state_reduce_child_called_minimally_on_update() {
     }]);
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
-    dom.traverse_depth_first(|n| {
-        println!("{:?}", n);
-        assert_eq!(
-            n.state.part1.child_counter.0,
-            if n.node_data.id.0 > 4 { 1 } else { 2 }
-        );
-        assert_eq!(
-            n.state.child_counter.0,
-            if n.node_data.id.0 > 4 { 1 } else { 2 }
-        );
-    });
+    // dom.traverse_depth_first(|n| {
+    //     println!("{:?}", n);
+    //     assert_eq!(
+    //         n.state.part1.child_counter.0,
+    //         if n.node_data.id.0 > 4 { 1 } else { 2 }
+    //     );
+    //     assert_eq!(
+    //         n.state.child_counter.0,
+    //         if n.node_data.id.0 > 4 { 1 } else { 2 }
+    //     );
+    // });
+    todo!()
 }
 
 #[derive(Debug, Clone, Default, State)]

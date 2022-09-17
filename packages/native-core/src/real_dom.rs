@@ -4,7 +4,7 @@ use std::ops::{Index, IndexMut};
 
 use dioxus_core::{
     AttributeDiscription, ElementId, GlobalNodeId, Mutations, OwnedAttributeValue,
-    RendererTemplateId, TemplateNodeId, VNode, VirtualDom, JS_MAX_INT,
+    RendererTemplateId, TemplateNodeId, VNode, JS_MAX_INT,
 };
 
 use crate::node_ref::{AttributeMask, NodeMask};
@@ -40,7 +40,7 @@ impl<S: State> RealDom<S> {
             root: 0,
             nodes: {
                 let v = vec![Some(Box::new(TemplateRefOrNode::Node(Node::new(
-                    0,
+                    GlobalNodeId::VNodeId(ElementId(0)),
                     NodeType::Element {
                         tag: "Root".to_string(),
                         namespace: Some("Root"),
@@ -65,6 +65,7 @@ impl<S: State> RealDom<S> {
         mutations_vec: Vec<Mutations>,
     ) -> Vec<(GlobalNodeId, NodeMask)> {
         let mut nodes_updated = Vec::new();
+        println!("Applying mutations {:?}", mutations_vec);
         for mutations in mutations_vec {
             for e in mutations.edits {
                 use dioxus_core::DomEdit::*;
@@ -122,6 +123,7 @@ impl<S: State> RealDom<S> {
                         self.remove(id).unwrap();
                     }
                     CreateTextNode { root, text } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Text {
@@ -129,13 +131,14 @@ impl<S: State> RealDom<S> {
                             },
                         );
                         self.insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreateTextNodeTemplate {
                         root,
                         text,
                         locally_static: _,
                     } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Text {
@@ -143,9 +146,10 @@ impl<S: State> RealDom<S> {
                             },
                         );
                         self.current_template_mut().unwrap().insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreateElement { root, tag } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Element {
@@ -157,7 +161,7 @@ impl<S: State> RealDom<S> {
                             },
                         );
                         self.insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreateElementTemplate {
                         root,
@@ -165,6 +169,7 @@ impl<S: State> RealDom<S> {
                         locally_static: _,
                         fully_static: _,
                     } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Element {
@@ -176,9 +181,10 @@ impl<S: State> RealDom<S> {
                             },
                         );
                         self.current_template_mut().unwrap().insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreateElementNs { root, tag, ns } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Element {
@@ -190,7 +196,7 @@ impl<S: State> RealDom<S> {
                             },
                         );
                         self.insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreateElementNsTemplate {
                         root,
@@ -199,6 +205,7 @@ impl<S: State> RealDom<S> {
                         locally_static: _,
                         fully_static: _,
                     } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(
                             root,
                             NodeType::Element {
@@ -209,18 +216,20 @@ impl<S: State> RealDom<S> {
                                 children: Vec::new(),
                             },
                         );
-                        self.insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.current_template_mut().unwrap().insert(n);
+                        self.node_stack.push(root)
                     }
                     CreatePlaceholder { root } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(root, NodeType::Placeholder);
                         self.insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     CreatePlaceholderTemplate { root } => {
+                        let root = self.decode_id(root);
                         let n = Node::new(root, NodeType::Placeholder);
                         self.current_template_mut().unwrap().insert(n);
-                        self.node_stack.push(self.decode_id(root))
+                        self.node_stack.push(root)
                     }
                     NewEventListener {
                         event_name,
@@ -294,12 +303,50 @@ impl<S: State> RealDom<S> {
                     CreateTemplateRef { id, template_id } => {
                         let template_id = RendererTemplateId(template_id as usize);
                         let template = self.templates.get(&template_id).unwrap();
-                        let nodes = template.nodes.clone();
+                        let mut nodes = template.nodes.clone();
                         let id = ElementId(id as usize);
+                        for n in nodes.iter_mut().filter_map(|n| n.as_mut()) {
+                            if let GlobalNodeId::TemplateId {
+                                template_node_id, ..
+                            } = n.node_data.id
+                            {
+                                n.node_data.id = GlobalNodeId::TemplateId {
+                                    template_ref_id: id,
+                                    template_node_id,
+                                };
+                            } else {
+                                panic!("non-template node in template");
+                            }
+                            if let NodeType::Element { children, .. } = &mut n.node_data.node_type {
+                                for c in children.iter_mut() {
+                                    if let GlobalNodeId::TemplateId {
+                                        template_node_id, ..
+                                    } = c
+                                    {
+                                        *c = GlobalNodeId::TemplateId {
+                                            template_ref_id: id,
+                                            template_node_id: *template_node_id,
+                                        };
+                                    } else {
+                                        panic!("non-template node in template");
+                                    }
+                                }
+                            }
+                        }
+                        let roots = template
+                            .roots
+                            .iter()
+                            .map(|n| GlobalNodeId::TemplateId {
+                                template_ref_id: id,
+                                template_node_id: TemplateNodeId(*n),
+                            })
+                            .collect();
                         let template_ref = TemplateRefOrNode::Ref {
                             nodes,
+                            roots,
                             parent: None,
                         };
+                        self.resize_to(id.0);
                         self.nodes[id.0] = Some(Box::new(template_ref));
                         self.node_stack.push(dioxus_core::GlobalNodeId::VNodeId(id));
                     }
@@ -360,24 +407,125 @@ impl<S: State> RealDom<S> {
     }
 
     fn link_child(&mut self, child_id: GlobalNodeId, parent_id: GlobalNodeId) -> Option<()> {
-        debug_assert_ne!(child_id, parent_id);
+        println!("linking {:?} to {:?}", child_id, parent_id);
+        println!(
+            "nodes: {:#?}",
+            self.current_template().map(|t| t
+                .nodes
+                .iter()
+                .map(|a| a.as_ref().map(|a| a.node_data.id))
+                .collect::<Vec<_>>())
+        );
+        println!(
+            "{:?}",
+            self.nodes
+                .iter()
+                .map(|n| n.as_ref().map(|n| match &**n {
+                    TemplateRefOrNode::Ref { .. } => {
+                        format!("ref")
+                    }
+                    TemplateRefOrNode::Node(node) => format!("{:?}", node.node_data.id),
+                }))
+                .collect::<Vec<_>>()
+        );
         let parent = &mut self[parent_id];
         parent.add_child(child_id);
         let parent_height = parent.node_data.height + 1;
-        self[child_id].set_parent(parent_id);
-        if let GlobalNodeId::VNodeId(child_id) = child_id {
-            self.increase_height(child_id, parent_height);
+        match child_id {
+            GlobalNodeId::VNodeId(id) => {
+                self.nodes
+                    .get_mut(id.0)
+                    .unwrap()
+                    .as_mut()
+                    .unwrap()
+                    .set_parent(parent_id);
+            }
+            GlobalNodeId::TemplateId {
+                template_ref_id,
+                template_node_id,
+            } => {
+                let n = if let Some(template) = self.current_template_mut() {
+                    &mut **template.nodes[template_node_id.0].as_mut().unwrap()
+                } else {
+                    let nodes = match self
+                        .nodes
+                        .get_mut(template_ref_id.0)
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .as_mut()
+                    {
+                        TemplateRefOrNode::Ref { nodes, .. } => nodes,
+                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                    };
+                    nodes
+                        .get_mut(template_node_id.0)
+                        .map(|n| n.as_mut())
+                        .flatten()
+                        .map(|n| n.as_mut())
+                        .unwrap()
+                };
+
+                n.set_parent(parent_id);
+            }
         }
+        self.increase_height(child_id, parent_height);
+
         Some(())
     }
 
-    fn increase_height(&mut self, id: ElementId, amount: u16) {
-        let n = &mut self[GlobalNodeId::VNodeId(id)];
-        n.node_data.height += amount;
-        if let NodeType::Element { children, .. } = &n.node_data.node_type {
-            for c in children.clone() {
-                if let GlobalNodeId::VNodeId(c) = c {
-                    self.increase_height(c, amount);
+    fn increase_height(&mut self, id: GlobalNodeId, amount: u16) {
+        println!("increasing height of {:?} by {}", id, amount);
+        match id {
+            GlobalNodeId::VNodeId(id) => {
+                let n = &mut **self.nodes.get_mut(id.0).unwrap().as_mut().unwrap();
+                match n {
+                    TemplateRefOrNode::Ref { roots, .. } => {
+                        for root in roots.clone() {
+                            self.increase_height(root, amount);
+                        }
+                    }
+                    TemplateRefOrNode::Node(n) => {
+                        n.node_data.height += amount;
+                        if let NodeType::Element { children, .. } = &n.node_data.node_type {
+                            for c in children.clone() {
+                                self.increase_height(c, amount);
+                            }
+                        }
+                    }
+                }
+            }
+            GlobalNodeId::TemplateId {
+                template_ref_id,
+                template_node_id,
+            } => {
+                let n = if let Some(template) = self.current_template_mut() {
+                    &mut **template.nodes[template_node_id.0].as_mut().unwrap()
+                } else {
+                    let nodes = match self
+                        .nodes
+                        .get_mut(template_ref_id.0)
+                        .unwrap()
+                        .as_mut()
+                        .unwrap()
+                        .as_mut()
+                    {
+                        TemplateRefOrNode::Ref { nodes, .. } => nodes,
+                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                    };
+                    nodes
+                        .get_mut(template_node_id.0)
+                        .map(|n| n.as_mut())
+                        .flatten()
+                        .map(|n| n.as_mut())
+                        .unwrap()
+                };
+
+                n.node_data.height += amount;
+                if let NodeType::Element { children, .. } = &n.node_data.node_type {
+                    for c in children.clone() {
+                        self.increase_height(c, amount);
+                    }
                 }
             }
         }
@@ -444,14 +592,21 @@ impl<S: State> RealDom<S> {
         Some(node)
     }
 
-    fn insert(&mut self, node: Node<S>) {
+    fn resize_to(&mut self, id: usize) {
         let current_len = self.nodes.len();
-        let id = node.node_data.id.0;
-        if current_len - 1 < node.node_data.id.0 {
-            // self.nodes.reserve(1 + id - current_len);
+        if current_len - 1 < id {
             self.nodes.extend((0..1 + id - current_len).map(|_| None));
         }
-        self.nodes[id] = Some(Box::new(TemplateRefOrNode::Node(node)));
+    }
+
+    fn insert(&mut self, node: Node<S>) {
+        match node.node_data.id {
+            GlobalNodeId::TemplateId { .. } => panic!("cannot insert into template"),
+            GlobalNodeId::VNodeId(id) => {
+                self.resize_to(id.0);
+                self.nodes[id.0] = Some(Box::new(TemplateRefOrNode::Node(node)));
+            }
+        }
     }
 
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
@@ -591,8 +746,9 @@ impl<S: State> RealDom<S> {
     }
 
     pub fn decode_id(&self, id: impl Into<u64>) -> GlobalNodeId {
-        let id = id.into();
-        if id > JS_MAX_INT / 2 {
+        let mut id = id.into();
+        if id >= JS_MAX_INT / 2 {
+            id -= JS_MAX_INT / 2;
             if self.current_template().is_some() {
                 GlobalNodeId::TemplateId {
                     template_ref_id: ElementId(0),
@@ -600,7 +756,7 @@ impl<S: State> RealDom<S> {
                 }
             } else {
                 let template_ref_id = *self.template_stack.last().unwrap();
-                let template_node_id = TemplateNodeId((id - (JS_MAX_INT / 2)) as usize);
+                let template_node_id = TemplateNodeId(id as usize);
                 GlobalNodeId::TemplateId {
                     template_ref_id,
                     template_node_id,
@@ -694,7 +850,7 @@ pub struct Node<S: State> {
 #[derive(Debug, Clone)]
 pub struct NodeData {
     /// The id of the node this node was created from.
-    pub id: ElementId,
+    pub id: GlobalNodeId,
     /// The parent id of the node.
     pub parent: Option<GlobalNodeId>,
     /// Additional inforation specific to the node type
@@ -719,21 +875,16 @@ pub enum NodeType {
 }
 
 impl<S: State> Node<S> {
-    fn new(id: u64, node_type: NodeType) -> Self {
+    fn new(id: GlobalNodeId, node_type: NodeType) -> Self {
         Node {
             state: S::default(),
             node_data: NodeData {
-                id: ElementId(id as usize),
+                id,
                 parent: None,
                 node_type,
                 height: 0,
             },
         }
-    }
-
-    /// Returns a reference to the element that this node refrences.
-    pub fn element<'b>(&self, vdom: &'b VirtualDom) -> &'b VNode<'b> {
-        vdom.get_element(self.node_data.id).unwrap()
     }
 
     fn add_child(&mut self, child: GlobalNodeId) {
@@ -771,16 +922,23 @@ impl<T: State> Traversable for RealDom<T> {
                 template_ref_id,
                 template_node_id,
             } => {
-                let nodes = match self.nodes.get(template_ref_id.0)?.as_ref()?.as_ref() {
-                    TemplateRefOrNode::Ref { nodes, .. } => nodes,
-                    TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
-                };
+                if self.template_in_progress.is_some() {
+                    let template = self.current_template().unwrap();
+                    template.nodes[template_node_id.0]
+                        .as_ref()
+                        .map(|n| n.as_ref())
+                } else {
+                    let nodes = match self.nodes.get(template_ref_id.0)?.as_ref()?.as_ref() {
+                        TemplateRefOrNode::Ref { nodes, .. } => nodes,
+                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                    };
 
-                nodes
-                    .get(template_node_id.0)
-                    .map(|n| n.as_ref())
-                    .flatten()
-                    .map(|n| n.as_ref())
+                    nodes
+                        .get(template_node_id.0)
+                        .map(|n| n.as_ref())
+                        .flatten()
+                        .map(|n| n.as_ref())
+                }
             }
         }
     }
@@ -795,16 +953,23 @@ impl<T: State> Traversable for RealDom<T> {
                 template_ref_id,
                 template_node_id,
             } => {
-                let nodes = match self.nodes.get_mut(template_ref_id.0)?.as_mut()?.as_mut() {
-                    TemplateRefOrNode::Ref { nodes, .. } => nodes,
-                    TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
-                };
+                if self.template_in_progress.is_some() {
+                    let template = self.current_template_mut().unwrap();
+                    template.nodes[template_node_id.0]
+                        .as_mut()
+                        .map(|n| n.as_mut())
+                } else {
+                    let nodes = match self.nodes.get_mut(template_ref_id.0)?.as_mut()?.as_mut() {
+                        TemplateRefOrNode::Ref { nodes, .. } => nodes,
+                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                    };
 
-                nodes
-                    .get_mut(template_node_id.0)
-                    .map(|n| n.as_mut())
-                    .flatten()
-                    .map(|n| n.as_mut())
+                    nodes
+                        .get_mut(template_node_id.0)
+                        .map(|n| n.as_mut())
+                        .flatten()
+                        .map(|n| n.as_mut())
+                }
             }
         }
     }

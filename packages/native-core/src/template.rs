@@ -1,4 +1,4 @@
-use dioxus_core::GlobalNodeId;
+use dioxus_core::{GlobalNodeId, TemplateNodeId};
 
 use crate::{real_dom::Node, state::State};
 
@@ -10,9 +10,17 @@ pub struct NativeTemplate<S: State> {
 
 impl<S: State> NativeTemplate<S> {
     pub fn insert(&mut self, node: Node<S>) {
-        let id = node.node_data.id.0;
-        self.nodes.resize(id, None);
-        self.nodes[id] = Some(Box::new(node));
+        let id = node.node_data.id;
+        match id {
+            GlobalNodeId::TemplateId {
+                template_node_id: TemplateNodeId(id),
+                ..
+            } => {
+                self.nodes.resize(id + 1, None);
+                self.nodes[id] = Some(Box::new(node));
+            }
+            GlobalNodeId::VNodeId(_) => panic!("Cannot insert a VNode into a template"),
+        }
     }
 }
 
@@ -20,6 +28,7 @@ impl<S: State> NativeTemplate<S> {
 pub(crate) enum TemplateRefOrNode<S: State> {
     Ref {
         nodes: Vec<Option<Box<Node<S>>>>,
+        roots: Vec<GlobalNodeId>,
         parent: Option<GlobalNodeId>,
     },
     Node(Node<S>),
@@ -30,6 +39,13 @@ impl<S: State> TemplateRefOrNode<S> {
         match self {
             TemplateRefOrNode::Ref { parent, .. } => *parent,
             TemplateRefOrNode::Node(node) => node.node_data.parent,
+        }
+    }
+
+    pub fn set_parent(&mut self, parent: GlobalNodeId) {
+        match self {
+            TemplateRefOrNode::Ref { parent: p, .. } => *p = Some(parent),
+            TemplateRefOrNode::Node(node) => node.node_data.parent = Some(parent),
         }
     }
 }

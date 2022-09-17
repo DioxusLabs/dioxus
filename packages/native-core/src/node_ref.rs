@@ -19,7 +19,7 @@ impl<'a> NodeView<'a> {
         }
     }
 
-    pub fn id(&self) -> ElementId {
+    pub fn id(&self) -> GlobalNodeId {
         self.inner.id
     }
 
