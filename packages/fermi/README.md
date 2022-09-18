@@ -70,7 +70,7 @@ Fermi is currently under construction, so you have to use the `master` branch to
 
 ```toml
 [dependencies]
-fermi = { git = "https://github.com/dioxuslabs/fermi" }
+fermi = { git = "https://github.com/dioxuslabs/dioxus" }
 ```
 
 
@@ -78,7 +78,7 @@ fermi = { git = "https://github.com/dioxuslabs/fermi" }
 
 The examples here use Dioxus Desktop to showcase their functionality. To run an example, use
 ```
-$ cargo run --example EXAMPLE
+$ cargo run --example fermi
 ```
 
 ## Features

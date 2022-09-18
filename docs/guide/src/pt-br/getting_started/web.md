@@ -64,7 +64,7 @@ Adicione um `index.html` para o `Trunk` usar. Certifique-se de que seu elemento 
 Edite seu `main.rs`:
 
 ```rust
-{{#include ../../examples/hello_world_web.rs}}
+{{#include ../../../examples/hello_world_web.rs}}
 ```
 
 E para servir nosso aplicativo:

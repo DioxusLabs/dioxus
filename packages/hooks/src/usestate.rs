@@ -110,8 +110,8 @@ impl<T: 'static> UseState<T> {
     ///
     /// This is useful for passing the setter function to other components.
     ///
-    /// However, for most cases, calling `to_owned` o`UseState`te is the
-    /// preferred way to get "anoth`set_state`tate handle.
+    /// However, for most cases, calling `to_owned` on the state is the
+    /// preferred way to get "another" state handle.
     ///
     ///
     /// # Examples

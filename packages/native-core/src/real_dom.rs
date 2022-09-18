@@ -59,7 +59,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    /// Updates the dom, up and down state and return a set of nodes that were updated pass this to update_state.
+    /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
     pub fn apply_mutations(
         &mut self,
         mutations_vec: Vec<Mutations>,
@@ -424,6 +424,7 @@ impl<S: State> RealDom<S> {
         self.templates.get(self.template_in_progress.as_ref()?)
     }
 
+    /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
         nodes_updated: Vec<(GlobalNodeId, NodeMask)>,
@@ -433,6 +434,7 @@ impl<S: State> RealDom<S> {
         S::update(&nodes_updated, &mut state_tree, &node_tree, &ctx)
     }
 
+    /// Link a child and parent together
     fn link_child(&mut self, child_id: GlobalNodeId, parent_id: GlobalNodeId) -> Option<()> {
         if let GlobalNodeId::VNodeId(id) = parent_id {
             if let TemplateRefOrNode::Ref { .. } = &**self.nodes[id.0].as_ref().unwrap() {
@@ -502,6 +504,7 @@ impl<S: State> RealDom<S> {
         Some(())
     }
 
+    /// Recursively increase the height of a node and its children
     fn increase_height(&mut self, id: GlobalNodeId, amount: u16) {
         match id {
             GlobalNodeId::VNodeId(id) => {
@@ -636,6 +639,8 @@ impl<S: State> RealDom<S> {
         }
     }
 
+    /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
+    /// This can be useful to avoid creating duplicate events.
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
@@ -886,6 +891,7 @@ pub struct NodeData {
     pub height: u16,
 }
 
+/// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
 #[derive(Debug, Clone)]
 pub enum NodeType {
     Text {
@@ -914,18 +920,21 @@ impl<S: State> Node<S> {
         }
     }
 
+    /// link a child node
     fn add_child(&mut self, child: GlobalNodeId) {
         if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
             children.push(child);
         }
     }
 
+    /// remove a child node
     fn remove_child(&mut self, child: GlobalNodeId) {
         if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
             children.retain(|c| c != &child);
         }
     }
 
+    /// link the parent node
     fn set_parent(&mut self, parent: GlobalNodeId) {
         self.node_data.parent = Some(parent);
     }

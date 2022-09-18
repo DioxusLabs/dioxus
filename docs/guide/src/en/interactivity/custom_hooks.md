@@ -9,7 +9,7 @@ To avoid repetition, you can encapsulate business logic based on existing hooks 
 For example, if many components need to access an `AppSettings` struct, you can create a "shortcut" hook:
 
 ```rust
-{{#include ../../examples/hooks_composed.rs:wrap_context}}
+{{#include ../../../examples/hooks_composed.rs:wrap_context}}
 ```
 
 ## Custom Hook Logic

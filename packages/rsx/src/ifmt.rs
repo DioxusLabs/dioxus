@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashSet, str::FromStr};
 
 use proc_macro2::{Span, TokenStream};
 
@@ -141,17 +141,25 @@ impl ToTokens for IfmtInput {
             }
         });
 
-        let named_args = self.segments.iter().filter_map(|seg| {
-            if let Segment::Formatted(FormattedSegment {
-                segment: FormattedSegmentType::Ident(ident),
-                ..
-            }) = seg
-            {
-                Some(quote! {#ident = #ident})
-            } else {
-                None
-            }
-        });
+        // remove duplicate idents
+        let named_args_idents: HashSet<_> = self
+            .segments
+            .iter()
+            .filter_map(|seg| {
+                if let Segment::Formatted(FormattedSegment {
+                    segment: FormattedSegmentType::Ident(ident),
+                    ..
+                }) = seg
+                {
+                    Some(ident)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let named_args = named_args_idents
+            .iter()
+            .map(|ident| quote!(#ident = #ident));
 
         quote! {
             format_args!(
