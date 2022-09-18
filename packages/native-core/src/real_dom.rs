@@ -65,7 +65,6 @@ impl<S: State> RealDom<S> {
         mutations_vec: Vec<Mutations>,
     ) -> Vec<(GlobalNodeId, NodeMask)> {
         let mut nodes_updated = Vec::new();
-        println!("Applying mutations {:?}", mutations_vec);
         for mutations in mutations_vec {
             for e in mutations.edits {
                 use dioxus_core::DomEdit::*;
@@ -86,7 +85,7 @@ impl<S: State> RealDom<S> {
                             .collect();
                         for id in drained {
                             self.link_child(id, target).unwrap();
-                            nodes_updated.push((id, NodeMask::ALL));
+                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
                     ReplaceWith { root, m } => {
@@ -95,7 +94,7 @@ impl<S: State> RealDom<S> {
                         let target = root.parent().unwrap();
                         let drained: Vec<_> = self.node_stack.drain(0..m as usize).collect();
                         for id in drained {
-                            nodes_updated.push((id, NodeMask::ALL));
+                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
                         }
                     }
@@ -103,7 +102,7 @@ impl<S: State> RealDom<S> {
                         let target = self[root as usize].node_data.parent.unwrap();
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for id in drained {
-                            nodes_updated.push((id, NodeMask::ALL));
+                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
                         }
                     }
@@ -111,13 +110,13 @@ impl<S: State> RealDom<S> {
                         let target = self[root as usize].node_data.parent.unwrap();
                         let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
                         for id in drained {
-                            nodes_updated.push((id, NodeMask::ALL));
+                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
                         }
                     }
                     Remove { root } => {
                         if let Some(parent) = self[root as usize].node_data.parent {
-                            nodes_updated.push((parent, NodeMask::NONE));
+                            self.mark_dirty(parent, NodeMask::NONE, &mut nodes_updated);
                         }
                         let id = self.decode_id(root);
                         self.remove(id).unwrap();
@@ -237,7 +236,7 @@ impl<S: State> RealDom<S> {
                         root,
                     } => {
                         let id = self.decode_id(root);
-                        nodes_updated.push((id, NodeMask::new().with_listeners()));
+                        self.mark_dirty(id, NodeMask::new().with_listeners(), &mut nodes_updated);
                         if let Some(v) = self.nodes_listening.get_mut(event_name) {
                             v.insert(id);
                         } else {
@@ -248,7 +247,7 @@ impl<S: State> RealDom<S> {
                     }
                     RemoveEventListener { root, event } => {
                         let id = self.decode_id(root);
-                        nodes_updated.push((id, NodeMask::new().with_listeners()));
+                        self.mark_dirty(id, NodeMask::new().with_listeners(), &mut nodes_updated);
                         let v = self.nodes_listening.get_mut(event).unwrap();
                         v.remove(&id);
                     }
@@ -257,8 +256,8 @@ impl<S: State> RealDom<S> {
                         text: new_text,
                     } => {
                         let id = self.decode_id(root);
+                        self.mark_dirty(id, NodeMask::new().with_text(), &mut nodes_updated);
                         let target = &mut self[id];
-                        nodes_updated.push((id, NodeMask::new().with_text()));
                         match &mut target.node_data.node_type {
                             NodeType::Text { text } => {
                                 *text = new_text.to_string();
@@ -287,15 +286,21 @@ impl<S: State> RealDom<S> {
                         } else {
                             panic!("tried to call set attribute on a non element");
                         }
-                        nodes_updated
-                            .push((id, NodeMask::new_with_attrs(AttributeMask::single(field))));
+                        self.mark_dirty(
+                            id,
+                            NodeMask::new_with_attrs(AttributeMask::single(field)),
+                            &mut nodes_updated,
+                        );
                     }
                     RemoveAttribute {
                         root, name: field, ..
                     } => {
                         let id = self.decode_id(root);
-                        nodes_updated
-                            .push((id, NodeMask::new_with_attrs(AttributeMask::single(field))));
+                        self.mark_dirty(
+                            id,
+                            NodeMask::new_with_attrs(AttributeMask::single(field)),
+                            &mut nodes_updated,
+                        );
                     }
                     PopRoot {} => {
                         self.node_stack.pop();
@@ -389,6 +394,28 @@ impl<S: State> RealDom<S> {
         nodes_updated
     }
 
+    fn mark_dirty(
+        &self,
+        gid: GlobalNodeId,
+        mask: NodeMask,
+        dirty_nodes: &mut Vec<(GlobalNodeId, NodeMask)>,
+    ) {
+        if self.template_in_progress.is_some() {
+            return;
+        }
+        if let GlobalNodeId::VNodeId(id) = gid {
+            if let TemplateRefOrNode::Ref { roots, .. } = &**self.nodes[id.0].as_ref().unwrap() {
+                for r in roots {
+                    dirty_nodes.push((*r, mask.clone()));
+                }
+            } else {
+                dirty_nodes.push((gid, mask));
+            }
+        } else {
+            dirty_nodes.push((gid, mask));
+        }
+    }
+
     fn current_template_mut(&mut self) -> Option<&mut NativeTemplate<S>> {
         self.templates.get_mut(self.template_in_progress.as_ref()?)
     }
@@ -407,29 +434,30 @@ impl<S: State> RealDom<S> {
     }
 
     fn link_child(&mut self, child_id: GlobalNodeId, parent_id: GlobalNodeId) -> Option<()> {
-        println!("linking {:?} to {:?}", child_id, parent_id);
-        println!(
-            "nodes: {:#?}",
-            self.current_template().map(|t| t
-                .nodes
-                .iter()
-                .map(|a| a.as_ref().map(|a| a.node_data.id))
-                .collect::<Vec<_>>())
-        );
-        println!(
-            "{:?}",
-            self.nodes
-                .iter()
-                .map(|n| n.as_ref().map(|n| match &**n {
-                    TemplateRefOrNode::Ref { .. } => {
-                        format!("ref")
-                    }
-                    TemplateRefOrNode::Node(node) => format!("{:?}", node.node_data.id),
-                }))
-                .collect::<Vec<_>>()
-        );
+        if let GlobalNodeId::VNodeId(id) = parent_id {
+            if let TemplateRefOrNode::Ref { .. } = &**self.nodes[id.0].as_ref().unwrap() {
+                return Some(());
+            }
+        }
+        if self.template_in_progress.is_some() {
+            return Some(());
+        }
+        let mut created = false;
+        if let GlobalNodeId::VNodeId(id) = child_id {
+            let unbounded_self: &mut Self = unsafe { std::mem::transmute(&*self as *const Self) };
+            if let TemplateRefOrNode::Ref { roots, .. } = &mut **self.nodes[id.0].as_mut()? {
+                // this is safe because we know that no parent will be it's own child
+                let parent = &mut unbounded_self[parent_id];
+                for r in roots {
+                    parent.add_child(*r);
+                }
+                created = true;
+            }
+        }
         let parent = &mut self[parent_id];
-        parent.add_child(child_id);
+        if !created {
+            parent.add_child(child_id);
+        }
         let parent_height = parent.node_data.height + 1;
         match child_id {
             GlobalNodeId::VNodeId(id) => {
@@ -475,7 +503,6 @@ impl<S: State> RealDom<S> {
     }
 
     fn increase_height(&mut self, id: GlobalNodeId, amount: u16) {
-        println!("increasing height of {:?} by {}", id, amount);
         match id {
             GlobalNodeId::VNodeId(id) => {
                 let n = &mut **self.nodes.get_mut(id.0).unwrap().as_mut().unwrap();

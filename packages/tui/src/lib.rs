@@ -252,7 +252,7 @@ fn render_vdom(
                     // update the style and layout
                     let mut any_map = AnyMap::new();
                     any_map.insert(taffy.clone());
-                    to_rerender = rdom.update_state(vdom, to_update, any_map);
+                    to_rerender = rdom.update_state(to_update, any_map);
                 }
             }
 
