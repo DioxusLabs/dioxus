@@ -94,7 +94,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
         let to_update = rdom.apply_mutations(vec![mutations]);
         let mut any_map = AnyMap::new();
         any_map.insert(taffy.clone());
-        let _to_rerender = rdom.update_state(&dom, to_update, any_map);
+        let _to_rerender = rdom.update_state(to_update, any_map);
     }
 
     render_vdom(

@@ -1,6 +1,6 @@
 use crate::{node::PreventDefault, Dom};
 
-use dioxus_core::{ElementId, GlobalNodeId};
+use dioxus_core::GlobalNodeId;
 use dioxus_native_core::utils::{ElementProduced, PersistantElementIter};
 use dioxus_native_core_macro::sorted_str_slice;
 
@@ -69,7 +69,10 @@ impl NodeDepState<()> for Focus {
 
     fn reduce(&mut self, node: NodeView<'_>, _sibling: (), _: &Self::Ctx) -> bool {
         let new = Focus {
-            level: if let Some(a) = node.attributes().find(|a| a.attribute.name == "tabindex") {
+            level: if let Some(a) = node
+                .attributes()
+                .and_then(|mut a| a.find(|a| a.attribute.name == "tabindex"))
+            {
                 if let Some(index) = a
                     .value
                     .as_int32()
@@ -88,7 +91,7 @@ impl NodeDepState<()> for Focus {
             } else if node
                 .listeners()
                 .iter()
-                .any(|l| FOCUS_EVENTS.binary_search(&l.event).is_ok())
+                .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
             {
                 FocusLevel::Focusable
             } else {
@@ -235,7 +238,7 @@ impl FocusState {
                     }
                 }
             }
-            if let NodeType::Element { children, .. } = &rdom[removed].node_type {
+            if let NodeType::Element { children, .. } = &rdom[removed].node_data.node_type {
                 for child in children {
                     remove_children(to_prune, rdom, *child);
                 }
