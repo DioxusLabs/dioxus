@@ -61,6 +61,7 @@ proc-macro2 = { version = "1.0", features = ["span-locations"] }
 
 # plugin packages
 mlua = { version = "0.8.1", features = ["lua54", "vendored", "async", "send"] }
+lazy_static = "1.4.0"
 
 [[bin]]
 path = "src/main.rs"

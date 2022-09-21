@@ -7,10 +7,10 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
 
-    let plugin_manager = PluginManager::init(&PluginConfig {
+    let _ = PluginManager::init(&PluginConfig {
         available: true,
         required: vec![],
-    }).unwrap();
+    });
 
     match args.action {
         Commands::Translate(opts) => {
@@ -21,7 +21,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Build(opts) => {
-            if let Err(e) = opts.build(plugin_manager) {
+            if let Err(e) = opts.build() {
                 log::error!("🚫 Build project failed: {}", e);
                 exit(1);
             }
@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Serve(opts) => {
-            if let Err(e) = opts.serve(plugin_manager).await {
+            if let Err(e) = opts.serve().await {
                 log::error!("🚫 Serve startup failed: {}", e);
                 exit(1);
             }

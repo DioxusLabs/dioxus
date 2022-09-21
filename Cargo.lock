@@ -621,6 +621,7 @@ dependencies = [
  "html_parser",
  "hyper",
  "indicatif",
+ "lazy_static",
  "log",
  "mlua",
  "notify",

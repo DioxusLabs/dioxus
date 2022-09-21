@@ -1,5 +1,3 @@
-use crate::plugin::PluginManager;
-
 use super::*;
 use std::{
     io::Write,
@@ -16,7 +14,7 @@ pub struct Serve {
 }
 
 impl Serve {
-    pub async fn serve(self, plugin_manager: PluginManager) -> Result<()> {
+    pub async fn serve(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
@@ -65,7 +63,7 @@ impl Serve {
         Serve::regen_dev_page(&crate_config)?;
 
         // start the develop server
-        server::startup(self.serve.port, crate_config.clone(), plugin_manager).await?;
+        server::startup(self.serve.port, crate_config.clone()).await?;
 
         Ok(())
     }

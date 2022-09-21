@@ -1,6 +1,7 @@
 use std::{
     io::{Read, Write},
     path::PathBuf,
+    sync::Mutex,
 };
 
 use mlua::{AsChunk, Lua, Table};
@@ -23,23 +24,29 @@ use self::{
 pub mod argument;
 pub mod interface;
 
+lazy_static::lazy_static! {
+    static ref LUA: Mutex<Lua> = Mutex::new(Lua::new());
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginConfig {
     pub available: bool,
     pub required: Vec<String>,
 }
 
-pub struct PluginManager {
-    lua: Lua,
-}
+pub struct PluginManager;
 
 impl PluginManager {
-    pub fn init(config: &PluginConfig) -> Option<Self> {
+    pub fn init(config: &PluginConfig) -> bool {
         if !config.available {
-            return None;
+            return false;
         }
 
-        let lua = Lua::new();
+        let lua = if let Ok(v) = LUA.lock() {
+            v
+        } else {
+            return false;
+        };
 
         let manager = lua.create_table().unwrap();
         let plugin_dir = Self::init_plugin_dir();
@@ -61,7 +68,12 @@ impl PluginManager {
 
         let mut index: u32 = 1;
         let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
-        for entry in std::fs::read_dir(&plugin_dir).ok()? {
+        let dirs = if let Ok(v) = std::fs::read_dir(&plugin_dir) {
+            v
+        } else {
+            return false;
+        };
+        for entry in dirs {
             if entry.is_err() {
                 continue;
             }
@@ -117,12 +129,12 @@ impl PluginManager {
                 file.write_all(buffer).unwrap();
             }
         }
-
-        Some(Self { lua })
+        true
     }
 
-    pub fn on_build_start(&self, crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
-        let lua = &self.lua;
+    pub fn on_build_start(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
+
+        let lua = LUA.lock().unwrap();
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 
@@ -142,12 +154,8 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn on_build_finish(
-        &self,
-        crate_config: &CrateConfig,
-        platform: &str,
-    ) -> anyhow::Result<()> {
-        let lua = &self.lua;
+    pub fn on_build_finish(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
+        let lua = LUA.lock().unwrap();
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 
@@ -167,8 +175,8 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn on_serve_start(&self, crate_config: &CrateConfig) -> anyhow::Result<()> {
-        let lua = &self.lua;
+    pub fn on_serve_start(crate_config: &CrateConfig) -> anyhow::Result<()> {
+        let lua = LUA.lock().unwrap();
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 
@@ -185,8 +193,8 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn on_serve_rebuild(&self, timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
-        let lua = &self.lua;
+    pub fn on_serve_rebuild(timestamp: i64, files: Vec<PathBuf>) -> anyhow::Result<()> {
+        let lua = LUA.lock().unwrap();
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 
@@ -208,8 +216,8 @@ impl PluginManager {
         Ok(())
     }
 
-    pub fn on_serve_shutdown(&self, crate_config: &CrateConfig) -> anyhow::Result<()> {
-        let lua = &self.lua;
+    pub fn on_serve_shutdown(crate_config: &CrateConfig) -> anyhow::Result<()> {
+        let lua = LUA.lock().unwrap();
 
         let manager = lua.globals().get::<_, Table>("manager")?;
 

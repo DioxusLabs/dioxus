@@ -52,11 +52,11 @@ struct WsReloadState {
     update: broadcast::Sender<()>,
 }
 
-pub async fn startup(port: u16, config: CrateConfig, plugin_manager: PluginManager) -> Result<()> {
+pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     if config.hot_reload {
-        startup_hot_reload(port, config, plugin_manager).await?
+        startup_hot_reload(port, config).await?
     } else {
-        startup_default(port, config, plugin_manager).await?
+        startup_default(port, config).await?
     }
     Ok(())
 }
@@ -64,13 +64,12 @@ pub async fn startup(port: u16, config: CrateConfig, plugin_manager: PluginManag
 pub async fn startup_hot_reload(
     port: u16,
     config: CrateConfig,
-    plugin_manager: PluginManager,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
 
-    plugin_manager.on_serve_start(&config)?;
+    PluginManager::on_serve_start(&config)?;
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
@@ -283,7 +282,6 @@ pub async fn startup_hot_reload(
 pub async fn startup_default(
     port: u16,
     config: CrateConfig,
-    plugin_manager: PluginManager,
 ) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
@@ -314,7 +312,6 @@ pub async fn startup_default(
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let wacher_plugin_manager = plugin_manager;
     let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
         let config = watcher_config.clone();
         if let Ok(e) = info {
@@ -331,8 +328,10 @@ pub async fn startup_default(
                                 elapsed_time: res.elapsed_time,
                             },
                         );
-                        let _ = plugin_manager
-                            .on_serve_rebuild(chrono::Local::now().timestamp(), e.paths);
+                        let _ = PluginManager::on_serve_rebuild(
+                            chrono::Local::now().timestamp(),
+                            e.paths,
+                        );
                     }
                     Err(e) => log::error!("{}", e),
                 }
@@ -361,7 +360,7 @@ pub async fn startup_default(
         },
     );
 
-    plugin_manager.on_serve_start(&config)?;
+    PluginManager::on_serve_start(&config)?;
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()

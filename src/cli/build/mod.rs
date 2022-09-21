@@ -11,7 +11,7 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn build(self, plugin_manager: PluginManager) -> Result<()> {
+    pub fn build(self) -> Result<()> {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the release state.
@@ -34,7 +34,7 @@ impl Build {
                 .clone()
         });
 
-        let _ = plugin_manager.on_build_start(&crate_config, &platform);
+        let _ = PluginManager::on_build_start(&crate_config, &platform);
 
         match platform.as_str() {
             "web" => {
@@ -65,7 +65,7 @@ impl Build {
         )?;
         file.write_all(temp.as_bytes())?;
 
-        let _ = plugin_manager.on_build_finish(&crate_config, &platform);
+        let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }
