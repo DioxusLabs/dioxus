@@ -11,6 +11,7 @@ async fn main() -> Result<()> {
         available: true,
         required: vec![],
     });
+    
     if !plugin_state {
         log::error!("🚫 Plugin system initialization failed");
         exit(1);

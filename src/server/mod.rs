@@ -53,6 +53,13 @@ struct WsReloadState {
 }
 
 pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
+    // ctrl-c shutdown checker
+    let crate_config = config.clone();
+    let _ = ctrlc::set_handler(move || {
+        let _ = PluginManager::on_serve_shutdown(&crate_config);
+        std::process::exit(0);
+    });
+
     if config.hot_reload {
         startup_hot_reload(port, config).await?
     } else {
@@ -61,10 +68,7 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
-pub async fn startup_hot_reload(
-    port: u16,
-    config: CrateConfig,
-) -> Result<()> {
+pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
@@ -279,10 +283,7 @@ pub async fn startup_hot_reload(
     Ok(())
 }
 
-pub async fn startup_default(
-    port: u16,
-    config: CrateConfig,
-) -> Result<()> {
+pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");

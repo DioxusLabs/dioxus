@@ -58,10 +58,11 @@ dioxus = { git = "https://github.com/dioxuslabs/dioxus/", features = ["hot-reloa
 dioxus-rsx-interpreter = { git = "https://github.com/dioxuslabs/dioxus/" }
 
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
+lazy_static = "1.4.0"
 
 # plugin packages
 mlua = { version = "0.8.1", features = ["lua54", "vendored", "async", "send"] }
-lazy_static = "1.4.0"
+ctrlc = "3.2.3"
 
 [[bin]]
 path = "src/main.rs"
