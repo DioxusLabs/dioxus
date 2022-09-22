@@ -11,3 +11,5 @@
   - [Translate](./cmd/translate.md)
 - [Plugin Development](./plugin/README.md)
   - [API.Command](./plugin/interface/command.md)
+  - [API.OS](./plugin/interface/os.md)
+  - [API.Directories](./plugin/interface/dirs.md)
