@@ -322,6 +322,7 @@ impl<S: State> RealDom<S> {
                             } else {
                                 panic!("non-template node in template");
                             }
+                            self.mark_dirty(n.node_data.id, NodeMask::ALL, &mut nodes_updated);
                             if let NodeType::Element { children, .. } = &mut n.node_data.node_type {
                                 for c in children.iter_mut() {
                                     if let GlobalNodeId::TemplateId {
@@ -332,6 +333,7 @@ impl<S: State> RealDom<S> {
                                             template_ref_id: id,
                                             template_node_id: *template_node_id,
                                         };
+                                        self.mark_dirty(*c, NodeMask::ALL, &mut nodes_updated);
                                     } else {
                                         panic!("non-template node in template");
                                     }
@@ -966,7 +968,9 @@ impl<T: State> Traversable for RealDom<T> {
                 } else {
                     let nodes = match self.nodes.get(template_ref_id.0)?.as_ref()?.as_ref() {
                         TemplateRefOrNode::Ref { nodes, .. } => nodes,
-                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                        TemplateRefOrNode::Node(_) => {
+                            panic!("Expected template ref")
+                        }
                     };
 
                     nodes
