@@ -7,10 +7,14 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
 
-    let _ = PluginManager::init(&PluginConfig {
+    let plugin_state = PluginManager::init(&PluginConfig {
         available: true,
         required: vec![],
     });
+    if !plugin_state {
+        log::error!("🚫 Plugin system initialization failed");
+        exit(1);
+    }
 
     match args.action {
         Commands::Translate(opts) => {

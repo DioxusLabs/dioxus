@@ -38,15 +38,18 @@ pub struct PluginManager;
 
 impl PluginManager {
     pub fn init(config: &PluginConfig) -> bool {
-        if !config.available {
-            return false;
-        }
 
         let lua = if let Ok(v) = LUA.lock() {
             v
         } else {
             return false;
         };
+
+        if !config.available {
+            // // if plugin system is available, just set manager to nil.
+            // lua.globals().set("manager", mlua::Value::Nil).unwrap();
+            return true;
+        }
 
         let manager = lua.create_table().unwrap();
         let plugin_dir = Self::init_plugin_dir();
@@ -136,6 +139,9 @@ impl PluginManager {
 
         let lua = LUA.lock().unwrap();
 
+        if !lua.globals().contains_key("manager")? {
+            return Ok(());
+        }
         let manager = lua.globals().get::<_, Table>("manager")?;
 
         let args = lua.create_table()?;
@@ -157,6 +163,9 @@ impl PluginManager {
     pub fn on_build_finish(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
         let lua = LUA.lock().unwrap();
 
+        if !lua.globals().contains_key("manager")? {
+            return Ok(());
+        }
         let manager = lua.globals().get::<_, Table>("manager")?;
 
         let args = lua.create_table()?;
@@ -178,6 +187,9 @@ impl PluginManager {
     pub fn on_serve_start(crate_config: &CrateConfig) -> anyhow::Result<()> {
         let lua = LUA.lock().unwrap();
 
+        if !lua.globals().contains_key("manager")? {
+            return Ok(());
+        }
         let manager = lua.globals().get::<_, Table>("manager")?;
 
         let args = lua.create_table()?;
@@ -219,6 +231,9 @@ impl PluginManager {
     pub fn on_serve_shutdown(crate_config: &CrateConfig) -> anyhow::Result<()> {
         let lua = LUA.lock().unwrap();
 
+        if !lua.globals().contains_key("manager")? {
+            return Ok(());
+        }
         let manager = lua.globals().get::<_, Table>("manager")?;
 
         let args = lua.create_table()?;
