@@ -15,3 +15,4 @@
   - [API.OS](./plugin/interface/os.md)
   - [API.Directories](./plugin/interface/dirs.md)
   - [API.Network](./plugin/interface/network.md)
+  - [API.Path](./plugin/interface/path.md)
