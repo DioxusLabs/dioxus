@@ -413,6 +413,9 @@ impl<S: State> RealDom<S> {
         debug_assert!(self.template_stack.is_empty());
         debug_assert_eq!(self.template_in_progress, None);
 
+        // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
+        nodes_updated.retain(|n| self.get(n.0).is_some());
+
         nodes_updated
     }
 
