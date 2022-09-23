@@ -19,3 +19,4 @@ log = "0.4.14"
 
 [dev-dependencies]
 closure = "0.3.0"
+dioxus = { path = "../dioxus" }

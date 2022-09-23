@@ -16,7 +16,7 @@ impl<K, V: 'static> Readable<ImMap<K, V>> for AtomFamily<K, V> {
     fn unique_id(&self) -> AtomId {
         AtomId {
             ptr: *self as *const (),
-            type_id: std::any::TypeId::of::<V>(),
+            type_name: std::any::type_name::<V>(),
         }
     }
 }
