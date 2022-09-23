@@ -1,5 +1,6 @@
 use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
+use std::fmt::format;
 use std::ops::{Index, IndexMut};
 
 use dioxus_core::{
@@ -318,7 +319,7 @@ impl<S: State> RealDom<S> {
                     CreateTemplateRef { id, template_id } => {
                         let template_id = RendererTemplateId(template_id as usize);
                         let template = self.templates.get(&template_id).unwrap();
-                        let mut nodes = template.nodes.clone();
+                        let nodes = template.nodes.clone();
                         let id = ElementId(id as usize);
                         fn update_refrences<S: State>(
                             real_dom: &mut RealDom<S>,
@@ -434,15 +435,42 @@ impl<S: State> RealDom<S> {
         debug_assert!(self.template_stack.is_empty());
         debug_assert_eq!(self.template_in_progress, None);
 
+        // println!("nodes updated: {:?}", nodes_updated);
+        // println!(
+        //     "templates:\n{:#?}",
+        //     self.nodes
+        //         .iter()
+        //         .filter_map(|n| n.as_ref().map(|n| match &**n {
+        //             TemplateRefOrNode::Ref {
+        //                 nodes,
+        //                 roots,
+        //                 parent,
+        //             } => format!(
+        //                 "ref:\n\tnodes: {:?}",
+        //                 nodes
+        //                     .iter()
+        //                     .filter_map(|n| n.as_ref().map(|n| format!("{:?}", n.node_data)))
+        //                     .collect::<Vec<_>>()
+        //             ),
+        //             TemplateRefOrNode::Node(n) => format!("{:?}", n.node_data),
+        //         }))
+        //         .collect::<Vec<_>>()
+        // );
+
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
         nodes_updated.retain(|n| match &n.0 {
             GlobalNodeId::TemplateId {
                 template_ref_id,
                 template_node_id,
             } => self
-                .templates
-                .get(&RendererTemplateId(template_ref_id.0))
-                .and_then(|t| t.nodes.get(template_node_id.0))
+                .nodes
+                .get(template_ref_id.0)
+                .map(|o| o.as_ref())
+                .flatten()
+                .and_then(|t| match &**t {
+                    TemplateRefOrNode::Ref { nodes, .. } => nodes.get(template_node_id.0),
+                    TemplateRefOrNode::Node(_) => None,
+                })
                 .is_some(),
             GlobalNodeId::VNodeId(n) => self
                 .nodes
@@ -455,6 +483,8 @@ impl<S: State> RealDom<S> {
                 })
                 .is_some(),
         });
+
+        // println!("nodes updated: {:?}", nodes_updated);
 
         nodes_updated
     }
@@ -561,27 +591,27 @@ impl<S: State> RealDom<S> {
                 n.set_parent(parent_id);
             }
         }
-        self.increase_height(child_id, parent_height);
+        self.set_height(child_id, parent_height);
 
         Some(())
     }
 
     /// Recursively increase the height of a node and its children
-    fn increase_height(&mut self, id: GlobalNodeId, amount: u16) {
+    fn set_height(&mut self, id: GlobalNodeId, height: u16) {
         match id {
             GlobalNodeId::VNodeId(id) => {
                 let n = &mut **self.nodes.get_mut(id.0).unwrap().as_mut().unwrap();
                 match n {
                     TemplateRefOrNode::Ref { roots, .. } => {
                         for root in roots.clone() {
-                            self.increase_height(root, amount);
+                            self.set_height(root, height);
                         }
                     }
                     TemplateRefOrNode::Node(n) => {
-                        n.node_data.height += amount;
+                        n.node_data.height = height;
                         if let NodeType::Element { children, .. } = &n.node_data.node_type {
                             for c in children.clone() {
-                                self.increase_height(c, amount);
+                                self.set_height(c, height + 1);
                             }
                         }
                     }
@@ -613,10 +643,10 @@ impl<S: State> RealDom<S> {
                         .unwrap()
                 };
 
-                n.node_data.height += amount;
+                n.node_data.height = height;
                 if let NodeType::Element { children, .. } = &n.node_data.node_type {
                     for c in children.clone() {
-                        self.increase_height(c, amount);
+                        self.set_height(c, height + 1);
                     }
                 }
             }
