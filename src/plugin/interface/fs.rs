@@ -10,10 +10,6 @@ use crate::tools::extract_zip;
 pub struct PluginFileSystem;
 impl UserData for PluginFileSystem {
     fn add_methods<'lua, M: mlua::UserDataMethods<'lua, Self>>(methods: &mut M) {
-        methods.add_function("exists", |_, path: String| {
-            let path = PathBuf::from(path);
-            Ok(path.exists())
-        });
         methods.add_function("create_dir", |_, args: (String, bool)| {
             let path = args.0;
             let recursive = args.1;

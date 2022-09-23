@@ -22,6 +22,10 @@ impl UserData for PluginPath {
                 return Ok(parent.unwrap().to_str().unwrap().to_string());
             }
         });
+        methods.add_function("exists", |_, path: String| {
+            let path = PathBuf::from(path);
+            Ok(path.exists())
+        });
         methods.add_function("is_dir", |_, path: String| {
             let path = PathBuf::from(path);
             Ok(path.is_dir())
