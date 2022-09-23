@@ -11,7 +11,7 @@ use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
-use std::{any::Any, rc::Rc, sync::Arc};
+use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
 
@@ -171,7 +171,7 @@ unsafe impl Sync for DioxusWebsysEvent {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-fn virtual_event_from_websys_event(
+async fn virtual_event_from_websys_event(
     event: web_sys::Event,
     target: Element,
 ) -> Arc<dyn Any + Send + Sync> {
@@ -266,11 +266,28 @@ fn virtual_event_from_websys_event(
 
             Arc::new(FormData { value, values })
         }
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
-        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
-        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(MouseData::from(event))
         }
+
+        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
+        | "drop" => {
+            let evt: &web_sys::DragEvent = event.dyn_ref().as_ref().unwrap();
+            let mut files = HashMap::new();
+
+            if let Some(transfer) = evt.data_transfer() {
+                let files = transfer.files();
+            }
+
+            let mouse = MouseData::from(event);
+
+            Arc::new(DragData {
+                mouse,
+                files: todo!(),
+            })
+        }
+
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             Arc::new(PointerData::from(event))

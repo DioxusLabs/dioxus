@@ -119,8 +119,8 @@ pub struct VirtualDom {
 /// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
 pub enum SchedulerMsg {
-    /// Events from the Renderer
-    Event(UserEvent),
+    /// Check the event queue to see if there's anything pending
+    CheckEvents,
 
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
@@ -315,6 +315,16 @@ impl VirtualDom {
         !(self.dirty_scopes.is_empty() && self.pending_messages.is_empty())
     }
 
+    /// Handle an event and get all the changes back
+    ///
+    /// This is syncrhonous and willl block as we get the data back. Important so things like prevent default can be handleed natively
+    pub fn handle_event(&self, event: UserEvent) -> Vec<Mutations> {
+        if let Some(element) = event.element {
+            self.scopes.call_listener_with_bubbling(&event, element);
+        }
+        todo!()
+    }
+
     /// Wait for the scheduler to have any work.
     ///
     /// This method polls the internal future queue *and* the scheduler channel.
@@ -385,10 +395,8 @@ impl VirtualDom {
             SchedulerMsg::NewTask(_id) => {
                 // uh, not sure? I think end up re-polling it anyways
             }
-            SchedulerMsg::Event(event) => {
-                if let Some(element) = event.element {
-                    self.scopes.call_listener_with_bubbling(&event, element);
-                }
+            SchedulerMsg::CheckEvents => {
+                todo!()
             }
             SchedulerMsg::Immediate(s) => {
                 self.dirty_scopes.insert(s);

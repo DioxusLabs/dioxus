@@ -1,8 +1,9 @@
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::on::{
-    AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
-    TransitionData, WheelData,
+    AnimationEvent as AnimationData, CompositionEvent as CompositionData,
+    KeyboardEvent as KeyboardData, MouseEvent as MouseData, PointerEvent as PointerData,
+    TouchEvent as TouchData, TransitionEvent as TransitionData, WheelEvent as WheelData,
 };
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
@@ -170,6 +171,7 @@ impl From<&AnimationEvent> for AnimationData {
             elapsed_time: e.elapsed_time(),
             animation_name: e.animation_name(),
             pseudo_element: e.pseudo_element(),
+            bubble: Default::default(),
         }
     }
 }

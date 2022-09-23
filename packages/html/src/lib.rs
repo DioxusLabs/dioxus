@@ -22,5 +22,6 @@ pub mod input_data;
 mod web_sys_bind;
 
 pub use elements::*;
+pub use events::keyboard::KeyCode;
 pub use events::*;
 pub use global_attributes::*;

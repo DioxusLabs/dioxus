@@ -318,8 +318,6 @@ impl ScopeArena {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
-        let state = Rc::new(BubbleState::new());
-
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
@@ -327,21 +325,17 @@ impl ScopeArena {
                 if let VNode::Element(real_el) = real_el {
                     for listener in real_el.listeners.borrow().iter() {
                         if listener.event == event.name {
-                            if state.canceled.get() {
+                            if event.data.bubbles() {
                                 // stop bubbling if canceled
                                 return;
                             }
 
                             let mut cb = listener.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
-                                // todo: arcs are pretty heavy to clone
-                                // we really want to convert arc to rc
-                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                                // we could convert arc to rc internally or something
-                                (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
-                                    data: event.data.clone(),
-                                });
+                                // todo: unbind the lifetime of the event from the dom
+                                let t: &dyn Any = event.data.as_any();
+                                let t: &dyn Any = unsafe { std::mem::transmute(t) };
+                                (cb)(t);
                             }
 
                             if !event.bubbles {
