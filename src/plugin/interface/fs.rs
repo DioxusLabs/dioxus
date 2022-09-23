@@ -14,14 +14,6 @@ impl UserData for PluginFileSystem {
             let path = PathBuf::from(path);
             Ok(path.exists())
         });
-        methods.add_function("is_dir", |_, path: String| {
-            let path = PathBuf::from(path);
-            Ok(path.is_dir())
-        });
-        methods.add_function("is_file", |_, path: String| {
-            let path = PathBuf::from(path);
-            Ok(path.is_file())
-        });
         methods.add_function("create_dir", |_, args: (String, bool)| {
             let path = args.0;
             let recursive = args.1;
