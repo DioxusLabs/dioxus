@@ -320,29 +320,44 @@ impl<S: State> RealDom<S> {
                         let template = self.templates.get(&template_id).unwrap();
                         let mut nodes = template.nodes.clone();
                         let id = ElementId(id as usize);
-                        for n in nodes.iter_mut().filter_map(|n| n.as_mut()) {
-                            if let Some(GlobalNodeId::TemplateId {
-                                template_ref_id: ElementId(0),
-                                template_node_id,
-                            }) = n.node_data.parent
+                        fn update_refrences<S: State>(
+                            real_dom: &mut RealDom<S>,
+                            nodes_updated: &mut Vec<(GlobalNodeId, NodeMask)>,
+                            node_id: GlobalNodeId,
+                            template_id: ElementId,
+                        ) {
+                            nodes_updated.push((node_id, NodeMask::ALL));
+                            let node_id = if let GlobalNodeId::TemplateId {
+                                template_node_id, ..
+                            } = node_id
                             {
-                                n.node_data.parent = Some(GlobalNodeId::TemplateId {
-                                    template_ref_id: id,
+                                GlobalNodeId::TemplateId {
+                                    template_ref_id: template_id,
                                     template_node_id,
-                                });
-                            }
+                                }
+                            } else {
+                                node_id
+                            };
+                            let n = real_dom.get_mut(node_id).unwrap();
                             if let GlobalNodeId::TemplateId {
                                 template_node_id, ..
                             } = n.node_data.id
                             {
                                 n.node_data.id = GlobalNodeId::TemplateId {
-                                    template_ref_id: id,
+                                    template_ref_id: template_id,
                                     template_node_id,
                                 };
-                            } else {
-                                panic!("non-template node in template");
+                                if let Some(GlobalNodeId::TemplateId {
+                                    template_ref_id: ElementId(0),
+                                    template_node_id,
+                                }) = n.node_data.parent
+                                {
+                                    n.node_data.parent = Some(GlobalNodeId::TemplateId {
+                                        template_ref_id: template_id,
+                                        template_node_id,
+                                    });
+                                }
                             }
-                            self.mark_dirty(n.node_data.id, NodeMask::ALL, &mut nodes_updated);
                             if let NodeType::Element { children, .. } = &mut n.node_data.node_type {
                                 for c in children.iter_mut() {
                                     if let GlobalNodeId::TemplateId {
@@ -350,17 +365,20 @@ impl<S: State> RealDom<S> {
                                     } = c
                                     {
                                         *c = GlobalNodeId::TemplateId {
-                                            template_ref_id: id,
+                                            template_ref_id: template_id,
                                             template_node_id: *template_node_id,
                                         };
-                                        self.mark_dirty(*c, NodeMask::ALL, &mut nodes_updated);
                                     } else {
                                         panic!("non-template node in template");
                                     }
                                 }
+                                for c in children.clone() {
+                                    update_refrences(real_dom, nodes_updated, c, template_id);
+                                }
                             }
                         }
-                        let roots = template
+                        let template = self.templates.get(&template_id).unwrap();
+                        let roots: Vec<_> = template
                             .roots
                             .iter()
                             .map(|n| GlobalNodeId::TemplateId {
@@ -370,11 +388,14 @@ impl<S: State> RealDom<S> {
                             .collect();
                         let template_ref = TemplateRefOrNode::Ref {
                             nodes,
-                            roots,
+                            roots: roots.clone(),
                             parent: None,
                         };
                         self.resize_to(id.0);
                         self.nodes[id.0] = Some(Box::new(template_ref));
+                        for node_id in roots {
+                            update_refrences(self, &mut nodes_updated, node_id, id);
+                        }
                         self.node_stack.push(dioxus_core::GlobalNodeId::VNodeId(id));
                     }
                     CreateTemplate { id } => {
@@ -414,7 +435,26 @@ impl<S: State> RealDom<S> {
         debug_assert_eq!(self.template_in_progress, None);
 
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-        nodes_updated.retain(|n| self.get(n.0).is_some());
+        nodes_updated.retain(|n| match &n.0 {
+            GlobalNodeId::TemplateId {
+                template_ref_id,
+                template_node_id,
+            } => self
+                .templates
+                .get(&RendererTemplateId(template_ref_id.0))
+                .and_then(|t| t.nodes.get(template_node_id.0))
+                .is_some(),
+            GlobalNodeId::VNodeId(n) => self
+                .nodes
+                .get(n.0)
+                .map(|o| o.as_ref())
+                .flatten()
+                .and_then(|n| match &**n {
+                    TemplateRefOrNode::Ref { .. } => None,
+                    TemplateRefOrNode::Node(_) => Some(n),
+                })
+                .is_some(),
+        });
 
         nodes_updated
     }
