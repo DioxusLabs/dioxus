@@ -12,8 +12,8 @@ async fn main() -> Result<()> {
         required: vec![],
     });
     
-    if !plugin_state {
-        log::error!("🚫 Plugin system initialization failed");
+    if let Err(e) = plugin_state {
+        log::error!("🚫 Plugin system initialization failed: {e}");
         exit(1);
     }
 

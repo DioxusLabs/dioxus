@@ -18,9 +18,9 @@ pub enum Tool {
     Tailwind,
 }
 
-pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen", "sass", "tailwindcss"]
-}
+// pub fn tool_list() -> Vec<&'static str> {
+//     vec!["binaryen", "sass", "tailwindcss"]
+// }
 
 pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();

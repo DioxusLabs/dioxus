@@ -37,18 +37,13 @@ pub struct PluginConfig {
 pub struct PluginManager;
 
 impl PluginManager {
-    pub fn init(config: &PluginConfig) -> bool {
-
-        let lua = if let Ok(v) = LUA.lock() {
-            v
-        } else {
-            return false;
-        };
+    pub fn init(config: &PluginConfig) -> anyhow::Result<()> {
+        let lua = LUA.lock().unwrap();
 
         if !config.available {
             // // if plugin system is available, just set manager to nil.
             // lua.globals().set("manager", mlua::Value::Nil).unwrap();
-            return true;
+            return Ok(());
         }
 
         let manager = lua.create_table().unwrap();
@@ -71,11 +66,7 @@ impl PluginManager {
 
         let mut index: u32 = 1;
         let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
-        let dirs = if let Ok(v) = std::fs::read_dir(&plugin_dir) {
-            v
-        } else {
-            return false;
-        };
+        let dirs = std::fs::read_dir(&plugin_dir)?;
         for entry in dirs {
             if entry.is_err() {
                 continue;
@@ -132,11 +123,10 @@ impl PluginManager {
                 file.write_all(buffer).unwrap();
             }
         }
-        true
+        return Ok(());
     }
 
     pub fn on_build_start(crate_config: &CrateConfig, platform: &str) -> anyhow::Result<()> {
-
         let lua = LUA.lock().unwrap();
 
         if !lua.globals().contains_key("manager")? {
@@ -249,7 +239,7 @@ impl PluginManager {
         Ok(())
     }
 
-    fn init_plugin_dir() -> PathBuf {
+    pub fn init_plugin_dir() -> PathBuf {
         let app_path = app_path();
         let plugin_path = app_path.join("plugins");
         if !plugin_path.is_dir() {
@@ -258,5 +248,23 @@ impl PluginManager {
             clone_repo(&plugin_path, url).unwrap();
         }
         plugin_path
+    }
+
+    pub fn plugin_list() -> Vec<String> {
+        let mut res = vec![];
+
+        let app_path = app_path();
+        let plugin_path = app_path.join("plugins");
+
+        let child_dirs = std::fs::read_dir(plugin_path).unwrap();
+        for p in child_dirs {
+            if let Ok(p) = p {
+                if p.path().is_dir() && p.file_name() != "library" {
+                    res.push(p.file_name().to_str().unwrap().to_string());
+                }
+            }
+        }
+
+        res
     }
 }
