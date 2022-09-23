@@ -65,6 +65,7 @@ impl<S: State> RealDom<S> {
         mutations_vec: Vec<Mutations>,
     ) -> Vec<(GlobalNodeId, NodeMask)> {
         let mut nodes_updated = Vec::new();
+        nodes_updated.push((GlobalNodeId::VNodeId(ElementId(0)), NodeMask::ALL));
         for mutations in mutations_vec {
             for e in mutations.edits {
                 use dioxus_core::DomEdit::*;
@@ -84,8 +85,8 @@ impl<S: State> RealDom<S> {
                             .drain(self.node_stack.len() - many as usize..)
                             .collect();
                         for id in drained {
-                            self.link_child(id, target).unwrap();
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
+                            self.link_child(id, target).unwrap();
                         }
                     }
                     ReplaceWith { root, m } => {
@@ -311,6 +312,16 @@ impl<S: State> RealDom<S> {
                         let mut nodes = template.nodes.clone();
                         let id = ElementId(id as usize);
                         for n in nodes.iter_mut().filter_map(|n| n.as_mut()) {
+                            if let Some(GlobalNodeId::TemplateId {
+                                template_ref_id: ElementId(0),
+                                template_node_id,
+                            }) = n.node_data.parent
+                            {
+                                n.node_data.parent = Some(GlobalNodeId::TemplateId {
+                                    template_ref_id: id,
+                                    template_node_id,
+                                });
+                            }
                             if let GlobalNodeId::TemplateId {
                                 template_node_id, ..
                             } = n.node_data.id
@@ -442,9 +453,6 @@ impl<S: State> RealDom<S> {
             if let TemplateRefOrNode::Ref { .. } = &**self.nodes[id.0].as_ref().unwrap() {
                 return Some(());
             }
-        }
-        if self.template_in_progress.is_some() {
-            return Some(());
         }
         let mut created = false;
         if let GlobalNodeId::VNodeId(id) = child_id {
