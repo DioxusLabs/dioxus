@@ -93,7 +93,10 @@ impl<S: State> RealDom<S> {
                         let id = self.decode_id(root);
                         let root = self.remove(id).unwrap();
                         let target = root.parent().unwrap();
-                        let drained: Vec<_> = self.node_stack.drain(0..m as usize).collect();
+                        let drained: Vec<_> = self
+                            .node_stack
+                            .drain(self.node_stack.len() - m as usize..)
+                            .collect();
                         for id in drained {
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
@@ -101,7 +104,10 @@ impl<S: State> RealDom<S> {
                     }
                     InsertAfter { root, n } => {
                         let target = self[root as usize].node_data.parent.unwrap();
-                        let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
+                        let drained: Vec<_> = self
+                            .node_stack
+                            .drain(self.node_stack.len() - n as usize..)
+                            .collect();
                         for id in drained {
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
@@ -109,7 +115,10 @@ impl<S: State> RealDom<S> {
                     }
                     InsertBefore { root, n } => {
                         let target = self[root as usize].node_data.parent.unwrap();
-                        let drained: Vec<_> = self.node_stack.drain(0..n as usize).collect();
+                        let drained: Vec<_> = self
+                            .node_stack
+                            .drain(self.node_stack.len() - n as usize..)
+                            .collect();
                         for id in drained {
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                             self.link_child(id, target).unwrap();
@@ -457,7 +466,7 @@ impl<S: State> RealDom<S> {
         let mut created = false;
         if let GlobalNodeId::VNodeId(id) = child_id {
             let unbounded_self: &mut Self = unsafe { std::mem::transmute(&*self as *const Self) };
-            if let TemplateRefOrNode::Ref { roots, .. } = &mut **self.nodes[id.0].as_mut()? {
+            if let TemplateRefOrNode::Ref { roots, .. } = &**self.nodes[id.0].as_mut()? {
                 // this is safe because we know that no parent will be it's own child
                 let parent = &mut unbounded_self[parent_id];
                 for r in roots {
@@ -582,7 +591,8 @@ impl<S: State> RealDom<S> {
                     template_node_id,
                 } => {
                     let template_ref = &mut dom.nodes[template_ref_id.0].as_mut().unwrap();
-                    if let TemplateRefOrNode::Ref { nodes, .. } = template_ref.as_mut() {
+                    if let TemplateRefOrNode::Ref { nodes, roots, .. } = template_ref.as_mut() {
+                        roots.retain(|r| *r != id);
                         TemplateRefOrNode::Node(*nodes[template_node_id.0].take().unwrap())
                     } else {
                         unreachable!()
@@ -608,7 +618,8 @@ impl<S: State> RealDom<S> {
                 template_node_id,
             } => {
                 let template_ref = &mut self.nodes[template_ref_id.0].as_mut().unwrap();
-                if let TemplateRefOrNode::Ref { nodes, .. } = template_ref.as_mut() {
+                if let TemplateRefOrNode::Ref { nodes, roots, .. } = template_ref.as_mut() {
+                    roots.retain(|r| *r != id);
                     TemplateRefOrNode::Node(*nodes[template_node_id.0].take().unwrap())
                 } else {
                     unreachable!()
