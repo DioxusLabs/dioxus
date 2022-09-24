@@ -66,7 +66,7 @@ use futures_util::FutureExt;
 mod cache;
 mod cfg;
 mod dom;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 mod rehydrate;
 mod ric_raf;
@@ -174,7 +174,7 @@ pub fn launch_with_props<T>(
 pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     hot_reload::init(&dom);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {

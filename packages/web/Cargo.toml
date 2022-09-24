@@ -71,12 +71,20 @@ features = [
     "SvgAnimatedString",
     "HtmlOptionElement",
     "IdleDeadline",
+    "WebSocket",
+    "Location",
+    "MessageEvent",
+    "console",
 ]
+
+[target.'cfg(debug_assertions)'.dependencies]
+serde_json = { version = "1.0" }
 
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
-hot-reload = ["web-sys/WebSocket", "web-sys/Location", "web-sys/MessageEvent", "web-sys/console", "serde_json", "dioxus/hot-reload"]
+hot-reload = ["serde_json", "dioxus/hot-reload"]
+
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

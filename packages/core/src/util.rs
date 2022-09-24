@@ -86,7 +86,7 @@ impl<'a> Iterator for ElementIdIterator<'a> {
 }
 
 /// This intentionally leaks once per element name to allow more flexability when hot reloding templetes
-#[cfg(all(feature = "hot-reload", feature = "serde"))]
+#[cfg(all(any(feature = "hot-reload", debug_assertions), feature = "serde"))]
 mod leaky {
     use std::sync::Mutex;
 
@@ -123,5 +123,5 @@ mod leaky {
     }
 }
 
-#[cfg(all(feature = "hot-reload", feature = "serde"))]
+#[cfg(all(any(feature = "hot-reload", debug_assertions), feature = "serde"))]
 pub use leaky::*;

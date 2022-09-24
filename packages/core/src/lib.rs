@@ -77,7 +77,7 @@ pub use crate::innerlude::{
     TemplateValue, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
     VFragment, VNode, VPlaceholder, VText, VirtualDom, JS_MAX_INT,
 };
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 pub use crate::innerlude::{
     OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
     SetTemplateMsg,
@@ -88,7 +88,7 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::get_line_num;
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     pub use crate::innerlude::OwnedTemplate;
     pub use crate::innerlude::{
         fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,

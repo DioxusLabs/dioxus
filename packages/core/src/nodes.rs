@@ -410,13 +410,13 @@ type StaticStr = &'static str;
 #[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(
-    all(feature = "serialize", feature = "hot-reload"),
+    all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Deserialize)
 )]
 pub struct AttributeDiscription {
     /// The name of the attribute.
     #[cfg_attr(
-        all(feature = "serialize", feature = "hot-reload"),
+        all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
         serde(deserialize_with = "crate::util::deserialize_static_leaky")
     )]
     pub name: StaticStr,
@@ -426,7 +426,7 @@ pub struct AttributeDiscription {
     /// Doesn't exist in the html spec.
     /// Used in Dioxus to denote "style" tags and other attribute groups.
     #[cfg_attr(
-        all(feature = "serialize", feature = "hot-reload"),
+        all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
         serde(deserialize_with = "crate::util::deserialize_static_leaky_ns")
     )]
     pub namespace: Option<StaticStr>,

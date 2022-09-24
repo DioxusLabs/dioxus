@@ -13,13 +13,13 @@
 
 #[macro_use]
 mod errors;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod attributes;
 mod component;
 mod element;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod elements;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod error;
 mod ifmt;
 mod node;
@@ -30,7 +30,7 @@ pub use component::*;
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 pub use template::{try_parse_template, DynamicTemplateContextBuilder};
 
 // imports

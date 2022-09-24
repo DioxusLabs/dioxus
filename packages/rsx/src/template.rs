@@ -6,7 +6,7 @@ use quote::TokenStreamExt;
 use quote::{quote, ToTokens};
 use syn::{Expr, Ident, LitStr};
 
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 pub fn try_parse_template(
     rsx: &str,
     location: OwnedCodeLocation,
@@ -30,9 +30,9 @@ pub fn try_parse_template(
     Ok((template_builder.try_into_owned(&location)?, dyn_ctx))
 }
 
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 use hot_reload_imports::*;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload_imports {
     pub use crate::{
         attributes::attrbute_to_static_str,
@@ -58,7 +58,7 @@ struct TemplateElementBuilder {
 }
 
 impl TemplateElementBuilder {
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -147,7 +147,7 @@ struct TemplateAttributeBuilder {
 }
 
 impl TemplateAttributeBuilder {
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -254,7 +254,7 @@ enum TemplateNodeTypeBuilder {
 }
 
 impl TemplateNodeTypeBuilder {
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(
         self,
         location: &OwnedCodeLocation,
@@ -307,7 +307,7 @@ struct TemplateNodeBuilder {
 }
 
 impl TemplateNodeBuilder {
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNode, Error> {
         let TemplateNodeBuilder { id, node_type } = self;
         let node_type = node_type.try_into_owned(location)?;
@@ -396,7 +396,7 @@ impl TemplateBuilder {
     }
 
     /// Create a template builder from nodes regardless of performance.
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn from_roots_always(roots: Vec<BodyNode>) -> Self {
         let mut builder = Self::default();
 
@@ -550,7 +550,7 @@ impl TemplateBuilder {
         id
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     pub fn try_switch_dynamic_context(
         mut self,
         dynamic_context: DynamicTemplateContextBuilder,
@@ -619,7 +619,7 @@ impl TemplateBuilder {
         Some(self)
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     pub fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplate, Error> {
         let mut nodes = Vec::new();
         let dynamic_mapping = self.dynamic_mapping(&nodes);
@@ -634,7 +634,7 @@ impl TemplateBuilder {
         })
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     pub fn dynamic_mapping(
         &self,
         resolved_nodes: &Vec<OwnedTemplateNode>,
