@@ -104,7 +104,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     InsertAfter { root, n } => {
-                        let target = self[root as usize].node_data.parent.unwrap();
+                        let target = self.parent(self.decode_id(root)).unwrap();
                         let drained: Vec<_> = self
                             .node_stack
                             .drain(self.node_stack.len() - n as usize..)
@@ -115,7 +115,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     InsertBefore { root, n } => {
-                        let target = self[root as usize].node_data.parent.unwrap();
+                        let target = self.parent(self.decode_id(root)).unwrap();
                         let drained: Vec<_> = self
                             .node_stack
                             .drain(self.node_stack.len() - n as usize..)
@@ -126,7 +126,7 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     Remove { root } => {
-                        if let Some(parent) = self[root as usize].node_data.parent {
+                        if let Some(parent) = self.parent(self.decode_id(root)) {
                             self.mark_dirty(parent, NodeMask::NONE, &mut nodes_updated);
                         }
                         let id = self.decode_id(root);
@@ -435,28 +435,6 @@ impl<S: State> RealDom<S> {
         debug_assert!(self.template_stack.is_empty());
         debug_assert_eq!(self.template_in_progress, None);
 
-        // println!("nodes updated: {:?}", nodes_updated);
-        // println!(
-        //     "templates:\n{:#?}",
-        //     self.nodes
-        //         .iter()
-        //         .filter_map(|n| n.as_ref().map(|n| match &**n {
-        //             TemplateRefOrNode::Ref {
-        //                 nodes,
-        //                 roots,
-        //                 parent,
-        //             } => format!(
-        //                 "ref:\n\tnodes: {:?}",
-        //                 nodes
-        //                     .iter()
-        //                     .filter_map(|n| n.as_ref().map(|n| format!("{:?}", n.node_data)))
-        //                     .collect::<Vec<_>>()
-        //             ),
-        //             TemplateRefOrNode::Node(n) => format!("{:?}", n.node_data),
-        //         }))
-        //         .collect::<Vec<_>>()
-        // );
-
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
         nodes_updated.retain(|n| match &n.0 {
             GlobalNodeId::TemplateId {
@@ -468,7 +446,9 @@ impl<S: State> RealDom<S> {
                 .map(|o| o.as_ref())
                 .flatten()
                 .and_then(|t| match &**t {
-                    TemplateRefOrNode::Ref { nodes, .. } => nodes.get(template_node_id.0),
+                    TemplateRefOrNode::Ref { nodes, .. } => {
+                        nodes.get(template_node_id.0).map(|o| o.as_ref()).flatten()
+                    }
                     TemplateRefOrNode::Node(_) => None,
                 })
                 .is_some(),
@@ -483,8 +463,6 @@ impl<S: State> RealDom<S> {
                 })
                 .is_some(),
         });
-
-        // println!("nodes updated: {:?}", nodes_updated);
 
         nodes_updated
     }
@@ -1039,7 +1017,8 @@ impl<T: State> Traversable for RealDom<T> {
     type Node = Node<T>;
 
     fn height(&self, id: Self::Id) -> Option<u16> {
-        Some(<Self as Traversable>::get(self, id)?.node_data.height)
+        let node = <Self as Traversable>::get(self, id);
+        Some(node?.node_data.height)
     }
 
     fn get(&self, id: Self::Id) -> Option<&Self::Node> {
@@ -1118,7 +1097,32 @@ impl<T: State> Traversable for RealDom<T> {
     }
 
     fn parent(&self, id: Self::Id) -> Option<Self::Id> {
-        <Self as Traversable>::get(self, id).and_then(|n| n.node_data.parent)
+        match id {
+            GlobalNodeId::VNodeId(id) => self.nodes.get(id.0).as_ref()?.as_ref()?.parent(),
+            GlobalNodeId::TemplateId {
+                template_ref_id,
+                template_node_id,
+            } => {
+                if self.template_in_progress.is_some() {
+                    let template = self.current_template().unwrap();
+                    template.nodes[template_node_id.0]
+                        .as_ref()
+                        .map(|n| n.as_ref())
+                } else {
+                    let nodes = match self.nodes.get(template_ref_id.0)?.as_ref()?.as_ref() {
+                        TemplateRefOrNode::Ref { nodes, .. } => nodes,
+                        TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
+                    };
+
+                    nodes
+                        .get(template_node_id.0)
+                        .map(|n| n.as_deref())
+                        .flatten()
+                }?
+                .node_data
+                .parent
+            }
+        }
     }
 }
 
