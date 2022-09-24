@@ -24,8 +24,8 @@ impl<T> PartialEq for LazyStaticVec<T> {
     }
 }
 
-// Stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
-// This makes adding constant template nodes add no additional cost to diffing.
+/// Stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
+/// This makes adding constant template nodes add no additional cost to diffing.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct DynamicNodeMapping<
@@ -45,12 +45,17 @@ pub struct DynamicNodeMapping<
     Volatile: AsRef<[(TemplateNodeId, usize)]>,
     Listeners: AsRef<[TemplateNodeId]>,
 {
+    /// The node that depend on each node in the dynamic template
     pub nodes: Nodes,
     text_inner: PhantomData<TextInner>,
+    /// The text nodes that depend on each text segment of the dynamic template
     pub text: TextOuter,
+    /// The attributes along with the attribute index in the template that depend on each attribute of the dynamic template
     pub attributes: AttributesOuter,
     attributes_inner: PhantomData<AttributesInner>,
+    /// The attributes that are marked as volatile in the template
     pub volatile_attributes: Volatile,
+    /// The listeners that depend on each listener of the dynamic template
     pub nodes_with_listeners: Listeners,
 }
 
@@ -73,6 +78,7 @@ where
     Volatile: AsRef<[(TemplateNodeId, usize)]>,
     Listeners: AsRef<[TemplateNodeId]>,
 {
+    /// Creates a new dynamic node mapping
     pub const fn new(
         nodes: Nodes,
         text: TextOuter,
@@ -154,7 +160,8 @@ pub struct TemplateContext<'b> {
 }
 
 impl<'b> TemplateContext<'b> {
-    pub(crate) fn resolve_text<TextSegments, Text>(&self, text: &TextSegments) -> String
+    /// Resolve text segments to a string
+    pub fn resolve_text<TextSegments, Text>(&self, text: &TextSegments) -> String
     where
         TextSegments: AsRef<[TextTemplateSegment<Text>]>,
         Text: AsRef<str>,
@@ -169,11 +176,18 @@ impl<'b> TemplateContext<'b> {
         result
     }
 
-    pub(crate) fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b> {
+    /// Resolve an attribute value
+    pub fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b> {
         &self.attributes[idx]
     }
 
-    pub(crate) fn resolve_listener(&self, idx: usize) -> &'b Listener<'b> {
+    /// Resolve a listener
+    pub fn resolve_listener(&self, idx: usize) -> &'b Listener<'b> {
         &self.listeners[idx]
+    }
+
+    /// Resolve a node
+    pub fn resolve_node(&self, idx: usize) -> &'b VNode<'b> {
+        &self.nodes[idx]
     }
 }

@@ -471,6 +471,7 @@ impl VirtualDom {
     #[allow(unused)]
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
+        self.scopes.template_bump.reset();
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
@@ -717,6 +718,19 @@ impl VirtualDom {
         edit.diff_node(old, new);
 
         (create.mutations, edit.mutations)
+    }
+
+    /// Runs a function with the template associated with a given id.
+    pub fn with_template<R>(&self, id: &TemplateId, mut f: impl FnMut(&Template) -> R) -> R {
+        self.scopes
+            .templates
+            .borrow()
+            .get(id)
+            .map(|inner| {
+                let borrow = &*inner;
+                f(&borrow.borrow())
+            })
+            .unwrap()
     }
 }
 

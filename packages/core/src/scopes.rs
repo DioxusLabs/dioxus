@@ -45,7 +45,6 @@ pub(crate) struct ScopeArena {
     pub template_resolver: RefCell<TemplateResolver>,
     pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
-    // todo: this allocates memory without dropping, but only when allocating templates so it should be minimal.
     pub template_bump: Bump,
 }
 

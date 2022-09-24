@@ -68,13 +68,14 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     AnyEvent, Attribute, AttributeDiscription, AttributeValue, CodeLocation, Component,
-    DioxusElement, DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority,
-    GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations, NodeFactory, OwnedAttributeValue,
-    Properties, RendererTemplateId, SchedulerMsg, Scope, ScopeId, ScopeState, StaticCodeLocation,
-    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, Template,
-    TemplateAttribute, TemplateAttributeValue, TemplateElement, TemplateNodeId, TemplateNodeType,
-    TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode,
-    VPlaceholder, VText, VirtualDom, JS_MAX_INT,
+    DioxusElement, DomEdit, DynamicNodeMapping, Element, ElementId, ElementIdIterator,
+    EventHandler, EventPriority, GlobalNodeId, IntoVNode, LazyNodes, Listener, Mutations,
+    NodeFactory, OwnedAttributeValue, Properties, RendererTemplateId, SchedulerMsg, Scope, ScopeId,
+    ScopeState, StaticCodeLocation, StaticDynamicNodeMapping, StaticTemplateNode,
+    StaticTemplateNodes, TaskId, Template, TemplateAttribute, TemplateAttributeValue,
+    TemplateContext, TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType,
+    TemplateValue, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
+    VFragment, VNode, VPlaceholder, VText, VirtualDom, JS_MAX_INT,
 };
 #[cfg(feature = "hot-reload")]
 pub use crate::innerlude::{

@@ -283,9 +283,9 @@ impl Into<u64> for TemplateNodeId {
 
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
-    pub(crate) id: Cell<Option<ElementId>>,
-    pub(crate) template_id: TemplateId,
-    pub(crate) dynamic_context: TemplateContext<'a>,
+    pub id: Cell<Option<ElementId>>,
+    pub template_id: TemplateId,
+    pub dynamic_context: TemplateContext<'a>,
 }
 
 impl<'a> VTemplateRef<'a> {
@@ -492,17 +492,6 @@ impl Template {
         }
     }
 
-    #[cfg(not(feature = "hot-reload"))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx)
-    where
-        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-    {
-        match self {
-            Template::Static(s) => f1(&s.nodes, ctx),
-        }
-    }
-
     #[cfg(feature = "hot-reload")]
     pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
     where
@@ -512,6 +501,17 @@ impl Template {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
             Template::Owned(o) => f2(&o.nodes, ctx),
+        }
+    }
+
+    #[cfg(not(feature = "hot-reload"))]
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx)
+    where
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+    {
+        match self {
+            Template::Static(s) => f1(&s.nodes, ctx),
         }
     }
 
@@ -696,7 +696,8 @@ where
             TemplateNodeType::DynamicNode(idx) => {
                 drop(self);
                 // this will only be triggered for root elements
-                let created = diff_state.create_node(&template_ref.dynamic_context.nodes[*idx]);
+                let created =
+                    diff_state.create_node(&template_ref.dynamic_context.resolve_node(*idx));
                 diff_state.mutations.replace_with(self.id, created as u32);
             }
         }
@@ -731,7 +732,9 @@ pub enum TemplateAttributeValue<V: TemplateValue> {
     Dynamic(usize),
 }
 
+/// The value for an attribute in a template
 pub trait TemplateValue {
+    /// Allocates the attribute in a bump allocator
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b>;
 }
 
