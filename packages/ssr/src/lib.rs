@@ -33,7 +33,7 @@ impl SsrRenderer {
             TextRenderer {
                 cfg: self.cfg.clone(),
                 root: &root,
-                vdom: None,
+                vdom: Some(&self.vdom),
                 bump: bumpalo::Bump::new(),
             }
         )
@@ -59,15 +59,18 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
 
     let root = f.into_vnode(NodeFactory::new(scope));
 
-    format!(
-        "{:}",
-        TextRenderer {
-            cfg: SsrConfig::default(),
-            root: &root,
-            vdom: None,
-            bump: bumpalo::Bump::new()
-        }
-    )
+    let vdom = Some(&vdom);
+
+    let ssr_renderer = TextRenderer {
+        cfg: SsrConfig::default(),
+        root: &root,
+        vdom,
+        bump: bumpalo::Bump::new(),
+    };
+    let r = ssr_renderer.to_string();
+    drop(ssr_renderer);
+    drop(vdom);
+    r
 }
 
 pub fn render_vdom(dom: &VirtualDom) -> String {
@@ -118,21 +121,21 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 /// let output = format!("{}", renderer);
 /// assert_eq!(output, "<div>hello world</div>");
 /// ```
-pub struct TextRenderer<'a, 'b> {
-    vdom: Option<&'a VirtualDom>,
+pub struct TextRenderer<'a, 'b, 'c> {
+    vdom: Option<&'c VirtualDom>,
     root: &'b VNode<'a>,
     cfg: SsrConfig,
     bump: bumpalo::Bump,
 }
 
-impl Display for TextRenderer<'_, '_> {
+impl<'a: 'c, 'c> Display for TextRenderer<'a, '_, 'c> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut last_node_was_text = false;
         self.html_render(self.root, f, 0, &mut last_node_was_text)
     }
 }
 
-impl<'a> TextRenderer<'a, '_> {
+impl<'a> TextRenderer<'a, '_, 'a> {
     pub fn from_vdom(vdom: &'a VirtualDom, cfg: SsrConfig) -> Self {
         Self {
             cfg,
@@ -141,7 +144,9 @@ impl<'a> TextRenderer<'a, '_> {
             bump: bumpalo::Bump::new(),
         }
     }
+}
 
+impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
     fn html_render(
         &self,
         node: &VNode,
@@ -265,6 +270,8 @@ impl<'a> TextRenderer<'a, '_> {
                         };
                         Ok(())
                     })?
+                } else {
+                    panic!("Cannot render template without vdom");
                 }
             }
         }
