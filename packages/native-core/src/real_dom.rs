@@ -1,6 +1,5 @@
 use anymap::AnyMap;
 use fxhash::{FxHashMap, FxHashSet};
-use std::fmt::format;
 use std::ops::{Index, IndexMut};
 
 use dioxus_core::{
@@ -533,12 +532,15 @@ impl<S: State> RealDom<S> {
         let parent_height = parent.node_data.height + 1;
         match child_id {
             GlobalNodeId::VNodeId(id) => {
-                self.nodes
-                    .get_mut(id.0)
-                    .unwrap()
-                    .as_mut()
-                    .unwrap()
-                    .set_parent(parent_id);
+                match &mut **self.nodes.get_mut(id.0).unwrap().as_mut().unwrap() {
+                    TemplateRefOrNode::Ref { roots, parent, .. } => {
+                        *parent = Some(parent_id);
+                        for r in roots.clone() {
+                            self[r].node_data.parent = Some(parent_id);
+                        }
+                    }
+                    TemplateRefOrNode::Node(n) => n.node_data.parent = Some(parent_id),
+                }
             }
             GlobalNodeId::TemplateId {
                 template_ref_id,

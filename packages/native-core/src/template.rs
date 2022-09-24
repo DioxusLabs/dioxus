@@ -41,11 +41,4 @@ impl<S: State> TemplateRefOrNode<S> {
             TemplateRefOrNode::Node(node) => node.node_data.parent,
         }
     }
-
-    pub fn set_parent(&mut self, parent: GlobalNodeId) {
-        match self {
-            TemplateRefOrNode::Ref { parent: p, .. } => *p = Some(parent),
-            TemplateRefOrNode::Node(node) => node.node_data.parent = Some(parent),
-        }
-    }
 }
