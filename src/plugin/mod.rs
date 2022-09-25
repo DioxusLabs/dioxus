@@ -260,7 +260,9 @@ impl PluginManager {
         for p in child_dirs {
             if let Ok(p) = p {
                 if p.path().is_dir() && p.file_name() != "library" {
-                    res.push(p.file_name().to_str().unwrap().to_string());
+                    if p.path().join("init.lua").is_file() {
+                        res.push(p.file_name().to_str().unwrap().to_string());
+                    }
                 }
             }
         }
