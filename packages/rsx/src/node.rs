@@ -3,9 +3,10 @@ use super::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
+    braced,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Expr, LitStr, Result,
+    token, Expr, LitStr, Pat, Result,
 };
 
 /*
@@ -21,6 +22,7 @@ pub enum BodyNode {
     Element(Element),
     Component(Component),
     Text(LitStr),
+    ForLoop(ForLoop),
     RawExpr(Expr),
 }
 
@@ -35,6 +37,7 @@ impl BodyNode {
             BodyNode::Component(component) => component.name.span(),
             BodyNode::Text(text) => text.span(),
             BodyNode::RawExpr(exp) => exp.span(),
+            BodyNode::ForLoop(fl) => fl.for_token.span(),
         }
     }
 }
@@ -83,12 +86,29 @@ impl Parse for BodyNode {
             // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) {
                 Component::validate_component_path(&path)?;
-
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }
 
-        Ok(BodyNode::RawExpr(stream.parse::<Expr>()?))
+        if stream.peek(Token![for]) {
+            let _f = stream.parse::<Token![for]>()?;
+            let pat = stream.parse::<syn::Pat>()?;
+            let _i = stream.parse::<Token![in]>()?;
+            let expr = stream.parse::<Box<Expr>>()?;
+
+            let body;
+            braced!(body in stream);
+
+            Ok(BodyNode::ForLoop(ForLoop {
+                for_token: _f,
+                pat,
+                in_token: _i,
+                expr,
+                body: body.parse()?,
+            }))
+        } else {
+            Ok(BodyNode::RawExpr(stream.parse::<Expr>()?))
+        }
     }
 }
 
@@ -103,6 +123,28 @@ impl ToTokens for BodyNode {
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
+            BodyNode::ForLoop(exp) => {
+                let ForLoop {
+                    pat, expr, body, ..
+                } = exp;
+
+                tokens.append_all(quote! {
+                     __cx.fragment_from_iter(
+                        #expr.map(|#pat| {
+                            #body
+                        })
+                     )
+                })
+            }
         }
     }
+}
+
+#[derive(PartialEq, Eq)]
+pub struct ForLoop {
+    pub for_token: Token![for],
+    pub pat: Pat,
+    pub in_token: Token![in],
+    pub expr: Box<Expr>,
+    pub body: Box<Expr>,
 }

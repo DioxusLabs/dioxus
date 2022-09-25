@@ -15,5 +15,11 @@ fn app(cx: Scope) -> Element {
             .collect::<Vec<_>>(),
         // Use optionals
         Some(rsx! { "Some" }),
+        //
+        div {
+            for name in (0..10) {
+                rsx! { "{name}" }
+            }
+        }
     ))
 }
