@@ -48,7 +48,7 @@ impl AtomRoot {
         true
     }
 
-    fn update_selector<V>(&self, selector: Selector<V>, value: *mut V) {
+    fn update_selector<V: PartialEq>(&self, selector: Selector<V>, value: *mut V) {
         let mut s = self.selections.borrow_mut();
 
         let s_ptr = selector as *const ();
@@ -58,6 +58,17 @@ impl AtomRoot {
             deps: HashSet::new(),
             val: value as *mut (),
         });
+
+        unsafe {
+            let old = selection.val as *const V;
+            let new = value as *const V;
+
+            let old = &*old;
+            let new = &*new;
+            if old != new {
+                // update all dep selectors and components
+            }
+        }
 
         selection.val = value as *mut ();
     }
@@ -121,7 +132,7 @@ pub const fn atom<V>(f: fn() -> V) -> Atom<V> {
     Atom { f, id }
 }
 
-pub fn use_selector<'a, V>(cx: &'a ScopeState, selector: fn(Select<'a>) -> V) -> &'a V {
+pub fn use_selector<'a, V: PartialEq>(cx: &'a ScopeState, selector: fn(Select<'a>) -> V) -> &'a V {
     let root = use_atom_root(cx);
 
     struct UseSelector {
