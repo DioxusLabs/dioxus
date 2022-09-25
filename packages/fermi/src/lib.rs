@@ -1,20 +1,10 @@
+use dioxus_core::prelude::ScopeId;
+use dioxus_core::ScopeState;
 use std::any::Any;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::{collections::HashMap, rc::Rc};
-
-use dioxus_core::prelude::ScopeId;
-use dioxus_core::ScopeState;
-
-pub type AtomId = &'static str;
-type SelectorId = *const ();
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Dep {
-    Atom(AtomId),
-    Selector(SelectorId),
-}
 
 pub struct AtomRoot {
     atoms: RefCell<HashMap<AtomId, Slot>>,
@@ -27,6 +17,15 @@ struct Selection {
     deps: HashSet<Dep>,
     val: *mut (),
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Dep {
+    Atom(AtomId),
+    Selector(SelectorId),
+}
+
+pub type AtomId = &'static str;
+type SelectorId = *const ();
 
 impl AtomRoot {
     pub(crate) fn new(update_any: Arc<dyn Fn(ScopeId)>) -> Self {
