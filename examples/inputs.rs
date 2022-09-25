@@ -38,12 +38,6 @@ const FIELDS: &[(&str, &str)] = &[
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div { margin_left: "30px",
-
-        // radio group
-
-
-
-
             div {
                 // handling inputs on divs will catch all input events below
                 // so the value of our input event will be either huey, dewey, louie, or true/false (because of the checkboxe)
@@ -127,7 +121,6 @@ fn app(cx: Scope) -> Element {
                         name: "{field}",
                         r#type: "{field}",
                         value: "{value}",
-                        // checked: "false",
                         oninput: move |evt: FormEvent| {
                             println!("{:?}", evt);
                         },

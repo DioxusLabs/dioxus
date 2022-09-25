@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 
@@ -5,14 +7,14 @@ fn main() {
     dioxus_desktop::launch(app);
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum FilterState {
     All,
     Active,
     Completed,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TodoItem {
     pub id: u32,
     pub checked: bool,
@@ -46,7 +48,7 @@ pub fn app(cx: Scope<()>) -> Element {
 
     cx.render(rsx!{
         section { class: "todoapp",
-            style { [include_str!("./assets/todomvc.css")] }
+            style { include_str!("./assets/todomvc.css") }
             div {
                 header { class: "header",
                     h1 {"todos"}
@@ -73,7 +75,7 @@ pub fn app(cx: Scope<()>) -> Element {
                     }
                 }
                 ul { class: "todo-list",
-                    filtered_todos.iter().map(|id| rsx!(todo_entry( key: "{id}", id: *id, todos: todos  )))
+                    filtered_todos.iter().map(|id| rsx!(TodoEntry { key: "{id}", id: *id, todos: todos }))
                 }
                 (!todos.is_empty()).then(|| rsx!(
                     footer { class: "footer",
@@ -86,7 +88,7 @@ pub fn app(cx: Scope<()>) -> Element {
                             li { class: "Active", a { onclick: move |_| filter.set(FilterState::Active), "Active" }}
                             li { class: "Completed", a { onclick: move |_| filter.set(FilterState::Completed), "Completed" }}
                         }
-                        (show_clear_completed).then(|| rsx!(
+                        show_clear_completed.then(|| rsx!(
                             button {
                                 class: "clear-completed",
                                 onclick: move |_| todos.make_mut().retain(|_, todo| !todo.checked),
@@ -111,7 +113,7 @@ pub struct TodoEntryProps<'a> {
     id: u32,
 }
 
-pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
+pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let is_editing = use_state(&cx, || false);
 
     let todos = cx.props.todos.get();
@@ -123,7 +125,6 @@ pub fn todo_entry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
         li {
             class: "{completed} {editing}",
             div { class: "view",
-
                 input {
                     class: "toggle",
                     r#type: "checkbox",

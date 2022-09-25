@@ -288,16 +288,14 @@ mod tests {
             }
 
             let caller = {
-                let it = (0..10)
-                    .map(|i| {
-                        let val = cx.props.inner.clone();
-                        LazyNodes::new(move |f| {
-                            eprintln!("hell closure");
-                            let inner = DropInner { id: i };
-                            f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
-                        })
+                let it = (0..10).map(|i| {
+                    let val = cx.props.inner.clone();
+                    LazyNodes::new(move |f| {
+                        eprintln!("hell closure");
+                        let inner = DropInner { id: i };
+                        f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
                     })
-                    .collect::<Vec<_>>();
+                });
 
                 LazyNodes::new(|f| {
                     eprintln!("main closure");

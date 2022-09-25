@@ -14,15 +14,16 @@
 //! primitives in our own custom components.
 
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 
 fn main() {
-    use dioxus_desktop::tao::dpi::LogicalSize;
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Doggo Fetcher")
-                .with_inner_size(LogicalSize::new(600.0, 800.0))
-        })
-    });
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Doggo Fetcher")
+            .with_inner_size(LogicalSize::new(600.0, 800.0)),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 #[derive(serde::Deserialize)]

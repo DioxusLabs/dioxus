@@ -1,9 +1,14 @@
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| w.with_title("BorderLess Demo").with_decorations(false))
-    });
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Borderless Window")
+            .with_decorations(false),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 fn app(cx: Scope) -> Element {
@@ -84,9 +89,7 @@ fn app(cx: Scope) -> Element {
                     button {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
                         onmousedown: |evt| evt.cancel_bubble(),
-                        onclick: move |_| {
-                            window.set_title("Dioxus Application");
-                        },
+                        onclick: move |_| window.set_title("Dioxus Application"),
                         "Change Title"
                     }
                 }

@@ -9,9 +9,13 @@
 //! we dont need to clutter our code with `read` commands.
 
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_resizable(true)));
+    dioxus_desktop::launch_cfg(
+        app,
+        Config::new().with_window(WindowBuilder::new().with_resizable(true)),
+    );
 }
 
 fn app(cx: Scope) -> Element {
@@ -19,10 +23,10 @@ fn app(cx: Scope) -> Element {
 
     rsx!(cx, div {
         link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
-        style { [include_str!("./assets/fileexplorer.css")] }
+        style { include_str!("./assets/fileexplorer.css") }
         header {
             i { class: "material-icons icon-menu", "menu" }
-            h1 { "Files: " [files.read().current()] }
+            h1 { "Files: ", files.read().current() }
             span { }
             i { class: "material-icons", onclick: move |_| files.write().go_up(), "logout" }
         }
