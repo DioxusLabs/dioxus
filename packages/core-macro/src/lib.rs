@@ -82,7 +82,6 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro]
 pub fn render(s: TokenStream) -> TokenStream {
-
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => quote::quote! {
