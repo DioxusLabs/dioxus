@@ -72,6 +72,7 @@ impl<'a> std::fmt::Display for AttributeValue<'a> {
 }
 
 #[derive(Clone, Copy)]
+#[allow(missing_docs)]
 pub struct ArbitraryAttributeValue<'a> {
     pub value: &'a dyn std::any::Any,
     pub cmp: fn(&'a dyn std::any::Any, &'a dyn std::any::Any) -> bool,
