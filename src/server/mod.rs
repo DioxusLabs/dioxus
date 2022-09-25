@@ -194,8 +194,8 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                         }
                     }
                 }
-                if !messages.is_empty() {
-                    let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
+                if updated {
+                    last_update_time = chrono::Local::now().timestamp();
                 }
             }
             last_update_time = chrono::Local::now().timestamp();
@@ -427,19 +427,17 @@ pub struct PrettierOptions {
 }
 
 fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
-    print!(
-        "{}",
-        String::from_utf8_lossy(
-            &Command::new(if cfg!(target_os = "windows") {
-                "cls"
-            } else {
-                "clear"
-            })
-            .output()
-            .unwrap()
-            .stdout
-        )
-    );
+    if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
+        "cls"
+    } else {
+        "clear"
+    })
+    .output() {
+        print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
+    } else {
+        // Try ANSI-Escape characters
+        print!("\x1b[2J\x1b[H");
+    }
 
     // for path in &changed {
     //     let path = path
