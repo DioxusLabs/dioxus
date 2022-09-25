@@ -130,7 +130,7 @@ impl ToTokens for BodyNode {
 
                 tokens.append_all(quote! {
                      __cx.fragment_from_iter(
-                        #expr.map(|#pat| {
+                        #expr.into_iter().map(|#pat| {
                             #body
                         })
                      )
