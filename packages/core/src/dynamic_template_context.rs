@@ -157,6 +157,8 @@ pub struct TemplateContext<'b> {
     /// The dynamic attributes
     // The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
     pub listeners: &'b [Listener<'b>],
+    /// A optional key for diffing
+    pub key: Option<&'b str>,
 }
 
 impl<'b> TemplateContext<'b> {

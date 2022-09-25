@@ -180,7 +180,7 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => f.key,
             VNode::Text(_t) => None,
             VNode::Placeholder(_f) => None,
-            VNode::TemplateRef(_t) => None,
+            VNode::TemplateRef(t) => t.dynamic_context.key,
         }
     }
 

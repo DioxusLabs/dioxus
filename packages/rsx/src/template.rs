@@ -489,6 +489,12 @@ impl TemplateBuilder {
                         }
                     }
                 }
+                if let Some(key) = el.key {
+                    self.dynamic_context.add_key(quote!(
+                        dioxus::core::exports::bumpalo::format!(in __bump, "{}", #key)
+                            .into_bump_str()
+                    ));
+                }
                 self.nodes.push(TemplateNodeBuilder {
                     id,
                     node_type: TemplateNodeTypeBuilder::Element(TemplateElementBuilder {
@@ -843,6 +849,7 @@ pub struct DynamicTemplateContextBuilder {
     text: Vec<FormattedSegment>,
     attributes: Vec<TokenStream>,
     listeners: Vec<(String, Expr)>,
+    key: Option<TokenStream>,
 }
 
 impl DynamicTemplateContextBuilder {
@@ -877,6 +884,10 @@ impl DynamicTemplateContextBuilder {
 
         listener_id
     }
+
+    fn add_key(&mut self, key: TokenStream) {
+        self.key = Some(key);
+    }
 }
 
 impl ToTokens for DynamicTemplateContextBuilder {
@@ -889,12 +900,17 @@ impl ToTokens for DynamicTemplateContextBuilder {
             .iter()
             .map(|(n, _)| syn::parse_str::<Ident>(n).expect(n));
         let listeners_exprs = self.listeners.iter().map(|(_, e)| e);
+        let key = match &self.key {
+            Some(k) => quote!(Some(#k)),
+            None => quote!(None),
+        };
         tokens.append_all(quote! {
             TemplateContext {
                 nodes: __cx.bump().alloc([#(#nodes),*]),
                 text_segments: __cx.bump().alloc([#(&*dioxus::core::exports::bumpalo::format!(in __bump, "{}", #text).into_bump_str()),*]),
                 attributes: __cx.bump().alloc([#(#attributes),*]),
                 listeners: __cx.bump().alloc([#(dioxus_elements::on::#listeners_names(__cx, #listeners_exprs)),*]),
+                key: #key,
             }
         })
     }
