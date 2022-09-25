@@ -4,7 +4,7 @@ use dioxus::prelude::*;
 #[allow(non_snake_case)]
 fn render_basic() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -44,7 +44,7 @@ fn render_basic() {
 #[allow(non_snake_case)]
 fn render_nested() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -96,7 +96,7 @@ fn render_nested() {
 #[allow(non_snake_case)]
 fn render_custom_attribute() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -144,11 +144,11 @@ fn render_custom_attribute() {
 #[allow(non_snake_case)]
 fn render_component() {
     fn Comp(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -200,7 +200,7 @@ fn render_component() {
 #[allow(non_snake_case)]
 fn render_iterator() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -254,7 +254,7 @@ fn render_iterator() {
 #[allow(non_snake_case)]
 fn render_captured_variable() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);
@@ -309,7 +309,7 @@ fn render_captured_variable() {
 #[allow(non_snake_case)]
 fn render_listener() {
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let dom = VirtualDom::new(Base);

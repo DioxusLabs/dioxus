@@ -30,10 +30,7 @@ impl CapturedContextBuilder {
     }
 
     pub fn from_call_body(body: CallBody) -> Result<Self> {
-        let mut new = Self {
-            custom_context: body.custom_context,
-            ..Default::default()
-        };
+        let mut new = Self::default();
         for node in body.roots {
             new.extend(Self::find_captured(node)?);
         }

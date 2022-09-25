@@ -528,7 +528,7 @@ impl ScopeState {
     ///
     /// ```rust, ignore
     /// fn App(cx: Scope) -> Element {
-    ///     rsx!(cx, div { "Subtree {id}"})
+    ///     render!(div { "Subtree {id}"})
     /// };
     /// ```
     ///
@@ -659,12 +659,12 @@ impl ScopeState {
     ///
     /// static App: Component = |cx| {
     ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
-    ///     rsx!(cx, Child {})
+    ///     render!(Child {})
     /// }
     ///
     /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
-    ///     rsx!(cx, div { "hello {state.0}" })
+    ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
@@ -685,12 +685,12 @@ impl ScopeState {
     ///
     /// static App: Component = |cx| {
     ///     cx.use_hook(|| cx.provide_root_context(SharedState("world")));
-    ///     rsx!(cx, Child {})
+    ///     render!(Child {})
     /// }
     ///
     /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
-    ///     rsx!(cx, div { "hello {state.0}" })
+    ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_root_context<T: 'static + Clone>(&self, value: T) -> T {
