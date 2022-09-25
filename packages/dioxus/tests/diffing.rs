@@ -25,14 +25,46 @@ fn html_and_rsx_generate_the_same_output() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "Hello world" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370496,
+                text: "Hello world",
+                locally_static: true
+            },
             AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            AppendChildren { many: 1 }
         ]
     );
 
-    assert_eq!(change.edits, [SetText { text: "Goodbye world", root: 2 },]);
+    assert_eq!(
+        change.edits,
+        [
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370496,
+                text: "Goodbye world",
+                locally_static: true
+            },
+            AppendChildren { many: 1 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            ReplaceWith { root: 1, m: 1 }
+        ]
+    );
 }
 
 /// Should result in 3 elements on the stack
@@ -49,16 +81,46 @@ fn fragments_create_properly() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "Hello a" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370496,
+                text: "Hello a",
+                locally_static: true
+            },
             AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "div" },
-            CreateTextNode { root: 4, text: "Hello b" },
+            CreateElementTemplate {
+                root: 4503599627370497,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370498,
+                text: "Hello b",
+                locally_static: true
+            },
             AppendChildren { many: 1 },
-            CreateElement { root: 5, tag: "div" },
-            CreateTextNode { root: 6, text: "Hello c" },
+            CreateElementTemplate {
+                root: 4503599627370499,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370500,
+                text: "Hello c",
+                locally_static: true
+            },
             AppendChildren { many: 1 },
-            AppendChildren { many: 3 },
+            FinishTemplate { len: 3 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            AppendChildren { many: 1 }
         ]
     );
 }
@@ -80,8 +142,17 @@ fn empty_fragments_create_anchors() {
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 2, tag: "div" },
-            ReplaceWith { m: 1, root: 1 }
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 0 },
+            ReplaceWith { root: 1, m: 1 }
         ]
     );
 }
@@ -135,15 +206,28 @@ fn empty_fragments_create_anchors_with_many_children() {
     assert_eq!(
         change.edits,
         [
-            CreateElement { tag: "div", root: 2 },
-            CreateTextNode { text: "hello: 0", root: 3 },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "", locally_static: false },
             AppendChildren { many: 1 },
-            CreateElement { tag: "div", root: 4 },
-            CreateTextNode { text: "hello: 1", root: 5 },
-            AppendChildren { many: 1 },
-            CreateElement { tag: "div", root: 6 },
-            CreateTextNode { text: "hello: 2", root: 7 },
-            AppendChildren { many: 1 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 0 },
+            EnterTemplateRef { root: 2 },
+            SetText { root: 4503599627370496, text: "hello: 0" },
+            ExitTemplateRef {},
+            CreateTemplateRef { id: 3, template_id: 0 },
+            EnterTemplateRef { root: 3 },
+            SetText { root: 4503599627370496, text: "hello: 1" },
+            ExitTemplateRef {},
+            CreateTemplateRef { id: 4, template_id: 0 },
+            EnterTemplateRef { root: 4 },
+            SetText { root: 4503599627370496, text: "hello: 2" },
+            ExitTemplateRef {},
             ReplaceWith { root: 1, m: 3 }
         ]
     );
@@ -165,13 +249,19 @@ fn many_items_become_fragment() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { text: "hello", root: 2 },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
             AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "div" },
-            CreateTextNode { text: "hello", root: 4 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 2 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            CreateTemplateRef { id: 2, template_id: 0 },
+            AppendChildren { many: 2 }
         ]
     );
 
@@ -300,10 +390,32 @@ fn two_fragments_with_same_elements_are_differet() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateElement { root: 3, tag: "p" },
-            AppendChildren { many: 3 },
+            CreateTemplate { id: 0 },
+            CreatePlaceholderTemplate { root: 4503599627370495 },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "p",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 2 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            EnterTemplateRef { root: 1 },
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            CreateTemplateRef { id: 3, template_id: 1 },
+            ReplaceWith { root: 4503599627370495, m: 2 },
+            ExitTemplateRef {},
+            AppendChildren { many: 1 }
         ]
     );
     assert_eq!(
@@ -390,7 +502,7 @@ fn keyed_diffing_out_of_order_adds() {
         ]
     );
 }
-/// Should result in moves onl
+/// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_2() {
     let dom = new_dom();
@@ -745,10 +857,24 @@ fn add_nested_elements() {
     assert_eq!(
         change.edits,
         [
-            PushRoot { root: 1 },
-            CreateElement { root: 2, tag: "div" },
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
             AppendChildren { many: 1 },
-            PopRoot {},
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            ReplaceWith { root: 1, m: 1 }
         ]
     );
 }
@@ -797,8 +923,17 @@ fn remove_listeners() {
     assert_eq!(
         change.edits,
         [
-            RemoveEventListener { event: "keyup", root: 1 },
-            RemoveEventListener { event: "keydown", root: 1 },
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            ReplaceWith { root: 1, m: 1 }
         ]
     );
 }
@@ -823,8 +958,20 @@ fn diff_listeners() {
     assert_eq!(
         change.edits,
         [
-            RemoveEventListener { root: 1, event: "keydown" },
-            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 1 }
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: false,
+                fully_static: false
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            EnterTemplateRef { root: 2 },
+            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 4503599627370495 },
+            ExitTemplateRef {},
+            ReplaceWith { root: 1, m: 1 }
         ]
     );
 }
