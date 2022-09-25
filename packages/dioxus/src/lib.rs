@@ -26,7 +26,7 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
 
     #[cfg(feature = "macro")]
-    pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
+    pub use dioxus_core_macro::{format_args_f, inline_props, render, rsx, Props};
 
     #[cfg(feature = "html")]
     pub use dioxus_html as dioxus_elements;

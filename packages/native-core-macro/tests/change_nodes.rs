@@ -13,7 +13,7 @@ struct Empty {}
 fn remove_node() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let vdom = VirtualDom::new(Base);
@@ -87,7 +87,7 @@ fn remove_node() {
 fn add_node() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let vdom = VirtualDom::new(Base);

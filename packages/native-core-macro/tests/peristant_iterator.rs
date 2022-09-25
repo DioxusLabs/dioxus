@@ -15,7 +15,7 @@ struct Empty {}
 fn traverse() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.create_vnodes(rsx! {
@@ -108,7 +108,7 @@ fn traverse() {
 fn persist_removes() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
@@ -196,7 +196,7 @@ fn persist_removes() {
 fn persist_instertions_before() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
@@ -262,7 +262,7 @@ fn persist_instertions_before() {
 fn persist_instertions_after() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(

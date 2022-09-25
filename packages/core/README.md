@@ -7,7 +7,7 @@ To build new apps with Dioxus or to extend the ecosystem with new hooks or compo
 
 ```rust, ignore
 fn app(cx: Scope) -> Element {
-    rsx!(cx, div { "hello world" })
+    render!(div { "hello world" })
 }
 
 fn main() {

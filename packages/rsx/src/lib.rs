@@ -30,25 +30,15 @@ use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    Ident, Result, Token,
+    Result, Token,
 };
 
 pub struct CallBody {
-    pub custom_context: Option<Ident>,
     pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = if input.peek(Ident) && input.peek2(Token![,]) {
-            let name = input.parse::<Ident>()?;
-            input.parse::<Token![,]>()?;
-
-            Some(name)
-        } else {
-            None
-        };
-
         let mut roots = Vec::new();
 
         while !input.is_empty() {
@@ -61,10 +51,7 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self {
-            custom_context,
-            roots,
-        })
+        Ok(Self { roots })
     }
 }
 
@@ -79,22 +66,12 @@ impl ToTokens for CallBody {
             quote! { __cx.fragment_root([ #(#childs),* ]) }
         };
 
-        match &self.custom_context {
-            // The `in cx` pattern allows directly rendering
-            Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                    #inner
-                }))
-            }),
-
-            // Otherwise we just build the LazyNode wrapper
-            None => out_tokens.append_all(quote! {
-                LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                    #inner
-                })
-            }),
-        };
+        // Otherwise we just build the LazyNode wrapper
+        out_tokens.append_all(quote! {
+            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                #inner
+            })
+        })
     }
 }

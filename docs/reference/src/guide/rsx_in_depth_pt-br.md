@@ -53,14 +53,14 @@ As vírgulas são totalmente opcionais, mas podem ser úteis para delinear entre
 
 A função `render` fornece um alocador **extremamente eficiente** para `VNodes` e `text`, então tente não usar a macro `format!` em seus componentes. Os métodos `ToString` padrão do Rust passam pelo alocador global, mas todo o texto nos componentes é alocado dentro de uma ""arena Bump"" gerenciada manualmente. Para levá-lo na direção certa, todos os atributos baseados em texto recebem `std::fmt::Arguments` diretamente, então você vai querer usar `format_args!` quando a interpolação interna `f-string` simplesmente não funcionar.
 
-### Ignorando `cx.render` com `rsx!(cx, ...)`
+### Ignorando `cx.render` com `render!(...)`
 
 Às vezes, escrever `cx.render` é um aborrecimento. O `rsx!` macro aceitará qualquer token seguido por uma vírgula como destino para chamar "render" em:
 
 ```rust
 cx.render(rsx!( div {} ))
 // becomes
-rsx!(cx, div {})
+render!(div {})
 ```
 
 ### Renderização Condicional
@@ -70,9 +70,9 @@ rsx!(cx, div {})
 ```rust
 rsx!({
     if enabled {
-        rsx!(cx, div {"enabled"})
+        render!(div {"enabled"})
     } else {
-        rsx!(cx, li {"disabled"})
+        render!(li {"disabled"})
     }
 })
 ```
@@ -96,8 +96,8 @@ match case {
 
 // the nodes must be rendered first
 match case {
-    true => rsx!(cx, div {}),
-    false => rsx!(cx, div {})
+    true => render!(div {}),
+    false => render!(div {})
 }
 ```
 
@@ -121,10 +121,10 @@ cx.render(rsx!{
 let mut items = vec![];
 
 for _ in 0..5 {
-    items.push(rsx!(cx, li {} ))
+    items.push(render!(li {} ))
 }
 
-rsx!(cx, {items} )
+render!({items} )
 ```
 
 #### Listas e chaves
@@ -137,7 +137,7 @@ Nesses casos, é de vital importância especificar uma "chave" ao lado do elemen
 
 ```rust
 fn render_list(cx: Scope, items: HashMap<String, Todo>) -> DomTree {
-    rsx!(cx, ul {
+    render!(ul {
         {items.iter().map(|key, item| {
             li {
                 key: key,
@@ -209,9 +209,9 @@ cx.render(rsx!{
             // rsx! is lazy, and the underlying closures cannot have the same type
             // Rendering produces the VNode type
             {match rand::gen_range::<i32>(1..3) {
-                1 => rsx!(cx, h1 { "big" })
-                2 => rsx!(cx, h2 { "medium" })
-                _ => rsx!(cx, h3 { "small" })
+                1 => render!(h1 { "big" })
+                2 => render!(h2 { "medium" })
+                _ => render!(h3 { "small" })
             }}
 
             // Optionals

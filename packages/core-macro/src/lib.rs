@@ -72,6 +72,26 @@ pub fn rsx(s: TokenStream) -> TokenStream {
     }
 }
 
+/// The render! macro makes it easy for developers to write jsx-style markup in their components.
+///
+/// The render macro automatically renders rsx - making it unhygenic.
+///
+/// ## Complete Reference Guide:
+/// ```ignore
+#[doc = include_str!("../../../examples/rsx_usage.rs")]
+/// ```
+#[proc_macro]
+pub fn render(s: TokenStream) -> TokenStream {
+    match syn::parse::<rsx::CallBody>(s) {
+        Err(err) => err.to_compile_error().into(),
+        Ok(body) => quote::quote! {
+            cx.render(#body)
+        }
+        .into_token_stream()
+        .into(),
+    }
+}
+
 /// Derive props for a component within the component definition.
 ///
 /// This macro provides a simple transformation from `Scope<{}>` to `Scope<P>`,

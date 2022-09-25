@@ -32,7 +32,7 @@ static TestComponent: Component = |cx|{
 
 #[inline_props]
 fn test_component(cx: Scope, name: String) -> Element {
-    rsx!(cx, "Hello, {name}")
+    render!("Hello, {name}")
 }
 ```
 

@@ -89,7 +89,7 @@ mod util;
 /// }
 ///
 /// static App: Component = |cx| {
-///     rsx!(cx, div {"hello world"})
+///     render!(div {"hello world"})
 /// }
 /// ```
 pub fn launch(root_component: Component) {
@@ -140,7 +140,7 @@ pub fn launch_cfg(root: Component, config: Config) {
 /// }
 ///
 /// static App: Component<RootProps> = |cx| {
-///     rsx!(cx, div {"hello {cx.props.name}"})
+///     render!(div {"hello {cx.props.name}"})
 /// }
 /// ```
 pub fn launch_with_props<T>(root_component: Component<T>, root_properties: T, config: Config)
