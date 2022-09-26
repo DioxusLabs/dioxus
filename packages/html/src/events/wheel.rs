@@ -25,6 +25,8 @@ pub struct WheelEvent {
     pub delta_z: f64,
 }
 
+impl dioxus_core::UiEvent for WheelEvent {}
+
 impl WheelEvent {
     /// Construct a new WheelEvent with the specified wheel movement delta
     pub fn new(delta: WheelDelta) -> Self {

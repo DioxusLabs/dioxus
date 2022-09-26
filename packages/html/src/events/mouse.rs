@@ -192,6 +192,8 @@ pub struct MouseEvent {
     pub shift_key: bool,
 }
 
+impl dioxus_core::UiEvent for MouseEvent {}
+
 impl MouseEvent {
     /// Construct MouseEvent with the specified properties
     ///

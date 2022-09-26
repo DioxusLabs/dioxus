@@ -27,6 +27,7 @@ event! {
         onkeyup
     ];
 }
+impl dioxus_core::UiEvent for KeyboardEvent {}
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone)]

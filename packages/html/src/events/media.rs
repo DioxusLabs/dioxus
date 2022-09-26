@@ -5,6 +5,8 @@ use dioxus_core::{Listener, NodeFactory};
 #[derive(Debug, Clone)]
 pub struct MediaEvent {}
 
+impl dioxus_core::UiEvent for MediaEvent {}
+
 event! {
     MediaEvent: [
         ///abort

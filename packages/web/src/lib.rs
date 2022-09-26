@@ -54,12 +54,14 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 pub use crate::cfg::Config;
 pub use crate::util::use_eval;
 use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
+use dioxus_core::UserEvent;
 use dioxus_core::VirtualDom;
 use futures_util::FutureExt;
 
@@ -181,14 +183,21 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
     let tasks = dom.get_scheduler_channel();
 
-    let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
-        Rc::new(move |event| tasks.unbounded_send(event).unwrap());
-
+    let pending_events: Rc<RefCell<Vec<UserEvent>>> = Default::default();
     let should_hydrate = cfg.hydrate;
 
-    let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
+    let mut websys_dom = dom::WebsysDom::new(
+        cfg,
+        Rc::new({
+            let pending_events = pending_events.clone();
+            move |event| {
+                pending_events.borrow_mut().push(event);
+                tasks.unbounded_send(SchedulerMsg::CheckEvents).unwrap();
+            }
+        }),
+    );
 
-    log::trace!("rebuilding app");
+    log::debug!("booting up dom with initial edits");
 
     if should_hydrate {
         // todo: we need to split rebuild and initialize into two phases
@@ -214,20 +223,33 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
+    log::debug!("done");
+
     let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
-        log::trace!("waiting for work");
+        log::debug!("waitinf for work");
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         dom.wait_for_work().await;
 
-        log::trace!("working..");
-
         // wait for the mainthread to schedule us in
         let mut deadline = work_loop.wait_for_idle_time().await;
 
-        // run the virtualdom work phase until the frame deadline is reached
+        {
+            // Handle any events first
+            let mut events = pending_events.borrow_mut();
+            for event in events.drain(..) {
+                for edit in dom.handle_event(event) {
+                    // actually apply our changes during the animation frame
+                    websys_dom.apply_edits(edit.edits);
+                }
+            }
+
+            drop(events);
+        }
+
+        // Handle any async next
         let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
 
         // wait for the animation frame to fire so we can apply our changes

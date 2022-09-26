@@ -29,3 +29,5 @@ pub struct TouchEvent {
     // targetTouches: DOMTouchList,
     // touches: DOMTouchList,
 }
+
+impl dioxus_core::UiEvent for TouchEvent {}

@@ -104,14 +104,10 @@ use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 /// ```
 pub struct VirtualDom {
     scopes: ScopeArena,
-
     pending_messages: VecDeque<SchedulerMsg>,
     dirty_scopes: IndexSet<ScopeId>,
-
-    channel: (
-        UnboundedSender<SchedulerMsg>,
-        UnboundedReceiver<SchedulerMsg>,
-    ),
+    sender: UnboundedSender<SchedulerMsg>,
+    receiver: UnboundedReceiver<SchedulerMsg>,
 }
 
 /// The type of message that can be sent to the scheduler.
@@ -232,7 +228,8 @@ impl VirtualDom {
 
         Self {
             scopes,
-            channel,
+            sender: channel.0,
+            receiver: channel.1,
             dirty_scopes: IndexSet::from_iter([ScopeId(0)]),
             pending_messages: VecDeque::new(),
         }
@@ -276,7 +273,7 @@ impl VirtualDom {
     /// let sender = dom.get_scheduler_channel();
     /// ```
     pub fn get_scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
-        self.channel.0.clone()
+        self.sender.clone()
     }
 
     /// Try to get an element from its ElementId
@@ -296,7 +293,7 @@ impl VirtualDom {
     /// dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
     /// ```
     pub fn handle_message(&mut self, msg: SchedulerMsg) {
-        if self.channel.0.unbounded_send(msg).is_ok() {
+        if self.sender.unbounded_send(msg).is_ok() {
             self.process_all_messages();
         }
     }
@@ -318,11 +315,12 @@ impl VirtualDom {
     /// Handle an event and get all the changes back
     ///
     /// This is syncrhonous and willl block as we get the data back. Important so things like prevent default can be handleed natively
-    pub fn handle_event(&self, event: UserEvent) -> Vec<Mutations> {
+    pub fn handle_event(&mut self, event: UserEvent) -> Vec<Mutations> {
         if let Some(element) = event.element {
             self.scopes.call_listener_with_bubbling(&event, element);
         }
-        todo!()
+
+        self.work_with_deadline(|| false)
     }
 
     /// Wait for the scheduler to have any work.
@@ -340,6 +338,7 @@ impl VirtualDom {
     /// ```
     pub async fn wait_for_work(&mut self) {
         loop {
+            // Wait until async has produced some work
             if !self.dirty_scopes.is_empty() && self.pending_messages.is_empty() {
                 break;
             }
@@ -359,13 +358,20 @@ impl VirtualDom {
                         }
                     });
 
-                    match select(task_poll, self.channel.1.next()).await {
+                    match select(task_poll, self.receiver.next()).await {
                         Either::Left((_, _)) => {}
                         Either::Right((msg, _)) => self.pending_messages.push_front(msg.unwrap()),
                     }
                 } else {
-                    self.pending_messages
-                        .push_front(self.channel.1.next().await.unwrap());
+                    // Wait for tasks only
+
+                    let msg = self.receiver.next().await.unwrap();
+
+                    // If it's a user event, just break and handle it
+                    match msg {
+                        SchedulerMsg::CheckEvents => break,
+                        msg => self.pending_messages.push_front(msg),
+                    }
                 }
             }
 
@@ -377,7 +383,7 @@ impl VirtualDom {
     /// Manually kick the VirtualDom to process any
     pub fn process_all_messages(&mut self) {
         // clear out the scheduler queue
-        while let Ok(Some(msg)) = self.channel.1.try_next() {
+        while let Ok(Some(msg)) = self.receiver.try_next() {
             self.pending_messages.push_front(msg);
         }
 
@@ -396,7 +402,7 @@ impl VirtualDom {
                 // uh, not sure? I think end up re-polling it anyways
             }
             SchedulerMsg::CheckEvents => {
-                todo!()
+                // just bouncing the poll
             }
             SchedulerMsg::Immediate(s) => {
                 self.dirty_scopes.insert(s);

@@ -35,6 +35,8 @@ event! {
     ];
 }
 
+impl dioxus_core::UiEvent for PointerEvent {}
+
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct PointerEvent {

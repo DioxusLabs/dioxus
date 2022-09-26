@@ -1,26 +1,25 @@
 use bumpalo::boxed::Box as BumpBox;
 use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
-use std::any::Any;
 
-pub fn make_listener<'a, V: 'static>(
+pub fn make_listener<'a, V: UiEvent>(
     factory: NodeFactory<'a>,
     mut callback: impl FnMut(&'a V) + 'a,
+
+    // ie oncopy
+    event_name: &'static str,
 ) -> Listener<'a> {
     let bump = &factory.bump();
 
     // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
     // safety: this is essentially the same as calling Box::new() but manually
     // The box is attached to the lifetime of the bumpalo allocator
-    let cb: &'a mut dyn FnMut(&'a dyn Any) = bump.alloc(move |evt: &'a dyn Any| {
+    let cb: &'a mut dyn FnMut(&'a dyn UiEvent) = bump.alloc(move |evt: &'a dyn UiEvent| {
         let evt = evt.downcast_ref::<V>().unwrap();
         callback(evt)
     });
 
-    let callback: BumpBox<dyn FnMut(&'a dyn Any) + 'a> = unsafe { BumpBox::from_raw(cb) };
-
-    // ie oncopy
-    let event_name = stringify!($name);
+    let callback: BumpBox<dyn FnMut(&'a dyn UiEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
     // ie copy
     let shortname: &'static str = &event_name[2..];
@@ -45,7 +44,7 @@ macro_rules! event {
                 $(#[$method_attr])*
                 #[inline]
                 pub fn $name<'a>( factory: NodeFactory<'a>, callback: impl FnMut(&'a $data) + 'a) -> Listener<'a> {
-                    make_listener(factory, callback)
+                    make_listener(factory, callback, stringify!($name))
                 }
             )*
         )*

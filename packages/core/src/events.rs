@@ -37,7 +37,7 @@ use std::{fmt::Debug, sync::Arc};
 ///     }
 /// )).unwrap();
 /// ```
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct UserEvent {
     /// The originator of the event trigger if available
     pub scope_id: Option<ScopeId>,

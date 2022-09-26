@@ -7,11 +7,11 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_core::{DomEdit, ElementId, UiEvent, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
-use std::{any::Any, collections::HashMap, rc::Rc, sync::Arc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
 
@@ -26,7 +26,7 @@ pub struct WebsysDom {
 }
 
 impl WebsysDom {
-    pub fn new(cfg: Config, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
+    pub fn new(cfg: Config, sender_callback: Rc<dyn Fn(UserEvent)>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
             let mut target = event
@@ -86,7 +86,7 @@ impl WebsysDom {
                     }
                 }
 
-                sender_callback.as_ref()(SchedulerMsg::Event(synthetic_event))
+                (sender_callback)(synthetic_event)
             }
         });
 
@@ -171,22 +171,24 @@ unsafe impl Sync for DioxusWebsysEvent {}
 
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
-async fn virtual_event_from_websys_event(
-    event: web_sys::Event,
-    target: Element,
-) -> Arc<dyn Any + Send + Sync> {
+fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Arc<dyn UiEvent> {
     use dioxus_html::on::*;
 
-    match event.type_().as_str() {
-        "copy" | "cut" | "paste" => Arc::new(ClipboardData {}),
+    let et = event.type_();
+    let event_name = et.as_str();
+
+    log::debug!("Event: {event_name}");
+
+    match event_name {
+        "copy" | "cut" | "paste" => Arc::new(ClipboardEvent { data: todo!() }),
         "compositionend" | "compositionstart" | "compositionupdate" => {
             let evt: &web_sys::CompositionEvent = event.dyn_ref().unwrap();
-            Arc::new(CompositionData {
+            Arc::new(CompositionEvent {
                 data: evt.data().unwrap_or_default(),
             })
         }
-        "keydown" | "keypress" | "keyup" => Arc::new(KeyboardData::from(event)),
-        "focus" | "blur" | "focusout" | "focusin" => Arc::new(FocusData {}),
+        "keydown" | "keypress" | "keyup" => Arc::new(KeyboardEvent::from(event)),
+        "focus" | "blur" | "focusout" | "focusin" => Arc::new(FocusEvent {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
@@ -264,50 +266,183 @@ async fn virtual_event_from_websys_event(
                 }
             }
 
-            Arc::new(FormData { value, values })
+            #[derive(Debug)]
+            struct InputFileEngine {
+                target: Option<web_sys::HtmlInputElement>,
+                files: Option<Vec<String>>,
+                file_list: Option<web_sys::FileList>,
+            }
+            impl InputFileEngine {
+                fn new(el: Element) -> Self {
+                    match el.dyn_ref::<web_sys::HtmlInputElement>() {
+                        Some(el) => {
+                            let target = el.clone();
+
+                            let mut files = vec![];
+
+                            let file_list = el.files();
+                            if let Some(list) = file_list.as_ref() {
+                                for x in 0..list.length() {
+                                    let file = list.item(x).unwrap();
+                                    files.push(file.name());
+                                }
+                            }
+
+                            Self {
+                                target: Some(target),
+                                files: Some(files),
+                                file_list,
+                            }
+                        }
+                        None => Self {
+                            files: Default::default(),
+                            target: None,
+                            file_list: None,
+                        },
+                    }
+                }
+            }
+
+            #[async_trait::async_trait(?Send)]
+            impl FileEngine for InputFileEngine {
+                fn files(&self) -> Vec<String> {
+                    self.files.clone().unwrap_or_default()
+                }
+
+                async fn read_file(&self, file_name: &str) -> Option<Vec<u8>> {
+                    let files = self.files.as_ref()?;
+                    let file_index = files.iter().position(|f| f.as_str() == file_name)?;
+                    let file = self.file_list.as_ref()?.item(file_index as u32)?;
+
+                    let as_blob: web_sys::Blob = file.dyn_into().unwrap();
+                    let prom = as_blob.array_buffer();
+                    let val = wasm_bindgen_futures::JsFuture::from(prom).await.ok()?;
+                    let view = js_sys::Uint8Array::new(&val);
+                    Some(view.to_vec())
+                }
+
+                async fn read_file_to_string(&self, file_name: &str) -> Option<String> {
+                    log::debug!("{:?}", self);
+
+                    let files = self.files.as_ref()?;
+                    let file_index = files.iter().position(|f| f.as_str() == file_name)?;
+                    let file = self.file_list.as_ref()?.item(file_index as u32)?;
+
+                    let as_blob: web_sys::Blob = file.dyn_into().unwrap();
+                    let prom = as_blob.text();
+                    let val = wasm_bindgen_futures::JsFuture::from(prom).await.ok()?;
+
+                    val.as_string()
+                }
+            }
+
+            Arc::new(FormEvent {
+                value,
+                values,
+                files: Arc::new(InputFileEngine::new(target)),
+            })
         }
         "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
         | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            Arc::new(MouseData::from(event))
+            Arc::new(MouseEvent::from(event))
         }
 
         "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
         | "drop" => {
             let evt: &web_sys::DragEvent = event.dyn_ref().as_ref().unwrap();
-            let mut files = HashMap::new();
 
-            if let Some(transfer) = evt.data_transfer() {
-                let files = transfer.files();
+            let should_prevent = match event_name {
+                "dragenter" | "ondragover" | "dragleave" | "drop" => true,
+                _ => false,
+            };
+
+            // if (event.type == "dragenter" || event.type == "dragover" || event.type == "dragleave" || event.type == "drop") {
+            //    event.dataTransfer.dropEffect = "copy";
+            //    event.preventDefault();
+
+            if should_prevent {
+                event.prevent_default();
             }
 
-            let mouse = MouseData::from(event);
+            if let Some(transfer) = evt.data_transfer() {
+                transfer.set_drop_effect("copy");
+            }
 
-            Arc::new(DragData {
-                mouse,
-                files: todo!(),
-            })
+            struct DragAndDropFileEngine {
+                files: Option<Vec<String>>,
+                file_list: Option<web_sys::FileList>,
+            }
+
+            #[async_trait::async_trait(?Send)]
+            impl FileEngine for DragAndDropFileEngine {
+                fn files(&self) -> Vec<String> {
+                    self.files.clone().unwrap_or_default()
+                }
+
+                async fn read_file(&self, file_name: &str) -> Option<Vec<u8>> {
+                    let files = self.files.as_ref()?;
+                    let file_index = files.iter().position(|f| f.as_str() == file_name)?;
+                    let file = self.file_list.as_ref()?.item(file_index as u32)?;
+
+                    let as_blob: web_sys::Blob = file.dyn_into().unwrap();
+                    let prom = as_blob.array_buffer();
+                    let val = wasm_bindgen_futures::JsFuture::from(prom).await.ok()?;
+                    let view = js_sys::Uint8Array::new(&val);
+                    Some(view.to_vec())
+                }
+
+                async fn read_file_to_string(&self, file_name: &str) -> Option<String> {
+                    let files = self.files.as_ref()?;
+                    let file_index = files.iter().position(|f| f.as_str() == file_name)?;
+                    let file = self.file_list.as_ref()?.item(file_index as u32)?;
+
+                    let as_blob: web_sys::Blob = file.dyn_into().unwrap();
+                    let prom = as_blob.text();
+                    let val = wasm_bindgen_futures::JsFuture::from(prom).await.ok()?;
+
+                    val.as_string()
+                }
+            }
+
+            let transfer = evt.data_transfer();
+            let file_list = transfer.and_then(|f| f.files());
+            let files = file_list.as_ref().and_then(|file_list| {
+                let mut f = vec![];
+                for x in 0..file_list.length() {
+                    let item = file_list.get(x).unwrap();
+                    f.push(item.name())
+                }
+                Some(f)
+            });
+
+            let files = Arc::new(DragAndDropFileEngine { file_list, files });
+
+            let mouse = MouseEvent::from(event);
+
+            Arc::new(DragEvent { mouse, files })
         }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            Arc::new(PointerData::from(event))
+            Arc::new(PointerEvent::from(event))
         }
-        "select" => Arc::new(SelectionData {}),
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => Arc::new(TouchData::from(event)),
+        "select" => Arc::new(SelectionEvent {}),
+        "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
+            Arc::new(TouchEvent::from(event))
+        }
 
-        "scroll" => Arc::new(()),
-        "wheel" => Arc::new(WheelData::from(event)),
+        "scroll" | "wheel" => Arc::new(WheelEvent::from(event)),
         "animationstart" | "animationend" | "animationiteration" => {
-            Arc::new(AnimationData::from(event))
+            Arc::new(AnimationEvent::from(event))
         }
-        "transitionend" => Arc::new(TransitionData::from(event)),
+        "transitionend" => Arc::new(TransitionEvent::from(event)),
         "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
         | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
         | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaData {}),
-        "toggle" => Arc::new(ToggleData {}),
+        | "timeupdate" | "volumechange" | "waiting" => Arc::new(MediaEvent {}),
+        "toggle" => Arc::new(ToggleEvent {}),
 
-        _ => Arc::new(()),
+        _ => todo!(),
     }
 }
 

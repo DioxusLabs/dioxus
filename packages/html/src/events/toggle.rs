@@ -9,3 +9,5 @@ event! {
 }
 
 pub struct ToggleEvent {}
+
+impl dioxus_core::UiEvent for ToggleEvent {}

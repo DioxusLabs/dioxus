@@ -1,7 +1,7 @@
-use super::make_listener;
+use super::{form::FileEngine, make_listener};
 use crate::mouse::MouseEvent;
-use dioxus_core::{Listener, NodeFactory};
-use std::collections::HashMap;
+use dioxus_core::{Listener, NodeFactory, UiEvent};
+use std::{collections::HashMap, sync::Arc};
 
 event! {
     DragEvent: [
@@ -38,8 +38,10 @@ event! {
 /// Do not use the deprecated fields; they may change or become private in the future.
 pub struct DragEvent {
     pub mouse: MouseEvent,
-    pub files: HashMap<String, Vec<u8>>,
+    pub files: Arc<dyn FileEngine>,
 }
+
+impl UiEvent for DragEvent {}
 
 // they say dont use deref as a form of inheritence, but who cares?
 impl std::ops::Deref for DragEvent {

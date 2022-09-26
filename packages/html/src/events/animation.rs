@@ -1,5 +1,5 @@
 use super::make_listener;
-use dioxus_core::{Listener, NodeFactory};
+use dioxus_core::{Listener, NodeFactory, UiEvent};
 use std::cell::Cell;
 
 event! {
@@ -23,3 +23,5 @@ pub struct AnimationEvent {
     pub elapsed_time: f32,
     pub bubble: Cell<bool>,
 }
+
+impl UiEvent for AnimationEvent {}

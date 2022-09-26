@@ -15,3 +15,5 @@ pub struct TransitionEvent {
     pub pseudo_element: String,
     pub elapsed_time: f32,
 }
+
+impl dioxus_core::UiEvent for TransitionEvent {}

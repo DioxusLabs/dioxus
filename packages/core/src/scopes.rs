@@ -318,6 +318,10 @@ impl ScopeArena {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
+        // todo: unbind the lifetime of the event from the dom
+        let data: &dyn UiEvent = event.data.as_ref();
+        let data: &dyn UiEvent = unsafe { std::mem::transmute(data) };
+
         while let Some(id) = cur_el.take() {
             if let Some(el) = nodes.get(id.0) {
                 let real_el = unsafe { &**el };
@@ -332,10 +336,7 @@ impl ScopeArena {
 
                             let mut cb = listener.callback.borrow_mut();
                             if let Some(cb) = cb.as_mut() {
-                                // todo: unbind the lifetime of the event from the dom
-                                let t: &dyn Any = event.data.as_any();
-                                let t: &dyn Any = unsafe { std::mem::transmute(t) };
-                                (cb)(t);
+                                (cb)(data);
                             }
 
                             if !event.bubbles {
@@ -958,7 +959,7 @@ impl BumpFrame {
     }
 }
 
-pub(crate) struct TaskQueue {
+pub struct TaskQueue {
     pub(crate) tasks: RefCell<FxHashMap<TaskId, InnerTask>>,
     pub(crate) task_map: RefCell<FxHashMap<ScopeId, HashSet<TaskId>>>,
     gen: Cell<usize>,
@@ -966,6 +967,7 @@ pub(crate) struct TaskQueue {
 }
 
 pub(crate) type InnerTask = Pin<Box<dyn Future<Output = ()>>>;
+
 impl TaskQueue {
     fn spawn(&self, scope: ScopeId, task: impl Future<Output = ()> + 'static) -> TaskId {
         let pinned = Box::pin(task);
@@ -999,6 +1001,11 @@ impl TaskQueue {
     pub(crate) fn has_tasks(&self) -> bool {
         !self.tasks.borrow().is_empty()
     }
+
+    /// wait for any tasks to complete
+    ///
+    /// Unsafe since
+    pub unsafe fn wait(&self) {}
 }
 
 #[test]
