@@ -40,6 +40,19 @@ pub fn rsx(s: TokenStream) -> TokenStream {
     }
 }
 
+/// A version of the rsx! macro that does not use templates. Used for testing diffing
+#[proc_macro]
+pub fn rsx_without_templates(s: TokenStream) -> TokenStream {
+    match syn::parse::<rsx::CallBody>(s) {
+        Err(err) => err.to_compile_error().into(),
+        Ok(body) => {
+            let mut tokens = proc_macro2::TokenStream::new();
+            body.to_tokens_without_template(&mut tokens);
+            tokens.into()
+        }
+    }
+}
+
 /// Derive props for a component within the component definition.
 ///
 /// This macro provides a simple transformation from `Scope<{}>` to `Scope<P>`,

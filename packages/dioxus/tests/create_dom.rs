@@ -290,6 +290,7 @@ fn create_components() {
         ]
     );
 }
+
 #[test]
 fn anchors() {
     static App: Component = |cx| {

@@ -68,7 +68,7 @@ mod dom;
 #[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 mod rehydrate;
-mod ric_raf;
+// mod ric_raf;
 mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.

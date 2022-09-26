@@ -112,3 +112,28 @@ impl ToTokens for CallBody {
         };
     }
 }
+
+impl CallBody {
+    pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
+        let children = &self.roots;
+        let inner = quote! { __cx.fragment_root([ #(#children),* ]) };
+
+        match &self.custom_context {
+            // The `in cx` pattern allows directly rendering
+            Some(ident) => out_tokens.append_all(quote! {
+                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                    #inner
+                }))
+            }),
+
+            // Otherwise we just build the LazyNode wrapper
+            None => out_tokens.append_all(quote! {
+                LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                    #inner
+                })
+            }),
+        };
+    }
+}
