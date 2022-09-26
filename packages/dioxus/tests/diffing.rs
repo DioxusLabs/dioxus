@@ -68,7 +68,7 @@ fn fragments_create_properly() {
 fn empty_fragments_create_anchors() {
     let dom = new_dom();
 
-    let left = rsx_without_templates!({ (0..0).map(|_f| rsx_without_templates! { div {}}) });oo
+    let left = rsx_without_templates!({ (0..0).map(|_f| rsx_without_templates! { div {}}) });
     let right = rsx_without_templates!({ (0..1).map(|_f| rsx_without_templates! { div {}}) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
