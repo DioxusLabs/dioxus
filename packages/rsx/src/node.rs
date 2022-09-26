@@ -33,7 +33,7 @@ impl BodyNode {
         match self {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
-            BodyNode::Text(text) => text.span(),
+            BodyNode::Text(text) => text.source.span(),
             BodyNode::RawExpr(exp) => exp.span(),
         }
     }
