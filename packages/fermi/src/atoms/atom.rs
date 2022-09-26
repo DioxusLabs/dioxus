@@ -12,8 +12,7 @@ impl<V: 'static> Readable<V> for Atom<V> {
     }
     fn unique_id(&self) -> AtomId {
         AtomId {
-            ptr: *self as *const (),
-            type_name: std::any::type_name::<V>(),
+            ptr: std::ptr::addr_of!(self) as *const (),
         }
     }
 }

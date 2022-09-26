@@ -1,21 +1,33 @@
-use dioxus_core::prelude::ScopeId;
-use dioxus_core::ScopeState;
-use std::any::Any;
-use std::cell::RefCell;
-use std::collections::HashSet;
-use std::sync::Arc;
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    any::{Any, TypeId},
+    cell::RefCell,
+    collections::HashMap,
+    rc::Rc,
+    sync::Arc,
+};
 
-pub struct AtomRoot {
-    atoms: RefCell<HashMap<AtomId, Slot>>,
-    update_any: Arc<dyn Fn(ScopeId)>,
-    selections: RefCell<HashMap<SelectorId, Selection>>,
-}
+use dioxus_core::{Element, Scope, ScopeId, ScopeState};
+use im_rc::HashSet;
+
+use crate::{Readable, Select, Selector};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Dep {
-    Atom(AtomId),
-    Selector(SelectorId),
+pub struct AtomId {
+    pub(crate) ptr: *const (),
+}
+
+pub fn AtomRoot(cx: Scope) -> Element {
+    todo!()
+}
+
+pub struct AtomRoot {
+    pub atoms: RefCell<HashMap<AtomId, Slot>>,
+    pub update_any: Arc<dyn Fn(ScopeId)>,
+}
+
+pub struct Slot {
+    pub value: Rc<dyn Any>,
+    pub subscribers: HashSet<ScopeId>,
 }
 
 impl AtomRoot {
@@ -23,54 +35,129 @@ impl AtomRoot {
         Self {
             update_any,
             atoms: RefCell::new(HashMap::new()),
-            selections: RefCell::new(HashMap::new()),
         }
     }
 
-    fn register_selector<V>(&self, selector: Selector<V>, id: ScopeId) {}
-
-    fn needs_selector_updated<V>(&self, selector: Selector<V>) -> bool {
-        true
+    pub(crate) fn initialize<V: 'static>(&self, f: impl Readable<V>) {
+        let id = f.unique_id();
+        if self.atoms.borrow().get(&id).is_none() {
+            self.atoms.borrow_mut().insert(
+                id,
+                Slot {
+                    value: Rc::new(f.init()),
+                    subscribers: HashSet::new(),
+                },
+            );
+        }
     }
 
-    // Value is dirty but hasn't been regenerated
-    fn needs_update(&self, id: ScopeId) -> bool {
-        true
+    pub(crate) fn select<'a, O: ?Sized + 'a>(&'a self, f: Selector<'a, O>) -> Rc<&'a O> {
+        let selector = Select::new(
+            self,
+            AtomId {
+                ptr: f as *const (),
+            },
+        );
+
+        todo!()
     }
 
-    fn update_selector<V: PartialEq>(&self, selector: Selector<V>, value: *mut V) {
-        let mut s = self.selections.borrow_mut();
+    pub(crate) fn get<V>(&self, f: impl Readable<V>) -> Rc<V> {
+        todo!()
+    }
 
-        let s_ptr = selector as *const ();
+    pub(crate) fn register<V: 'static>(&self, f: impl Readable<V>, scope: ScopeId) -> Rc<V> {
+        let mut atoms = self.atoms.borrow_mut();
 
-        let selection = s.entry(s_ptr).or_insert_with(|| Selection {
-            id: s_ptr,
-            deps: HashSet::new(),
-            val: value as *mut (),
-        });
+        // initialize the value if it's not already initialized
+        if let Some(slot) = atoms.get_mut(&f.unique_id()) {
+            slot.subscribers.insert(scope);
+            match slot.value.clone().downcast() {
+                Ok(res) => res,
+                Err(e) => panic!(
+                    "Downcasting atom failed: {:?}. Has typeid of {:?} but needs typeid of {:?}",
+                    f.unique_id(),
+                    e.type_id(),
+                    TypeId::of::<V>()
+                ),
+            }
+        } else {
+            let value = Rc::new(f.init());
+            let mut subscribers = HashSet::new();
+            subscribers.insert(scope);
 
-        unsafe {
-            let old = selection.val as *const V;
-            let new = value as *const V;
+            atoms.insert(
+                f.unique_id(),
+                Slot {
+                    value: value.clone(),
+                    subscribers,
+                },
+            );
+            value
+        }
+    }
 
-            let old = &*old;
-            let new = &*new;
-            if old != new {
-                // update all dep selectors and components
+    pub(crate) fn set<V: 'static>(&self, ptr: AtomId, value: V) {
+        let mut atoms = self.atoms.borrow_mut();
+
+        if let Some(slot) = atoms.get_mut(&ptr) {
+            slot.value = Rc::new(value);
+            log::trace!("found item with subscribers {:?}", slot.subscribers);
+
+            for scope in &slot.subscribers {
+                log::trace!("updating subcsriber");
+                (self.update_any)(*scope);
+            }
+        } else {
+            log::trace!("no atoms found for {:?}", ptr);
+            atoms.insert(
+                ptr,
+                Slot {
+                    value: Rc::new(value),
+                    subscribers: HashSet::new(),
+                },
+            );
+        }
+    }
+
+    pub(crate) fn unsubscribe(&self, ptr: AtomId, scope: ScopeId) {
+        let mut atoms = self.atoms.borrow_mut();
+
+        if let Some(slot) = atoms.get_mut(&ptr) {
+            slot.subscribers.remove(&scope);
+
+            if slot.subscribers.is_empty() {
+                // drop the value?
             }
         }
-
-        selection.val = value as *mut ();
     }
 
-    fn get_selector<V>(&self, selector: Selector<V>) -> *mut V {
-        let s = self.selections.borrow_mut();
-        let s_ptr = selector as *const ();
-        s.get(&s_ptr).map(|s| s.val as *mut V).unwrap()
+    // force update of all subscribers
+    pub(crate) fn force_update(&self, ptr: AtomId) {
+        if let Some(slot) = self.atoms.borrow_mut().get(&ptr) {
+            for scope in slot.subscribers.iter() {
+                log::trace!("updating subcsriber");
+                (self.update_any)(*scope);
+            }
+        }
     }
-}
 
-pub struct Slot {
-    pub value: Rc<dyn Any>,
-    pub subscribers: HashSet<ScopeId>,
+    pub(crate) fn read<V: 'static>(&self, f: impl Readable<V>) -> Rc<V> {
+        let mut atoms = self.atoms.borrow_mut();
+
+        // initialize the value if it's not already initialized
+        if let Some(slot) = atoms.get_mut(&f.unique_id()) {
+            slot.value.clone().downcast().unwrap()
+        } else {
+            let value = Rc::new(f.init());
+            atoms.insert(
+                f.unique_id(),
+                Slot {
+                    value: value.clone(),
+                    subscribers: HashSet::new(),
+                },
+            );
+            value
+        }
+    }
 }

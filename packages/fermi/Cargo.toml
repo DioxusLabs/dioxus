@@ -16,6 +16,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.2.1" }
 im-rc = { version = "15.0.0", features = ["serde"] }
 log = "0.4.14"
+uuid = { version = "1.1.2", features = ["v4"] }
 
 [dev-dependencies]
 closure = "0.3.0"

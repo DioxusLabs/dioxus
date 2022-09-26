@@ -1,4 +1,4 @@
-use crate::{AtomId, AtomRoot, Writable};
+use crate::{Atom, AtomId, AtomRoot, Readable, Writable};
 use dioxus_core::{ScopeId, ScopeState};
 use std::{
     cell::RefMut,
@@ -30,7 +30,7 @@ use std::{
 ///     ))
 /// }
 /// ```
-pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &AtomState<T> {
+pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: Atom<T>) -> &AtomState<T> {
     let root = crate::use_atom_root(cx);
 
     let inner = cx.use_hook(|| AtomState {
