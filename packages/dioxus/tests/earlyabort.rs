@@ -28,7 +28,7 @@ fn test_early_abort() {
             return None;
         }
 
-        rsx!(cx, div { "Hello, world!" })
+        render!(div { "Hello, world!" })
     };
 
     let mut dom = new_dom(app, ());

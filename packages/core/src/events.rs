@@ -32,7 +32,7 @@ impl BubbleState {
 /// # Example
 /// ```rust, ignore
 /// fn App(cx: Scope) -> Element {
-///     rsx!(cx, div {
+///     render!(div {
 ///         onclick: move |_| println!("Clicked!")
 ///     })
 /// }

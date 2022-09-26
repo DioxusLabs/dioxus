@@ -16,7 +16,7 @@ fn initial_build_simple() {
 
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let vdom = VirtualDom::new(Base);
@@ -47,7 +47,7 @@ fn initial_build_simple() {
 fn initial_build_with_children() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     let vdom = VirtualDom::new(Base);

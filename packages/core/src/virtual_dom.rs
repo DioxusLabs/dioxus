@@ -622,7 +622,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -642,7 +642,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -666,7 +666,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -691,7 +691,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);

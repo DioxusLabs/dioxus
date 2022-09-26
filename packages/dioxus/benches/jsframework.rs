@@ -23,7 +23,7 @@ fn create_rows(c: &mut Criterion) {
     static App: Component = |cx| {
         let mut rng = SmallRng::from_entropy();
 
-        rsx!(cx, table {
+        render!(table {
             tbody {
                 (0..10_000_usize).map(|f| {
                     let label = Label::new(&mut rng);

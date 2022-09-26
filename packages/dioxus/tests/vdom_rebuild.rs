@@ -15,7 +15,7 @@ use dioxus_core::DomEdit::*;
 
 #[test]
 fn app_runs() {
-    static App: Component = |cx| rsx!(cx, div{"hello"} );
+    static App: Component = |cx| render!(div{"hello"} );
 
     let mut vdom = VirtualDom::new(App);
     let edits = vdom.rebuild();

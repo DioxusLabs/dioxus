@@ -171,7 +171,7 @@ struct StateTester {
 fn state_initial() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
+        render!(div {
             p{}
             h1{}
         })
@@ -248,7 +248,7 @@ fn state_initial() {
 fn state_reduce_parent_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
+        render!(div {
             width: "100%",
             div{
                 div{
@@ -315,7 +315,7 @@ fn state_reduce_parent_called_minimally_on_update() {
 fn state_reduce_child_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
+        render!(div {
             div{
                 div{
                     p{
@@ -447,7 +447,7 @@ impl NodeDepState<()> for CDepCallCounter {
 fn dependancies_order_independant() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {
+        render!(div {
             width: "100%",
             p{
                 "hello"

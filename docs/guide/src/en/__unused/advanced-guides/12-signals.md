@@ -98,7 +98,7 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 const TITLE: Atom<String> = || "".to_string();
 const Provider: Component = |cx|{
     let title = use_signal(&cx, &TITLE);
-    rsx!(cx, input { value: title })
+    render!(input { value: title })
 };
 ```
 
