@@ -1,9 +1,9 @@
 use dioxus::prelude::*;
-use fermi::{use_selector, Atom, Select};
+use fermi::{use_atom_state, use_selector, Atom, Select};
 
-static AGE: Atom<i32> = || 42;
-static NAME: Atom<String> = || "hello world".to_string();
-static TITLE: Atom<String> = || "hello world".to_string();
+static AGE: Atom<i32> = |_| 42;
+static NAME: Atom<String> = |_| "hello world".to_string();
+static TITLE: Atom<String> = |_| "hello world".to_string();
 
 fn names(root: Select) -> Vec<&str> {
     root.get(TITLE).split_ascii_whitespace().collect()
@@ -28,13 +28,19 @@ fn multi_layer(root: Select) -> Vec<String> {
 }
 
 fn app(cx: Scope) -> Element {
-    let age = use_atom(cx, AGE);
     let names = use_selector(&cx, names);
     let header = use_selector(&cx, combo);
+    let multi = use_selector(&cx, multi_layer);
+
+    let mut age = use_atom_state(&cx, AGE);
 
     cx.render(rsx! {
         ul {
             "{header}"
+            button {
+                onclick: move |_| age += 1,
+                "Increment age"
+            }
             names.iter().map(|f| rsx! {
                 li {"{f}"}
             })
@@ -44,8 +50,6 @@ fn app(cx: Scope) -> Element {
 
 fn main() {
     let mut dom = VirtualDom::new(app);
-
     let edits = dom.rebuild();
-
     dbg!(edits);
 }

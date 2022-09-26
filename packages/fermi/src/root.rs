@@ -1,20 +1,12 @@
+use crate::{AtomId, Readable, Select, Selection, Selector, SelectorId};
+use dioxus_core::{Element, Scope, ScopeId, ScopeState};
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
-
-use dioxus_core::{Element, Scope, ScopeId, ScopeState};
-use im_rc::HashSet;
-
-use crate::{Readable, Select, Selector};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct AtomId {
-    pub(crate) ptr: *const (),
-}
 
 pub fn AtomRoot(cx: Scope) -> Element {
     todo!()
@@ -23,6 +15,7 @@ pub fn AtomRoot(cx: Scope) -> Element {
 pub struct AtomRoot {
     pub atoms: RefCell<HashMap<AtomId, Slot>>,
     pub update_any: Arc<dyn Fn(ScopeId)>,
+    pub selections: RefCell<HashMap<SelectorId, Selection>>,
 }
 
 pub struct Slot {
@@ -35,6 +28,7 @@ impl AtomRoot {
         Self {
             update_any,
             atoms: RefCell::new(HashMap::new()),
+            selections: RefCell::new(HashMap::new()),
         }
     }
 
@@ -51,13 +45,8 @@ impl AtomRoot {
         }
     }
 
-    pub(crate) fn select<'a, O: ?Sized + 'a>(&'a self, f: Selector<'a, O>) -> Rc<&'a O> {
-        let selector = Select::new(
-            self,
-            AtomId {
-                ptr: f as *const (),
-            },
-        );
+    pub(crate) fn select<'a, O: ?Sized + 'a>(&'a self, f: Selector<O>) -> Rc<&'a O> {
+        // let selector = Select::new(self, SelectorId::new(f));
 
         todo!()
     }
@@ -159,5 +148,52 @@ impl AtomRoot {
             );
             value
         }
+    }
+
+    pub fn register_selector<V>(&self, selector: Selector<V>, id: ScopeId) {}
+
+    pub fn needs_selector_updated<V>(&self, selector: Selector<V>) -> bool {
+        true
+    }
+
+    // Value is dirty but hasn't been regenerated
+    pub fn needs_update(&self, id: ScopeId) -> bool {
+        true
+    }
+
+    pub fn update_selector<V: PartialEq>(&self, selector: Selector<V>, value: *mut V) {
+        let mut s = self.selections.borrow_mut();
+
+        let s_ptr = SelectorId(selector as *const ());
+
+        let selection = s.entry(s_ptr).or_insert_with(|| Selection {
+            id: s_ptr,
+            deps: HashSet::new(),
+            val: value as *mut (),
+        });
+
+        unsafe {
+            let old = selection.val as *const V;
+            let new = value as *const V;
+
+            let old = &*old;
+            let new = &*new;
+
+            // if old != new {
+            //     // update all dep selectors and components
+            // }
+        }
+
+        selection.val = value as *mut ();
+    }
+
+    pub fn get_selector<V>(&self, selector: Selector<V>) -> *mut V {
+        let s = self.selections.borrow_mut();
+
+        let s = selector.unique_id();
+
+        // s.get(&s_ptr).map(|s| s.val as *mut V).unwrap()
+
+        todo!()
     }
 }

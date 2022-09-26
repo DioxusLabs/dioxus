@@ -1,6 +1,5 @@
-use crate::{AtomId, AtomRoot, Readable, Writable};
+use crate::{Atom, AtomId, AtomRoot, Readable, Writable};
 
-pub type Atom<T> = fn(AtomBuilder) -> T;
 pub struct AtomBuilder;
 
 impl<V: 'static> Readable<V> for Atom<V> {
@@ -11,9 +10,7 @@ impl<V: 'static> Readable<V> for Atom<V> {
         (*self)(AtomBuilder)
     }
     fn unique_id(&self) -> AtomId {
-        AtomId {
-            ptr: std::ptr::addr_of!(self) as *const (),
-        }
+        AtomId::new(*self)
     }
 }
 
