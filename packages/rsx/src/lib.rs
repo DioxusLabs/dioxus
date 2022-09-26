@@ -93,7 +93,12 @@ impl ToTokens for CallBody {
 impl CallBody {
     pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
         let children = &self.roots;
-        let inner = quote! { __cx.fragment_root([ #(#children),* ]) };
+        let inner = if children.len() == 1 {
+            let inner = &self.roots[0];
+            quote! { #inner }
+        } else {
+            quote! { __cx.fragment_root([ #(#children),* ]) }
+        };
 
         out_tokens.append_all(quote! {
             LazyNodes::new(move |__cx: NodeFactory| -> VNode {

@@ -9,7 +9,7 @@
 use dioxus::{core_macro::rsx_without_templates, prelude::*};
 
 fn new_dom() -> VirtualDom {
-    VirtualDom::new(|cx| rsx_without_templates!(cx, "hi"))
+    VirtualDom::new(|cx| cx.render(rsx_without_templates!("hi")))
 }
 
 use dioxus_core::DomEdit::*;
@@ -288,11 +288,11 @@ fn two_fragments_with_same_elements_are_differet() {
     let dom = new_dom();
 
     let left = rsx_without_templates!(
-        {(0..2).map(|f| {rsx_without_templates! { div {  }}})}
+        {(0..2).map(|f| rsx_without_templates! { div {  }})}
         p {}
     );
     let right = rsx_without_templates!(
-        {(0..5).map(|f| {rsx_without_templates! { div {  }}})}
+        {(0..5).map(|f| rsx_without_templates! { div {  }})}
         p {}
     );
 

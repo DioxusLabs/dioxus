@@ -63,14 +63,38 @@ fn conditional_rendering() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "h1" },
-            CreateTextNode { root: 2, text: "hello" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "h1",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
             AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "span" },
-            CreateTextNode { root: 4, text: "a" },
+            CreatePlaceholderTemplate { root: 4503599627370497 },
+            CreatePlaceholderTemplate { root: 4503599627370498 },
+            FinishTemplate { len: 3 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            EnterTemplateRef { root: 1 },
+            CreateTemplate { id: 1 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "span",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "a", locally_static: true },
             AppendChildren { many: 1 },
-            CreatePlaceholder { root: 5 },
-            AppendChildren { many: 3 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 2, template_id: 1 },
+            ReplaceWith { root: 4503599627370497, m: 1 },
+            ExitTemplateRef {},
+            EnterTemplateRef { root: 1 },
+            CreatePlaceholder { root: 3 },
+            ReplaceWith { root: 4503599627370498, m: 1 },
+            ExitTemplateRef {},
+            AppendChildren { many: 1 }
         ]
     )
 }
