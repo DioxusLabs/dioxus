@@ -45,7 +45,7 @@ impl<S: State> RealDom<S> {
                         tag: "Root".to_string(),
                         namespace: Some("Root"),
                         attributes: FxHashMap::default(),
-                        listeners: Vec::new(),
+                        listeners: FxHashSet::default(),
                         children: Vec::new(),
                     },
                 ))))];
@@ -165,7 +165,7 @@ impl<S: State> RealDom<S> {
                                 tag: tag.to_string(),
                                 namespace: None,
                                 attributes: FxHashMap::default(),
-                                listeners: Vec::new(),
+                                listeners: FxHashSet::default(),
                                 children: Vec::new(),
                             },
                         );
@@ -185,7 +185,7 @@ impl<S: State> RealDom<S> {
                                 tag: tag.to_string(),
                                 namespace: None,
                                 attributes: FxHashMap::default(),
-                                listeners: Vec::new(),
+                                listeners: FxHashSet::default(),
                                 children: Vec::new(),
                             },
                         );
@@ -200,7 +200,7 @@ impl<S: State> RealDom<S> {
                                 tag: tag.to_string(),
                                 namespace: Some(ns),
                                 attributes: FxHashMap::default(),
-                                listeners: Vec::new(),
+                                listeners: FxHashSet::default(),
                                 children: Vec::new(),
                             },
                         );
@@ -221,7 +221,7 @@ impl<S: State> RealDom<S> {
                                 tag: tag.to_string(),
                                 namespace: Some(ns),
                                 attributes: FxHashMap::default(),
-                                listeners: Vec::new(),
+                                listeners: FxHashSet::default(),
                                 children: Vec::new(),
                             },
                         );
@@ -247,6 +247,13 @@ impl<S: State> RealDom<S> {
                     } => {
                         let id = self.decode_id(root);
                         self.mark_dirty(id, NodeMask::new().with_listeners(), &mut nodes_updated);
+                        match &mut self[id].node_data.node_type {
+                            NodeType::Text { .. } => panic!("Text nodes cannot have listeners"),
+                            NodeType::Element { listeners, .. } => {
+                                listeners.insert(event_name.to_string());
+                            }
+                            NodeType::Placeholder => panic!("Placeholder cannot have listeners"),
+                        }
                         if let Some(v) = self.nodes_listening.get_mut(event_name) {
                             v.insert(id);
                         } else {
@@ -975,7 +982,7 @@ pub enum NodeType {
         tag: String,
         namespace: Option<&'static str>,
         attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
-        listeners: Vec<&'static str>,
+        listeners: FxHashSet<String>,
         children: Vec<GlobalNodeId>,
     },
     Placeholder,

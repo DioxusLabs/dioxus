@@ -90,8 +90,12 @@ impl NodeDepState<()> for Focus {
                 }
             } else if node
                 .listeners()
-                .iter()
-                .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
+                .map(|mut listeners| {
+                    listeners
+                        .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
+                        .then(|| ())
+                })
+                .is_some()
             {
                 FocusLevel::Focusable
             } else {

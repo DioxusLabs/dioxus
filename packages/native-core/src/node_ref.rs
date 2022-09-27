@@ -76,14 +76,14 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the listeners if it is enabled in the mask
-    pub fn listeners(&self) -> &'a [&'static str] {
+    pub fn listeners(&self) -> Option<impl Iterator<Item = &'a str> + '_> {
         if self.mask.listeners {
             match &self.inner.node_type {
-                NodeType::Element { listeners, .. } => listeners,
-                _ => &[],
+                NodeType::Element { listeners, .. } => Some(listeners.iter().map(|l| &**l)),
+                _ => None,
             }
         } else {
-            &[]
+            None
         }
     }
 }
@@ -217,7 +217,8 @@ impl NodeMask {
     /// A node mask with every part visible.
     pub const ALL: Self = Self::new_with_attrs(AttributeMask::All)
         .with_text()
-        .with_element();
+        .with_element()
+        .with_listeners();
 
     /// Check if two masks overlap
     pub fn overlaps(&self, other: &Self) -> bool {
