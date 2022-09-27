@@ -30,7 +30,7 @@ futures-util = "0.3.19"
 smallstr = "0.2.0"
 serde-wasm-bindgen = "0.4.2"
 futures-channel = "0.3.21"
-serde_json = { version = "1.0", optional = true }
+serde_json = { version = "1.0" }
 
 [dependencies.web-sys]
 version = "0.3.56"
@@ -77,13 +77,10 @@ features = [
     "console",
 ]
 
-[target.'cfg(debug_assertions)'.dependencies]
-serde_json = { version = "1.0" }
-
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
-hot-reload = ["serde_json", "dioxus/hot-reload"]
+hot-reload = ["dioxus/hot-reload"]
 
 
 [dev-dependencies]
