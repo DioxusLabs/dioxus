@@ -1,7 +1,8 @@
 use anymap::AnyMap;
-use dioxus::core as dioxus_core;
 use dioxus::core::ElementId;
+use dioxus::core::{self as dioxus_core, GlobalNodeId};
 use dioxus::core::{AttributeValue, DomEdit, Mutations};
+use dioxus::core_macro::rsx_without_templates;
 use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
@@ -50,19 +51,13 @@ impl ChildDepState for ChildDepCallCounter {
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        _: NodeView,
         _: impl Iterator<Item = &'a Self::DepState>,
         _: &Self::Ctx,
     ) -> bool
     where
         Self::DepState: 'a,
     {
-        println!(
-            "{self:?} {:?}: {:?} {:?}",
-            node.tag(),
-            node.id(),
-            node.text()
-        );
         self.0 += 1;
         true
     }
@@ -148,8 +143,13 @@ impl NodeDepState<()> for NodeStateTester {
             node.tag().map(|s| s.to_string()),
             node.attributes()
                 .map(|iter| {
-                    iter.map(|a| (a.attribute.name.to_string(), format!("{:?}", a.value)))
-                        .collect()
+                    iter.map(|a| {
+                        (
+                            a.attribute.name.to_string(),
+                            format!("{}", a.value.as_text().unwrap()),
+                        )
+                    })
+                    .collect()
                 })
                 .unwrap_or_default(),
         );
@@ -195,7 +195,10 @@ fn state_initial() {
     ctx.insert(42u32);
     let _to_rerender = dom.update_state(nodes_updated, ctx);
 
-    let root_div = &dom[ElementId(1)];
+    let root_div = &dom[GlobalNodeId::TemplateId {
+        template_ref_id: dioxus_core::ElementId(1),
+        template_node_id: dioxus::prelude::TemplateNodeId(0),
+    }];
     assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
     assert_eq!(
         root_div.state.bubbled.1,
@@ -207,12 +210,18 @@ fn state_initial() {
     assert_eq!(root_div.state.pushed.0, Some("div".to_string()));
     assert_eq!(
         root_div.state.pushed.1,
-        Some(Box::new(PushedDownStateTester(None, None)))
+        Some(Box::new(PushedDownStateTester(
+            Some("Root".to_string()),
+            None
+        )))
     );
     assert_eq!(root_div.state.node.0, Some("div".to_string()));
     assert_eq!(root_div.state.node.1, vec![]);
 
-    let child_p = &dom[ElementId(2)];
+    let child_p = &dom[GlobalNodeId::TemplateId {
+        template_ref_id: dioxus_core::ElementId(1),
+        template_node_id: dioxus::prelude::TemplateNodeId(1),
+    }];
     assert_eq!(child_p.state.bubbled.0, Some("p".to_string()));
     assert_eq!(child_p.state.bubbled.1, Vec::new());
     assert_eq!(child_p.state.pushed.0, Some("p".to_string()));
@@ -220,7 +229,10 @@ fn state_initial() {
         child_p.state.pushed.1,
         Some(Box::new(PushedDownStateTester(
             Some("div".to_string()),
-            Some(Box::new(PushedDownStateTester(None, None)))
+            Some(Box::new(PushedDownStateTester(
+                Some("Root".to_string()),
+                None
+            )))
         )))
     );
     assert_eq!(child_p.state.node.0, Some("p".to_string()));
@@ -229,7 +241,10 @@ fn state_initial() {
         vec![("color".to_string(), "red".to_string())]
     );
 
-    let child_h1 = &dom[ElementId(3)];
+    let child_h1 = &dom[GlobalNodeId::TemplateId {
+        template_ref_id: dioxus_core::ElementId(1),
+        template_node_id: dioxus::prelude::TemplateNodeId(2),
+    }];
     assert_eq!(child_h1.state.bubbled.0, Some("h1".to_string()));
     assert_eq!(child_h1.state.bubbled.1, Vec::new());
     assert_eq!(child_h1.state.pushed.0, Some("h1".to_string()));
@@ -237,7 +252,10 @@ fn state_initial() {
         child_h1.state.pushed.1,
         Some(Box::new(PushedDownStateTester(
             Some("div".to_string()),
-            Some(Box::new(PushedDownStateTester(None, None)))
+            Some(Box::new(PushedDownStateTester(
+                Some("Root".to_string()),
+                None
+            )))
         )))
     );
     assert_eq!(child_h1.state.node.0, Some("h1".to_string()));
@@ -269,7 +287,7 @@ fn state_reduce_parent_called_minimally_on_update() {
 
     let vdom = VirtualDom::new(Base);
 
-    let mutations = vdom.create_vnodes(rsx! {
+    let mutations = vdom.create_vnodes(rsx_without_templates! {
         div {
             width: "100%",
             div{
@@ -315,7 +333,7 @@ fn state_reduce_parent_called_minimally_on_update() {
 fn state_reduce_child_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        render!(div {
+        cx.render(rsx_without_templates!(div {
             div{
                 div{
                     p{
@@ -332,12 +350,12 @@ fn state_reduce_child_called_minimally_on_update() {
                     "world"
                 }
             }
-        })
+        }))
     }
 
     let vdom = VirtualDom::new(Base);
 
-    let mutations = vdom.create_vnodes(rsx! {
+    let mutations = vdom.create_vnodes(rsx_without_templates! {
         div {
             div{
                 div{
@@ -374,18 +392,32 @@ fn state_reduce_child_called_minimally_on_update() {
     }]);
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
-    // dom.traverse_depth_first(|n| {
-    //     println!("{:?}", n);
-    //     assert_eq!(
-    //         n.state.part1.child_counter.0,
-    //         if n.node_data.id.0 > 4 { 1 } else { 2 }
-    //     );
-    //     assert_eq!(
-    //         n.state.child_counter.0,
-    //         if n.node_data.id.0 > 4 { 1 } else { 2 }
-    //     );
-    // });
-    todo!()
+    dom.traverse_depth_first(|n| {
+        assert_eq!(
+            n.state.part1.child_counter.0,
+            if let GlobalNodeId::VNodeId(ElementId(id)) = n.node_data.id {
+                if id > 4 {
+                    1
+                } else {
+                    2
+                }
+            } else {
+                panic!()
+            }
+        );
+        assert_eq!(
+            n.state.child_counter.0,
+            if let GlobalNodeId::VNodeId(ElementId(id)) = n.node_data.id {
+                if id > 4 {
+                    1
+                } else {
+                    2
+                }
+            } else {
+                panic!()
+            }
+        );
+    });
 }
 
 #[derive(Debug, Clone, Default, State)]

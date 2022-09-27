@@ -1,4 +1,5 @@
 use dioxus::core as dioxus_core;
+use dioxus::core_macro::rsx_without_templates;
 use dioxus::prelude::*;
 use dioxus_native_core::{
     real_dom::{NodeType, RealDom},
@@ -112,7 +113,7 @@ fn persist_removes() {
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -128,7 +129,7 @@ fn persist_removes() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -203,7 +204,7 @@ fn persist_instertions_before() {
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -215,7 +216,7 @@ fn persist_instertions_before() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -269,7 +270,7 @@ fn persist_instertions_after() {
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -281,7 +282,7 @@ fn persist_instertions_after() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",

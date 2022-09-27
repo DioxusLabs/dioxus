@@ -733,7 +733,7 @@ impl<S: State> RealDom<S> {
             }
             VNode::Element(e) => {
                 if let Some(id) = e.id.get() {
-                    let dom_node = &self[GlobalNodeId::VNodeId(id)];
+                    let dom_node = &self[id];
                     match &dom_node.node_data.node_type {
                         NodeType::Element {
                             tag,
