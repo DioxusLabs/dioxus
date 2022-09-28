@@ -2,6 +2,7 @@ use crate::Buffer;
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use std::{fmt::Result, fmt::Write};
+use syn::{spanned::Spanned, Expr};
 
 #[derive(Debug)]
 enum ShortOptimization {
@@ -87,8 +88,11 @@ impl Buffer {
                     write!(self.buf, ", ")?;
                 }
 
-                for child in children {
+                for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
+                    if id != children.len() - 1 && children.len() > 1 {
+                        write!(self.buf, ", ")?;
+                    }
                 }
 
                 write!(self.buf, " ")?;
@@ -283,28 +287,54 @@ impl Buffer {
                         .map(|child_len| child_len + attr_len)
                 }
             }
-            [BodyNode::RawExpr(ref _expr)] => {
+            [BodyNode::RawExpr(ref expr)] => {
                 // TODO: let rawexprs to be inlined
-                // let span = syn::spanned::Spanned::span(&text);
-                // let (start, end) = (span.start(), span.end());
-                // if start.line == end.line {
-                //     Some(end.column - start.column)
-                // } else {
-                //     None
-                // }
-                None
+                get_expr_length(expr)
             }
             [BodyNode::Element(ref el)] => {
                 let attr_len = self.is_short_attrs(&el.attributes);
 
-                if attr_len > 80 {
-                    None
-                } else {
-                    self.is_short_children(&el.children)
-                        .map(|child_len| child_len + attr_len)
+                if el.children.is_empty() && attr_len < 80 {
+                    return Some(el.name.to_string().len());
                 }
+
+                if el.children.len() == 1 {
+                    if let BodyNode::Text(ref text) = el.children[0] {
+                        if text.value().len() + el.name.to_string().len() + attr_len < 80 {
+                            return Some(text.value().len() + el.name.to_string().len() + attr_len);
+                        }
+                    }
+                }
+
+                None
             }
-            _ => None,
+            // todo, allow non-elements to be on the same line
+            items => {
+                let mut total_count = 0;
+
+                for item in items {
+                    match item {
+                        BodyNode::Component(_) | BodyNode::Element(_) => return None,
+                        BodyNode::Text(text) => total_count += text.value().len(),
+                        BodyNode::RawExpr(expr) => match get_expr_length(expr) {
+                            Some(len) => total_count += len,
+                            None => return None,
+                        },
+                    }
+                }
+
+                Some(total_count)
+            }
         }
+    }
+}
+
+fn get_expr_length(expr: &Expr) -> Option<usize> {
+    let span = expr.span();
+    let (start, end) = (span.start(), span.end());
+    if start.line == end.line {
+        Some(end.column - start.column)
+    } else {
+        None
     }
 }

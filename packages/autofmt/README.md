@@ -15,3 +15,6 @@ Sorted roughly in order of what's possible
 - [ ] Format regular exprs
 - [ ] Fix prettyplease around chaining
 - [ ] Don't eat comments in prettyplease
+
+
+# Technique

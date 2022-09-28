@@ -33,6 +33,7 @@ use syn::{
     Result, Token,
 };
 
+#[derive(Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
 }
