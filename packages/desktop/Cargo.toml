@@ -32,7 +32,7 @@ webbrowser = "0.7.1"
 infer = "0.9.0"
 dunce = "1.0.2"
 
-interprocess = { version = "1.1.1", optional = true }
+interprocess = { version = "1.1.1" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9.3"
@@ -43,7 +43,7 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot-reload = ["interprocess", "dioxus-core/hot-reload"]
+hot-reload = ["dioxus-core/hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }
