@@ -68,6 +68,7 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused_assignments)]
 pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
@@ -112,14 +113,15 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         if chrono::Local::now().timestamp() > last_update_time {
             // Give time for the change to take effect before reading the file
             std::thread::sleep(std::time::Duration::from_millis(100));
+            let mut updated = false;
             if let Ok(evt) = evt {
                 let mut messages = Vec::new();
                 let mut needs_rebuild = false;
                 for path in evt.paths.clone() {
-                    let mut file = File::open(path.clone()).unwrap();
                     if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
                         continue;
                     }
+                    let mut file = File::open(path.clone()).unwrap();
                     let mut src = String::new();
                     file.read_to_string(&mut src).expect("Unable to read file");
                     // find changes to the rsx in the file
@@ -127,6 +129,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                         let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
                         if let Some(old_str) = last_file_rebuild.map.get(&path) {
                             if let Ok(old) = syn::parse_file(&old_str) {
+                                updated = true;
                                 match find_rsx(&syntax, &old) {
                                     DiffResult::CodeChanged => {
                                         needs_rebuild = true;

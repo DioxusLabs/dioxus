@@ -1,5 +1,3 @@
-use crate::tools;
-
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
