@@ -14,7 +14,6 @@ pub trait Readable<V, B = ()> {
 
 /// All Atoms are `Writable` - they support writing their value.
 ///
-/// This trait lets Dioxus abstract over Atoms, AtomFamilies, AtomRefs, and Selectors.
 /// This trait lets Dioxus abstract over Atoms, AtomFamilies, AtomRefs, and Selectors
 pub trait Writable<V, B = ()>: Readable<V, B> {
     fn write(&self, root: AtomRoot, value: V);

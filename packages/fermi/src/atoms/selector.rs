@@ -17,7 +17,6 @@ impl<'a> Select<'a> {
 
     pub fn get<O>(&self, f: impl Readable<O>) -> &'a O {
         // self.root.register(f, scope);
-
         todo!()
     }
 
