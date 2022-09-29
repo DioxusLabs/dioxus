@@ -25,3 +25,5 @@ twoway! ("tiny" => tiny);
 twoway! ("tinynoopt" => tinynoopt);
 
 twoway! ("long" => long);
+
+twoway! ("key" => key);

@@ -84,7 +84,7 @@ impl Buffer {
 
                 self.write_attributes(attributes, key, true)?;
 
-                if !children.is_empty() && !attributes.is_empty() {
+                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.buf, ", ")?;
                 }
 
@@ -104,7 +104,7 @@ impl Buffer {
                 }
                 self.write_attributes(attributes, key, true)?;
 
-                if !children.is_empty() && !attributes.is_empty() {
+                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.buf, ",")?;
                 }
 
@@ -117,7 +117,7 @@ impl Buffer {
             ShortOptimization::NoOpt => {
                 self.write_attributes(attributes, key, false)?;
 
-                if !children.is_empty() && !attributes.is_empty() {
+                if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
                     write!(self.buf, ",")?;
                 }
 
@@ -282,9 +282,10 @@ impl Buffer {
 
                 if attr_len > 80 {
                     None
+                } else if comp.children.is_empty() {
+                    Some(attr_len)
                 } else {
-                    self.is_short_children(&comp.children)
-                        .map(|child_len| child_len + attr_len)
+                    None
                 }
             }
             [BodyNode::RawExpr(ref expr)] => {
