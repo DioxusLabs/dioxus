@@ -1,5 +1,7 @@
 use std::fmt::Formatter;
 
+use dyn_clone::{clone_box, DynClone};
+
 /// Possible values for an attribute
 // trying to keep values at 3 bytes
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -74,8 +76,8 @@ impl<'a> std::fmt::Display for AttributeValue<'a> {
 #[derive(Clone, Copy)]
 #[allow(missing_docs)]
 pub struct ArbitraryAttributeValue<'a> {
-    pub value: &'a dyn std::any::Any,
-    pub cmp: fn(&'a dyn std::any::Any, &'a dyn std::any::Any) -> bool,
+    pub value: &'a dyn AnyClone,
+    pub cmp: fn(&dyn AnyClone, &dyn AnyClone) -> bool,
 }
 
 impl PartialEq for ArbitraryAttributeValue<'_> {
@@ -115,6 +117,79 @@ impl<'de, 'a> serde::Deserialize<'de> for ArbitraryAttributeValue<'a> {
         D: serde::Deserializer<'de>,
     {
         panic!("ArbitraryAttributeValue is not deserializable!")
+    }
+}
+
+/// A clone, sync and send version of `Any`
+// we only need the Sync + Send bound when hot reloading is enabled
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+pub trait AnyClone: std::any::Any + DynClone + Send + Sync {
+    fn as_any(&self) -> &dyn std::any::Any;
+}
+#[cfg(not(any(feature = "hot-reload", debug_assertions)))]
+pub trait AnyClone: std::any::Any + DynClone {
+    fn as_any(&self) -> &dyn std::any::Any;
+}
+
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+impl<T: std::any::Any + DynClone + Send + Sync> AnyClone for T {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+#[cfg(not(any(feature = "hot-reload", debug_assertions)))]
+impl<T: std::any::Any + DynClone> AnyClone for T {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+}
+
+dyn_clone::clone_trait_object!(AnyClone);
+
+#[derive(Clone)]
+#[allow(missing_docs)]
+pub struct OwnedArbitraryAttributeValue {
+    pub value: Box<dyn AnyClone>,
+    pub cmp: fn(&dyn AnyClone, &dyn AnyClone) -> bool,
+}
+
+impl PartialEq for OwnedArbitraryAttributeValue {
+    fn eq(&self, other: &Self) -> bool {
+        (self.cmp)(&*self.value, &*other.value)
+    }
+}
+
+impl std::fmt::Debug for OwnedArbitraryAttributeValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OwnedArbitraryAttributeValue").finish()
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'a> serde::Serialize for OwnedArbitraryAttributeValue {
+    fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("OwnedArbitraryAttributeValue should not be serialized")
+    }
+}
+#[cfg(feature = "serialize")]
+impl<'de, 'a> serde::Deserialize<'de> for &'a OwnedArbitraryAttributeValue {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        panic!("OwnedArbitraryAttributeValue is not deserializable!")
+    }
+}
+#[cfg(feature = "serialize")]
+impl<'de, 'a> serde::Deserialize<'de> for OwnedArbitraryAttributeValue {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        panic!("OwnedArbitraryAttributeValue is not deserializable!")
     }
 }
 
@@ -261,7 +336,7 @@ pub enum OwnedAttributeValue {
 
     Bytes(Vec<u8>),
     // TODO: support other types
-    // Any(ArbitraryAttributeValue<'a>),
+    Any(OwnedArbitraryAttributeValue),
 }
 
 impl PartialEq<AttributeValue<'_>> for OwnedAttributeValue {
@@ -321,7 +396,10 @@ impl<'a> From<AttributeValue<'a>> for OwnedAttributeValue {
                 OwnedAttributeValue::Vec4Uint(f1, f2, f3, f4)
             }
             AttributeValue::Bytes(b) => OwnedAttributeValue::Bytes(b.to_owned()),
-            AttributeValue::Any(_) => todo!(),
+            AttributeValue::Any(a) => OwnedAttributeValue::Any(OwnedArbitraryAttributeValue {
+                value: clone_box(a.value),
+                cmp: a.cmp,
+            }),
         }
     }
 }
