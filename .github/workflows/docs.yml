@@ -2,9 +2,10 @@ name: github pages
 
 on:
   push:
+    paths:
+      - docs/**
     branches:
       - main
-  pull_request:
 
 jobs:
   deploy:
