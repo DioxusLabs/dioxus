@@ -105,7 +105,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             Arc::new(serde_json::from_value::<TouchData>(val).unwrap())
         }
 
-        "scroll" => Arc::new(()),
+        "scroll" => Arc::new(ScrollData {}),
 
         "wheel" => Arc::new(serde_json::from_value::<WheelData>(val).unwrap()),
 
