@@ -33,10 +33,4 @@ pub mod prelude {
 
     #[cfg(feature = "html")]
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
-
-    #[cfg(feature = "hot-reload")]
-    pub use dioxus_rsx_interpreter::{
-        captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
-        get_line_num, resolve_scope, CodeLocation, RsxContext,
-    };
 }

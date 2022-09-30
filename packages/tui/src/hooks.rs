@@ -243,23 +243,24 @@ impl InnerInputState {
         fn try_create_event(
             name: &'static str,
             data: Arc<dyn Any + Send + Sync>,
-            will_bubble: &mut FxHashSet<ElementId>,
+            will_bubble: &mut FxHashSet<GlobalNodeId>,
             resolved_events: &mut Vec<UserEvent>,
             node: &Node,
             dom: &Dom,
         ) {
             // only trigger event if the event was not triggered already by a child
-            if will_bubble.insert(node.id) {
-                let mut parent = node.parent;
+            let id = node.node_data.id;
+            if will_bubble.insert(id) {
+                let mut parent = node.node_data.parent;
                 while let Some(parent_id) = parent {
                     will_bubble.insert(parent_id);
-                    parent = dom[parent_id].parent;
+                    parent = dom[parent_id].node_data.parent;
                 }
                 resolved_events.push(UserEvent {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name,
-                    element: Some(node.id),
+                    element: Some(id),
                     data,
                     bubbles: event_bubbles(name),
                 })
@@ -546,7 +547,7 @@ impl InnerInputState {
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && node.state.focus.level.focusable() {
-                        focus_id = Some(node.id);
+                        focus_id = Some(node.node_data.id);
                     }
                 });
                 if let Some(id) = focus_id {
@@ -565,7 +566,7 @@ fn get_abs_layout(node: &Node, dom: &Dom, taffy: &Taffy) -> Layout {
     let mut node_layout = *taffy.layout(node.state.layout.node.unwrap()).unwrap();
     let mut current = node;
 
-    while let Some(parent_id) = current.parent {
+    while let Some(parent_id) = current.node_data.parent {
         let parent = &dom[parent_id];
         current = parent;
         let parent_layout = taffy.layout(parent.state.layout.node.unwrap()).unwrap();
@@ -664,7 +665,7 @@ impl RinkInputHandler {
                             scope_id: None,
                             priority: EventPriority::Medium,
                             name: event,
-                            element: Some(node.id),
+                            element: Some(node.node_data.id),
                             data: data.clone(),
                             bubbles: event_bubbles(event),
                         });

@@ -29,10 +29,10 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use dioxus_core::Attribute;
 use dioxus_native_core::{
     layout_attributes::parse_value,
     node_ref::{AttributeMask, NodeMask, NodeView},
+    real_dom::OwnedAttributeView,
     state::ParentDepState,
 };
 use dioxus_native_core_macro::sorted_str_slice;
@@ -79,9 +79,14 @@ impl ParentDepState for StyleModifier {
         }
 
         // gather up all the styles from the attribute list
-        for Attribute { name, value, .. } in node.attributes() {
-            if let Some(text) = value.as_text() {
-                apply_style_attributes(name, text, &mut new);
+        if let Some(attrs) = node.attributes() {
+            for OwnedAttributeView {
+                attribute, value, ..
+            } in attrs
+            {
+                if let Some(text) = value.as_text() {
+                    apply_style_attributes(&attribute.name, text, &mut new);
+                }
             }
         }
 

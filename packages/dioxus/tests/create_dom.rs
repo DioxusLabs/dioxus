@@ -30,12 +30,29 @@ fn test_original_diff() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateTextNode { root: 3, text: "Hello, world!" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370497,
+                text: "Hello, world!",
+                locally_static: true
+            },
             AppendChildren { many: 1 },
             AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            AppendChildren { many: 1 }
         ]
     );
 }
@@ -66,18 +83,49 @@ fn create() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateTextNode { root: 3, text: "Hello, world!" },
-            CreateElement { root: 4, tag: "div" },
-            CreateElement { root: 5, tag: "div" },
-            CreateTextNode { root: 6, text: "hello" },
-            CreateTextNode { root: 7, text: "world" },
-            AppendChildren { many: 2 },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreateTextNodeTemplate {
+                root: 4503599627370497,
+                text: "Hello, world!",
+                locally_static: true
+            },
+            CreateElementTemplate {
+                root: 4503599627370498,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreateElementTemplate {
+                root: 4503599627370499,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreatePlaceholderTemplate { root: 4503599627370500 },
+            AppendChildren { many: 1 },
             AppendChildren { many: 1 },
             AppendChildren { many: 2 },
             AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            EnterTemplateRef { root: 1 },
+            CreateTextNode { root: 2, text: "hello" },
+            CreateTextNode { root: 3, text: "world" },
+            ReplaceWith { root: 4503599627370500, m: 2 },
+            ExitTemplateRef {},
+            AppendChildren { many: 1 }
         ]
     );
 }
@@ -99,16 +147,20 @@ fn create_list() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "hello" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
             AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "div" },
-            CreateTextNode { root: 4, text: "hello" },
-            AppendChildren { many: 1 },
-            CreateElement { root: 5, tag: "div" },
-            CreateTextNode { root: 6, text: "hello" },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 3 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            CreateTemplateRef { id: 2, template_id: 0 },
+            CreateTemplateRef { id: 3, template_id: 0 },
+            AppendChildren { many: 3 }
         ]
     );
 }
@@ -131,11 +183,38 @@ fn create_simple() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateElement { root: 3, tag: "div" },
-            CreateElement { root: 4, tag: "div" },
-            AppendChildren { many: 4 },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            CreateElementTemplate {
+                root: 4503599627370497,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            CreateElementTemplate {
+                root: 4503599627370498,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 4 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            AppendChildren { many: 1 }
         ]
     );
 }
@@ -168,25 +247,50 @@ fn create_components() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "h1" },
-            CreateElement { root: 2, tag: "div" },
-            CreateTextNode { root: 3, text: "abc1" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "h1",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            CreateElementTemplate {
+                root: 4503599627370496,
+                tag: "div",
+                locally_static: true,
+                fully_static: false
+            },
+            CreatePlaceholderTemplate { root: 4503599627370497 },
             AppendChildren { many: 1 },
-            CreateElement { root: 4, tag: "p" },
-            CreateElement { root: 5, tag: "h1" },
-            CreateElement { root: 6, tag: "div" },
-            CreateTextNode { root: 7, text: "abc2" },
-            AppendChildren { many: 1 },
-            CreateElement { root: 8, tag: "p" },
-            CreateElement { root: 9, tag: "h1" },
-            CreateElement { root: 10, tag: "div" },
-            CreateTextNode { root: 11, text: "abc3" },
-            AppendChildren { many: 1 },
-            CreateElement { root: 12, tag: "p" },
-            AppendChildren { many: 9 },
+            CreateElementTemplate {
+                root: 4503599627370498,
+                tag: "p",
+                locally_static: true,
+                fully_static: true
+            },
+            AppendChildren { many: 0 },
+            FinishTemplate { len: 3 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            EnterTemplateRef { root: 1 },
+            CreateTextNode { root: 2, text: "abc1" },
+            ReplaceWith { root: 4503599627370497, m: 1 },
+            ExitTemplateRef {},
+            CreateTemplateRef { id: 3, template_id: 0 },
+            EnterTemplateRef { root: 3 },
+            CreateTextNode { root: 4, text: "abc2" },
+            ReplaceWith { root: 4503599627370497, m: 1 },
+            ExitTemplateRef {},
+            CreateTemplateRef { id: 5, template_id: 0 },
+            EnterTemplateRef { root: 5 },
+            CreateTextNode { root: 6, text: "abc3" },
+            ReplaceWith { root: 4503599627370497, m: 1 },
+            ExitTemplateRef {},
+            AppendChildren { many: 3 }
         ]
     );
 }
+
 #[test]
 fn anchors() {
     static App: Component = |cx| {
@@ -201,11 +305,19 @@ fn anchors() {
     assert_eq!(
         mutations.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "hello" },
+            CreateTemplate { id: 0 },
+            CreateElementTemplate {
+                root: 4503599627370495,
+                tag: "div",
+                locally_static: true,
+                fully_static: true
+            },
+            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
             AppendChildren { many: 1 },
-            CreatePlaceholder { root: 3 },
-            AppendChildren { many: 2 },
+            FinishTemplate { len: 1 },
+            CreateTemplateRef { id: 1, template_id: 0 },
+            CreatePlaceholder { root: 2 },
+            AppendChildren { many: 2 }
         ]
     );
 }

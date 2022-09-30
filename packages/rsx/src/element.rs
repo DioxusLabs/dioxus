@@ -10,10 +10,10 @@ use syn::{
 // =======================================
 // Parse the VNode::Element type
 // =======================================
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Element {
     pub name: Ident,
-    pub key: Option<LitStr>,
+    pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
@@ -46,7 +46,7 @@ impl Parse for Element {
                 content.parse::<Token![:]>()?;
 
                 if content.peek(LitStr) && content.peek2(Token![,]) {
-                    let value = content.parse::<LitStr>()?;
+                    let value = content.parse()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrText { name, value },
@@ -164,7 +164,7 @@ impl ToTokens for Element {
         let children = &self.children;
 
         let key = match &self.key {
-            Some(ty) => quote! { Some(format_args_f!(#ty)) },
+            Some(ty) => quote! { Some(#ty) },
             None => quote! { None },
         };
 
@@ -190,16 +190,16 @@ impl ToTokens for Element {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttr {
     /// attribute: "valuee {}"
-    AttrText { name: Ident, value: LitStr },
+    AttrText { name: Ident, value: IfmtInput },
 
     /// attribute: true,
     AttrExpression { name: Ident, value: Expr },
 
     /// "attribute": "value {}"
-    CustomAttrText { name: LitStr, value: LitStr },
+    CustomAttrText { name: LitStr, value: IfmtInput },
 
     /// "attribute": true,
     CustomAttrExpression { name: LitStr, value: Expr },
@@ -231,7 +231,7 @@ impl ElementAttr {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ElementAttrNamed {
     pub el_name: Ident,
     pub attr: ElementAttr,
@@ -244,29 +244,24 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
                 quote! {
-                    dioxus_elements::#el_name.#name(__cx, format_args_f!(#value))
+                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
                 quote! {
-                    dioxus_elements::#el_name.#name(__cx, #value)
+                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                    __cx.attr( #name, #value, None, false )
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
-                    __cx.attr( #name, format_args_f!(#value), None, false )
+                    __cx.attr( #name, #value, None, false )
                 }
             }
-            // ElementAttr::EventClosure { name, closure } => {
-            //     quote! {
-            //         dioxus_elements::on::#name(__cx, #closure)
-            //     }
-            // }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
                     dioxus_elements::on::#name(__cx, #tokens)

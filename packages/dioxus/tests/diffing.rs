@@ -6,10 +6,10 @@
 //!
 //! It does not validated that component lifecycles work properly. This is done in another test file.
 
-use dioxus::prelude::*;
+use dioxus::{core_macro::rsx_without_templates, prelude::*};
 
 fn new_dom() -> VirtualDom {
-    VirtualDom::new(|cx| render!("hi"))
+    VirtualDom::new(|cx| cx.render(rsx_without_templates!("hi")))
 }
 
 use dioxus_core::DomEdit::*;
@@ -19,8 +19,8 @@ use dioxus_core::DomEdit::*;
 fn html_and_rsx_generate_the_same_output() {
     let dom = new_dom();
     let (create, change) = dom.diff_lazynodes(
-        rsx! ( div { "Hello world" } ),
-        rsx! ( div { "Goodbye world" } ),
+        rsx_without_templates! ( div { "Hello world" } ),
+        rsx_without_templates! ( div { "Goodbye world" } ),
     );
     assert_eq!(
         create.edits,
@@ -40,7 +40,7 @@ fn html_and_rsx_generate_the_same_output() {
 fn fragments_create_properly() {
     let dom = new_dom();
 
-    let create = dom.create_vnodes(rsx! {
+    let create = dom.create_vnodes(rsx_without_templates! {
         div { "Hello a" }
         div { "Hello b" }
         div { "Hello c" }
@@ -68,8 +68,8 @@ fn fragments_create_properly() {
 fn empty_fragments_create_anchors() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
-    let right = rsx!({ (0..1).map(|_f| rsx! { div {}}) });
+    let left = rsx_without_templates!({ (0..0).map(|_f| rsx_without_templates! { div {}}) });
+    let right = rsx_without_templates!({ (0..1).map(|_f| rsx_without_templates! { div {}}) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
 
@@ -91,8 +91,8 @@ fn empty_fragments_create_anchors() {
 fn empty_fragments_create_many_anchors() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|_f| rsx! { div {}}) });
-    let right = rsx!({ (0..5).map(|_f| rsx! { div {}}) });
+    let left = rsx_without_templates!({ (0..0).map(|_f| rsx_without_templates! { div {}}) });
+    let right = rsx_without_templates!({ (0..5).map(|_f| rsx_without_templates! { div {}}) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
@@ -119,10 +119,10 @@ fn empty_fragments_create_many_anchors() {
 fn empty_fragments_create_anchors_with_many_children() {
     let dom = new_dom();
 
-    let left = rsx!({ (0..0).map(|_| rsx! { div {} }) });
-    let right = rsx!({
+    let left = rsx_without_templates!({ (0..0).map(|_| rsx_without_templates! { div {} }) });
+    let right = rsx_without_templates!({
         (0..3).map(|f| {
-            rsx! { div { "hello: {f}" }}
+            rsx_without_templates! { div { "hello: {f}" }}
         })
     });
 
@@ -154,12 +154,12 @@ fn empty_fragments_create_anchors_with_many_children() {
 fn many_items_become_fragment() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         (0..2).map(|_| {
-            rsx! { div { "hello" }}
+            rsx_without_templates! { div { "hello" }}
         })
     });
-    let right = rsx!({ (0..0).map(|_| rsx! { div {} }) });
+    let right = rsx_without_templates!({ (0..0).map(|_| rsx_without_templates! { div {} }) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
@@ -190,14 +190,14 @@ fn many_items_become_fragment() {
 fn two_equal_fragments_are_equal() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         (0..2).map(|_| {
-            rsx! { div { "hello" }}
+            rsx_without_templates! { div { "hello" }}
         })
     });
-    let right = rsx!({
+    let right = rsx_without_templates!({
         (0..2).map(|_| {
-            rsx! { div { "hello" }}
+            rsx_without_templates! { div { "hello" }}
         })
     });
 
@@ -210,12 +210,12 @@ fn two_equal_fragments_are_equal() {
 fn two_fragments_with_differrent_elements_are_differet() {
     let dom = new_dom();
 
-    let left = rsx!(
-        { (0..2).map(|_| rsx! { div {  }} ) }
+    let left = rsx_without_templates!(
+        { (0..2).map(|_| rsx_without_templates! { div {  }} ) }
         p {}
     );
-    let right = rsx!(
-        { (0..5).map(|_| rsx! (h1 {  }) ) }
+    let right = rsx_without_templates!(
+        { (0..5).map(|_| rsx_without_templates! (h1 {  }) ) }
         p {}
     );
 
@@ -243,12 +243,12 @@ fn two_fragments_with_differrent_elements_are_differet() {
 fn two_fragments_with_differrent_elements_are_differet_shorter() {
     let dom = new_dom();
 
-    let left = rsx!(
-        {(0..5).map(|f| {rsx! { div {  }}})}
+    let left = rsx_without_templates!(
+        {(0..5).map(|f| {rsx_without_templates! { div {  }}})}
         p {}
     );
-    let right = rsx!(
-        {(0..2).map(|f| {rsx! { h1 {  }}})}
+    let right = rsx_without_templates!(
+        {(0..2).map(|f| {rsx_without_templates! { h1 {  }}})}
         p {}
     );
 
@@ -287,12 +287,12 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
 fn two_fragments_with_same_elements_are_differet() {
     let dom = new_dom();
 
-    let left = rsx!(
-        {(0..2).map(|f| {rsx! { div {  }}})}
+    let left = rsx_without_templates!(
+        {(0..2).map(|f| rsx_without_templates! { div {  }})}
         p {}
     );
-    let right = rsx!(
-        {(0..5).map(|f| {rsx! { div {  }}})}
+    let right = rsx_without_templates!(
+        {(0..5).map(|f| rsx_without_templates! { div {  }})}
         p {}
     );
 
@@ -322,12 +322,12 @@ fn two_fragments_with_same_elements_are_differet() {
 fn keyed_diffing_order() {
     let dom = new_dom();
 
-    let left = rsx!(
-        {(0..5).map(|f| {rsx! { div { key: "{f}"  }}})}
+    let left = rsx_without_templates!(
+        {(0..5).map(|f| {rsx_without_templates! { div { key: "{f}"  }}})}
         p {"e"}
     );
-    let right = rsx!(
-        {(0..2).map(|f| rsx! { div { key: "{f}" }})}
+    let right = rsx_without_templates!(
+        {(0..2).map(|f| rsx_without_templates! { div { key: "{f}" }})}
         p {"e"}
     );
 
@@ -343,15 +343,15 @@ fn keyed_diffing_order() {
 fn keyed_diffing_out_of_order() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [0, 1, 2, 3, /**/ 4, 5, 6, /**/ 7, 8, 9].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [0, 1, 2, 3, /**/ 6, 4, 5, /**/ 7, 8, 9].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -368,15 +368,15 @@ fn keyed_diffing_out_of_order() {
 fn keyed_diffing_out_of_order_adds() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 8, 7, 4, 5, 6 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -395,15 +395,15 @@ fn keyed_diffing_out_of_order_adds() {
 fn keyed_diffing_out_of_order_adds_2() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 7, 8, 4, 5, 6 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -423,15 +423,15 @@ fn keyed_diffing_out_of_order_adds_2() {
 fn keyed_diffing_out_of_order_adds_3() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 4, 8, 7, 5, 6 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -451,15 +451,15 @@ fn keyed_diffing_out_of_order_adds_3() {
 fn keyed_diffing_out_of_order_adds_4() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 4, 5, 8, 7, 6 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -479,15 +479,15 @@ fn keyed_diffing_out_of_order_adds_4() {
 fn keyed_diffing_out_of_order_adds_5() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 4, 5, 6, 8, 7 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -502,15 +502,15 @@ fn keyed_diffing_out_of_order_adds_5() {
 fn keyed_diffing_additions() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 4, 5, 6, 7, 8, 9, 10 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -529,15 +529,15 @@ fn keyed_diffing_additions() {
 fn keyed_diffing_additions_and_moves_on_ends() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 4, 5, 6, 7 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 7, 4, 5, 6, 11, 12 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -561,15 +561,15 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 fn keyed_diffing_additions_and_moves_in_middle() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [/**/ 1, 2, 3, 4 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [/**/ 4, 1, 7, 8, 2, 5, 6, 3 /**/].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -598,15 +598,15 @@ fn keyed_diffing_additions_and_moves_in_middle() {
 fn controlled_keyed_diffing_out_of_order() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [4, 5, 6, 7].iter().map(|f| {
-            rsx! { div { key: "{f}" }}
+            rsx_without_templates! { div { key: "{f}" }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [0, 5, 9, 6, 4].iter().map(|f| {
-            rsx! { div { key: "{f}" }}
+            rsx_without_templates! { div { key: "{f}" }}
         })
     });
 
@@ -636,15 +636,15 @@ fn controlled_keyed_diffing_out_of_order() {
 fn controlled_keyed_diffing_out_of_order_max_test() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         [0, 1, 2, 3, 4].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         [3, 0, 1, 10, 2].iter().map(|f| {
-            rsx! { div { key: "{f}"  }}
+            rsx_without_templates! { div { key: "{f}"  }}
         })
     });
 
@@ -668,15 +668,15 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 fn remove_list() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         (0..10).rev().take(5).map(|i| {
-            rsx! { Fragment { key: "{i}", "{i}" }}
+            rsx_without_templates! { Fragment { key: "{i}", "{i}" }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         (0..10).rev().take(2).map(|i| {
-            rsx! { Fragment { key: "{i}", "{i}" }}
+            rsx_without_templates! { Fragment { key: "{i}", "{i}" }}
         })
     });
 
@@ -702,15 +702,15 @@ fn remove_list() {
 fn remove_list_nokeyed() {
     let dom = new_dom();
 
-    let left = rsx!({
+    let left = rsx_without_templates!({
         (0..10).rev().take(5).map(|i| {
-            rsx! { Fragment { "{i}" }}
+            rsx_without_templates! { Fragment { "{i}" }}
         })
     });
 
-    let right = rsx!({
+    let right = rsx_without_templates!({
         (0..10).rev().take(2).map(|i| {
-            rsx! { Fragment { "{i}" }}
+            rsx_without_templates! { Fragment { "{i}" }}
         })
     });
 
@@ -732,10 +732,10 @@ fn add_nested_elements() {
     let vdom = new_dom();
 
     let (_create, change) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{}
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 div{}
             }
@@ -758,10 +758,10 @@ fn add_listeners() {
     let vdom = new_dom();
 
     let (_create, change) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{}
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 onkeyup: |_| {},
                 onkeydown: |_| {},
@@ -783,13 +783,13 @@ fn remove_listeners() {
     let vdom = new_dom();
 
     let (_create, change) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 onkeyup: |_| {},
                 onkeydown: |_| {},
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{}
         },
     );
@@ -808,12 +808,12 @@ fn diff_listeners() {
     let vdom = new_dom();
 
     let (_create, change) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 onkeydown: |_| {},
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 onkeyup: |_| {},
             }

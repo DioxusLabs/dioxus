@@ -4,23 +4,27 @@
 
 pub(crate) mod arbitrary_value;
 pub(crate) mod diff;
+pub(crate) mod dynamic_template_context;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod properties;
 pub(crate) mod scopes;
+pub(crate) mod template;
 pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::arbitrary_value::*;
+    pub use crate::dynamic_template_context::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scopes::*;
+    pub use crate::template::*;
     pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
@@ -63,20 +67,36 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeValue, Component, DioxusElement,
-    DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode,
-    LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg, Scope, ScopeId,
-    ScopeState, TaskId, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
-    VText, VirtualDom,
+    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeDiscription, AttributeValue,
+    CodeLocation, Component, DioxusElement, DomEdit, DynamicNodeMapping, Element, ElementId,
+    ElementIdIterator, EventHandler, EventPriority, GlobalNodeId, IntoVNode, LazyNodes, Listener,
+    Mutations, NodeFactory, OwnedAttributeValue, Properties, RendererTemplateId, SchedulerMsg,
+    Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping, StaticTemplateNode,
+    StaticTemplateNodes, TaskId, Template, TemplateAttribute, TemplateAttributeValue,
+    TemplateContext, TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType,
+    TemplateValue, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
+    VFragment, VNode, VPlaceholder, VText, VirtualDom, JS_MAX_INT,
+};
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+pub use crate::innerlude::{
+    OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedTemplateNode, OwnedTemplateNodes,
+    SetTemplateMsg,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
 ///
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
+    pub use crate::get_line_num;
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
+    pub use crate::innerlude::OwnedTemplate;
     pub use crate::innerlude::{
-        fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
-        LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode, VirtualDom,
+        fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
+        DioxusElement, Element, EventHandler, Fragment, LazyNodes, LazyStaticVec, NodeFactory,
+        Properties, Scope, ScopeId, ScopeState, StaticAttributeValue, StaticCodeLocation,
+        StaticDynamicNodeMapping, StaticTemplate, StaticTemplateNodes, Template, TemplateAttribute,
+        TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId, TemplateNode,
+        TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, VNode, VirtualDom,
     };
 }
 
@@ -85,6 +105,7 @@ pub mod exports {
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
     pub use futures_channel;
+    pub use once_cell;
 }
 
 /// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite

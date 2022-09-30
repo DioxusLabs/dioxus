@@ -4,6 +4,7 @@ use std::rc::Rc;
 use dioxus_core::*;
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
+use dioxus_native_core::real_dom::OwnedAttributeView;
 use dioxus_native_core::state::ChildDepState;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
@@ -84,10 +85,17 @@ impl ChildDepState for TaffyLayout {
             }
         } else {
             // gather up all the styles from the attribute list
-            for Attribute { name, value, .. } in node.attributes() {
-                assert!(SORTED_LAYOUT_ATTRS.binary_search(name).is_ok());
-                if let Some(text) = value.as_text() {
-                    apply_layout_attributes(name, text, &mut style);
+            if let Some(attributes) = node.attributes() {
+                for OwnedAttributeView {
+                    attribute, value, ..
+                } in attributes
+                {
+                    assert!(SORTED_LAYOUT_ATTRS
+                        .binary_search(&attribute.name.as_ref())
+                        .is_ok());
+                    if let Some(text) = value.as_text() {
+                        apply_layout_attributes(&&attribute.name, text, &mut style);
+                    }
                 }
             }
 

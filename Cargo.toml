@@ -17,7 +17,6 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/rsx",
-    "packages/rsx_interpreter",
     "packages/native-core",
     "packages/native-core-macro",
     "docs/guide",
@@ -42,7 +41,7 @@ rust-version = "1.60.0"
 
 [dev-dependencies]
 dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop" }
+dioxus-desktop = { path = "./packages/desktop", features = ["hot-reload"] }
 dioxus-ssr = { path = "./packages/ssr" }
 dioxus-router = { path = "./packages/router" }
 fermi = { path = "./packages/fermi" }
@@ -60,3 +59,8 @@ reqwest = { version = "0.11.9", features = ["json"] }
 fern = { version = "0.6.0", features = ["colored"] }
 thiserror = "1.0.30"
 env_logger = "0.9.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+debug = true

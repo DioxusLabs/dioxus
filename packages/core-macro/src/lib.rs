@@ -34,40 +34,21 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 /// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
-    #[cfg(feature = "hot-reload")]
-    let rsx_text = s.to_string();
+    match syn::parse::<rsx::CallBody>(s) {
+        Err(err) => err.to_compile_error().into(),
+        Ok(body) => body.to_token_stream().into(),
+    }
+}
+
+/// A version of the rsx! macro that does not use templates. Used for testing diffing
+#[proc_macro]
+pub fn rsx_without_templates(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
         Ok(body) => {
-            #[cfg(feature = "hot-reload")]
-            {
-                use dioxus_rsx_interpreter::captuered_context::CapturedContextBuilder;
-
-                match CapturedContextBuilder::from_call_body(body) {
-                    Ok(captured) => {
-                        let lazy = quote::quote! {
-                            LazyNodes::new(move |__cx|{
-                                let code_location = get_line_num!();
-                                let captured = #captured;
-                                let text = #rsx_text;
-
-                                resolve_scope(code_location, text, captured, __cx)
-                            })
-                        };
-                        if let Some(cx) = captured.custom_context {
-                            quote::quote! {
-                                #cx.render(#lazy)
-                            }
-                            .into()
-                        } else {
-                            lazy.into()
-                        }
-                    }
-                    Err(err) => err.into_compile_error().into(),
-                }
-            }
-            #[cfg(not(feature = "hot-reload"))]
-            body.to_token_stream().into()
+            let mut tokens = proc_macro2::TokenStream::new();
+            body.to_tokens_without_template(&mut tokens);
+            tokens.into()
         }
     }
 }

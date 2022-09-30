@@ -1,7 +1,8 @@
 #![doc = include_str!("../README.md")]
 
-use std::fmt::{Display, Formatter};
+use std::fmt::{Display, Formatter, Write};
 
+use dioxus_core::exports::bumpalo;
 use dioxus_core::IntoVNode;
 use dioxus_core::*;
 
@@ -32,7 +33,8 @@ impl SsrRenderer {
             TextRenderer {
                 cfg: self.cfg.clone(),
                 root: &root,
-                vdom: None
+                vdom: Some(&self.vdom),
+                bump: bumpalo::Bump::new(),
             }
         )
     }
@@ -57,14 +59,18 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
 
     let root = f.into_vnode(NodeFactory::new(scope));
 
-    format!(
-        "{:}",
-        TextRenderer {
-            cfg: SsrConfig::default(),
-            root: &root,
-            vdom: None
-        }
-    )
+    let vdom = Some(&vdom);
+
+    let ssr_renderer = TextRenderer {
+        cfg: SsrConfig::default(),
+        root: &root,
+        vdom,
+        bump: bumpalo::Bump::new(),
+    };
+    let r = ssr_renderer.to_string();
+    drop(ssr_renderer);
+    drop(vdom);
+    r
 }
 
 pub fn render_vdom(dom: &VirtualDom) -> String {
@@ -91,7 +97,8 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
         TextRenderer {
             cfg: SsrConfig::default(),
             root: vdom.get_scope(scope).unwrap().root_node(),
-            vdom: Some(vdom)
+            vdom: Some(vdom),
+            bump: bumpalo::Bump::new()
         }
     ))
 }
@@ -114,32 +121,36 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
 /// let output = format!("{}", renderer);
 /// assert_eq!(output, "<div>hello world</div>");
 /// ```
-pub struct TextRenderer<'a, 'b> {
-    vdom: Option<&'a VirtualDom>,
+pub struct TextRenderer<'a, 'b, 'c> {
+    vdom: Option<&'c VirtualDom>,
     root: &'b VNode<'a>,
     cfg: SsrConfig,
+    bump: bumpalo::Bump,
 }
 
-impl Display for TextRenderer<'_, '_> {
+impl<'a: 'c, 'c> Display for TextRenderer<'a, '_, 'c> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut last_node_was_text = false;
         self.html_render(self.root, f, 0, &mut last_node_was_text)
     }
 }
 
-impl<'a> TextRenderer<'a, '_> {
+impl<'a> TextRenderer<'a, '_, 'a> {
     pub fn from_vdom(vdom: &'a VirtualDom, cfg: SsrConfig) -> Self {
         Self {
             cfg,
             root: vdom.base_scope().root_node(),
             vdom: Some(vdom),
+            bump: bumpalo::Bump::new(),
         }
     }
+}
 
+impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
     fn html_render(
         &self,
         node: &VNode,
-        f: &mut std::fmt::Formatter,
+        f: &mut impl Write,
         il: u16,
         last_node_was_text: &mut bool,
     ) -> std::fmt::Result {
@@ -180,66 +191,7 @@ impl<'a> TextRenderer<'a, '_> {
 
                 write!(f, "<{}", el.tag)?;
 
-                let mut inner_html = None;
-                let mut attr_iter = el.attributes.iter().peekable();
-
-                while let Some(attr) = attr_iter.next() {
-                    match attr.namespace {
-                        None => match attr.name {
-                            "dangerous_inner_html" => {
-                                inner_html = Some(attr.value.as_text().unwrap())
-                            }
-                            "allowfullscreen"
-                            | "allowpaymentrequest"
-                            | "async"
-                            | "autofocus"
-                            | "autoplay"
-                            | "checked"
-                            | "controls"
-                            | "default"
-                            | "defer"
-                            | "disabled"
-                            | "formnovalidate"
-                            | "hidden"
-                            | "ismap"
-                            | "itemscope"
-                            | "loop"
-                            | "multiple"
-                            | "muted"
-                            | "nomodule"
-                            | "novalidate"
-                            | "open"
-                            | "playsinline"
-                            | "readonly"
-                            | "required"
-                            | "reversed"
-                            | "selected"
-                            | "truespeed" => {
-                                if attr.value.is_truthy() {
-                                    write!(f, " {}=\"{}\"", attr.name, attr.value)?
-                                }
-                            }
-                            _ => write!(f, " {}=\"{}\"", attr.name, attr.value)?,
-                        },
-
-                        Some(ns) => {
-                            // write the opening tag
-                            write!(f, " {}=\"", ns)?;
-                            let mut cur_ns_el = attr;
-                            'ns_parse: loop {
-                                write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
-                                match attr_iter.peek() {
-                                    Some(next_attr) if next_attr.namespace == Some(ns) => {
-                                        cur_ns_el = attr_iter.next().unwrap();
-                                    }
-                                    _ => break 'ns_parse,
-                                }
-                            }
-                            // write the closing tag
-                            write!(f, "\"")?;
-                        }
-                    }
-                }
+                let inner_html = render_attributes(el.attributes.iter(), f)?;
 
                 match self.cfg.newline {
                     true => writeln!(f, ">")?,
@@ -283,8 +235,328 @@ impl<'a> TextRenderer<'a, '_> {
                 } else {
                 }
             }
+            VNode::TemplateRef(tmpl) => {
+                if let Some(vdom) = self.vdom {
+                    let template_id = &tmpl.template_id;
+                    let dynamic_context = &tmpl.dynamic_context;
+                    vdom.with_template(template_id, move |tmpl| {
+                        match tmpl {
+                            Template::Static(s) => {
+                                for r in s.root_nodes {
+                                    self.render_template_node(
+                                        &s.nodes,
+                                        &s.nodes[r.0],
+                                        dynamic_context,
+                                        &s.dynamic_mapping,
+                                        f,
+                                        last_node_was_text,
+                                        il,
+                                    )?;
+                                }
+                            }
+                            Template::Owned(o) => {
+                                for r in &o.root_nodes {
+                                    self.render_template_node(
+                                        &o.nodes,
+                                        &o.nodes[r.0],
+                                        dynamic_context,
+                                        &o.dynamic_mapping,
+                                        f,
+                                        last_node_was_text,
+                                        il,
+                                    )?;
+                                }
+                            }
+                        };
+                        Ok(())
+                    })?
+                } else {
+                    panic!("Cannot render template without vdom");
+                }
+            }
         }
         Ok(())
+    }
+
+    fn render_template_node<
+        TemplateNodes,
+        Attributes,
+        V,
+        Children,
+        Listeners,
+        TextSegments,
+        Text,
+        Nodes,
+        TextOuter,
+        TextInner,
+        AttributesOuter,
+        AttributesInner,
+        Volatile,
+        Listeners2,
+    >(
+        &self,
+        template_nodes: &TemplateNodes,
+        node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        dynamic_context: &TemplateContext,
+        dynamic_node_mapping: &DynamicNodeMapping<
+            Nodes,
+            TextOuter,
+            TextInner,
+            AttributesOuter,
+            AttributesInner,
+            Volatile,
+            Listeners2,
+        >,
+        f: &mut impl Write,
+        last_node_was_text: &mut bool,
+        il: u16,
+    ) -> std::fmt::Result
+    where
+        TemplateNodes:
+            AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+        Attributes: AsRef<[TemplateAttribute<V>]>,
+        AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
+        AttributesOuter: AsRef<[AttributesInner]>,
+        Children: AsRef<[TemplateNodeId]>,
+        Listeners: AsRef<[usize]>,
+        Listeners2: AsRef<[TemplateNodeId]>,
+        Nodes: AsRef<[Option<TemplateNodeId>]>,
+        Text: AsRef<str>,
+        TextInner: AsRef<[TemplateNodeId]>,
+        TextOuter: AsRef<[TextInner]>,
+        TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+        V: TemplateValue,
+        Volatile: AsRef<[(TemplateNodeId, usize)]>,
+    {
+        match &node.node_type {
+            TemplateNodeType::Element(el) => {
+                *last_node_was_text = false;
+
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+
+                write!(f, "<{}", el.tag)?;
+
+                let mut inner_html = None;
+
+                let mut attr_iter = el.attributes.as_ref().into_iter().peekable();
+
+                while let Some(attr) = attr_iter.next() {
+                    match attr.attribute.namespace {
+                        None => {
+                            if attr.attribute.name == "dangerous_inner_html" {
+                                inner_html = {
+                                    let text = match &attr.value {
+                                        TemplateAttributeValue::Static(val) => {
+                                            val.allocate(&self.bump).as_text().unwrap()
+                                        }
+                                        TemplateAttributeValue::Dynamic(idx) => dynamic_context
+                                            .resolve_attribute(*idx)
+                                            .as_text()
+                                            .unwrap(),
+                                    };
+                                    Some(text)
+                                }
+                            } else if is_boolean_attribute(attr.attribute.name) {
+                                match &attr.value {
+                                    TemplateAttributeValue::Static(val) => {
+                                        let val = val.allocate(&self.bump);
+                                        if val.is_truthy() {
+                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                        }
+                                    }
+                                    TemplateAttributeValue::Dynamic(idx) => {
+                                        let val = dynamic_context.resolve_attribute(*idx);
+                                        if val.is_truthy() {
+                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                        }
+                                    }
+                                }
+                            } else {
+                                match &attr.value {
+                                    TemplateAttributeValue::Static(val) => {
+                                        let val = val.allocate(&self.bump);
+                                        write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                    }
+                                    TemplateAttributeValue::Dynamic(idx) => {
+                                        let val = dynamic_context.resolve_attribute(*idx);
+                                        write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                    }
+                                }
+                            }
+                        }
+
+                        Some(ns) => {
+                            // write the opening tag
+                            write!(f, " {}=\"", ns)?;
+                            let mut cur_ns_el = attr;
+                            loop {
+                                match &attr.value {
+                                    TemplateAttributeValue::Static(val) => {
+                                        let val = val.allocate(&self.bump);
+                                        write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+                                    }
+                                    TemplateAttributeValue::Dynamic(idx) => {
+                                        let val = dynamic_context.resolve_attribute(*idx);
+                                        write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+                                    }
+                                }
+                                match attr_iter.peek() {
+                                    Some(next_attr)
+                                        if next_attr.attribute.namespace == Some(ns) =>
+                                    {
+                                        cur_ns_el = attr_iter.next().unwrap();
+                                    }
+                                    _ => break,
+                                }
+                            }
+                            // write the closing tag
+                            write!(f, "\"")?;
+                        }
+                    }
+                }
+
+                match self.cfg.newline {
+                    true => writeln!(f, ">")?,
+                    false => write!(f, ">")?,
+                }
+
+                if let Some(inner_html) = inner_html {
+                    write!(f, "{}", inner_html)?;
+                } else {
+                    let mut last_node_was_text = false;
+                    for child in el.children.as_ref() {
+                        self.render_template_node(
+                            template_nodes,
+                            &template_nodes.as_ref()[child.0],
+                            dynamic_context,
+                            dynamic_node_mapping,
+                            f,
+                            &mut last_node_was_text,
+                            il + 1,
+                        )?;
+                    }
+                }
+
+                if self.cfg.newline {
+                    writeln!(f)?;
+                }
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+
+                write!(f, "</{}>", el.tag)?;
+                if self.cfg.newline {
+                    writeln!(f)?;
+                }
+            }
+            TemplateNodeType::Text(txt) => {
+                if *last_node_was_text {
+                    write!(f, "<!--spacer-->")?;
+                }
+
+                if self.cfg.indent {
+                    for _ in 0..il {
+                        write!(f, "    ")?;
+                    }
+                }
+
+                *last_node_was_text = true;
+
+                let text = dynamic_context.resolve_text(&txt.segments);
+
+                write!(f, "{}", text)?
+            }
+            TemplateNodeType::DynamicNode(idx) => {
+                let node = dynamic_context.resolve_node(*idx);
+                self.html_render(node, f, il, last_node_was_text)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn render_attributes<'a, 'b: 'a, I>(
+    attrs: I,
+    f: &mut impl Write,
+) -> Result<Option<&'b str>, std::fmt::Error>
+where
+    I: Iterator<Item = &'a Attribute<'b>>,
+{
+    let mut inner_html = None;
+    let mut attr_iter = attrs.peekable();
+
+    while let Some(attr) = attr_iter.next() {
+        match attr.attribute.namespace {
+            None => {
+                if attr.attribute.name == "dangerous_inner_html" {
+                    inner_html = Some(attr.value.as_text().unwrap())
+                } else {
+                    if is_boolean_attribute(attr.attribute.name) {
+                        if !attr.value.is_truthy() {
+                            continue;
+                        }
+                    }
+                    write!(f, " {}=\"{}\"", attr.attribute.name, attr.value)?
+                }
+            }
+            Some(ns) => {
+                // write the opening tag
+                write!(f, " {}=\"", ns)?;
+                let mut cur_ns_el = attr;
+                loop {
+                    write!(f, "{}:{};", cur_ns_el.attribute.name, cur_ns_el.value)?;
+                    match attr_iter.peek() {
+                        Some(next_attr) if next_attr.attribute.namespace == Some(ns) => {
+                            cur_ns_el = attr_iter.next().unwrap();
+                        }
+                        _ => break,
+                    }
+                }
+                // write the closing tag
+                write!(f, "\"")?;
+            }
+        }
+    }
+    Ok(inner_html)
+}
+
+fn is_boolean_attribute(attribute: &'static str) -> bool {
+    if let "allowfullscreen"
+    | "allowpaymentrequest"
+    | "async"
+    | "autofocus"
+    | "autoplay"
+    | "checked"
+    | "controls"
+    | "default"
+    | "defer"
+    | "disabled"
+    | "formnovalidate"
+    | "hidden"
+    | "ismap"
+    | "itemscope"
+    | "loop"
+    | "multiple"
+    | "muted"
+    | "nomodule"
+    | "novalidate"
+    | "open"
+    | "playsinline"
+    | "readonly"
+    | "required"
+    | "reversed"
+    | "selected"
+    | "truespeed" = attribute
+    {
+        true
+    } else {
+        false
     }
 }
 

@@ -1,37 +1,39 @@
 use dioxus_core::*;
 
-use crate::state::union_ordered_iter;
+use crate::{
+    real_dom::{NodeData, NodeType, OwnedAttributeView},
+    state::union_ordered_iter,
+};
 
 /// A view into a [VNode] with limited access.
 #[derive(Debug)]
 pub struct NodeView<'a> {
-    inner: &'a VNode<'a>,
+    inner: &'a NodeData,
     mask: NodeMask,
 }
 
 impl<'a> NodeView<'a> {
     /// Create a new NodeView from a VNode, and mask.
-    pub fn new(mut vnode: &'a VNode<'a>, view: NodeMask, vdom: &'a VirtualDom) -> Self {
-        if let VNode::Component(sc) = vnode {
-            let scope = vdom.get_scope(sc.scope.get().unwrap()).unwrap();
-            vnode = scope.root_node();
-        }
+    pub fn new(node: &'a NodeData, view: NodeMask) -> Self {
         Self {
-            inner: vnode,
+            inner: node,
             mask: view,
         }
     }
 
     /// Get the id of the node
-    pub fn id(&self) -> ElementId {
-        self.inner.mounted_id()
+    pub fn id(&self) -> GlobalNodeId {
+        self.inner.id
     }
 
     /// Get the tag of the node if the tag is enabled in the mask
     pub fn tag(&self) -> Option<&'a str> {
         self.mask
             .tag
-            .then(|| self.try_element().map(|el| el.tag))
+            .then(|| match &self.inner.node_type {
+                NodeType::Element { tag, .. } => Some(&**tag),
+                _ => None,
+            })
             .flatten()
     }
 
@@ -39,47 +41,47 @@ impl<'a> NodeView<'a> {
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then(|| self.try_element().and_then(|el| el.namespace))
+            .then(|| match &self.inner.node_type {
+                NodeType::Element { namespace, .. } => namespace.map(|s| &*s),
+                _ => None,
+            })
             .flatten()
     }
 
     /// Get any attributes that are enabled in the mask
-    pub fn attributes(&self) -> impl Iterator<Item = &Attribute<'a>> {
-        self.try_element()
-            .map(|el| el.attributes)
-            .unwrap_or_default()
-            .iter()
-            .filter(|a| self.mask.attritutes.contains_attribute(a.name))
+    pub fn attributes<'b>(&'b self) -> Option<impl Iterator<Item = OwnedAttributeView<'a>> + 'b> {
+        match &self.inner.node_type {
+            NodeType::Element { attributes, .. } => Some(
+                attributes
+                    .iter()
+                    .filter(move |(attr, _)| self.mask.attritutes.contains_attribute(&attr.name))
+                    .map(|(attr, val)| OwnedAttributeView {
+                        attribute: attr,
+                        value: val,
+                    }),
+            ),
+            _ => None,
+        }
     }
 
     /// Get the text if it is enabled in the mask
     pub fn text(&self) -> Option<&str> {
         self.mask
             .text
-            .then(|| self.try_text().map(|txt| txt.text))
+            .then(|| match &self.inner.node_type {
+                NodeType::Text { text } => Some(&**text),
+                _ => None,
+            })
             .flatten()
     }
 
     /// Get the listeners if it is enabled in the mask
-    pub fn listeners(&self) -> &'a [Listener<'a>] {
-        self.try_element()
-            .map(|el| el.listeners)
-            .unwrap_or_default()
-    }
-
-    /// Try to get the underlying element.
-    fn try_element(&self) -> Option<&'a VElement<'a>> {
-        if let VNode::Element(el) = &self.inner {
-            Some(el)
-        } else {
-            None
-        }
-    }
-
-    /// Try to get the underlying text node.
-    fn try_text(&self) -> Option<&'a VText<'a>> {
-        if let VNode::Text(txt) = &self.inner {
-            Some(txt)
+    pub fn listeners(&self) -> Option<impl Iterator<Item = &'a str> + '_> {
+        if self.mask.listeners {
+            match &self.inner.node_type {
+                NodeType::Element { listeners, .. } => Some(listeners.iter().map(|l| &**l)),
+                _ => None,
+            }
         } else {
             None
         }
@@ -100,7 +102,7 @@ impl AttributeMask {
     /// A empty attribute mask
     pub const NONE: Self = Self::Static(&[]);
 
-    fn contains_attribute(&self, attr: &'static str) -> bool {
+    fn contains_attribute(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
             AttributeMask::Dynamic(l) => l.binary_search(&attr).is_ok(),
@@ -215,7 +217,8 @@ impl NodeMask {
     /// A node mask with every part visible.
     pub const ALL: Self = Self::new_with_attrs(AttributeMask::All)
         .with_text()
-        .with_element();
+        .with_element()
+        .with_listeners();
 
     /// Check if two masks overlap
     pub fn overlaps(&self, other: &Self) -> bool {

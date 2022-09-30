@@ -49,3 +49,4 @@ backtrace = "0.3"
 default = []
 serialize = ["serde"]
 debug_vdom = []
+hot-reload = []

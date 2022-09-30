@@ -1,12 +1,19 @@
-use crate::{innerlude::*, unsafe_utils::extend_vnode};
+use crate::{
+    dynamic_template_context::TemplateContext,
+    innerlude::*,
+    template::{
+        TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
+        TemplateValue, TextTemplateSegment,
+    },
+    unsafe_utils::extend_vnode,
+};
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    borrow::Borrow,
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
@@ -35,6 +42,10 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
+    pub template_resolver: RefCell<TemplateResolver>,
+    pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
+    // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
+    pub template_bump: Bump,
 }
 
 impl ScopeArena {
@@ -74,6 +85,9 @@ impl ScopeArena {
                 gen: Cell::new(0),
                 sender,
             }),
+            template_resolver: RefCell::new(TemplateResolver::default()),
+            templates: Rc::new(RefCell::new(FxHashMap::default())),
+            template_bump: Bump::new(),
         }
     }
 
@@ -93,8 +107,7 @@ impl ScopeArena {
         fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
-        container: ElementId,
-        subtree: u32,
+        container: GlobalNodeId,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_gen.get());
@@ -124,7 +137,6 @@ impl ScopeArena {
             scope.height = height;
             scope.fnptr = fc_ptr;
             scope.props.get_mut().replace(vcomp);
-            scope.subtree.set(subtree);
             scope.frames[0].reset();
             scope.frames[1].reset();
             scope.shared_contexts.get_mut().clear();
@@ -155,10 +167,6 @@ impl ScopeArena {
                     props: RefCell::new(Some(vcomp)),
                     frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
 
-                    // todo: subtrees
-                    subtree: Cell::new(0),
-                    is_subtree_root: Cell::default(),
-
                     generation: 0.into(),
 
                     tasks: self.tasks.clone(),
@@ -172,6 +180,8 @@ impl ScopeArena {
                     hook_arena: Bump::new(),
                     hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
                     hook_idx: Cell::default(),
+
+                    templates: self.templates.clone(),
                 }),
             );
         }
@@ -314,44 +324,140 @@ impl ScopeArena {
         scope.cycle_frame();
     }
 
-    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: ElementId) {
+    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: GlobalNodeId) {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
         let state = Rc::new(BubbleState::new());
 
         while let Some(id) = cur_el.take() {
-            if let Some(el) = nodes.get(id.0) {
-                let real_el = unsafe { &**el };
-
-                if let VNode::Element(real_el) = real_el {
-                    for listener in real_el.listeners.borrow().iter() {
-                        if listener.event == event.name {
-                            if state.canceled.get() {
-                                // stop bubbling if canceled
-                                return;
-                            }
-
-                            let mut cb = listener.callback.borrow_mut();
-                            if let Some(cb) = cb.as_mut() {
-                                // todo: arcs are pretty heavy to clone
-                                // we really want to convert arc to rc
-                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                                // we could convert arc to rc internally or something
-                                (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
-                                    data: event.data.clone(),
-                                });
-                            }
-
-                            if !event.bubbles {
-                                return;
-                            }
+            if state.canceled.get() {
+                // stop bubbling if canceled
+                return;
+            }
+            match id {
+                GlobalNodeId::TemplateId {
+                    template_ref_id,
+                    template_node_id,
+                } => {
+                    log::trace!(
+                        "looking for listener in {:?} in node {:?}",
+                        template_ref_id,
+                        template_node_id
+                    );
+                    if let Some(template) = nodes.get(template_ref_id.0) {
+                        let template = unsafe { &**template };
+                        if let VNode::TemplateRef(template_ref) = template {
+                            let templates = self.templates.borrow();
+                            let template = templates.get(&template_ref.template_id).unwrap();
+                            cur_el = template.borrow().with_node(
+                                template_node_id,
+                                bubble_template,
+                                bubble_template,
+                                (
+                                    &nodes,
+                                    &template_ref.dynamic_context,
+                                    &event,
+                                    &state,
+                                    template_ref_id,
+                                ),
+                            );
                         }
                     }
-
-                    cur_el = real_el.parent.get();
                 }
+                GlobalNodeId::VNodeId(id) => {
+                    if let Some(el) = nodes.get(id.0) {
+                        let real_el = unsafe { &**el };
+                        log::trace!("looking for listener on {:?}", real_el);
+
+                        if let VNode::Element(real_el) = real_el {
+                            for listener in real_el.listeners.iter() {
+                                if listener.event == event.name {
+                                    log::trace!("calling listener {:?}", listener.event);
+
+                                    let mut cb = listener.callback.borrow_mut();
+                                    if let Some(cb) = cb.as_mut() {
+                                        // todo: arcs are pretty heavy to clone
+                                        // we really want to convert arc to rc
+                                        // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                        // we could convert arc to rc internally or something
+                                        (cb)(AnyEvent {
+                                            bubble_state: state.clone(),
+                                            data: event.data.clone(),
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
+
+                            cur_el = real_el.parent.get();
+                        }
+                    }
+                }
+            }
+            if !event.bubbles {
+                return;
+            }
+        }
+
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+            ctx: (
+                &Ref<Slab<*const VNode>>,
+                &TemplateContext<'b>,
+                &UserEvent,
+                &Rc<BubbleState>,
+                ElementId,
+            ),
+        ) -> Option<GlobalNodeId>
+        where
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (vnodes, dynamic_context, event, state, template_ref_id) = ctx;
+            if let TemplateNodeType::Element(el) = &node.node_type {
+                let TemplateElement { listeners, .. } = el;
+                for listener_idx in listeners.as_ref() {
+                    let listener = dynamic_context.resolve_listener(*listener_idx);
+                    if listener.event == event.name {
+                        log::trace!("calling listener {:?}", listener.event);
+
+                        let mut cb = listener.callback.borrow_mut();
+                        if let Some(cb) = cb.as_mut() {
+                            // todo: arcs are pretty heavy to clone
+                            // we really want to convert arc to rc
+                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                            // we could convert arc to rc internally or something
+                            (cb)(AnyEvent {
+                                bubble_state: state.clone(),
+                                data: event.data.clone(),
+                            });
+                        }
+                        break;
+                    }
+                }
+
+                if let Some(id) = el.parent {
+                    Some(GlobalNodeId::TemplateId {
+                        template_ref_id,
+                        template_node_id: id,
+                    })
+                } else {
+                    vnodes.get(template_ref_id.0).and_then(|el| {
+                        let real_el = unsafe { &**el };
+                        if let VNode::Element(real_el) = real_el {
+                            real_el.parent.get()
+                        } else {
+                            None
+                        }
+                    })
+                }
+            } else {
+                None
             }
         }
     }
@@ -463,14 +569,10 @@ pub struct TaskId {
 /// use case they might have.
 pub struct ScopeState {
     pub(crate) parent_scope: Option<*mut ScopeState>,
-    pub(crate) container: ElementId,
+    pub(crate) container: GlobalNodeId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,
-
-    // todo: subtrees
-    pub(crate) is_subtree_root: Cell<bool>,
-    pub(crate) subtree: Cell<u32>,
     pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
 
     // nodes, items
@@ -486,6 +588,9 @@ pub struct ScopeState {
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
+
+    // templates
+    pub(crate) templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
 }
 
 pub struct SelfReferentialItems<'a> {
@@ -495,52 +600,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
-    /// Get the subtree ID that this scope belongs to.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!{ div {} }));
-    /// dom.rebuild();
-    ///
-    /// let base = dom.base_scope();
-    ///
-    /// assert_eq!(base.subtree(), 0);
-    /// ```
-    ///
-    /// todo: enable
-    pub(crate) fn _subtree(&self) -> u32 {
-        self.subtree.get()
-    }
-
-    /// Create a new subtree with this scope as the root of the subtree.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// This method
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// fn App(cx: Scope) -> Element {
-    ///     render!(div { "Subtree {id}"})
-    /// };
-    /// ```
-    ///
-    /// todo: enable subtree
-    pub(crate) fn _create_subtree(&self) -> Option<u32> {
-        if self.is_subtree_root.get() {
-            None
-        } else {
-            todo!()
-        }
-    }
-
     /// Get the height of this Scope - IE the number of scopes above it.
     ///
     /// A Scope with a height of `0` is the root scope - there are no other scopes above it.
@@ -903,8 +962,6 @@ impl ScopeState {
         self.hook_idx.set(0);
         self.parent_scope = None;
         self.generation.set(0);
-        self.is_subtree_root.set(false);
-        self.subtree.set(0);
 
         // next: shared context data
         self.shared_contexts.get_mut().clear();

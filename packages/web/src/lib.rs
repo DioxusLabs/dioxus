@@ -61,15 +61,14 @@ pub use crate::util::use_eval;
 use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
 use dioxus_core::VirtualDom;
-use futures_util::FutureExt;
 
 mod cache;
 mod cfg;
 mod dom;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 mod rehydrate;
-mod ric_raf;
+// mod ric_raf;
 mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
@@ -169,7 +168,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
     hot_reload::init(&dom);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
@@ -214,7 +213,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    // let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
@@ -225,13 +224,14 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         log::trace!("working..");
 
         // wait for the mainthread to schedule us in
-        let mut deadline = work_loop.wait_for_idle_time().await;
+        // let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| false);
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         for edit in mutations {
             // actually apply our changes during the animation frame
