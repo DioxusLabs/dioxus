@@ -1,3 +1,5 @@
+use crate::{raw_expr::RawExprNode, text::TextNode};
+
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -5,7 +7,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Expr, LitStr, Result,
+    token, LitStr, Result,
 };
 
 /*
@@ -16,17 +18,17 @@ Parse
 -> "text {with_args}"
 -> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
 */
-#[derive(PartialEq, Eq, Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BodyNode {
     Element(Element),
     Component(Component),
-    Text(LitStr),
-    RawExpr(Expr),
+    Text(TextNode),
+    RawExpr(RawExprNode),
 }
 
 impl BodyNode {
     pub fn is_litstr(&self) -> bool {
-        matches!(self, BodyNode::Text(_))
+        matches!(self, BodyNode::Text { .. })
     }
 
     pub fn span(&self) -> Span {
@@ -83,12 +85,11 @@ impl Parse for BodyNode {
             // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) {
                 Component::validate_component_path(&path)?;
-
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }
 
-        Ok(BodyNode::RawExpr(stream.parse::<Expr>()?))
+        Ok(BodyNode::RawExpr(stream.parse()?))
     }
 }
 
@@ -97,8 +98,8 @@ impl ToTokens for BodyNode {
         match &self {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
-            BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text(format_args_f!(#txt))
+            BodyNode::Text(text) => tokens.append_all(quote! {
+                __cx.text(format_args_f!(#text))
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)

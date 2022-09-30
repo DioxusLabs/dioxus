@@ -18,6 +18,24 @@ impl Buffer {
         let end = placement.end();
         // let num_spaces_desired = (self.indent * 4) as isize;
 
+        // print comments
+        // let mut queued_comments = vec![];
+        // let mut offset = 2;
+        // loop {
+        //     let line = &self.src[start.line - offset];
+        //     if line.trim_start().starts_with("//") {
+        //         queued_comments.push(line);
+        //     } else {
+        //         break;
+        //     }
+
+        //     offset += 1;
+        // }
+        // let had_comments = !queued_comments.is_empty();
+        // for comment in queued_comments.into_iter().rev() {
+        //     writeln!(self.buf, "{}", comment)?;
+        // }
+
         // if the expr is on one line, just write it directly
         if start.line == end.line {
             write!(
@@ -30,7 +48,6 @@ impl Buffer {
 
         // If the expr is multiline, we want to collect all of its lines together and write them out properly
         // This involves unshifting the first line if it's aligned
-
         let first_line = &self.src[start.line - 1];
         write!(
             self.buf,

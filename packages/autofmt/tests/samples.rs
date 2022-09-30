@@ -27,3 +27,6 @@ twoway! ("tinynoopt" => tinynoopt);
 twoway! ("long" => long);
 
 twoway! ("key" => key);
+
+// Disabled because we can't handle comments on exprs yet
+twoway! ("multirsx" => multirsx);

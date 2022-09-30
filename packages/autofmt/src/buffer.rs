@@ -67,8 +67,8 @@ impl Buffer {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
-            BodyNode::Text(text) => self.write_text(text),
-            BodyNode::RawExpr(exp) => self.write_raw_expr(exp),
+            BodyNode::Text(text) => self.write_text(&text.text),
+            BodyNode::RawExpr(exp) => self.write_raw_expr(&exp.expr),
         }
     }
 
@@ -129,7 +129,7 @@ impl Buffer {
         for (idx, child) in children.iter().enumerate() {
             match child {
                 // check if the expr is a short
-                BodyNode::RawExpr(_) => {
+                BodyNode::RawExpr { .. } => {
                     self.tabbed_line()?;
                     self.write_ident(child)?;
                     if idx != last_child - 1 {
