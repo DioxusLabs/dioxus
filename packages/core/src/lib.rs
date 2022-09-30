@@ -63,10 +63,11 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, Attribute, AttributeValue, Component, DioxusElement, DomEdit, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations,
-    NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent, UserEvent,
-    VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeValue, Component, DioxusElement,
+    DomEdit, Element, ElementId, ElementIdIterator, EventHandler, EventPriority, IntoVNode,
+    LazyNodes, Listener, Mutations, NodeFactory, Properties, SchedulerMsg, Scope, ScopeId,
+    ScopeState, TaskId, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
+    VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

@@ -66,12 +66,13 @@ impl<'a> std::fmt::Display for AttributeValue<'a> {
             AttributeValue::Vec4Int(_, _, _, _) => todo!(),
             AttributeValue::Vec4Uint(_, _, _, _) => todo!(),
             AttributeValue::Bytes(a) => write!(f, "{:?}", a),
-            AttributeValue::Any(_) => todo!(),
+            AttributeValue::Any(a) => write!(f, "{:?}", a),
         }
     }
 }
 
 #[derive(Clone, Copy)]
+#[allow(missing_docs)]
 pub struct ArbitraryAttributeValue<'a> {
     pub value: &'a dyn std::any::Any,
     pub cmp: fn(&'a dyn std::any::Any, &'a dyn std::any::Any) -> bool,
