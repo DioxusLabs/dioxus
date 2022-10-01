@@ -4,7 +4,7 @@ use std::{
     sync::Mutex,
 };
 
-use mlua::{AsChunk, Lua, Table};
+use mlua::{AsChunk, chunk, Lua, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -44,7 +44,7 @@ impl PluginManager {
             // // if plugin system is available, just set manager to nil.
             // lua.globals().set("manager", mlua::Value::Nil).unwrap();
             return Ok(());
-        }
+       }
 
         let manager = lua.create_table().unwrap();
         let plugin_dir = Self::init_plugin_dir();
@@ -108,19 +108,39 @@ impl PluginManager {
         lua.globals().set("manager", manager).unwrap();
 
         for (idx, path, info) in init_list {
-            let res = lua.load(&format!("manager[{idx}].on_init()")).exec();
-            if res.is_ok() {
-                let mut file = std::fs::File::create(path).unwrap();
-                let value = json!({
-                    "name": info.name,
-                    "author": info.author,
-                    "repository": info.repository,
-                    "version": info.version,
-                    "generate_time": chrono::Local::now().timestamp(),
-                });
-                let buffer = serde_json::to_string_pretty(&value).unwrap();
-                let buffer = buffer.as_bytes();
-                file.write_all(buffer).unwrap();
+            let res = lua
+                .load(mlua::chunk! {
+                    manager[$idx].on_init()
+                })
+                .eval::<bool>();
+            match res {
+                Ok(true) => {
+                    // plugin init success, create `dcp.json` file.
+                    let mut file = std::fs::File::create(path).unwrap();
+                    let value = json!({
+                        "name": info.name,
+                        "author": info.author,
+                        "repository": info.repository,
+                        "version": info.version,
+                        "generate_time": chrono::Local::now().timestamp(),
+                    });
+                    let buffer = serde_json::to_string_pretty(&value).unwrap();
+                    let buffer = buffer.as_bytes();
+                    file.write_all(buffer).unwrap();
+                }
+                Ok(false) => {
+                    log::warn!("Plugin init function result is `false`, init failed.");
+                    let _ = lua.load(mlua::chunk! {
+                        table.remove(manager, $idx)
+                    }).exec();
+                }
+                Err(e) => {
+                    // plugin init failed
+                    let _ = lua.load(mlua::chunk! {
+                        table.remove(manager, $idx)
+                    }).exec();
+                    log::warn!("Plugin init failed: {e}");
+                }
             }
         }
         return Ok(());
@@ -268,5 +288,9 @@ impl PluginManager {
         }
 
         res
+    }
+
+    pub fn plugin_status() {
+        let lua = LUA.lock().unwrap();
     }
 }

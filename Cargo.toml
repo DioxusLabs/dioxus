@@ -61,7 +61,7 @@ proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
 
 # plugin packages
-mlua = { version = "0.8.1", features = ["lua54", "vendored", "async", "send"] }
+mlua = { version = "0.8.1", features = ["lua54", "vendored", "async", "send", "macros"] }
 ctrlc = "3.2.3"
 
 [[bin]]
