@@ -26,7 +26,7 @@ impl<T> PartialEq for LazyStaticVec<T> {
 
 /// Stores what nodes depend on specific dynamic parts of the template to allow the diffing algorithm to jump to that part of the template instead of travering it
 /// This makes adding constant template nodes add no additional cost to diffing.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct DynamicNodeMapping<
     Nodes,
@@ -97,7 +97,7 @@ where
         }
     }
 
-    pub(crate) fn all_dynamic<'a>(&'a self) -> impl Iterator<Item = TemplateNodeId> + 'a {
+    pub(crate) fn all_dynamic(&self) -> impl Iterator<Item = TemplateNodeId> + '_ {
         self.nodes
             .as_ref()
             .iter()
@@ -106,16 +106,14 @@ where
                 self.text
                     .as_ref()
                     .iter()
-                    .map(|ids| ids.as_ref().iter())
-                    .flatten(),
+                    .flat_map(|ids| ids.as_ref().iter()),
             )
             .copied()
             .chain(
                 self.attributes
                     .as_ref()
                     .iter()
-                    .map(|ids| ids.as_ref().iter())
-                    .flatten()
+                    .flat_map(|ids| ids.as_ref().iter())
                     .map(|dynamic| dynamic.0),
             )
             .chain(self.nodes_with_listeners.as_ref().iter().copied())

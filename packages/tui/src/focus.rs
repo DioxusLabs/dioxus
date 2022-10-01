@@ -93,7 +93,7 @@ impl NodeDepState<()> for Focus {
                 .map(|mut listeners| {
                     listeners
                         .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
-                        .then(|| ())
+                        .then_some(())
                 })
                 .is_some()
             {

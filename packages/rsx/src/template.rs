@@ -21,7 +21,7 @@ pub fn try_parse_template(
         template_builder = template_builder
             .try_switch_dynamic_context(prev)
             .ok_or_else(|| {
-                Error::RecompileRequiredError(RecompileReason::CapturedVariable(
+                Error::RecompileRequiredError(RecompileReason::Variable(
                     "dynamic context updated".to_string(),
                 ))
             })?;
@@ -57,20 +57,17 @@ struct TemplateElementBuilder {
     parent: Option<TemplateNodeId>,
 }
 
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+type OwndedTemplateElement = TemplateElement<
+    Vec<TemplateAttribute<OwnedAttributeValue>>,
+    OwnedAttributeValue,
+    Vec<TemplateNodeId>,
+    Vec<usize>,
+>;
+
 impl TemplateElementBuilder {
     #[cfg(any(feature = "hot-reload", debug_assertions))]
-    fn try_into_owned(
-        self,
-        location: &OwnedCodeLocation,
-    ) -> Result<
-        TemplateElement<
-            Vec<TemplateAttribute<OwnedAttributeValue>>,
-            OwnedAttributeValue,
-            Vec<TemplateNodeId>,
-            Vec<usize>,
-        >,
-        Error,
-    > {
+    fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwndedTemplateElement, Error> {
         let Self {
             tag,
             attributes,
@@ -163,9 +160,7 @@ impl TemplateAttributeBuilder {
             .ok_or_else(|| {
                 if literal {
                     // literals will be captured when a full recompile is triggered
-                    Error::RecompileRequiredError(RecompileReason::CapturedAttribute(
-                        name.to_string(),
-                    ))
+                    Error::RecompileRequiredError(RecompileReason::Attribute(name.to_string()))
                 } else {
                     Error::ParseError(ParseError::new(
                         syn::Error::new(span, format!("unknown attribute: {}", name)),
@@ -253,22 +248,19 @@ enum TemplateNodeTypeBuilder {
     DynamicNode(usize),
 }
 
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+type OwnedTemplateNodeType = TemplateNodeType<
+    Vec<TemplateAttribute<OwnedAttributeValue>>,
+    OwnedAttributeValue,
+    Vec<TemplateNodeId>,
+    Vec<usize>,
+    Vec<TextTemplateSegment<String>>,
+    String,
+>;
+
 impl TemplateNodeTypeBuilder {
     #[cfg(any(feature = "hot-reload", debug_assertions))]
-    fn try_into_owned(
-        self,
-        location: &OwnedCodeLocation,
-    ) -> Result<
-        TemplateNodeType<
-            Vec<TemplateAttribute<OwnedAttributeValue>>,
-            OwnedAttributeValue,
-            Vec<TemplateNodeId>,
-            Vec<usize>,
-            Vec<TextTemplateSegment<String>>,
-            String,
-        >,
-        Error,
-    > {
+    fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNodeType, Error> {
         match self {
             TemplateNodeTypeBuilder::Element(el) => {
                 Ok(TemplateNodeType::Element(el.try_into_owned(location)?))
@@ -382,13 +374,11 @@ impl TemplateBuilder {
         }
 
         // only build a template if there is at least one static node
-        if builder.nodes.iter().all(|r| {
-            if let TemplateNodeTypeBuilder::DynamicNode(_) = &r.node_type {
-                true
-            } else {
-                false
-            }
-        }) {
+        if builder
+            .nodes
+            .iter()
+            .all(|r| matches!(&r.node_type, TemplateNodeTypeBuilder::DynamicNode(_)))
+        {
             None
         } else {
             Some(builder)
@@ -649,50 +639,40 @@ impl TemplateBuilder {
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         let nodes = &self.nodes;
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::DynamicNode(idx) => node_mapping[*idx] = Some(n.id),
-                _ => (),
+            if let TemplateNodeTypeBuilder::DynamicNode(idx) = &n.node_type {
+                node_mapping[*idx] = Some(n.id)
             }
         }
         let mut text_mapping = vec![Vec::new(); dynamic_context.text.len()];
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Text(txt) => {
-                    for seg in &txt.segments {
-                        match seg {
-                            TextTemplateSegment::Static(_) => (),
-                            TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
-                        }
+            if let TemplateNodeTypeBuilder::Text(txt) = &n.node_type {
+                for seg in &txt.segments {
+                    match seg {
+                        TextTemplateSegment::Static(_) => (),
+                        TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
                     }
                 }
-                _ => (),
             }
         }
         let mut attribute_mapping = vec![Vec::new(); dynamic_context.attributes.len()];
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Element(el) => {
-                    for (i, attr) in el.attributes.iter().enumerate() {
-                        match attr.value {
-                            TemplateAttributeValue::Static(_) => (),
-                            TemplateAttributeValue::Dynamic(idx) => {
-                                attribute_mapping[idx].push((n.id, i));
-                            }
+            if let TemplateNodeTypeBuilder::Element(el) = &n.node_type {
+                for (i, attr) in el.attributes.iter().enumerate() {
+                    match attr.value {
+                        TemplateAttributeValue::Static(_) => (),
+                        TemplateAttributeValue::Dynamic(idx) => {
+                            attribute_mapping[idx].push((n.id, i));
                         }
                     }
                 }
-                _ => (),
             }
         }
         let mut listener_mapping = Vec::new();
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Element(el) => {
-                    if !el.listeners.is_empty() {
-                        listener_mapping.push(n.id);
-                    }
+            if let TemplateNodeTypeBuilder::Element(el) = &n.node_type {
+                if !el.listeners.is_empty() {
+                    listener_mapping.push(n.id);
                 }
-                _ => (),
             }
         }
 
@@ -727,50 +707,40 @@ impl ToTokens for TemplateBuilder {
 
         let mut node_mapping = vec![None; dynamic_context.nodes.len()];
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::DynamicNode(idx) => node_mapping[*idx] = Some(n.id),
-                _ => (),
+            if let TemplateNodeTypeBuilder::DynamicNode(idx) = &n.node_type {
+                node_mapping[*idx] = Some(n.id);
             }
         }
         let mut text_mapping = vec![Vec::new(); dynamic_context.text.len()];
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Text(txt) => {
-                    for seg in &txt.segments {
-                        match seg {
-                            TextTemplateSegment::Static(_) => (),
-                            TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
-                        }
+            if let TemplateNodeTypeBuilder::Text(txt) = &n.node_type {
+                for seg in &txt.segments {
+                    match seg {
+                        TextTemplateSegment::Static(_) => (),
+                        TextTemplateSegment::Dynamic(idx) => text_mapping[*idx].push(n.id),
                     }
                 }
-                _ => (),
             }
         }
         let mut attribute_mapping = vec![Vec::new(); dynamic_context.attributes.len()];
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Element(el) => {
-                    for (i, attr) in el.attributes.iter().enumerate() {
-                        match attr.value {
-                            TemplateAttributeValue::Static(_) => (),
-                            TemplateAttributeValue::Dynamic(idx) => {
-                                attribute_mapping[idx].push((n.id, i));
-                            }
+            if let TemplateNodeTypeBuilder::Element(el) = &n.node_type {
+                for (i, attr) in el.attributes.iter().enumerate() {
+                    match attr.value {
+                        TemplateAttributeValue::Static(_) => (),
+                        TemplateAttributeValue::Dynamic(idx) => {
+                            attribute_mapping[idx].push((n.id, i));
                         }
                     }
                 }
-                _ => (),
             }
         }
         let mut listener_mapping = Vec::new();
         for n in nodes {
-            match &n.node_type {
-                TemplateNodeTypeBuilder::Element(el) => {
-                    if !el.listeners.is_empty() {
-                        listener_mapping.push(n.id);
-                    }
+            if let TemplateNodeTypeBuilder::Element(el) = &n.node_type {
+                if !el.listeners.is_empty() {
+                    listener_mapping.push(n.id);
                 }
-                _ => (),
             }
         }
 

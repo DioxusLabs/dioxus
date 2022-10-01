@@ -66,8 +66,10 @@ macro_rules! builder_constructors {
     };
 }
 
+type MappedAttributes = &'static [(&'static str, &'static [(&'static str, &'static str, bool)])];
+
 /// All attributes that are tied to a specific element that either have a different name, or are volitile
-pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: &[(&str, &[(&str, &str, bool)])] = &[
+pub const ELEMENTS_WITH_MAPPED_ATTRIBUTES: MappedAttributes = &[
     (
         "script",
         &[("r#type", "type", false), ("r#script", "script", false)],

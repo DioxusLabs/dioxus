@@ -94,7 +94,7 @@ impl ChildDepState for TaffyLayout {
                         .binary_search(&attribute.name.as_ref())
                         .is_ok());
                     if let Some(text) = value.as_text() {
-                        apply_layout_attributes(&&attribute.name, text, &mut style);
+                        apply_layout_attributes(&attribute.name, text, &mut style);
                     }
                 }
             }

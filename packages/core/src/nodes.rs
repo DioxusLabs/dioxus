@@ -37,9 +37,9 @@ pub enum GlobalNodeId {
     VNodeId(ElementId),
 }
 
-impl Into<GlobalNodeId> for ElementId {
-    fn into(self) -> GlobalNodeId {
-        GlobalNodeId::VNodeId(self)
+impl From<ElementId> for GlobalNodeId {
+    fn from(id: ElementId) -> GlobalNodeId {
+        GlobalNodeId::VNodeId(id)
     }
 }
 
@@ -279,9 +279,9 @@ impl ElementId {
     }
 }
 
-impl Into<u64> for ElementId {
-    fn into(self) -> u64 {
-        self.0 as u64
+impl From<ElementId> for u64 {
+    fn from(el: ElementId) -> u64 {
+        el.0 as u64
     }
 }
 

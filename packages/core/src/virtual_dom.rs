@@ -727,7 +727,7 @@ impl VirtualDom {
             .borrow()
             .get(id)
             .map(|inner| {
-                let borrow = &*inner;
+                let borrow = inner;
                 f(&borrow.borrow())
             })
             .unwrap()

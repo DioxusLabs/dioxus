@@ -30,7 +30,7 @@ impl<'a> NodeView<'a> {
     pub fn tag(&self) -> Option<&'a str> {
         self.mask
             .tag
-            .then(|| match &self.inner.node_type {
+            .then_some(match &self.inner.node_type {
                 NodeType::Element { tag, .. } => Some(&**tag),
                 _ => None,
             })
@@ -41,8 +41,8 @@ impl<'a> NodeView<'a> {
     pub fn namespace(&self) -> Option<&'a str> {
         self.mask
             .namespace
-            .then(|| match &self.inner.node_type {
-                NodeType::Element { namespace, .. } => namespace.map(|s| &*s),
+            .then_some(match &self.inner.node_type {
+                NodeType::Element { namespace, .. } => *namespace,
                 _ => None,
             })
             .flatten()
@@ -68,7 +68,7 @@ impl<'a> NodeView<'a> {
     pub fn text(&self) -> Option<&str> {
         self.mask
             .text
-            .then(|| match &self.inner.node_type {
+            .then_some(match &self.inner.node_type {
                 NodeType::Text { text } => Some(&**text),
                 _ => None,
             })

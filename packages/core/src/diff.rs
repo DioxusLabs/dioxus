@@ -157,7 +157,7 @@ impl<'b> DiffState<'b> {
             }
 
             (Component(old), Component(new)) => {
-                self.diff_component_nodes(*old, *new, old_node, new_node);
+                self.diff_component_nodes(old, new, old_node, new_node);
             }
 
             (Fragment(old), Fragment(new)) => {
@@ -181,8 +181,8 @@ impl<'b> DiffState<'b> {
             VNode::Placeholder(anchor) => self.create_anchor_node(anchor, node),
             VNode::Element(element) => self.create_element_node(element, node),
             VNode::Fragment(frag) => self.create_fragment_node(frag),
-            VNode::Component(component) => self.create_component_node(*component),
-            VNode::TemplateRef(temp) => self.create_template_ref_node(*temp, node),
+            VNode::Component(component) => self.create_component_node(component),
+            VNode::TemplateRef(temp) => self.create_template_ref_node(temp, node),
         }
     }
 
@@ -572,6 +572,7 @@ impl<'b> DiffState<'b> {
         self.diff_children(old.children, new.children);
     }
 
+    #[allow(clippy::too_many_lines)]
     fn diff_template_ref_nodes(
         &mut self,
         old: &'b VTemplateRef<'b>,
@@ -579,6 +580,94 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
+        fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+            nodes: &Nodes,
+            ctx: (
+                &mut Mutations<'b>,
+                &'b Bump,
+                &VTemplateRef<'b>,
+                &Template,
+                usize,
+            ),
+        ) where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (mutations, scope_bump, new, template, idx) = ctx;
+            for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
+                if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type {
+                    let TemplateElement { attributes, .. } = el;
+                    let attr = &attributes.as_ref()[*attr_idx];
+                    let attribute = Attribute {
+                        attribute: attr.attribute,
+                        value: new.dynamic_context.resolve_attribute(idx).clone(),
+                        is_static: false,
+                    };
+                    mutations.set_attribute(scope_bump.alloc(attribute), *node_id);
+                } else {
+                    panic!("expected element node");
+                }
+            }
+        }
+
+        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+            ctx: (&mut Mutations<'b>, &'b Bump, &VTemplateRef<'b>, usize),
+        ) where
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (mutations, scope_bump, new, template_attr_idx) = ctx;
+            if let TemplateNodeType::Element(el) = &node.node_type {
+                let TemplateElement { attributes, .. } = el;
+                let attr = &attributes.as_ref()[template_attr_idx];
+                let value = match &attr.value {
+                    TemplateAttributeValue::Dynamic(idx) => {
+                        new.dynamic_context.resolve_attribute(*idx).clone()
+                    }
+                    TemplateAttributeValue::Static(value) => value.allocate(scope_bump),
+                };
+                let attribute = Attribute {
+                    attribute: attr.attribute,
+                    value,
+                    is_static: false,
+                };
+                mutations.set_attribute(scope_bump.alloc(attribute), node.id);
+            } else {
+                panic!("expected element node");
+            }
+        }
+
+        fn diff_dynamic_node<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+            ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
+        ) where
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (diff, old_node, new_node, root) = ctx;
+            if let TemplateNodeType::Element { .. } = node.node_type {
+                diff.element_stack.push(GlobalNodeId::VNodeId(root));
+                diff.diff_node(old_node, new_node);
+                diff.element_stack.pop();
+            } else {
+                diff.diff_node(old_node, new_node);
+            }
+        }
+
         if std::ptr::eq(old, new) {
             return;
         }
@@ -617,41 +706,6 @@ impl<'b> DiffState<'b> {
         };
         let template = template.borrow();
 
-        fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
-            nodes: &Nodes,
-            ctx: (
-                &mut Mutations<'b>,
-                &'b Bump,
-                &VTemplateRef<'b>,
-                &Template,
-                usize,
-            ),
-        ) where
-            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (mutations, scope_bump, new, template, idx) = ctx;
-            for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
-                if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type {
-                    let TemplateElement { attributes, .. } = el;
-                    let attr = &attributes.as_ref()[*attr_idx];
-                    let attribute = Attribute {
-                        attribute: attr.attribute,
-                        value: new.dynamic_context.resolve_attribute(idx).clone(),
-                        is_static: false,
-                    };
-                    mutations.set_attribute(scope_bump.alloc(attribute), *node_id);
-                } else {
-                    panic!("expected element node");
-                }
-            }
-        }
-
         // diff dynamic attributes
         for (idx, (old_attr, new_attr)) in old
             .dynamic_context
@@ -669,38 +723,6 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-            ctx: (&mut Mutations<'b>, &'b Bump, &VTemplateRef<'b>, usize),
-        ) where
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (mutations, scope_bump, new, template_attr_idx) = ctx;
-            if let TemplateNodeType::Element(el) = &node.node_type {
-                let TemplateElement { attributes, .. } = el;
-                let attr = &attributes.as_ref()[template_attr_idx];
-                let value = match &attr.value {
-                    TemplateAttributeValue::Dynamic(idx) => {
-                        new.dynamic_context.resolve_attribute(*idx).clone()
-                    }
-                    TemplateAttributeValue::Static(value) => value.allocate(scope_bump),
-                };
-                let attribute = Attribute {
-                    attribute: attr.attribute,
-                    value,
-                    is_static: false,
-                };
-                mutations.set_attribute(scope_bump.alloc(attribute), node.id);
-            } else {
-                panic!("expected element node");
-            }
-        }
-
         // set all volatile attributes
         for (id, idx) in template.volatile_attributes() {
             template.with_node(
@@ -708,28 +730,7 @@ impl<'b> DiffState<'b> {
                 set_attribute,
                 set_attribute,
                 (&mut self.mutations, scope_bump, new, idx),
-            )
-        }
-
-        fn diff_dynamic_node<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-            ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
-        ) where
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (diff, old_node, new_node, root) = ctx;
-            if let TemplateNodeType::Element { .. } = node.node_type {
-                diff.element_stack.push(GlobalNodeId::VNodeId(root));
-                diff.diff_node(old_node, new_node);
-                diff.element_stack.pop();
-            } else {
-                diff.diff_node(old_node, new_node);
-            }
+            );
         }
 
         // diff dynmaic nodes
