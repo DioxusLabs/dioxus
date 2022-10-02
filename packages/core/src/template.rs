@@ -790,6 +790,12 @@ impl TemplateValue for OwnedAttributeValue {
             OwnedAttributeValue::Vec4Uint(u1, u2, u3, u4) => {
                 AttributeValue::Vec4Uint(u1, u2, u3, u4)
             }
+            OwnedAttributeValue::Any(owned) => {
+                AttributeValue::Any(crate::ArbitraryAttributeValue {
+                    value: bump.alloc(owned.value),
+                    cmp: owned.cmp,
+                })
+            }
         }
     }
 }

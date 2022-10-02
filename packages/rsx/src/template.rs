@@ -216,6 +216,7 @@ impl ToTokens for TemplateAttributeBuilder {
                     OwnedAttributeValue::Bytes(b) => {
                         quote! {StaticAttributeValue::Bytes(&[#(#b),*])}
                     }
+                    OwnedAttributeValue::Any(_) => todo!(),
                 };
                 quote! {TemplateAttributeValue::Static(#val)}
             }

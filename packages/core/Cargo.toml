@@ -45,6 +45,9 @@ serde = { version = "1", features = ["derive"], optional = true }
 # todo: I want to get rid of this
 backtrace = "0.3"
 
+# allows cloing trait objects
+dyn-clone = "1.0.9"
+
 [features]
 default = []
 serialize = ["serde"]
