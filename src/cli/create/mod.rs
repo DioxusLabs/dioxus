@@ -17,8 +17,7 @@ pub struct Create {
 impl Create {
     pub fn create(self) -> Result<()> {
         if Self::name_vaild_check(self.name.clone()) {
-            log::error!("❗Unsupported project name.");
-            return Ok(());
+            return custom_error!("❗Unsupported project name.");
         }
 
         let project_path = PathBuf::from(&self.name);

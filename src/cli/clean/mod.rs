@@ -16,8 +16,7 @@ impl Clean {
             .output()?;
 
         if !output.status.success() {
-            log::error!("Cargo clean failed.");
-            return Ok(());
+            return custom_error!("Cargo clean failed.");
         }
 
         let out_dir = crate_config

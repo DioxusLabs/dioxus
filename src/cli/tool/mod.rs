@@ -30,15 +30,14 @@ impl Tool {
                 if let Some(v) = tools::tools_path().to_str() {
                     println!("{}", v);
                 } else {
-                    log::error!("Tools path get failed.");
+                    return custom_error!("Tools path get failed.");
                 }
             }
             Tool::Add { name } => {
                 let tool_list = tools::tool_list();
 
                 if !tool_list.contains(&name.as_str()) {
-                    log::error!("Tool {name} not found.");
-                    return Ok(());
+                    return custom_error!("Tool {name} not found.");
                 }
                 let target_tool = tools::Tool::from_str(&name).unwrap();
 
@@ -49,17 +48,15 @@ impl Tool {
 
                 log::info!("Start to download tool package...");
                 if let Err(e) = target_tool.download_package().await {
-                    log::error!("Tool download failed: {e}");
-                    return Ok(());
+                    return custom_error!("Tool download failed: {e}");
                 }
 
                 log::info!("Start to install tool package...");
                 if let Err(e) = target_tool.install_package().await {
-                    log::error!("Tool install failed: {e}");
-                    return Ok(());
+                    return custom_error!("Tool install failed: {e}");
                 }
 
-                log::info!("Tool {name} install successfully!");
+                log::info!("Tool {name} installed successfully!");
             }
         }
         Ok(())

@@ -27,14 +27,11 @@ impl Translate {
         } = self;
 
         let contents = match file {
-            Some(input) => std::fs::read_to_string(&input).unwrap_or_else(|e| {
-                log::error!("Cloud not read input file: {}.", e);
-                exit(0);
-            }),
+            Some(input) => std::fs::read_to_string(&input)
+                .map_err(|e| Error::CustomError(format!("Could not read input file: {e}.")))?,
             None => {
                 if atty::is(atty::Stream::Stdin) {
-                    log::error!("No input file, source, or stdin to translate from.");
-                    exit(0);
+                    return custom_error!("No input file, source, or stdin to translate from.");
                 }
 
                 let mut buffer = String::new();
