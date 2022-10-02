@@ -641,6 +641,9 @@ impl<S: State> RealDom<S> {
     fn remove(&mut self, id: GlobalNodeId) -> Option<TemplateRefOrNode<S>> {
         // We do not need to remove the node from the parent's children list for children.
         fn inner<S: State>(dom: &mut RealDom<S>, id: GlobalNodeId) -> Option<TemplateRefOrNode<S>> {
+            for nodes_listeners in dom.nodes_listening.values_mut() {
+                nodes_listeners.remove(&id);
+            }
             let mut either = match id {
                 GlobalNodeId::VNodeId(id) => *dom.nodes[id.0].take()?,
                 GlobalNodeId::TemplateId {
@@ -683,6 +686,9 @@ impl<S: State> RealDom<S> {
                 }
             }
         };
+        for nodes_listeners in self.nodes_listening.values_mut() {
+            nodes_listeners.remove(&id);
+        }
         if let Some(parent) = node.parent() {
             let parent = &mut self[parent];
             parent.remove_child(id);
