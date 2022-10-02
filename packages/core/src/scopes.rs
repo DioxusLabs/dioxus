@@ -21,6 +21,8 @@ use std::{
     sync::Arc,
 };
 
+pub(crate) type NodeSlab = Slab<Option<*const VNode<'static>>>;
+
 /// for traceability, we use the raw fn pointer to identify the function
 /// we also get the component name, but that's not necessarily unique in the app
 pub(crate) type ComponentPtr = *mut std::os::raw::c_void;
@@ -40,7 +42,10 @@ pub(crate) struct ScopeArena {
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
     pub heuristics: RefCell<FxHashMap<ComponentPtr, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
-    pub nodes: RefCell<Slab<*const VNode<'static>>>,
+    // All nodes are stored here. This mimics the allocations needed on the renderer side.
+    // Some allocations are needed on the renderer to render nodes in templates that are
+    // not needed in dioxus, for these allocations None is used so that the id is preseved and passive memory managment is preserved.
+    pub nodes: RefCell<NodeSlab>,
     pub tasks: Rc<TaskQueue>,
     pub template_resolver: RefCell<TemplateResolver>,
     pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
@@ -68,7 +73,7 @@ impl ScopeArena {
 
         let node = bump.alloc(VNode::Element(el));
         let mut nodes = Slab::new();
-        let root_id = nodes.insert(unsafe { std::mem::transmute(node as *const _) });
+        let root_id = nodes.insert(Some(unsafe { std::mem::transmute(node as *const _) }));
 
         debug_assert_eq!(root_id, 0);
 
@@ -217,13 +222,13 @@ impl ScopeArena {
         let key = entry.key();
         let id = ElementId(key);
         let node = unsafe { extend_vnode(node) };
-        entry.insert(node as *const _);
+        entry.insert(Some(node as *const _));
         id
     }
 
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
         let node = unsafe { extend_vnode(node) };
-        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = node;
+        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = Some(node);
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -346,7 +351,7 @@ impl ScopeArena {
                         template_node_id
                     );
                     if let Some(template) = nodes.get(template_ref_id.0) {
-                        let template = unsafe { &**template };
+                        let template = unsafe { &*template.unwrap() };
                         if let VNode::TemplateRef(template_ref) = template {
                             let templates = self.templates.borrow();
                             let template = templates.get(&template_ref.template_id).unwrap();
@@ -367,7 +372,7 @@ impl ScopeArena {
                 }
                 GlobalNodeId::VNodeId(id) => {
                     if let Some(el) = nodes.get(id.0) {
-                        let real_el = unsafe { &**el };
+                        let real_el = unsafe { &*el.unwrap() };
                         log::trace!("looking for listener on {:?}", real_el);
 
                         if let VNode::Element(real_el) = real_el {
@@ -403,7 +408,7 @@ impl ScopeArena {
         fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
             node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (
-                &Ref<Slab<*const VNode>>,
+                &Ref<NodeSlab>,
                 &TemplateContext<'b>,
                 &UserEvent,
                 &Rc<BubbleState>,
@@ -448,7 +453,7 @@ impl ScopeArena {
                     })
                 } else {
                     vnodes.get(template_ref_id.0).and_then(|el| {
-                        let real_el = unsafe { &**el };
+                        let real_el = unsafe { &*el.unwrap() };
                         if let VNode::Element(real_el) = real_el {
                             real_el.parent.get()
                         } else {
@@ -488,7 +493,7 @@ impl ScopeArena {
             .borrow()
             .get(id.0)
             .copied()
-            .map(|ptr| unsafe { extend_vnode(&*ptr) })
+            .map(|ptr| unsafe { extend_vnode(&*ptr.unwrap()) })
     }
 }
 

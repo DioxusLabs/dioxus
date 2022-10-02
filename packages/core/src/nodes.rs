@@ -875,6 +875,7 @@ impl<'a> NodeFactory<'a> {
             id: empty_cell(),
             dynamic_context,
             template_id: id,
+            node_ids: Vec::new(),
         }))
     }
 }

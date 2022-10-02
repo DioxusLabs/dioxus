@@ -289,14 +289,21 @@ pub struct VTemplateRef<'a> {
     pub id: Cell<Option<ElementId>>,
     pub template_id: TemplateId,
     pub dynamic_context: TemplateContext<'a>,
+    // any nodes that already have ids assigned to them in the renderer
+    pub node_ids: Vec<Option<ElementId>>,
 }
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a>) {
+    pub(crate) fn hydrate<'b>(
+        &self,
+        parent: ElementId,
+        template: &'b Template,
+        diff_state: &mut DiffState<'a>,
+    ) {
         fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
-            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template),
+            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template, ElementId),
         ) where
             Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -306,14 +313,60 @@ impl<'a> VTemplateRef<'a> {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (diff_state, template_ref, template) = ctx;
+            let (diff_state, template_ref, template, parent) = ctx;
             for id in template.all_dynamic() {
                 let dynamic_node = &nodes.as_ref()[id.0];
-                dynamic_node.hydrate(diff_state, template_ref);
+                dynamic_node.hydrate(parent, diff_state, template_ref);
             }
         }
 
-        template.with_nodes(hydrate_inner, hydrate_inner, (diff_state, self, template));
+        template.with_nodes(
+            hydrate_inner,
+            hydrate_inner,
+            (diff_state, self, template, parent),
+        );
+    }
+
+    fn get_node_id<'b>(
+        &self,
+        id: TemplateNodeId,
+        template: &'b Template,
+        diff_state: &mut DiffState<'a>,
+    ) -> ElementId {
+        fn get_path<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+            nodes: &Nodes,
+            ctx: (&mut Vec<u64>, TemplateNodeId),
+        ) where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (path, mut current) = ctx;
+            loop {
+                path.push(current.0 as u64);
+                let node = &nodes.as_ref()[current.0];
+                if let TemplateNodeType::Element(element) = node.node_type {
+                    if let Some(parent) = element.parent {
+                        current = parent;
+                    } else {
+                        return;
+                    }
+                }
+            }
+        }
+
+        if let Some(id) = self.node_ids.get(id.0).map(|o| *o).flatten() {
+            id
+        } else {
+            // find the path from the neerest resolved node or root to this node
+            let mut path = Vec::new();
+            template.with_nodes(get_path, get_path, (&mut path, id));
+            panic!()
+        }
     }
 }
 
@@ -361,13 +414,17 @@ impl Template {
         bump: &'b Bump,
         id: RendererTemplateId,
     ) {
-        mutations.create_templete(id);
+        let children = match self {
+            Template::Static(s) => s.root_nodes.len(),
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            Template::Owned(o) => o.root_nodes.len(),
+        };
+        mutations.create_element("template", None, id, children as u64);
         let empty = match self {
             Template::Static(s) => s.nodes.is_empty(),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => o.nodes.is_empty(),
         };
-        let mut len = 0;
         if !empty {
             let roots = match self {
                 Template::Static(s) => s.root_nodes,
@@ -375,11 +432,9 @@ impl Template {
                 Template::Owned(o) => &o.root_nodes,
             };
             for root in roots {
-                len += 1;
                 self.create_node(mutations, bump, *root);
             }
         }
-        mutations.finish_templete(len as u32);
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
@@ -396,8 +451,6 @@ impl Template {
         {
             let (mutations, bump, template) = ctx;
             let id = node.id;
-            let locally_static = node.locally_static;
-            let fully_static = node.fully_static;
             match &node.node_type {
                 TemplateNodeType::Element(el) => {
                     let TemplateElement {
@@ -407,13 +460,7 @@ impl Template {
                         children,
                         ..
                     } = el;
-                    mutations.create_element_template(
-                        tag,
-                        *namespace,
-                        id,
-                        locally_static,
-                        fully_static,
-                    );
+                    mutations.create_element(tag, *namespace, id, children.as_ref().len() as u64);
                     for attr in attributes.as_ref() {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
                             let val: AttributeValue<'b> = val.allocate(bump);
@@ -425,30 +472,22 @@ impl Template {
                             mutations.set_attribute(bump.alloc(attribute), id);
                         }
                     }
-                    let mut children_created = 0;
                     for child in children.as_ref() {
                         template.create_node(mutations, bump, *child);
-                        children_created += 1;
                     }
-
-                    mutations.append_children(children_created);
                 }
                 TemplateNodeType::Text(text) => {
                     let mut text_iter = text.segments.as_ref().iter();
                     if let (Some(TextTemplateSegment::Static(txt)), None) =
                         (text_iter.next(), text_iter.next())
                     {
-                        mutations.create_text_node_template(
-                            bump.alloc_str(txt.as_ref()),
-                            id,
-                            locally_static,
-                        );
+                        mutations.create_text_node(bump.alloc_str(txt.as_ref()), id);
                     } else {
-                        mutations.create_text_node_template("", id, locally_static);
+                        mutations.create_text_node("", id);
                     }
                 }
                 TemplateNodeType::DynamicNode(_) => {
-                    mutations.create_placeholder_template(id);
+                    mutations.create_placeholder(id);
                 }
             }
         }
@@ -641,14 +680,18 @@ where
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
 {
-    fn hydrate<'b>(&self, diff_state: &mut DiffState<'b>, template_ref: &VTemplateRef<'b>) {
+    fn hydrate<'b>(
+        &self,
+        parent: ElementId,
+        diff_state: &mut DiffState<'b>,
+        template_ref: &VTemplateRef<'b>,
+    ) {
         let real_id = template_ref.id.get().unwrap();
 
         diff_state.element_stack.push(GlobalNodeId::TemplateId {
             template_ref_id: real_id,
             template_node_id: self.id,
         });
-        diff_state.mutations.enter_template_ref(real_id);
         match &self.node_type {
             TemplateNodeType::Element(el) => {
                 let TemplateElement {
@@ -696,11 +739,10 @@ where
             TemplateNodeType::DynamicNode(idx) => {
                 // this will only be triggered for root elements
                 let created =
-                    diff_state.create_node(template_ref.dynamic_context.resolve_node(*idx));
-                diff_state.mutations.replace_with(self.id, created as u32);
+                    diff_state.create_node(parent, template_ref.dynamic_context.resolve_node(*idx));
+                diff_state.mutations.replace_with(self.id, created);
             }
         }
-        diff_state.mutations.exit_template_ref();
         diff_state.element_stack.pop();
     }
 }
