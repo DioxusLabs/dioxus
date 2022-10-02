@@ -230,7 +230,7 @@ fn virtual_event_from_websys_event(
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
         "change" | "input" | "invalid" | "reset" | "submit" => {
-            let value: String = (&target)
+            let value: String = target
                 .dyn_ref()
                 .map(|input: &web_sys::HtmlInputElement| {
                     // todo: special case more input types
@@ -273,7 +273,7 @@ fn virtual_event_from_websys_event(
                 for x in 0..elements.length() {
                     let element = elements.item(x).unwrap();
                     if let Some(name) = element.get_attribute("name") {
-                        let value: Option<String> = (&element)
+                        let value: Option<String> = element
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
                                     match input.type_().as_str() {

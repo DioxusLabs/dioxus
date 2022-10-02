@@ -113,7 +113,7 @@ fn get_mime_from_path(trimmed: &str) -> Result<&str> {
         return Ok("image/svg+xml");
     }
 
-    let res = match infer::get_from_path(&trimmed)?.map(|f| f.mime_type()) {
+    let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
         Some(t) if t == "text/plain" => get_mime_by_ext(trimmed),
         Some(f) => f,
         None => get_mime_by_ext(trimmed),

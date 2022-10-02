@@ -146,7 +146,7 @@ impl NodeDepState<()> for NodeStateTester {
                     iter.map(|a| {
                         (
                             a.attribute.name.to_string(),
-                            format!("{}", a.value.as_text().unwrap()),
+                            a.value.as_text().unwrap().to_string(),
                         )
                     })
                     .collect()

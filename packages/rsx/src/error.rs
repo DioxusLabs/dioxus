@@ -12,11 +12,11 @@ pub enum Error {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RecompileReason {
-    CapturedVariable(String),
-    CapturedExpression(String),
-    CapturedComponent(String),
-    CapturedListener(String),
-    CapturedAttribute(String),
+    Variable(String),
+    Expression(String),
+    Component(String),
+    Listener(String),
+    Attribute(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

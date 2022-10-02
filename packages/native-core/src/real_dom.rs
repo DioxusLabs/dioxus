@@ -449,11 +449,10 @@ impl<S: State> RealDom<S> {
             } => self
                 .nodes
                 .get(template_ref_id.0)
-                .map(|o| o.as_ref())
-                .flatten()
+                .and_then(|o| o.as_ref())
                 .and_then(|t| match &**t {
                     TemplateRefOrNode::Ref { nodes, .. } => {
-                        nodes.get(template_node_id.0).map(|o| o.as_ref()).flatten()
+                        nodes.get(template_node_id.0).and_then(|o| o.as_ref())
                     }
                     TemplateRefOrNode::Node(_) => None,
                 })
@@ -461,8 +460,7 @@ impl<S: State> RealDom<S> {
             GlobalNodeId::VNodeId(n) => self
                 .nodes
                 .get(n.0)
-                .map(|o| o.as_ref())
-                .flatten()
+                .and_then(|o| o.as_ref())
                 .and_then(|n| match &**n {
                     TemplateRefOrNode::Ref { .. } => None,
                     TemplateRefOrNode::Node(_) => Some(n),
@@ -522,6 +520,7 @@ impl<S: State> RealDom<S> {
         }
         let mut created = false;
         if let GlobalNodeId::VNodeId(id) = child_id {
+            #[allow(clippy::transmute_ptr_to_ref)]
             let unbounded_self: &mut Self = unsafe { std::mem::transmute(&*self as *const Self) };
             if let TemplateRefOrNode::Ref { roots, .. } = &**self.nodes[id.0].as_mut()? {
                 // this is safe because we know that no parent will be it's own child
@@ -569,8 +568,7 @@ impl<S: State> RealDom<S> {
                     };
                     nodes
                         .get_mut(template_node_id.0)
-                        .map(|n| n.as_mut())
-                        .flatten()
+                        .and_then(|n| n.as_mut())
                         .map(|n| n.as_mut())
                         .unwrap()
                 };
@@ -624,8 +622,7 @@ impl<S: State> RealDom<S> {
                     };
                     nodes
                         .get_mut(template_node_id.0)
-                        .map(|n| n.as_mut())
-                        .flatten()
+                        .and_then(|n| n.as_mut())
                         .map(|n| n.as_mut())
                         .unwrap()
                 };
@@ -764,7 +761,7 @@ impl<S: State> RealDom<S> {
                                         && self[GlobalNodeId::VNodeId(c.mounted_id())]
                                             .node_data
                                             .parent
-                                            == e.id.get().map(|id| GlobalNodeId::VNodeId(id))
+                                            == e.id.get().map(GlobalNodeId::VNodeId)
                                 })
                                 && attributes
                                     .iter()
@@ -880,11 +877,11 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    pub fn split<'a>(
-        &'a mut self,
+    pub fn split(
+        &mut self,
     ) -> (
-        impl Traversable<Id = GlobalNodeId, Node = S> + 'a,
-        impl Traversable<Id = GlobalNodeId, Node = NodeData> + 'a,
+        impl Traversable<Id = GlobalNodeId, Node = S> + '_,
+        impl Traversable<Id = GlobalNodeId, Node = NodeData> + '_,
     ) {
         let raw = self as *mut Self;
         // this is safe beacuse the traversable trait does not allow mutation of the position of elements, and within elements the access is disjoint.
@@ -1055,8 +1052,7 @@ impl<T: State> Traversable for RealDom<T> {
 
                     nodes
                         .get(template_node_id.0)
-                        .map(|n| n.as_ref())
-                        .flatten()
+                        .and_then(|n| n.as_ref())
                         .map(|n| n.as_ref())
                 }
             }
@@ -1086,8 +1082,7 @@ impl<T: State> Traversable for RealDom<T> {
 
                     nodes
                         .get_mut(template_node_id.0)
-                        .map(|n| n.as_mut())
-                        .flatten()
+                        .and_then(|n| n.as_mut())
                         .map(|n| n.as_mut())
                 }
             }
@@ -1097,7 +1092,7 @@ impl<T: State> Traversable for RealDom<T> {
     fn children(&self, id: Self::Id) -> &[Self::Id] {
         if let Some(node) = <Self as Traversable>::get(self, id) {
             match &node.node_data.node_type {
-                NodeType::Element { children, .. } => &children,
+                NodeType::Element { children, .. } => children,
                 _ => &[],
             }
         } else {
@@ -1123,10 +1118,7 @@ impl<T: State> Traversable for RealDom<T> {
                         TemplateRefOrNode::Node(_) => panic!("Expected template ref"),
                     };
 
-                    nodes
-                        .get(template_node_id.0)
-                        .map(|n| n.as_deref())
-                        .flatten()
+                    nodes.get(template_node_id.0).and_then(|n| n.as_deref())
                 }?
                 .node_data
                 .parent

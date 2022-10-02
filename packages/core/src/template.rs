@@ -264,9 +264,9 @@ pub struct TemplateId(pub CodeLocation);
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct RendererTemplateId(pub usize);
 
-impl Into<u64> for RendererTemplateId {
-    fn into(self) -> u64 {
-        self.0 as u64
+impl From<RendererTemplateId> for u64 {
+    fn from(id: RendererTemplateId) -> u64 {
+        id.0 as u64
     }
 }
 
@@ -278,9 +278,9 @@ impl Into<u64> for RendererTemplateId {
 #[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct TemplateNodeId(pub usize);
 
-impl Into<u64> for TemplateNodeId {
-    fn into(self) -> u64 {
-        JS_MAX_INT / 2 + self.0 as u64
+impl From<TemplateNodeId> for u64 {
+    fn from(id: TemplateNodeId) -> u64 {
+        JS_MAX_INT / 2 + id.0 as u64
     }
 }
 
@@ -434,7 +434,7 @@ impl Template {
                     mutations.append_children(children_created);
                 }
                 TemplateNodeType::Text(text) => {
-                    let mut text_iter = text.segments.as_ref().into_iter();
+                    let mut text_iter = text.segments.as_ref().iter();
                     if let (Some(TextTemplateSegment::Static(txt)), None) =
                         (text_iter.next(), text_iter.next())
                     {
@@ -550,23 +550,20 @@ impl Template {
         }
     }
 
-    pub(crate) fn get_dynamic_nodes_for_text_index<'a>(
-        &'a self,
-        idx: usize,
-    ) -> &'a [TemplateNodeId] {
+    pub(crate) fn get_dynamic_nodes_for_text_index(&self, idx: usize) -> &[TemplateNodeId] {
         match self {
-            Template::Static(s) => s.dynamic_mapping.text[idx].as_ref(),
+            Template::Static(s) => s.dynamic_mapping.text[idx],
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => o.dynamic_mapping.text[idx].as_ref(),
         }
     }
 
-    pub(crate) fn get_dynamic_nodes_for_attribute_index<'a>(
-        &'a self,
+    pub(crate) fn get_dynamic_nodes_for_attribute_index(
+        &self,
         idx: usize,
-    ) -> &'a [(TemplateNodeId, usize)] {
+    ) -> &[(TemplateNodeId, usize)] {
         match self {
-            Template::Static(s) => s.dynamic_mapping.attributes[idx].as_ref(),
+            Template::Static(s) => s.dynamic_mapping.attributes[idx],
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => o.dynamic_mapping.attributes[idx].as_ref(),
         }
@@ -610,7 +607,7 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -697,10 +694,9 @@ where
                     .set_text(scope_bump.alloc(new_text), self.id)
             }
             TemplateNodeType::DynamicNode(idx) => {
-                drop(self);
                 // this will only be triggered for root elements
                 let created =
-                    diff_state.create_node(&template_ref.dynamic_context.resolve_node(*idx));
+                    diff_state.create_node(template_ref.dynamic_context.resolve_node(*idx));
                 diff_state.mutations.replace_with(self.id, created as u32);
             }
         }
@@ -710,7 +706,7 @@ where
 }
 
 /// A template for an attribute
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -723,7 +719,7 @@ pub struct TemplateAttribute<V: TemplateValue> {
 }
 
 /// A template attribute value that is either dynamic or static
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -744,9 +740,9 @@ pub trait TemplateValue {
 impl TemplateValue for StaticAttributeValue {
     fn allocate<'b>(&self, bump: &'b Bump) -> AttributeValue<'b> {
         match self.clone() {
-            StaticAttributeValue::Text(txt) => AttributeValue::Text(bump.alloc_str(&txt)),
+            StaticAttributeValue::Text(txt) => AttributeValue::Text(bump.alloc_str(txt)),
             StaticAttributeValue::Bytes(bytes) => {
-                AttributeValue::Bytes(bump.alloc_slice_copy(&bytes))
+                AttributeValue::Bytes(bump.alloc_slice_copy(bytes))
             }
             StaticAttributeValue::Float32(f) => AttributeValue::Float32(f),
             StaticAttributeValue::Float64(f) => AttributeValue::Float64(f),
@@ -799,7 +795,7 @@ impl TemplateValue for OwnedAttributeValue {
 }
 
 /// The kind of node the template is.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -867,7 +863,7 @@ where
 type StaticStr = &'static str;
 
 /// A element template
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -931,7 +927,7 @@ where
 }
 
 /// A template for some text that may contain dynamic segments for example "Hello {name}" contains the static segment "Hello " and the dynamic segment "{name}".
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -961,7 +957,7 @@ where
 }
 
 /// A segment of a text template that may be dynamic or static.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -1019,11 +1015,7 @@ impl TemplateResolver {
     }
 
     pub fn is_dirty(&self, id: &TemplateId) -> bool {
-        if let Some((_, true)) = self.template_id_mapping.get(id) {
-            true
-        } else {
-            false
-        }
+        matches!(self.template_id_mapping.get(id), Some((_, true)))
     }
 
     // returns (id, if the id was created)

@@ -357,7 +357,7 @@ impl ScopeArena {
                                 (
                                     &nodes,
                                     &template_ref.dynamic_context,
-                                    &event,
+                                    event,
                                     &state,
                                     template_ref_id,
                                 ),

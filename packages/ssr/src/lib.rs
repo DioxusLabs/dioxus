@@ -69,7 +69,6 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
     };
     let r = ssr_renderer.to_string();
     drop(ssr_renderer);
-    drop(vdom);
     r
 }
 
@@ -247,7 +246,6 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                                         &s.nodes,
                                         &s.nodes[r.0],
                                         dynamic_context,
-                                        &s.dynamic_mapping,
                                         f,
                                         last_node_was_text,
                                         il,
@@ -260,7 +258,6 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                                         &o.nodes,
                                         &o.nodes[r.0],
                                         dynamic_context,
-                                        &o.dynamic_mapping,
                                         f,
                                         last_node_was_text,
                                         il,
@@ -278,35 +275,11 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
         Ok(())
     }
 
-    fn render_template_node<
-        TemplateNodes,
-        Attributes,
-        V,
-        Children,
-        Listeners,
-        TextSegments,
-        Text,
-        Nodes,
-        TextOuter,
-        TextInner,
-        AttributesOuter,
-        AttributesInner,
-        Volatile,
-        Listeners2,
-    >(
+    fn render_template_node<TemplateNodes, Attributes, V, Children, Listeners, TextSegments, Text>(
         &self,
         template_nodes: &TemplateNodes,
         node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
         dynamic_context: &TemplateContext,
-        dynamic_node_mapping: &DynamicNodeMapping<
-            Nodes,
-            TextOuter,
-            TextInner,
-            AttributesOuter,
-            AttributesInner,
-            Volatile,
-            Listeners2,
-        >,
         f: &mut impl Write,
         last_node_was_text: &mut bool,
         il: u16,
@@ -315,18 +288,11 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
         TemplateNodes:
             AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
         Attributes: AsRef<[TemplateAttribute<V>]>,
-        AttributesInner: AsRef<[(TemplateNodeId, usize)]>,
-        AttributesOuter: AsRef<[AttributesInner]>,
         Children: AsRef<[TemplateNodeId]>,
         Listeners: AsRef<[usize]>,
-        Listeners2: AsRef<[TemplateNodeId]>,
-        Nodes: AsRef<[Option<TemplateNodeId>]>,
         Text: AsRef<str>,
-        TextInner: AsRef<[TemplateNodeId]>,
-        TextOuter: AsRef<[TextInner]>,
         TextSegments: AsRef<[TextTemplateSegment<Text>]>,
         V: TemplateValue,
-        Volatile: AsRef<[(TemplateNodeId, usize)]>,
     {
         match &node.node_type {
             TemplateNodeType::Element(el) => {
@@ -342,7 +308,7 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
 
                 let mut inner_html = None;
 
-                let mut attr_iter = el.attributes.as_ref().into_iter().peekable();
+                let mut attr_iter = el.attributes.as_ref().iter().peekable();
 
                 while let Some(attr) = attr_iter.next() {
                     match attr.attribute.namespace {
@@ -433,7 +399,6 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                             template_nodes,
                             &template_nodes.as_ref()[child.0],
                             dynamic_context,
-                            dynamic_node_mapping,
                             f,
                             &mut last_node_was_text,
                             il + 1,
@@ -497,10 +462,8 @@ where
                 if attr.attribute.name == "dangerous_inner_html" {
                     inner_html = Some(attr.value.as_text().unwrap())
                 } else {
-                    if is_boolean_attribute(attr.attribute.name) {
-                        if !attr.value.is_truthy() {
-                            continue;
-                        }
+                    if is_boolean_attribute(attr.attribute.name) && !attr.value.is_truthy() {
+                        continue;
                     }
                     write!(f, " {}=\"{}\"", attr.attribute.name, attr.value)?
                 }
@@ -527,37 +490,35 @@ where
 }
 
 fn is_boolean_attribute(attribute: &'static str) -> bool {
-    if let "allowfullscreen"
-    | "allowpaymentrequest"
-    | "async"
-    | "autofocus"
-    | "autoplay"
-    | "checked"
-    | "controls"
-    | "default"
-    | "defer"
-    | "disabled"
-    | "formnovalidate"
-    | "hidden"
-    | "ismap"
-    | "itemscope"
-    | "loop"
-    | "multiple"
-    | "muted"
-    | "nomodule"
-    | "novalidate"
-    | "open"
-    | "playsinline"
-    | "readonly"
-    | "required"
-    | "reversed"
-    | "selected"
-    | "truespeed" = attribute
-    {
-        true
-    } else {
-        false
-    }
+    matches!(
+        attribute,
+        "allowfullscreen"
+            | "allowpaymentrequest"
+            | "async"
+            | "autofocus"
+            | "autoplay"
+            | "checked"
+            | "controls"
+            | "default"
+            | "defer"
+            | "disabled"
+            | "formnovalidate"
+            | "hidden"
+            | "ismap"
+            | "itemscope"
+            | "loop"
+            | "multiple"
+            | "muted"
+            | "nomodule"
+            | "novalidate"
+            | "open"
+            | "playsinline"
+            | "readonly"
+            | "required"
+            | "reversed"
+            | "selected"
+            | "truespeed"
+    )
 }
 
 #[derive(Clone, Debug, Default)]
