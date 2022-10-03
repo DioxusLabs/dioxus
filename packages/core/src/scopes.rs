@@ -226,6 +226,16 @@ impl ScopeArena {
         id
     }
 
+    /// reserve a id for a node that only exists in the renderer (e.g. a template ref node)
+    pub fn reserve_phantom_node(&self) -> ElementId {
+        let mut els = self.nodes.borrow_mut();
+        let entry = els.vacant_entry();
+        let key = entry.key();
+        let id = ElementId(key);
+        entry.insert(None);
+        id
+    }
+
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
         let node = unsafe { extend_vnode(node) };
         *self.nodes.borrow_mut().get_mut(id.0).unwrap() = Some(node);

@@ -61,6 +61,7 @@
 pub const JS_MAX_INT: u64 = 9007199254740991;
 
 use fxhash::FxHashMap;
+use once_cell::unsync::OnceCell;
 use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;
@@ -68,7 +69,7 @@ use bumpalo::Bump;
 use crate::{
     diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
     nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
-    OwnedAttributeValue, StaticDynamicNodeMapping,
+    OwnedAttributeValue, StaticDynamicNodeMapping, VNode,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -284,13 +285,22 @@ impl From<TemplateNodeId> for u64 {
     }
 }
 
+#[derive(Default)]
+struct PathToNode {
+    /// the resolved node to start travering from
+    start: u64,
+    /// the child numbers to traverse to get to the node
+    /// The list is reversed (the last number is the first offset)
+    child_offests: Vec<u32>,
+}
+
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
     pub id: Cell<Option<ElementId>>,
     pub template_id: TemplateId,
     pub dynamic_context: TemplateContext<'a>,
     // any nodes that already have ids assigned to them in the renderer
-    pub node_ids: Vec<Option<ElementId>>,
+    pub node_ids: Vec<OnceCell<ElementId>>,
 }
 
 impl<'a> VTemplateRef<'a> {
@@ -316,7 +326,7 @@ impl<'a> VTemplateRef<'a> {
             let (diff_state, template_ref, template, parent) = ctx;
             for id in template.all_dynamic() {
                 let dynamic_node = &nodes.as_ref()[id.0];
-                dynamic_node.hydrate(parent, diff_state, template_ref);
+                dynamic_node.hydrate(parent, diff_state, template_ref, template);
             }
         }
 
@@ -333,9 +343,9 @@ impl<'a> VTemplateRef<'a> {
         template: &'b Template,
         diff_state: &mut DiffState<'a>,
     ) -> ElementId {
-        fn get_path<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+        fn get_path<Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
-            ctx: (&mut Vec<u64>, TemplateNodeId),
+            ctx: (&VTemplateRef, &mut PathToNode, TemplateNodeId),
         ) where
             Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -345,27 +355,56 @@ impl<'a> VTemplateRef<'a> {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (path, mut current) = ctx;
+            let (tmpl, path, mut current) = ctx;
             loop {
-                path.push(current.0 as u64);
                 let node = &nodes.as_ref()[current.0];
-                if let TemplateNodeType::Element(element) = node.node_type {
+                if let TemplateNodeType::Element(element) = &node.node_type {
                     if let Some(parent) = element.parent {
+                        let child_num = match &nodes.as_ref()[current.0].node_type {
+                            TemplateNodeType::Element(el) => el
+                                .children
+                                .as_ref()
+                                .iter()
+                                .position(|c| *c == current)
+                                .unwrap(),
+                            TemplateNodeType::DynamicNode(idx) => {
+                                // dynamic nodes are always resolved, so we can stop here
+                                path.start = tmpl
+                                    .dynamic_context
+                                    .resolve_node(*idx)
+                                    .mounted_id()
+                                    .as_u64();
+                                return;
+                            }
+                            _ => unreachable!(),
+                        };
+                        path.child_offests.push(child_num as u32);
                         current = parent;
                     } else {
+                        path.start = tmpl.node_ids[current.0].get().unwrap().as_u64();
                         return;
                     }
                 }
             }
         }
 
-        if let Some(id) = self.node_ids.get(id.0).map(|o| *o).flatten() {
-            id
+        if let Some(real_id) = self.node_ids.get(id.0).and_then(|o| o.get().copied()) {
+            real_id
         } else {
-            // find the path from the neerest resolved node or root to this node
-            let mut path = Vec::new();
-            template.with_nodes(get_path, get_path, (&mut path, id));
-            panic!()
+            // find the path from the nearest resolved node or root to this node
+            let mut path = PathToNode::default();
+            template.with_nodes(get_path, get_path, (self, &mut path, id));
+            diff_state.mutations.set_last_node(path.start);
+            for offset in path.child_offests.iter().rev() {
+                diff_state.mutations.first_child();
+                for _ in 0..*offset {
+                    diff_state.mutations.next_sibling();
+                }
+            }
+            let real_id = diff_state.scopes.reserve_phantom_node();
+            diff_state.mutations.store_with_id(real_id);
+            self.node_ids[id.0].set(real_id);
+            real_id
         }
     }
 }
@@ -685,6 +724,7 @@ where
         parent: ElementId,
         diff_state: &mut DiffState<'b>,
         template_ref: &VTemplateRef<'b>,
+        template: &Template,
     ) {
         let real_id = template_ref.id.get().unwrap();
 
@@ -709,19 +749,19 @@ where
                                 .to_owned(),
                             is_static: false,
                         };
+                        let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
                         let scope_bump = diff_state.current_scope_bump();
                         diff_state
                             .mutations
-                            .set_attribute(scope_bump.alloc(attribute), self.id);
+                            .set_attribute(scope_bump.alloc(attribute), real_node_id);
                     }
                 }
                 for listener_idx in listeners.as_ref() {
                     let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
-                    let global_id = GlobalNodeId::TemplateId {
-                        template_ref_id: real_id,
-                        template_node_id: self.id,
-                    };
-                    listener.mounted_node.set(Some(global_id));
+                    let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
+                    listener
+                        .mounted_node
+                        .set(Some(GlobalNodeId::VNodeId(real_node_id)));
                     diff_state
                         .mutations
                         .new_event_listener(listener, diff_state.current_scope());
@@ -731,16 +771,19 @@ where
                 let new_text = template_ref
                     .dynamic_context
                     .resolve_text(&text.segments.as_ref());
+
+                let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
                 let scope_bump = diff_state.current_scope_bump();
                 diff_state
                     .mutations
-                    .set_text(scope_bump.alloc(new_text), self.id)
+                    .set_text(scope_bump.alloc(new_text), real_node_id);
             }
             TemplateNodeType::DynamicNode(idx) => {
                 // this will only be triggered for root elements
                 let created =
                     diff_state.create_node(parent, template_ref.dynamic_context.resolve_node(*idx));
-                diff_state.mutations.replace_with(self.id, created);
+                let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
+                diff_state.mutations.replace_with(real_node_id, created);
             }
         }
         diff_state.element_stack.pop();
