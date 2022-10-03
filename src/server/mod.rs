@@ -8,7 +8,8 @@ use axum::{
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
-use dioxus_rsx_interpreter::SetRsxMessage;
+use dioxus_core::{prelude::TemplateId, SetTemplateMsg};
+use dioxus_rsx::try_parse_template;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
@@ -157,10 +158,25 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                                     }
                                                 }
                                                 let rsx = lines.join("\n");
-                                                messages.push(SetRsxMessage {
-                                                    location: hr,
-                                                    new_text: rsx,
-                                                });
+
+                                                let old_dyn_ctx = try_parse_template(
+                                                    &format!("{}", old.tokens),
+                                                    hr.to_owned(),
+                                                    None,
+                                                )
+                                                .map(|(_, old_dyn_ctx)| old_dyn_ctx);
+                                                if let Ok((template, _)) = try_parse_template(
+                                                    &rsx,
+                                                    hr.to_owned(),
+                                                    old_dyn_ctx.ok(),
+                                                ) {
+                                                    messages.push(SetTemplateMsg(
+                                                        TemplateId(hr),
+                                                        template,
+                                                    ));
+                                                } else {
+                                                    needs_rebuild = true;
+                                                }
                                             }
                                         }
                                     }
@@ -189,8 +205,8 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                             }
                         }
                     }
-                    if !messages.is_empty() {
-                        let _ = hot_reload_tx.send(SetManyRsxMessage(messages));
+                    for msg in messages {
+                        let _ = hot_reload_tx.send(msg);
                     }
                 }
                 if updated {
@@ -423,6 +439,7 @@ pub struct PrettierOptions {
 }
 
 fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
+
     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
         "cls"
     } else {
