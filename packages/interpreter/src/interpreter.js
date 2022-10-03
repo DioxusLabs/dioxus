@@ -1,129 +1,8 @@
-// id > Number.MAX_SAFE_INTEGER/2 in template ref
-// id <= Number.MAX_SAFE_INTEGER/2 in global nodes
-const templateIdLimit = BigInt((Number.MAX_SAFE_INTEGER - 1) / 2);
-
 export function main() {
   let root = window.document.getElementById("main");
   if (root != null) {
     window.interpreter = new Interpreter(root);
     window.ipc.postMessage(serializeIpcMessage("initialize"));
-  }
-}
-
-class TemplateRef {
-  constructor(fragment, dynamicNodePaths, roots, id) {
-    this.fragment = fragment;
-    this.dynamicNodePaths = dynamicNodePaths;
-    this.roots = roots;
-    this.id = id;
-    this.placed = false;
-    this.nodes = [];
-  }
-
-  build(id) {
-    if (!this.nodes[id]) {
-      let current = this.fragment;
-      const path = this.dynamicNodePaths[id];
-      for (let i = 0; i < path.length; i++) {
-        const idx = path[i];
-        current = current.firstChild;
-        for (let i2 = 0; i2 < idx; i2++) {
-          current = current.nextSibling;
-        }
-      }
-      this.nodes[id] = current;
-    }
-  }
-
-  get(id) {
-    this.build(id);
-    return this.nodes[id];
-  }
-
-  parent() {
-    return this.roots[0].parentNode;
-  }
-
-  first() {
-    return this.roots[0];
-  }
-
-  last() {
-    return this.roots[this.roots.length - 1];
-  }
-
-  move() {
-    // move the root nodes into a new template
-    this.fragment = new DocumentFragment();
-    for (let n of this.roots) {
-      this.fragment.appendChild(n);
-    }
-  }
-
-  getFragment() {
-    if (!this.placed) {
-      this.placed = true;
-    }
-    else {
-      this.move();
-    }
-    return this.fragment;
-  }
-}
-
-class Template {
-  constructor(template_id, id) {
-    this.nodes = [];
-    this.dynamicNodePaths = [];
-    this.template_id = template_id;
-    this.id = id;
-    this.template = document.createElement("template");
-    this.reconstructingRefrencesIndex = null;
-  }
-
-  finalize(roots) {
-    for (let i = 0; i < roots.length; i++) {
-      let node = roots[i];
-      let path = [i];
-      const is_element = node.nodeType == 1;
-      const locally_static = is_element && !node.hasAttribute("data-dioxus-dynamic");
-      if (!locally_static) {
-        this.dynamicNodePaths[node.tmplId] = [...path];
-      }
-      const traverse_children = is_element && !node.hasAttribute("data-dioxus-fully-static");
-      if (traverse_children) {
-        this.createIds(path, node);
-      }
-      this.template.content.appendChild(node);
-    }
-    document.head.appendChild(this.template);
-  }
-
-  createIds(path, root) {
-    let i = 0;
-    for (let node = root.firstChild; node != null; node = node.nextSibling) {
-      let new_path = [...path, i];
-      const is_element = node.nodeType == 1;
-      const locally_static = is_element && !node.hasAttribute("data-dioxus-dynamic");
-      if (!locally_static) {
-        this.dynamicNodePaths[node.tmplId] = [...new_path];
-      }
-      const traverse_children = is_element && !node.hasAttribute("data-dioxus-fully-static");
-      if (traverse_children) {
-        this.createIds(new_path, node);
-      }
-      i++;
-    }
-  }
-
-  ref(id) {
-    const template = this.template.content.cloneNode(true);
-    let roots = [];
-    this.reconstructingRefrencesIndex = 0;
-    for (let node = template.firstChild; node != null; node = node.nextSibling) {
-      roots.push(node);
-    }
-    return new TemplateRef(template, this.dynamicNodePaths, roots, id);
   }
 }
 
@@ -179,175 +58,64 @@ class ListenerMap {
 export class Interpreter {
   constructor(root) {
     this.root = root;
-    this.stack = [root];
-    this.templateInProgress = null;
-    this.insideTemplateRef = [];
+    this.lastNode = root;
     this.listeners = new ListenerMap(root);
     this.handlers = {};
     this.nodes = [root];
-    this.templates = [];
-  }
-  top() {
-    return this.stack[this.stack.length - 1];
-  }
-  pop() {
-    return this.stack.pop();
-  }
-  currentTemplateId() {
-    if (this.insideTemplateRef.length) {
-      return this.insideTemplateRef[this.insideTemplateRef.length - 1].id;
-    }
-    else {
-      return null;
-    }
   }
   getId(id) {
-    if (this.templateInProgress !== null) {
-      return this.templates[this.templateInProgress].nodes[id - templateIdLimit];
-    }
-    else if (this.insideTemplateRef.length && id >= templateIdLimit) {
-      return this.insideTemplateRef[this.insideTemplateRef.length - 1].get(id - templateIdLimit);
-    }
-    else {
-      return this.nodes[id];
-    }
+    return this.nodes[id];
   }
   SetNode(id, node) {
-    if (this.templateInProgress !== null) {
-      id -= templateIdLimit;
-      node.tmplId = id;
-      this.templates[this.templateInProgress].nodes[id] = node;
-    }
-    else if (this.insideTemplateRef.length && id >= templateIdLimit) {
-      id -= templateIdLimit;
-      let last = this.insideTemplateRef[this.insideTemplateRef.length - 1];
-      last.childNodes[id] = node;
-      if (last.nodeCache[id]) {
-        last.nodeCache[id] = node;
-      }
-    }
-    else {
-      this.nodes[id] = node;
+    this.nodes[id] = node;
+  }
+  AppendChildren(root, children) {
+    let root = this.getId(root);
+    for (let i = 0; i < children.length; i++) {
+      root.appendChild(this.getId(children[i]));
     }
   }
-  PushRoot(root) {
-    const node = this.getId(root);
-    this.stack.push(node);
+  ReplaceWith(root, nodes) {
+    let root = this.getId(root);
+    let els = nodes.map((id) => this.getId(id));
+    root.replaceWith(...els);
   }
-  PopRoot() {
-    this.stack.pop();
-  }
-  AppendChildren(many) {
-    let root = this.stack[this.stack.length - (1 + many)];
-    let to_add = this.stack.splice(this.stack.length - many);
-    for (let i = 0; i < many; i++) {
-      const child = to_add[i];
-      if (child instanceof TemplateRef) {
-        root.appendChild(child.getFragment());
-      }
-      else {
-        root.appendChild(child);
-      }
-    }
-  }
-  ReplaceWith(root_id, m) {
-    let root = this.getId(root_id);
-    if (root instanceof TemplateRef) {
-      this.InsertBefore(root_id, m);
-      this.Remove(root_id);
-    }
-    else {
-      let els = this.stack.splice(this.stack.length - m).map(function (el) {
-        if (el instanceof TemplateRef) {
-          return el.getFragment();
-        }
-        else {
-          return el;
-        }
-      });
-      root.replaceWith(...els);
-    }
-  }
-  InsertAfter(root, n) {
+  InsertAfter(root, nodes) {
     const old = this.getId(root);
-    const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
-      if (el instanceof TemplateRef) {
-        return el.getFragment();
-      }
-      else {
-        return el;
-      }
-    });
-    if (old instanceof TemplateRef) {
-      const last = old.last();
-      last.after(...new_nodes);
-    }
-    else {
-      old.after(...new_nodes);
-    }
+    let els = nodes.map((id) => this.getId(id));
+    old.after(...els);
   }
-  InsertBefore(root, n) {
+  InsertBefore(root, nodes) {
     const old = this.getId(root);
-    const new_nodes = this.stack.splice(this.stack.length - n).map(function (el) {
-      if (el instanceof TemplateRef) {
-        return el.getFragment();
-      }
-      else {
-        return el;
-      }
-    });
-    if (old instanceof TemplateRef) {
-      const first = old.first();
-      first.before(...new_nodes);
-    }
-    else {
-      old.before(...new_nodes);
-    }
+    let els = nodes.map((id) => this.getId(id));
+    old.before(...els);
   }
   Remove(root) {
     let node = this.getId(root);
     if (node !== undefined) {
-      if (node instanceof TemplateRef) {
-        for (let child of node.roots) {
-          child.remove();
-        }
-      }
-      else {
-        node.remove();
-      }
+      node.remove();
     }
   }
   CreateTextNode(text, root) {
-    const node = document.createTextNode(text);
-    this.stack.push(node);
-    this.SetNode(root, node);
+    this.lastNode = document.createTextNode(text);
+    this.SetNode(root, this.lastNode);
   }
   CreateElement(tag, root) {
-    const el = document.createElement(tag);
-    this.stack.push(el);
-    this.SetNode(root, el);
+    this.lastNode = document.createElement(tag);
+    this.SetNode(root, this.lastNode);
   }
   CreateElementNs(tag, root, ns) {
-    let el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-    this.SetNode(root, el);
+    this.lastNode = document.createElementNS(ns, tag);
+    this.SetNode(root, this.lastNode);
   }
   CreatePlaceholder(root) {
-    let el = document.createElement("pre");
-    el.hidden = true;
-    this.stack.push(el);
-    this.SetNode(root, el);
+    this.lastNode = document.createElement("pre");
+    this.lastNode.hidden = true;
+    this.SetNode(root, this.lastNode);
   }
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.getId(root);
-    if (root >= templateIdLimit) {
-      let currentTemplateRefId = this.currentTemplateId();
-      root -= templateIdLimit;
-      element.setAttribute("data-dioxus-id", `${currentTemplateRefId},${root}`);
-    }
-    else {
-      element.setAttribute("data-dioxus-id", `${root}`);
-    }
+    element.setAttribute("data-dioxus-id", `${root}`);
     this.listeners.create(event_name, element, handler, bubbles);
   }
   RemoveEventListener(root, event_name, bubbles) {
@@ -411,59 +179,36 @@ export class Interpreter {
       node.removeAttribute(name);
     }
   }
-  CreateTemplateRef(id, template_id) {
-    const el = this.templates[template_id].ref(id);
-    this.nodes[id] = el;
-    this.stack.push(el);
+  CloneNode(old, new_id) {
+    this.SetNode(new_id, this.getId(old).cloneNode(true));
   }
-  CreateTemplate(template_id) {
-    this.templateInProgress = template_id;
-    this.templates[template_id] = new Template(template_id, 0);
+  CloneNodeChildren(old, new_ids) {
+    const old_node = this.getId(old).cloneNode(true).appendChild(new_nodes[i]);
+    let i = 0;
+    for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
+      this.SetNode(new_ids[i], node);
+      i++;
+    }
   }
-  FinishTemplate(many) {
-    this.templates[this.templateInProgress].finalize(this.stack.splice(this.stack.length - many));
-    this.templateInProgress = null;
+  FirstChild() {
+    this.lastNode = this.lastNode.firstChild;
   }
-  EnterTemplateRef(id) {
-    this.insideTemplateRef.push(this.nodes[id]);
+  NextSibling() {
+    this.lastNode = this.lastNode.nextSibling;
   }
-  ExitTemplateRef() {
-    this.insideTemplateRef.pop();
+  ParentNode() {
+    this.lastNode = this.lastNode.parentNode;
+  }
+  StoreWithId(id) {
+    this.SetNode(id, this.lastNode);
+  }
+  SetLastNode(root) {
+    this.lastNode = this.getId(root);
   }
   handleEdits(edits) {
     for (let edit of edits) {
       this.handleEdit(edit);
     }
-  }
-  CreateElementTemplate(tag, root, locally_static, fully_static) {
-    const el = document.createElement(tag);
-    this.stack.push(el);
-    this.SetNode(root, el);
-    if (!locally_static)
-      el.setAttribute("data-dioxus-dynamic", "true");
-    if (fully_static)
-      el.setAttribute("data-dioxus-fully-static", fully_static);
-  }
-  CreateElementNsTemplate(tag, root, ns, locally_static, fully_static) {
-    const el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-    this.SetNode(root, el);
-    if (!locally_static)
-      el.setAttribute("data-dioxus-dynamic", "true");
-    if (fully_static)
-      el.setAttribute("data-dioxus-fully-static", fully_static);
-  }
-  CreateTextNodeTemplate(text, root, locally_static) {
-    const node = document.createTextNode(text);
-    this.stack.push(node);
-    this.SetNode(root, node);
-  }
-  CreatePlaceholderTemplate(root) {
-    const el = document.createElement("pre");
-    el.setAttribute("data-dioxus-dynamic", "true");
-    el.hidden = true;
-    this.stack.push(el);
-    this.SetNode(root, el);
   }
   handleEdit(edit) {
     switch (edit.type) {
@@ -474,13 +219,13 @@ export class Interpreter {
         this.AppendChildren(edit.many);
         break;
       case "ReplaceWith":
-        this.ReplaceWith(BigInt(edit.root), edit.m);
+        this.ReplaceWith(BigInt(edit.root), edit.children);
         break;
       case "InsertAfter":
-        this.InsertAfter(BigInt(edit.root), edit.n);
+        this.InsertAfter(BigInt(edit.root), edit.nodes);
         break;
       case "InsertBefore":
-        this.InsertBefore(BigInt(edit.root), edit.n);
+        this.InsertBefore(BigInt(edit.root), edit.nodes);
         break;
       case "Remove":
         this.Remove(BigInt(edit.root));
@@ -582,16 +327,7 @@ export class Interpreter {
             if (realId === null) {
               return;
             }
-            if (realId.includes(",")) {
-              realId = realId.split(',');
-              realId = {
-                template_ref_id: parseInt(realId[0]),
-                template_node_id: parseInt(realId[1]),
-              };
-            }
-            else {
-              realId = parseInt(realId);
-            }
+            realId = parseInt(realId);
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,
@@ -613,35 +349,26 @@ export class Interpreter {
       case "RemoveAttribute":
         this.RemoveAttribute(BigInt(edit.root), edit.name, edit.ns);
         break;
-      case "PopRoot":
-        this.PopRoot();
+      case "CloneNode":
+        this.CloneNode(BigInt(edit.id), BigInt(edit.new_id));
         break;
-      case "CreateTemplateRef":
-        this.CreateTemplateRef(BigInt(edit.id), edit.template_id);
+      case "CloneNodeChildren":
+        this.CloneNodeChildren(BigInt(edit.id), edit.new_ids);
         break;
-      case "CreateTemplate":
-        this.CreateTemplate(BigInt(edit.id));
+      case "FirstChild":
+        this.FirstChild();
         break;
-      case "FinishTemplate":
-        this.FinishTemplate(edit.len);
+      case "NextSibling":
+        this.NextSibling();
         break;
-      case "EnterTemplateRef":
-        this.EnterTemplateRef(BigInt(edit.root));
+      case "ParentNode":
+        this.ParentNode();
         break;
-      case "ExitTemplateRef":
-        this.ExitTemplateRef();
+      case "StoreWithId":
+        this.StoreWithId(BigInt(edit.id));
         break;
-      case "CreateElementTemplate":
-        this.CreateElementTemplate(edit.tag, BigInt(edit.root), edit.locally_static, edit.fully_static);
-        break;
-      case "CreateElementNsTemplate":
-        this.CreateElementNsTemplate(edit.tag, BigInt(edit.root), edit.ns, edit.locally_static, edit.fully_static);
-        break;
-      case "CreateTextNodeTemplate":
-        this.CreateTextNodeTemplate(edit.text, BigInt(edit.root), edit.locally_static);
-        break;
-      case "CreatePlaceholderTemplate":
-        this.CreatePlaceholderTemplate(BigInt(edit.root));
+      case "SetLastNode":
+        this.SetLastNode(BigInt(edit.id));
         break;
     }
   }

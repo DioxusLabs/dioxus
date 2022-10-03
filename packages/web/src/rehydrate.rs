@@ -114,14 +114,12 @@ impl WebsysDom {
                             template_ref_id,
                             template_node_id: id,
                         } => {
-                            self.interpreter.EnterTemplateRef(template_ref_id.into());
                             self.interpreter.NewEventListener(
                                 listener.event,
-                                id.into(),
+                                todo!(),
                                 self.handler.as_ref().unchecked_ref(),
                                 event_bubbles(listener.event),
                             );
-                            self.interpreter.ExitTemplateRef();
                         }
                         dioxus_core::GlobalNodeId::VNodeId(id) => {
                             self.interpreter.NewEventListener(
