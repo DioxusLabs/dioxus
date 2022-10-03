@@ -4,7 +4,7 @@ use std::{
     sync::Mutex,
 };
 
-use mlua::{AsChunk, chunk, Lua, Table};
+use mlua::{AsChunk, Lua, Table};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
@@ -136,10 +136,10 @@ impl PluginManager {
                 }
                 Err(e) => {
                     // plugin init failed
+                    log::warn!("Plugin init failed: {e}");
                     let _ = lua.load(mlua::chunk! {
                         table.remove(manager, $idx)
                     }).exec();
-                    log::warn!("Plugin init failed: {e}");
                 }
             }
         }
@@ -288,9 +288,5 @@ impl PluginManager {
         }
 
         res
-    }
-
-    pub fn plugin_status() {
-        let lua = LUA.lock().unwrap();
     }
 }
