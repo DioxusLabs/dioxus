@@ -69,7 +69,7 @@ use bumpalo::Bump;
 use crate::{
     diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
     nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
-    OwnedAttributeValue, StaticDynamicNodeMapping, VNode,
+    OwnedAttributeValue, StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -403,7 +403,7 @@ impl<'a> VTemplateRef<'a> {
             }
             let real_id = diff_state.scopes.reserve_phantom_node();
             diff_state.mutations.store_with_id(real_id);
-            self.node_ids[id.0].set(real_id);
+            self.node_ids[id.0].set(real_id).unwrap();
             real_id
         }
     }

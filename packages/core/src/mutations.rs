@@ -232,6 +232,7 @@ pub enum DomEdit<'bump> {
 use fxhash::FxHashSet;
 use DomEdit::*;
 
+#[allow(unused)]
 impl<'a> Mutations<'a> {
     pub(crate) fn new() -> Self {
         Self {
