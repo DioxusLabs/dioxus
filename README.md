@@ -1,26 +1,30 @@
 <div align="center">
   <h1>📦✨ Dioxus CLI </h1>
-  <p><strong>Tooling to supercharge dioxus projects</strong></p>
+  <p><strong>Tooling to supercharge Dioxus projects</strong></p>
 </div>
 
-dioxus-cli (inspired by wasm-pack and webpack) is a tool to help get dioxus projects off the ground. It handles all the build, development, bundling, and publishing to make web development simple.
+`dioxus-cli` (inspired by wasm-pack and webpack) is a tool for getting Dioxus projects up and running. It handles all of the build, bundling, development and publishing to simplify web development.
 
-## Installation
+# Installation
 
-```shell
-# for stable
-$ cargo install dioxus-cli
-# for latest
-$ cargo install --git https://github.com/DioxusLabs/cli
-# for developing
-$ cargo install --path . --debug
+## Stable
+```
+cargo install dioxus-cli
+```
+## Latest
+```
+cargo install --git https://github.com/DioxusLabs/cli
+```
+## Developing
+```
+cargo install --path . --debug
 ```
 
-Now, `dioxus` is in your path, you can use `dioxus --help` to get the help document.
+Now that `dioxus` is in the path, use `dioxus --help` to see the help information.
 
 ```
 dioxus 0.1.2
-Build, bundle, & ship your Dioxus app
+Build, Bundle & Ship Dioxus Apps
 
 USAGE:
     dioxus [FLAGS] <SUBCOMMAND>
@@ -42,9 +46,13 @@ SUBCOMMANDS:
 
 ## Get Started 
 
-You can use the `dioxus create project_name` to init a dioxus project, its will be clone from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template).
+Use `dioxus create project_name` to initialize a new Dioxus project. <br>
 
-or you can assign the template path:
+It will be cloned from the [dioxus-template](https://github.com/DioxusLabs/dioxus-template) repository.
+
+<br>
+
+Alternatively, you can specify the template path:
 
 ```
 dioxus create hello --template gh:dioxuslabs/dioxus-template
