@@ -6,6 +6,7 @@ pub enum DiffResult {
     RsxChanged(Vec<(Macro, TokenStream)>),
 }
 
+/// Find any rsx calls in the given file and return a list of all the rsx calls that have changed.
 pub fn find_rsx(new: &File, old: &File) -> DiffResult {
     let mut rsx_calls = Vec::new();
     if new.items.len() != old.items.len() {

@@ -25,7 +25,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// Build, bundle, & ship your Dioxus app.
+/// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
 #[clap(name = "dioxus", version)]
 pub struct Cli {
