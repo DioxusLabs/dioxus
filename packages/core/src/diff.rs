@@ -251,8 +251,7 @@ impl<'b> DiffState<'b> {
     }
 
     fn create_fragment_node(&mut self, parent: ElementId, frag: &'b VFragment<'b>) -> Vec<u64> {
-        // self.create_children(frag.children)
-        todo!()
+        self.create_children(parent, frag.children)
     }
 
     fn create_component_node(
@@ -886,7 +885,7 @@ impl<'b> DiffState<'b> {
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
             Ordering::Less => {
-                self.create_and_insert_after(parent, &new[old.len()..], old.last().unwrap())
+                self.create_and_insert_after(parent, &new[old.len()..], old.last().unwrap());
             }
             Ordering::Equal => {}
         }
