@@ -167,7 +167,12 @@ impl Buffer {
                     write!(self.buf, "{}: {}", name, out)?;
                 }
                 ContentField::Formatted(s) => {
-                    write!(self.buf, "{}: \"{}\"", name, s.value())?;
+                    write!(
+                        self.buf,
+                        "{}: \"{}\"",
+                        name,
+                        s.source.as_ref().unwrap().value()
+                    )?;
                 }
                 ContentField::OnHandlerRaw(exp) => {
                     let out = prettyplease::unparse_expr(exp);
@@ -209,7 +214,7 @@ impl Buffer {
         let attr_len = fields
             .iter()
             .map(|field| match &field.content {
-                ContentField::Formatted(s) => s.value().len() ,
+                ContentField::Formatted(s) => s.source.as_ref().unwrap().value().len() ,
                 ContentField::OnHandlerRaw(exp) | ContentField::ManExpr(exp) => {
                     let formatted = prettyplease::unparse_expr(exp);
                     let len = if formatted.contains('\n') {

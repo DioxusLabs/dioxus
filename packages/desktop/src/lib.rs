@@ -8,7 +8,7 @@ mod controller;
 mod desktop_context;
 mod escape;
 mod events;
-#[cfg(feature = "hot-reload")]
+#[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 mod protocol;
 

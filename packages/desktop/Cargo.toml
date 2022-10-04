@@ -15,7 +15,6 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 dioxus-html = { path = "../html", features = ["serialize"], version = "^0.2.1" }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1" }
-dioxus-rsx-interpreter = { path = "../rsx_interpreter", optional = true }
 
 serde = "1.0.136"
 serde_json = "1.0.79"
@@ -33,7 +32,7 @@ webbrowser = "0.7.1"
 infer = "0.9.0"
 dunce = "1.0.2"
 
-interprocess = { version = "1.1.1", optional = true }
+interprocess = { version = "1.1.1" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9.3"
@@ -44,7 +43,7 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot-reload = ["dioxus-rsx-interpreter", "interprocess"]
+hot-reload = ["dioxus-core/hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }

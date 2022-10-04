@@ -1,6 +1,6 @@
 #![allow(unused, non_upper_case_globals, non_snake_case)]
 
-use dioxus::prelude::*;
+use dioxus::{core_macro::rsx_without_templates, prelude::*};
 use dioxus_core::{DomEdit, Mutations, SchedulerMsg, ScopeId};
 use std::rc::Rc;
 use DomEdit::*;
@@ -11,12 +11,12 @@ fn shared_state_test() {
 
     static App: Component = |cx| {
         cx.provide_context(Rc::new(MySharedState("world!")));
-        cx.render(rsx!(Child {}))
+        cx.render(rsx_without_templates!(Child {}))
     };
 
     static Child: Component = |cx| {
         let shared = cx.consume_context::<Rc<MySharedState>>()?;
-        cx.render(rsx!("Hello, {shared.0}"))
+        cx.render(rsx_without_templates!("Hello, {shared.0}"))
     };
 
     let mut dom = VirtualDom::new(App);
@@ -42,13 +42,13 @@ fn swap_test() {
         cx.provide_context(Rc::new(MySharedState("world!")));
 
         let child = match *val % 2 {
-            0 => rsx!(
+            0 => rsx_without_templates!(
                 Child1 {
                     Child1 { }
                     Child2 { }
                 }
             ),
-            _ => rsx!(
+            _ => rsx_without_templates!(
                 Child2 {
                     Child2 { }
                     Child2 { }
@@ -56,7 +56,7 @@ fn swap_test() {
             ),
         };
 
-        cx.render(rsx!(
+        cx.render(rsx_without_templates!(
             Router {
                 div { child }
             }
@@ -65,14 +65,14 @@ fn swap_test() {
 
     #[inline_props]
     fn Router<'a>(cx: Scope, children: Element<'a>) -> Element<'a> {
-        cx.render(rsx!(div { children }))
+        cx.render(rsx_without_templates!(div { children }))
     }
 
     #[inline_props]
     fn Child1<'a>(cx: Scope, children: Element<'a>) -> Element {
         let shared = cx.consume_context::<Rc<MySharedState>>().unwrap();
         println!("Child1: {}", shared.0);
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             div {
                 "{shared.0}",
                 children
@@ -84,7 +84,7 @@ fn swap_test() {
     fn Child2<'a>(cx: Scope, children: Element<'a>) -> Element {
         let shared = cx.consume_context::<Rc<MySharedState>>().unwrap();
         println!("Child2: {}", shared.0);
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             h1 {
                 "{shared.0}",
                 children

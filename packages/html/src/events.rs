@@ -250,9 +250,6 @@ pub mod on {
             /// onmouseout
             onmouseout
 
-            ///
-            onscroll
-
             /// onmouseover
             ///
             /// Triggered when the users's mouse hovers over an element.
@@ -260,6 +257,11 @@ pub mod on {
 
             /// onmouseup
             onmouseup
+        ];
+
+        ScrollEvent(ScrollData): [
+            ///
+            onscroll
         ];
 
         PointerEvent(PointerData): [
@@ -896,6 +898,11 @@ pub mod on {
                 .finish()
         }
     }
+
+    pub type ScrollEvent = UiEvent<ScrollData>;
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Debug, Clone)]
+    pub struct ScrollData {}
 
     pub type MediaEvent = UiEvent<MediaData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]

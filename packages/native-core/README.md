@@ -1,1 +1,1 @@
-# Dioxus Native-Core: An ECS approach to GUI state and trees
+# Dioxus Native-Core: An lazy approach to GUI state and trees

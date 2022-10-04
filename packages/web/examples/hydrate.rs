@@ -24,6 +24,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 
+#[allow(non_snake_case)]
 fn Bapp(cx: Scope) -> Element {
     cx.render(rsx! {
         div {

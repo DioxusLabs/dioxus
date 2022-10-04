@@ -16,13 +16,13 @@ Parse
 -> "text {with_args}"
 -> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
 */
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
     Element(Element),
     Component(Component),
-    Text(LitStr),
     ForLoop(ForLoop),
     IfChain(ExprIf),
+    Text(IfmtInput),
     RawExpr(Expr),
 }
 
@@ -35,7 +35,7 @@ impl BodyNode {
         match self {
             BodyNode::Element(el) => el.name.span(),
             BodyNode::Component(component) => component.name.span(),
-            BodyNode::Text(text) => text.span(),
+            BodyNode::Text(text) => text.source.span(),
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
@@ -123,7 +123,7 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text(format_args_f!(#txt))
+                __cx.text(#txt)
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
@@ -206,7 +206,7 @@ impl ToTokens for BodyNode {
     }
 }
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ForLoop {
     pub for_token: Token![for],
     pub pat: Pat,

@@ -1,7 +1,6 @@
-use dioxus_core::VirtualDom;
-use dioxus_rsx_interpreter::{error::Error, ErrorHandler, SetManyRsxMessage, RSX_CONTEXT};
+use dioxus_core::{SchedulerMsg, SetTemplateMsg, VirtualDom};
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::{sync::Arc, sync::Mutex};
 
@@ -15,29 +14,6 @@ pub(crate) fn init(dom: &VirtualDom) {
     let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
         Arc::new(Mutex::new(None));
     let latest_in_connection_handle = latest_in_connection.clone();
-    let latest_out_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
-        Arc::new(Mutex::new(None));
-    let latest_out_connection_handle = latest_out_connection.clone();
-
-    struct DesktopErrorHandler {
-        latest_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>>,
-    }
-    impl ErrorHandler for DesktopErrorHandler {
-        fn handle_error(&self, err: Error) {
-            if let Some(conn) = &mut *self.latest_connection.lock().unwrap() {
-                conn.get_mut()
-                    .write_all((serde_json::to_string(&err).unwrap() + "\n").as_bytes())
-                    .unwrap();
-            } else {
-                panic!("{}", err);
-            }
-        }
-    }
-
-    RSX_CONTEXT.set_error_handler(DesktopErrorHandler {
-        latest_connection: latest_out_connection_handle,
-    });
-    RSX_CONTEXT.provide_scheduler_channel(dom.get_scheduler_channel());
 
     // connect to processes for incoming data
     std::thread::spawn(move || {
@@ -48,14 +24,7 @@ pub(crate) fn init(dom: &VirtualDom) {
         }
     });
 
-    // connect to processes for outgoing errors
-    std::thread::spawn(move || {
-        if let Ok(listener) = LocalSocketListener::bind("@dioxusout") {
-            for conn in listener.incoming().filter_map(handle_error) {
-                *latest_out_connection.lock().unwrap() = Some(BufReader::new(conn));
-            }
-        }
-    });
+    let mut channel = dom.get_scheduler_channel();
 
     std::thread::spawn(move || {
         loop {
@@ -63,8 +32,10 @@ pub(crate) fn init(dom: &VirtualDom) {
                 let mut buf = String::new();
                 match conn.read_line(&mut buf) {
                     Ok(_) => {
-                        let msgs: SetManyRsxMessage = serde_json::from_str(&buf).unwrap();
-                        RSX_CONTEXT.extend(msgs);
+                        let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
+                        channel
+                            .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
+                            .unwrap();
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {

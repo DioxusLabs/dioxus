@@ -1,8 +1,7 @@
 use std::fmt::Display;
 
+use dioxus_core::OwnedCodeLocation;
 use serde::{Deserialize, Serialize};
-
-use crate::CodeLocation;
 
 /// An error produced when interperting the rsx
 #[derive(Debug, Serialize, Deserialize)]
@@ -13,21 +12,21 @@ pub enum Error {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RecompileReason {
-    CapturedVariable(String),
-    CapturedExpression(String),
-    CapturedComponent(String),
-    CapturedListener(String),
-    CapturedAttribute(String),
+    Variable(String),
+    Expression(String),
+    Component(String),
+    Listener(String),
+    Attribute(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ParseError {
     pub message: String,
-    pub location: CodeLocation,
+    pub location: OwnedCodeLocation,
 }
 
 impl ParseError {
-    pub fn new(error: syn::Error, mut location: CodeLocation) -> Self {
+    pub fn new(error: syn::Error, mut location: OwnedCodeLocation) -> Self {
         let message = error.to_string();
         let syn_call_site = error.span().start();
         location.line += syn_call_site.line as u32;

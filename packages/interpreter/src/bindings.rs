@@ -73,4 +73,44 @@ extern "C" {
 
     #[wasm_bindgen(method)]
     pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str, ns: Option<&str>);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTemplateRef(this: &Interpreter, id: u64, template_id: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTemplate(this: &Interpreter, id: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn FinishTemplate(this: &Interpreter, len: u32);
+
+    #[wasm_bindgen(method)]
+    pub fn EnterTemplateRef(this: &Interpreter, id: u64);
+
+    #[wasm_bindgen(method)]
+    pub fn ExitTemplateRef(this: &Interpreter);
+
+    #[wasm_bindgen(method)]
+    pub fn CreateElementTemplate(
+        this: &Interpreter,
+        tag: &str,
+        root: u64,
+        locally_static: bool,
+        fully_static: bool,
+    );
+
+    #[wasm_bindgen(method)]
+    pub fn CreateElementNsTemplate(
+        this: &Interpreter,
+        tag: &str,
+        id: u64,
+        ns: &str,
+        locally_static: bool,
+        fully_static: bool,
+    );
+
+    #[wasm_bindgen(method)]
+    pub fn CreateTextNodeTemplate(this: &Interpreter, text: &str, root: u64, locally_static: bool);
+
+    #[wasm_bindgen(method)]
+    pub fn CreatePlaceholderTemplate(this: &Interpreter, root: u64);
 }

@@ -164,20 +164,20 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
             let gen = quote! {
                 impl State for #type_name {
-                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = dioxus_core::ElementId>>(
-                        dirty: &[(dioxus_core::ElementId, dioxus_native_core::node_ref::NodeMask)],
+                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = dioxus_core::GlobalNodeId>,T2: dioxus_native_core::traversable::Traversable<Node = dioxus_native_core::real_dom::NodeData, Id = dioxus_core::GlobalNodeId>>(
+                        dirty: &[(dioxus_core::GlobalNodeId, dioxus_native_core::node_ref::NodeMask)],
                         state_tree: &'a mut T,
-                        vdom: &'a dioxus_core::VirtualDom,
+                        rdom: &'a T2,
                         ctx: &anymap::AnyMap,
-                    ) -> fxhash::FxHashSet<dioxus_core::ElementId>{
+                    ) -> fxhash::FxHashSet<dioxus_core::GlobalNodeId>{
                         #[derive(Eq, PartialEq)]
                         struct HeightOrdering {
                             height: u16,
-                            id: dioxus_core::ElementId,
+                            id: dioxus_core::GlobalNodeId,
                         }
 
                         impl HeightOrdering {
-                            fn new(height: u16, id: dioxus_core::ElementId) -> Self {
+                            fn new(height: u16, id: dioxus_core::GlobalNodeId) -> Self {
                                 HeightOrdering {
                                     height,
                                     id,
@@ -185,9 +185,29 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                             }
                         }
 
+                        // not the ordering after height is just for deduplication it can be any ordering as long as it is consistent
                         impl Ord for HeightOrdering {
                             fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                                self.height.cmp(&other.height).then(self.id.0.cmp(&other.id.0))
+                                self.height.cmp(&other.height).then(match (self.id, other.id){
+                                    (
+                                        dioxus_core::GlobalNodeId::TemplateId {
+                                            template_ref_id,
+                                            template_node_id,
+                                        },
+                                        dioxus_core::GlobalNodeId::TemplateId {
+                                            template_ref_id: o_template_ref_id,
+                                            template_node_id: o_template_node_id,
+                                        },
+                                    ) => template_ref_id
+                                        .0
+                                        .cmp(&o_template_ref_id.0)
+                                        .then(template_node_id.0.cmp(&o_template_node_id.0)),
+                                    (dioxus_core::GlobalNodeId::TemplateId { .. }, dioxus_core::GlobalNodeId::VNodeId(_)) => std::cmp::Ordering::Less,
+                                    (dioxus_core::GlobalNodeId::VNodeId(_), dioxus_core::GlobalNodeId::TemplateId { .. }) => {
+                                        std::cmp::Ordering::Greater
+                                    }
+                                    (dioxus_core::GlobalNodeId::VNodeId(s_id), dioxus_core::GlobalNodeId::VNodeId(o_id)) => s_id.0.cmp(&o_id.0),
+                                })
                             }
                         }
 
@@ -218,7 +238,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
                         let mut dirty_elements = fxhash::FxHashSet::default();
                         // the states of any elements that are dirty
-                        let mut states: fxhash::FxHashMap<dioxus_core::ElementId, MembersDirty> = fxhash::FxHashMap::default();
+                        let mut states: fxhash::FxHashMap<dioxus_core::GlobalNodeId, MembersDirty> = fxhash::FxHashMap::default();
 
                         for (id, mask) in dirty {
                             let members_dirty = MembersDirty {
@@ -244,7 +264,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                                 <#child_types as dioxus_native_core::state::State>::update(
                                     dirty,
                                     &mut state_tree.map(|n| &n.#child_members, |n| &mut n.#child_members),
-                                    vdom,
+                                    rdom,
                                     ctx,
                                 )
                             );
@@ -493,7 +513,7 @@ impl<'a> StateStruct<'a> {
                     let mut i = 0;
                     while i < resolution_order.len(){
                         let id = resolution_order[i].id;
-                        let vnode = vdom.get_element(id).unwrap();
+                        let node = rdom.get(id).unwrap();
                         let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, parent) = state_tree.get_node_parent_mut(id);
                         let current_state = current_state.unwrap();
@@ -515,7 +535,7 @@ impl<'a> StateStruct<'a> {
                     let mut i = 0;
                     while i < resolution_order.len(){
                         let id = resolution_order[i].id;
-                        let vnode = vdom.get_element(id).unwrap();
+                        let node = rdom.get(id).unwrap();
                         let members_dirty = states.get_mut(&id).unwrap();
                         let (current_state, children) = state_tree.get_node_children_mut(id);
                         let current_state = current_state.unwrap();
@@ -534,7 +554,7 @@ impl<'a> StateStruct<'a> {
                     let mut i = 0;
                     while i < resolution_order.len(){
                         let id = resolution_order[i];
-                        let vnode = vdom.get_element(id).unwrap();
+                        let node = rdom.get(id).unwrap();
                         let members_dirty = states.get_mut(&id).unwrap();
                         let current_state = state_tree.get_mut(id).unwrap();
                         if members_dirty.#member && #reduce_member {
@@ -679,8 +699,7 @@ impl<'a> StateMember<'a> {
         };
 
         let ty = &self.mem.ty;
-        let node_view =
-            quote!(dioxus_native_core::node_ref::NodeView::new(vnode, #ty::NODE_MASK, vdom));
+        let node_view = quote!(dioxus_native_core::node_ref::NodeView::new(node, #ty::NODE_MASK));
         let dep_idents = self.dep_mems.iter().map(|m| &m.0.ident);
         match self.dep_kind {
             DependencyKind::Node => {

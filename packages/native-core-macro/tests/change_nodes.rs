@@ -1,10 +1,8 @@
-use dioxus::core as dioxus_core;
-use dioxus::core::{ElementId, VElement};
+use dioxus::core::{self as dioxus_core, GlobalNodeId};
 use dioxus::prelude::*;
 use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::State;
 use dioxus_native_core_macro::State;
-use std::cell::Cell;
 
 #[derive(State, Default, Clone)]
 struct Empty {}
@@ -18,44 +16,8 @@ fn remove_node() {
 
     let vdom = VirtualDom::new(Base);
 
-    let mutations = vdom.create_vnodes(rsx! {
-        div{
-            div{}
-        }
-    });
-
     let mut dom: RealDom<Empty> = RealDom::new();
-
-    let _to_update = dom.apply_mutations(vec![mutations]);
-    let child_div = VElement {
-        id: Cell::new(Some(ElementId(2))),
-        key: None,
-        tag: "div",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(1))),
-        listeners: &[],
-        attributes: &[],
-        children: &[],
-    };
-    let child_div_el = VNode::Element(&child_div);
-    let root_div = VElement {
-        id: Cell::new(Some(ElementId(1))),
-        key: None,
-        tag: "div",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
-        listeners: &[],
-        attributes: &[],
-        children: &[child_div_el],
-    };
-
-    assert_eq!(dom.size(), 2);
-    assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
-    assert_eq!(dom[ElementId(2)].height, 2);
-
-    let vdom = VirtualDom::new(Base);
-    let mutations = vdom.diff_lazynodes(
+    let (create, edit) = vdom.diff_lazynodes(
         rsx! {
             div{
                 div{}
@@ -65,22 +27,43 @@ fn remove_node() {
             div{}
         },
     );
-    dom.apply_mutations(vec![mutations.1]);
 
-    let new_root_div = VElement {
-        id: Cell::new(Some(ElementId(1))),
-        key: None,
-        tag: "div",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
-        listeners: &[],
-        attributes: &[],
-        children: &[],
-    };
+    println!("create: {:#?}", create);
+    println!("edit: {:#?}", edit);
+
+    let _to_update = dom.apply_mutations(vec![create]);
+
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(1),
+            template_node_id: dioxus::prelude::TemplateNodeId(0),
+        }]
+        .node_data
+        .height,
+        1
+    );
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(1),
+            template_node_id: dioxus::prelude::TemplateNodeId(1),
+        }]
+        .node_data
+        .height,
+        2
+    );
+
+    dom.apply_mutations(vec![edit]);
 
     assert_eq!(dom.size(), 1);
-    assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(2),
+            template_node_id: dioxus::prelude::TemplateNodeId(0),
+        }]
+        .node_data
+        .height,
+        1
+    );
 }
 
 #[test]
@@ -92,31 +75,7 @@ fn add_node() {
 
     let vdom = VirtualDom::new(Base);
 
-    let mutations = vdom.create_vnodes(rsx! {
-        div{}
-    });
-
-    let mut dom: RealDom<Empty> = RealDom::new();
-
-    let _to_update = dom.apply_mutations(vec![mutations]);
-
-    let root_div = VElement {
-        id: Cell::new(Some(ElementId(1))),
-        key: None,
-        tag: "div",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
-        listeners: &[],
-        attributes: &[],
-        children: &[],
-    };
-
-    assert_eq!(dom.size(), 1);
-    assert!(&dom.contains_node(&VNode::Element(&root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
-
-    let vdom = VirtualDom::new(Base);
-    let mutations = vdom.diff_lazynodes(
+    let (create, update) = vdom.diff_lazynodes(
         rsx! {
             div{}
         },
@@ -126,32 +85,41 @@ fn add_node() {
             }
         },
     );
-    dom.apply_mutations(vec![mutations.1]);
 
-    let child_div = VElement {
-        id: Cell::new(Some(ElementId(2))),
-        key: None,
-        tag: "p",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(1))),
-        listeners: &[],
-        attributes: &[],
-        children: &[],
-    };
-    let child_div_el = VNode::Element(&child_div);
-    let new_root_div = VElement {
-        id: Cell::new(Some(ElementId(1))),
-        key: None,
-        tag: "div",
-        namespace: None,
-        parent: Cell::new(Some(ElementId(0))),
-        listeners: &[],
-        attributes: &[],
-        children: &[child_div_el],
-    };
+    let mut dom: RealDom<Empty> = RealDom::new();
 
-    assert_eq!(dom.size(), 2);
-    assert!(&dom.contains_node(&VNode::Element(&new_root_div)));
-    assert_eq!(dom[ElementId(1)].height, 1);
-    assert_eq!(dom[ElementId(2)].height, 2);
+    let _to_update = dom.apply_mutations(vec![create]);
+
+    assert_eq!(dom.size(), 1);
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(1),
+            template_node_id: dioxus::prelude::TemplateNodeId(0),
+        }]
+        .node_data
+        .height,
+        1
+    );
+
+    dom.apply_mutations(vec![update]);
+
+    assert_eq!(dom.size(), 1);
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(2),
+            template_node_id: dioxus::prelude::TemplateNodeId(0),
+        }]
+        .node_data
+        .height,
+        1
+    );
+    assert_eq!(
+        dom[GlobalNodeId::TemplateId {
+            template_ref_id: dioxus_core::ElementId(2),
+            template_node_id: dioxus::prelude::TemplateNodeId(1),
+        }]
+        .node_data
+        .height,
+        2
+    );
 }

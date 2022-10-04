@@ -51,7 +51,7 @@ impl DesktopController {
                 dom.base_scope().provide_context(window_context);
 
                 // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
-                #[cfg(feature = "hot-reload")]
+                #[cfg(any(feature = "hot-reload", debug_assertions))]
                 crate::hot_reload::init(&dom);
 
                 let edits = dom.rebuild();

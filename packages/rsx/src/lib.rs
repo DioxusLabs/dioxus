@@ -13,17 +13,25 @@
 
 #[macro_use]
 mod errors;
-
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod attributes;
 mod component;
 mod element;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod elements;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod error;
 mod ifmt;
 mod node;
+mod template;
 
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+pub use template::{try_parse_template, DynamicTemplateContextBuilder};
 
 // imports
 use proc_macro2::TokenStream as TokenStream2;
@@ -32,6 +40,7 @@ use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
+use template::TemplateBuilder;
 
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
@@ -58,15 +67,39 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let inner = if self.roots.len() == 1 {
-            let inner = &self.roots[0];
-            quote! { #inner }
+        let template = TemplateBuilder::from_roots(self.roots.clone());
+        let inner = if let Some(template) = template {
+            quote! { #template }
         } else {
-            let childs = &self.roots;
-            quote! { __cx.fragment_root([ #(#childs),* ]) }
+            let children = &self.roots;
+            if children.len() == 1 {
+                let inner = &self.roots[0];
+                quote! { #inner }
+            } else {
+                quote! { __cx.fragment_root([ #(#children),* ]) }
+            }
         };
 
         // Otherwise we just build the LazyNode wrapper
+        out_tokens.append_all(quote! {
+            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                #inner
+            })
+        })
+    }
+}
+
+impl CallBody {
+    pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
+        let children = &self.roots;
+        let inner = if children.len() == 1 {
+            let inner = &self.roots[0];
+            quote! { #inner }
+        } else {
+            quote! { __cx.fragment_root([ #(#children),* ]) }
+        };
+
         out_tokens.append_all(quote! {
             LazyNodes::new(move |__cx: NodeFactory| -> VNode {
                 use dioxus_elements::{GlobalAttributes, SvgAttributes};
