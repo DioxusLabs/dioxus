@@ -69,13 +69,14 @@ pub(crate) mod innerlude {
 pub use crate::innerlude::{
     AnyEvent, ArbitraryAttributeValue, Attribute, AttributeDiscription, AttributeValue,
     CodeLocation, Component, DioxusElement, DomEdit, DynamicNodeMapping, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, GlobalNodeId, IntoVNode, LazyNodes, Listener,
-    Mutations, NodeFactory, OwnedAttributeValue, Properties, RendererTemplateId, SchedulerMsg,
-    Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping, StaticTemplateNode,
-    StaticTemplateNodes, TaskId, Template, TemplateAttribute, TemplateAttributeValue,
-    TemplateContext, TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType,
-    TemplateValue, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
-    VFragment, VNode, VPlaceholder, VText, VirtualDom, JS_MAX_INT,
+    ElementIdIterator, EventHandler, EventPriority, GlobalNodeId, IntoAttributeValue, IntoVNode,
+    LazyNodes, Listener, Mutations, NodeFactory, OwnedAttributeValue, Properties,
+    RendererTemplateId, SchedulerMsg, Scope, ScopeId, ScopeState, StaticCodeLocation,
+    StaticDynamicNodeMapping, StaticTemplateNode, StaticTemplateNodes, TaskId, Template,
+    TemplateAttribute, TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId,
+    TemplateNode, TemplateNodeId, TemplateNodeType, TemplateValue, TextTemplate,
+    TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement, VFragment, VNode, VPlaceholder,
+    VText, VirtualDom, JS_MAX_INT,
 };
 #[cfg(any(feature = "hot-reload", debug_assertions))]
 pub use crate::innerlude::{
@@ -92,11 +93,12 @@ pub mod prelude {
     pub use crate::innerlude::OwnedTemplate;
     pub use crate::innerlude::{
         fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
-        DioxusElement, Element, EventHandler, Fragment, LazyNodes, LazyStaticVec, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, StaticAttributeValue, StaticCodeLocation,
-        StaticDynamicNodeMapping, StaticTemplate, StaticTemplateNodes, Template, TemplateAttribute,
-        TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId, TemplateNode,
-        TemplateNodeId, TemplateNodeType, TextTemplate, TextTemplateSegment, VNode, VirtualDom,
+        DioxusElement, Element, EventHandler, Fragment, IntoAttributeValue, LazyNodes,
+        LazyStaticVec, NodeFactory, Properties, Scope, ScopeId, ScopeState, StaticAttributeValue,
+        StaticCodeLocation, StaticDynamicNodeMapping, StaticTemplate, StaticTemplateNodes,
+        Template, TemplateAttribute, TemplateAttributeValue, TemplateContext, TemplateElement,
+        TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType, TextTemplate,
+        TextTemplateSegment, VNode, VirtualDom,
     };
 }
 
