@@ -16,7 +16,7 @@ We can get the current state of the router using the [`use_route`] hook. From
 that state we can extract the current value of our parameter by using a key we
 will later also define on our route.
 
-> It is **VERY IMPORTANT** to dropt the object returned by the [`use_route`]
+> It is **VERY IMPORTANT** to drop the object returned by the [`use_route`]
 > hook once our component finished rendering. Otherwise the entire router will
 > be frozen.
 

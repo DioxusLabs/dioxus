@@ -72,7 +72,7 @@ fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
             .index(Index as Component)
-            // not the absence of a / prefix
+            // note the absence of a / prefix
             .fixed("other", Other as Component)
     });
 

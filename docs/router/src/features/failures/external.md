@@ -18,7 +18,7 @@ will need to check the [`HistoryController`] to see if an external redirect has
 happened.
 
 ## Failure handling
-When the router encounters an external navigation it cannot fullfil, it changes
+When the router encounters an external navigation it cannot fulfill, it changes
 the path to `/` and shows some fallback content.
 
 > You can detect if the router is in the external navigation failure handling
