@@ -29,6 +29,7 @@ fn app(cx: Scope) -> Element {
                 })
                 .clone(),
 
+                Outlet { }
                 p { "----"}
                 ul {
                     Link { target: "/", li { "Router link to home" } },
@@ -41,12 +42,12 @@ fn app(cx: Scope) -> Element {
 
 fn Home(cx: Scope) -> Element {
     cx.render(rsx! {
-        "Home"
+        h1 { "Home" }
     })
 }
 
 fn Settings(cx: Scope) -> Element {
     cx.render(rsx! {
-        "Settings"
+        h1 { "Settings" }
     })
 }
