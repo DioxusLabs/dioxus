@@ -48,7 +48,7 @@ pub enum DomEdit<'bump> {
     /// at the top of the stack.
     AppendChildren {
         /// The parent to append nodes to.
-        root: u64,
+        root: Option<u64>,
 
         /// The ids of the children to append.
         children: Vec<u64>,
@@ -57,7 +57,7 @@ pub enum DomEdit<'bump> {
     /// Replace a given (single) node with a handful of nodes currently on the stack.
     ReplaceWith {
         /// The ID of the node to be replaced.
-        root: u64,
+        root: Option<u64>,
 
         /// The ids of the nodes to replace the root with.
         nodes: Vec<u64>,
@@ -66,7 +66,7 @@ pub enum DomEdit<'bump> {
     /// Insert a number of nodes after a given node.
     InsertAfter {
         /// The ID of the node to insert after.
-        root: u64,
+        root: Option<u64>,
 
         /// The ids of the nodes to insert after the target node.
         nodes: Vec<u64>,
@@ -75,7 +75,7 @@ pub enum DomEdit<'bump> {
     /// Insert a number of nodes before a given node.
     InsertBefore {
         /// The ID of the node to insert before.
-        root: u64,
+        root: Option<u64>,
 
         /// The ids of the nodes to insert before the target node.
         nodes: Vec<u64>,
@@ -84,13 +84,13 @@ pub enum DomEdit<'bump> {
     /// Remove a particular node from the DOM
     Remove {
         /// The ID of the node to remove.
-        root: u64,
+        root: Option<u64>,
     },
 
     /// Create a new purely-text node
     CreateTextNode {
         /// The ID the new node should have.
-        root: u64,
+        root: Option<u64>,
 
         /// The textcontent of the node
         text: &'bump str,
@@ -99,19 +99,19 @@ pub enum DomEdit<'bump> {
     /// Create a new purely-element node
     CreateElement {
         /// The ID the new node should have.
-        root: u64,
+        root: Option<u64>,
 
         /// The tagname of the node
         tag: &'bump str,
 
         /// The number of children nodes that will follow this message.
-        children: u64,
+        children: u32,
     },
 
     /// Create a new purely-comment node with a given namespace
     CreateElementNs {
         /// The ID the new node should have.
-        root: u64,
+        root: Option<u64>,
 
         /// The namespace of the node
         tag: &'bump str,
@@ -120,14 +120,14 @@ pub enum DomEdit<'bump> {
         ns: &'static str,
 
         /// The number of children nodes that will follow this message.
-        children: u64,
+        children: u32,
     },
 
     /// Create a new placeholder node.
     /// In most implementations, this will either be a hidden div or a comment node.
     CreatePlaceholder {
         /// The ID the new node should have.
-        root: u64,
+        root: Option<u64>,
     },
 
     /// Create a new Event Listener.
@@ -139,13 +139,13 @@ pub enum DomEdit<'bump> {
         scope: ScopeId,
 
         /// The ID of the node to attach the listener to.
-        root: u64,
+        root: Option<u64>,
     },
 
     /// Remove an existing Event Listener.
     RemoveEventListener {
         /// The ID of the node to remove.
-        root: u64,
+        root: Option<u64>,
 
         /// The name of the event to remove.
         event: &'static str,
@@ -154,7 +154,7 @@ pub enum DomEdit<'bump> {
     /// Set the textcontent of a node.
     SetText {
         /// The ID of the node to set the textcontent of.
-        root: u64,
+        root: Option<u64>,
 
         /// The textcontent of the node
         text: &'bump str,
@@ -163,7 +163,7 @@ pub enum DomEdit<'bump> {
     /// Set the value of a node's attribute.
     SetAttribute {
         /// The ID of the node to set the attribute of.
-        root: u64,
+        root: Option<u64>,
 
         /// The name of the attribute to set.
         field: &'static str,
@@ -180,7 +180,7 @@ pub enum DomEdit<'bump> {
     /// Remove an attribute from a node.
     RemoveAttribute {
         /// The ID of the node to remove.
-        root: u64,
+        root: Option<u64>,
 
         /// The name of the attribute to remove.
         name: &'static str,
@@ -192,7 +192,7 @@ pub enum DomEdit<'bump> {
     /// Clones a node.
     CloneNode {
         /// The ID of the node to clone.
-        id: u64,
+        id: Option<u64>,
 
         /// The ID of the new node.
         new_id: u64,
@@ -201,7 +201,7 @@ pub enum DomEdit<'bump> {
     /// Clones the children of a node. (allows cloning fragments)
     CloneNodeChildren {
         /// The ID of the node to clone.
-        id: u64,
+        id: Option<u64>,
 
         /// The ID of the new node.
         new_ids: Vec<u64>,
@@ -242,36 +242,29 @@ impl<'a> Mutations<'a> {
         }
     }
 
-    pub(crate) fn replace_with(&mut self, root: impl Into<u64>, nodes: Vec<u64>) {
-        let root = root.into();
+    pub(crate) fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.edits.push(ReplaceWith { nodes, root });
     }
 
-    pub(crate) fn insert_after(&mut self, root: impl Into<u64>, nodes: Vec<u64>) {
-        let root = root.into();
+    pub(crate) fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.edits.push(InsertAfter { nodes, root });
     }
 
-    pub(crate) fn insert_before(&mut self, root: impl Into<u64>, nodes: Vec<u64>) {
-        let root = root.into();
+    pub(crate) fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.edits.push(InsertBefore { nodes, root });
     }
 
-    pub(crate) fn append_children(&mut self, root: impl Into<u64>, children: Vec<u64>) {
-        self.edits.push(AppendChildren {
-            root: root.into(),
-            children,
-        });
+    pub(crate) fn append_children(&mut self, root: Option<u64>, children: Vec<u64>) {
+        self.edits.push(AppendChildren { root, children });
     }
 
     // Remove Nodes from the dom
-    pub(crate) fn remove(&mut self, id: impl Into<u64>) {
-        self.edits.push(Remove { root: id.into() });
+    pub(crate) fn remove(&mut self, id: Option<u64>) {
+        self.edits.push(Remove { root: id });
     }
 
     // Create
-    pub(crate) fn create_text_node(&mut self, text: &'a str, id: impl Into<u64>) {
-        let id = id.into();
+    pub(crate) fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
         self.edits.push(CreateTextNode { text, root: id });
     }
 
@@ -279,10 +272,9 @@ impl<'a> Mutations<'a> {
         &mut self,
         tag: &'static str,
         ns: Option<&'static str>,
-        id: impl Into<u64>,
-        children: u64,
+        id: Option<u64>,
+        children: u32,
     ) {
-        let id = id.into();
         match ns {
             Some(ns) => self.edits.push(CreateElementNs {
                 root: id,
@@ -299,8 +291,7 @@ impl<'a> Mutations<'a> {
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: impl Into<u64>) {
-        let id = id.into();
+    pub(crate) fn create_placeholder(&mut self, id: Option<u64>) {
         self.edits.push(CreatePlaceholder { root: id });
     }
 
@@ -312,13 +303,13 @@ impl<'a> Mutations<'a> {
             ..
         } = listener;
 
-        let element_id = match mounted_node.get().unwrap() {
+        let element_id = Some(match mounted_node.get().unwrap() {
             GlobalNodeId::TemplateId {
                 template_ref_id: _,
                 template_node_id,
             } => template_node_id.into(),
             GlobalNodeId::VNodeId(id) => id.into(),
-        };
+        });
 
         self.edits.push(NewEventListener {
             scope,
@@ -327,21 +318,17 @@ impl<'a> Mutations<'a> {
         });
     }
 
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: impl Into<u64>) {
-        self.edits.push(RemoveEventListener {
-            event,
-            root: root.into(),
-        });
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>) {
+        self.edits.push(RemoveEventListener { event, root });
     }
 
     // modify
-    pub(crate) fn set_text(&mut self, text: &'a str, root: impl Into<u64>) {
+    pub(crate) fn set_text(&mut self, text: &'a str, root: Option<u64>) {
         let root = root.into();
         self.edits.push(SetText { text, root });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: impl Into<u64>) {
-        let root = root.into();
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>) {
         let Attribute {
             value, attribute, ..
         } = attribute;
@@ -354,8 +341,7 @@ impl<'a> Mutations<'a> {
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: impl Into<u64>) {
-        let root = root.into();
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>) {
         let Attribute { attribute, .. } = attribute;
 
         self.edits.push(RemoveAttribute {
@@ -369,11 +355,12 @@ impl<'a> Mutations<'a> {
         self.dirty_scopes.insert(scope);
     }
 
-    pub(crate) fn clone_node(&mut self, id: impl Into<u64>, new_id: impl Into<u64>) {
-        self.edits.push(CloneNode {
-            id: id.into(),
-            new_id: new_id.into(),
-        });
+    pub(crate) fn clone_node(&mut self, id: Option<u64>, new_id: u64) {
+        self.edits.push(CloneNode { id, new_id });
+    }
+
+    pub(crate) fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>) {
+        self.edits.push(CloneNodeChildren { id, new_ids });
     }
 
     pub(crate) fn first_child(&mut self) {
@@ -388,12 +375,12 @@ impl<'a> Mutations<'a> {
         self.edits.push(ParentNode {});
     }
 
-    pub(crate) fn store_with_id(&mut self, id: impl Into<u64>) {
-        self.edits.push(StoreWithId { id: id.into() });
+    pub(crate) fn store_with_id(&mut self, id: u64) {
+        self.edits.push(StoreWithId { id });
     }
 
-    pub(crate) fn set_last_node(&mut self, id: impl Into<u64>) {
-        self.edits.push(SetLastNode { id: id.into() });
+    pub(crate) fn set_last_node(&mut self, id: u64) {
+        self.edits.push(SetLastNode { id });
     }
 }
 

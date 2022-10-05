@@ -21,7 +21,15 @@ use std::{
     sync::Arc,
 };
 
-pub(crate) type NodeSlab = Slab<Option<*const VNode<'static>>>;
+enum NodePtr {
+    VNode(*const VNode<'static>),
+    TemplateNode {
+        template_ref_id: ElementId,
+        template_node_id: TemplateNodeId,
+    },
+}
+
+pub(crate) type NodeSlab = Slab<NodePtr>;
 
 /// for traceability, we use the raw fn pointer to identify the function
 /// we also get the component name, but that's not necessarily unique in the app
@@ -73,7 +81,9 @@ impl ScopeArena {
 
         let node = bump.alloc(VNode::Element(el));
         let mut nodes = Slab::new();
-        let root_id = nodes.insert(Some(unsafe { std::mem::transmute(node as *const _) }));
+        let root_id = nodes.insert(NodePtr::VNode(unsafe {
+            std::mem::transmute(node as *const _)
+        }));
 
         debug_assert_eq!(root_id, 0);
 
@@ -222,23 +232,30 @@ impl ScopeArena {
         let key = entry.key();
         let id = ElementId(key);
         let node = unsafe { extend_vnode(node) };
-        entry.insert(Some(node as *const _));
+        entry.insert(NodePtr::VNode(node as *const _));
         id
     }
 
     /// reserve a id for a node that only exists in the renderer (e.g. a template ref node)
-    pub fn reserve_phantom_node(&self) -> ElementId {
+    pub fn reserve_phantom_node(
+        &self,
+        template_id: ElementId,
+        node_id: TemplateNodeId,
+    ) -> ElementId {
         let mut els = self.nodes.borrow_mut();
         let entry = els.vacant_entry();
         let key = entry.key();
         let id = ElementId(key);
-        entry.insert(None);
+        entry.insert(NodePtr::TemplateNode {
+            template_ref_id: template_id,
+            template_node_id: node_id,
+        });
         id
     }
 
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
         let node = unsafe { extend_vnode(node) };
-        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = Some(node);
+        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = NodePtr::VNode(node);
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -339,7 +356,7 @@ impl ScopeArena {
         scope.cycle_frame();
     }
 
-    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: GlobalNodeId) {
+    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: ElementId) {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
@@ -456,7 +473,7 @@ impl ScopeArena {
                     }
                 }
 
-                if let Some(id) = el.parent {
+                if let Some(id) = node.parent {
                     Some(GlobalNodeId::TemplateId {
                         template_ref_id,
                         template_node_id: id,

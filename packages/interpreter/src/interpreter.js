@@ -62,73 +62,96 @@ export class Interpreter {
     this.listeners = new ListenerMap(root);
     this.handlers = {};
     this.nodes = [root];
+    this.parents = [];
   }
-  getId(id) {
-    return this.nodes[id];
+  checkAppendParent() {
+    if (this.parents.length > 0) {
+      const lastParent = this.parents[this.parents.length - 1];
+      lastParent[1]--;
+      if (lastParent[1] === 0) {
+        this.parents.pop();
+      }
+      lastParent[0].appendChild(this.lastNode);
+    }
   }
   SetNode(id, node) {
-    this.nodes[id] = node;
+    if (id !== null) {
+      this.nodes[id] = node;
+    }
   }
   AppendChildren(root, children) {
-    let root = this.getId(root);
+    let root_el = this.nodes[root];
     for (let i = 0; i < children.length; i++) {
-      root.appendChild(this.getId(children[i]));
+      root_el.appendChild(this.nodes[children[i]]);
     }
   }
   ReplaceWith(root, nodes) {
-    let root = this.getId(root);
-    let els = nodes.map((id) => this.getId(id));
-    root.replaceWith(...els);
+    let root_el = this.nodes[root];
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
+    root_el.replaceWith(...els);
   }
   InsertAfter(root, nodes) {
-    const old = this.getId(root);
-    let els = nodes.map((id) => this.getId(id));
+    const old = this.nodes[root];
+    let els = nodes.map((id) => this.nodes[id]);
     old.after(...els);
   }
   InsertBefore(root, nodes) {
-    const old = this.getId(root);
-    let els = nodes.map((id) => this.getId(id));
+    const old = this.nodes[root];
+    let els = nodes.map((id) => this.nodes[id]);
     old.before(...els);
   }
   Remove(root) {
-    let node = this.getId(root);
+    let node = this.nodes[root];
     if (node !== undefined) {
       node.remove();
     }
   }
   CreateTextNode(text, root) {
     this.lastNode = document.createTextNode(text);
+    this.checkAppendParent();
     this.SetNode(root, this.lastNode);
   }
-  CreateElement(tag, root) {
+  CreateElement(tag, root, children) {
     this.lastNode = document.createElement(tag);
+    this.checkAppendParent();
     this.SetNode(root, this.lastNode);
+    if (children > 0) {
+      this.parents.push([this.lastNode, children]);
+    }
   }
-  CreateElementNs(tag, root, ns) {
+  CreateElementNs(tag, root, ns, children) {
     this.lastNode = document.createElementNS(ns, tag);
+    this.checkAppendParent();
     this.SetNode(root, this.lastNode);
+    if (children > 0) {
+      this.parents.push([this.lastNode, children]);
+    }
   }
   CreatePlaceholder(root) {
     this.lastNode = document.createElement("pre");
     this.lastNode.hidden = true;
+    this.checkAppendParent();
     this.SetNode(root, this.lastNode);
   }
   NewEventListener(event_name, root, handler, bubbles) {
-    const element = this.getId(root);
+    const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     this.listeners.create(event_name, element, handler, bubbles);
   }
   RemoveEventListener(root, event_name, bubbles) {
-    const element = this.getId(root);
+    const element = this.nodes[root];
     element.removeAttribute(`data-dioxus-id`);
     this.listeners.remove(element, event_name, bubbles);
   }
   SetText(root, text) {
-    this.getId(root).data = text;
+    this.nodes[root].data = text;
   }
   SetAttribute(root, field, value, ns) {
     const name = field;
-    const node = this.getId(root);
+    const node = this.nodes[root];
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
@@ -162,7 +185,7 @@ export class Interpreter {
   }
   RemoveAttribute(root, field, ns) {
     const name = field;
-    const node = this.getId(root);
+    const node = this.nodes[root];
     if (ns == "style") {
       node.style.removeProperty(name);
     } else if (ns !== null || ns !== undefined) {
@@ -180,14 +203,13 @@ export class Interpreter {
     }
   }
   CloneNode(old, new_id) {
-    this.SetNode(new_id, this.getId(old).cloneNode(true));
+    this.SetNode(new_id, this.nodes[old].cloneNode(true));
   }
   CloneNodeChildren(old, new_ids) {
-    const old_node = this.getId(old).cloneNode(true).appendChild(new_nodes[i]);
+    const old_node = this.nodes[old].cloneNode(true);
     let i = 0;
     for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
-      this.SetNode(new_ids[i], node);
-      i++;
+      this.SetNode(new_ids[i++], node);
     }
   }
   FirstChild() {
@@ -203,7 +225,7 @@ export class Interpreter {
     this.SetNode(id, this.lastNode);
   }
   SetLastNode(root) {
-    this.lastNode = this.getId(root);
+    this.lastNode = this.nodes[root];
   }
   handleEdits(edits) {
     for (let edit of edits) {

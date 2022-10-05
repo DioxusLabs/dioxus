@@ -201,7 +201,7 @@ impl<'src> VNode<'src> {
             VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
-            VNode::TemplateRef(t) => t.id.get(),
+            VNode::TemplateRef(t) => None,
         }
     }
 
@@ -252,7 +252,6 @@ impl Debug for VNode<'_> {
             VNode::TemplateRef(temp) => s
                 .debug_struct("VNode::TemplateRef")
                 .field("template_id", &temp.template_id)
-                .field("id", &temp.id)
                 .finish(),
         }
     }
@@ -872,10 +871,9 @@ impl<'a> NodeFactory<'a> {
             borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
         }
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {
-            id: empty_cell(),
             dynamic_context,
             template_id: id,
-            node_ids: Vec::new(),
+            node_ids: RefCell::new(Vec::new()),
         }))
     }
 }

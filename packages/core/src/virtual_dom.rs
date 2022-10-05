@@ -561,7 +561,9 @@ impl VirtualDom {
         let node = self.scopes.fin_head(scope_id);
         let created = diff_state.create_node(self.root, node);
 
-        diff_state.mutations.append_children(self.root, created);
+        diff_state
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
 
         self.dirty_scopes.clear();
         assert!(self.dirty_scopes.is_empty());
@@ -682,7 +684,9 @@ impl VirtualDom {
             .push(GlobalNodeId::VNodeId(ElementId(0)));
         let node = self.render_vnodes(nodes);
         let created = machine.create_node(self.root, node);
-        machine.mutations.append_children(self.root, created);
+        machine
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
         machine.mutations
     }
 
@@ -712,7 +716,9 @@ impl VirtualDom {
             .element_stack
             .push(GlobalNodeId::VNodeId(ElementId(0)));
         let created = create.create_node(self.root, old);
-        create.mutations.append_children(self.root, created);
+        create
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
 
         let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));

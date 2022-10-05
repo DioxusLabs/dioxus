@@ -54,7 +54,6 @@ struct TemplateElementBuilder {
     attributes: Vec<TemplateAttributeBuilder>,
     children: Vec<TemplateNodeId>,
     listeners: Vec<usize>,
-    parent: Option<TemplateNodeId>,
 }
 
 #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -73,7 +72,6 @@ impl TemplateElementBuilder {
             attributes,
             children,
             listeners,
-            parent,
         } = self;
         let (element_tag, element_ns) =
             element_to_static_str(&tag.to_string()).ok_or_else(|| {
@@ -94,7 +92,6 @@ impl TemplateElementBuilder {
             owned_attributes,
             children,
             listeners,
-            parent,
         ))
     }
 }
@@ -106,19 +103,11 @@ impl ToTokens for TemplateElementBuilder {
             attributes,
             children,
             listeners,
-            parent,
         } = self;
         let children = children.iter().map(|id| {
             let raw = id.0;
             quote! {TemplateNodeId(#raw)}
         });
-        let parent = match parent {
-            Some(id) => {
-                let raw = id.0;
-                quote! {Some(TemplateNodeId(#raw))}
-            }
-            None => quote! {None},
-        };
         tokens.append_all(quote! {
             TemplateElement::new(
                 dioxus_elements::#tag::TAG_NAME,
@@ -126,7 +115,6 @@ impl ToTokens for TemplateElementBuilder {
                 &[#(#attributes),*],
                 &[#(#children),*],
                 &[#(#listeners),*],
-                #parent,
             )
         })
     }
@@ -295,19 +283,25 @@ impl ToTokens for TemplateNodeTypeBuilder {
 
 struct TemplateNodeBuilder {
     id: TemplateNodeId,
+    parent: Option<TemplateNodeId>,
     node_type: TemplateNodeTypeBuilder,
 }
 
 impl TemplateNodeBuilder {
     #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNode, Error> {
-        let TemplateNodeBuilder { id, node_type } = self;
+        let TemplateNodeBuilder {
+            id,
+            node_type,
+            parent,
+        } = self;
         let node_type = node_type.try_into_owned(location)?;
         Ok(OwnedTemplateNode {
             id,
             node_type,
             locally_static: false,
             fully_static: false,
+            parent,
         })
     }
 
@@ -340,10 +334,21 @@ impl TemplateNodeBuilder {
     }
 
     fn to_tokens(&self, tokens: &mut TokenStream, nodes: &Vec<TemplateNodeBuilder>) {
-        let Self { id, node_type } = self;
+        let Self {
+            id,
+            node_type,
+            parent,
+        } = self;
         let raw_id = id.0;
         let fully_static = self.is_fully_static(nodes);
         let locally_static = self.is_locally_static();
+        let parent = match parent {
+            Some(id) => {
+                let id = id.0;
+                quote! {Some(TemplateNodeId(#id))}
+            }
+            None => quote! {None},
+        };
 
         tokens.append_all(quote! {
             TemplateNode {
@@ -351,6 +356,7 @@ impl TemplateNodeBuilder {
                 node_type: #node_type,
                 locally_static: #locally_static,
                 fully_static: #fully_static,
+                parent: #parent,
             }
         })
     }
@@ -492,8 +498,8 @@ impl TemplateBuilder {
                         attributes,
                         children: Vec::new(),
                         listeners,
-                        parent,
                     }),
+                    parent,
                 });
 
                 let children: Vec<_> = el
@@ -513,6 +519,7 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::Component(comp)),
                     ),
+                    parent,
                 });
             }
 
@@ -531,6 +538,7 @@ impl TemplateBuilder {
                 self.nodes.push(TemplateNodeBuilder {
                     id,
                     node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments)),
+                    parent,
                 });
             }
 
@@ -540,6 +548,7 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::RawExpr(expr)),
                     ),
+                    parent,
                 });
             }
         }

@@ -124,7 +124,7 @@ impl WebsysDom {
                         dioxus_core::GlobalNodeId::VNodeId(id) => {
                             self.interpreter.NewEventListener(
                                 listener.event,
-                                id.into(),
+                                Some(id.as_u64()),
                                 self.handler.as_ref().unchecked_ref(),
                                 event_bubbles(listener.event),
                             );
