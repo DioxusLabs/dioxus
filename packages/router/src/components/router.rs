@@ -127,7 +127,7 @@ impl Debug for RouterProps<'_> {
 ///             routes: routes.clone(),
 ///             // other props
 ///
-///             // content, at least one
+///             // content, should contain at least one outlet
 ///             Outlet { }
 ///         }
 ///     })

@@ -192,7 +192,7 @@ impl Segment {
 
     /// Add a _parameter_ route.
     ///
-    /// A _parameter_ route is like a _matching_ route with an empty `regex`. It is active if these
+    /// A _parameter_ route is like a _matching_ route with a `/./` `regex`. It is active if these
     /// conditions apply:
     /// 1. The [`Segment`] is specified by the path,
     /// 2. no _fixed_ route is active,
