@@ -1,3 +1,4 @@
+// This example should panic in debug builds, because it contains an invalid link.
 #![allow(non_snake_case)]
 
 use std::sync::{Arc, RwLockReadGuard};
