@@ -711,19 +711,18 @@ impl<'a> NodeFactory<'a> {
     pub fn attr(
         &self,
         name: &'static str,
-        val: Arguments,
+        val: impl IntoAttributeValue<'a>,
         namespace: Option<&'static str>,
         is_volatile: bool,
     ) -> Attribute<'a> {
-        let (value, is_static) = self.raw_text(val);
         Attribute {
             attribute: AttributeDiscription {
                 name,
                 namespace,
                 volatile: is_volatile,
             },
-            is_static,
-            value: AttributeValue::Text(value),
+            is_static: false,
+            value: val.into_value(self.bump),
         }
     }
 
