@@ -6,7 +6,7 @@
 - [Adding the Router to Your Application](./features/index.md)
 - [Defining Routes](./features/routes/index.md)
   - [Nested Routes](./features/routes/nested.md)
-  - [Parameter Routes](./features/routes/parameter.md)
+  - [Catch All Routes](./features/routes/catch_all.md)
   - [Matching Routes](./features/routes/matching.md)
   - [Fallback Routes (404 page)](./features/routes/fallback.md)
   - [Multiple Components & Redirects](./features/routes/multiple-and-redirect.md)

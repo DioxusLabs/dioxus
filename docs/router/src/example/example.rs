@@ -12,7 +12,7 @@ fn App(cx: Scope) -> Element {
             .fixed(
                 "blog",
                 Route::new(Blog as Component).nested(
-                    Segment::default().index(BlogList as Component).parameter(
+                    Segment::default().index(BlogList as Component).catch_all(
                         ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost),
                     ),
                 ),

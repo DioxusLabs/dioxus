@@ -53,7 +53,7 @@ fn App(cx: Scope) -> Element {
                         .fixed("nested", Nested as Component)
                 )
             )
-            .parameter(("parameter", Parameter as Component))
+            .catch_all(("parameter", Parameter as Component))
     });
 
     cx.render(rsx! {
@@ -110,7 +110,7 @@ fn prepare_routes() -> Segment {
                     .fixed("nested", Nested as Component)
             )
         )
-        .parameter(("parameter", Parameter as Component))
+        .catch_all(("parameter", Parameter as Component))
 }
 ```
 
@@ -142,7 +142,7 @@ Besides that `\`, all paths are URL encoded
 #                     .fixed("nested", Nested as Component)
 #             )
 #         )
-#         .parameter(("parameter", Parameter as Component))
+#         .catch_all(("parameter", Parameter as Component))
 # }
 
 let expected = vec![
@@ -185,7 +185,7 @@ use std::collections::{BTreeMap, HashSet};
 #                     .fixed("nested", Nested as Component)
 #             )
 #         )
-#         .parameter(("parameter", Parameter as Component))
+#         .catch_all(("parameter", Parameter as Component))
 # }
 
 let parameters = {

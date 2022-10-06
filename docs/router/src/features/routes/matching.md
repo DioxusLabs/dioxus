@@ -1,6 +1,6 @@
 # Matching Routes
 
-> Make sure you understand how [parameter routes](./parameter.md) work before
+> Make sure you understand how [catch all routes](./catch_all.md) work before
 > reading this page.
 
 When accepting parameters via the path, some complex applications might need to
@@ -15,7 +15,7 @@ _Matching_ routes make it easy to implement such behavior.
 
 ## Code Example
 > Notice that the second parameter of a _matching route_ has the same type as a
-> [_parameter route_](./parameter.md).
+> [_catch all route_](./catch_all.md).
 
 ```rust
 # // Hidden lines (like this one) make the documentation tests work.
@@ -87,7 +87,7 @@ fn App(cx: Scope) -> Element {
                 Regex::new("^m").unwrap(),
                 ("name", GreetingMale as Component)
             )
-            .parameter(("name", GreetingWithoutGender as Component))
+            .catch_all(("name", GreetingWithoutGender as Component))
     });
 
     cx.render(rsx! {

@@ -515,7 +515,7 @@ fn construct_named_targets(
         );
     }
 
-    if let Some(pr) = &segment.parameter {
+    if let Some(pr) = &segment.catch_all {
         add_named_target(
             NamedNavigationSegment::Parameter(pr.key),
             &pr.name,
@@ -574,7 +574,7 @@ fn match_segment<'a>(
         key = Some(route.key);
         name = route.name;
         nested = route.nested.as_ref().map(|b| b.as_ref());
-    } else if let Some(route) = &segment.parameter {
+    } else if let Some(route) = &segment.catch_all {
         found_route = true;
         content = &route.content;
         key = Some(route.key);
@@ -1050,7 +1050,7 @@ mod tests {
                 Regex::new("^m1.*$").unwrap(),
                 ParameterRoute::new("m1-parameter", RouteContent::Empty).name(Match),
             )
-            .parameter(ParameterRoute::new("p-parameter", RouteContent::Empty).name(Parameter))
+            .catch_all(ParameterRoute::new("p-parameter", RouteContent::Empty).name(Parameter))
     }
 
     #[allow(non_snake_case)]

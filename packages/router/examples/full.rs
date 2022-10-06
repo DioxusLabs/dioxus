@@ -24,7 +24,7 @@ fn App(cx: Scope) -> Element {
                 Route::new(Blog as Component).nested(
                     Segment::default()
                         .index(BlogWelcome as Component)
-                        .parameter(
+                        .catch_all(
                             ParameterRoute::new("blog_id", BlogPost as Component)
                                 .name(BlogPostName),
                         ),

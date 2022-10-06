@@ -234,7 +234,7 @@ fn App(cx: Scope) -> Element {
                 Route::new(Blog as Component).nested(
                     Segment::default()
                         .index(BlogList as Component)
-                        .parameter(("post_id", BlogPost as Component))
+                        .catch_all(("post_id", BlogPost as Component))
                 ),
             )
             // new stuff ends here

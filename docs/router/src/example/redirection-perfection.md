@@ -32,7 +32,7 @@ let routes = use_segment(&cx, || {
         .fixed(
             "blog",
             Route::new(Blog as Component).nested(
-                Segment::new().index(BlogList as Component).parameter(
+                Segment::new().index(BlogList as Component).catch_all(
                     ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost)
                 ),
             ),

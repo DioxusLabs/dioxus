@@ -38,7 +38,7 @@ fn test_routes_segment() -> Segment {
                                 .fallback(NestedFallback as Component),
                         ),
                     )
-                    .parameter(("parameter", "/")),
+                    .catch_all(("parameter", "/")),
             ),
         )
         .fixed("external-navigation-failure", "https://dioxuslabs.com/")

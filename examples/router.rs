@@ -16,7 +16,7 @@ fn app(cx: Scope) -> Element {
                 Route::new(()).nested(
                     Segment::new()
                         .index(BlogList as Component)
-                        .parameter(("post", BlogPost as Component)),
+                        .catch_all(("post", BlogPost as Component)),
                 ),
             )
             .fixed(
@@ -24,7 +24,7 @@ fn app(cx: Scope) -> Element {
                 Route::new(()).nested(
                     Segment::new()
                         .index(UserList as Component)
-                        .parameter(("name", User as Component)),
+                        .catch_all(("name", User as Component)),
                 ),
             )
             .fallback(RouteNotFound as Component)

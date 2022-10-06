@@ -15,10 +15,140 @@ pub struct Segment {
     pub(crate) fixed: BTreeMap<String, Route>,
     pub(crate) index: RouteContent,
     pub(crate) matching: Vec<(Box<dyn SegmentMatch>, ParameterRoute)>,
-    pub(crate) parameter: Option<ParameterRoute>,
+    pub(crate) catch_all: Option<ParameterRoute>,
 }
 
 impl Segment {
+    /// Create a new [`Segment`].
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Add an _index_ route.
+    ///
+    /// The _index_ route acts like an `index.html` (with most web servers). It is active, if the
+    /// [`Segment`] is the first to not be specified by the path. Some examples:
+    /// - If the path is `/`, no segment is specified. The _index_ route of the root segment (the
+    ///   [`Segment`] passed to the [`Router`](crate::components::Router)) is active.
+    /// - If the path is `/test` or `/test/`, one segment is specified. If the root segment has an
+    ///   active route, and that route has a nested [`Segment`], that [`Segment`]s _index_  route is
+    ///   active.
+    ///
+    /// # Panic
+    /// - If an _index_ route was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// Segment::new().index(());
+    /// ```
+    pub fn index(mut self, content: impl Into<RouteContent>) -> Self {
+        if !self.index.is_empty() {
+            error!("index route already set, later prevails");
+            #[cfg(debug_assertions)]
+            panic!("index route already set");
+        }
+
+        self.index = content.into();
+        self
+    }
+
+    /// Add a _fixed_ route.
+    ///
+    /// A _fixed_ route acts like a static file or directory (with most web servers). It is active,
+    /// if its _path_ matches the segments value exactly. Some examples:
+    /// - If the path is `/`, no _fixed_ root is active.
+    /// - If the path is `/test` or `/test/`, and the root segment (the [`Segment`] passed to the
+    ///   [`Router`](crate::components::Router)) has a _fixed_ route with a `path` of `test`, that
+    ///   route will be active.
+    /// - If the path is `//`, and the root segment has a _fixed_ route with a `path` of `""` (empty
+    ///   string), that route will be active.
+    ///
+    /// # URL decoding
+    /// The segments value will be decoded when checking if the _fixed_ route is active.
+    ///
+    /// # Panic
+    /// - If a _fixed_ route with the same `path` was already added, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// Segment::new().fixed("path", Route::new(()));
+    /// ```
+    pub fn fixed(mut self, path: &str, route: impl Into<Route>) -> Self {
+        if self.fixed.insert(path.to_string(), route.into()).is_some() {
+            error!(r#"two fixed routes with identical path: "{path}", later prevails"#);
+            #[cfg(debug_assertions)]
+            panic!(r#"two fixed routes with identical path: "{path}""#)
+        }
+
+        self
+    }
+
+    /// Add a _matching_ parameter route.
+    ///
+    /// A _matching_ route allows the application to accept a dynamic value, that matches a provided
+    /// regular expression. A _matching_ parameter route is active if these conditions apply:
+    /// 1. The [`Segment`] is specified by the path,
+    /// 2. no _fixed_ route is active,
+    /// 3. no prior _matching_ route (in order of addition) is active,
+    /// 4. and the `regex` matches the segments value.
+    ///
+    /// The segments complete value will be provided as a parameter using the `key` specified in the
+    /// `route`.
+    ///
+    /// # URL decoding
+    /// - The segments value will be decoded when checking if the _matching_ route is active.
+    /// - The segments value will be decoded when providing it as a parameter.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// # use regex::Regex;
+    /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", ()));
+    /// ```
+    pub fn matching(
+        mut self,
+        matcher: impl SegmentMatch + 'static,
+        route: impl Into<ParameterRoute>,
+    ) -> Self {
+        self.matching.push((Box::new(matcher), route.into()));
+        self
+    }
+
+    /// Add a _catch all_ route.
+    ///
+    /// A _catch all_ route is like a _matching_ route with a `/./` `regex`. It is active if these
+    /// conditions apply:
+    /// 1. The [`Segment`] is specified by the path,
+    /// 2. no _fixed_ route is active,
+    /// 3. and no _matching_ route is active.
+    ///
+    /// The segments complete value will be provided as a parameter using the `key` specified in the
+    /// `route`.
+    ///
+    /// # URL decoding
+    /// - The segments value will be decoded when providing it as a parameter.
+    ///
+    /// # Panic
+    /// - If a _catch all_ route  was already set, but only in debug builds.
+    ///
+    /// # Example
+    /// ```rust
+    /// # use dioxus_router::prelude::*;
+    /// Segment::new().catch_all(ParameterRoute::new("key", ()));
+    /// ```
+    pub fn catch_all(mut self, route: impl Into<ParameterRoute>) -> Self {
+        if self.catch_all.is_some() {
+            error!("parameter route already set, later prevails");
+            #[cfg(debug_assertions)]
+            panic!("parameter route already set");
+        }
+
+        self.catch_all = Some(route.into());
+        self
+    }
+
     /// Add a _fallback_ route.
     ///
     /// A _fallback_ route acts like a `404.html` file (with some web servers). It is active, if
@@ -93,136 +223,6 @@ impl Segment {
         }
 
         self.fallback = content.into();
-        self
-    }
-
-    /// Add a _fixed_ route.
-    ///
-    /// A _fixed_ route acts like a static file or directory (with most web servers). It is active,
-    /// if its _path_ matches the segments value exactly. Some examples:
-    /// - If the path is `/`, no _fixed_ root is active.
-    /// - If the path is `/test` or `/test/`, and the root segment (the [`Segment`] passed to the
-    ///   [`Router`](crate::components::Router)) has a _fixed_ route with a `path` of `test`, that
-    ///   route will be active.
-    /// - If the path is `//`, and the root segment has a _fixed_ route with a `path` of `""` (empty
-    ///   string), that route will be active.
-    ///
-    /// # URL decoding
-    /// The segments value will be decoded when checking if the _fixed_ route is active.
-    ///
-    /// # Panic
-    /// - If a _fixed_ route with the same `path` was already added, but only in debug builds.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus_router::prelude::*;
-    /// Segment::new().fixed("path", Route::new(()));
-    /// ```
-    pub fn fixed(mut self, path: &str, route: impl Into<Route>) -> Self {
-        if self.fixed.insert(path.to_string(), route.into()).is_some() {
-            error!(r#"two fixed routes with identical path: "{path}", later prevails"#);
-            #[cfg(debug_assertions)]
-            panic!(r#"two fixed routes with identical path: "{path}""#)
-        }
-
-        self
-    }
-
-    /// Add an _index_ route.
-    ///
-    /// The _index_ route acts like an `index.html` (with most web servers). It is active, if the
-    /// [`Segment`] is the first to not be specified by the path. Some examples:
-    /// - If the path is `/`, no segment is specified. The _index_ route of the root segment (the
-    ///   [`Segment`] passed to the [`Router`](crate::components::Router)) is active.
-    /// - If the path is `/test` or `/test/`, one segment is specified. If the root segment has an
-    ///   active route, and that route has a nested [`Segment`], that [`Segment`]s _index_  route is
-    ///   active.
-    ///
-    /// # Panic
-    /// - If an _index_ route was already set, but only in debug builds.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus_router::prelude::*;
-    /// Segment::new().index(());
-    /// ```
-    pub fn index(mut self, content: impl Into<RouteContent>) -> Self {
-        if !self.index.is_empty() {
-            error!("index route already set, later prevails");
-            #[cfg(debug_assertions)]
-            panic!("index route already set");
-        }
-
-        self.index = content.into();
-        self
-    }
-
-    /// Add a _matching_ parameter route.
-    ///
-    /// A _matching_ route allows the application to accept a dynamic value, that matches a provided
-    /// regular expression. A _matching_ parameter route is active if these conditions apply:
-    /// 1. The [`Segment`] is specified by the path,
-    /// 2. no _fixed_ route is active,
-    /// 3. no prior _matching_ route (in order of addition) is active,
-    /// 4. and the `regex` matches the segments value.
-    ///
-    /// The segments complete value will be provided as a parameter using the `key` specified in the
-    /// `route`.
-    ///
-    /// # URL decoding
-    /// - The segments value will be decoded when checking if the _matching_ route is active.
-    /// - The segments value will be decoded when providing it as a parameter.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus_router::prelude::*;
-    /// # use regex::Regex;
-    /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", ()));
-    /// ```
-    pub fn matching(
-        mut self,
-        matcher: impl SegmentMatch + 'static,
-        route: impl Into<ParameterRoute>,
-    ) -> Self {
-        self.matching.push((Box::new(matcher), route.into()));
-        self
-    }
-
-    /// Create a new [`Segment`].
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Add a _parameter_ route.
-    ///
-    /// A _parameter_ route is like a _matching_ route with a `/./` `regex`. It is active if these
-    /// conditions apply:
-    /// 1. The [`Segment`] is specified by the path,
-    /// 2. no _fixed_ route is active,
-    /// 3. and no _matching_ route is active.
-    ///
-    /// The segments complete value will be provided as a parameter using the `key` specified in the
-    /// `route`.
-    ///
-    /// # URL decoding
-    /// - The segments value will be decoded when providing it as a parameter.
-    ///
-    /// # Panic
-    /// - If a _parameter_ route  was already set, but only in debug builds.
-    ///
-    /// # Example
-    /// ```rust
-    /// # use dioxus_router::prelude::*;
-    /// Segment::new().parameter(ParameterRoute::new("key", ()));
-    /// ```
-    pub fn parameter(mut self, route: impl Into<ParameterRoute>) -> Self {
-        if self.parameter.is_some() {
-            error!("parameter route already set, later prevails");
-            #[cfg(debug_assertions)]
-            panic!("parameter route already set");
-        }
-
-        self.parameter = Some(route.into());
         self
     }
 
@@ -308,7 +308,7 @@ impl Segment {
         }
 
         // insert parameter route
-        if let Some(route) = &self.parameter {
+        if let Some(route) = &self.catch_all {
             match params {
                 None => {
                     let parents = format!("{parents}\\{}/", encode(route.key));
@@ -441,9 +441,9 @@ mod tests {
 
     #[test]
     fn parameter() {
-        let s = Segment::new().parameter(ParameterRoute::new("", "test"));
+        let s = Segment::new().catch_all(ParameterRoute::new("", "test"));
 
-        let parameter_is_correct = match s.parameter {
+        let parameter_is_correct = match s.catch_all {
             Some(ParameterRoute {
                 name: _,
                 key: _,
@@ -460,21 +460,21 @@ mod tests {
     #[should_panic = "parameter route already set"]
     fn parameter_panic_in_debug() {
         Segment::new()
-            .parameter(ParameterRoute::new("", RouteContent::Empty))
-            .parameter(ParameterRoute::new("", RouteContent::Empty));
+            .catch_all(ParameterRoute::new("", RouteContent::Empty))
+            .catch_all(ParameterRoute::new("", RouteContent::Empty));
     }
 
     #[cfg(not(debug_assertions))]
     #[test]
     fn parameter_override_in_release() {
         let s = Segment::new()
-            .parameter(ParameterRoute::new(
+            .catch_all(ParameterRoute::new(
                 "",
                 RouteContent::Component(TestComponent),
             ))
-            .parameter(ParameterRoute::new("", RouteContent::Empty));
+            .catch_all(ParameterRoute::new("", RouteContent::Empty));
 
-        let fallback_is_correct = match s.parameter {
+        let fallback_is_correct = match s.catch_all {
             Some(p) => p.content.is_empty(),
             _ => false,
         };

@@ -1,8 +1,8 @@
-# Parameter Routes
+# Catch All Routes
 
 Many modern web apps store parameters within their current path. This allows
 users to share URLs that link to a specific bit of content. We can create this
-functionality with parameter routes.
+functionality with catch all routes.
 
 > If you want to change what route is active based on the format of the
 > parameter, see [Matching Routes](./matching.md).
@@ -44,7 +44,7 @@ fn Greeting(cx: Scope) -> Element {
 
 ## Defining the routes
 Now we can define our route. Unlike a fixed [`Route`], a [`ParameterRoute`]
-needs to arguments to be created.
+needs two arguments to be created.
 
 > Also note that each [`Segment`] can have exactly one parameter or
 > [fallback route](./fallback.md).
@@ -63,8 +63,8 @@ needs to arguments to be created.
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
         Segment::new()
-            .parameter(ParameterRoute::new("name", Greeting as Component))
-            .parameter(("name", Greeting as Component)) // same in short
+            .catch_all(ParameterRoute::new("name", Greeting as Component))
+            .catch_all(("name", Greeting as Component)) // same in short
     });
 
     // ...
@@ -74,7 +74,7 @@ fn App(cx: Scope) -> Element {
 
 ## Interaction with other routes
 Each individual [`Segment`] can only ever have one active route. This means that
-when a [`Segment`] has more than just a parameter route, the router has to
+when a [`Segment`] has more than just a catch all route, the router has to
 decide which is active. It does that this way:
 
 0. If the segment is not specified (i.e. `/`), then the index route will be
@@ -83,13 +83,13 @@ decide which is active. It does that this way:
    will be active.
 2. If a [_matching_ route](./matching.md) matches the current path, it will be
    active. _Matching_ routes are checked in the order they are defined.
-3. If neither a _fixed_ nor a _matching_ route is active, the _parameter_ route
+3. If neither a _fixed_ nor a _matching_ route is active, the _catch all_ route
    or [_fallback_ route](./fallback.md) will be.
 
 Step 0 means that if we want a parameter to be empty, that needs to be specified
 by the path, i.e. `//`.
 
-> Be careful with using parameter routes on the root [`Segment`]. Navigating to
+> Be careful with using catch all routes on the root [`Segment`]. Navigating to
 > paths starting with `//` will **NOT** work. This is not a limitation of the
 > router, but rather of how relative URLs work.
 >
@@ -120,7 +120,7 @@ fn Greeting(cx: Scope) -> Element {
 
 fn App(cx: Scope) -> Element {
     let routes = use_segment(&cx, || {
-        Segment::new().parameter(("name", Greeting as Component))
+        Segment::new().catch_all(("name", Greeting as Component))
     });
 
     // ...
