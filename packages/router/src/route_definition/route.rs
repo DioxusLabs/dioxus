@@ -5,7 +5,7 @@ use log::error;
 use super::{RouteContent, Segment};
 
 /// A static route.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Route {
     pub(crate) content: RouteContent,
     pub(crate) name: Option<(TypeId, &'static str)>,

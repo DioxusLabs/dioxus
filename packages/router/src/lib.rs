@@ -70,6 +70,9 @@ pub mod route_definition {
     mod content;
     pub use content::*;
 
+    mod matcher;
+    pub use matcher::*;
+
     mod parameter;
     pub use parameter::*;
 

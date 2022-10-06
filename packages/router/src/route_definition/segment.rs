@@ -1,21 +1,20 @@
 use std::collections::{BTreeMap, HashSet};
 
 use log::error;
-use regex::Regex;
 use urlencoding::encode;
 
-use super::{ParameterRoute, Route, RouteContent};
+use super::{ParameterRoute, Route, RouteContent, SegmentMatch};
 
 /// A collection of routes for a single path segment.
 ///
 /// A segment refers to the value between two `/` in the path. For example `/blog/1` contains two
 /// segments: `["blog", "1"]`.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct Segment {
     pub(crate) fallback: RouteContent,
     pub(crate) fixed: BTreeMap<String, Route>,
     pub(crate) index: RouteContent,
-    pub(crate) matching: Vec<(Regex, ParameterRoute)>,
+    pub(crate) matching: Vec<(Box<dyn SegmentMatch>, ParameterRoute)>,
     pub(crate) parameter: Option<ParameterRoute>,
 }
 
@@ -180,8 +179,12 @@ impl Segment {
     /// # use regex::Regex;
     /// Segment::new().matching(Regex::new(".*").unwrap(), ParameterRoute::new("key", ()));
     /// ```
-    pub fn matching(mut self, regex: Regex, route: impl Into<ParameterRoute>) -> Self {
-        self.matching.push((regex, route.into()));
+    pub fn matching(
+        mut self,
+        matcher: impl SegmentMatch + 'static,
+        route: impl Into<ParameterRoute>,
+    ) -> Self {
+        self.matching.push((Box::new(matcher), route.into()));
         self
     }
 
@@ -290,7 +293,7 @@ impl Segment {
                 Some(p) => {
                     if let Some(p) = p.get(route.key) {
                         for p in p {
-                            if regex.is_match(p) {
+                            if regex.matches(p) {
                                 let parents = format!("{parents}{}/", encode(p));
                                 res.push(parents.clone());
 
@@ -340,6 +343,7 @@ mod tests {
 
     use super::*;
     use dioxus::prelude::*;
+    use regex::Regex;
 
     #[test]
     fn fallback() {

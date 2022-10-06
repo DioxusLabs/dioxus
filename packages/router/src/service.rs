@@ -567,7 +567,7 @@ fn match_segment<'a>(
     } else if let Some((_, route)) = segment
         .matching
         .iter()
-        .find(|(regex, _)| regex.is_match(&decoded_path))
+        .find(|(regex, _)| regex.matches(&decoded_path))
     {
         found_route = true;
         content = &route.content;

@@ -5,7 +5,7 @@ use log::error;
 use super::{RouteContent, Segment};
 
 /// A route that treats its actual value as a parameter.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct ParameterRoute {
     pub(crate) name: Option<(TypeId, &'static str)>,
     pub(crate) key: &'static str,
