@@ -105,3 +105,28 @@ fn App(cx: Scope) -> Element {
 # let html = dioxus_ssr::render_vdom(&vdom);
 # assert_eq!("<p>Hello Mrs. Anna</p>", html);
 ```
+
+## Matcher
+In the example above, both _matching routes_ use a regular expression to specify
+when they match. However, _matching routes_ are not limited to those. They
+accept all types that implement the [`SegmentMatch`] trait.
+
+For example, you could (but probably shouldn't) implement a matcher, that
+matches all values with an even number of characters:
+
+```rust,no_run
+# // Hidden lines (like this one) make the documentation tests work.
+# extern crate dioxus_router;
+# use dioxus_router::prelude::*;
+#
+#[derive(Debug)]
+struct EvenMatcher;
+
+impl SegmentMatch for EvenMatcher {
+    fn matches(&self, value: &str) -> bool {
+        value.len() % 2 == 0
+    }
+}
+```
+
+[`SegmentMatch`]: https://docs.rs/dioxus-router/latest/dioxus_router/route_definition/trait.SegmentMatch.html
