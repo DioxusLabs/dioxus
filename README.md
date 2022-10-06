@@ -1,6 +1,6 @@
-<div align="center">
-  <h1>Dioxus</h1>
-</div>
+<p align="center">
+  <img src="./notes/header.svg">
+</p>
 
 <div align="center">
   <!-- Crates version -->
@@ -92,7 +92,7 @@ If you know React, then you already know Dioxus.
 ## Example Projects:
 
 | File Navigator (Desktop)                                                                                                                                                        | WiFi scanner (Desktop)                                                                                                                                                                 | TodoMVC (All platforms)                                                                                                                                                 | E-commerce w/ Tailwind (SSR/LiveView)                                                                                                                                                 |
-|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
 
 See the [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) page for a curated list of content in the Dioxus Ecosystem.
