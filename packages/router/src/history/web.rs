@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use gloo_events::EventListener;
 use log::error;
-use wasm_bindgen::JsValue;
 use web_sys::{History, ScrollRestoration, Window};
 
 use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
@@ -24,14 +23,15 @@ use super::{update_history_with_scroll, HistoryProvider, ScrollPosition};
 /// # Example
 /// ```rust,no_run
 /// # use dioxus::prelude::*;
-/// use dioxus::router::history::BrowserPathHistoryProvider;
+/// # use dioxus_router::prelude::*;
+/// use dioxus_router::history::WebHistory;
 /// fn App(cx: Scope) -> Element {
 ///     let routes = use_segment(&cx, Segment::default);
 ///
 ///     cx.render(rsx! {
 ///         Router {
 ///             routes: routes.clone(),
-///             history: &|| BrowserPathHistoryProvider::with_prefix(String::from("/pre")),
+///             history: &|| WebHistory::with_prefix(String::from("/pre")),
 ///             Outlet { }
 ///         }
 ///     })
@@ -107,7 +107,7 @@ impl HistoryProvider for WebHistory {
             // update scroll position
             let ScrollPosition { x, y } = history
                 .state()
-                .map(|state| state.into_serde().unwrap_or_default())
+                .map(|state| serde_wasm_bindgen::from_value(state).unwrap_or_default())
                 .unwrap_or_default();
             // TODO: find way to scroll when new outlets are updated
             window.scroll_to_with_x_and_y(x, y);
@@ -173,7 +173,7 @@ impl HistoryProvider for WebHistory {
         }
 
         match self.history.push_state_with_url(
-            &JsValue::from_serde(&ScrollPosition::default()).unwrap(),
+            &serde_wasm_bindgen::to_value(&ScrollPosition::default()).unwrap(),
             "",
             Some(&path),
         ) {
@@ -193,7 +193,7 @@ impl HistoryProvider for WebHistory {
         }
 
         match self.history.replace_state_with_url(
-            &JsValue::from_serde(&ScrollPosition::default()).unwrap(),
+            &serde_wasm_bindgen::to_value(&ScrollPosition::default()).unwrap(),
             "",
             Some(&path),
         ) {

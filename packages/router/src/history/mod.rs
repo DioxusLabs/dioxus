@@ -112,7 +112,7 @@ fn update_history_with_scroll(window: &web_sys::Window, history: &web_sys::Histo
     use log::error;
 
     // get position
-    let position = wasm_bindgen::JsValue::from_serde(&ScrollPosition {
+    let position = serde_wasm_bindgen::to_value(&ScrollPosition {
         x: window.scroll_x().unwrap_or_default(),
         y: window.scroll_y().unwrap_or_default(),
     })

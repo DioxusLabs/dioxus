@@ -24,7 +24,8 @@ urlencoding = "2.1.0"
 # for wasm
 gloo-events = { version = "0.1.1", optional = true }
 js-sys = { version = "0.3", optional = true }
-wasm-bindgen = { version = "0.2.80", optional = true, features = ["serde-serialize"] }
+serde-wasm-bindgen = { version = "0.4", optional = true}
+wasm-bindgen = { version = "0.2.80", optional = true }
 web-sys = { version = "0.3", features = [
     "Attr",
     "Document",
@@ -41,7 +42,7 @@ web-sys = { version = "0.3", features = [
 
 [features]
 default = []
-web = ["gloo-events", "js-sys", "wasm-bindgen", "web-sys"]
+web = ["gloo-events", "js-sys", "serde-wasm-bindgen", "wasm-bindgen", "web-sys"]
 wasm_test = []
 hot-reload = ["dioxus/hot-reload"]
 
