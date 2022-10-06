@@ -318,7 +318,6 @@ impl<'a> Mutations<'a> {
 
     // modify
     pub(crate) fn set_text(&mut self, text: &'a str, root: Option<u64>) {
-        let root = root.into();
         self.edits.push(SetText { text, root });
     }
 

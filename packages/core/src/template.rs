@@ -521,7 +521,6 @@ impl Template {
             Text: AsRef<str>,
         {
             let (mutations, bump, template) = ctx;
-            let id = node.id;
             match &node.node_type {
                 TemplateNodeType::Element(el) => {
                     let TemplateElement {
@@ -1149,7 +1148,6 @@ impl TemplateResolver {
         if let Some(id) = self.template_id_mapping.get(template_id) {
             *id
         } else {
-            let id = self.template_count;
             let renderer_id = scopes.reserve_phantom_node();
             self.template_id_mapping
                 .insert(template_id.clone(), (renderer_id, false));

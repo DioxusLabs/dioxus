@@ -3,7 +3,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use dioxus_core::{EventPriority, GlobalNodeId, UserEvent};
+use dioxus_core::{EventPriority, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
 use serde::{Deserialize, Serialize};

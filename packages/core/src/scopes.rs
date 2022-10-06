@@ -5,7 +5,7 @@ use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, Ref, RefCell},
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,

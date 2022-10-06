@@ -153,7 +153,7 @@ impl<'src> VNode<'src> {
             VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
-            VNode::TemplateRef(t) => None,
+            VNode::TemplateRef(_) => None,
         }
     }
 

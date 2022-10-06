@@ -821,7 +821,7 @@ impl<'b> DiffState<'b> {
                 let (diff, new, template, dynamic_context) = ctx;
                 if let TemplateNodeType::Text(text) = &node.node_type {
                     let text = dynamic_context.resolve_text(&text.segments.as_ref());
-                    let real_id = new.get_node_id(node.id, &template, new, diff);
+                    let real_id = new.get_node_id(node.id, template, new, diff);
                     diff.mutations.set_text(
                         diff.current_scope_bump().alloc(text),
                         Some(real_id.as_u64()),
@@ -1372,7 +1372,7 @@ impl<'b> DiffState<'b> {
                     self.leave_scope();
                 }
 
-                VNode::TemplateRef(t) => {
+                VNode::TemplateRef(_) => {
                     todo!();
                     // if gen_muts {
                     //     self.mutations.remove(id);
@@ -1449,7 +1449,7 @@ impl<'b> DiffState<'b> {
                 VNode::TemplateRef(t) => {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
-                    let template = template.borrow();
+                    let _template = template.borrow();
                     todo!()
                 }
             }
@@ -1471,7 +1471,7 @@ impl<'b> DiffState<'b> {
                 VNode::TemplateRef(t) => {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
-                    let template = template.borrow();
+                    let _template = template.borrow();
                     todo!()
                 }
             }
