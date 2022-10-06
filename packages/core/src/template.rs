@@ -62,7 +62,12 @@ pub const JS_MAX_INT: u64 = 9007199254740991;
 
 use fxhash::FxHashMap;
 use once_cell::unsync::OnceCell;
-use std::{cell::RefCell, hash::Hash, marker::PhantomData, ops::Index};
+use std::{
+    cell::{Cell, RefCell},
+    hash::Hash,
+    marker::PhantomData,
+    ops::Index,
+};
 
 use bumpalo::Bump;
 
@@ -285,7 +290,7 @@ impl From<TemplateNodeId> for u64 {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 struct PathToNode {
     /// the resolved node to start travering from
     start: u64,
@@ -294,10 +299,25 @@ struct PathToNode {
     child_offests: Vec<u32>,
 }
 
+impl PathToNode {
+    fn new(depth: usize) -> Self {
+        Self {
+            start: 0,
+            child_offests: Vec::with_capacity(depth),
+        }
+    }
+
+    fn push(&mut self, offset: u32) {
+        self.child_offests.push(offset);
+    }
+}
+
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
     pub template_id: TemplateId,
     pub dynamic_context: TemplateContext<'a>,
+    /// The parent of the template
+    pub(crate) parent: Cell<Option<ElementId>>,
     // any nodes that already have ids assigned to them in the renderer
     pub node_ids: RefCell<Vec<OnceCell<ElementId>>>,
 }
@@ -382,7 +402,7 @@ impl<'a> VTemplateRef<'a> {
                         }
                         _ => unreachable!(),
                     };
-                    path.child_offests.push(child_num as u32);
+                    path.push(child_num as u32);
                     current = parent;
                 } else {
                     path.start = tmpl.node_ids.borrow()[current.0].get().unwrap().as_u64();
@@ -397,7 +417,11 @@ impl<'a> VTemplateRef<'a> {
         } else {
             drop(node_ids);
             // find the path from the nearest resolved node or root to this node
-            let mut path = PathToNode::default();
+            let mut path = PathToNode::new(match template {
+                Template::Static(s) => s.nodes[id.0].depth,
+                #[cfg(any(feature = "hot-reload", debug_assertions))]
+                Template::Owned(o) => o.nodes[id.0].depth,
+            });
             template.with_nodes(get_path, get_path, (self, &mut path, id));
             diff_state.mutations.set_last_node(path.start);
             for offset in path.child_offests.iter().rev() {
@@ -582,10 +606,10 @@ impl Template {
     }
 
     #[cfg(any(feature = "hot-reload", debug_assertions))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx, R>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx) -> R
     where
-        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-        F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx),
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
+        F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx) -> R,
     {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
@@ -594,10 +618,10 @@ impl Template {
     }
 
     #[cfg(not(any(feature = "hot-reload", debug_assertions)))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx)
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx, R>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx) -> R
     where
-        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
+        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
     {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
@@ -709,6 +733,9 @@ where
 {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
+    /// The depth of the node in the template node tree
+    /// Root nodes have a depth of 0
+    pub depth: usize,
     /// If the id of the node must be kept in the refrences
     pub locally_static: bool,
     /// If any children of this node must be kept in the references

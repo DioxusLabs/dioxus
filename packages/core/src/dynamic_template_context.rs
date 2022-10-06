@@ -4,8 +4,9 @@ use once_cell::sync::Lazy;
 
 use crate::{
     template::{TemplateNodeId, TextTemplateSegment},
-    AttributeValue, Listener, VNode,
+    AttributeValue, ElementId, Listener, VNode,
 };
+use std::cell::Cell;
 
 /// A lazily initailized vector
 #[derive(Debug, Clone, Copy)]

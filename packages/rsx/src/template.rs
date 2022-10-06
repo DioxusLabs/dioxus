@@ -283,6 +283,7 @@ impl ToTokens for TemplateNodeTypeBuilder {
 
 struct TemplateNodeBuilder {
     id: TemplateNodeId,
+    depth: usize,
     parent: Option<TemplateNodeId>,
     node_type: TemplateNodeTypeBuilder,
 }
@@ -294,6 +295,7 @@ impl TemplateNodeBuilder {
             id,
             node_type,
             parent,
+            depth,
         } = self;
         let node_type = node_type.try_into_owned(location)?;
         Ok(OwnedTemplateNode {
@@ -302,6 +304,7 @@ impl TemplateNodeBuilder {
             locally_static: false,
             fully_static: false,
             parent,
+            depth,
         })
     }
 
@@ -338,6 +341,7 @@ impl TemplateNodeBuilder {
             id,
             node_type,
             parent,
+            depth,
         } = self;
         let raw_id = id.0;
         let fully_static = self.is_fully_static(nodes);
@@ -357,6 +361,7 @@ impl TemplateNodeBuilder {
                 locally_static: #locally_static,
                 fully_static: #fully_static,
                 parent: #parent,
+                depth: #depth,
             }
         })
     }
@@ -375,7 +380,7 @@ impl TemplateBuilder {
         let mut builder = Self::default();
 
         for root in roots {
-            let id = builder.build_node(root, None);
+            let id = builder.build_node(root, None, 0);
             builder.root_nodes.push(id);
         }
 
@@ -397,14 +402,19 @@ impl TemplateBuilder {
         let mut builder = Self::default();
 
         for root in roots {
-            let id = builder.build_node(root, None);
+            let id = builder.build_node(root, None, 0);
             builder.root_nodes.push(id);
         }
 
         builder
     }
 
-    fn build_node(&mut self, node: BodyNode, parent: Option<TemplateNodeId>) -> TemplateNodeId {
+    fn build_node(
+        &mut self,
+        node: BodyNode,
+        parent: Option<TemplateNodeId>,
+        depth: usize,
+    ) -> TemplateNodeId {
         let id = TemplateNodeId(self.nodes.len());
         match node {
             BodyNode::Element(el) => {
@@ -500,12 +510,13 @@ impl TemplateBuilder {
                         listeners,
                     }),
                     parent,
+                    depth,
                 });
 
                 let children: Vec<_> = el
                     .children
                     .into_iter()
-                    .map(|child| self.build_node(child, Some(id)))
+                    .map(|child| self.build_node(child, Some(id), depth + 1))
                     .collect();
                 let parent = &mut self.nodes[id.0];
                 if let TemplateNodeTypeBuilder::Element(element) = &mut parent.node_type {
@@ -520,6 +531,7 @@ impl TemplateBuilder {
                         self.dynamic_context.add_node(BodyNode::Component(comp)),
                     ),
                     parent,
+                    depth,
                 });
             }
 
@@ -539,6 +551,7 @@ impl TemplateBuilder {
                     id,
                     node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments)),
                     parent,
+                    depth,
                 });
             }
 
@@ -549,6 +562,7 @@ impl TemplateBuilder {
                         self.dynamic_context.add_node(BodyNode::RawExpr(expr)),
                     ),
                     parent,
+                    depth,
                 });
             }
         }

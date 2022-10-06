@@ -826,6 +826,7 @@ impl<'a> NodeFactory<'a> {
             dynamic_context,
             template_id: id,
             node_ids: RefCell::new(Vec::new()),
+            parent: Cell::new(None),
         }))
     }
 }

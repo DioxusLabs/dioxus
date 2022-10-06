@@ -1,12 +1,4 @@
-use crate::{
-    dynamic_template_context::TemplateContext,
-    innerlude::*,
-    template::{
-        TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
-        TemplateValue, TextTemplateSegment,
-    },
-    unsafe_utils::extend_vnode,
-};
+use crate::{innerlude::*, template::TemplateNodeId, unsafe_utils::extend_vnode};
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
@@ -24,7 +16,7 @@ use std::{
 pub enum NodePtr {
     VNode(*const VNode<'static>),
     TemplateNode {
-        tempalte_ref: *const VTemplateRef<'static>,
+        template_ptr: *const VTemplateRef<'static>,
         node_id: TemplateNodeId,
     },
     Phantom,
@@ -248,7 +240,7 @@ impl ScopeArena {
         let id = ElementId(key);
         let unbounded: &VTemplateRef<'static> = unsafe { std::mem::transmute(template_ref) };
         entry.insert(NodePtr::TemplateNode {
-            tempalte_ref: unbounded as *const _,
+            template_ptr: unbounded as *const _,
             node_id,
         });
         id
@@ -372,148 +364,117 @@ impl ScopeArena {
 
         let state = Rc::new(BubbleState::new());
 
-        // while let Some(id) = cur_el.take() {
-        //     if state.canceled.get() {
-        //         // stop bubbling if canceled
-        //         return;
-        //     }
-        //     match id {
-        //         GlobalNodeId::TemplateId {
-        //             template_ref_id,
-        //             template_node_id,
-        //         } => {
-        //             log::trace!(
-        //                 "looking for listener in {:?} in node {:?}",
-        //                 template_ref_id,
-        //                 template_node_id
-        //             );
-        //             if let Some(template) = nodes.get(template_ref_id.0) {
-        //                 let template = unsafe { &*template.unwrap() };
-        //                 if let VNode::TemplateRef(template_ref) = template {
-        //                     let templates = self.templates.borrow();
-        //                     let template = templates.get(&template_ref.template_id).unwrap();
-        //                     cur_el = template.borrow().with_node(
-        //                         template_node_id,
-        //                         bubble_template,
-        //                         bubble_template,
-        //                         (
-        //                             &nodes,
-        //                             &template_ref.dynamic_context,
-        //                             event,
-        //                             &state,
-        //                             template_ref_id,
-        //                         ),
-        //                     );
-        //                 }
-        //             }
-        //         }
-        //         GlobalNodeId::VNodeId(id) => {
-        //             if let Some(ptr) = nodes.get(id.0) {
-        //                 let real_el = match ptr {
-        //                     NodePtr::VNode(ptr) => unsafe { &**ptr },
-        //                     NodePtr::TemplateNode {
-        //                         template_ref_id,
-        //                         template_node_id,
-        //                     } => panic!("Expected VNode"),
-        //                 };
-        //                 log::trace!("looking for listener on {:?}", real_el);
+        while let Some(id) = cur_el.take() {
+            if state.canceled.get() {
+                // stop bubbling if canceled
+                return;
+            }
+            if let Some(ptr) = nodes.get(id.0) {
+                match ptr {
+                    NodePtr::VNode(ptr) => {
+                        let real_el = unsafe { &**ptr };
+                        log::trace!("looking for listener on {:?}", real_el);
 
-        //                 if let VNode::Element(real_el) = real_el {
-        //                     for listener in real_el.listeners.iter() {
-        //                         if listener.event == event.name {
-        //                             log::trace!("calling listener {:?}", listener.event);
+                        if let VNode::Element(real_el) = real_el {
+                            for listener in real_el.listeners.iter() {
+                                if listener.event == event.name {
+                                    log::trace!("calling listener {:?}", listener.event);
 
-        //                             let mut cb = listener.callback.borrow_mut();
-        //                             if let Some(cb) = cb.as_mut() {
-        //                                 // todo: arcs are pretty heavy to clone
-        //                                 // we really want to convert arc to rc
-        //                                 // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-        //                                 // we could convert arc to rc internally or something
-        //                                 (cb)(AnyEvent {
-        //                                     bubble_state: state.clone(),
-        //                                     data: event.data.clone(),
-        //                                 });
-        //                             }
-        //                             break;
-        //                         }
-        //                     }
+                                    let mut cb = listener.callback.borrow_mut();
+                                    if let Some(cb) = cb.as_mut() {
+                                        // todo: arcs are pretty heavy to clone
+                                        // we really want to convert arc to rc
+                                        // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                        // we could convert arc to rc internally or something
+                                        (cb)(AnyEvent {
+                                            bubble_state: state.clone(),
+                                            data: event.data.clone(),
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
 
-        //                     cur_el = real_el.parent.get();
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     if !event.bubbles {
-        //         return;
-        //     }
-        // }
+                            cur_el = real_el.parent.get();
+                        }
+                    }
+                    NodePtr::TemplateNode {
+                        template_ptr,
+                        node_id,
+                    } => {
+                        let template_ref = unsafe { &**template_ptr };
+                        log::trace!("looking for listener in node {:?}", node_id);
+                        let templates = self.templates.borrow();
+                        let template = templates.get(&template_ref.template_id).unwrap();
+                        cur_el = template.borrow().with_nodes(
+                            bubble_template,
+                            bubble_template,
+                            (*node_id, template_ref, event, &state),
+                        );
+                    }
+                    _ => panic!("Expected Real Node"),
+                }
+            }
 
-        // fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-        //     node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-        //     ctx: (
-        //         &Ref<NodeSlab>,
-        //         &TemplateContext<'b>,
-        //         &UserEvent,
-        //         &Rc<BubbleState>,
-        //         ElementId,
-        //     ),
-        // ) -> Option<GlobalNodeId>
-        // where
-        //     Attributes: AsRef<[TemplateAttribute<V>]>,
-        //     V: TemplateValue,
-        //     Children: AsRef<[TemplateNodeId]>,
-        //     Listeners: AsRef<[usize]>,
-        //     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-        //     Text: AsRef<str>,
-        // {
-        //     let (vnodes, dynamic_context, event, state, template_ref_id) = ctx;
-        //     if let TemplateNodeType::Element(el) = &node.node_type {
-        //         let TemplateElement { listeners, .. } = el;
-        //         for listener_idx in listeners.as_ref() {
-        //             let listener = dynamic_context.resolve_listener(*listener_idx);
-        //             if listener.event == event.name {
-        //                 log::trace!("calling listener {:?}", listener.event);
+            if !event.bubbles {
+                return;
+            }
+        }
 
-        //                 let mut cb = listener.callback.borrow_mut();
-        //                 if let Some(cb) = cb.as_mut() {
-        //                     // todo: arcs are pretty heavy to clone
-        //                     // we really want to convert arc to rc
-        //                     // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-        //                     // we could convert arc to rc internally or something
-        //                     (cb)(AnyEvent {
-        //                         bubble_state: state.clone(),
-        //                         data: event.data.clone(),
-        //                     });
-        //                 }
-        //                 break;
-        //             }
-        //         }
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text, Nodes>(
+            nodes: &Nodes,
+            ctx: (
+                TemplateNodeId,
+                &VTemplateRef<'b>,
+                &UserEvent,
+                &Rc<BubbleState>,
+            ),
+        ) -> Option<ElementId>
+        where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (start, template_ref, event, state) = ctx;
+            let dynamic_context = &template_ref.dynamic_context;
+            let mut current = &nodes.as_ref()[start.0];
+            loop {
+                if let TemplateNodeType::Element(el) = &current.node_type {
+                    let TemplateElement { listeners, .. } = el;
+                    for listener_idx in listeners.as_ref() {
+                        let listener = dynamic_context.resolve_listener(*listener_idx);
+                        if listener.event == event.name {
+                            log::trace!("calling listener {:?}", listener.event);
 
-        //         if let Some(id) = node.parent {
-        //             Some(GlobalNodeId::TemplateId {
-        //                 template_ref_id,
-        //                 template_node_id: id,
-        //             })
-        //         } else {
-        //             vnodes.get(template_ref_id.0).and_then(|ptr| {
-        //                 let real_el = match ptr {
-        //                     NodePtr::VNode(ptr) => unsafe { &**ptr },
-        //                     NodePtr::TemplateNode {
-        //                         template_ref_id,
-        //                         template_node_id,
-        //                     } => panic!("Expected VNode"),
-        //                 };
-        //                 if let VNode::Element(real_el) = real_el {
-        //                     real_el.parent.get()
-        //                 } else {
-        //                     None
-        //                 }
-        //             })
-        //         }
-        //     } else {
-        //         None
-        //     }
-        // }
+                            let mut cb = listener.callback.borrow_mut();
+                            if let Some(cb) = cb.as_mut() {
+                                // todo: arcs are pretty heavy to clone
+                                // we really want to convert arc to rc
+                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                // we could convert arc to rc internally or something
+                                (cb)(AnyEvent {
+                                    bubble_state: state.clone(),
+                                    data: event.data.clone(),
+                                });
+                            }
+                            break;
+                        }
+                    }
+
+                    if let Some(id) = current.parent {
+                        current = &nodes.as_ref()[id.0];
+                    } else {
+                        return template_ref.parent.get();
+                    }
+                } else {
+                    return None;
+                }
+            }
+        }
     }
 
     // The head of the bumpframe is the first linked NodeLink
