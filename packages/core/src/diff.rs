@@ -697,9 +697,14 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn diff_dynamic_node<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+        fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
             node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-            ctx: (&mut DiffState<'b>, &'b VNode<'b>, &'b VNode<'b>, ElementId),
+            ctx: (
+                &mut DiffState<'b>,
+                &'b VTemplateRef<'b>,
+                &Template,
+                &TemplateContext<'b>,
+            ),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
@@ -708,11 +713,16 @@ impl<'b> DiffState<'b> {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (diff, old_node, new_node, parent) = ctx;
-            if let TemplateNodeType::Element { .. } = node.node_type {
-                diff.diff_node(parent, old_node, new_node);
+            let (diff, new, template, dynamic_context) = ctx;
+            if let TemplateNodeType::Text(text) = &node.node_type {
+                let text = dynamic_context.resolve_text(&text.segments.as_ref());
+                let real_id = new.get_node_id(node.id, template, new, diff);
+                diff.mutations.set_text(
+                    diff.current_scope_bump().alloc(text),
+                    Some(real_id.as_u64()),
+                );
             } else {
-                diff.diff_node(parent, old_node, new_node);
+                panic!("expected text node");
             }
         }
 
@@ -731,6 +741,9 @@ impl<'b> DiffState<'b> {
             self.replace_node(parent, old_node, new_node);
             return;
         }
+
+        new.parent.set(Some(parent));
+        new.node_ids.replace(old.node_ids.clone().take());
 
         let scope_bump = &self.current_scope_bump();
 
@@ -768,21 +781,13 @@ impl<'b> DiffState<'b> {
         }
 
         // diff dynmaic nodes
-        for (idx, (old_node, new_node)) in old
+        for (old_node, new_node) in old
             .dynamic_context
             .nodes
             .iter()
             .zip(new.dynamic_context.nodes.iter())
-            .enumerate()
         {
-            if let Some(id) = template.get_dynamic_nodes_for_node_index(idx) {
-                template.with_node(
-                    id,
-                    diff_dynamic_node,
-                    diff_dynamic_node,
-                    (self, old_node, new_node, parent),
-                );
-            }
+            self.diff_node(parent, old_node, new_node);
         }
 
         // diff dynamic text
@@ -802,34 +807,6 @@ impl<'b> DiffState<'b> {
             }
         }
         for node_id in dirty_text_nodes {
-            fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-                node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-                ctx: (
-                    &mut DiffState<'b>,
-                    &'b VTemplateRef<'b>,
-                    &Template,
-                    &TemplateContext<'b>,
-                ),
-            ) where
-                Attributes: AsRef<[TemplateAttribute<V>]>,
-                V: TemplateValue,
-                Children: AsRef<[TemplateNodeId]>,
-                Listeners: AsRef<[usize]>,
-                TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-                Text: AsRef<str>,
-            {
-                let (diff, new, template, dynamic_context) = ctx;
-                if let TemplateNodeType::Text(text) = &node.node_type {
-                    let text = dynamic_context.resolve_text(&text.segments.as_ref());
-                    let real_id = new.get_node_id(node.id, template, new, diff);
-                    diff.mutations.set_text(
-                        diff.current_scope_bump().alloc(text),
-                        Some(real_id.as_u64()),
-                    );
-                } else {
-                    panic!("expected text node");
-                }
-            }
             template.with_node(
                 node_id,
                 diff_text,
@@ -1300,6 +1277,7 @@ impl<'b> DiffState<'b> {
             }
 
             VNode::TemplateRef(t) => {
+                todo!();
                 let ids = t.node_ids.borrow();
                 let mut ids_iter = ids.iter();
                 self.mutations.replace_with(
