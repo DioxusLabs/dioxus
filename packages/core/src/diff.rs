@@ -94,8 +94,8 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AnyProps, ElementId, GlobalNodeId, Mutations, RendererTemplateId, ScopeArena, ScopeId,
-        VComponent, VElement, VFragment, VNode, VPlaceholder, VText,
+        AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment,
+        VNode, VPlaceholder, VText,
     },
     template::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -111,7 +111,7 @@ pub(crate) struct DiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
-    pub(crate) element_stack: SmallVec<[GlobalNodeId; 10]>,
+    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
@@ -224,7 +224,7 @@ impl<'b> DiffState<'b> {
 
         dom_id.set(Some(real_id));
 
-        self.element_stack.push(GlobalNodeId::VNodeId(real_id));
+        self.element_stack.push(real_id);
         {
             self.mutations
                 .create_element(tag_name, *namespace, Some(real_id.as_u64()), 0);
@@ -232,9 +232,7 @@ impl<'b> DiffState<'b> {
             let cur_scope_id = self.current_scope();
 
             for listener in listeners.iter() {
-                listener
-                    .mounted_node
-                    .set(Some(GlobalNodeId::VNodeId(real_id)));
+                listener.mounted_node.set(Some(real_id));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
 
@@ -338,7 +336,7 @@ impl<'b> DiffState<'b> {
                 .root_nodes
                 .iter()
                 .map(|node_id| {
-                    let real_id = self.scopes.reserve_phantom_node(id, *node_id);
+                    let real_id = self.scopes.reserve_template_node(new, *node_id);
                     new.set_node_id(*node_id, real_id);
                     real_id.as_u64()
                 })
@@ -348,7 +346,7 @@ impl<'b> DiffState<'b> {
                 .root_nodes
                 .iter()
                 .map(|node_id| {
-                    let real_id = self.scopes.reserve_phantom_node(id, *node_id);
+                    let real_id = self.scopes.reserve_template_node(new, *node_id);
                     new.set_node_id(*node_id, real_id);
                     real_id.as_u64()
                 })
@@ -495,7 +493,7 @@ impl<'b> DiffState<'b> {
                     .remove_event_listener(listener.event, Some(root.as_u64()));
             }
             for listener in new.listeners {
-                listener.mounted_node.set(Some(GlobalNodeId::VNodeId(root)));
+                listener.mounted_node.set(Some(root));
                 self.mutations.new_event_listener(listener, cur_scope_id);
             }
         }
@@ -625,7 +623,7 @@ impl<'b> DiffState<'b> {
             ctx: (
                 &mut DiffState<'b>,
                 &'b Bump,
-                &VTemplateRef<'b>,
+                &'b VTemplateRef<'b>,
                 &Template,
                 usize,
             ),
@@ -648,7 +646,7 @@ impl<'b> DiffState<'b> {
                         value: new.dynamic_context.resolve_attribute(idx).clone(),
                         is_static: false,
                     };
-                    let real_id = new.get_node_id(*node_id, template, diff_state);
+                    let real_id = new.get_node_id(*node_id, template, new, diff_state);
                     diff_state
                         .mutations
                         .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -663,7 +661,7 @@ impl<'b> DiffState<'b> {
             ctx: (
                 &mut DiffState<'b>,
                 &'b Bump,
-                &VTemplateRef<'b>,
+                &'b VTemplateRef<'b>,
                 &Template,
                 usize,
             ),
@@ -690,7 +688,7 @@ impl<'b> DiffState<'b> {
                     value,
                     is_static: false,
                 };
-                let real_id = new.get_node_id(node.id, template, diff_state);
+                let real_id = new.get_node_id(node.id, template, new, diff_state);
                 diff_state
                     .mutations
                     .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -808,7 +806,7 @@ impl<'b> DiffState<'b> {
                 node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
                 ctx: (
                     &mut DiffState<'b>,
-                    &VTemplateRef<'b>,
+                    &'b VTemplateRef<'b>,
                     &Template,
                     &TemplateContext<'b>,
                 ),
@@ -823,7 +821,7 @@ impl<'b> DiffState<'b> {
                 let (diff, new, template, dynamic_context) = ctx;
                 if let TemplateNodeType::Text(text) = &node.node_type {
                     let text = dynamic_context.resolve_text(&text.segments.as_ref());
-                    let real_id = new.get_node_id(node.id, &template, diff);
+                    let real_id = new.get_node_id(node.id, &template, new, diff);
                     diff.mutations.set_text(
                         diff.current_scope_bump().alloc(text),
                         Some(real_id.as_u64()),

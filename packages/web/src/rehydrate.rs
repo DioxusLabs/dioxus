@@ -108,28 +108,13 @@ impl WebsysDom {
                 }
 
                 for listener in vel.listeners {
-                    let global_id = listener.mounted_node.get().unwrap();
-                    match global_id {
-                        dioxus_core::GlobalNodeId::TemplateId {
-                            template_ref_id,
-                            template_node_id: id,
-                        } => {
-                            self.interpreter.NewEventListener(
-                                listener.event,
-                                todo!(),
-                                self.handler.as_ref().unchecked_ref(),
-                                event_bubbles(listener.event),
-                            );
-                        }
-                        dioxus_core::GlobalNodeId::VNodeId(id) => {
-                            self.interpreter.NewEventListener(
-                                listener.event,
-                                Some(id.as_u64()),
-                                self.handler.as_ref().unchecked_ref(),
-                                event_bubbles(listener.event),
-                            );
-                        }
-                    }
+                    let id = listener.mounted_node.get().unwrap();
+                    self.interpreter.NewEventListener(
+                        listener.event,
+                        Some(id.as_u64()),
+                        self.handler.as_ref().unchecked_ref(),
+                        event_bubbles(listener.event),
+                    );
                 }
 
                 if !vel.listeners.is_empty() {

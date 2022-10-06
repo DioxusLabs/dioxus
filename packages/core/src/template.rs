@@ -62,20 +62,14 @@ pub const JS_MAX_INT: u64 = 9007199254740991;
 
 use fxhash::FxHashMap;
 use once_cell::unsync::OnceCell;
-use std::{
-    borrow::Borrow,
-    cell::{Cell, RefCell},
-    hash::Hash,
-    marker::PhantomData,
-    ops::Index,
-};
+use std::{cell::RefCell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;
 
 use crate::{
-    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
-    nodes::AttributeDiscription, scopes::ScopeArena, Attribute, AttributeValue, ElementId,
-    Mutations, OwnedAttributeValue, StaticDynamicNodeMapping,
+    diff::DiffState, dynamic_template_context::TemplateContext, nodes::AttributeDiscription,
+    scopes::ScopeArena, Attribute, AttributeValue, ElementId, Mutations, OwnedAttributeValue,
+    StaticDynamicNodeMapping,
 };
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
@@ -310,15 +304,20 @@ pub struct VTemplateRef<'a> {
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b>(
-        &self,
+    pub(crate) fn hydrate<'b: 'a>(
+        &'b self,
         parent: ElementId,
-        template: &'b Template,
+        template: &Template,
         diff_state: &mut DiffState<'a>,
     ) {
         fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
-            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template, ElementId),
+            ctx: (
+                &mut DiffState<'b>,
+                &'b VTemplateRef<'b>,
+                &Template,
+                ElementId,
+            ),
         ) where
             Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -345,7 +344,8 @@ impl<'a> VTemplateRef<'a> {
     pub(crate) fn get_node_id<'b>(
         &self,
         id: TemplateNodeId,
-        template: &'b Template,
+        template: &Template,
+        template_ref: &'b VTemplateRef<'b>,
         diff_state: &mut DiffState<'a>,
     ) -> ElementId {
         fn get_path<Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
@@ -406,7 +406,7 @@ impl<'a> VTemplateRef<'a> {
                     diff_state.mutations.next_sibling();
                 }
             }
-            let real_id = diff_state.scopes.reserve_phantom_node(self);
+            let real_id = diff_state.scopes.reserve_template_node(template_ref, id);
             self.set_node_id(id, real_id);
             diff_state.mutations.store_with_id(real_id.as_u64());
             real_id
@@ -693,7 +693,7 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -733,7 +733,7 @@ where
         &self,
         parent: ElementId,
         diff_state: &mut DiffState<'b>,
-        template_ref: &VTemplateRef<'b>,
+        template_ref: &'b VTemplateRef<'b>,
         template: &Template,
     ) {
         // todo: this
@@ -758,7 +758,8 @@ where
                                 .to_owned(),
                             is_static: false,
                         };
-                        let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
+                        let real_node_id =
+                            template_ref.get_node_id(self.id, template, template_ref, diff_state);
                         let scope_bump = diff_state.current_scope_bump();
                         diff_state.mutations.set_attribute(
                             scope_bump.alloc(attribute),
@@ -768,10 +769,9 @@ where
                 }
                 for listener_idx in listeners.as_ref() {
                     let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
-                    let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
-                    listener
-                        .mounted_node
-                        .set(Some(GlobalNodeId::VNodeId(real_node_id)));
+                    let real_node_id =
+                        template_ref.get_node_id(self.id, template, template_ref, diff_state);
+                    listener.mounted_node.set(Some(real_node_id));
                     diff_state
                         .mutations
                         .new_event_listener(listener, diff_state.current_scope());
@@ -782,7 +782,8 @@ where
                     .dynamic_context
                     .resolve_text(&text.segments.as_ref());
 
-                let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
+                let real_node_id =
+                    template_ref.get_node_id(self.id, template, template_ref, diff_state);
                 let scope_bump = diff_state.current_scope_bump();
                 diff_state
                     .mutations
@@ -792,7 +793,8 @@ where
                 // this will only be triggered for root elements
                 let created =
                     diff_state.create_node(parent, template_ref.dynamic_context.resolve_node(*idx));
-                let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
+                let real_node_id =
+                    template_ref.get_node_id(self.id, template, template_ref, diff_state);
                 diff_state
                     .mutations
                     .replace_with(Some(real_node_id.as_u64()), created);

@@ -303,13 +303,7 @@ impl<'a> Mutations<'a> {
             ..
         } = listener;
 
-        let element_id = Some(match mounted_node.get().unwrap() {
-            GlobalNodeId::TemplateId {
-                template_ref_id: _,
-                template_node_id,
-            } => template_node_id.into(),
-            GlobalNodeId::VNodeId(id) => id.into(),
-        });
+        let element_id = Some(mounted_node.get().unwrap().into());
 
         self.edits.push(NewEventListener {
             scope,

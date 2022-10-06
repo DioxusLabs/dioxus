@@ -3,7 +3,7 @@
 //!
 //! This is all kinda WIP, but the bones are there.
 
-use crate::{nodes::GlobalNodeId, ElementId, ScopeId};
+use crate::{ElementId, ScopeId};
 use std::{any::Any, cell::Cell, fmt::Debug, rc::Rc, sync::Arc};
 
 pub(crate) struct BubbleState {
