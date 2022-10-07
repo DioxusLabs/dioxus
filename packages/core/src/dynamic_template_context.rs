@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ops::Deref};
+use std::{fmt::Write, marker::PhantomData, ops::Deref};
 
 use once_cell::sync::Lazy;
 
@@ -170,13 +170,29 @@ impl<'b> TemplateContext<'b> {
         Text: AsRef<str>,
     {
         let mut result = String::with_capacity(text.min_size);
+        self.resolve_text_into(text, &mut result);
+        result
+    }
+
+    /// Resolve text and writes the result
+    pub fn resolve_text_into<TextSegments, Text>(
+        &self,
+        text: &TextTemplate<TextSegments, Text>,
+        result: &mut impl Write,
+    ) where
+        TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+        Text: AsRef<str>,
+    {
         for seg in text.segments.as_ref() {
             match seg {
-                TextTemplateSegment::Static(s) => result += s.as_ref(),
-                TextTemplateSegment::Dynamic(idx) => result += self.text_segments[*idx],
+                TextTemplateSegment::Static(s) => {
+                    let _ = result.write_str(s.as_ref());
+                }
+                TextTemplateSegment::Dynamic(idx) => {
+                    let _ = result.write_str(self.text_segments[*idx]);
+                }
             }
         }
-        result
     }
 
     /// Resolve an attribute value

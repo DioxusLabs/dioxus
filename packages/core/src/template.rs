@@ -809,14 +809,18 @@ where
                 }
             }
             TemplateNodeType::Text(text) => {
-                let new_text = template_ref.dynamic_context.resolve_text(text);
+                let scope_bump = diff_state.current_scope_bump();
+                let mut bump_str =
+                    bumpalo::collections::String::with_capacity_in(text.min_size, scope_bump);
+                template_ref
+                    .dynamic_context
+                    .resolve_text_into(text, &mut bump_str);
 
                 let real_node_id =
                     template_ref.get_node_id(self.id, template, template_ref, diff_state);
-                let scope_bump = diff_state.current_scope_bump();
                 diff_state
                     .mutations
-                    .set_text(scope_bump.alloc(new_text), Some(real_node_id.as_u64()));
+                    .set_text(bump_str.into_bump_str(), Some(real_node_id.as_u64()));
             }
             TemplateNodeType::DynamicNode(idx) => {
                 // this will only be triggered for root elements
