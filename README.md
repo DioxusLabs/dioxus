@@ -78,60 +78,62 @@ If you know React, then you already know Dioxus.
 - And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ## Supported Platforms
-<table style="width:100%">
-  <tr>
-    <td><em>Web</em></td>
-    <td>
-      <ul>
-        <li>Render directly to the DOM using WebAssembly</li>
-        <li>Pre-render with SSR and rehydrate on the client</li>
-        <li>Simple "hello world" at about 65kb, comparable to React</li>
-        <li>Built-in dev server and hot reloading for quick iteration</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><em>Desktop</em></td>
-    <td>
-      <ul>
-        <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-        <li>Zero-config setup. Simply cargo-run to build your app </li>
-        <li>Full support for native system access without electron-esque IPC </li>
-        <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><em>Mobile</em></td>
-    <td>
-      <ul>
-        <li>Render using Webview or - experimentally - with WGPU or Skia </li>
-        <li>Support for iOS and Android </li>
-        <li><em>Significantly</em> more performant than React Native </li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><em>Liveview</em></td>
-    <td>
-      <ul>
-        <li>Render apps - or just a single component - entirely on the server</li>
-        <li>Integrations with popular Rust frameworks like Axum and Warp</li>
-        <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td><em>Terminal</em></td>
-    <td>
-      <ul>
-        <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
-        <li>Powered by the familiar flexbox and CSS model of the browser</li>
-        <li>Built-in widgets like text input, buttons, and focus system</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <table style="width:100%">
+    <tr>
+      <td><em>Web</em></td>
+      <td>
+        <ul>
+          <li>Render directly to the DOM using WebAssembly</li>
+          <li>Pre-render with SSR and rehydrate on the client</li>
+          <li>Simple "hello world" at about 65kb, comparable to React</li>
+          <li>Built-in dev server and hot reloading for quick iteration</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>Desktop</em></td>
+      <td>
+        <ul>
+          <li>Render using Webview or - experimentally - with WGPU or Skia </li>
+          <li>Zero-config setup. Simply cargo-run to build your app </li>
+          <li>Full support for native system access without electron-esque IPC </li>
+          <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>Mobile</em></td>
+      <td>
+        <ul>
+          <li>Render using Webview or - experimentally - with WGPU or Skia </li>
+          <li>Support for iOS and Android </li>
+          <li><em>Significantly</em> more performant than React Native </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>Liveview</em></td>
+      <td>
+        <ul>
+          <li>Render apps - or just a single component - entirely on the server</li>
+          <li>Integrations with popular Rust frameworks like Axum and Warp</li>
+          <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>Terminal</em></td>
+      <td>
+        <ul>
+          <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
+          <li>Powered by the familiar flexbox and CSS model of the browser</li>
+          <li>Built-in widgets like text input, buttons, and focus system</li>
+        </ul>
+      </td>
+    </tr>
+  </table>
+</div>
 
 ## Why Dioxus?
 There's tons of options for building apps, so why would you choose Dioxus?
