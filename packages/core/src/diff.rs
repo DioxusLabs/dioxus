@@ -742,11 +742,13 @@ impl<'b> DiffState<'b> {
             return;
         }
 
-        new.template_ref_id.set(Some(
-            old.template_ref_id
-                .get()
-                .unwrap_or_else(|| self.scopes.reserve_template_ref(new)),
-        ));
+        if let Some(template_ref_id) = old.template_ref_id.get() {
+            self.scopes.update_template_ref(template_ref_id, new);
+            new.template_ref_id.set(Some(template_ref_id));
+        } else {
+            new.template_ref_id
+                .set(Some(self.scopes.reserve_template_ref(new)));
+        }
         new.parent.set(Some(parent));
         new.node_ids.replace(old.node_ids.take());
 
