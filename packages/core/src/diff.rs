@@ -747,6 +747,11 @@ impl<'b> DiffState<'b> {
             return;
         }
 
+        new.template_ref_id.set(Some(
+            old.template_ref_id
+                .get()
+                .unwrap_or_else(|| self.scopes.reserve_template_ref(new)),
+        ));
         new.parent.set(Some(parent));
         new.node_ids.replace(old.node_ids.clone().take());
 
