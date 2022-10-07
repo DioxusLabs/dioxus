@@ -1,7 +1,9 @@
 use crate::{node::PreventDefault, Dom};
 
-use dioxus_core::GlobalNodeId;
-use dioxus_native_core::utils::{ElementProduced, PersistantElementIter};
+use dioxus_native_core::{
+    utils::{ElementProduced, PersistantElementIter},
+    RealNodeId,
+};
 use dioxus_native_core_macro::sorted_str_slice;
 
 use std::{cmp::Ordering, num::NonZeroU16};
@@ -117,7 +119,7 @@ const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["tabindex"]);
 #[derive(Default)]
 pub(crate) struct FocusState {
     pub(crate) focus_iter: PersistantElementIter,
-    pub(crate) last_focused_id: Option<GlobalNodeId>,
+    pub(crate) last_focused_id: Option<RealNodeId>,
     pub(crate) focus_level: FocusLevel,
     pub(crate) dirty: bool,
 }
@@ -231,9 +233,9 @@ impl FocusState {
 
     pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &Dom) {
         fn remove_children(
-            to_prune: &mut [&mut Option<GlobalNodeId>],
+            to_prune: &mut [&mut Option<RealNodeId>],
             rdom: &Dom,
-            removed: GlobalNodeId,
+            removed: RealNodeId,
         ) {
             for opt in to_prune.iter_mut() {
                 if let Some(id) = opt {
@@ -256,19 +258,19 @@ impl FocusState {
                 dioxus_core::DomEdit::ReplaceWith { root, .. } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    rdom.decode_id(*root),
+                    rdom.resolve_maybe_id(*root),
                 ),
                 dioxus_core::DomEdit::Remove { root } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    rdom.decode_id(*root),
+                    rdom.resolve_maybe_id(*root),
                 ),
                 _ => (),
             }
         }
     }
 
-    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: GlobalNodeId) {
+    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: RealNodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
             rdom[old].state.focused = false;
         }

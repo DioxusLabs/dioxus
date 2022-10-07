@@ -51,7 +51,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    pub(crate) fn resolve_maybe_id(&self, id: Option<u64>) -> RealNodeId {
+    pub fn resolve_maybe_id(&self, id: Option<u64>) -> RealNodeId {
         if let Some(id) = id {
             RealNodeId::ElementId(ElementId(id as usize))
         } else {
@@ -116,7 +116,16 @@ impl<S: State> RealDom<S> {
                         let n = Node::new(NodeType::Text {
                             text: text.to_string(),
                         });
-                        self.last = Some(self.insert(n, root));
+                        let id = self.insert(n, root);
+                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
+                            *remaining -= 1;
+                            let parent = *parent;
+                            if *remaining == 0 {
+                                self.parents_queued.pop();
+                            }
+                            self.link_child(id, parent).unwrap();
+                        }
+                        self.last = Some(id);
                     }
                     CreateElement {
                         root,
@@ -131,6 +140,14 @@ impl<S: State> RealDom<S> {
                             children: Vec::new(),
                         });
                         let id = self.insert(n, root);
+                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
+                            *remaining -= 1;
+                            let parent = *parent;
+                            if *remaining == 0 {
+                                self.parents_queued.pop();
+                            }
+                            self.link_child(id, parent).unwrap();
+                        }
                         self.last = Some(id);
                         if children > 0 {
                             self.parents_queued.push((id, children));
@@ -150,6 +167,14 @@ impl<S: State> RealDom<S> {
                             children: Vec::new(),
                         });
                         let id = self.insert(n, root);
+                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
+                            *remaining -= 1;
+                            let parent = *parent;
+                            if *remaining == 0 {
+                                self.parents_queued.pop();
+                            }
+                            self.link_child(id, parent).unwrap();
+                        }
                         self.last = Some(id);
                         if children > 0 {
                             self.parents_queued.push((id, children));
@@ -158,6 +183,14 @@ impl<S: State> RealDom<S> {
                     CreatePlaceholder { root } => {
                         let n = Node::new(NodeType::Placeholder);
                         let id = self.insert(n, root);
+                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
+                            *remaining -= 1;
+                            let parent = *parent;
+                            if *remaining == 0 {
+                                self.parents_queued.pop();
+                            }
+                            self.link_child(id, parent).unwrap();
+                        }
                         self.last = Some(id);
                     }
                     NewEventListener {
@@ -241,7 +274,7 @@ impl<S: State> RealDom<S> {
                     }
                     CloneNode { id, new_id } => {
                         let id = self.resolve_maybe_id(id);
-                        let node = self[id].clone();
+                        let node = self.clone_node(id, &mut nodes_updated);
                         self.insert(node, Some(new_id));
                     }
                     CloneNodeChildren { id, new_ids } => {
@@ -251,7 +284,7 @@ impl<S: State> RealDom<S> {
                             unsafe { std::mem::transmute(bounded_self) };
                         if let NodeType::Element { children, .. } = &self[id].node_data.node_type {
                             for (old_id, new_id) in children.iter().zip(new_ids) {
-                                let node = self[*old_id].clone();
+                                let node = unbounded_self.clone_node(*old_id, &mut nodes_updated);
                                 unbounded_self.insert(node, Some(new_id));
                             }
                         }
@@ -261,6 +294,8 @@ impl<S: State> RealDom<S> {
                             &self[self.last.unwrap()].node_data.node_type
                         {
                             self.last = Some(children[0]);
+                        } else {
+                            panic!("tried to call first child on a non element");
                         }
                     }
                     NextSibling {} => {
@@ -272,16 +307,27 @@ impl<S: State> RealDom<S> {
                                 let index = children.iter().position(|a| *a == id).unwrap();
                                 self.last = Some(children[index + 1]);
                             }
+                        } else {
+                            panic!("tried to call next sibling on a non element");
                         }
                     }
                     ParentNode {} => {
                         if let Some(parent) = self.parent(self.last.unwrap()) {
                             self.last = Some(parent);
+                        } else {
+                            panic!("tried to call parent node on a non element");
                         }
                     }
                     StoreWithId { id } => {
-                        let node = self.remove(self.last.unwrap()).unwrap();
-                        self.insert(node, Some(id));
+                        let old_id = self.last.unwrap();
+                        let node = self.remove(old_id).unwrap();
+                        let new_id = self.insert(node, Some(id));
+                        self.last = Some(new_id);
+                        for (node, _) in &mut nodes_updated {
+                            if *node == old_id {
+                                *node = new_id;
+                            }
+                        }
                     }
                     SetLastNode { id } => {
                         self.last =
@@ -544,6 +590,25 @@ impl<S: State> RealDom<S> {
             unsafe { &mut *raw }.map(|n| &n.node_data, |n| &mut n.node_data),
         )
     }
+
+    /// Recurively clones a node and marks it and it's children as dirty.
+    fn clone_node(
+        &mut self,
+        id: RealNodeId,
+        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
+    ) -> Node<S> {
+        let mut node = self[id].clone();
+        if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
+            // this is safe because no node has itself as a child.
+            let unbounded_self = unsafe { &mut *(self as *mut Self) };
+            for c in children {
+                let child_id = self.insert(unbounded_self.clone_node(*c, nodes_updated), None);
+                self.link_child(child_id, id);
+                nodes_updated.push((child_id, NodeMask::ALL));
+            }
+        }
+        node
+    }
 }
 
 impl<S: State> Index<ElementId> for RealDom<S> {
@@ -641,6 +706,11 @@ impl<S: State> Node<S> {
     /// link the parent node
     fn set_parent(&mut self, parent: RealNodeId) {
         self.node_data.parent = Some(parent);
+    }
+
+    /// get the mounted id of the node
+    pub fn mounted_id(&self) -> RealNodeId {
+        self.node_data.id.unwrap()
     }
 }
 

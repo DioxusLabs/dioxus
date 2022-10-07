@@ -21,8 +21,8 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the id of the node
-    pub fn id(&self) -> Option<RealNodeId> {
-        self.inner.id
+    pub fn id(&self) -> RealNodeId {
+        self.inner.id.unwrap()
     }
 
     /// Get the tag of the node if the tag is enabled in the mask

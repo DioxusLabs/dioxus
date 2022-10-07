@@ -17,6 +17,15 @@ pub enum RealNodeId {
     UnaccessableId(usize),
 }
 
+impl RealNodeId {
+    pub fn as_element_id(&self) -> ElementId {
+        match self {
+            RealNodeId::ElementId(id) => *id,
+            RealNodeId::UnaccessableId(_) => panic!("Expected element id"),
+        }
+    }
+}
+
 impl Ord for RealNodeId {
     fn cmp(&self, other: &Self) -> Ordering {
         self.partial_cmp(other).unwrap()
@@ -38,8 +47,8 @@ impl PartialOrd for RealNodeId {
 #[derive(Eq, PartialEq)]
 #[doc(hidden)]
 pub struct HeightOrdering {
-    height: u16,
-    id: RealNodeId,
+    pub height: u16,
+    pub id: RealNodeId,
 }
 
 impl HeightOrdering {

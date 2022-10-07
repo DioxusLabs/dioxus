@@ -2,6 +2,7 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
 use dioxus_core::*;
+use dioxus_native_core::RealNodeId;
 use fxhash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
@@ -195,7 +196,7 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focus",
-                    element: Some(id),
+                    element: Some(id.as_element_id()),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focus"),
                 });
@@ -203,7 +204,7 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focusin",
-                    element: Some(id),
+                    element: Some(id.as_element_id()),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focusin"),
                 });
@@ -213,7 +214,7 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focusout",
-                    element: Some(id),
+                    element: Some(id.as_element_id()),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focusout"),
                 });
@@ -243,13 +244,13 @@ impl InnerInputState {
         fn try_create_event(
             name: &'static str,
             data: Arc<dyn Any + Send + Sync>,
-            will_bubble: &mut FxHashSet<GlobalNodeId>,
+            will_bubble: &mut FxHashSet<RealNodeId>,
             resolved_events: &mut Vec<UserEvent>,
             node: &Node,
             dom: &Dom,
         ) {
             // only trigger event if the event was not triggered already by a child
-            let id = node.node_data.id;
+            let id = node.mounted_id();
             if will_bubble.insert(id) {
                 let mut parent = node.node_data.parent;
                 while let Some(parent_id) = parent {
@@ -260,7 +261,7 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name,
-                    element: Some(id),
+                    element: Some(id.as_element_id()),
                     data,
                     bubbles: event_bubbles(name),
                 })
@@ -547,7 +548,7 @@ impl InnerInputState {
                     let currently_contains = layout_contains_point(node_layout, new_pos);
 
                     if currently_contains && node.state.focus.level.focusable() {
-                        focus_id = Some(node.node_data.id);
+                        focus_id = Some(node.mounted_id());
                     }
                 });
                 if let Some(id) = focus_id {
@@ -665,7 +666,7 @@ impl RinkInputHandler {
                             scope_id: None,
                             priority: EventPriority::Medium,
                             name: event,
-                            element: Some(node.node_data.id),
+                            element: Some(node.mounted_id().as_element_id()),
                             data: data.clone(),
                             bubbles: event_bubbles(event),
                         });
