@@ -69,7 +69,6 @@ Dioxus can be used to deliver webapps, desktop apps, static sites, mobile apps, 
 If you know React, then you already know Dioxus.
 
 ## Unique features:
----
 - Desktop apps running natively (no Electron!) in less than 10 lines of code.
 - Incredibly ergonomic and powerful state management.
 - Comprehensive inline documentation - hover and guides for all HTML elements, listeners, and events.
@@ -79,7 +78,6 @@ If you know React, then you already know Dioxus.
 - And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ## Supported Platforms
----
 <table style="width:100%">
   <tr>
     <td><h2>Web</h2></td>
@@ -136,7 +134,6 @@ If you know React, then you already know Dioxus.
 </table>
 
 ## Why Dioxus?
----
 There's tons of options for building apps, so why would you choose Dioxus?
 
 Well, first and foremost, Dioxus prioritizes developer experience. This is reflected in a variety of features unique to Dioxus:
@@ -158,7 +155,6 @@ So... Dioxus is great, but why won't it work for me?
 
 
 ## Contributing
----
 - Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
 - Join the discord and ask questions!
 
@@ -168,7 +164,6 @@ So... Dioxus is great, but why won't it work for me?
 </a>
 
 ## License
----
 This project is licensed under the [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
