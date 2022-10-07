@@ -1492,8 +1492,23 @@ impl<'b> DiffState<'b> {
     // recursively push all the nodes of a tree onto the stack and return how many are there
     fn get_all_real_nodes(&mut self, node: &'b VNode<'b>) -> Vec<u64> {
         match node {
-            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) | VNode::TemplateRef(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) => {
                 vec![node.mounted_id().0 as u64]
+            }
+
+            VNode::TemplateRef(template_ref) => {
+                let templates = self.scopes.templates.borrow();
+                let template = templates.get(&template_ref.template_id).unwrap();
+                let template = template.borrow();
+                template
+                    .root_nodes()
+                    .iter()
+                    .map(|id| {
+                        template_ref
+                            .get_node_id(*id, &template, template_ref, self)
+                            .as_u64()
+                    })
+                    .collect()
             }
 
             VNode::Fragment(frag) => {
