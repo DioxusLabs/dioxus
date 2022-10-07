@@ -715,7 +715,7 @@ impl<'b> DiffState<'b> {
         {
             let (diff, new, template, dynamic_context) = ctx;
             if let TemplateNodeType::Text(text) = &node.node_type {
-                let text = dynamic_context.resolve_text(&text.segments.as_ref());
+                let text = dynamic_context.resolve_text(&text);
                 let real_id = new.get_node_id(node.id, template, new, diff);
                 diff.mutations.set_text(
                     diff.current_scope_bump().alloc(text),

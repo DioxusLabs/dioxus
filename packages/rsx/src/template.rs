@@ -266,12 +266,18 @@ impl ToTokens for TemplateNodeTypeBuilder {
                 TemplateNodeType::Element(#el)
             }),
             TemplateNodeTypeBuilder::Text(txt) => {
+                let mut length = 0;
+
                 let segments = txt.segments.iter().map(|seg| match seg {
-                    TextTemplateSegment::Static(s) => quote!(TextTemplateSegment::Static(#s)),
+                    TextTemplateSegment::Static(s) => {
+                        length += s.len();
+                        quote!(TextTemplateSegment::Static(#s))
+                    }
                     TextTemplateSegment::Dynamic(idx) => quote!(TextTemplateSegment::Dynamic(#idx)),
                 });
+
                 tokens.append_all(quote! {
-                    TemplateNodeType::Text(TextTemplate::new(&[#(#segments),*]))
+                    TemplateNodeType::Text(TextTemplate::new(&[#(#segments),*], #length))
                 });
             }
             TemplateNodeTypeBuilder::DynamicNode(idx) => tokens.append_all(quote! {
@@ -537,10 +543,14 @@ impl TemplateBuilder {
 
             BodyNode::Text(txt) => {
                 let mut segments = Vec::new();
+                let mut length = 0;
 
                 for segment in txt.segments {
                     segments.push(match segment {
-                        Segment::Literal(lit) => TextTemplateSegment::Static(lit),
+                        Segment::Literal(lit) => {
+                            length += lit.len();
+                            TextTemplateSegment::Static(lit)
+                        }
                         Segment::Formatted(fmted) => {
                             TextTemplateSegment::Dynamic(self.dynamic_context.add_text(fmted))
                         }
@@ -549,7 +559,7 @@ impl TemplateBuilder {
 
                 self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments)),
+                    node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments, length)),
                     parent,
                     depth,
                 });

@@ -67,6 +67,7 @@ use std::{
     hash::Hash,
     marker::PhantomData,
     ops::Index,
+    ptr,
 };
 
 use bumpalo::Bump;
@@ -149,10 +150,8 @@ impl Hash for CodeLocation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             CodeLocation::Static(loc) => {
-                loc.crate_path.hash(state);
-                loc.file_path.hash(state);
-                state.write_u32(loc.line);
-                state.write_u32(loc.column);
+                let loc: &'static _ = *loc;
+                state.write_usize((loc as *const _) as usize);
             }
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             CodeLocation::Dynamic(loc) => {
@@ -169,7 +168,7 @@ impl Hash for CodeLocation {
 impl PartialEq for CodeLocation {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Static(l), Self::Static(r)) => l == r,
+            (Self::Static(l), Self::Static(r)) => ptr::eq(*l, *r),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             (Self::Dynamic(l), Self::Dynamic(r)) => l == r,
             #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -818,9 +817,7 @@ where
                 }
             }
             TemplateNodeType::Text(text) => {
-                let new_text = template_ref
-                    .dynamic_context
-                    .resolve_text(&text.segments.as_ref());
+                let new_text = template_ref.dynamic_context.resolve_text(text);
 
                 let real_node_id =
                     template_ref.get_node_id(self.id, template, template_ref, diff_state);
@@ -1074,6 +1071,8 @@ where
 {
     /// The segments of the template.
     pub segments: Segments,
+    /// The minimum size of the output text.
+    pub min_size: usize,
     text: PhantomData<Text>,
 }
 
@@ -1083,9 +1082,10 @@ where
     Text: AsRef<str>,
 {
     /// create a new template from the segments it is composed of.
-    pub const fn new(segments: Segments) -> Self {
+    pub const fn new(segments: Segments, min_size: usize) -> Self {
         TextTemplate {
             segments,
+            min_size,
             text: PhantomData,
         }
     }
