@@ -975,6 +975,7 @@ where
                 && children.last().unwrap().key().is_none()
             {
                 // todo: make the backtrace prettier or remove it altogether
+                #[cfg(feature = "dev")]
                 log::error!(
                     r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.

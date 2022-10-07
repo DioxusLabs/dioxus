@@ -7,7 +7,6 @@ use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
 use fxhash::FxHashSet;
-use indexmap::IndexSet;
 use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -106,7 +105,8 @@ pub struct VirtualDom {
     scopes: ScopeArena,
 
     pending_messages: VecDeque<SchedulerMsg>,
-    dirty_scopes: IndexSet<ScopeId>,
+    dirty_scopes: Vec<ScopeId>,
+    removed_scopes: FxHashSet<ScopeId>,
 
     channel: (
         UnboundedSender<SchedulerMsg>,
@@ -236,8 +236,9 @@ impl VirtualDom {
         Self {
             scopes,
             channel,
-            dirty_scopes: IndexSet::from_iter([ScopeId(0)]),
+            dirty_scopes: Vec::from_iter([ScopeId(0)]),
             pending_messages: VecDeque::new(),
+            removed_scopes: FxHashSet::default(),
         }
     }
 
@@ -394,11 +395,18 @@ impl VirtualDom {
                 }
             }
             SchedulerMsg::Immediate(s) => {
-                self.dirty_scopes.insert(s);
+                self.mark_dirty_scope(s);
             }
             SchedulerMsg::DirtyAll => {
-                for id in self.scopes.scopes.borrow().keys() {
-                    self.dirty_scopes.insert(*id);
+                let dirty = self
+                    .scopes
+                    .scopes
+                    .borrow()
+                    .keys()
+                    .copied()
+                    .collect::<Vec<_>>();
+                for id in dirty {
+                    self.mark_dirty_scope(id);
                 }
             }
             #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -472,6 +480,7 @@ impl VirtualDom {
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
         self.scopes.template_bump.reset();
+        self.removed_scopes.clear();
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
@@ -490,7 +499,10 @@ impl VirtualDom {
             });
 
             if let Some(scopeid) = self.dirty_scopes.pop() {
-                if !ran_scopes.contains(&scopeid) {
+                if scopes.get_scope(scopeid).is_some()
+                    && !self.removed_scopes.contains(&scopeid)
+                    && !ran_scopes.contains(&scopeid)
+                {
                     ran_scopes.insert(scopeid);
 
                     self.scopes.run_scope(scopeid);
@@ -499,9 +511,8 @@ impl VirtualDom {
 
                     let DiffState { mutations, .. } = diff_state;
 
-                    for scope in &mutations.dirty_scopes {
-                        self.dirty_scopes.remove(scope);
-                    }
+                    self.removed_scopes
+                        .extend(mutations.dirty_scopes.iter().copied());
 
                     if !mutations.edits.is_empty() {
                         committed_mutations.push(mutations);
@@ -732,6 +743,24 @@ impl VirtualDom {
             })
             .unwrap()
     }
+
+    fn mark_dirty_scope(&mut self, scope_id: ScopeId) {
+        let scopes = &self.scopes;
+        let scope = scopes.get_scope(scope_id).unwrap();
+        let height = scope.height;
+        let id = scope_id.0;
+        if let Err(index) = self.dirty_scopes.binary_search_by(|new| {
+            let scope = scopes.get_scope(*new).unwrap();
+            let new_height = scope.height;
+            let new_id = &scope.scope_id();
+            height.cmp(&new_height).then(new_id.0.cmp(&id))
+        }) {
+            self.dirty_scopes.insert(index, scope_id);
+            #[cfg(feature = "dev")]
+            #[cfg(feature = "dev")]
+            log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
+        }
+    }
 }
 
 /*
@@ -739,7 +768,8 @@ Scopes and ScopeArenas are never dropped internally.
 An app will always occupy as much memory as its biggest form.
 
 This means we need to handle all specifics of drop *here*. It's easier
-to reason about centralizing all the drop logic in one spot rather than scattered in each module.
+to reason about centralizing all the drop#[cfg(feature = "dev")]
+logic in one spot rather than scattered in each module.
 
 Broadly speaking, we want to use the remove_nodes method to clean up *everything*
 This will drop listeners, borrowed props, and hooks for all components.

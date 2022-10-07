@@ -67,6 +67,7 @@ mod cfg;
 mod dom;
 #[cfg(any(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
+#[cfg(feature = "hydrate")]
 mod rehydrate;
 // mod ric_raf;
 mod util;
@@ -164,7 +165,8 @@ where
 pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: Config) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
-    if cfg!(feature = "panic_hook") && cfg.default_panic_hook {
+    #[cfg(feature = "panic_hook")]
+    if cfg.default_panic_hook {
         console_error_panic_hook::set_once();
     }
 
@@ -187,6 +189,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
     let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
 
+    #[cfg(feature = "dev")]
     log::trace!("rebuilding app");
 
     if should_hydrate {
@@ -194,7 +197,10 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         // it's a waste to produce edits just to get the vdom loaded
         let _ = dom.rebuild();
 
+        #[cfg(feature = "hydrate")]
+        #[allow(unused_variables)]
         if let Err(err) = websys_dom.rehydrate(&dom) {
+            #[cfg(feature = "dev")]
             log::error!(
                 "Rehydration failed {:?}. Rebuild DOM into element from scratch",
                 &err
@@ -216,11 +222,13 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
     // let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
+        #[cfg(feature = "dev")]
         log::trace!("waiting for work");
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
         dom.wait_for_work().await;
 
+        #[cfg(feature = "dev")]
         log::trace!("working..");
 
         // wait for the mainthread to schedule us in

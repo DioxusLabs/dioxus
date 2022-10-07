@@ -273,6 +273,7 @@ impl ScopeArena {
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
+        #[cfg(feature = "dev")]
         log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // Safety:
@@ -340,6 +341,7 @@ impl ScopeArena {
                     template_ref_id,
                     template_node_id,
                 } => {
+                    #[cfg(feature = "dev")]
                     log::trace!(
                         "looking for listener in {:?} in node {:?}",
                         template_ref_id,
@@ -368,11 +370,13 @@ impl ScopeArena {
                 GlobalNodeId::VNodeId(id) => {
                     if let Some(el) = nodes.get(id.0) {
                         let real_el = unsafe { &**el };
+                        #[cfg(feature = "dev")]
                         log::trace!("looking for listener on {:?}", real_el);
 
                         if let VNode::Element(real_el) = real_el {
                             for listener in real_el.listeners.iter() {
                                 if listener.event == event.name {
+                                    #[cfg(feature = "dev")]
                                     log::trace!("calling listener {:?}", listener.event);
 
                                     let mut cb = listener.callback.borrow_mut();
@@ -424,6 +428,7 @@ impl ScopeArena {
                 for listener_idx in listeners.as_ref() {
                     let listener = dynamic_context.resolve_listener(*listener_idx);
                     if listener.event == event.name {
+                        #[cfg(feature = "dev")]
                         log::trace!("calling listener {:?}", listener.event);
 
                         let mut cb = listener.callback.borrow_mut();
@@ -774,6 +779,7 @@ impl ScopeState {
                     .insert(TypeId::of::<T>(), Box::new(value.clone()));
 
                 if exists.is_some() {
+                    #[cfg(feature = "dev")]
                     log::warn!("Context already provided to parent scope - replacing it");
                 }
                 return value;
