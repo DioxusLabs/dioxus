@@ -556,7 +556,8 @@ impl VirtualDom {
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
-        let created = diff_state.create_node(self.root, node);
+        let mut created = Vec::new();
+        diff_state.create_node(self.root, node, &mut created);
 
         diff_state
             .mutations
@@ -673,7 +674,8 @@ impl VirtualDom {
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
         let node = self.render_vnodes(nodes);
-        let created = machine.create_node(self.root, node);
+        let mut created = Vec::new();
+        machine.create_node(self.root, node, &mut created);
         machine
             .mutations
             .append_children(Some(self.root.as_u64()), created);
@@ -702,7 +704,8 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
-        let created = create.create_node(self.root, old);
+        let mut created = Vec::new();
+        create.create_node(self.root, old, &mut created);
         create
             .mutations
             .append_children(Some(self.root.as_u64()), created);

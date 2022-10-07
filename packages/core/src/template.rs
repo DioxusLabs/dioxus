@@ -823,9 +823,13 @@ where
                     .set_text(bump_str.into_bump_str(), Some(real_node_id.as_u64()));
             }
             TemplateNodeType::DynamicNode(idx) => {
+                let mut created = Vec::new();
                 // this will only be triggered for root elements
-                let created =
-                    diff_state.create_node(parent, template_ref.dynamic_context.resolve_node(*idx));
+                diff_state.create_node(
+                    parent,
+                    template_ref.dynamic_context.resolve_node(*idx),
+                    &mut created,
+                );
                 let real_node_id =
                     template_ref.get_node_id(self.id, template, template_ref, diff_state);
                 diff_state
