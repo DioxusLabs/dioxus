@@ -1,8 +1,5 @@
 use anymap::AnyMap;
-use dioxus_core::{
-    AttributeDiscription, ElementId, Mutations, OwnedAttributeValue, RendererTemplateId,
-    TemplateNodeId, VNode,
-};
+use dioxus_core::{AttributeDiscription, ElementId, Mutations, OwnedAttributeValue, VNode};
 use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::ops::{Index, IndexMut};
@@ -11,8 +8,9 @@ use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
 use crate::traversable::Traversable;
 
+/// A id for a node that lives in the real dom.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum RealNodeId {
+pub enum RealNodeId {
     ElementId(ElementId),
     UnaccessableId(usize),
 }
@@ -89,7 +87,7 @@ impl<S: State> RealDom<S> {
                     ReplaceWith { root, nodes } => {
                         let id = self.resolve_maybe_id(root);
                         let root = self.remove(id).unwrap();
-                        let target = root.parent().unwrap();
+                        let target = root.node_data.parent.unwrap();
                         for id in nodes {
                             let id = RealNodeId::ElementId(ElementId(id as usize));
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
@@ -247,18 +245,61 @@ impl<S: State> RealDom<S> {
                             &mut nodes_updated,
                         );
                     }
+                    CloneNode { id, new_id } => {
+                        let id = self.resolve_maybe_id(id);
+                        let node = self[id].clone();
+                        self.insert(node, Some(new_id));
+                    }
+                    CloneNodeChildren { id, new_ids } => {
+                        let id = self.resolve_maybe_id(id);
+                        let bounded_self: &mut Self = self;
+                        let unbounded_self: &mut Self =
+                            unsafe { std::mem::transmute(bounded_self) };
+                        if let NodeType::Element { children, .. } = &self[id].node_data.node_type {
+                            for (old_id, new_id) in children.iter().zip(new_ids) {
+                                let node = self[*old_id].clone();
+                                unbounded_self.insert(node, Some(new_id));
+                            }
+                        }
+                    }
+                    FirstChild {} => {
+                        if let NodeType::Element { children, .. } =
+                            &self[self.last.unwrap()].node_data.node_type
+                        {
+                            self.last = Some(children[0]);
+                        }
+                    }
+                    NextSibling {} => {
+                        let id = self.last.unwrap();
+                        if let Some(parent) = self.parent(id) {
+                            if let NodeType::Element { children, .. } =
+                                &self[parent].node_data.node_type
+                            {
+                                let index = children.iter().position(|a| *a == id).unwrap();
+                                self.last = Some(children[index + 1]);
+                            }
+                        }
+                    }
+                    ParentNode {} => {
+                        if let Some(parent) = self.parent(self.last.unwrap()) {
+                            self.last = Some(parent);
+                        }
+                    }
+                    StoreWithId { id } => {
+                        let node = self.remove(self.last.unwrap()).unwrap();
+                        self.insert(node, Some(id));
+                    }
+                    SetLastNode { id } => {
+                        self.last =
+                            Some(RealNodeId::ElementId(dioxus_core::ElementId(id as usize)));
+                    }
                 }
             }
         }
 
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
         nodes_updated.retain(|n| match n.0 {
-            RealNodeId::ElementId(id) => self
-                .nodes
-                .get(id.0)
-                .map(|o| o.map(|_| ()))
-                .flatten()
-                .is_some(),
+            RealNodeId::ElementId(id) => self.nodes.get(id.0).and_then(|o| o.as_ref()).is_some(),
             RealNodeId::UnaccessableId(id) => self.internal_nodes.get(id).is_some(),
         });
 
@@ -286,13 +327,10 @@ impl<S: State> RealDom<S> {
 
     /// Link a child and parent together
     fn link_child(&mut self, child_id: RealNodeId, parent_id: RealNodeId) -> Option<()> {
-        let mut created = false;
         let parent = &mut self[parent_id];
-        if !created {
-            parent.add_child(child_id);
-        }
+        parent.add_child(child_id);
         let parent_height = parent.node_data.height + 1;
-        self[child_id].node_data.parent = Some(parent_id);
+        self[child_id].set_parent(parent_id);
         self.set_height(child_id, parent_height);
 
         Some(())
@@ -347,7 +385,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    fn insert(&mut self, node: Node<S>, id: Option<u64>) -> RealNodeId {
+    fn insert(&mut self, mut node: Node<S>, id: Option<u64>) -> RealNodeId {
         match id {
             Some(id) => {
                 let id = id as usize;
@@ -356,7 +394,7 @@ impl<S: State> RealDom<S> {
                 RealNodeId::ElementId(ElementId(id))
             }
             None => {
-                let mut entry = self.internal_nodes.vacant_entry();
+                let entry = self.internal_nodes.vacant_entry();
                 let id = entry.key();
                 node.node_data.id = Some(RealNodeId::UnaccessableId(id));
                 entry.insert(Box::new(node));
@@ -623,14 +661,19 @@ impl<T: State> Traversable for RealDom<T> {
 
     fn get(&self, id: Self::Id) -> Option<&Self::Node> {
         match id {
-            RealNodeId::ElementId(id) => self.nodes.get(id.0).and_then(|b| b.map(|b| &*b)),
+            RealNodeId::ElementId(id) => {
+                self.nodes.get(id.0).and_then(|b| b.as_ref().map(|b| &**b))
+            }
             RealNodeId::UnaccessableId(id) => self.internal_nodes.get(id).map(|b| &**b),
         }
     }
 
     fn get_mut(&mut self, id: Self::Id) -> Option<&mut Self::Node> {
         match id {
-            RealNodeId::ElementId(id) => self.nodes.get_mut(id.0).and_then(|b| b.map(|b| &mut *b)),
+            RealNodeId::ElementId(id) => self
+                .nodes
+                .get_mut(id.0)
+                .and_then(|b| b.as_mut().map(|b| &mut **b)),
             RealNodeId::UnaccessableId(id) => self.internal_nodes.get_mut(id).map(|b| &mut **b),
         }
     }

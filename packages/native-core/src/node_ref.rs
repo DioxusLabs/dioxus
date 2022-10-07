@@ -1,7 +1,5 @@
-use dioxus_core::*;
-
 use crate::{
-    real_dom::{NodeData, NodeType, OwnedAttributeView},
+    real_dom::{NodeData, NodeType, OwnedAttributeView, RealNodeId},
     state::union_ordered_iter,
 };
 
@@ -22,7 +20,7 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the id of the node
-    pub fn id(&self) -> Option<ElementId> {
+    pub fn id(&self) -> Option<RealNodeId> {
         self.inner.id
     }
 
