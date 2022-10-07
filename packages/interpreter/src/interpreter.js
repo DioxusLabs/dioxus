@@ -74,11 +74,6 @@ export class Interpreter {
       lastParent[0].appendChild(this.lastNode);
     }
   }
-  SetNode(id, node) {
-    if (id !== null) {
-      this.nodes[id] = node;
-    }
-  }
   AppendChildren(root, children) {
     let root_el = this.nodes[root];
     for (let i = 0; i < children.length; i++) {
@@ -112,12 +107,16 @@ export class Interpreter {
   CreateTextNode(text, root) {
     this.lastNode = document.createTextNode(text);
     this.checkAppendParent();
-    this.SetNode(root, this.lastNode);
+    if (root !== null) {
+      this.nodes[root] = this.lastNode;
+    }
   }
   CreateElement(tag, root, children) {
     this.lastNode = document.createElement(tag);
     this.checkAppendParent();
-    this.SetNode(root, this.lastNode);
+    if (root !== null) {
+      this.nodes[root] = this.lastNode;
+    }
     if (children > 0) {
       this.parents.push([this.lastNode, children]);
     }
@@ -125,7 +124,9 @@ export class Interpreter {
   CreateElementNs(tag, root, ns, children) {
     this.lastNode = document.createElementNS(ns, tag);
     this.checkAppendParent();
-    this.SetNode(root, this.lastNode);
+    if (root !== null) {
+      this.nodes[root] = this.lastNode;
+    }
     if (children > 0) {
       this.parents.push([this.lastNode, children]);
     }
@@ -134,7 +135,9 @@ export class Interpreter {
     this.lastNode = document.createElement("pre");
     this.lastNode.hidden = true;
     this.checkAppendParent();
-    this.SetNode(root, this.lastNode);
+    if (root !== null) {
+      this.nodes[root] = this.lastNode;
+    }
   }
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.nodes[root];
@@ -203,13 +206,13 @@ export class Interpreter {
     }
   }
   CloneNode(old, new_id) {
-    this.SetNode(new_id, this.nodes[old].cloneNode(true));
+    this.nodes[new_id] = this.nodes[old].cloneNode(true);
   }
   CloneNodeChildren(old, new_ids) {
     const old_node = this.nodes[old].cloneNode(true);
     let i = 0;
     for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
-      this.SetNode(new_ids[i++], node);
+      this.nodes[new_ids[i++]] = node;
     }
   }
   FirstChild() {
@@ -222,7 +225,7 @@ export class Interpreter {
     this.lastNode = this.lastNode.parentNode;
   }
   StoreWithId(id) {
-    this.SetNode(id, this.lastNode);
+    this.nodes[id] = this.lastNode;
   }
   SetLastNode(root) {
     this.lastNode = this.nodes[root];
