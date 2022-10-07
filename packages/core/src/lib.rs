@@ -75,7 +75,7 @@ pub use crate::innerlude::{
     StaticTemplateNodes, TaskId, Template, TemplateAttribute, TemplateAttributeValue,
     TemplateContext, TemplateElement, TemplateId, TemplateNode, TemplateNodeId, TemplateNodeType,
     TemplateValue, TextTemplate, TextTemplateSegment, UiEvent, UserEvent, VComponent, VElement,
-    VFragment, VNode, VPlaceholder, VText, VirtualDom, JS_MAX_INT,
+    VFragment, VNode, VPlaceholder, VText, VirtualDom,
 };
 #[cfg(any(feature = "hot-reload", debug_assertions))]
 pub use crate::innerlude::{

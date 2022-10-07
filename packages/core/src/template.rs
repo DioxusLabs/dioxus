@@ -51,14 +51,8 @@
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 //!
 //! Notes:
-//! 1) Why does the template need to exist outside of the virtual dom?
-//! The main use of the template is skipping diffing on static parts of the dom, but it is also used to make renderes more efficient. Renderers can create a template once and the clone it into place.
-//! When the renderers clone the template we could those new nodes as normal vnodes, but that would interfere with the passive memory management of the nodes. This would mean that static nodes memory must be managed by the virtual dom even though those static nodes do not exist in the virtual dom.
-//! 2) The template allow diffing to scale with reactivity.
+//! 1) The template allow diffing to scale with reactivity.
 //! With a virtual dom the diffing cost scales with the number of nodes in the dom. With templates the cost scales with the number of dynamic parts of the dom. The dynamic template context links any parts of the template that can change which allows the diffing algorithm to skip traversing the template and find what part to hydrate in constant time.
-
-/// The maxiumum integer in JS
-pub const JS_MAX_INT: u64 = 9007199254740991;
 
 use fxhash::FxHashMap;
 use once_cell::unsync::OnceCell;
@@ -285,12 +279,6 @@ impl From<RendererTemplateId> for u64 {
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct TemplateNodeId(pub usize);
-
-impl From<TemplateNodeId> for u64 {
-    fn from(id: TemplateNodeId) -> u64 {
-        JS_MAX_INT / 2 + id.0 as u64
-    }
-}
 
 #[derive(Debug)]
 struct PathToNode {

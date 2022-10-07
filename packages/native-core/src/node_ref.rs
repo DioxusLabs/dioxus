@@ -22,7 +22,7 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the id of the node
-    pub fn id(&self) -> GlobalNodeId {
+    pub fn id(&self) -> Option<ElementId> {
         self.inner.id
     }
 
