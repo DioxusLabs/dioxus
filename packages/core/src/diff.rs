@@ -1175,10 +1175,8 @@ impl<'b> DiffState<'b> {
                 }
             }
 
-            self.mutations.insert_after(
-                Some(self.find_last_element(&new[last]).unwrap().as_u64()),
-                nodes_created,
-            );
+            let last = Some(self.find_last_element(&new[last]).unwrap().as_u64());
+            self.mutations.insert_after(last, nodes_created);
             nodes_created = Vec::new();
         }
 
@@ -1198,10 +1196,8 @@ impl<'b> DiffState<'b> {
                     }
                 }
 
-                self.mutations.insert_before(
-                    Some(self.find_first_element(&new[last]).unwrap().as_u64()),
-                    nodes_created,
-                );
+                let first = Some(self.find_first_element(&new[last]).unwrap().as_u64());
+                self.mutations.insert_before(first, nodes_created);
 
                 nodes_created = Vec::new();
             }
@@ -1221,10 +1217,8 @@ impl<'b> DiffState<'b> {
                 }
             }
 
-            self.mutations.insert_before(
-                Some(self.find_first_element(&new[first_lis]).unwrap().as_u64()),
-                nodes_created,
-            );
+            let first = Some(self.find_first_element(&new[first_lis]).unwrap().as_u64());
+            self.mutations.insert_before(first, nodes_created);
         }
     }
 
@@ -1445,7 +1439,7 @@ impl<'b> DiffState<'b> {
         self.scope_stack.pop();
     }
 
-    fn find_last_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
+    fn find_last_element(&mut self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
         loop {
             match &search_node.take().unwrap() {
@@ -1460,14 +1454,17 @@ impl<'b> DiffState<'b> {
                 VNode::TemplateRef(t) => {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
-                    let _template = template.borrow();
-                    todo!()
+                    let template = template.borrow();
+                    break template
+                        .root_nodes()
+                        .last()
+                        .map(|id| t.get_node_id(*id, &template, t, self));
                 }
             }
         }
     }
 
-    fn find_first_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
+    fn find_first_element(&mut self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
         loop {
             match &search_node.take().expect("search node to have an ID") {
@@ -1482,8 +1479,11 @@ impl<'b> DiffState<'b> {
                 VNode::TemplateRef(t) => {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
-                    let _template = template.borrow();
-                    todo!()
+                    let template = template.borrow();
+                    break template
+                        .root_nodes()
+                        .first()
+                        .map(|id| t.get_node_id(*id, &template, t, self));
                 }
             }
         }
