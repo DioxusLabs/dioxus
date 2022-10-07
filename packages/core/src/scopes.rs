@@ -5,7 +5,6 @@ use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    borrow::BorrowMut,
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,

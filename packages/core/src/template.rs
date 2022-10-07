@@ -656,14 +656,6 @@ impl Template {
         }
     }
 
-    pub(crate) fn get_dynamic_node_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
-        match self {
-            Template::Static(s) => s.dynamic_mapping.nodes[idx],
-            #[cfg(any(feature = "hot-reload", debug_assertions))]
-            Template::Owned(o) => o.dynamic_mapping.nodes[idx],
-        }
-    }
-
     pub(crate) fn get_dynamic_nodes_for_text_index(&self, idx: usize) -> &[TemplateNodeId] {
         match self {
             Template::Static(s) => s.dynamic_mapping.text[idx],
@@ -685,7 +677,7 @@ impl Template {
 
     pub(crate) fn root_nodes(&self) -> &[TemplateNodeId] {
         match self {
-            Template::Static(s) => &s.root_nodes,
+            Template::Static(s) => s.root_nodes,
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => &o.root_nodes,
         }
