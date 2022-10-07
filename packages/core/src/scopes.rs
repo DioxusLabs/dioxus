@@ -5,6 +5,7 @@ use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
+    borrow::BorrowMut,
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
@@ -13,16 +14,16 @@ use std::{
     sync::Arc,
 };
 
-pub enum NodePtr {
+pub(crate) enum NodePtr {
     VNode(*const VNode<'static>),
     TemplateNode {
-        template_ptr: *const VTemplateRef<'static>,
+        template_ref: TemplateRefId,
         node_id: TemplateNodeId,
     },
     Phantom,
 }
 
-pub type NodeSlab = Slab<NodePtr>;
+pub(crate) type NodeSlab = Slab<NodePtr>;
 
 /// for traceability, we use the raw fn pointer to identify the function
 /// we also get the component name, but that's not necessarily unique in the app
@@ -52,6 +53,7 @@ pub(crate) struct ScopeArena {
     pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
     pub template_bump: Bump,
+    pub template_refs: RefCell<Slab<*const VTemplateRef<'static>>>,
 }
 
 impl ScopeArena {
@@ -96,6 +98,7 @@ impl ScopeArena {
             template_resolver: RefCell::new(TemplateResolver::default()),
             templates: Rc::new(RefCell::new(FxHashMap::default())),
             template_bump: Bump::new(),
+            template_refs: RefCell::new(Slab::new()),
         }
     }
 
@@ -229,18 +232,27 @@ impl ScopeArena {
         id
     }
 
-    pub fn reserve_template_node<'a>(
+    pub fn reserve_template_ref<'a>(&self, template_ref: &'a VTemplateRef<'a>) -> TemplateRefId {
+        let mut refs = self.template_refs.borrow_mut();
+        let entry = refs.vacant_entry();
+        let key = entry.key();
+        let id = TemplateRefId(key);
+        let static_ref: &VTemplateRef<'static> = unsafe { std::mem::transmute(template_ref) };
+        entry.insert(static_ref as *const _);
+        id
+    }
+
+    pub fn reserve_template_node(
         &self,
-        template_ref: &'a VTemplateRef<'a>,
+        template_ref_id: TemplateRefId,
         node_id: TemplateNodeId,
     ) -> ElementId {
         let mut els = self.nodes.borrow_mut();
         let entry = els.vacant_entry();
         let key = entry.key();
         let id = ElementId(key);
-        let unbounded: &VTemplateRef<'static> = unsafe { std::mem::transmute(template_ref) };
         entry.insert(NodePtr::TemplateNode {
-            template_ptr: unbounded as *const _,
+            template_ref: template_ref_id,
             node_id,
         });
         id
@@ -258,6 +270,19 @@ impl ScopeArena {
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
         let node = unsafe { extend_vnode(node) };
         *self.nodes.borrow_mut().get_mut(id.0).unwrap() = NodePtr::VNode(node);
+    }
+
+    pub fn update_template_ref<'a>(
+        &self,
+        template_ref_id: TemplateRefId,
+        template_ref: &'a VTemplateRef<'a>,
+    ) {
+        let template_ref = unsafe { std::mem::transmute(template_ref) };
+        *self
+            .template_refs
+            .borrow_mut()
+            .get_mut(template_ref_id.0)
+            .unwrap() = template_ref;
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -399,9 +424,11 @@ impl ScopeArena {
                         }
                     }
                     NodePtr::TemplateNode {
-                        template_ptr,
                         node_id,
+                        template_ref,
                     } => {
+                        let template_refs = self.template_refs.borrow();
+                        let template_ptr = template_refs.get(template_ref.0).unwrap();
                         let template_ref = unsafe { &**template_ptr };
                         log::trace!("looking for listener in node {:?}", node_id);
                         let templates = self.templates.borrow();

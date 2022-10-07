@@ -466,9 +466,11 @@ impl<'a, T> Default for EventHandler<'a, T> {
 impl<T> EventHandler<'_, T> {
     /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
+        log::trace!("calling event handler");
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
+        log::trace!("done");
     }
 
     /// Forcibly drop the internal handler callback, releasing memory
@@ -827,6 +829,7 @@ impl<'a> NodeFactory<'a> {
             template_id: id,
             node_ids: RefCell::new(Vec::new()),
             parent: Cell::new(None),
+            template_ref_id: Cell::new(None),
         }))
     }
 }

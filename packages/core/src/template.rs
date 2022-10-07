@@ -77,6 +77,9 @@ use crate::{
     StaticDynamicNodeMapping,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TemplateRefId(pub usize);
+
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
@@ -314,6 +317,7 @@ impl PathToNode {
 
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
+    pub(crate) template_ref_id: Cell<Option<TemplateRefId>>,
     pub template_id: TemplateId,
     pub dynamic_context: TemplateContext<'a>,
     /// The parent of the template
@@ -430,7 +434,9 @@ impl<'a> VTemplateRef<'a> {
                     diff_state.mutations.next_sibling();
                 }
             }
-            let real_id = diff_state.scopes.reserve_template_node(template_ref, id);
+            let real_id = diff_state
+                .scopes
+                .reserve_template_node(template_ref.template_ref_id.get().unwrap(), id);
             self.set_node_id(id, real_id);
             diff_state.mutations.store_with_id(real_id.as_u64());
             real_id
@@ -651,7 +657,7 @@ impl Template {
         }
     }
 
-    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
+    pub(crate) fn get_dynamic_node_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
         match self {
             Template::Static(s) => s.dynamic_mapping.nodes[idx],
             #[cfg(any(feature = "hot-reload", debug_assertions))]

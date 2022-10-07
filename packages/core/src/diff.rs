@@ -331,12 +331,17 @@ impl<'b> DiffState<'b> {
             self.register_template(&template, id);
         }
 
+        new.template_ref_id
+            .set(Some(self.scopes.reserve_template_ref(new)));
+
+        let template_ref_id = new.template_ref_id.get().unwrap();
+
         let real_ids: Vec<_> = match &*template {
             Template::Static(s) => s
                 .root_nodes
                 .iter()
                 .map(|node_id| {
-                    let real_id = self.scopes.reserve_template_node(new, *node_id);
+                    let real_id = self.scopes.reserve_template_node(template_ref_id, *node_id);
                     new.set_node_id(*node_id, real_id);
                     real_id.as_u64()
                 })
@@ -346,7 +351,7 @@ impl<'b> DiffState<'b> {
                 .root_nodes
                 .iter()
                 .map(|node_id| {
-                    let real_id = self.scopes.reserve_template_node(new, *node_id);
+                    let real_id = self.scopes.reserve_template_node(template_ref_id, *node_id);
                     new.set_node_id(*node_id, real_id);
                     real_id.as_u64()
                 })
