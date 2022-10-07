@@ -80,7 +80,7 @@ If you know React, then you already know Dioxus.
 ## Supported Platforms
 <table style="width:100%">
   <tr>
-    <td><h2>Web</h2></td>
+    <td><em>Web</em></td>
     <td>
       <ul>
         <li>Render directly to the DOM using WebAssembly</li>
@@ -91,7 +91,7 @@ If you know React, then you already know Dioxus.
     </td>
   </tr>
   <tr>
-    <td><h2>Desktop</h2></td>
+    <td><em>Desktop</em></td>
     <td>
       <ul>
         <li>Render using Webview or - experimentally - with WGPU or Skia </li>
@@ -102,7 +102,7 @@ If you know React, then you already know Dioxus.
     </td>
   </tr>
   <tr>
-    <td><h2>Mobile</h2></td>
+    <td><em>Mobile</em></td>
     <td>
       <ul>
         <li>Render using Webview or - experimentally - with WGPU or Skia </li>
@@ -112,7 +112,7 @@ If you know React, then you already know Dioxus.
     </td>
   </tr>
   <tr>
-    <td><h2>Liveview</h2></td>
+    <td><em>Liveview</em></td>
     <td>
       <ul>
         <li>Render apps - or just a single component - entirely on the server</li>
@@ -122,7 +122,7 @@ If you know React, then you already know Dioxus.
     </td>
   </tr>
   <tr>
-    <td><h2>Terminal</h2></td>
+    <td><em>Terminal</em></td>
     <td>
       <ul>
         <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
