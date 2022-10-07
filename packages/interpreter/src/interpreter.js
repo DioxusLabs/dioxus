@@ -247,7 +247,7 @@ export class Interpreter {
         this.PushRoot(BigInt(edit.root));
         break;
       case "AppendChildren":
-        this.AppendChildren(edit.many);
+        this.AppendChildren(BigInt(edit.root), edit.children);
         break;
       case "ReplaceWith":
         this.ReplaceWith(BigInt(edit.root), edit.children);
