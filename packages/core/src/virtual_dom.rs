@@ -553,7 +553,6 @@ impl VirtualDom {
         let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
-        diff_state.element_stack.push(ElementId(0));
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
@@ -611,9 +610,8 @@ impl VirtualDom {
         diff_machine.force_diff = true;
         diff_machine.scope_stack.push(scope_id);
         let scope = diff_machine.scopes.get_scope(scope_id).unwrap();
-        diff_machine.element_stack.push(scope.container);
 
-        diff_machine.diff_node(self.root, old, new);
+        diff_machine.diff_node(scope.container, old, new);
 
         diff_machine.mutations
     }
@@ -652,7 +650,6 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine.element_stack.push(ElementId(0));
         machine.scope_stack.push(ScopeId(0));
         machine.diff_node(self.root, old, new);
 
@@ -675,7 +672,6 @@ impl VirtualDom {
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
-        machine.element_stack.push(ElementId(0));
         let node = self.render_vnodes(nodes);
         let created = machine.create_node(self.root, node);
         machine
@@ -706,7 +702,6 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
-        create.element_stack.push(ElementId(0));
         let created = create.create_node(self.root, old);
         create
             .mutations
@@ -714,7 +709,6 @@ impl VirtualDom {
 
         let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));
-        edit.element_stack.push(ElementId(0));
         edit.diff_node(self.root, old, new);
 
         (create.mutations, edit.mutations)

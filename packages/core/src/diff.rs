@@ -111,7 +111,6 @@ pub(crate) struct DiffState<'bump> {
     pub(crate) scopes: &'bump ScopeArena,
     pub(crate) mutations: Mutations<'bump>,
     pub(crate) force_diff: bool,
-    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
@@ -121,7 +120,6 @@ impl<'b> DiffState<'b> {
             scopes,
             mutations: Mutations::new(),
             force_diff: false,
-            element_stack: smallvec![],
             scope_stack: smallvec![],
         }
     }
@@ -131,11 +129,9 @@ impl<'b> DiffState<'b> {
         let scope = self.scopes.get_scope(scopeid).unwrap();
 
         self.scope_stack.push(scopeid);
-        self.element_stack.push(scope.container);
         {
             self.diff_node(parent, old, new);
         }
-        self.element_stack.pop();
         self.scope_stack.pop();
 
         self.mutations.mark_dirty_scope(scopeid);
@@ -184,7 +180,7 @@ impl<'b> DiffState<'b> {
         match node {
             VNode::Text(vtext) => vec![self.create_text_node(vtext, node)],
             VNode::Placeholder(anchor) => vec![self.create_anchor_node(anchor, node)],
-            VNode::Element(element) => vec![self.create_element_node(element, node)],
+            VNode::Element(element) => vec![self.create_element_node(parent, element, node)],
             VNode::Fragment(frag) => self.create_fragment_node(parent, frag),
             VNode::Component(component) => self.create_component_node(parent, component),
             VNode::TemplateRef(temp) => self.create_template_ref_node(parent, temp, node),
@@ -206,7 +202,12 @@ impl<'b> DiffState<'b> {
         real_id.0 as u64
     }
 
-    fn create_element_node(&mut self, element: &'b VElement<'b>, node: &'b VNode<'b>) -> u64 {
+    fn create_element_node(
+        &mut self,
+        parent: ElementId,
+        element: &'b VElement<'b>,
+        node: &'b VNode<'b>,
+    ) -> u64 {
         let VElement {
             tag: tag_name,
             listeners,
@@ -218,13 +219,12 @@ impl<'b> DiffState<'b> {
             ..
         } = &element;
 
-        parent_id.set(self.element_stack.last().copied());
+        parent_id.set(Some(parent));
 
         let real_id = self.scopes.reserve_node(node);
 
         dom_id.set(Some(real_id));
 
-        self.element_stack.push(real_id);
         {
             self.mutations
                 .create_element(tag_name, *namespace, Some(real_id.as_u64()), 0);
@@ -244,7 +244,6 @@ impl<'b> DiffState<'b> {
                 self.create_and_append_children(real_id, children);
             }
         }
-        self.element_stack.pop();
 
         real_id.0 as u64
     }
@@ -269,12 +268,8 @@ impl<'b> DiffState<'b> {
             // Insert a new scope into our component list
             let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
             let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-            self.scopes.new_with_key(
-                vcomponent.user_fc,
-                props,
-                Some(parent_idx),
-                self.element_stack.last().copied().unwrap(),
-            )
+            self.scopes
+                .new_with_key(vcomponent.user_fc, props, Some(parent_idx), parent)
         };
 
         // Actually initialize the caller's slot with the right address
@@ -753,7 +748,7 @@ impl<'b> DiffState<'b> {
                 .unwrap_or_else(|| self.scopes.reserve_template_ref(new)),
         ));
         new.parent.set(Some(parent));
-        new.node_ids.replace(old.node_ids.clone().take());
+        new.node_ids.replace(old.node_ids.take());
 
         let scope_bump = &self.current_scope_bump();
 
