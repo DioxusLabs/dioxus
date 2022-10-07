@@ -7,13 +7,7 @@ use std::ops::{Index, IndexMut};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
 use crate::traversable::Traversable;
-
-/// A id for a node that lives in the real dom.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RealNodeId {
-    ElementId(ElementId),
-    UnaccessableId(usize),
-}
+use crate::RealNodeId;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.

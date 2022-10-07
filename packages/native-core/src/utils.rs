@@ -1,6 +1,7 @@
 use crate::{
-    real_dom::{NodeType, RealDom, RealNodeId},
+    real_dom::{NodeType, RealDom},
     state::State,
+    RealNodeId,
 };
 use dioxus_core::{DomEdit, ElementId, Mutations};
 

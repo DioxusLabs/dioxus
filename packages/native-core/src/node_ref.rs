@@ -1,6 +1,7 @@
 use crate::{
-    real_dom::{NodeData, NodeType, OwnedAttributeView, RealNodeId},
+    real_dom::{NodeData, NodeType, OwnedAttributeView},
     state::union_ordered_iter,
+    RealNodeId,
 };
 
 /// A view into a [VNode] with limited access.

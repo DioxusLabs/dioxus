@@ -4,8 +4,9 @@ use anymap::AnyMap;
 use fxhash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};
-use crate::real_dom::{NodeData, RealNodeId};
+use crate::real_dom::NodeData;
 use crate::traversable::Traversable;
+use crate::RealNodeId;
 
 /// Join two sorted iterators
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
