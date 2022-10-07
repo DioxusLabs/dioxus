@@ -1,4 +1,4 @@
-use crate::{error::Result, plugin::PluginConfig};
+use crate::error::Result;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 
@@ -6,6 +6,7 @@ use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
     pub web: WebConfig,
+    pub plugin: toml::Value,
 }
 
 impl DioxusConfig {
@@ -36,8 +37,7 @@ impl Default for DioxusConfig {
                 asset_dir: Some(PathBuf::from("public")),
 
                 tools: None,
-                plugins: None,
-                
+
                 sub_package: None,
             },
             web: WebConfig {
@@ -59,6 +59,7 @@ impl Default for DioxusConfig {
                     script: Some(vec![]),
                 },
             },
+            plugin: toml::Value::Table(toml::map::Map::new())
         }
     }
 }
@@ -69,9 +70,8 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
-    
+
     pub tools: Option<HashMap<String, toml::Value>>,
-    pub plugins: Option<PluginConfig>,
 
     pub sub_package: Option<String>,
 }
@@ -223,5 +223,4 @@ impl CrateConfig {
         self.features = Some(features);
         self
     }
-
 }

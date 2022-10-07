@@ -5,7 +5,6 @@ use std::{
 };
 
 use mlua::{AsChunk, Lua, Table};
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::{
@@ -28,23 +27,16 @@ lazy_static::lazy_static! {
     static ref LUA: Mutex<Lua> = Mutex::new(Lua::new());
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PluginConfig {
-    pub available: bool,
-    pub required: Vec<String>,
-}
-
 pub struct PluginManager;
 
 impl PluginManager {
-    pub fn init(config: &PluginConfig) -> anyhow::Result<()> {
+    pub fn init(config: toml::Value) -> anyhow::Result<()> {
         let lua = LUA.lock().unwrap();
 
-        if !config.available {
-            // // if plugin system is available, just set manager to nil.
-            // lua.globals().set("manager", mlua::Value::Nil).unwrap();
+        if !config.is_table() {
+            // if plugins config is not a table, then termination init
             return Ok(());
-       }
+        }
 
         let manager = lua.create_table().unwrap();
         let plugin_dir = Self::init_plugin_dir();

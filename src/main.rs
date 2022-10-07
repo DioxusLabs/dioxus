@@ -1,5 +1,5 @@
 use clap::Parser;
-use dioxus_cli::{*, plugin::{PluginManager, PluginConfig}};
+use dioxus_cli::{plugin::PluginManager, *};
 use std::process::exit;
 
 #[tokio::main]
@@ -7,11 +7,10 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
 
-    let plugin_state = PluginManager::init(&PluginConfig {
-        available: true,
-        required: vec![],
-    });
-    
+    let dioxus_config = DioxusConfig::load()?;
+
+    let plugin_state = PluginManager::init(dioxus_config.plugin);
+
     if let Err(e) = plugin_state {
         log::error!("🚫 Plugin system initialization failed: {e}");
         exit(1);
