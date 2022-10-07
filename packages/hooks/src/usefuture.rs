@@ -146,6 +146,17 @@ impl<T> UseFuture<T> {
     }
 }
 
+impl<'a, T> Future for &'a UseFuture<T> {
+    type Output = &'a T;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        todo!()
+    }
+}
+
 pub trait UseFutureDep: Sized + Clone {
     type Out;
     fn out(&self) -> Self::Out;

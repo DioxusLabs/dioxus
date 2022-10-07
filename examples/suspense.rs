@@ -15,6 +15,7 @@
 
 use dioxus::prelude::*;
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
+use futures_util::FutureExt;
 
 fn main() {
     let cfg = Config::new().with_window(
@@ -77,5 +78,25 @@ fn Doggo(cx: Scope) -> Element {
         },
         Some(Err(_)) => rsx! { div { "loading dogs failed" } },
         None => rsx! { div { "loading dogs..." } },
+    })
+}
+
+fn sus2(cx: Scope) -> Element {
+    let value1 = use_future(&cx, (), |_| async { 123 });
+    let value2 = use_future(&cx, (), |_| async { 123 });
+
+    cx.render(rsx! {
+        div {
+            async move {
+                let a = value1.await;
+                let b = value2.await;
+                render!("{a} {b}")
+            }
+
+            async move {
+                let a = value1.await;
+                render!("{a}")
+            }
+        }
     })
 }

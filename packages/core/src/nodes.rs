@@ -900,7 +900,7 @@ impl Debug for NodeFactory<'_> {
 ///
 /// As such, all node creation must go through the factory, which is only available in the component context.
 /// These strict requirements make it possible to manage lifetimes and state.
-pub trait IntoVNode<'a, I = (), J = ()> {
+pub trait IntoVNode<'a, I = (), J = (), K = ()> {
     /// Convert this into a [`VNode`], using the [`NodeFactory`] as a source of allocation
     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a>;
 }
@@ -994,3 +994,37 @@ where
         }
     }
 }
+
+pub struct FutureToSuspense;
+impl<'a, T> IntoVNode<'a, FutureToSuspense, T> for T
+where
+    T: futures_util::Future<Output = Element<'a>> + 'a,
+    // I: IntoVNode<'a> + 'a,
+{
+    fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+        let future = cx.bump.alloc(self);
+        todo!()
+        // VNode::Suspense(cx.bump.alloc(VSuspense {
+        //     future,
+        //     id: empty_cell(),
+        //     key: None,
+        // }))
+    }
+}
+
+// pub struct StreamToSuspense;
+// impl<'a, T, I> IntoVNode<'a, StreamToSuspense, T> for T
+// where
+//     T: futures_util::Stream<Item = I>,
+//     I: IntoVNode<'a>,
+// {
+//     fn into_vnode(self, cx: NodeFactory<'a>) -> VNode<'a> {
+//         let future = cx.bump.alloc(self);
+//         todo!()
+//         // VNode::Suspense(cx.bump.alloc(VSuspense {
+//         //     future,
+//         //     id: empty_cell(),
+//         //     key: None,
+//         // }))
+//     }
+// }

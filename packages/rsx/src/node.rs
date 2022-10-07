@@ -55,13 +55,14 @@ impl Parse for BodyNode {
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
+                let ident_name = ident.to_string();
+
+                if ident_name == "async" {
+                    return Ok(BodyNode::RawExpr(stream.parse()?));
+                }
+
                 if body_stream.peek(token::Brace)
-                    && ident
-                        .to_string()
-                        .chars()
-                        .next()
-                        .unwrap()
-                        .is_ascii_lowercase()
+                    && ident_name.chars().next().unwrap().is_ascii_lowercase()
                 {
                     return Ok(BodyNode::Element(stream.parse::<Element>()?));
                 }
