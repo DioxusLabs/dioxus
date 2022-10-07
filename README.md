@@ -82,57 +82,57 @@ If you know React, then you already know Dioxus.
 ---
 <table style="width:100%">
   <tr>
-    <td><h2>Web<h2><td>
+    <td><h2>Web</h2></td>
     <td>
       <ul>
-        <li>Render directly to the DOM using WebAssembly
-        <li>Pre-render with SSR and rehydrate on the client
-        <li>Simple "hello world" at about 65kb, comparable to React
-        <li>Built-in dev server and hot reloading for quick iteration
-      <ul>
-    <td>
+        <li>Render directly to the DOM using WebAssembly</li>
+        <li>Pre-render with SSR and rehydrate on the client</li>
+        <li>Simple "hello world" at about 65kb, comparable to React</li>
+        <li>Built-in dev server and hot reloading for quick iteration</li>
+      </ul>
+    </td>
+  </tr>
   <tr>
-  <tr>
-    <td><h2>Desktop<h2><td>
+    <td><h2>Desktop</h2></td>
     <td>
       <ul>
-        <li>Render using Webview or - experimentally - with WGPU or Skia
-        <li>Zero-config setup. Simply cargo-run to build your app
-        <li>Full support for native system access without electron-esque IPC
-        <li>Supports macOS, Linux, and Windows. Portable <3mb binaries
-      <ul>
-    <td>
+        <li>Render using Webview or - experimentally - with WGPU or Skia </li>
+        <li>Zero-config setup. Simply cargo-run to build your app </li>
+        <li>Full support for native system access without electron-esque IPC </li>
+        <li>Supports macOS, Linux, and Windows. Portable <3mb binaries </li>
+      </ul>
+    </td>
+  </tr>
   <tr>
-  <tr>
-    <td><h2>Mobile<h2><td>
-    <td>
-      <ul>
-        <li>Render using Webview or - experimentally - with WGPU or Skia
-        <li>Support for iOS and Android
-        <li><em>Significantly</em> more performant than React Native
-      <ul>
-    <td>
-  <tr>
-  <tr>
-    <td><h2>Liveview<h2><td>
+    <td><h2>Mobile</h2></td>
     <td>
       <ul>
-        <li>Render apps - or just a single component - entirely on the server
-        <li>Integrations with popular Rust frameworks like Axum and Warp
-        <li>Extremely low-latency and ability to support 10,000+ simultaneous apps
-      <ul>
-    <td>
+        <li>Render using Webview or - experimentally - with WGPU or Skia </li>
+        <li>Support for iOS and Android </li>
+        <li><em>Significantly</em> more performant than React Native </li>
+      </ul>
+    </td>
+  </tr>
   <tr>
-  <tr>
-    <td><h2>Terminal<h2><td>
+    <td><h2>Liveview</h2></td>
     <td>
       <ul>
-        <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a>
-        <li>Powered by the familiar flexbox and CSS model of the browser
-        <li>Built-in widgets like text input, buttons, and focus system
-      <ul>
-    <td>
+        <li>Render apps - or just a single component - entirely on the server</li>
+        <li>Integrations with popular Rust frameworks like Axum and Warp</li>
+        <li>Extremely low-latency and ability to support 10,000+ simultaneous apps</li>
+      </ul>
+    </td>
+  </tr>
   <tr>
+    <td><h2>Terminal</h2></td>
+    <td>
+      <ul>
+        <li>Render apps directly into your terminal, similar to <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
+        <li>Powered by the familiar flexbox and CSS model of the browser</li>
+        <li>Built-in widgets like text input, buttons, and focus system</li>
+      </ul>
+    </td>
+  </tr>
 </table>
 
 ## Why Dioxus?
