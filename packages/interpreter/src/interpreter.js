@@ -90,12 +90,18 @@ export class Interpreter {
   }
   InsertAfter(root, nodes) {
     const old = this.nodes[root];
-    let els = nodes.map((id) => this.nodes[id]);
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
     old.after(...els);
   }
   InsertBefore(root, nodes) {
     const old = this.nodes[root];
-    let els = nodes.map((id) => this.nodes[id]);
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
     old.before(...els);
   }
   Remove(root) {
