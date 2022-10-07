@@ -683,6 +683,14 @@ impl Template {
             Template::Owned(o) => o.dynamic_mapping.attributes[idx].as_ref(),
         }
     }
+
+    pub(crate) fn root_nodes(&self) -> &[TemplateNodeId] {
+        match self {
+            Template::Static(s) => &s.root_nodes,
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            Template::Owned(o) => &o.root_nodes,
+        }
+    }
 }
 
 /// A array of stack allocated Template nodes

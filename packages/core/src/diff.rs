@@ -1281,19 +1281,34 @@ impl<'b> DiffState<'b> {
                 self.leave_scope();
             }
 
-            VNode::TemplateRef(t) => {
-                todo!();
-                let ids = t.node_ids.borrow();
-                let mut ids_iter = ids.iter();
-                self.mutations.replace_with(
-                    Some(ids_iter.next().unwrap().get().unwrap().as_u64()),
-                    nodes_created,
+            VNode::TemplateRef(template_ref) => {
+                let templates = self.scopes.templates.borrow();
+                let template = templates.get(&template_ref.template_id).unwrap().borrow();
+                let mut root_iter = template.root_nodes().iter();
+                let first_real_id = template_ref.get_node_id(
+                    *root_iter.next().unwrap(),
+                    &template,
+                    template_ref,
+                    self,
                 );
-                for n in ids_iter {
-                    self.mutations.remove(Some(n.get().unwrap().as_u64()));
+                self.mutations
+                    .replace_with(Some(first_real_id.as_u64()), nodes_created);
+                for id in root_iter {
+                    let real_id = template_ref.get_node_id(*id, &template, template_ref, self);
+                    self.mutations.remove(Some(real_id.as_u64()));
                 }
 
-                self.remove_nodes(t.dynamic_context.nodes, true);
+                self.remove_nodes(template_ref.dynamic_context.nodes, true);
+
+                if let Some(id) = template_ref.template_ref_id.get() {
+                    self.scopes.template_refs.borrow_mut().remove(id.0);
+                }
+
+                for id in template_ref.node_ids.borrow().iter() {
+                    if let Some(id) = id.get() {
+                        self.scopes.collect_garbage(*id);
+                    }
+                }
             }
         }
     }
@@ -1355,15 +1370,28 @@ impl<'b> DiffState<'b> {
                     self.leave_scope();
                 }
 
-                VNode::TemplateRef(_) => {
-                    todo!();
-                    // if gen_muts {
-                    //     self.mutations.remove(id);
-                    // }
+                VNode::TemplateRef(template_ref) => {
+                    let templates = self.scopes.templates.borrow();
+                    let template = templates.get(&template_ref.template_id).unwrap().borrow();
+                    if gen_muts {
+                        for id in template.root_nodes() {
+                            let real_id =
+                                template_ref.get_node_id(*id, &template, template_ref, self);
+                            self.mutations.remove(Some(real_id.as_u64()));
+                        }
+                    }
 
-                    // self.scopes.collect_garbage(id);
+                    self.remove_nodes(template_ref.dynamic_context.nodes, gen_muts);
 
-                    // self.remove_nodes(t.dynamic_context.nodes, gen_muts);
+                    if let Some(id) = template_ref.template_ref_id.get() {
+                        self.scopes.template_refs.borrow_mut().remove(id.0);
+                    }
+
+                    for id in template_ref.node_ids.borrow().iter() {
+                        if let Some(id) = id.get() {
+                            self.scopes.collect_garbage(*id);
+                        }
+                    }
                 }
             }
         }
