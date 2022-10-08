@@ -274,8 +274,7 @@ impl<S: State> RealDom<S> {
                     }
                     CloneNode { id, new_id } => {
                         let id = self.resolve_maybe_id(id);
-                        let node = self.clone_node(id, &mut nodes_updated);
-                        self.insert(node, Some(new_id));
+                        self.clone_node_into(id, &mut nodes_updated, Some(new_id));
                     }
                     CloneNodeChildren { id, new_ids } => {
                         let id = self.resolve_maybe_id(id);
@@ -284,8 +283,11 @@ impl<S: State> RealDom<S> {
                             unsafe { std::mem::transmute(bounded_self) };
                         if let NodeType::Element { children, .. } = &self[id].node_data.node_type {
                             for (old_id, new_id) in children.iter().zip(new_ids) {
-                                let node = unbounded_self.clone_node(*old_id, &mut nodes_updated);
-                                unbounded_self.insert(node, Some(new_id));
+                                unbounded_self.clone_node_into(
+                                    *old_id,
+                                    &mut nodes_updated,
+                                    Some(new_id),
+                                );
                             }
                         }
                     }
@@ -369,9 +371,9 @@ impl<S: State> RealDom<S> {
     fn link_child(&mut self, child_id: RealNodeId, parent_id: RealNodeId) -> Option<()> {
         let parent = &mut self[parent_id];
         parent.add_child(child_id);
-        let parent_height = parent.node_data.height + 1;
+        let parent_height = parent.node_data.height;
         self[child_id].set_parent(parent_id);
-        self.set_height(child_id, parent_height);
+        self.set_height(child_id, parent_height + 1);
 
         Some(())
     }
@@ -592,22 +594,29 @@ impl<S: State> RealDom<S> {
     }
 
     /// Recurively clones a node and marks it and it's children as dirty.
-    fn clone_node(
+    fn clone_node_into(
         &mut self,
         id: RealNodeId,
         nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
-    ) -> Node<S> {
-        let mut node = self[id].clone();
+        new_id: Option<u64>,
+    ) -> RealNodeId {
+        let new_id = self.insert(self[id].clone(), new_id);
+        // this is safe because no node has itself as a child.
+        let unbounded_self = unsafe { &mut *(self as *mut Self) };
+        let mut node = &mut self[new_id];
+        node.node_data.height = 0;
         if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
-            // this is safe because no node has itself as a child.
-            let unbounded_self = unsafe { &mut *(self as *mut Self) };
             for c in children {
-                let child_id = self.insert(unbounded_self.clone_node(*c, nodes_updated), None);
-                self.link_child(child_id, id);
+                let child_id = unbounded_self.clone_node_into(*c, nodes_updated, None);
+                *c = child_id;
+                let parent_height = node.node_data.height;
+                unbounded_self[child_id].set_parent(new_id);
+                unbounded_self.set_height(child_id, parent_height + 1);
+
                 nodes_updated.push((child_id, NodeMask::ALL));
             }
         }
-        node
+        new_id
     }
 }
 
