@@ -191,12 +191,13 @@ impl InnerInputState {
         self.resolve_mouse_events(previous_mouse, resolved_events, layout, dom);
 
         if old_focus != self.focus_state.last_focused_id {
-            if let Some(id) = self.focus_state.last_focused_id {
+            // elements with listeners will always have a element id
+            if let Some(RealNodeId::ElementId(id)) = self.focus_state.last_focused_id {
                 resolved_events.push(UserEvent {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focus",
-                    element: Some(id.as_element_id()),
+                    element: Some(id),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focus"),
                 });
@@ -204,17 +205,17 @@ impl InnerInputState {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focusin",
-                    element: Some(id.as_element_id()),
+                    element: Some(id),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focusin"),
                 });
             }
-            if let Some(id) = old_focus {
+            if let Some(RealNodeId::ElementId(id)) = old_focus {
                 resolved_events.push(UserEvent {
                     scope_id: None,
                     priority: EventPriority::Medium,
                     name: "focusout",
-                    element: Some(id.as_element_id()),
+                    element: Some(id),
                     data: Arc::new(FocusData {}),
                     bubbles: event_bubbles("focusout"),
                 });
