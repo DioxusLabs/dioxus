@@ -328,6 +328,28 @@ impl<S: State> RealDom<S> {
                         let old_id = self.last.unwrap();
                         let node = self.remove(old_id).unwrap();
                         let new_id = self.insert(node, Some(id));
+                        // this is safe because a node cannot have itself as a child or parent
+                        let unbouned_self = unsafe { &mut *(self as *mut Self) };
+                        // update parent's link to child id
+                        if let Some(parent) = self[new_id].node_data.parent {
+                            if let NodeType::Element { children, .. } =
+                                &mut self[parent].node_data.node_type
+                            {
+                                for c in children {
+                                    if *c == old_id {
+                                        *c = new_id;
+                                    }
+                                }
+                            }
+                        }
+                        // update child's link to parent id
+                        if let NodeType::Element { children, .. } =
+                            &self[new_id].node_data.node_type
+                        {
+                            for child_id in children {
+                                unbouned_self[*child_id].node_data.parent = Some(new_id);
+                            }
+                        }
                         self.last = Some(new_id);
                         for (node, _) in &mut nodes_updated {
                             if *node == old_id {
