@@ -92,7 +92,7 @@ impl NodeDepState<()> for Focus {
                 }
             } else if node
                 .listeners()
-                .map(|mut listeners| {
+                .and_then(|mut listeners| {
                     listeners
                         .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
                         .then_some(())
@@ -218,6 +218,9 @@ impl FocusState {
         }
 
         if let Some(id) = next_focus {
+            if !rdom[id].state.focus.level.focusable() {
+                panic!()
+            }
             rdom[id].state.focused = true;
             if let Some(old) = self.last_focused_id.replace(id) {
                 rdom[old].state.focused = false;
