@@ -612,7 +612,17 @@ impl<'b> DiffState<'b> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+        fn diff_attributes<
+            'b,
+            Nodes,
+            Attributes,
+            V,
+            Children,
+            Listeners,
+            TextSegments,
+            Text,
+            Path,
+        >(
             nodes: &Nodes,
             ctx: (
                 &mut DiffState<'b>,
@@ -622,13 +632,15 @@ impl<'b> DiffState<'b> {
                 usize,
             ),
         ) where
-            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Nodes:
+                AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
+            Path: AsRef<[usize]>,
         {
             let (diff_state, scope_bump, new, template, idx) = ctx;
             for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
@@ -650,8 +662,8 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
             ctx: (
                 &mut DiffState<'b>,
                 &'b Bump,
@@ -666,6 +678,7 @@ impl<'b> DiffState<'b> {
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
+            Path: AsRef<[usize]>,
         {
             let (diff_state, scope_bump, new, template, template_attr_idx) = ctx;
             if let TemplateNodeType::Element(el) = &node.node_type {
@@ -691,8 +704,8 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
             ctx: (
                 &mut DiffState<'b>,
                 &'b VTemplateRef<'b>,
@@ -706,6 +719,7 @@ impl<'b> DiffState<'b> {
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
+            Path: AsRef<[usize]>,
         {
             let (diff, new, template, dynamic_context) = ctx;
             if let TemplateNodeType::Text(text) = &node.node_type {

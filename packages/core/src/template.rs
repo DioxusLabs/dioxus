@@ -280,28 +280,6 @@ impl From<RendererTemplateId> for u64 {
 #[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct TemplateNodeId(pub usize);
 
-#[derive(Debug)]
-struct PathToNode {
-    /// the resolved node to start travering from
-    start: u64,
-    /// the child numbers to traverse to get to the node
-    /// The list is reversed (the last number is the first offset)
-    child_offests: Vec<u32>,
-}
-
-impl PathToNode {
-    fn new(depth: usize) -> Self {
-        Self {
-            start: 0,
-            child_offests: Vec::with_capacity(depth),
-        }
-    }
-
-    fn push(&mut self, offset: u32) {
-        self.child_offests.push(offset);
-    }
-}
-
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
     pub(crate) template_ref_id: Cell<Option<TemplateRefId>>,
@@ -321,7 +299,7 @@ impl<'a> VTemplateRef<'a> {
         template: &Template,
         diff_state: &mut DiffState<'a>,
     ) {
-        fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+        fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
             nodes: &Nodes,
             ctx: (
                 &mut DiffState<'b>,
@@ -330,13 +308,15 @@ impl<'a> VTemplateRef<'a> {
                 ElementId,
             ),
         ) where
-            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Nodes:
+                AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
+            Path: AsRef<[usize]>,
         {
             let (diff_state, template_ref, template, parent) = ctx;
             for id in template.all_dynamic() {
@@ -359,65 +339,26 @@ impl<'a> VTemplateRef<'a> {
         template_ref: &'b VTemplateRef<'b>,
         diff_state: &mut DiffState<'a>,
     ) -> ElementId {
-        fn get_path<Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
-            nodes: &Nodes,
-            ctx: (&VTemplateRef, &mut PathToNode, TemplateNodeId),
-        ) where
-            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (tmpl, path, mut current) = ctx;
-            loop {
-                let node = &nodes.as_ref()[current.0];
-                if let Some(parent) = node.parent {
-                    let child_num = match &nodes.as_ref()[parent.0].node_type {
-                        TemplateNodeType::Element(el) => el
-                            .children
-                            .as_ref()
-                            .iter()
-                            .position(|c| *c == current)
-                            .unwrap(),
-                        TemplateNodeType::DynamicNode(idx) => {
-                            // dynamic nodes are always resolved, so we can stop here
-                            path.start = tmpl
-                                .dynamic_context
-                                .resolve_node(*idx)
-                                .mounted_id()
-                                .as_u64();
-                            return;
-                        }
-                        _ => unreachable!(),
-                    };
-                    path.push(child_num as u32);
-                    current = parent;
-                } else {
-                    path.start = tmpl.node_ids.borrow()[current.0].get().unwrap().as_u64();
-                    return;
-                }
-            }
-        }
-
         let node_ids = self.node_ids.borrow();
         if let Some(real_id) = node_ids.get(id.0).and_then(|o| o.get().copied()) {
             real_id
         } else {
             drop(node_ids);
-            // find the path from the nearest resolved node or root to this node
-            let mut path = PathToNode::new(match template {
-                Template::Static(s) => s.nodes[id.0].depth,
+            let path = match template {
+                Template::Static(s) => s.nodes[id.0].path,
                 #[cfg(any(feature = "hot-reload", debug_assertions))]
-                Template::Owned(o) => o.nodes[id.0].depth,
-            });
-            template.with_nodes(get_path, get_path, (self, &mut path, id));
-            diff_state.mutations.set_last_node(path.start);
-            for offset in path.child_offests.iter().rev() {
+                Template::Owned(o) => &o.nodes[id.0].path,
+            };
+            let mut path_iter = path.iter().copied();
+            let start_node_id = template.root_nodes()[path_iter.next().unwrap()];
+            let start_id = self.node_ids.borrow()[start_node_id.0]
+                .get()
+                .unwrap()
+                .as_u64();
+            diff_state.mutations.set_last_node(start_id as u64);
+            for offset in path_iter {
                 diff_state.mutations.first_child();
-                for _ in 0..*offset {
+                for _ in 0..offset {
                     diff_state.mutations.next_sibling();
                 }
             }
@@ -502,8 +443,8 @@ impl Template {
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
-        fn crate_node_inner<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        fn crate_node_inner<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
             ctx: (&mut Mutations<'b>, &'b Bump, &Template),
         ) where
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -512,6 +453,7 @@ impl Template {
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
+            Path: AsRef<[usize]>,
         {
             let (mutations, bump, template) = ctx;
             match &node.node_type {
@@ -686,6 +628,7 @@ pub type StaticTemplateNode = TemplateNode<
     &'static [usize],
     &'static [TextTemplateSegment<&'static str>],
     &'static str,
+    &'static [usize],
 >;
 
 #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -697,6 +640,7 @@ pub type OwnedTemplateNode = TemplateNode<
     Vec<usize>,
     Vec<TextTemplateSegment<String>>,
     String,
+    Vec<usize>,
 >;
 
 /// A stack allocated list of root Template nodes
@@ -714,7 +658,7 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
 )]
-pub struct TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
+pub struct TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
     V: TemplateValue,
@@ -722,24 +666,25 @@ where
     Listeners: AsRef<[usize]>,
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
+    Path: AsRef<[usize]>,
 {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
     /// The depth of the node in the template node tree
     /// Root nodes have a depth of 0
     pub depth: usize,
-    /// If the id of the node must be kept in the refrences
+    /// If the this node can ever be changed
     pub locally_static: bool,
-    /// If any children of this node must be kept in the references
-    pub fully_static: bool,
     /// The type of the [`TemplateNode`].
     pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
     /// The parent of this node.
     pub parent: Option<TemplateNodeId>,
+    /// The path to this node from one of the root nodes. Stored as [root node #, child #, child #, ...]
+    pub path: Path,
 }
 
-impl<Attributes, V, Children, Listeners, TextSegments, Text>
-    TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>
+impl<Attributes, V, Children, Listeners, TextSegments, Text, Path>
+    TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>
 where
     Attributes: AsRef<[TemplateAttribute<V>]>,
     V: TemplateValue,
@@ -747,6 +692,7 @@ where
     Listeners: AsRef<[usize]>,
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
+    Path: AsRef<[usize]>,
 {
     fn hydrate<'b>(
         &self,
