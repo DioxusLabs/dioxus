@@ -117,6 +117,7 @@ impl<S: State> RealDom<S> {
                             text: text.to_string(),
                         });
                         let id = self.insert(n, root);
+                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
                             let parent = *parent;
@@ -140,6 +141,7 @@ impl<S: State> RealDom<S> {
                             children: Vec::new(),
                         });
                         let id = self.insert(n, root);
+                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
                             let parent = *parent;
@@ -167,6 +169,7 @@ impl<S: State> RealDom<S> {
                             children: Vec::new(),
                         });
                         let id = self.insert(n, root);
+                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
                             let parent = *parent;
@@ -183,6 +186,7 @@ impl<S: State> RealDom<S> {
                     CreatePlaceholder { root } => {
                         let n = Node::new(NodeType::Placeholder);
                         let id = self.insert(n, root);
+                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
                             let parent = *parent;
@@ -432,15 +436,18 @@ impl<S: State> RealDom<S> {
             Some(id) => {
                 let id = id as usize;
                 self.resize_to(id);
+                let real_id = RealNodeId::ElementId(ElementId(id));
+                node.node_data.id = Some(real_id);
                 self.nodes[id] = Some(Box::new(node));
-                RealNodeId::ElementId(ElementId(id))
+                real_id
             }
             None => {
                 let entry = self.internal_nodes.vacant_entry();
                 let id = entry.key();
-                node.node_data.id = Some(RealNodeId::UnaccessableId(id));
+                let real_id = RealNodeId::UnaccessableId(id);
+                node.node_data.id = Some(real_id);
                 entry.insert(Box::new(node));
-                RealNodeId::UnaccessableId(id)
+                real_id
             }
         }
     }
@@ -601,6 +608,7 @@ impl<S: State> RealDom<S> {
         new_id: Option<u64>,
     ) -> RealNodeId {
         let new_id = self.insert(self[id].clone(), new_id);
+        nodes_updated.push((new_id, NodeMask::ALL));
         // this is safe because no node has itself as a child.
         let unbounded_self = unsafe { &mut *(self as *mut Self) };
         let mut node = &mut self[new_id];
@@ -612,8 +620,6 @@ impl<S: State> RealDom<S> {
                 let parent_height = node.node_data.height;
                 unbounded_self[child_id].set_parent(new_id);
                 unbounded_self.set_height(child_id, parent_height + 1);
-
-                nodes_updated.push((child_id, NodeMask::ALL));
             }
         }
         new_id
