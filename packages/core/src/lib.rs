@@ -134,7 +134,7 @@ pub(crate) mod unsafe_utils {
 /// }
 /// ```
 macro_rules! to_owned {
-    ($($es:ident),+) => {$(
+    ($($es:ident),+$(,)?) => {$(
         #[allow(unused_mut)]
         let mut $es = $es.to_owned();
     )*}
