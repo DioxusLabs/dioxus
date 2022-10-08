@@ -75,37 +75,62 @@ export class Interpreter {
     }
   }
   AppendChildren(root, children) {
-    let root_el = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     for (let i = 0; i < children.length; i++) {
-      root_el.appendChild(this.nodes[children[i]]);
+      node.appendChild(this.nodes[children[i]]);
     }
   }
   ReplaceWith(root, nodes) {
-    let root_el = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     let els = [];
     for (let i = 0; i < nodes.length; i++) {
       els.push(this.nodes[nodes[i]])
     }
-    root_el.replaceWith(...els);
+    node.replaceWith(...els);
   }
   InsertAfter(root, nodes) {
-    const old = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     let els = [];
     for (let i = 0; i < nodes.length; i++) {
       els.push(this.nodes[nodes[i]])
     }
-    old.after(...els);
+    node.after(...els);
   }
   InsertBefore(root, nodes) {
-    const old = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     let els = [];
     for (let i = 0; i < nodes.length; i++) {
       els.push(this.nodes[nodes[i]])
     }
-    old.before(...els);
+    node.before(...els);
   }
   Remove(root) {
-    let node = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     if (node !== undefined) {
       node.remove();
     }
@@ -146,21 +171,42 @@ export class Interpreter {
     }
   }
   NewEventListener(event_name, root, handler, bubbles) {
-    const element = this.nodes[root];
-    element.setAttribute("data-dioxus-id", `${root}`);
-    this.listeners.create(event_name, element, handler, bubbles);
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    node.setAttribute("data-dioxus-id", `${root}`);
+    this.listeners.create(event_name, node, handler, bubbles);
   }
   RemoveEventListener(root, event_name, bubbles) {
-    const element = this.nodes[root];
-    element.removeAttribute(`data-dioxus-id`);
-    this.listeners.remove(element, event_name, bubbles);
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    node.removeAttribute(`data-dioxus-id`);
+    this.listeners.remove(node, event_name, bubbles);
   }
   SetText(root, text) {
-    this.nodes[root].data = text;
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    node.data = text;
   }
   SetAttribute(root, field, value, ns) {
     const name = field;
-    const node = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
@@ -194,7 +240,12 @@ export class Interpreter {
   }
   RemoveAttribute(root, field, ns) {
     const name = field;
-    const node = this.nodes[root];
+    let node;
+    if (root === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     if (ns == "style") {
       node.style.removeProperty(name);
     } else if (ns !== null || ns !== undefined) {
@@ -212,10 +263,22 @@ export class Interpreter {
     }
   }
   CloneNode(old, new_id) {
-    this.nodes[new_id] = this.nodes[old].cloneNode(true);
+    let node;
+    if (old === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[old];
+    }
+    this.nodes[new_id] = node.cloneNode(true);
   }
   CloneNodeChildren(old, new_ids) {
-    const old_node = this.nodes[old].cloneNode(true);
+    let node;
+    if (old === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[old];
+    }
+    const old_node = node.cloneNode(true);
     let i = 0;
     for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
       this.nodes[new_ids[i++]] = node;
@@ -244,37 +307,37 @@ export class Interpreter {
   handleEdit(edit) {
     switch (edit.type) {
       case "PushRoot":
-        this.PushRoot(BigInt(edit.root));
+        this.PushRoot(edit.root);
         break;
       case "AppendChildren":
-        this.AppendChildren(BigInt(edit.root), edit.children);
+        this.AppendChildren(edit.root, edit.children);
         break;
       case "ReplaceWith":
-        this.ReplaceWith(BigInt(edit.root), edit.children);
+        this.ReplaceWith(edit.root, edit.nodes);
         break;
       case "InsertAfter":
-        this.InsertAfter(BigInt(edit.root), edit.nodes);
+        this.InsertAfter(edit.root, edit.nodes);
         break;
       case "InsertBefore":
-        this.InsertBefore(BigInt(edit.root), edit.nodes);
+        this.InsertBefore(edit.root, edit.nodes);
         break;
       case "Remove":
-        this.Remove(BigInt(edit.root));
+        this.Remove(edit.root);
         break;
       case "CreateTextNode":
-        this.CreateTextNode(edit.text, BigInt(edit.root));
+        this.CreateTextNode(edit.text, edit.root);
         break;
       case "CreateElement":
-        this.CreateElement(edit.tag, BigInt(edit.root));
+        this.CreateElement(edit.tag, edit.root, edit.children);
         break;
       case "CreateElementNs":
-        this.CreateElementNs(edit.tag, BigInt(edit.root), edit.ns);
+        this.CreateElementNs(edit.tag, edit.root, edit.ns, edit.children);
         break;
       case "CreatePlaceholder":
-        this.CreatePlaceholder(BigInt(edit.root));
+        this.CreatePlaceholder(edit.root);
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(BigInt(edit.root), edit.event_name);
+        this.RemoveEventListener(edit.root, edit.event_name);
         break;
       case "NewEventListener":
         // this handler is only provided on desktop implementations since this
@@ -368,23 +431,23 @@ export class Interpreter {
             );
           }
         };
-        this.NewEventListener(edit.event_name, BigInt(edit.root), handler, event_bubbles(edit.event_name));
+        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
 
         break;
       case "SetText":
-        this.SetText(BigInt(edit.root), edit.text);
+        this.SetText(edit.root, edit.text);
         break;
       case "SetAttribute":
-        this.SetAttribute(BigInt(edit.root), edit.field, edit.value, edit.ns);
+        this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(BigInt(edit.root), edit.name, edit.ns);
+        this.RemoveAttribute(edit.root, edit.name, edit.ns);
         break;
       case "CloneNode":
-        this.CloneNode(BigInt(edit.id), BigInt(edit.new_id));
+        this.CloneNode(edit.id, edit.new_id);
         break;
       case "CloneNodeChildren":
-        this.CloneNodeChildren(BigInt(edit.id), edit.new_ids);
+        this.CloneNodeChildren(edit.id, edit.new_ids);
         break;
       case "FirstChild":
         this.FirstChild();
