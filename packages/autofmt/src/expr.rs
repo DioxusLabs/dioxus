@@ -1,6 +1,8 @@
 //! pretty printer for rsx!
 use std::fmt::{Result, Write};
 
+use dioxus_rsx::ForLoop;
+
 use crate::Buffer;
 
 impl Buffer {
@@ -40,6 +42,23 @@ impl Buffer {
         }
 
         Ok(())
+    }
+
+    pub fn write_if_chain(&mut self, exp: &syn::ExprIf) -> Result {
+        todo!()
+    }
+
+    pub fn write_for_loop(&mut self, for_loop: &ForLoop) -> Result {
+        let ForLoop {
+            for_token,
+            pat,
+            in_token,
+            expr,
+            body,
+        } = for_loop;
+        todo!()
+        // self.write_raw_expr(&for_loop.expr)?;
+        // Ok(())
     }
 }
 
