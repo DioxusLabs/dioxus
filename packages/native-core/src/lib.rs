@@ -24,6 +24,13 @@ impl RealNodeId {
             RealNodeId::UnaccessableId(_) => panic!("Expected element id"),
         }
     }
+
+    pub fn as_unaccessable_id(&self) -> usize {
+        match self {
+            RealNodeId::ElementId(_) => panic!("Expected unaccessable id"),
+            RealNodeId::UnaccessableId(id) => *id,
+        }
+    }
 }
 
 impl Ord for RealNodeId {

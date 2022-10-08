@@ -287,11 +287,12 @@ impl<S: State> RealDom<S> {
                             unsafe { std::mem::transmute(bounded_self) };
                         if let NodeType::Element { children, .. } = &self[id].node_data.node_type {
                             for (old_id, new_id) in children.iter().zip(new_ids) {
-                                unbounded_self.clone_node_into(
+                                let child_id = unbounded_self.clone_node_into(
                                     *old_id,
                                     &mut nodes_updated,
                                     Some(new_id),
                                 );
+                                unbounded_self[child_id].node_data.parent = None;
                             }
                         }
                     }
@@ -326,8 +327,8 @@ impl<S: State> RealDom<S> {
                     }
                     StoreWithId { id } => {
                         let old_id = self.last.unwrap();
-                        let node = self.remove(old_id).unwrap();
-                        let new_id = self.insert(node, Some(id));
+                        let node = self.internal_nodes.remove(old_id.as_unaccessable_id());
+                        let new_id = self.insert(*node, Some(id));
                         // this is safe because a node cannot have itself as a child or parent
                         let unbouned_self = unsafe { &mut *(self as *mut Self) };
                         // update parent's link to child id
