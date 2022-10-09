@@ -81,7 +81,7 @@ impl Parse for Element {
 
             if content.peek(Ident)
                 && ((content.peek2(Token![?]) && content.peek3(Token![:]))
-                    || content.peek2(Token![:]))
+                    || (content.peek2(Token![:]) && !content.peek3(Token![:])))
             {
                 let name = content.parse::<Ident>()?;
                 let maybe = content.peek(Token![?]);
