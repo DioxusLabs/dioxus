@@ -104,3 +104,11 @@ You can include arbitrary Rust expressions within RSX, but you must escape them 
 ```html
 <span>DIOXUS</span>
 ```
+
+### Optional Attributes
+
+You can include optional attribute within RSX. To do this add a `?` after the attribute name and make the value an option:
+
+```rust
+{{#include ../../../examples/rsx_overview.rs:optional_attribute}}
+```

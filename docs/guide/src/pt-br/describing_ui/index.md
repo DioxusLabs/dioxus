@@ -114,3 +114,9 @@ Você pode incluir expressões Rust arbitrárias dentro do RSX, mas deve escapá
 ```html
 <span>DIOXUS</span>
 ```
+
+### Atributos opcional
+
+```rust
+{{#include ../../../examples/rsx_overview.rs:optional_attributes}}
+```

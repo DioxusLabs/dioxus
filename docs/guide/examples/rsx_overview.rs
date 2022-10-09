@@ -107,3 +107,13 @@ pub fn Expression(cx: Scope) -> Element {
     }))
     // ANCHOR_END: expression
 }
+
+pub fn OptionalAttributes(cx: Scope) -> Element {
+    // ANCHOR: optional_attributes
+    let text = Some("Dioxus");
+    cx.render(rsx!(span {
+        // adding a `?` to the end of an attribute name makes it accept a `Option<_>` and only add the attribute if it's `Some(_)`
+        width?: text,
+    }))
+    // ANCHOR_END: optional_attributes
+}
