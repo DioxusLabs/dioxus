@@ -1,9 +1,4 @@
 {
-  "rust-analyzer.cargo.allFeatures": true,
-  "rust-analyzer.cargo.features": [
-    "desktop",
-    "router"
-  ],
   "editor.formatOnSave": true,
   "[toml]": {
     "editor.formatOnSave": false

@@ -7,6 +7,11 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-proc-macro2 = { version = "1.0" }
+proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = { version = "1.0" }
+dioxus-core = { path = "../core", features = ["serialize", "hot-reload"] }
+serde = { version = "1.0", features = ["derive"] }
+
+[features]
+hot-reload = []

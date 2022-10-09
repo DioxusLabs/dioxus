@@ -189,7 +189,7 @@ pub(super) fn handler(
         MaximizeToggle => window.set_maximized(!window.is_maximized()),
         Fullscreen(state) => {
             if let Some(handle) = window.current_monitor() {
-                window.set_fullscreen(state.then(|| WryFullscreen::Borderless(Some(handle))));
+                window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
             }
         }
         FocusWindow => window.set_focus(),

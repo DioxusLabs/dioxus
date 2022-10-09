@@ -28,6 +28,9 @@ pub struct RouterProps<'a> {
     /// This is useful if you don't want to repeat the same `active_class` prop value in every Link.
     /// By default set to `"active"`.
     pub active_class: Option<&'a str>,
+
+    /// Set the initial url.
+    pub initial_url: Option<String>,
 }
 
 /// A component that conditionally renders children based on the current location of the app.
@@ -43,6 +46,7 @@ pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
+                initial_url: cx.props.initial_url.clone(),
             },
         ))
     });

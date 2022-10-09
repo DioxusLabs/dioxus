@@ -67,7 +67,7 @@ macro_rules! test_state{
         fn state_reduce_initally_called_minimally() {
             #[allow(non_snake_case)]
             fn Base(cx: Scope) -> Element {
-                rsx!(cx, div {
+                render!(div {
                     div{
                         div{
                             p{}
@@ -109,7 +109,7 @@ macro_rules! test_state{
             let mut dom: RealDom<$s> = RealDom::new();
 
             let nodes_updated = dom.apply_mutations(vec![mutations]);
-            let _to_rerender = dom.update_state(&vdom, nodes_updated, AnyMap::new());
+            let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
             dom.traverse_depth_first(|n| {
                 $(

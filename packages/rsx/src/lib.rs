@@ -13,42 +13,41 @@
 
 #[macro_use]
 mod errors;
-
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod attributes;
 mod component;
 mod element;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod elements;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod error;
 mod ifmt;
 mod node;
+mod template;
 
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+pub use template::{try_parse_template, DynamicTemplateContextBuilder};
 
 // imports
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
-    Ident, Result, Token,
+    Result, Token,
 };
+use template::TemplateBuilder;
 
 pub struct CallBody {
-    pub custom_context: Option<Ident>,
     pub roots: Vec<BodyNode>,
 }
 
 impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
-        let custom_context = if input.peek(Ident) && input.peek2(Token![,]) {
-            let name = input.parse::<Ident>()?;
-            input.parse::<Token![,]>()?;
-
-            Some(name)
-        } else {
-            None
-        };
-
         let mut roots = Vec::new();
 
         while !input.is_empty() {
@@ -61,40 +60,51 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self {
-            custom_context,
-            roots,
-        })
+        Ok(Self { roots })
     }
 }
 
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let inner = if self.roots.len() == 1 {
+        let template = TemplateBuilder::from_roots(self.roots.clone());
+        let inner = if let Some(template) = template {
+            quote! { #template }
+        } else {
+            let children = &self.roots;
+            if children.len() == 1 {
+                let inner = &self.roots[0];
+                quote! { #inner }
+            } else {
+                quote! { __cx.fragment_root([ #(#children),* ]) }
+            }
+        };
+
+        // Otherwise we just build the LazyNode wrapper
+        out_tokens.append_all(quote! {
+            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                #inner
+            })
+        })
+    }
+}
+
+impl CallBody {
+    pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
+        let children = &self.roots;
+        let inner = if children.len() == 1 {
             let inner = &self.roots[0];
             quote! { #inner }
         } else {
-            let childs = &self.roots;
-            quote! { __cx.fragment_root([ #(#childs),* ]) }
+            quote! { __cx.fragment_root([ #(#children),* ]) }
         };
 
-        match &self.custom_context {
-            // The `in cx` pattern allows directly rendering
-            Some(ident) => out_tokens.append_all(quote! {
-                #ident.render(LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                    #inner
-                }))
-            }),
-
-            // Otherwise we just build the LazyNode wrapper
-            None => out_tokens.append_all(quote! {
-                LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                    use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                    #inner
-                })
-            }),
-        };
+        out_tokens.append_all(quote! {
+            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+                use dioxus_elements::{GlobalAttributes, SvgAttributes};
+                #inner
+            })
+        })
     }
 }

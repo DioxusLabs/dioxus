@@ -6,16 +6,16 @@ This calculator version uses React-style state management. All state is held as 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    use dioxus_desktop::tao::dpi::LogicalSize;
-    dioxus_desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Calculator Demo")
-                .with_resizable(false)
-                .with_inner_size(LogicalSize::new(320.0, 530.0))
-        })
-    });
+    let config = Config::new().with_window(
+        WindowBuilder::default()
+            .with_title("Calculator")
+            .with_inner_size(dioxus_desktop::LogicalSize::new(300.0, 500.0)),
+    );
+
+    dioxus_desktop::launch_cfg(app, config);
 }
 
 fn app(cx: Scope) -> Element {
@@ -57,12 +57,12 @@ fn app(cx: Scope) -> Element {
     };
 
     cx.render(rsx!(
-        style { [include_str!("./assets/calculator.css")] }
+        style { include_str!("./assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator",
                     onkeydown: handle_key_down_event,
-                    div { class: "calculator-display", [val.to_string()] }
+                    div { class: "calculator-display", val.to_string() }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -74,7 +74,7 @@ fn app(cx: Scope) -> Element {
                                             val.set("0".into());
                                         }
                                     },
-                                    [if val.is_empty() { "C" } else { "AC" }]
+                                    if val.is_empty() { "C" } else { "AC" }
                                 }
                                 button {
                                     class: "calculator-key key-sign",

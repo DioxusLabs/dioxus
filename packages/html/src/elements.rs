@@ -1,6 +1,5 @@
 use crate::{GlobalAttributes, SvgAttributes};
 use dioxus_core::*;
-use std::fmt::Arguments;
 
 macro_rules! builder_constructors {
     (
@@ -28,10 +27,12 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
-                    $(#[$attr_method])*
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, None, false)
-                    }
+                    #[allow(non_upper_case_globals)]
+                    pub const $fil: AttributeDiscription = AttributeDiscription{
+                        name: stringify!($fil),
+                        namespace: None,
+                        volatile: false
+                    };
                 )*
             }
         )*
@@ -57,9 +58,13 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, Some(stringify!($namespace)), false)
-                    }
+
+                    #[allow(non_upper_case_globals)]
+                    pub const $fil: AttributeDiscription = AttributeDiscription{
+                        name: stringify!($fil),
+                        namespace: Some(stringify!($namespace)),
+                        volatile: false
+                    };
                 )*
             }
         )*
@@ -1061,13 +1066,19 @@ impl input {
     /// - `time`
     /// - `url`
     /// - `week`
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
 
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 /*
@@ -1077,41 +1088,63 @@ volatile attributes
 impl script {
     // r#async: Bool,
     // r#type: String, // TODO could be an enum
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
-    pub fn r#script<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("script", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
+
+    #[allow(non_upper_case_globals)]
+    pub const r#script: AttributeDiscription = AttributeDiscription {
+        name: "script",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 impl button {
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 impl select {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 impl option {
-    pub fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("selected", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const selected: AttributeDiscription = AttributeDiscription {
+        name: "selected",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 impl textarea {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 impl label {
-    pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("for", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#for: AttributeDiscription = AttributeDiscription {
+        name: "for",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 builder_constructors! {

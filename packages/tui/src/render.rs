@@ -25,7 +25,7 @@ pub(crate) fn render_vnode(
 ) {
     use dioxus_native_core::real_dom::NodeType;
 
-    if let NodeType::Placeholder = &node.node_type {
+    if let NodeType::Placeholder = &node.node_data.node_type {
         return;
     }
 
@@ -38,7 +38,7 @@ pub(crate) fn render_vnode(
     let Point { x, y } = location;
     let Size { width, height } = size;
 
-    match &node.node_type {
+    match &node.node_data.node_type {
         NodeType::Text { text } => {
             #[derive(Default)]
             struct Label<'a> {

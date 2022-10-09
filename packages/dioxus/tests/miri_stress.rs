@@ -34,17 +34,17 @@ fn test_memory_leak() {
 
         cx.render(rsx!(
             div { "Hello, world!" }
-            child()
-            child()
-            child()
-            child()
-            child()
-            child()
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
-            borrowed_child(na: name)
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            Child {}
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
+            BorrowedChild { na: name }
         ))
     }
 
@@ -53,16 +53,16 @@ fn test_memory_leak() {
         na: &'a str,
     }
 
-    fn borrowed_child<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
-        rsx!(cx, div {
+    fn BorrowedChild<'a>(cx: Scope<'a, BorrowedProps<'a>>) -> Element {
+        render!(div {
             "goodbye {cx.props.na}"
-            child()
-            child()
+            Child {}
+            Child {}
         })
     }
 
-    fn child(cx: Scope) -> Element {
-        rsx!(cx, div { "goodbye world" })
+    fn Child(cx: Scope) -> Element {
+        render!(div { "goodbye world" })
     }
 
     let mut dom = new_dom(app, ());
@@ -91,7 +91,7 @@ fn memo_works_properly() {
 
         cx.render(rsx!(
             div { "Hello, world! {name}" }
-            child(na: "asdfg".to_string() )
+            Child { na: "asdfg".to_string() }
         ))
     }
 
@@ -100,8 +100,8 @@ fn memo_works_properly() {
         na: String,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
-        rsx!(cx, div { "goodbye world" })
+    fn Child(cx: Scope<ChildProps>) -> Element {
+        render!(div { "goodbye world" })
     }
 
     let mut dom = new_dom(app, ());
@@ -120,10 +120,10 @@ fn memo_works_properly() {
 fn free_works_on_root_props() {
     fn app(cx: Scope<Custom>) -> Element {
         cx.render(rsx! {
-            child(a: "alpha")
-            child(a: "beta")
-            child(a: "gamma")
-            child(a: "delta")
+            Child { a: "alpha"}
+            Child { a: "beta"}
+            Child { a: "gamma"}
+            Child { a: "delta"}
         })
     }
 
@@ -132,8 +132,8 @@ fn free_works_on_root_props() {
         a: &'static str,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
-        rsx!(cx, "child {cx.props.a}")
+    fn Child(cx: Scope<ChildProps>) -> Element {
+        render!("child {cx.props.a}")
     }
 
     struct Custom {
@@ -154,7 +154,7 @@ fn free_works_on_root_props() {
 fn free_works_on_borrowed() {
     fn app(cx: Scope) -> Element {
         cx.render(rsx! {
-            child(a: "alpha", b: "asd".to_string())
+            Child { a: "alpha", b: "asd".to_string() }
         })
     }
     #[derive(Props)]
@@ -163,9 +163,9 @@ fn free_works_on_borrowed() {
         b: String,
     }
 
-    fn child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
+    fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element {
         dbg!("rendering child");
-        rsx!(cx, "child {cx.props.a}, {cx.props.b}")
+        render!("child {cx.props.a}, {cx.props.b}")
     }
 
     impl Drop for ChildProps<'_> {
@@ -193,7 +193,7 @@ fn free_works_on_root_hooks() {
 
     fn app(cx: Scope) -> Element {
         let name = cx.use_hook(|| Droppable(String::from("asd")));
-        rsx!(cx, div { "{name.0}" })
+        render!(div { "{name.0}" })
     }
 
     let mut dom = new_dom(app, ());
@@ -208,9 +208,9 @@ fn old_props_arent_stale() {
         *cnt += 1;
 
         if *cnt == 1 {
-            rsx!(cx, div { child(a: "abcdef".to_string()) })
+            render!(div { Child { a: "abcdef".to_string() } })
         } else {
-            rsx!(cx, div { child(a: "abcdef".to_string()) })
+            render!(div { Child { a: "abcdef".to_string() } })
         }
     }
 
@@ -218,9 +218,9 @@ fn old_props_arent_stale() {
     struct ChildProps {
         a: String,
     }
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         dbg!("rendering child", &cx.props.a);
-        rsx!(cx, div { "child {cx.props.a}" })
+        render!(div { "child {cx.props.a}" })
     }
 
     let mut dom = new_dom(app, ());
@@ -250,8 +250,8 @@ fn old_props_arent_stale() {
 #[test]
 fn basic() {
     fn app(cx: Scope) -> Element {
-        rsx!(cx, div {
-            child(a: "abcdef".to_string())
+        render!(div {
+            Child { a: "abcdef".to_string() }
         })
     }
 
@@ -260,9 +260,9 @@ fn basic() {
         a: String,
     }
 
-    fn child(cx: Scope<ChildProps>) -> Element {
+    fn Child(cx: Scope<ChildProps>) -> Element {
         dbg!("rendering child", &cx.props.a);
-        rsx!(cx, div { "child {cx.props.a}" })
+        render!(div { "child {cx.props.a}" })
     }
 
     let mut dom = new_dom(app, ());
@@ -290,7 +290,7 @@ fn leak_thru_children() {
 
     #[inline_props]
     fn Child(cx: Scope, name: String) -> Element {
-        rsx!(cx, div { "child {name}" })
+        render!(div { "child {name}" })
     }
 
     let mut dom = new_dom(app, ());
@@ -315,8 +315,7 @@ fn test_pass_thru() {
     }
 
     fn NavMenu(cx: Scope) -> Element {
-        rsx!(cx,
-            NavBrand {}
+        render!(            NavBrand {}
             div {
                 NavStart {}
                 NavEnd {}
@@ -325,15 +324,15 @@ fn test_pass_thru() {
     }
 
     fn NavBrand(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     fn NavStart(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     fn NavEnd(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
 
     #[inline_props]

@@ -5,7 +5,8 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use dioxus_core::{ElementId, EventPriority, UserEvent};
+use dioxus_core::GlobalNodeId;
+use dioxus_core::{EventPriority, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
 
@@ -25,7 +26,7 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
     event: String,
-    mounted_dom_id: u64,
+    mounted_dom_id: GlobalNodeId,
     contents: serde_json::Value,
 }
 
@@ -36,7 +37,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         contents,
     } = serde_json::from_value(val).unwrap();
 
-    let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
+    let mounted_dom_id = Some(mounted_dom_id);
 
     let name = event_name_from_type(&event);
     let event = make_synthetic_event(&event, contents);

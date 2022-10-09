@@ -132,7 +132,7 @@ impl Buffer {
     fn write_attributes(
         &mut self,
         attributes: &[ElementAttrNamed],
-        key: &Option<syn::LitStr>,
+        key: &Option<IfmtInput>,
         sameline: bool,
     ) -> Result {
         let mut attr_iter = attributes.iter().peekable();
@@ -141,7 +141,11 @@ impl Buffer {
             if !sameline {
                 self.indented_tabbed_line()?;
             }
-            write!(self.buf, "key: \"{}\"", key.value())?;
+            write!(
+                self.buf,
+                "key: \"{}\"",
+                key.source.as_ref().unwrap().value()
+            )?;
             if !attributes.is_empty() {
                 write!(self.buf, ",")?;
                 if sameline {
@@ -178,7 +182,11 @@ impl Buffer {
     fn write_attribute(&mut self, attr: &ElementAttrNamed) -> Result {
         match &attr.attr {
             ElementAttr::AttrText { name, value } => {
-                write!(self.buf, "{name}: \"{value}\"", value = value.value())?;
+                write!(
+                    self.buf,
+                    "{name}: \"{value}\"",
+                    value = value.source.as_ref().unwrap().value()
+                )?;
             }
             ElementAttr::AttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
@@ -190,7 +198,7 @@ impl Buffer {
                     self.buf,
                     "\"{name}\": \"{value}\"",
                     name = name.value(),
-                    value = value.value()
+                    value = value.source.as_ref().unwrap().value()
                 )?;
             }
 
@@ -272,7 +280,7 @@ impl Buffer {
         }
 
         match children {
-            [BodyNode::Text(ref text)] => Some(text.value().len()),
+            [BodyNode::Text(ref text)] => Some(text.source.as_ref().unwrap().value().len()),
             [BodyNode::Component(ref comp)] => {
                 let attr_len = self.field_len(&comp.fields, &comp.manual_props);
 

@@ -2,7 +2,7 @@
 #![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
-use dioxus::prelude::*;
+use dioxus::{core_macro::rsx_without_templates, prelude::*};
 use dioxus_core::DomEdit::*;
 use std::sync::{Arc, Mutex};
 
@@ -16,7 +16,7 @@ fn manual_diffing() {
 
     static App: Component<AppProps> = |cx| {
         let val = cx.props.value.lock().unwrap();
-        cx.render(rsx! { div { "{val}" } })
+        cx.render(rsx_without_templates! { div { "{val}" } })
     };
 
     let value = Arc::new(Mutex::new("Hello"));
@@ -38,7 +38,7 @@ fn events_generate() {
 
         let inner = match *count {
             0 => {
-                rsx! {
+                rsx_without_templates! {
                     div {
                         onclick: move |_| *count += 1,
                         div {
@@ -81,21 +81,21 @@ fn components_generate() {
         *render_phase += 1;
 
         cx.render(match *render_phase {
-            1 => rsx!("Text0"),
-            2 => rsx!(div {}),
-            3 => rsx!("Text2"),
-            4 => rsx!(Child {}),
-            5 => rsx!({ None as Option<()> }),
-            6 => rsx!("text 3"),
-            7 => rsx!({ (0..2).map(|f| rsx!("text {f}")) }),
-            8 => rsx!(Child {}),
+            1 => rsx_without_templates!("Text0"),
+            2 => rsx_without_templates!(div {}),
+            3 => rsx_without_templates!("Text2"),
+            4 => rsx_without_templates!(Child {}),
+            5 => rsx_without_templates!({ None as Option<()> }),
+            6 => rsx_without_templates!("text 3"),
+            7 => rsx_without_templates!({ (0..2).map(|f| rsx_without_templates!("text {f}")) }),
+            8 => rsx_without_templates!(Child {}),
             _ => todo!(),
         })
     };
 
     fn Child(cx: Scope) -> Element {
         println!("Running child");
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             h1 {}
         })
     }
@@ -175,53 +175,53 @@ fn component_swap() {
         *render_phase += 1;
 
         cx.render(match *render_phase {
-            0 => rsx!(
+            0 => rsx_without_templates!(
                 div {
                     NavBar {}
                     Dashboard {}
                 }
             ),
-            1 => rsx!(
+            1 => rsx_without_templates!(
                 div {
                     NavBar {}
                     Results {}
                 }
             ),
-            2 => rsx!(
+            2 => rsx_without_templates!(
                 div {
                     NavBar {}
                     Dashboard {}
                 }
             ),
-            3 => rsx!(
+            3 => rsx_without_templates!(
                 div {
                     NavBar {}
                     Results {}
                 }
             ),
-            4 => rsx!(
+            4 => rsx_without_templates!(
                 div {
                     NavBar {}
                     Dashboard {}
                 }
             ),
-            _ => rsx!("blah"),
+            _ => rsx_without_templates!("blah"),
         })
     };
 
     static NavBar: Component = |cx| {
         println!("running navbar");
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             h1 {
                 "NavBar"
-                {(0..3).map(|f| rsx!(NavLink {}))}
+                {(0..3).map(|f| rsx_without_templates!(NavLink {}))}
             }
         })
     };
 
     static NavLink: Component = |cx| {
         println!("running navlink");
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             h1 {
                 "NavLink"
             }
@@ -230,7 +230,7 @@ fn component_swap() {
 
     static Dashboard: Component = |cx| {
         println!("running dashboard");
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             div {
                 "dashboard"
             }
@@ -239,7 +239,7 @@ fn component_swap() {
 
     static Results: Component = |cx| {
         println!("running results");
-        cx.render(rsx! {
+        cx.render(rsx_without_templates! {
             div {
                 "results"
             }

@@ -1,4 +1,5 @@
 use dioxus::core as dioxus_core;
+use dioxus::core_macro::rsx_without_templates;
 use dioxus::prelude::*;
 use dioxus_native_core::{
     real_dom::{NodeType, RealDom},
@@ -15,7 +16,7 @@ struct Empty {}
 fn traverse() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let mutations = vdom.create_vnodes(rsx! {
@@ -37,68 +38,68 @@ fn traverse() {
     let mut iter = PersistantElementIter::new();
     let div_tag = "div".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     let text1 = "hello".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text1, .. }
     ));
     let p_tag = "p".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text2 = "world".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text2, .. }
     ));
     let text3 = "hello world".to_string();
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
     assert!(matches!(
-        &rdom[iter.next(&rdom).id()].node_type,
+        &rdom[iter.next(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
 
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text2, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text1, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
     assert!(matches!(
-        &rdom[iter.prev(&rdom).id()].node_type,
+        &rdom[iter.prev(&rdom).id()].node_data.node_type,
         NodeType::Text { text: text3, .. }
     ));
 }
@@ -108,11 +109,11 @@ fn traverse() {
 fn persist_removes() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -128,7 +129,7 @@ fn persist_removes() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -177,16 +178,19 @@ fn persist_removes() {
     let p_tag = "p".to_string();
     let idx = iter1.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text = "hello world".to_string();
     let idx = iter1.next(&rdom).id();
-    assert!(matches!(&rdom[idx].node_type, NodeType::Text { text, .. }));
+    assert!(matches!(
+        &rdom[idx].node_data.node_type,
+        NodeType::Text { text, .. }
+    ));
     let div_tag = "div".to_string();
     let idx = iter2.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: div_tag, .. }
     ));
 }
@@ -196,11 +200,11 @@ fn persist_removes() {
 fn persist_instertions_before() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -212,7 +216,7 @@ fn persist_instertions_before() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -252,7 +256,7 @@ fn persist_instertions_before() {
     let p_tag = "div".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
 }
@@ -262,11 +266,11 @@ fn persist_instertions_before() {
 fn persist_instertions_after() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        rsx!(cx, div {})
+        render!(div {})
     }
     let vdom = VirtualDom::new(Base);
     let (build, update) = vdom.diff_lazynodes(
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -278,7 +282,7 @@ fn persist_instertions_after() {
                 }
             }
         },
-        rsx! {
+        rsx_without_templates! {
             div{
                 p{
                     key: "1",
@@ -318,10 +322,13 @@ fn persist_instertions_after() {
     let p_tag = "p".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
-        &rdom[idx].node_type,
+        &rdom[idx].node_data.node_type,
         NodeType::Element { tag: p_tag, .. }
     ));
     let text = "hello world".to_string();
     let idx = iter.next(&rdom).id();
-    assert!(matches!(&rdom[idx].node_type, NodeType::Text { text, .. }));
+    assert!(matches!(
+        &rdom[idx].node_data.node_type,
+        NodeType::Text { text, .. }
+    ));
 }

@@ -128,6 +128,59 @@ pub enum DomEdit<'bump> {
         root: u64,
     },
 
+    /// Create a new purely-text node in a template
+    CreateTextNodeTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The textcontent of the noden
+        text: &'bump str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+    },
+
+    /// Create a new purely-element node in a template
+    CreateElementTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The tagname of the node
+        tag: &'bump str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+
+        /// If any children of this node must be kept in the references
+        fully_static: bool,
+    },
+
+    /// Create a new purely-comment node with a given namespace in a template
+    CreateElementNsTemplate {
+        /// The ID the new node should have.
+        root: u64,
+
+        /// The namespace of the node
+        tag: &'bump str,
+
+        /// The namespace of the node (like `SVG`)
+        ns: &'static str,
+
+        /// If the id of the node must be kept in the refrences
+        locally_static: bool,
+
+        /// If any children of this node must be kept in the references
+        fully_static: bool,
+    },
+
+    /// Create a new placeholder node.
+    /// In most implementations, this will either be a hidden div or a comment node. in a template
+    /// Always both locally and fully static
+    CreatePlaceholderTemplate {
+        /// The ID the new node should have.
+        root: u64,
+    },
+
     /// Create a new Event Listener.
     NewEventListener {
         /// The name of the event to listen for.
@@ -189,6 +242,38 @@ pub enum DomEdit<'bump> {
 
     /// Manually pop a root node from the stack.
     PopRoot {},
+
+    /// Enter a TemplateRef tree
+    EnterTemplateRef {
+        /// The ID of the node to enter.
+        root: u64,
+    },
+
+    /// Exit a TemplateRef tree
+    ExitTemplateRef {},
+
+    /// Create a refrence to a template node.
+    CreateTemplateRef {
+        /// The ID of the new template refrence.
+        id: u64,
+
+        /// The ID of the template the node is refrencing.
+        template_id: u64,
+    },
+
+    /// Create a new templete.
+    /// IMPORTANT: When adding nodes to a templete, id's will reset to zero, so they must be allocated on a different stack.
+    /// It is recommended to use Cow<NativeNode>.
+    CreateTemplate {
+        /// The ID of the new template.
+        id: u64,
+    },
+
+    /// Finish a templete
+    FinishTemplate {
+        /// The number of root nodes in the template
+        len: u32,
+    },
 }
 
 use fxhash::FxHashSet;
@@ -204,8 +289,8 @@ impl<'a> Mutations<'a> {
     }
 
     // Navigation
-    pub(crate) fn push_root(&mut self, root: ElementId) {
-        let id = root.as_u64();
+    pub(crate) fn push_root(&mut self, root: impl Into<u64>) {
+        let id = root.into();
         self.edits.push(PushRoot { root: id });
     }
 
@@ -214,18 +299,18 @@ impl<'a> Mutations<'a> {
         self.edits.push(PopRoot {});
     }
 
-    pub(crate) fn replace_with(&mut self, root: ElementId, m: u32) {
-        let root = root.as_u64();
+    pub(crate) fn replace_with(&mut self, root: impl Into<u64>, m: u32) {
+        let root = root.into();
         self.edits.push(ReplaceWith { m, root });
     }
 
-    pub(crate) fn insert_after(&mut self, root: ElementId, n: u32) {
-        let root = root.as_u64();
+    pub(crate) fn insert_after(&mut self, root: impl Into<u64>, n: u32) {
+        let root = root.into();
         self.edits.push(InsertAfter { n, root });
     }
 
-    pub(crate) fn insert_before(&mut self, root: ElementId, n: u32) {
-        let root = root.as_u64();
+    pub(crate) fn insert_before(&mut self, root: impl Into<u64>, n: u32) {
+        let root = root.into();
         self.edits.push(InsertBefore { n, root });
     }
 
@@ -234,13 +319,13 @@ impl<'a> Mutations<'a> {
     }
 
     // Remove Nodes from the dom
-    pub(crate) fn remove(&mut self, id: u64) {
-        self.edits.push(Remove { root: id });
+    pub(crate) fn remove(&mut self, id: impl Into<u64>) {
+        self.edits.push(Remove { root: id.into() });
     }
 
     // Create
-    pub(crate) fn create_text_node(&mut self, text: &'a str, id: ElementId) {
-        let id = id.as_u64();
+    pub(crate) fn create_text_node(&mut self, text: &'a str, id: impl Into<u64>) {
+        let id = id.into();
         self.edits.push(CreateTextNode { text, root: id });
     }
 
@@ -248,18 +333,66 @@ impl<'a> Mutations<'a> {
         &mut self,
         tag: &'static str,
         ns: Option<&'static str>,
-        id: ElementId,
+        id: impl Into<u64>,
     ) {
-        let id = id.as_u64();
+        let id = id.into();
         match ns {
             Some(ns) => self.edits.push(CreateElementNs { root: id, ns, tag }),
             None => self.edits.push(CreateElement { root: id, tag }),
         }
     }
+
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: ElementId) {
-        let id = id.as_u64();
+    pub(crate) fn create_placeholder(&mut self, id: impl Into<u64>) {
+        let id = id.into();
         self.edits.push(CreatePlaceholder { root: id });
+    }
+
+    // Create
+    pub(crate) fn create_text_node_template(
+        &mut self,
+        text: &'a str,
+        id: impl Into<u64>,
+        locally_static: bool,
+    ) {
+        let id = id.into();
+        self.edits.push(CreateTextNodeTemplate {
+            text,
+            root: id,
+            locally_static,
+        });
+    }
+
+    pub(crate) fn create_element_template(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: impl Into<u64>,
+        locally_static: bool,
+        fully_static: bool,
+    ) {
+        let id = id.into();
+        match ns {
+            Some(ns) => self.edits.push(CreateElementNsTemplate {
+                root: id,
+                ns,
+                tag,
+                locally_static,
+                fully_static,
+            }),
+            None => self.edits.push(CreateElementTemplate {
+                root: id,
+                tag,
+                locally_static,
+                fully_static,
+            }),
+        }
+    }
+
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    pub(crate) fn create_placeholder_template(&mut self, id: impl Into<u64>) {
+        let id = id.into();
+        self.edits.push(CreatePlaceholderTemplate { root: id });
     }
 
     // events
@@ -270,7 +403,13 @@ impl<'a> Mutations<'a> {
             ..
         } = listener;
 
-        let element_id = mounted_node.get().unwrap().as_u64();
+        let element_id = match mounted_node.get().unwrap() {
+            GlobalNodeId::TemplateId {
+                template_ref_id: _,
+                template_node_id,
+            } => template_node_id.into(),
+            GlobalNodeId::VNodeId(id) => id.into(),
+        };
 
         self.edits.push(NewEventListener {
             scope,
@@ -278,45 +417,74 @@ impl<'a> Mutations<'a> {
             root: element_id,
         });
     }
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: u64) {
-        self.edits.push(RemoveEventListener { event, root });
+
+    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: impl Into<u64>) {
+        self.edits.push(RemoveEventListener {
+            event,
+            root: root.into(),
+        });
     }
 
     // modify
-    pub(crate) fn set_text(&mut self, text: &'a str, root: u64) {
+    pub(crate) fn set_text(&mut self, text: &'a str, root: impl Into<u64>) {
+        let root = root.into();
         self.edits.push(SetText { text, root });
     }
 
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: u64) {
+    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: impl Into<u64>) {
+        let root = root.into();
         let Attribute {
-            name,
-            value,
-            namespace,
-            ..
+            value, attribute, ..
         } = attribute;
 
         self.edits.push(SetAttribute {
-            field: name,
+            field: attribute.name,
             value: value.clone(),
-            ns: *namespace,
+            ns: attribute.namespace,
             root,
         });
     }
 
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: u64) {
-        let Attribute {
-            name, namespace, ..
-        } = attribute;
+    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: impl Into<u64>) {
+        let root = root.into();
+        let Attribute { attribute, .. } = attribute;
 
         self.edits.push(RemoveAttribute {
-            name,
-            ns: *namespace,
+            name: attribute.name,
+            ns: attribute.namespace,
             root,
         });
     }
 
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
         self.dirty_scopes.insert(scope);
+    }
+
+    pub(crate) fn create_templete(&mut self, id: impl Into<u64>) {
+        self.edits.push(CreateTemplate { id: id.into() });
+    }
+
+    pub(crate) fn finish_templete(&mut self, len: u32) {
+        self.edits.push(FinishTemplate { len });
+    }
+
+    pub(crate) fn create_template_ref(&mut self, id: impl Into<u64>, template_id: u64) {
+        self.edits.push(CreateTemplateRef {
+            id: id.into(),
+            template_id,
+        })
+    }
+
+    pub(crate) fn enter_template_ref(&mut self, id: impl Into<u64>) {
+        self.edits.push(EnterTemplateRef { root: id.into() });
+    }
+
+    pub(crate) fn exit_template_ref(&mut self) {
+        if let Some(&DomEdit::EnterTemplateRef { .. }) = self.edits.last() {
+            self.edits.pop();
+        } else {
+            self.edits.push(ExitTemplateRef {});
+        }
     }
 }
 

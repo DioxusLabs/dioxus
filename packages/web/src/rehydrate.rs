@@ -108,12 +108,30 @@ impl WebsysDom {
                 }
 
                 for listener in vel.listeners {
-                    self.interpreter.NewEventListener(
-                        listener.event,
-                        listener.mounted_node.get().unwrap().as_u64(),
-                        self.handler.as_ref().unchecked_ref(),
-                        event_bubbles(listener.event),
-                    );
+                    let global_id = listener.mounted_node.get().unwrap();
+                    match global_id {
+                        dioxus_core::GlobalNodeId::TemplateId {
+                            template_ref_id,
+                            template_node_id: id,
+                        } => {
+                            self.interpreter.EnterTemplateRef(template_ref_id.into());
+                            self.interpreter.NewEventListener(
+                                listener.event,
+                                id.into(),
+                                self.handler.as_ref().unchecked_ref(),
+                                event_bubbles(listener.event),
+                            );
+                            self.interpreter.ExitTemplateRef();
+                        }
+                        dioxus_core::GlobalNodeId::VNodeId(id) => {
+                            self.interpreter.NewEventListener(
+                                listener.event,
+                                id.into(),
+                                self.handler.as_ref().unchecked_ref(),
+                                event_bubbles(listener.event),
+                            );
+                        }
+                    }
                 }
 
                 if !vel.listeners.is_empty() {
@@ -165,6 +183,7 @@ impl WebsysDom {
                 let node = scope.root_node();
                 self.rehydrate_single(nodes, place, dom, node, last_node_was_text)?;
             }
+            VNode::TemplateRef(_) => todo!(),
         }
         Ok(())
     }

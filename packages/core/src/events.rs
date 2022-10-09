@@ -3,7 +3,7 @@
 //!
 //! This is all kinda WIP, but the bones are there.
 
-use crate::{ElementId, ScopeId};
+use crate::{nodes::GlobalNodeId, ScopeId};
 use std::{any::Any, cell::Cell, fmt::Debug, rc::Rc, sync::Arc};
 
 pub(crate) struct BubbleState {
@@ -32,7 +32,7 @@ impl BubbleState {
 /// # Example
 /// ```rust, ignore
 /// fn App(cx: Scope) -> Element {
-///     rsx!(cx, div {
+///     render!(div {
 ///         onclick: move |_| println!("Clicked!")
 ///     })
 /// }
@@ -58,7 +58,7 @@ pub struct UserEvent {
     pub priority: EventPriority,
 
     /// The optional real node associated with the trigger
-    pub element: Option<ElementId>,
+    pub element: Option<GlobalNodeId>,
 
     /// The event type IE "onclick" or "onmouseover"
     pub name: &'static str,

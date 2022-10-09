@@ -26,17 +26,11 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
 
     #[cfg(feature = "macro")]
-    pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
+    pub use dioxus_core_macro::{format_args_f, inline_props, render, rsx, Props};
 
     #[cfg(feature = "html")]
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
     pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
-
-    #[cfg(feature = "hot-reload")]
-    pub use dioxus_rsx_interpreter::{
-        captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
-        get_line_num, resolve_scope, CodeLocation, RsxContext,
-    };
 }

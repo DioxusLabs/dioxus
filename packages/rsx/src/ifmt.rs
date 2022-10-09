@@ -2,85 +2,35 @@ use std::{collections::HashSet, str::FromStr};
 
 use proc_macro2::{Span, TokenStream};
 
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     *,
 };
 
 pub fn format_args_f_impl(input: IfmtInput) -> Result<TokenStream> {
-    // build format_literal
-    let mut format_literal = String::new();
-    let mut expr_counter = 0;
-    for segment in input.segments.iter() {
-        match segment {
-            Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
-            Segment::Formatted {
-                format_args,
-                segment,
-            } => {
-                format_literal += "{";
-                match segment {
-                    FormattedSegment::Expr(_) => {
-                        format_literal += &expr_counter.to_string();
-                        expr_counter += 1;
-                    }
-                    FormattedSegment::Ident(ident) => {
-                        format_literal += &ident.to_string();
-                    }
-                }
-                format_literal += ":";
-                format_literal += format_args;
-                format_literal += "}";
-            }
-        }
-    }
-
-    let positional_args = input.segments.iter().filter_map(|seg| {
-        if let Segment::Formatted {
-            segment: FormattedSegment::Expr(expr),
-            ..
-        } = seg
-        {
-            Some(expr)
-        } else {
-            None
-        }
-    });
-
-    // remove duplicate idents
-    let named_args_idents: HashSet<_> = input
-        .segments
-        .iter()
-        .filter_map(|seg| {
-            if let Segment::Formatted {
-                segment: FormattedSegment::Ident(ident),
-                ..
-            } = seg
-            {
-                Some(ident)
-            } else {
-                None
-            }
-        })
-        .collect();
-    let named_args = named_args_idents
-        .iter()
-        .map(|ident| quote!(#ident = #ident));
-
-    Ok(quote! {
-        format_args!(
-            #format_literal
-            #(, #positional_args)*
-            #(, #named_args)*
-        )
-    })
+    Ok(input.into_token_stream())
 }
 
 #[allow(dead_code)] // dumb compiler does not see the struct being used...
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 pub struct IfmtInput {
+    pub source: Option<LitStr>,
     pub segments: Vec<Segment>,
+}
+
+impl IfmtInput {
+    pub fn to_static(&self) -> Option<String> {
+        self.segments
+            .iter()
+            .try_fold(String::new(), |acc, segment| {
+                if let Segment::Literal(seg) = segment {
+                    Some(acc + seg)
+                } else {
+                    None
+                }
+            })
+    }
 }
 
 impl FromStr for IfmtInput {
@@ -96,7 +46,9 @@ impl FromStr for IfmtInput {
                     current_literal.push(c);
                     continue;
                 }
-                segments.push(Segment::Literal(current_literal));
+                if !current_literal.is_empty() {
+                    segments.push(Segment::Literal(current_literal));
+                }
                 current_literal = String::new();
                 let mut current_captured = String::new();
                 while let Some(c) = chars.next() {
@@ -104,10 +56,10 @@ impl FromStr for IfmtInput {
                         let mut current_format_args = String::new();
                         for c in chars.by_ref() {
                             if c == '}' {
-                                segments.push(Segment::Formatted {
+                                segments.push(Segment::Formatted(FormattedSegment {
                                     format_args: current_format_args,
-                                    segment: FormattedSegment::parse(&current_captured)?,
-                                });
+                                    segment: FormattedSegmentType::parse(&current_captured)?,
+                                }));
                                 break;
                             }
                             current_format_args.push(c);
@@ -115,10 +67,10 @@ impl FromStr for IfmtInput {
                         break;
                     }
                     if c == '}' {
-                        segments.push(Segment::Formatted {
+                        segments.push(Segment::Formatted(FormattedSegment {
                             format_args: String::new(),
-                            segment: FormattedSegment::parse(&current_captured)?,
-                        });
+                            segment: FormattedSegmentType::parse(&current_captured)?,
+                        }));
                         break;
                     }
                     current_captured.push(c);
@@ -138,27 +90,117 @@ impl FromStr for IfmtInput {
                 current_literal.push(c);
             }
         }
-        segments.push(Segment::Literal(current_literal));
-        Ok(Self { segments })
+        if !current_literal.is_empty() {
+            segments.push(Segment::Literal(current_literal));
+        }
+        Ok(Self {
+            segments,
+            source: None,
+        })
     }
 }
 
-#[derive(Debug)]
-pub enum Segment {
-    Literal(String),
-    Formatted {
-        format_args: String,
-        segment: FormattedSegment,
-    },
+impl ToTokens for IfmtInput {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        // build format_literal
+        let mut format_literal = String::new();
+        let mut expr_counter = 0;
+        for segment in self.segments.iter() {
+            match segment {
+                Segment::Literal(s) => format_literal += &s.replace('{', "{{").replace('}', "}}"),
+                Segment::Formatted(FormattedSegment {
+                    format_args,
+                    segment,
+                }) => {
+                    format_literal += "{";
+                    match segment {
+                        FormattedSegmentType::Expr(_) => {
+                            format_literal += &expr_counter.to_string();
+                            expr_counter += 1;
+                        }
+                        FormattedSegmentType::Ident(ident) => {
+                            format_literal += &ident.to_string();
+                        }
+                    }
+                    format_literal += ":";
+                    format_literal += format_args;
+                    format_literal += "}";
+                }
+            }
+        }
+
+        let positional_args = self.segments.iter().filter_map(|seg| {
+            if let Segment::Formatted(FormattedSegment {
+                segment: FormattedSegmentType::Expr(expr),
+                ..
+            }) = seg
+            {
+                Some(expr)
+            } else {
+                None
+            }
+        });
+
+        // remove duplicate idents
+        let named_args_idents: HashSet<_> = self
+            .segments
+            .iter()
+            .filter_map(|seg| {
+                if let Segment::Formatted(FormattedSegment {
+                    segment: FormattedSegmentType::Ident(ident),
+                    ..
+                }) = seg
+                {
+                    Some(ident)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let named_args = named_args_idents
+            .iter()
+            .map(|ident| quote!(#ident = #ident));
+
+        quote! {
+            format_args!(
+                #format_literal
+                #(, #positional_args)*
+                #(, #named_args)*
+            )
+        }
+        .to_tokens(tokens)
+    }
 }
 
-#[derive(Debug)]
-pub enum FormattedSegment {
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum Segment {
+    Literal(String),
+    Formatted(FormattedSegment),
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct FormattedSegment {
+    format_args: String,
+    segment: FormattedSegmentType,
+}
+
+impl ToTokens for FormattedSegment {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let (fmt, seg) = (&self.format_args, &self.segment);
+        let fmt = format!("{{0:{}}}", fmt);
+        tokens.append_all(quote! {
+            format_args!(#fmt, #seg)
+        });
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum FormattedSegmentType {
     Expr(Box<Expr>),
     Ident(Ident),
 }
 
-impl FormattedSegment {
+impl FormattedSegmentType {
     fn parse(input: &str) -> Result<Self> {
         if let Ok(ident) = parse_str::<Ident>(input) {
             if ident == input {
@@ -176,7 +218,7 @@ impl FormattedSegment {
     }
 }
 
-impl ToTokens for FormattedSegment {
+impl ToTokens for FormattedSegmentType {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
             Self::Expr(expr) => expr.to_tokens(tokens),
@@ -189,6 +231,8 @@ impl Parse for IfmtInput {
     fn parse(input: ParseStream) -> Result<Self> {
         let input: LitStr = input.parse()?;
         let input_str = input.value();
-        IfmtInput::from_str(&input_str)
+        let mut ifmt = IfmtInput::from_str(&input_str)?;
+        ifmt.source = Some(input);
+        Ok(ifmt)
     }
 }

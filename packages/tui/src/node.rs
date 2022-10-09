@@ -61,11 +61,11 @@ impl NodeDepState<()> for PreventDefault {
         _sibling: (),
         _ctx: &Self::Ctx,
     ) -> bool {
-        let new = match node
-            .attributes()
-            .find(|a| a.name == "dioxus-prevent-default")
-            .and_then(|a| a.value.as_text())
-        {
+        let new = match node.attributes().and_then(|mut attrs| {
+            attrs
+                .find(|a| a.attribute.name == "dioxus-prevent-default")
+                .and_then(|a| a.value.as_text())
+        }) {
             Some("onfocus") => PreventDefault::Focus,
             Some("onkeypress") => PreventDefault::KeyPress,
             Some("onkeyrelease") => PreventDefault::KeyRelease,
