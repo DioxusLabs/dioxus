@@ -151,7 +151,7 @@ pub struct TemplateContext<'b> {
     /// The dynamic text
     pub text_segments: &'b [&'b str],
     /// The dynamic attributes
-    pub attributes: &'b [AttributeValue<'b>],
+    pub attributes: &'b [Option<AttributeValue<'b>>],
     /// The dynamic attributes
     // The listeners must not change during the lifetime of the context, use a dynamic node if the listeners change
     pub listeners: &'b [Listener<'b>],
@@ -177,8 +177,8 @@ impl<'b> TemplateContext<'b> {
     }
 
     /// Resolve an attribute value
-    pub fn resolve_attribute(&self, idx: usize) -> &'b AttributeValue<'b> {
-        &self.attributes[idx]
+    pub fn resolve_attribute(&self, idx: usize) -> Option<&'b AttributeValue<'b>> {
+        self.attributes[idx].as_ref()
     }
 
     /// Resolve a listener

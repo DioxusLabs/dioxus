@@ -658,18 +658,17 @@ where
                 } = el;
                 for attr in attributes.as_ref() {
                     if let TemplateAttributeValue::Dynamic(idx) = attr.value {
-                        let attribute = Attribute {
-                            attribute: attr.attribute,
-                            value: template_ref
-                                .dynamic_context
-                                .resolve_attribute(idx)
-                                .to_owned(),
-                            is_static: false,
-                        };
-                        let scope_bump = diff_state.current_scope_bump();
-                        diff_state
-                            .mutations
-                            .set_attribute(scope_bump.alloc(attribute), self.id);
+                        if let Some(value) = template_ref.dynamic_context.resolve_attribute(idx) {
+                            let attribute = Attribute {
+                                attribute: attr.attribute,
+                                value: value.to_owned(),
+                                is_static: false,
+                            };
+                            let scope_bump = diff_state.current_scope_bump();
+                            diff_state
+                                .mutations
+                                .set_attribute(scope_bump.alloc(attribute), self.id);
+                        }
                     }
                 }
                 for listener_idx in listeners.as_ref() {

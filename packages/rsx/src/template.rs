@@ -421,10 +421,17 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Ident(name),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(
-                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
-                                                .into_bump_str()
-                                        ))),
+                                        if attr.maybe{
+                                            self.dynamic_context.add_attr(quote!((#value).map(|value| AttributeValue::Text(
+                                                dioxus::core::exports::bumpalo::format!(in __bump, "{}", value)
+                                                    .into_bump_str()
+                                            ))))
+                                        }else{
+                                            self.dynamic_context.add_attr(quote!(Some(AttributeValue::Text(
+                                                dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                    .into_bump_str()
+                                            ))))
+                                        },
                                     ),
                                 })
                             }
@@ -443,10 +450,17 @@ impl TemplateBuilder {
                                     element_tag: el.name.clone(),
                                     name: AttributeName::Str(name),
                                     value: TemplateAttributeValue::Dynamic(
-                                        self.dynamic_context.add_attr(quote!(AttributeValue::Text(
-                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
-                                                .into_bump_str()
-                                        ))),
+                                        if attr.maybe{
+                                            self.dynamic_context.add_attr(quote!((#value).map(|value| AttributeValue::Text(
+                                                dioxus::core::exports::bumpalo::format!(in __bump, "{}", value)
+                                                    .into_bump_str()
+                                            ))))
+                                        }else{
+                                            self.dynamic_context.add_attr(quote!(Some(AttributeValue::Text(
+                                                dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                    .into_bump_str()
+                                            ))))
+                                        },
                                     ),
                                 })
                             }
@@ -456,10 +470,17 @@ impl TemplateBuilder {
                                 element_tag: el.name.clone(),
                                 name: AttributeName::Ident(name),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(
-                                        dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
-                                            .into_bump_str()
-                                    ))),
+                                    if attr.maybe{
+                                        self.dynamic_context.add_attr(quote!((#value).map(|value| AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", value)
+                                                .into_bump_str()
+                                        ))))
+                                    }else{
+                                        self.dynamic_context.add_attr(quote!(Some(AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                .into_bump_str()
+                                        ))))
+                                    },
                                 ),
                             })
                         }
@@ -468,10 +489,17 @@ impl TemplateBuilder {
                                 element_tag: el.name.clone(),
                                 name: AttributeName::Str(name),
                                 value: TemplateAttributeValue::Dynamic(
-                                    self.dynamic_context.add_attr(quote!(AttributeValue::Text(
-                                        dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
-                                            .into_bump_str()
-                                    ))),
+                                    if attr.maybe{
+                                        self.dynamic_context.add_attr(quote!((#value).map(|value| AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", value)
+                                                .into_bump_str()
+                                        ))))
+                                    }else{
+                                        self.dynamic_context.add_attr(quote!(Some(AttributeValue::Text(
+                                            dioxus::core::exports::bumpalo::format!(in __bump, "{}", #value)
+                                                .into_bump_str()
+                                        ))))
+                                    },
                                 ),
                             })
                         }

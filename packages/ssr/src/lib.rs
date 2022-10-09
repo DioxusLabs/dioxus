@@ -315,16 +315,14 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                         None => {
                             if attr.attribute.name == "dangerous_inner_html" {
                                 inner_html = {
-                                    let text = match &attr.value {
+                                    match &attr.value {
                                         TemplateAttributeValue::Static(val) => {
-                                            val.allocate(&self.bump).as_text().unwrap()
+                                            Some(val.allocate(&self.bump).as_text().unwrap())
                                         }
                                         TemplateAttributeValue::Dynamic(idx) => dynamic_context
                                             .resolve_attribute(*idx)
-                                            .as_text()
-                                            .unwrap(),
-                                    };
-                                    Some(text)
+                                            .and_then(|val| val.as_text()),
+                                    }
                                 }
                             } else if is_boolean_attribute(attr.attribute.name) {
                                 match &attr.value {
@@ -335,9 +333,10 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                                         }
                                     }
                                     TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        if val.is_truthy() {
-                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                        if let Some(val) = dynamic_context.resolve_attribute(*idx) {
+                                            if val.is_truthy() {
+                                                write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                            }
                                         }
                                     }
                                 }
@@ -348,8 +347,9 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                                         write!(f, " {}=\"{}\"", attr.attribute.name, val)?
                                     }
                                     TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                        if let Some(val) = dynamic_context.resolve_attribute(*idx) {
+                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+                                        }
                                     }
                                 }
                             }
@@ -366,8 +366,9 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                                         write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
                                     }
                                     TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+                                        if let Some(val) = dynamic_context.resolve_attribute(*idx) {
+                                            write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+                                        }
                                     }
                                 }
                                 match attr_iter.peek() {

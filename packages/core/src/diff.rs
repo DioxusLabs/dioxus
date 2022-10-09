@@ -603,12 +603,14 @@ impl<'b> DiffState<'b> {
                 if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type {
                     let TemplateElement { attributes, .. } = el;
                     let attr = &attributes.as_ref()[*attr_idx];
-                    let attribute = Attribute {
-                        attribute: attr.attribute,
-                        value: new.dynamic_context.resolve_attribute(idx).clone(),
-                        is_static: false,
-                    };
-                    mutations.set_attribute(scope_bump.alloc(attribute), *node_id);
+                    if let Some(value) = new.dynamic_context.resolve_attribute(idx) {
+                        let attribute = Attribute {
+                            attribute: attr.attribute,
+                            value: value.clone(),
+                            is_static: false,
+                        };
+                        mutations.set_attribute(scope_bump.alloc(attribute), *node_id);
+                    }
                 } else {
                     panic!("expected element node");
                 }
@@ -632,7 +634,11 @@ impl<'b> DiffState<'b> {
                 let attr = &attributes.as_ref()[template_attr_idx];
                 let value = match &attr.value {
                     TemplateAttributeValue::Dynamic(idx) => {
-                        new.dynamic_context.resolve_attribute(*idx).clone()
+                        if let Some(value) = new.dynamic_context.resolve_attribute(*idx) {
+                            value.clone()
+                        } else {
+                            return;
+                        }
                     }
                     TemplateAttributeValue::Static(value) => value.allocate(scope_bump),
                 };
