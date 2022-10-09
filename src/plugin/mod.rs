@@ -33,11 +33,6 @@ impl PluginManager {
     pub fn init(config: toml::Value) -> anyhow::Result<()> {
         let lua = LUA.lock().unwrap();
 
-        if !config.is_table() {
-            // if plugins config is not a table, then termination init
-            return Ok(());
-        }
-
         let manager = lua.create_table().unwrap();
         let plugin_dir = Self::init_plugin_dir();
 
@@ -55,6 +50,8 @@ impl PluginManager {
         lua.globals()
             .set("library_dir", plugin_dir.to_str().unwrap())
             .unwrap();
+        // lua.globals()
+        //     .set("config_info", );
 
         let mut index: u32 = 1;
         let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
@@ -122,16 +119,20 @@ impl PluginManager {
                 }
                 Ok(false) => {
                     log::warn!("Plugin init function result is `false`, init failed.");
-                    let _ = lua.load(mlua::chunk! {
-                        table.remove(manager, $idx)
-                    }).exec();
+                    let _ = lua
+                        .load(mlua::chunk! {
+                            table.remove(manager, $idx)
+                        })
+                        .exec();
                 }
                 Err(e) => {
                     // plugin init failed
                     log::warn!("Plugin init failed: {e}");
-                    let _ = lua.load(mlua::chunk! {
-                        table.remove(manager, $idx)
-                    }).exec();
+                    let _ = lua
+                        .load(mlua::chunk! {
+                            table.remove(manager, $idx)
+                        })
+                        .exec();
                 }
             }
         }
