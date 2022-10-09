@@ -6,6 +6,7 @@ use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
 use dioxus_native_core::real_dom::OwnedAttributeView;
 use dioxus_native_core::state::ChildDepState;
+use dioxus_native_core::RealNodeId;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
@@ -100,7 +101,7 @@ impl ChildDepState for TaffyLayout {
             }
 
             // the root node fills the entire area
-            if node.id() == ElementId(0) {
+            if node.id() == RealNodeId::ElementId(ElementId(0)) {
                 apply_layout_attributes("width", "100%", &mut style);
                 apply_layout_attributes("height", "100%", &mut style);
             }

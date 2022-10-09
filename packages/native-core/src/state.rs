@@ -1,12 +1,12 @@
 use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::GlobalNodeId;
 use fxhash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};
 use crate::real_dom::NodeData;
 use crate::traversable::Traversable;
+use crate::RealNodeId;
 
 /// Join two sorted iterators
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
@@ -209,14 +209,14 @@ pub trait State: Default + Clone {
     #[doc(hidden)]
     fn update<
         'a,
-        T: Traversable<Node = Self, Id = GlobalNodeId>,
-        T2: Traversable<Node = NodeData, Id = GlobalNodeId>,
+        T: Traversable<Node = Self, Id = RealNodeId>,
+        T2: Traversable<Node = NodeData, Id = RealNodeId>,
     >(
-        dirty: &[(GlobalNodeId, NodeMask)],
+        dirty: &[(RealNodeId, NodeMask)],
         state_tree: &'a mut T,
         rdom: &'a T2,
         ctx: &AnyMap,
-    ) -> FxHashSet<GlobalNodeId>;
+    ) -> FxHashSet<RealNodeId>;
 }
 
 impl ChildDepState for () {

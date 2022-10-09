@@ -62,14 +62,14 @@ fn events_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement { tag: "div", root: 1 },
-            NewEventListener { event_name: "click", scope: ScopeId(0), root: 1 },
-            CreateElement { tag: "div", root: 2 },
-            CreateTextNode { text: "nested", root: 3 },
-            AppendChildren { many: 1 },
-            CreateTextNode { text: "Click me!", root: 4 },
-            AppendChildren { many: 2 },
-            AppendChildren { many: 1 },
+            CreateElement { root: Some(1), tag: "div", children: 0 },
+            NewEventListener { event_name: "click", scope: ScopeId(0), root: Some(1) },
+            CreateElement { root: Some(2), tag: "div", children: 0 },
+            CreateTextNode { root: Some(3), text: "nested" },
+            AppendChildren { root: Some(2), children: vec![3] },
+            CreateTextNode { root: Some(4), text: "Click me!" },
+            AppendChildren { root: Some(1), children: vec![2, 4] },
+            AppendChildren { root: Some(0), children: vec![1] }
         ]
     )
 }
@@ -105,24 +105,24 @@ fn components_generate() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode { text: "Text0", root: 1 },
-            AppendChildren { many: 1 },
+            CreateTextNode { root: Some(1), text: "Text0" },
+            AppendChildren { root: Some(0), children: vec![1] }
         ]
     );
 
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement { tag: "div", root: 2 },
-            ReplaceWith { root: 1, m: 1 },
+            CreateElement { root: Some(2), tag: "div", children: 0 },
+            ReplaceWith { root: Some(1), nodes: vec![2] }
         ]
     );
 
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode { text: "Text2", root: 1 },
-            ReplaceWith { root: 2, m: 1 },
+            CreateTextNode { root: Some(1), text: "Text2" },
+            ReplaceWith { root: Some(2), nodes: vec![1] }
         ]
     );
 
@@ -130,40 +130,43 @@ fn components_generate() {
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement { tag: "h1", root: 2 },
-            ReplaceWith { root: 1, m: 1 },
+            CreateElement { root: Some(2), tag: "h1", children: 0 },
+            ReplaceWith { root: Some(1), nodes: vec![2] }
         ]
     );
 
     // placeholder
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
-        [CreatePlaceholder { root: 1 }, ReplaceWith { root: 2, m: 1 },]
-    );
-
-    assert_eq!(
-        dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode { text: "text 3", root: 2 },
-            ReplaceWith { root: 1, m: 1 },
+            CreatePlaceholder { root: Some(1) },
+            ReplaceWith { root: Some(2), nodes: vec![1] }
         ]
     );
 
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateTextNode { text: "text 0", root: 1 },
-            CreateTextNode { text: "text 1", root: 3 },
-            ReplaceWith { root: 2, m: 2 },
+            CreateTextNode { root: Some(2), text: "text 3" },
+            ReplaceWith { root: Some(1), nodes: vec![2] }
         ]
     );
 
     assert_eq!(
         dom.hard_diff(ScopeId(0)).edits,
         [
-            CreateElement { tag: "h1", root: 2 },
-            ReplaceWith { root: 1, m: 1 },
-            Remove { root: 3 },
+            CreateTextNode { text: "text 0", root: Some(1) },
+            CreateTextNode { text: "text 1", root: Some(3) },
+            ReplaceWith { root: Some(2), nodes: vec![1, 3] },
+        ]
+    );
+
+    assert_eq!(
+        dom.hard_diff(ScopeId(0)).edits,
+        [
+            CreateElement { tag: "h1", root: Some(2), children: 0 },
+            ReplaceWith { root: Some(1), nodes: vec![2] },
+            Remove { root: Some(3) },
         ]
     );
 }

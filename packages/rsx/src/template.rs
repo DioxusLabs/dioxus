@@ -54,7 +54,6 @@ struct TemplateElementBuilder {
     attributes: Vec<TemplateAttributeBuilder>,
     children: Vec<TemplateNodeId>,
     listeners: Vec<usize>,
-    parent: Option<TemplateNodeId>,
 }
 
 #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -73,7 +72,6 @@ impl TemplateElementBuilder {
             attributes,
             children,
             listeners,
-            parent,
         } = self;
         let (element_tag, element_ns) =
             element_to_static_str(&tag.to_string()).ok_or_else(|| {
@@ -94,7 +92,6 @@ impl TemplateElementBuilder {
             owned_attributes,
             children,
             listeners,
-            parent,
         ))
     }
 }
@@ -106,19 +103,11 @@ impl ToTokens for TemplateElementBuilder {
             attributes,
             children,
             listeners,
-            parent,
         } = self;
         let children = children.iter().map(|id| {
             let raw = id.0;
             quote! {TemplateNodeId(#raw)}
         });
-        let parent = match parent {
-            Some(id) => {
-                let raw = id.0;
-                quote! {Some(TemplateNodeId(#raw))}
-            }
-            None => quote! {None},
-        };
         tokens.append_all(quote! {
             TemplateElement::new(
                 dioxus_elements::#tag::TAG_NAME,
@@ -126,7 +115,6 @@ impl ToTokens for TemplateElementBuilder {
                 &[#(#attributes),*],
                 &[#(#children),*],
                 &[#(#listeners),*],
-                #parent,
             )
         })
     }
@@ -279,12 +267,18 @@ impl ToTokens for TemplateNodeTypeBuilder {
                 TemplateNodeType::Element(#el)
             }),
             TemplateNodeTypeBuilder::Text(txt) => {
+                let mut length = 0;
+
                 let segments = txt.segments.iter().map(|seg| match seg {
-                    TextTemplateSegment::Static(s) => quote!(TextTemplateSegment::Static(#s)),
+                    TextTemplateSegment::Static(s) => {
+                        length += s.len();
+                        quote!(TextTemplateSegment::Static(#s))
+                    }
                     TextTemplateSegment::Dynamic(idx) => quote!(TextTemplateSegment::Dynamic(#idx)),
                 });
+
                 tokens.append_all(quote! {
-                    TemplateNodeType::Text(TextTemplate::new(&[#(#segments),*]))
+                    TemplateNodeType::Text(TextTemplate::new(&[#(#segments),*], #length))
                 });
             }
             TemplateNodeTypeBuilder::DynamicNode(idx) => tokens.append_all(quote! {
@@ -296,32 +290,31 @@ impl ToTokens for TemplateNodeTypeBuilder {
 
 struct TemplateNodeBuilder {
     id: TemplateNodeId,
+    depth: usize,
+    parent: Option<TemplateNodeId>,
     node_type: TemplateNodeTypeBuilder,
+    path: Vec<usize>,
 }
 
 impl TemplateNodeBuilder {
     #[cfg(any(feature = "hot-reload", debug_assertions))]
     fn try_into_owned(self, location: &OwnedCodeLocation) -> Result<OwnedTemplateNode, Error> {
-        let TemplateNodeBuilder { id, node_type } = self;
+        let TemplateNodeBuilder {
+            id,
+            node_type,
+            parent,
+            depth,
+            path,
+        } = self;
         let node_type = node_type.try_into_owned(location)?;
         Ok(OwnedTemplateNode {
             id,
             node_type,
             locally_static: false,
-            fully_static: false,
+            parent,
+            depth,
+            path,
         })
-    }
-
-    fn is_fully_static(&self, nodes: &Vec<TemplateNodeBuilder>) -> bool {
-        self.is_locally_static()
-            && match &self.node_type {
-                TemplateNodeTypeBuilder::Element(el) => el
-                    .children
-                    .iter()
-                    .all(|child| nodes[child.0].is_fully_static(nodes)),
-                TemplateNodeTypeBuilder::Text(_) => true,
-                TemplateNodeTypeBuilder::DynamicNode(_) => unreachable!(),
-            }
     }
 
     fn is_locally_static(&self) -> bool {
@@ -340,18 +333,32 @@ impl TemplateNodeBuilder {
         }
     }
 
-    fn to_tokens(&self, tokens: &mut TokenStream, nodes: &Vec<TemplateNodeBuilder>) {
-        let Self { id, node_type } = self;
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let Self {
+            id,
+            node_type,
+            parent,
+            depth,
+            path,
+        } = self;
         let raw_id = id.0;
-        let fully_static = self.is_fully_static(nodes);
         let locally_static = self.is_locally_static();
+        let parent = match parent {
+            Some(id) => {
+                let id = id.0;
+                quote! {Some(TemplateNodeId(#id))}
+            }
+            None => quote! {None},
+        };
 
         tokens.append_all(quote! {
             TemplateNode {
                 id: TemplateNodeId(#raw_id),
                 node_type: #node_type,
                 locally_static: #locally_static,
-                fully_static: #fully_static,
+                parent: #parent,
+                depth: #depth,
+                path: &[#(#path),*],
             }
         })
     }
@@ -369,8 +376,8 @@ impl TemplateBuilder {
     pub fn from_roots(roots: Vec<BodyNode>) -> Option<Self> {
         let mut builder = Self::default();
 
-        for root in roots {
-            let id = builder.build_node(root, None);
+        for (i, root) in roots.into_iter().enumerate() {
+            let id = builder.build_node(root, None, vec![i], 0);
             builder.root_nodes.push(id);
         }
 
@@ -391,15 +398,21 @@ impl TemplateBuilder {
     fn from_roots_always(roots: Vec<BodyNode>) -> Self {
         let mut builder = Self::default();
 
-        for root in roots {
-            let id = builder.build_node(root, None);
+        for (i, root) in roots.into_iter().enumerate() {
+            let id = builder.build_node(root, None, vec![i], 0);
             builder.root_nodes.push(id);
         }
 
         builder
     }
 
-    fn build_node(&mut self, node: BodyNode, parent: Option<TemplateNodeId>) -> TemplateNodeId {
+    fn build_node(
+        &mut self,
+        node: BodyNode,
+        parent: Option<TemplateNodeId>,
+        path: Vec<usize>,
+        depth: usize,
+    ) -> TemplateNodeId {
         let id = TemplateNodeId(self.nodes.len());
         match node {
             BodyNode::Element(el) => {
@@ -521,14 +534,20 @@ impl TemplateBuilder {
                         attributes,
                         children: Vec::new(),
                         listeners,
-                        parent,
                     }),
+                    parent,
+                    depth,
+                    path: path.clone(),
                 });
-
                 let children: Vec<_> = el
                     .children
                     .into_iter()
-                    .map(|child| self.build_node(child, Some(id)))
+                    .enumerate()
+                    .map(|(i, child)| {
+                        let mut new_path = path.clone();
+                        new_path.push(i);
+                        self.build_node(child, Some(id), new_path, depth + 1)
+                    })
                     .collect();
                 let parent = &mut self.nodes[id.0];
                 if let TemplateNodeTypeBuilder::Element(element) = &mut parent.node_type {
@@ -542,15 +561,22 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::Component(comp)),
                     ),
+                    parent,
+                    depth,
+                    path,
                 });
             }
 
             BodyNode::Text(txt) => {
                 let mut segments = Vec::new();
+                let mut length = 0;
 
                 for segment in txt.segments {
                     segments.push(match segment {
-                        Segment::Literal(lit) => TextTemplateSegment::Static(lit),
+                        Segment::Literal(lit) => {
+                            length += lit.len();
+                            TextTemplateSegment::Static(lit)
+                        }
                         Segment::Formatted(fmted) => {
                             TextTemplateSegment::Dynamic(self.dynamic_context.add_text(fmted))
                         }
@@ -559,7 +585,10 @@ impl TemplateBuilder {
 
                 self.nodes.push(TemplateNodeBuilder {
                     id,
-                    node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments)),
+                    node_type: TemplateNodeTypeBuilder::Text(TextTemplate::new(segments, length)),
+                    parent,
+                    depth,
+                    path,
                 });
             }
 
@@ -569,6 +598,9 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::RawExpr(expr)),
                     ),
+                    parent,
+                    depth,
+                    path,
                 });
             }
         }
@@ -799,7 +831,7 @@ impl ToTokens for TemplateBuilder {
         });
         let mut nodes_quoted = TokenStream::new();
         for n in nodes {
-            n.to_tokens(&mut nodes_quoted, nodes);
+            n.to_tokens(&mut nodes_quoted);
             quote! {,}.to_tokens(&mut nodes_quoted);
         }
 

@@ -275,10 +275,19 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
         Ok(())
     }
 
-    fn render_template_node<TemplateNodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+    fn render_template_node<
+        TemplateNodes,
+        Attributes,
+        V,
+        Children,
+        Listeners,
+        TextSegments,
+        Text,
+        Path,
+    >(
         &self,
         template_nodes: &TemplateNodes,
-        node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
         dynamic_context: &TemplateContext,
         f: &mut impl Write,
         last_node_was_text: &mut bool,
@@ -286,13 +295,14 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
     ) -> std::fmt::Result
     where
         TemplateNodes:
-            AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
         Attributes: AsRef<[TemplateAttribute<V>]>,
         Children: AsRef<[TemplateNodeId]>,
         Listeners: AsRef<[usize]>,
         Text: AsRef<str>,
         TextSegments: AsRef<[TextTemplateSegment<Text>]>,
         V: TemplateValue,
+        Path: AsRef<[usize]>,
     {
         match &node.node_type {
             TemplateNodeType::Element(el) => {
@@ -434,7 +444,7 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
 
                 *last_node_was_text = true;
 
-                let text = dynamic_context.resolve_text(&txt.segments);
+                let text = dynamic_context.resolve_text(txt);
 
                 write!(f, "{}", text)?
             }
