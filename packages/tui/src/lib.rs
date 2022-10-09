@@ -38,8 +38,6 @@ pub mod widgets;
 pub use config::*;
 pub use crossterm;
 pub use hooks::*;
-pub use stretch2::geometry::{Point, Size};
-pub use stretch2::result::Layout;
 
 pub(crate) use node::*;
 

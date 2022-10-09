@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::Query;
-use dioxus_core as dioxus;
+use dioxus::prelude::*;
 use dioxus_core::VNode;
 use dioxus_core::*;
 use dioxus_core_macro::*;

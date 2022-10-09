@@ -1,4 +1,4 @@
-use dioxus_core as dioxus;
+use dioxus::prelude::*;
 use dioxus_core::prelude::fc_to_builder;
 use dioxus_core::VNode;
 use dioxus_core::*;
