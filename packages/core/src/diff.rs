@@ -647,15 +647,17 @@ impl<'b> DiffState<'b> {
                 if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type {
                     let TemplateElement { attributes, .. } = el;
                     let attr = &attributes.as_ref()[*attr_idx];
-                    let attribute = Attribute {
-                        attribute: attr.attribute,
-                        value: new.dynamic_context.resolve_attribute(idx).clone(),
-                        is_static: false,
-                    };
-                    let real_id = new.get_node_id(*node_id, template, new, diff_state);
-                    diff_state
-                        .mutations
-                        .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
+                    if let Some(value) = new.dynamic_context.resolve_attribute(idx) {
+                        let attribute = Attribute {
+                            attribute: attr.attribute,
+                            value: value.clone(),
+                            is_static: false,
+                        };
+                        let real_id = new.get_node_id(*node_id, template, new, diff_state);
+                        diff_state
+                            .mutations
+                            .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
+                    }
                 } else {
                     panic!("expected element node");
                 }
