@@ -1,6 +1,5 @@
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
+use dioxus_web::Config;
 use wasm_bindgen_test::wasm_bindgen_test;
 use web_sys::window;
 
@@ -61,5 +60,5 @@ fn rehydrates() {
         .unwrap()
         .set_inner_html(&format!("<div id='main'>{}</div>", out));
 
-    dioxus_web::launch_cfg(app, |c| c.hydrate(true));
+    dioxus_web::launch_cfg(app, Config::new().hydrate(true));
 }

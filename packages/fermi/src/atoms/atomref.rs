@@ -4,7 +4,7 @@ use std::cell::RefCell;
 pub struct AtomRefBuilder;
 pub type AtomRef<T> = fn(AtomRefBuilder) -> T;
 
-impl<V> Readable<RefCell<V>> for AtomRef<V> {
+impl<V: 'static> Readable<RefCell<V>> for AtomRef<V> {
     fn read(&self, _root: AtomRoot) -> Option<RefCell<V>> {
         todo!()
     }
@@ -14,7 +14,10 @@ impl<V> Readable<RefCell<V>> for AtomRef<V> {
     }
 
     fn unique_id(&self) -> AtomId {
-        *self as *const ()
+        AtomId {
+            ptr: *self as *const (),
+            type_id: std::any::TypeId::of::<V>(),
+        }
     }
 }
 

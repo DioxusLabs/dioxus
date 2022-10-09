@@ -7,7 +7,7 @@ fn main() {
     let mut vdom = VirtualDom::new(example);
     vdom.rebuild();
 
-    let out = dioxus::ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
+    let out = dioxus_ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
     println!("{}", out);
 }
 
@@ -32,27 +32,19 @@ fn example(cx: Scope) -> Element {
 
     cx.render(rsx!(
         div {
-            div {
-                id: "asd",
+            div { id: "asd",
                 "your neighborhood spiderman"
 
                 items.iter().cycle().take(5).map(|f| rsx!{
-                    div {
-                        "{f.a}"
-                    }
+                    div { "{f.a}" }
                 })
 
                 things_list.iter().map(|f| rsx!{
-                    div {
-                        "{f.a}"
-                        "{f.b}"
-                    }
+                    div { "{f.a}" "{f.b}" }
                 })
 
-                mything_read.as_ref().map(|f| rsx!{
-                    div {
-                       "{f}"
-                    }
+                mything_read.as_ref().map(|f| rsx! {
+                    div { "{f}" }
                 })
             }
         }

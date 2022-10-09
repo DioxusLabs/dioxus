@@ -4,14 +4,13 @@ One of Dioxus' killer features is the ability to quickly build a native desktop 
 
 Dioxus Desktop is built off Tauri. Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri - mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly. The next major release of Dioxus-Desktop will include components and hooks for notifications, global shortcuts, menubar, etc.
 
-
 ## Getting Set up
 
 Getting Set up with Dioxus-Desktop is quite easy. Make sure you have Rust and Cargo installed, and then create a new project:
 
 ```shell
 $ cargo new --bin demo
-$ cd app
+$ cd demo
 ```
 
 Add Dioxus with the `desktop` feature:
@@ -38,7 +37,6 @@ fn app(cx: Scope) -> Element {
     })
 }
 ```
-
 
 To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-desktop/).
 

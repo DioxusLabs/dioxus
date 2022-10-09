@@ -7,14 +7,15 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
+use dioxus_core::{DomEdit, SchedulerMsg, UserEvent};
+use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
 
-use crate::WebConfig;
+use crate::Config;
 
 pub struct WebsysDom {
     pub interpreter: Interpreter,
@@ -25,7 +26,7 @@ pub struct WebsysDom {
 }
 
 impl WebsysDom {
-    pub fn new(cfg: WebConfig, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
+    pub fn new(cfg: Config, sender_callback: Rc<dyn Fn(SchedulerMsg)>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
             let mut target = event
@@ -42,9 +43,10 @@ impl WebsysDom {
                         break Ok(UserEvent {
                             name: event_name_from_typ(&typ),
                             data: virtual_event_from_websys_event(event.clone(), target.clone()),
-                            element: Some(ElementId(id)),
+                            element: Some(id),
                             scope_id: None,
                             priority: dioxus_core::EventPriority::Medium,
+                            bubbles: event.bubbles(),
                         });
                     }
                     Some(Err(e)) => {
@@ -64,6 +66,7 @@ impl WebsysDom {
                                 element: None,
                                 scope_id: None,
                                 priority: dioxus_core::EventPriority::Low,
+                                bubbles: event.bubbles(),
                             });
                         }
                     }
@@ -121,12 +124,17 @@ impl WebsysDom {
                     event_name, root, ..
                 } => {
                     let handler: &Function = self.handler.as_ref().unchecked_ref();
-                    self.interpreter.NewEventListener(event_name, root, handler);
+                    self.interpreter.NewEventListener(
+                        event_name,
+                        root,
+                        handler,
+                        event_bubbles(event_name),
+                    );
                 }
 
-                DomEdit::RemoveEventListener { root, event } => {
-                    self.interpreter.RemoveEventListener(root, event)
-                }
+                DomEdit::RemoveEventListener { root, event } => self
+                    .interpreter
+                    .RemoveEventListener(root, event, event_bubbles(event)),
 
                 DomEdit::RemoveAttribute { root, name, ns } => {
                     self.interpreter.RemoveAttribute(root, name, ns)
@@ -148,6 +156,45 @@ impl WebsysDom {
                 } => {
                     let value = serde_wasm_bindgen::to_value(&value).unwrap();
                     self.interpreter.SetAttribute(root, field, value, ns)
+                }
+                DomEdit::CreateTemplateRef { id, template_id } => {
+                    self.interpreter.CreateTemplateRef(id, template_id)
+                }
+                DomEdit::CreateTemplate { id } => self.interpreter.CreateTemplate(id),
+                DomEdit::FinishTemplate { len } => self.interpreter.FinishTemplate(len),
+                DomEdit::EnterTemplateRef { root } => self.interpreter.EnterTemplateRef(root),
+                DomEdit::ExitTemplateRef {} => self.interpreter.ExitTemplateRef(),
+                DomEdit::CreateTextNodeTemplate {
+                    root,
+                    text,
+                    locally_static,
+                } => self
+                    .interpreter
+                    .CreateTextNodeTemplate(text, root, locally_static),
+                DomEdit::CreateElementTemplate {
+                    root,
+                    tag,
+                    locally_static,
+                    fully_static,
+                } => {
+                    self.interpreter
+                        .CreateElementTemplate(tag, root, locally_static, fully_static)
+                }
+                DomEdit::CreateElementNsTemplate {
+                    root,
+                    tag,
+                    ns,
+                    locally_static,
+                    fully_static,
+                } => self.interpreter.CreateElementNsTemplate(
+                    tag,
+                    root,
+                    ns,
+                    locally_static,
+                    fully_static,
+                ),
+                DomEdit::CreatePlaceholderTemplate { root } => {
+                    self.interpreter.CreatePlaceholderTemplate(root)
                 }
             }
         }
@@ -178,12 +225,12 @@ fn virtual_event_from_websys_event(
             })
         }
         "keydown" | "keypress" | "keyup" => Arc::new(KeyboardData::from(event)),
-        "focus" | "blur" => Arc::new(FocusData {}),
+        "focus" | "blur" | "focusout" | "focusin" => Arc::new(FocusData {}),
 
         // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
         // don't have a good solution with the serialized event problem
         "change" | "input" | "invalid" | "reset" | "submit" => {
-            let value: String = (&target)
+            let value: String = target
                 .dyn_ref()
                 .map(|input: &web_sys::HtmlInputElement| {
                     // todo: special case more input types
@@ -226,7 +273,7 @@ fn virtual_event_from_websys_event(
                 for x in 0..elements.length() {
                     let element = elements.item(x).unwrap();
                     if let Some(name) = element.get_attribute("name") {
-                        let value: Option<String> = (&element)
+                        let value: Option<String> = element
                                 .dyn_ref()
                                 .map(|input: &web_sys::HtmlInputElement| {
                                     match input.type_().as_str() {
@@ -258,9 +305,9 @@ fn virtual_event_from_websys_event(
 
             Arc::new(FormData { value, values })
         }
-        "click" | "contextmenu" | "doubleclick" | "drag" | "dragend" | "dragenter" | "dragexit"
-        | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown" | "mouseenter"
-        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
+        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
+        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Arc::new(MouseData::from(event))
         }
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
@@ -305,6 +352,8 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "keypress" => "keypress",
         "keyup" => "keyup",
         "focus" => "focus",
+        "focusout" => "focusout",
+        "focusin" => "focusin",
         "blur" => "blur",
         "change" => "change",
         "input" => "input",
@@ -314,6 +363,7 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "click" => "click",
         "contextmenu" => "contextmenu",
         "doubleclick" => "doubleclick",
+        "dblclick" => "dblclick",
         "drag" => "drag",
         "dragend" => "dragend",
         "dragenter" => "dragenter",
@@ -374,8 +424,8 @@ fn event_name_from_typ(typ: &str) -> &'static str {
         "volumechange" => "volumechange",
         "waiting" => "waiting",
         "toggle" => "toggle",
-        _ => {
-            panic!("unsupported event type")
+        a => {
+            panic!("unsupported event type {:?}", a);
         }
     }
 }

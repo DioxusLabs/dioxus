@@ -3,10 +3,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use dioxus_core::{ElementId, EventPriority, UserEvent};
+use dioxus_core::{EventPriority, GlobalNodeId, UserEvent};
+use dioxus_html::event_bubbles;
 use dioxus_html::on::*;
+use serde::{Deserialize, Serialize};
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub(crate) struct IpcMessage {
     method: String,
     params: serde_json::Value,
@@ -32,10 +34,10 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Deserialize, Serialize)]
 struct ImEvent {
     event: String,
-    mounted_dom_id: u64,
+    mounted_dom_id: GlobalNodeId,
     contents: serde_json::Value,
 }
 
@@ -46,9 +48,9 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         contents,
     } = serde_json::from_value(val).unwrap();
 
-    let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
-
+    let mounted_dom_id = Some(mounted_dom_id);
     let name = event_name_from_type(&event);
+
     let event = make_synthetic_event(&event, contents);
 
     UserEvent {
@@ -56,6 +58,7 @@ pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
         priority: EventPriority::Low,
         scope_id: None,
         element: mounted_dom_id,
+        bubbles: event_bubbles(name),
         data: event,
     }
 }
@@ -102,7 +105,7 @@ fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Sen
             Arc::new(serde_json::from_value::<TouchData>(val).unwrap())
         }
 
-        "scroll" => Arc::new(()),
+        "scroll" => Arc::new(ScrollData {}),
 
         "wheel" => Arc::new(serde_json::from_value::<WheelData>(val).unwrap()),
 

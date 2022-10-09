@@ -11,9 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1", default-features = false }
-dioxus-html = { path = "../html", version = "^0.2.1", default-features = false }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
+dioxus = { path = "../dioxus" }
 futures-channel = "0.3.21"
 url = { version = "2.2.2", default-features = false }
 
@@ -28,7 +26,7 @@ web-sys = { version = "0.3", features = [
     "Url",
     "UrlSearchParams",
     "Window",
-    "Location"
+    "Location",
 ], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
@@ -44,17 +42,15 @@ default = ["query"]
 web = ["web-sys", "gloo-events", "js-sys", "wasm-bindgen"]
 query = ["serde", "serde_urlencoded"]
 wasm_test = []
+hot-reload = ["dioxus/hot-reload"]
 
 [dev-dependencies]
 console_error_panic_hook = "0.1.7"
-dioxus-web = { path = "../web" }
 log = "0.4.14"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
-dioxus-ssr = { path = "../ssr" }
-
-dioxus-router = { path = ".", default-features = false }
+dioxus-web = { path = "../web" }
 
 [target.wasm32-unknown-unknown.dev-dependencies]
 dioxus-router = { path = ".", features = ["web"] }

@@ -24,7 +24,7 @@ fn Thing4<'a>(cx: Scope<'a>, _a: &'a u32) -> Element<'a> {
 }
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

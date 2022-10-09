@@ -1,6 +1,5 @@
-use dioxus_core::prelude::*;
-use dioxus_core_macro::*;
-use dioxus_html as dioxus_elements;
+use dioxus::prelude::*;
+use dioxus_web::Config;
 use web_sys::window;
 
 fn app(cx: Scope) -> Element {
@@ -15,7 +14,7 @@ fn app(cx: Scope) -> Element {
             h2 { "thing 2"}
             "asd"
             "asd"
-            bapp()
+            Bapp {}
         }
         (0..10).map(|f| rsx!{
             div {
@@ -25,7 +24,8 @@ fn app(cx: Scope) -> Element {
     })
 }
 
-fn bapp(cx: Scope) -> Element {
+#[allow(non_snake_case)]
+fn Bapp(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             h1 { "thing 1" }
@@ -61,5 +61,5 @@ fn main() {
         .set_inner_html(&pre);
 
     // now rehydtrate
-    dioxus_web::launch_with_props(app, (), |c| c.hydrate(true));
+    dioxus_web::launch_with_props(app, (), Config::new().hydrate(true));
 }

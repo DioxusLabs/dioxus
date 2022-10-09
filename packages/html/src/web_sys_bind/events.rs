@@ -1,8 +1,12 @@
+use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use crate::on::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
-use crate::KeyCode;
+use keyboard_types::{Code, Key, Modifiers};
+use std::convert::TryInto;
+use std::str::FromStr;
 use wasm_bindgen::JsCast;
 use web_sys::{
     AnimationEvent, CompositionEvent, Event, KeyboardEvent, MouseEvent, PointerEvent, TouchEvent,
@@ -53,40 +57,63 @@ impl From<&CompositionEvent> for CompositionData {
 
 impl From<&KeyboardEvent> for KeyboardData {
     fn from(e: &KeyboardEvent) -> Self {
-        Self {
-            alt_key: e.alt_key(),
-            char_code: e.char_code(),
-            key: e.key(),
-            key_code: KeyCode::from_raw_code(e.key_code() as u8),
-            ctrl_key: e.ctrl_key(),
-            locale: "not implemented".to_string(),
-            location: e.location() as usize,
-            meta_key: e.meta_key(),
-            repeat: e.repeat(),
-            shift_key: e.shift_key(),
-            which: e.which() as usize,
+        let mut modifiers = Modifiers::empty();
+
+        if e.alt_key() {
+            modifiers.insert(Modifiers::ALT);
         }
+        if e.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if e.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if e.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        Self::new(
+            Key::from_str(&e.key()).expect("could not parse key"),
+            Code::from_str(&e.code()).expect("could not parse code"),
+            decode_key_location(
+                e.location()
+                    .try_into()
+                    .expect("could not convert location to u32"),
+            ),
+            e.repeat(),
+            modifiers,
+        )
     }
 }
 
 impl From<&MouseEvent> for MouseData {
     fn from(e: &MouseEvent) -> Self {
-        Self {
-            alt_key: e.alt_key(),
-            button: e.button(),
-            buttons: e.buttons(),
-            client_x: e.client_x(),
-            client_y: e.client_y(),
-            ctrl_key: e.ctrl_key(),
-            meta_key: e.meta_key(),
-            offset_x: e.offset_x(),
-            offset_y: e.offset_y(),
-            screen_x: e.screen_x(),
-            screen_y: e.screen_y(),
-            shift_key: e.shift_key(),
-            page_x: e.page_x(),
-            page_y: e.page_y(),
+        let mut modifiers = Modifiers::empty();
+
+        if e.alt_key() {
+            modifiers.insert(Modifiers::ALT);
         }
+        if e.ctrl_key() {
+            modifiers.insert(Modifiers::CONTROL);
+        }
+        if e.meta_key() {
+            modifiers.insert(Modifiers::META);
+        }
+        if e.shift_key() {
+            modifiers.insert(Modifiers::SHIFT);
+        }
+
+        MouseData::new(
+            Coordinates::new(
+                ScreenPoint::new(e.screen_x().into(), e.screen_y().into()),
+                ClientPoint::new(e.client_x().into(), e.client_y().into()),
+                ElementPoint::new(e.offset_x().into(), e.offset_y().into()),
+                PagePoint::new(e.page_x().into(), e.page_y().into()),
+            ),
+            Some(MouseButton::from_web_code(e.button())),
+            decode_mouse_button_set(e.buttons()),
+            modifiers,
+        )
     }
 }
 
@@ -133,12 +160,7 @@ impl From<&PointerEvent> for PointerData {
 
 impl From<&WheelEvent> for WheelData {
     fn from(e: &WheelEvent) -> Self {
-        Self {
-            delta_x: e.delta_x(),
-            delta_y: e.delta_y(),
-            delta_z: e.delta_z(),
-            delta_mode: e.delta_mode(),
-        }
+        WheelData::from_web_attributes(e.delta_mode(), e.delta_x(), e.delta_y(), e.delta_z())
     }
 }
 

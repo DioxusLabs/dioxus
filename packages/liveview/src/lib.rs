@@ -8,20 +8,12 @@ pub mod adapters {
     #[cfg(feature = "axum")]
     pub mod axum_adapter;
 
-    #[cfg(feature = "actix")]
-    pub mod actix_adapter;
+    #[cfg(feature = "salvo")]
+    pub mod salvo_adapter;
 }
 
 use std::net::SocketAddr;
 
-#[cfg(feature = "warp")]
-pub use adapters::warp_adapter::connect;
-
-#[cfg(feature = "axum")]
-pub use adapters::axum_adapter::connect;
-
-#[cfg(feature = "actix")]
-pub use adapters::actix_adapter::connect;
 use tokio_util::task::LocalPoolHandle;
 
 #[derive(Clone)]

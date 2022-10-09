@@ -1,12 +1,19 @@
-use crate::{innerlude::*, unsafe_utils::extend_vnode};
+use crate::{
+    dynamic_template_context::TemplateContext,
+    innerlude::*,
+    template::{
+        TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
+        TemplateValue, TextTemplateSegment,
+    },
+    unsafe_utils::extend_vnode,
+};
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    borrow::Borrow,
-    cell::{Cell, RefCell},
+    cell::{Cell, Ref, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
@@ -35,6 +42,10 @@ pub(crate) struct ScopeArena {
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
     pub nodes: RefCell<Slab<*const VNode<'static>>>,
     pub tasks: Rc<TaskQueue>,
+    pub template_resolver: RefCell<TemplateResolver>,
+    pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
+    // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
+    pub template_bump: Bump,
 }
 
 impl ScopeArena {
@@ -74,6 +85,9 @@ impl ScopeArena {
                 gen: Cell::new(0),
                 sender,
             }),
+            template_resolver: RefCell::new(TemplateResolver::default()),
+            templates: Rc::new(RefCell::new(FxHashMap::default())),
+            template_bump: Bump::new(),
         }
     }
 
@@ -93,8 +107,7 @@ impl ScopeArena {
         fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
-        container: ElementId,
-        subtree: u32,
+        container: GlobalNodeId,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_gen.get());
@@ -124,7 +137,6 @@ impl ScopeArena {
             scope.height = height;
             scope.fnptr = fc_ptr;
             scope.props.get_mut().replace(vcomp);
-            scope.subtree.set(subtree);
             scope.frames[0].reset();
             scope.frames[1].reset();
             scope.shared_contexts.get_mut().clear();
@@ -155,23 +167,21 @@ impl ScopeArena {
                     props: RefCell::new(Some(vcomp)),
                     frames: [BumpFrame::new(node_capacity), BumpFrame::new(node_capacity)],
 
-                    // todo: subtrees
-                    subtree: Cell::new(0),
-                    is_subtree_root: Cell::new(false),
-
                     generation: 0.into(),
 
                     tasks: self.tasks.clone(),
-                    shared_contexts: Default::default(),
+                    shared_contexts: RefCell::default(),
 
                     items: RefCell::new(SelfReferentialItems {
-                        listeners: Default::default(),
-                        borrowed_props: Default::default(),
+                        listeners: Vec::default(),
+                        borrowed_props: Vec::default(),
                     }),
 
                     hook_arena: Bump::new(),
                     hook_vals: RefCell::new(Vec::with_capacity(hook_capacity)),
-                    hook_idx: Default::default(),
+                    hook_idx: Cell::default(),
+
+                    templates: self.templates.clone(),
                 }),
             );
         }
@@ -180,8 +190,7 @@ impl ScopeArena {
     }
 
     // Removes a scope and its descendents from the arena
-    pub fn try_remove(&self, id: ScopeId) -> Option<()> {
-        log::trace!("removing scope {:?}", id);
+    pub fn try_remove(&self, id: ScopeId) {
         self.ensure_drop_safety(id);
 
         // Dispose of any ongoing tasks
@@ -200,8 +209,6 @@ impl ScopeArena {
         scope.reset();
 
         self.free_scopes.borrow_mut().push(scope);
-
-        Some(())
     }
 
     pub fn reserve_node<'a>(&self, node: &'a VNode<'a>) -> ElementId {
@@ -307,7 +314,7 @@ impl ScopeArena {
             let node = frame
                 .bump
                 .alloc(VNode::Placeholder(frame.bump.alloc(VPlaceholder {
-                    id: Default::default(),
+                    id: Cell::default(),
                 })));
             frame.node.set(unsafe { extend_vnode(node) });
         }
@@ -317,43 +324,140 @@ impl ScopeArena {
         scope.cycle_frame();
     }
 
-    pub fn call_listener_with_bubbling(&self, event: UserEvent, element: ElementId) {
+    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: GlobalNodeId) {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
-        log::trace!("calling listener {:?}, {:?}", event, element);
         let state = Rc::new(BubbleState::new());
 
         while let Some(id) = cur_el.take() {
-            if let Some(el) = nodes.get(id.0) {
-                let real_el = unsafe { &**el };
-                log::trace!("looking for listener on {:?}", real_el);
-
-                if let VNode::Element(real_el) = real_el {
-                    for listener in real_el.listeners.borrow().iter() {
-                        if listener.event == event.name {
-                            log::trace!("calling listener {:?}", listener.event);
-                            if state.canceled.get() {
-                                // stop bubbling if canceled
-                                break;
-                            }
-
-                            let mut cb = listener.callback.borrow_mut();
-                            if let Some(cb) = cb.as_mut() {
-                                // todo: arcs are pretty heavy to clone
-                                // we really want to convert arc to rc
-                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                                // we could convert arc to rc internally or something
-                                (cb)(AnyEvent {
-                                    bubble_state: state.clone(),
-                                    data: event.data.clone(),
-                                });
-                            }
+            if state.canceled.get() {
+                // stop bubbling if canceled
+                return;
+            }
+            match id {
+                GlobalNodeId::TemplateId {
+                    template_ref_id,
+                    template_node_id,
+                } => {
+                    log::trace!(
+                        "looking for listener in {:?} in node {:?}",
+                        template_ref_id,
+                        template_node_id
+                    );
+                    if let Some(template) = nodes.get(template_ref_id.0) {
+                        let template = unsafe { &**template };
+                        if let VNode::TemplateRef(template_ref) = template {
+                            let templates = self.templates.borrow();
+                            let template = templates.get(&template_ref.template_id).unwrap();
+                            cur_el = template.borrow().with_node(
+                                template_node_id,
+                                bubble_template,
+                                bubble_template,
+                                (
+                                    &nodes,
+                                    &template_ref.dynamic_context,
+                                    event,
+                                    &state,
+                                    template_ref_id,
+                                ),
+                            );
                         }
                     }
-
-                    cur_el = real_el.parent.get();
                 }
+                GlobalNodeId::VNodeId(id) => {
+                    if let Some(el) = nodes.get(id.0) {
+                        let real_el = unsafe { &**el };
+                        log::trace!("looking for listener on {:?}", real_el);
+
+                        if let VNode::Element(real_el) = real_el {
+                            for listener in real_el.listeners.iter() {
+                                if listener.event == event.name {
+                                    log::trace!("calling listener {:?}", listener.event);
+
+                                    let mut cb = listener.callback.borrow_mut();
+                                    if let Some(cb) = cb.as_mut() {
+                                        // todo: arcs are pretty heavy to clone
+                                        // we really want to convert arc to rc
+                                        // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                        // we could convert arc to rc internally or something
+                                        (cb)(AnyEvent {
+                                            bubble_state: state.clone(),
+                                            data: event.data.clone(),
+                                        });
+                                    }
+                                    break;
+                                }
+                            }
+
+                            cur_el = real_el.parent.get();
+                        }
+                    }
+                }
+            }
+            if !event.bubbles {
+                return;
+            }
+        }
+
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+            ctx: (
+                &Ref<Slab<*const VNode>>,
+                &TemplateContext<'b>,
+                &UserEvent,
+                &Rc<BubbleState>,
+                ElementId,
+            ),
+        ) -> Option<GlobalNodeId>
+        where
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            let (vnodes, dynamic_context, event, state, template_ref_id) = ctx;
+            if let TemplateNodeType::Element(el) = &node.node_type {
+                let TemplateElement { listeners, .. } = el;
+                for listener_idx in listeners.as_ref() {
+                    let listener = dynamic_context.resolve_listener(*listener_idx);
+                    if listener.event == event.name {
+                        log::trace!("calling listener {:?}", listener.event);
+
+                        let mut cb = listener.callback.borrow_mut();
+                        if let Some(cb) = cb.as_mut() {
+                            // todo: arcs are pretty heavy to clone
+                            // we really want to convert arc to rc
+                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                            // we could convert arc to rc internally or something
+                            (cb)(AnyEvent {
+                                bubble_state: state.clone(),
+                                data: event.data.clone(),
+                            });
+                        }
+                        break;
+                    }
+                }
+
+                if let Some(id) = el.parent {
+                    Some(GlobalNodeId::TemplateId {
+                        template_ref_id,
+                        template_node_id: id,
+                    })
+                } else {
+                    vnodes.get(template_ref_id.0).and_then(|el| {
+                        let real_el = unsafe { &**el };
+                        if let VNode::Element(real_el) = real_el {
+                            real_el.parent.get()
+                        } else {
+                            None
+                        }
+                    })
+                }
+            } else {
+                None
             }
         }
     }
@@ -380,14 +484,11 @@ impl ScopeArena {
 
     // this is totally okay since all our nodes are always in a valid state
     pub fn get_element(&self, id: ElementId) -> Option<&VNode> {
-        let ptr = self.nodes.borrow().get(id.0).cloned();
-        match ptr {
-            Some(ptr) => {
-                let node = unsafe { &*ptr };
-                Some(unsafe { extend_vnode(node) })
-            }
-            None => None,
-        }
+        self.nodes
+            .borrow()
+            .get(id.0)
+            .copied()
+            .map(|ptr| unsafe { extend_vnode(&*ptr) })
     }
 }
 
@@ -437,7 +538,7 @@ impl<'a, P> std::ops::Deref for Scope<'a, P> {
 
 /// A component's unique identifier.
 ///
-/// `ScopeId` is a `usize` that is unique across the entire VirtualDOM and across time. ScopeIDs will never be reused
+/// `ScopeId` is a `usize` that is unique across the entire [`VirtualDom`] and across time. [`ScopeID`]s will never be reused
 /// once a component has been unmounted.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
@@ -445,7 +546,7 @@ pub struct ScopeId(pub usize);
 
 /// A task's unique identifier.
 ///
-/// `TaskId` is a `usize` that is unique across the entire VirtualDOM and across time. TaskIDs will never be reused
+/// `TaskId` is a `usize` that is unique across the entire [`VirtualDom`] and across time. [`TaskID`]s will never be reused
 /// once a Task has been completed.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -464,18 +565,14 @@ pub struct TaskId {
 /// Scopes are allocated in a generational arena. As components are mounted/unmounted, they will replace slots of dead components.
 /// The actual contents of the hooks, though, will be allocated with the standard allocator. These should not allocate as frequently.
 ///
-/// We expose the `Scope` type so downstream users can traverse the Dioxus VirtualDOM for whatever
+/// We expose the `Scope` type so downstream users can traverse the Dioxus [`VirtualDom`] for whatever
 /// use case they might have.
 pub struct ScopeState {
     pub(crate) parent_scope: Option<*mut ScopeState>,
-    pub(crate) container: ElementId,
+    pub(crate) container: GlobalNodeId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,
-
-    // todo: subtrees
-    pub(crate) is_subtree_root: Cell<bool>,
-    pub(crate) subtree: Cell<u32>,
     pub(crate) props: RefCell<Option<Box<dyn AnyProps>>>,
 
     // nodes, items
@@ -491,6 +588,9 @@ pub struct ScopeState {
     // shared state -> todo: move this out of scopestate
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
     pub(crate) tasks: Rc<TaskQueue>,
+
+    // templates
+    pub(crate) templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
 }
 
 pub struct SelfReferentialItems<'a> {
@@ -500,52 +600,6 @@ pub struct SelfReferentialItems<'a> {
 
 // Public methods exposed to libraries and components
 impl ScopeState {
-    /// Get the subtree ID that this scope belongs to.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// let mut dom = VirtualDom::new(|cx| cx.render(rsx!{ div {} }));
-    /// dom.rebuild();
-    ///
-    /// let base = dom.base_scope();
-    ///
-    /// assert_eq!(base.subtree(), 0);
-    /// ```
-    ///
-    /// todo: enable
-    pub(crate) fn _subtree(&self) -> u32 {
-        self.subtree.get()
-    }
-
-    /// Create a new subtree with this scope as the root of the subtree.
-    ///
-    /// Each component has its own subtree ID - the root subtree has an ID of 0. This ID is used by the renderer to route
-    /// the mutations to the correct window/portal/subtree.
-    ///
-    /// This method
-    ///
-    /// # Example
-    ///
-    /// ```rust, ignore
-    /// fn App(cx: Scope) -> Element {
-    ///     rsx!(cx, div { "Subtree {id}"})
-    /// };
-    /// ```
-    ///
-    /// todo: enable subtree
-    pub(crate) fn _create_subtree(&self) -> Option<u32> {
-        if self.is_subtree_root.get() {
-            None
-        } else {
-            todo!()
-        }
-    }
-
     /// Get the height of this Scope - IE the number of scopes above it.
     ///
     /// A Scope with a height of `0` is the root scope - there are no other scopes above it.
@@ -564,9 +618,9 @@ impl ScopeState {
         self.height
     }
 
-    /// Get the Parent of this Scope within this Dioxus VirtualDOM.
+    /// Get the Parent of this [`Scope`] within this Dioxus [`VirtualDom`].
     ///
-    /// This ID is not unique across Dioxus VirtualDOMs or across time. IDs will be reused when components are unmounted.
+    /// This ID is not unique across Dioxus [`VirtualDom`]s or across time. IDs will be reused when components are unmounted.
     ///
     /// The base component will not have a parent, and will return `None`.
     ///
@@ -585,9 +639,9 @@ impl ScopeState {
         self.parent_scope.map(|p| unsafe { &*p }.our_arena_idx)
     }
 
-    /// Get the ID of this Scope within this Dioxus VirtualDOM.
+    /// Get the ID of this Scope within this Dioxus [`VirtualDom`].
     ///
-    /// This ID is not unique across Dioxus VirtualDOMs or across time. IDs will be reused when components are unmounted.
+    /// This ID is not unique across Dioxus [`VirtualDom`]s or across time. IDs will be reused when components are unmounted.
     ///
     /// # Example
     ///
@@ -609,41 +663,37 @@ impl ScopeState {
 
     /// Create a subscription that schedules a future render for the reference component
     ///
-    /// ## Notice: you should prefer using prepare_update and get_scope_id
+    /// ## Notice: you should prefer using [`schedule_update_any`] and [`scope_id`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
-        Arc::new(move || {
-            let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
-        })
+        Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
 
-    /// Schedule an update for any component given its ScopeId.
+    /// Schedule an update for any component given its [`ScopeId`].
     ///
-    /// A component's ScopeId can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
+    /// A component's [`ScopeId`] can be obtained from `use_hook` or the [`ScopeState::scope_id`] method.
     ///
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
-        Arc::new(move |id| {
-            let _ = chan.unbounded_send(SchedulerMsg::Immediate(id));
-        })
+        Arc::new(move |id| drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
 
     /// Get the [`ScopeId`] of a mounted component.
     ///
-    /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
+    /// `ScopeId` is not unique for the lifetime of the [`VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
     pub fn needs_update(&self) {
-        self.needs_update_any(self.scope_id())
+        self.needs_update_any(self.scope_id());
     }
 
     /// Get the [`ScopeId`] of a mounted component.
     ///
-    /// `ScopeId` is not unique for the lifetime of the VirtualDom - a ScopeId will be reused if a component is unmounted.
+    /// `ScopeId` is not unique for the lifetime of the [`VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
-        let _ = self
-            .tasks
+        self.tasks
             .sender
-            .unbounded_send(SchedulerMsg::Immediate(id));
+            .unbounded_send(SchedulerMsg::Immediate(id))
+            .expect("Scheduler to exist if scope exists");
     }
 
     /// Get the Root Node of this scope
@@ -652,7 +702,7 @@ impl ScopeState {
         unsafe { std::mem::transmute(node) }
     }
 
-    /// This method enables the ability to expose state to children further down the VirtualDOM Tree.
+    /// This method enables the ability to expose state to children further down the [`VirtualDom`] Tree.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
@@ -667,13 +717,13 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component = |cx| {
-    ///     cx.use_hook(|_| cx.provide_context(SharedState("world")));
-    ///     rsx!(cx, Child {})
+    ///     cx.use_hook(|| cx.provide_context(SharedState("world")));
+    ///     render!(Child {})
     /// }
     ///
     /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
-    ///     rsx!(cx, div { "hello {state.0}" })
+    ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
@@ -693,13 +743,13 @@ impl ScopeState {
     /// struct SharedState(&'static str);
     ///
     /// static App: Component = |cx| {
-    ///     cx.use_hook(|_| cx.provide_root_context(SharedState("world")));
-    ///     rsx!(cx, Child {})
+    ///     cx.use_hook(|| cx.provide_root_context(SharedState("world")));
+    ///     render!(Child {})
     /// }
     ///
     /// static Child: Component = |cx| {
     ///     let state = cx.consume_state::<SharedState>();
-    ///     rsx!(cx, div { "hello {state.0}" })
+    ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
     pub fn provide_root_context<T: 'static + Clone>(&self, value: T) -> T {
@@ -735,10 +785,15 @@ impl ScopeState {
         unreachable!("all apps have a root scope")
     }
 
-    /// Try to retrieve a SharedState with type T from the any parent Scope.
+    /// Try to retrieve a shared state with type T from the any parent Scope.
     pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         if let Some(shared) = self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-            Some((*shared.downcast_ref::<T>().unwrap()).clone())
+            Some(
+                (*shared
+                    .downcast_ref::<T>()
+                    .expect("Context of type T should exist"))
+                .clone(),
+            )
         } else {
             let mut search_parent = self.parent_scope;
 
@@ -746,7 +801,12 @@ impl ScopeState {
                 // safety: all parent pointers are valid thanks to the bump arena
                 let parent = unsafe { &*parent_ptr };
                 if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                    return Some(shared.downcast_ref::<T>().unwrap().clone());
+                    return Some(
+                        shared
+                            .downcast_ref::<T>()
+                            .expect("Context of type T should exist")
+                            .clone(),
+                    );
                 }
                 search_parent = parent.parent_scope;
             }
@@ -760,12 +820,12 @@ impl ScopeState {
         self.tasks
             .sender
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
-            .unwrap();
+            .expect("Scheduler should exist");
 
         self.tasks.spawn(self.our_arena_idx, fut)
     }
 
-    /// Spawns the future but does not return the TaskId
+    /// Spawns the future but does not return the [`TaskId`]
     pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
         self.push_future(fut);
     }
@@ -778,7 +838,7 @@ impl ScopeState {
         self.tasks
             .sender
             .unbounded_send(SchedulerMsg::NewTask(self.our_arena_idx))
-            .unwrap();
+            .expect("Scheduler should exist");
 
         // The root scope will never be unmounted so we can just add the task at the top of the app
         self.tasks.spawn(ScopeId(0), fut)
@@ -790,9 +850,7 @@ impl ScopeState {
         self.tasks.remove(id);
     }
 
-    /// Take a lazy VNode structure and actually build it with the context of the VDom's efficient VNode allocator.
-    ///
-    /// This function consumes the context and absorb the lifetime, so these VNodes *must* be returned.
+    /// Take a lazy [`VNode`] structure and actually build it with the context of the Vdoms efficient [`VNode`] allocator.
     ///
     /// ## Example
     ///
@@ -812,36 +870,31 @@ impl ScopeState {
         }))
     }
 
-    /// Store a value between renders
+    /// Store a value between renders. The foundational hook for all other hooks.
     ///
-    /// This is *the* foundational hook for all other hooks.
+    /// Accepts an `initializer` closure, which is run on the first use of the hook (typically the initial render). The return value of this closure is stored for the lifetime of the component, and a mutable reference to it is provided on every render as the return value of `use_hook`.
     ///
-    /// - Initializer: closure used to create the initial hook state
-    /// - Runner: closure used to output a value every time the hook is used
-    ///
-    /// To "cleanup" the hook, implement `Drop` on the stored hook value. Whenever the component is dropped, the hook
-    /// will be dropped as well.
+    /// When the component is unmounted (removed from the UI), the value is dropped. This means you can return a custom type and provide cleanup code by implementing the [`Drop`] trait
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// // use_ref is the simplest way of storing a value between renders
-    /// fn use_ref<T: 'static>(initial_value: impl FnOnce() -> T) -> &RefCell<T> {
-    ///     use_hook(|| Rc::new(RefCell::new(initial_value())))
+    /// ```
+    /// use dioxus_core::ScopeState;
+    ///
+    /// // prints a greeting on the initial render
+    /// pub fn use_hello_world(cx: &ScopeState) {
+    ///     cx.use_hook(|| println!("Hello, world!"));
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<'src, State: 'static>(
-        &'src self,
-        initializer: impl FnOnce(usize) -> State,
-    ) -> &'src mut State {
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let mut vals = self.hook_vals.borrow_mut();
 
         let hook_len = vals.len();
         let cur_idx = self.hook_idx.get();
 
         if cur_idx >= hook_len {
-            vals.push(self.hook_arena.alloc(initializer(hook_len)));
+            vals.push(self.hook_arena.alloc(initializer()));
         }
 
         vals
@@ -864,25 +917,25 @@ impl ScopeState {
 
     /// The "work in progress frame" represents the frame that is currently being worked on.
     pub(crate) fn wip_frame(&self) -> &BumpFrame {
-        match self.generation.get() & 1 == 0 {
-            true => &self.frames[0],
-            false => &self.frames[1],
+        match self.generation.get() & 1 {
+            0 => &self.frames[0],
+            _ => &self.frames[1],
         }
     }
 
     /// Mutable access to the "work in progress frame" - used to clear it
     pub(crate) fn wip_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.generation.get() & 1 == 0 {
-            true => &mut self.frames[0],
-            false => &mut self.frames[1],
+        match self.generation.get() & 1 {
+            0 => &mut self.frames[0],
+            _ => &mut self.frames[1],
         }
     }
 
     /// Access to the frame where finalized nodes existed
     pub(crate) fn fin_frame(&self) -> &BumpFrame {
-        match self.generation.get() & 1 == 1 {
-            true => &self.frames[0],
-            false => &self.frames[1],
+        match self.generation.get() & 1 {
+            1 => &self.frames[0],
+            _ => &self.frames[1],
         }
     }
 
@@ -890,7 +943,7 @@ impl ScopeState {
     ///
     /// # Safety:
     ///
-    /// This method breaks every reference of VNodes in the current frame.
+    /// This method breaks every reference of every [`VNode`] in the current frame.
     ///
     /// Calling reset itself is not usually a big deal, but we consider it important
     /// due to the complex safety guarantees we need to uphold.
@@ -909,8 +962,6 @@ impl ScopeState {
         self.hook_idx.set(0);
         self.parent_scope = None;
         self.generation.set(0);
-        self.is_subtree_root.set(false);
-        self.subtree.set(0);
 
         // next: shared context data
         self.shared_contexts.get_mut().clear();
@@ -944,13 +995,14 @@ pub(crate) struct BumpFrame {
 impl BumpFrame {
     pub(crate) fn new(capacity: usize) -> Self {
         let bump = Bump::with_capacity(capacity);
-
-        let node = &*bump.alloc(VText {
+        let node = bump.alloc(VText {
             text: "placeholdertext",
-            id: Default::default(),
+            id: Cell::default(),
             is_static: false,
         });
-        let node = bump.alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
+        let node = bump.alloc(VNode::Text(unsafe {
+            &*(node as *mut VText as *const VText)
+        }));
         let nodes = Cell::new(node as *const _);
         Self { bump, node: nodes }
     }
@@ -959,12 +1011,12 @@ impl BumpFrame {
         self.bump.reset();
         let node = self.bump.alloc(VText {
             text: "placeholdertext",
-            id: Default::default(),
+            id: Cell::default(),
             is_static: false,
         });
-        let node = self
-            .bump
-            .alloc(VNode::Text(unsafe { std::mem::transmute(node) }));
+        let node = self.bump.alloc(VNode::Text(unsafe {
+            &*(node as *mut VText as *const VText)
+        }));
         self.node.set(node as *const _);
     }
 }
@@ -999,13 +1051,12 @@ impl TaskQueue {
 
     fn remove(&self, id: TaskId) {
         if let Ok(mut tasks) = self.tasks.try_borrow_mut() {
-            let _ = tasks.remove(&id);
+            tasks.remove(&id);
+            if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
+                task_map.remove(&id);
+            }
         }
-
         // the task map is still around, but it'll be removed when the scope is unmounted
-        if let Some(task_map) = self.task_map.borrow_mut().get_mut(&id.scope) {
-            task_map.remove(&id);
-        }
     }
 
     pub(crate) fn has_tasks(&self) -> bool {

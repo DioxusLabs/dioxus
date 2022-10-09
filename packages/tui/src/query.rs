@@ -4,10 +4,10 @@ use std::{
 };
 
 use dioxus_core::ElementId;
-use stretch2::{
+use taffy::{
     geometry::Point,
     prelude::{Layout, Size},
-    Stretch,
+    Taffy,
 };
 
 use crate::Dom;
@@ -15,13 +15,13 @@ use crate::Dom;
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
 /// # Example
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
-/// use dioxus::tui::query::Query;
-/// use dioxus::tui::Size;
+/// use dioxus_tui::query::Query;
+/// use dioxus_tui::Size;
 ///
 /// fn main() {
-///     dioxus::tui::launch(app);
+///     dioxus_tui::launch(app);
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -46,7 +46,7 @@ use crate::Dom;
 #[derive(Clone)]
 pub struct Query {
     pub(crate) rdom: Rc<RefCell<Dom>>,
-    pub(crate) stretch: Rc<RefCell<Stretch>>,
+    pub(crate) stretch: Rc<RefCell<Taffy>>,
 }
 
 impl Query {
@@ -57,12 +57,12 @@ impl Query {
 
 pub struct ElementRef<'a> {
     inner: Ref<'a, Dom>,
-    stretch: Ref<'a, Stretch>,
+    stretch: Ref<'a, Taffy>,
     id: ElementId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, Dom>, stretch: Ref<'a, Stretch>, id: ElementId) -> Self {
+    fn new(inner: Ref<'a, Dom>, stretch: Ref<'a, Taffy>, id: ElementId) -> Self {
         Self { inner, stretch, id }
     }
 

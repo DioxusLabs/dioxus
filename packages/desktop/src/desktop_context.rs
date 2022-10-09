@@ -10,7 +10,7 @@ pub type ProxyType = EventLoopProxy<UserWindowEvent>;
 
 /// Get an imperative handle to the current window
 pub fn use_window(cx: &ScopeState) -> &DesktopContext {
-    cx.use_hook(|_| cx.consume_context::<DesktopContext>())
+    cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
 }
@@ -24,7 +24,7 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 ///
 /// you can use `cx.consume_context::<DesktopContext>` to get this context
 ///
-/// ```rust
+/// ```rust, ignore
 ///     let desktop = cx.consume_context::<DesktopContext>().unwrap();
 /// ```
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl DesktopContext {
     /// Moves the window with the left mouse button until the button is released.
     ///
     /// you need use it in `onmousedown` event:
-    /// ```rust
+    /// ```rust, ignore
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
@@ -115,6 +115,16 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetDecorations(decoration));
     }
 
+    /// set window zoom level
+    pub fn set_zoom_level(&self, scale_factor: f64) {
+        let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
+    }
+
+    /// launch print modal
+    pub fn print(&self) {
+        let _ = self.proxy.send_event(Print);
+    }
+
     /// opens DevTool window
     pub fn devtool(&self) {
         let _ = self.proxy.send_event(DevTool);
@@ -148,6 +158,9 @@ pub enum UserWindowEvent {
     SetTitle(String),
     SetDecorations(bool),
 
+    SetZoomLevel(f64),
+
+    Print,
     DevTool,
 
     Eval(String),
@@ -176,7 +189,7 @@ pub(super) fn handler(
         MaximizeToggle => window.set_maximized(!window.is_maximized()),
         Fullscreen(state) => {
             if let Some(handle) = window.current_monitor() {
-                window.set_fullscreen(state.then(|| WryFullscreen::Borderless(Some(handle))));
+                window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
             }
         }
         FocusWindow => window.set_focus(),
@@ -191,11 +204,27 @@ pub(super) fn handler(
         SetTitle(content) => window.set_title(&content),
         SetDecorations(state) => window.set_decorations(state),
 
-        DevTool => {}
+        SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
 
-        Eval(code) => webview
-            .evaluate_script(code.as_str())
-            .expect("eval shouldn't panic"),
+        Print => {
+            if let Err(e) = webview.print() {
+                // we can't panic this error.
+                log::warn!("Open print modal failed: {e}");
+            }
+        }
+        DevTool => {
+            #[cfg(debug_assertions)]
+            webview.open_devtools();
+            #[cfg(not(debug_assertions))]
+            log::warn!("Devtools are disabled in release builds");
+        }
+
+        Eval(code) => {
+            if let Err(e) = webview.evaluate_script(code.as_str()) {
+                // we can't panic this error.
+                log::warn!("Eval script error: {e}");
+            }
+        }
     }
 }
 
@@ -203,5 +232,5 @@ pub(super) fn handler(
 pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
     let desktop = use_window(cx).clone();
 
-    cx.use_hook(|_| move |script| desktop.eval(script))
+    cx.use_hook(|| move |script| desktop.eval(script))
 }

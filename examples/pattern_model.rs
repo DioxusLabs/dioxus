@@ -17,36 +17,39 @@
 //! the RefCell will panic and crash. You can use `try_get_mut` or `.modify` to avoid this problem, or just not hold two
 //! RefMuts at the same time.
 
-use dioxus::desktop::wry::application::dpi::LogicalSize;
 use dioxus::events::*;
+use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
+use dioxus_desktop::wry::application::dpi::LogicalSize;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    dioxus::desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Calculator Demo")
-                .with_resizable(false)
-                .with_inner_size(LogicalSize::new(320.0, 530.0))
-        })
-    });
+    let cfg = Config::new().with_window(
+        WindowBuilder::new()
+            .with_title("Calculator Demo")
+            .with_resizable(false)
+            .with_inner_size(LogicalSize::new(320.0, 530.0)),
+    );
+
+    dioxus_desktop::launch_cfg(app, cfg);
 }
 
 fn app(cx: Scope) -> Element {
     let state = use_ref(&cx, Calculator::new);
 
     cx.render(rsx! {
-        style { [include_str!("./assets/calculator.css")] }
+        style { include_str!("./assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator", onkeypress: move |evt| state.write().handle_keydown(evt),
-                    div { class: "calculator-display", [state.read().formatted_display()]}
+                    div { class: "calculator-display", state.read().formatted_display() }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
                                 CalculatorKey {
                                     name: "key-clear",
                                     onclick: move |_| state.write().clear_display(),
-                                    [if state.read().display_value == "0" { "C" } else { "AC" }]
+                                    if state.read().display_value == "0" { "C" } else { "AC" }
                                 }
                                 CalculatorKey {
                                     name: "key-sign",
@@ -212,22 +215,26 @@ impl Calculator {
         self.waiting_for_operand = true;
     }
     fn handle_keydown(&mut self, evt: KeyboardEvent) {
-        match evt.key_code {
-            KeyCode::Backspace => self.backspace(),
-            KeyCode::Num0 => self.input_digit(0),
-            KeyCode::Num1 => self.input_digit(1),
-            KeyCode::Num2 => self.input_digit(2),
-            KeyCode::Num3 => self.input_digit(3),
-            KeyCode::Num4 => self.input_digit(4),
-            KeyCode::Num5 => self.input_digit(5),
-            KeyCode::Num6 => self.input_digit(6),
-            KeyCode::Num7 => self.input_digit(7),
-            KeyCode::Num8 => self.input_digit(8),
-            KeyCode::Num9 => self.input_digit(9),
-            KeyCode::Add => self.operator = Some(Operator::Add),
-            KeyCode::Subtract => self.operator = Some(Operator::Sub),
-            KeyCode::Divide => self.operator = Some(Operator::Div),
-            KeyCode::Multiply => self.operator = Some(Operator::Mul),
+        match evt.key() {
+            Key::Backspace => self.backspace(),
+            Key::Character(c) => match c.as_str() {
+                "0" => self.input_digit(0),
+                "1" => self.input_digit(1),
+                "2" => self.input_digit(2),
+                "3" => self.input_digit(3),
+                "4" => self.input_digit(4),
+                "5" => self.input_digit(5),
+                "6" => self.input_digit(6),
+                "7" => self.input_digit(7),
+                "8" => self.input_digit(8),
+                "9" => self.input_digit(9),
+                "+" => self.operator = Some(Operator::Add),
+                "-" => self.operator = Some(Operator::Sub),
+                "/" => self.operator = Some(Operator::Div),
+                "*" => self.operator = Some(Operator::Mul),
+                _ => {}
+            },
+
             _ => {}
         }
     }

@@ -7,7 +7,7 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -15,7 +15,6 @@ fn app(cx: Scope) -> Element {
         div {
             onclick: move |_| println!("clicked! top"),
             "- div"
-
             button {
                 onclick: move |_| println!("clicked! bottom propoate"),
                 "Propogate"

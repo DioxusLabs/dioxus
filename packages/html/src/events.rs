@@ -3,7 +3,22 @@ use dioxus_core::exports::bumpalo;
 use dioxus_core::*;
 
 pub mod on {
+    //! Input events and associated data
+
+    use crate::geometry::{
+        ClientPoint, Coordinates, ElementPoint, LinesVector, PagePoint, PagesVector, PixelsVector,
+        ScreenPoint, WheelDelta,
+    };
+    use crate::input_data::{
+        decode_key_location, decode_mouse_button_set, encode_key_location, encode_mouse_button_set,
+        MouseButton, MouseButtonSet,
+    };
+    use euclid::UnknownUnit;
+    use keyboard_types::{Code, Key, Location, Modifiers};
     use std::collections::HashMap;
+    use std::convert::TryInto;
+    use std::fmt::{Debug, Formatter};
+    use std::str::FromStr;
 
     use super::*;
     macro_rules! event_directory {
@@ -178,7 +193,7 @@ pub mod on {
             /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
             ///
             /// ## Example
-            /// ```
+            /// ```rust, ignore
             /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
             /// ```
             ///
@@ -235,9 +250,6 @@ pub mod on {
             /// onmouseout
             onmouseout
 
-            ///
-            onscroll
-
             /// onmouseover
             ///
             /// Triggered when the users's mouse hovers over an element.
@@ -245,6 +257,11 @@ pub mod on {
 
             /// onmouseup
             onmouseup
+        ];
+
+        ScrollEvent(ScrollData): [
+            ///
+            onscroll
         ];
 
         PointerEvent(PointerData): [
@@ -412,71 +429,142 @@ pub mod on {
 
     pub type KeyboardEvent = UiEvent<KeyboardData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct KeyboardData {
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use key() instead."
+        )]
         pub char_code: u32,
 
         /// Identify which "key" was entered.
-        ///
-        /// This is the best method to use for all languages. They key gets mapped to a String sequence which you can match on.
-        /// The key isn't an enum because there are just so many context-dependent keys.
-        ///
-        /// A full list on which keys to use is available at:
-        /// <https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values>
-        ///
-        /// # Example
-        ///
-        /// ```rust, ignore
-        /// match event.key().as_str() {
-        ///     "Esc" | "Escape" => {}
-        ///     "ArrowDown" => {}
-        ///     "ArrowLeft" => {}
-        ///      _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(since = "0.3.0", note = "use key() instead")]
         pub key: String,
 
         /// Get the key code as an enum Variant.
-        ///
-        /// This is intended for things like arrow keys, escape keys, function keys, and other non-international keys.
-        /// To match on unicode sequences, use the [`KeyboardEvent::key`] method - this will return a string identifier instead of a limited enum.
-        ///
-        ///
-        /// ## Example
-        ///
-        /// ```rust, ignore
-        /// use dioxus::KeyCode;
-        /// match event.key_code() {
-        ///     KeyCode::Escape => {}
-        ///     KeyCode::LeftArrow => {}
-        ///     KeyCode::RightArrow => {}
-        ///     _ => {}
-        /// }
-        /// ```
-        ///
+        #[deprecated(
+            since = "0.3.0",
+            note = "This may not work in all environments. Use code() instead."
+        )]
         pub key_code: KeyCode,
 
+        /// the physical key on the keyboard
+        code: Code,
+
         /// Indicate if the `alt` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub alt_key: bool,
 
         /// Indicate if the `ctrl` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub ctrl_key: bool,
 
         /// Indicate if the `meta` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub meta_key: bool,
 
         /// Indicate if the `shift` modifier key was pressed during this keyboard event
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub shift_key: bool,
 
-        pub locale: String,
-
+        #[deprecated(since = "0.3.0", note = "use location() instead")]
         pub location: usize,
 
+        #[deprecated(since = "0.3.0", note = "use is_auto_repeating() instead")]
         pub repeat: bool,
 
+        #[deprecated(since = "0.3.0", note = "use code() or key() instead")]
         pub which: usize,
-        // get_modifier_state: bool,
+    }
+
+    impl KeyboardData {
+        pub fn new(
+            key: Key,
+            code: Code,
+            location: Location,
+            is_auto_repeating: bool,
+            modifiers: Modifiers,
+        ) -> Self {
+            #[allow(deprecated)]
+            KeyboardData {
+                char_code: key.legacy_charcode(),
+                key: key.to_string(),
+                key_code: KeyCode::from_raw_code(
+                    key.legacy_keycode()
+                        .try_into()
+                        .expect("could not convert keycode to u8"),
+                ),
+                code,
+                alt_key: modifiers.contains(Modifiers::ALT),
+                ctrl_key: modifiers.contains(Modifiers::CONTROL),
+                meta_key: modifiers.contains(Modifiers::META),
+                shift_key: modifiers.contains(Modifiers::SHIFT),
+                location: encode_key_location(location),
+                repeat: is_auto_repeating,
+                which: key
+                    .legacy_charcode()
+                    .try_into()
+                    .expect("could not convert charcode to usize"),
+            }
+        }
+
+        /// The value of the key pressed by the user, taking into consideration the state of modifier keys such as Shift as well as the keyboard locale and layout.
+        pub fn key(&self) -> Key {
+            #[allow(deprecated)]
+            FromStr::from_str(&self.key).expect("could not parse")
+        }
+
+        /// A physical key on the keyboard (as opposed to the character generated by pressing the key). In other words, this property returns a value that isn't altered by keyboard layout or the state of the modifier keys.
+        pub fn code(&self) -> Code {
+            self.code
+        }
+
+        /// The set of modifier keys which were pressed when the event occurred
+        pub fn modifiers(&self) -> Modifiers {
+            let mut modifiers = Modifiers::empty();
+
+            #[allow(deprecated)]
+            {
+                if self.alt_key {
+                    modifiers.insert(Modifiers::ALT);
+                }
+                if self.ctrl_key {
+                    modifiers.insert(Modifiers::CONTROL);
+                }
+                if self.meta_key {
+                    modifiers.insert(Modifiers::META);
+                }
+                if self.shift_key {
+                    modifiers.insert(Modifiers::SHIFT);
+                }
+            }
+
+            modifiers
+        }
+
+        /// The location of the key on the keyboard or other input device.
+        pub fn location(&self) -> Location {
+            #[allow(deprecated)]
+            decode_key_location(self.location)
+        }
+
+        /// `true` iff the key is being held down such that it is automatically repeating.
+        pub fn is_auto_repeating(&self) -> bool {
+            #[allow(deprecated)]
+            self.repeat
+        }
+    }
+
+    impl Debug for KeyboardData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("KeyboardData")
+                .field("key", &self.key())
+                .field("code", &self.code())
+                .field("modifiers", &self.modifiers())
+                .field("location", &self.location())
+                .field("is_auto_repeating", &self.is_auto_repeating())
+                .finish()
+        }
     }
 
     pub type FocusEvent = UiEvent<FocusData>;
@@ -495,11 +583,16 @@ pub mod on {
 
     pub type MouseEvent = UiEvent<MouseData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
+    /// Data associated with a mouse event
+    ///
+    /// Do not use the deprecated fields; they may change or become private in the future.
     pub struct MouseData {
         /// True if the alt key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub alt_key: bool,
         /// The button number that was pressed (if applicable) when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use trigger_button() instead")]
         pub button: i16,
         /// Indicates which buttons are pressed on the mouse (or other input device) when a mouse event is triggered.
         ///
@@ -510,38 +603,180 @@ pub mod on {
         /// - 4: Auxiliary button (usually the mouse wheel button or middle button)
         /// - 8: 4th button (typically the "Browser Back" button)
         /// - 16 : 5th button (typically the "Browser Forward" button)
+        #[deprecated(since = "0.3.0", note = "use held_buttons() instead")]
         pub buttons: u16,
         /// The horizontal coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
         ///
         /// For example, clicking on the left edge of the viewport will always result in a mouse event with a clientX value of 0, regardless of whether the page is scrolled horizontally.
+        #[deprecated(since = "0.3.0", note = "use client_coordinates() instead")]
         pub client_x: i32,
         /// The vertical coordinate within the application's viewport at which the event occurred (as opposed to the coordinate within the page).
         ///
         /// For example, clicking on the top edge of the viewport will always result in a mouse event with a clientY value of 0, regardless of whether the page is scrolled vertically.
+        #[deprecated(since = "0.3.0", note = "use client_coordinates() instead")]
         pub client_y: i32,
         /// True if the control key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub ctrl_key: bool,
         /// True if the meta key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub meta_key: bool,
         /// The offset in the X coordinate of the mouse pointer between that event and the padding edge of the target node.
+        #[deprecated(since = "0.3.0", note = "use element_coordinates() instead")]
         pub offset_x: i32,
         /// The offset in the Y coordinate of the mouse pointer between that event and the padding edge of the target node.
+        #[deprecated(since = "0.3.0", note = "use element_coordinates() instead")]
         pub offset_y: i32,
         /// The X (horizontal) coordinate (in pixels) of the mouse, relative to the left edge of the entire document. This includes any portion of the document not currently visible.
         ///
         /// Being based on the edge of the document as it is, this property takes into account any horizontal scrolling of the page. For example, if the page is scrolled such that 200 pixels of the left side of the document are scrolled out of view, and the mouse is clicked 100 pixels inward from the left edge of the view, the value returned by pageX will be 300.
+        #[deprecated(since = "0.3.0", note = "use page_coordinates() instead")]
         pub page_x: i32,
         /// The Y (vertical) coordinate in pixels of the event relative to the whole document.
         ///
         /// See `page_x`.
+        #[deprecated(since = "0.3.0", note = "use page_coordinates() instead")]
         pub page_y: i32,
         /// The X coordinate of the mouse pointer in global (screen) coordinates.
+        #[deprecated(since = "0.3.0", note = "use screen_coordinates() instead")]
         pub screen_x: i32,
         /// The Y coordinate of the mouse pointer in global (screen) coordinates.
+        #[deprecated(since = "0.3.0", note = "use screen_coordinates() instead")]
         pub screen_y: i32,
         /// True if the shift key was down when the mouse event was fired.
+        #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
         pub shift_key: bool,
         // fn get_modifier_state(&self, key_code: &str) -> bool;
+    }
+
+    impl MouseData {
+        /// Construct MouseData with the specified properties
+        ///
+        /// Note: the current implementation truncates coordinates. In the future, when we change the internal representation, it may also support a fractional part.
+        pub fn new(
+            coordinates: Coordinates,
+            trigger_button: Option<MouseButton>,
+            held_buttons: MouseButtonSet,
+            modifiers: Modifiers,
+        ) -> Self {
+            let alt_key = modifiers.contains(Modifiers::ALT);
+            let ctrl_key = modifiers.contains(Modifiers::CONTROL);
+            let meta_key = modifiers.contains(Modifiers::META);
+            let shift_key = modifiers.contains(Modifiers::SHIFT);
+
+            let [client_x, client_y]: [i32; 2] = coordinates.client().cast().into();
+            let [offset_x, offset_y]: [i32; 2] = coordinates.element().cast().into();
+            let [page_x, page_y]: [i32; 2] = coordinates.page().cast().into();
+            let [screen_x, screen_y]: [i32; 2] = coordinates.screen().cast().into();
+
+            #[allow(deprecated)]
+            Self {
+                alt_key,
+                ctrl_key,
+                meta_key,
+                shift_key,
+
+                button: trigger_button.map_or(0, |b| b.into_web_code()),
+                buttons: encode_mouse_button_set(held_buttons),
+
+                client_x,
+                client_y,
+                offset_x,
+                offset_y,
+                page_x,
+                page_y,
+                screen_x,
+                screen_y,
+            }
+        }
+
+        /// The event's coordinates relative to the application's viewport (as opposed to the coordinate within the page).
+        ///
+        /// For example, clicking in the top left corner of the viewport will always result in a mouse event with client coordinates (0., 0.), regardless of whether the page is scrolled horizontally.
+        pub fn client_coordinates(&self) -> ClientPoint {
+            #[allow(deprecated)]
+            ClientPoint::new(self.client_x.into(), self.client_y.into())
+        }
+
+        /// The event's coordinates relative to the padding edge of the target element
+        ///
+        /// For example, clicking in the top left corner of an element will result in element coordinates (0., 0.)
+        pub fn element_coordinates(&self) -> ElementPoint {
+            #[allow(deprecated)]
+            ElementPoint::new(self.offset_x.into(), self.offset_y.into())
+        }
+
+        /// The event's coordinates relative to the entire document. This includes any portion of the document not currently visible.
+        ///
+        /// For example, if the page is scrolled 200 pixels to the right and 300 pixels down, clicking in the top left corner of the viewport would result in page coordinates (200., 300.)
+        pub fn page_coordinates(&self) -> PagePoint {
+            #[allow(deprecated)]
+            PagePoint::new(self.page_x.into(), self.page_y.into())
+        }
+
+        /// The event's coordinates relative to the entire screen. This takes into account the window's offset.
+        pub fn screen_coordinates(&self) -> ScreenPoint {
+            #[allow(deprecated)]
+            ScreenPoint::new(self.screen_x.into(), self.screen_y.into())
+        }
+
+        pub fn coordinates(&self) -> Coordinates {
+            Coordinates::new(
+                self.screen_coordinates(),
+                self.client_coordinates(),
+                self.element_coordinates(),
+                self.page_coordinates(),
+            )
+        }
+
+        /// The set of modifier keys which were pressed when the event occurred
+        pub fn modifiers(&self) -> Modifiers {
+            let mut modifiers = Modifiers::empty();
+
+            #[allow(deprecated)]
+            {
+                if self.alt_key {
+                    modifiers.insert(Modifiers::ALT);
+                }
+                if self.ctrl_key {
+                    modifiers.insert(Modifiers::CONTROL);
+                }
+                if self.meta_key {
+                    modifiers.insert(Modifiers::META);
+                }
+                if self.shift_key {
+                    modifiers.insert(Modifiers::SHIFT);
+                }
+            }
+
+            modifiers
+        }
+
+        /// The set of mouse buttons which were held when the event occurred.
+        pub fn held_buttons(&self) -> MouseButtonSet {
+            #[allow(deprecated)]
+            decode_mouse_button_set(self.buttons)
+        }
+
+        /// The mouse button that triggered the event
+        ///
+        // todo the following is kind of bad; should we just return None when the trigger_button is unreliable (and frankly irrelevant)? i guess we would need the event_type here
+        /// This is only guaranteed to indicate which button was pressed during events caused by pressing or releasing a button. As such, it is not reliable for events such as mouseenter, mouseleave, mouseover, mouseout, or mousemove. For example, a value of MouseButton::Primary may also indicate that no button was pressed.
+        pub fn trigger_button(&self) -> Option<MouseButton> {
+            #[allow(deprecated)]
+            Some(MouseButton::from_web_code(self.button))
+        }
+    }
+
+    impl Debug for MouseData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("MouseData")
+                .field("coordinates", &self.coordinates())
+                .field("modifiers", &self.modifiers())
+                .field("held_buttons", &self.held_buttons())
+                .field("trigger_button", &self.trigger_button())
+                .finish()
+        }
     }
 
     pub type PointerEvent = UiEvent<PointerData>;
@@ -595,13 +830,79 @@ pub mod on {
 
     pub type WheelEvent = UiEvent<WheelData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Debug, Clone)]
+    #[derive(Clone)]
     pub struct WheelData {
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_mode: u32,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_x: f64,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_y: f64,
+        #[deprecated(since = "0.3.0", note = "use delta() instead")]
         pub delta_z: f64,
     }
+
+    impl WheelData {
+        /// Construct a new WheelData with the specified wheel movement delta
+        pub fn new(delta: WheelDelta) -> Self {
+            let (delta_mode, vector) = match delta {
+                WheelDelta::Pixels(v) => (0, v.cast_unit::<UnknownUnit>()),
+                WheelDelta::Lines(v) => (1, v.cast_unit::<UnknownUnit>()),
+                WheelDelta::Pages(v) => (2, v.cast_unit::<UnknownUnit>()),
+            };
+
+            #[allow(deprecated)]
+            WheelData {
+                delta_mode,
+                delta_x: vector.x,
+                delta_y: vector.y,
+                delta_z: vector.z,
+            }
+        }
+
+        /// Construct from the attributes of the web wheel event
+        pub fn from_web_attributes(
+            delta_mode: u32,
+            delta_x: f64,
+            delta_y: f64,
+            delta_z: f64,
+        ) -> Self {
+            #[allow(deprecated)]
+            Self {
+                delta_mode,
+                delta_x,
+                delta_y,
+                delta_z,
+            }
+        }
+
+        /// The amount of wheel movement
+        #[allow(deprecated)]
+        pub fn delta(&self) -> WheelDelta {
+            let x = self.delta_x;
+            let y = self.delta_y;
+            let z = self.delta_z;
+            match self.delta_mode {
+                0 => WheelDelta::Pixels(PixelsVector::new(x, y, z)),
+                1 => WheelDelta::Lines(LinesVector::new(x, y, z)),
+                2 => WheelDelta::Pages(PagesVector::new(x, y, z)),
+                _ => panic!("Invalid delta mode, {:?}", self.delta_mode),
+            }
+        }
+    }
+
+    impl Debug for WheelData {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            f.debug_struct("WheelData")
+                .field("delta", &self.delta())
+                .finish()
+        }
+    }
+
+    pub type ScrollEvent = UiEvent<ScrollData>;
+    #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Debug, Clone)]
+    pub struct ScrollData {}
 
     pub type MediaEvent = UiEvent<MediaData>;
     #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -643,7 +944,7 @@ pub mod on {
     feature = "serialize",
     derive(serde_repr::Serialize_repr, serde_repr::Deserialize_repr)
 )]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u8)]
 pub enum KeyCode {
     // That key has no keycode, = 0
@@ -1179,5 +1480,93 @@ pub(crate) fn _event_meta(event: &UserEvent) -> (bool, EventPriority) {
         "toggle" => (true, Medium),
 
         _ => (true, Low),
+    }
+}
+
+pub fn event_bubbles(evt: &str) -> bool {
+    match evt {
+        "copy" => true,
+        "cut" => true,
+        "paste" => true,
+        "compositionend" => true,
+        "compositionstart" => true,
+        "compositionupdate" => true,
+        "keydown" => true,
+        "keypress" => true,
+        "keyup" => true,
+        "focus" => false,
+        "focusout" => true,
+        "focusin" => true,
+        "blur" => false,
+        "change" => true,
+        "input" => true,
+        "invalid" => true,
+        "reset" => true,
+        "submit" => true,
+        "click" => true,
+        "contextmenu" => true,
+        "doubleclick" => true,
+        "dblclick" => true,
+        "drag" => true,
+        "dragend" => true,
+        "dragenter" => false,
+        "dragexit" => false,
+        "dragleave" => true,
+        "dragover" => true,
+        "dragstart" => true,
+        "drop" => true,
+        "mousedown" => true,
+        "mouseenter" => false,
+        "mouseleave" => false,
+        "mousemove" => true,
+        "mouseout" => true,
+        "scroll" => false,
+        "mouseover" => true,
+        "mouseup" => true,
+        "pointerdown" => true,
+        "pointermove" => true,
+        "pointerup" => true,
+        "pointercancel" => true,
+        "gotpointercapture" => true,
+        "lostpointercapture" => true,
+        "pointerenter" => false,
+        "pointerleave" => false,
+        "pointerover" => true,
+        "pointerout" => true,
+        "select" => true,
+        "touchcancel" => true,
+        "touchend" => true,
+        "touchmove" => true,
+        "touchstart" => true,
+        "wheel" => true,
+        "abort" => false,
+        "canplay" => false,
+        "canplaythrough" => false,
+        "durationchange" => false,
+        "emptied" => false,
+        "encrypted" => true,
+        "ended" => false,
+        "error" => false,
+        "loadeddata" => false,
+        "loadedmetadata" => false,
+        "loadstart" => false,
+        "pause" => false,
+        "play" => false,
+        "playing" => false,
+        "progress" => false,
+        "ratechange" => false,
+        "seeked" => false,
+        "seeking" => false,
+        "stalled" => false,
+        "suspend" => false,
+        "timeupdate" => false,
+        "volumechange" => false,
+        "waiting" => false,
+        "animationstart" => true,
+        "animationend" => true,
+        "animationiteration" => true,
+        "transitionend" => true,
+        "toggle" => true,
+        _ => panic!("unsupported event type {:?}", evt),
     }
 }

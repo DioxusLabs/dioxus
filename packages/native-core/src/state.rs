@@ -1,14 +1,14 @@
-use std::{
-    cmp::Ordering,
-    fmt::Debug,
-    ops::{Add, AddAssign, Sub, SubAssign},
-};
+use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
-use dioxus_core::VNode;
+use dioxus_core::GlobalNodeId;
+use fxhash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};
+use crate::real_dom::NodeData;
+use crate::traversable::Traversable;
 
+/// Join two sorted iterators
 pub(crate) fn union_ordered_iter<T: Ord + Debug>(
     s_iter: impl Iterator<Item = T>,
     o_iter: impl Iterator<Item = T>,
@@ -44,15 +44,47 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 }
 
 /// This state is derived from children. For example a node's size could be derived from the size of children.
-/// Called when the current node's node properties are modified, a child's [BubbledUpState] is modified or a child is removed.
+/// Called when the current node's node properties are modified, a child's [ChildDepState] is modified or a child is removed.
 /// Called at most once per update.
+/// ```rust
+/// #[derive(Clone, Copy, PartialEq, Default)]
+/// struct Layout {
+///     width: u32,
+///     height: u32,
+/// }
+///
+/// impl ChildDepState for Layout {
+///     type Ctx = ();
+///     // The layout depends on the layout of the children.
+///     type DepState = Layout;
+///     fn reduce<'a>(
+///         &mut self,
+///         _node: NodeView,
+///         children: impl Iterator<Item = &'a Self::DepState>,
+///         _ctx: &Self::Ctx,
+///     ) -> bool
+///     where
+///         Self::DepState: 'a{
+///         /// Children are layed out form left to right. The width of the parent is the sum of the widths and the max of the heights.
+///         let new = children.copied().reduce(|c1, c2| Layout{
+///             width: c1.width + c2.width,
+///             height: c1.height.max(c2.height)
+///         }).unwrap_or_default();
+///         let changed = new != self.combined;
+///         self = new;
+///         changed
+///     }
+/// }
+/// ```
 pub trait ChildDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
-    /// This is sometimes nessisary for lifetime purposes.
+    /// The context is passed to the [ChildDepState::reduce] when it is resolved.
     type Ctx;
-    /// This must be either a [ChildDepState] or [NodeDepState]
+    /// A state from each child node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
+    /// This must be either a [ChildDepState], or [NodeDepState].
     type DepState;
+    /// The part of a node that this state cares about. This is used to determine if the state should be updated when a node is updated.
     const NODE_MASK: NodeMask = NodeMask::NONE;
+    /// Resolve the state current node's state from the state of the children, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
         node: NodeView,
@@ -64,82 +96,129 @@ pub trait ChildDepState {
 }
 
 /// This state that is passed down to children. For example text properties (`<b>` `<i>` `<u>`) would be passed to children.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a parrent's [ParentDepState] is modified.
 /// Called at most once per update.
+/// ```rust
+/// use dioxus_native_core::node_ref::{NodeMask, AttributeMask, NodeView};
+/// use dioxus_native_core::state::*;
+///
+/// #[derive(Clone, Copy, PartialEq)]
+/// struct FontSize(usize);
+///
+/// impl ParentDepState for FontSize {
+///     type Ctx = ();
+///     // The font size depends on the font size of the parent element.
+///     type DepState = Self;
+///     const NODE_MASK: NodeMask =
+///         NodeMask::new_with_attrs(AttributeMask::Static(&[
+///             "font-size"
+///         ]));
+///     fn reduce<'a>(
+///         &mut self,
+///         node: NodeView,
+///         parent: Option<&'a Self::DepState>,
+///         ctx: &Self::Ctx,
+///     ) -> bool{
+///         let old = *self;
+///         // If the font size was set on the parent, it is passed down to the current element
+///         if let Some(parent) = parent{
+///             *self = parent;
+///         }
+///         // If the current node overrides the font size, use that size insead.
+///         for attr in node.attributes() {
+///             match attr.name {
+///                 "font-size" => {
+///                     self.0 = attr.value.as_text().unwrap().parse().unwrap();
+///                 }
+///                 // font-size is the only attribute we specified in the mask, so it is the only one we can see
+///                 _ => unreachable!(),
+///             }
+///         }
+///         old != *self
+///     }
+/// }
+/// ```
 pub trait ParentDepState {
-    /// The context is passed to the [PushedDownState::reduce] when it is pushed down.
-    /// This is sometimes nessisary for lifetime purposes.
+    /// The context is passed to the [ParentDepState::reduce] when it is resolved.
     type Ctx;
+    /// A state from from the parent node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
     /// This must be either a [ParentDepState] or [NodeDepState]
     type DepState;
+    /// The part of a node that this state cares about. This is used to determine if the state should be updated when a node is updated.
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool;
+    /// Resolve the state current node's state from the state of the parent node, the state of the node, and some external context.
+    fn reduce<'a>(
+        &mut self,
+        node: NodeView,
+        parent: Option<&'a Self::DepState>,
+        ctx: &Self::Ctx,
+    ) -> bool;
 }
 
 /// This state that is upadated lazily. For example any propertys that do not effect other parts of the dom like bg-color.
-/// Called when the current node's node properties are modified or a parrent's [PushedDownState] is modified.
+/// Called when the current node's node properties are modified or a one of its dependanices are modified.
 /// Called at most once per update.
-pub trait NodeDepState {
+/// NodeDepState is the only state that can accept multiple dependancies, but only from the current node.
+/// ```rust
+/// use dioxus_native_core::node_ref::{NodeMask, AttributeMask, NodeView};
+/// use dioxus_native_core::state::*;
+///
+/// #[derive(Clone, Copy, PartialEq)]
+/// struct TabIndex(usize);
+///
+/// impl NodeDepState for TabIndex {
+///     type Ctx = ();
+///     const NODE_MASK: NodeMask =
+///         NodeMask::new_with_attrs(AttributeMask::Static(&[
+///             "tabindex"
+///         ]));
+///     fn reduce(
+///         &mut self,
+///         node: NodeView,
+///         siblings: (),
+///         ctx: &(),
+///     ) -> bool {
+///         let old = self;
+///         for attr in node.attributes() {
+///             match attr.name {
+///                 "tabindex" => {
+///                     self.0 = attr.value.as_text().unwrap().parse().unwrap();
+///                 }
+///                 // tabindex is the only attribute we specified in the mask, so it is the only one we can see
+///                 _ => unreachable!(),
+///             }
+///         }
+///         old != *self
+///     }
+/// }
+/// ```
+/// The generic argument (Depstate) must be a tuple containing any number of borrowed elements that are either a [ChildDepState], [ParentDepState] or [NodeDepState].
+// Todo: once GATs land we can model multable dependencies better
+
+pub trait NodeDepState<DepState = ()> {
+    /// The state passed to [NodeDepState::reduce] when it is resolved.
     type Ctx;
-    type DepState: NodeDepState;
+    /// The part of a node that this state cares about. This is used to determine if the state should be updated when a node is updated.
     const NODE_MASK: NodeMask = NodeMask::NONE;
-    fn reduce(&mut self, node: NodeView, sibling: &Self::DepState, ctx: &Self::Ctx) -> bool;
+    /// Resolve the state current node's state from the state of the sibling states, the state of the node, and some external context.
+    fn reduce(&mut self, node: NodeView, siblings: DepState, ctx: &Self::Ctx) -> bool;
 }
 
-#[derive(Debug)]
-pub struct ChildStatesChanged {
-    pub node_dep: Vec<MemberId>,
-    pub child_dep: Vec<MemberId>,
-}
-
-#[derive(Debug)]
-pub struct ParentStatesChanged {
-    pub node_dep: Vec<MemberId>,
-    pub parent_dep: Vec<MemberId>,
-}
-
-#[derive(Debug)]
-pub struct NodeStatesChanged {
-    pub node_dep: Vec<MemberId>,
-}
-
+/// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
 pub trait State: Default + Clone {
-    const SIZE: usize;
-
-    fn update_node_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
-        vdom: &'a dioxus_core::VirtualDom,
+    #[doc(hidden)]
+    fn update<
+        'a,
+        T: Traversable<Node = Self, Id = GlobalNodeId>,
+        T2: Traversable<Node = NodeData, Id = GlobalNodeId>,
+    >(
+        dirty: &[(GlobalNodeId, NodeMask)],
+        state_tree: &'a mut T,
+        rdom: &'a T2,
         ctx: &AnyMap,
-    ) -> Option<NodeStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn child_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
-
-    fn update_parent_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
-        vdom: &'a dioxus_core::VirtualDom,
-        parent: Option<&Self>,
-        ctx: &AnyMap,
-    ) -> Option<ParentStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn parent_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
-
-    fn update_child_dep_state<'a>(
-        &'a mut self,
-        ty: MemberId,
-        node: &'a VNode<'a>,
-        vdom: &'a dioxus_core::VirtualDom,
-        children: &Vec<&Self>,
-        ctx: &AnyMap,
-    ) -> Option<ChildStatesChanged>;
-    /// This must be a valid resolution order. (no nodes updated before a state they rely on)
-    fn node_dep_types(&self, mask: &NodeMask) -> Vec<MemberId>;
+    ) -> FxHashSet<GlobalNodeId>;
 }
 
-// Todo: once GATs land we can model multable dependencies
 impl ChildDepState for () {
     type Ctx = ();
     type DepState = ();
@@ -159,44 +238,14 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce(&mut self, _: NodeView, _: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView, _: Option<&'a Self::DepState>, _: &Self::Ctx) -> bool {
         false
     }
 }
 
-impl NodeDepState for () {
+impl NodeDepState<()> for () {
     type Ctx = ();
-    type DepState = ();
-    fn reduce(&mut self, _: NodeView, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, _: NodeView, _sibling: (), _: &Self::Ctx) -> bool {
         false
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct MemberId(pub usize);
-
-impl Sub<usize> for MemberId {
-    type Output = MemberId;
-    fn sub(self, rhs: usize) -> Self::Output {
-        MemberId(self.0 - rhs)
-    }
-}
-
-impl Add<usize> for MemberId {
-    type Output = MemberId;
-    fn add(self, rhs: usize) -> Self::Output {
-        MemberId(self.0 + rhs)
-    }
-}
-
-impl SubAssign<usize> for MemberId {
-    fn sub_assign(&mut self, rhs: usize) {
-        *self = *self - rhs;
-    }
-}
-
-impl AddAssign<usize> for MemberId {
-    fn add_assign(&mut self, rhs: usize) {
-        *self = *self + rhs;
     }
 }

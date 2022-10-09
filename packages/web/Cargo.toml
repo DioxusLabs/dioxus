@@ -11,7 +11,7 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
     "web"
@@ -30,6 +30,7 @@ futures-util = "0.3.19"
 smallstr = "0.2.0"
 serde-wasm-bindgen = "0.4.2"
 futures-channel = "0.3.21"
+serde_json = { version = "1.0" }
 
 [dependencies.web-sys]
 version = "0.3.56"
@@ -70,14 +71,20 @@ features = [
     "SvgAnimatedString",
     "HtmlOptionElement",
     "IdleDeadline",
+    "WebSocket",
+    "Location",
+    "MessageEvent",
+    "console",
 ]
 
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
+hot-reload = ["dioxus/hot-reload"]
+
 
 [dev-dependencies]
-dioxus-core-macro = { path = "../core-macro" }
+dioxus = { path = "../dioxus" }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"

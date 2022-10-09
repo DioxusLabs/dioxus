@@ -1,6 +1,6 @@
 use crate::{node::PreventDefault, Dom};
 
-use dioxus_core::ElementId;
+use dioxus_core::{ElementId, GlobalNodeId};
 use dioxus_native_core::utils::persistant_iter::{ElementProduced, PersistantElementIter};
 use dioxus_native_core_macro::sorted_str_slice;
 
@@ -62,16 +62,22 @@ pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
-impl NodeDepState for Focus {
+impl NodeDepState<()> for Focus {
     type Ctx = ();
-    type DepState = ();
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
 
-    fn reduce(&mut self, node: NodeView<'_>, _sibling: &Self::DepState, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView<'_>, _sibling: (), _: &Self::Ctx) -> bool {
         let new = Focus {
-            level: if let Some(a) = node.attributes().find(|a| a.name == "tabindex") {
-                if let Ok(index) = a.value.parse::<i32>() {
+            level: if let Some(a) = node
+                .attributes()
+                .and_then(|mut a| a.find(|a| a.attribute.name == "tabindex"))
+            {
+                if let Some(index) = a
+                    .value
+                    .as_int32()
+                    .or_else(|| a.value.as_text().and_then(|v| v.parse::<i32>().ok()))
+                {
                     match index.cmp(&0) {
                         Ordering::Less => FocusLevel::Unfocusable,
                         Ordering::Equal => FocusLevel::Focusable,
@@ -84,8 +90,12 @@ impl NodeDepState for Focus {
                 }
             } else if node
                 .listeners()
-                .iter()
-                .any(|l| FOCUS_EVENTS.binary_search(&l.event).is_ok())
+                .map(|mut listeners| {
+                    listeners
+                        .any(|l| FOCUS_EVENTS.binary_search(&l).is_ok())
+                        .then_some(())
+                })
+                .is_some()
             {
                 FocusLevel::Focusable
             } else {
@@ -107,7 +117,7 @@ const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["tabindex"]);
 #[derive(Default)]
 pub(crate) struct FocusState {
     pub(crate) focus_iter: PersistantElementIter,
-    pub(crate) last_focused_id: Option<ElementId>,
+    pub(crate) last_focused_id: Option<GlobalNodeId>,
     pub(crate) focus_level: FocusLevel,
     pub(crate) dirty: bool,
 }
@@ -221,9 +231,9 @@ impl FocusState {
 
     pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &Dom) {
         fn remove_children(
-            to_prune: &mut [&mut Option<ElementId>],
+            to_prune: &mut [&mut Option<GlobalNodeId>],
             rdom: &Dom,
-            removed: ElementId,
+            removed: GlobalNodeId,
         ) {
             for opt in to_prune.iter_mut() {
                 if let Some(id) = opt {
@@ -232,7 +242,7 @@ impl FocusState {
                     }
                 }
             }
-            if let NodeType::Element { children, .. } = &rdom[removed].node_type {
+            if let NodeType::Element { children, .. } = &rdom[removed].node_data.node_type {
                 for child in children {
                     remove_children(to_prune, rdom, *child);
                 }
@@ -246,19 +256,19 @@ impl FocusState {
                 dioxus_core::DomEdit::ReplaceWith { root, .. } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    ElementId(*root as usize),
+                    rdom.decode_id(*root),
                 ),
                 dioxus_core::DomEdit::Remove { root } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    ElementId(*root as usize),
+                    rdom.decode_id(*root),
                 ),
                 _ => (),
             }
         }
     }
 
-    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: ElementId) {
+    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: GlobalNodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
             rdom[old].state.focused = false;
         }

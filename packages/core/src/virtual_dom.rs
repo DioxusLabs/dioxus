@@ -1,4 +1,4 @@
-//! # VirtualDom Implementation for Rust
+//! # Virtual DOM Implementation for Rust
 //!
 //! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
 
@@ -125,6 +125,13 @@ pub enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
 
+    /// Mark all components as dirty and update them
+    DirtyAll,
+
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
+    /// Mark a template as dirty, used for hot reloading
+    SetTemplate(Box<SetTemplateMsg>),
+
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
 }
@@ -223,8 +230,7 @@ impl VirtualDom {
                 render_fn: root,
             }),
             None,
-            ElementId(0),
-            0,
+            GlobalNodeId::VNodeId(ElementId(0)),
         );
 
         Self {
@@ -337,29 +343,12 @@ impl VirtualDom {
 
                     let scopes = &mut self.scopes;
                     let task_poll = poll_fn(|cx| {
-                        //
-                        let mut any_pending = false;
-
                         let mut tasks = scopes.tasks.tasks.borrow_mut();
-                        let mut to_remove = vec![];
+                        tasks.retain(|_, task| task.as_mut().poll(cx).is_pending());
 
-                        // this would be better served by retain
-                        for (id, task) in tasks.iter_mut() {
-                            if task.as_mut().poll(cx).is_ready() {
-                                to_remove.push(*id);
-                            } else {
-                                any_pending = true;
-                            }
-                        }
-
-                        for id in to_remove {
-                            tasks.remove(&id);
-                        }
-
-                        // Resolve the future if any singular task is ready
-                        match any_pending {
-                            true => Poll::Pending,
-                            false => Poll::Ready(()),
+                        match tasks.is_empty() {
+                            true => Poll::Ready(()),
+                            false => Poll::Pending,
                         }
                     });
 
@@ -401,11 +390,35 @@ impl VirtualDom {
             }
             SchedulerMsg::Event(event) => {
                 if let Some(element) = event.element {
-                    self.scopes.call_listener_with_bubbling(event, element);
+                    self.scopes.call_listener_with_bubbling(&event, element);
                 }
             }
             SchedulerMsg::Immediate(s) => {
                 self.dirty_scopes.insert(s);
+            }
+            SchedulerMsg::DirtyAll => {
+                for id in self.scopes.scopes.borrow().keys() {
+                    self.dirty_scopes.insert(*id);
+                }
+            }
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            SchedulerMsg::SetTemplate(msg) => {
+                let SetTemplateMsg(id, tmpl) = *msg;
+                if self
+                    .scopes
+                    .templates
+                    .borrow_mut()
+                    .insert(
+                        id.clone(),
+                        std::rc::Rc::new(std::cell::RefCell::new(Template::Owned(tmpl))),
+                    )
+                    .is_some()
+                {
+                    self.scopes.template_resolver.borrow_mut().mark_dirty(&id)
+                }
+
+                // mark any scopes that used the template as dirty
+                self.process_message(SchedulerMsg::DirtyAll);
             }
         }
     }
@@ -458,6 +471,7 @@ impl VirtualDom {
     #[allow(unused)]
     pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
         let mut committed_mutations = vec![];
+        self.scopes.template_bump.reset();
 
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
@@ -475,8 +489,6 @@ impl VirtualDom {
                 h1.cmp(&h2).reverse()
             });
 
-            log::trace!("dirty_scopes: {:?}", self.dirty_scopes);
-
             if let Some(scopeid) = self.dirty_scopes.pop() {
                 if !ran_scopes.contains(&scopeid) {
                     ran_scopes.insert(scopeid);
@@ -486,8 +498,6 @@ impl VirtualDom {
                     diff_state.diff_scope(scopeid);
 
                     let DiffState { mutations, .. } = diff_state;
-
-                    log::trace!("succesffuly resolved scopes {:?}", mutations.dirty_scopes);
 
                     for scope in &mutations.dirty_scopes {
                         self.dirty_scopes.remove(scope);
@@ -537,11 +547,13 @@ impl VirtualDom {
     /// ```
     pub fn rebuild(&mut self) -> Mutations {
         let scope_id = ScopeId(0);
-        let mut diff_state = DiffState::new(&self.scopes);
 
+        let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
-        diff_state.element_stack.push(ElementId(0));
+        diff_state
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
@@ -583,7 +595,7 @@ impl VirtualDom {
     ///
     /// *value.borrow_mut() = "goodbye";
     ///
-    /// let edits = dom.diff();
+    /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
     pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
         let mut diff_machine = DiffState::new(&self.scopes);
@@ -610,7 +622,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -630,7 +642,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -638,7 +650,9 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine.element_stack.push(ElementId(0));
+        machine
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         machine.scope_stack.push(ScopeId(0));
         machine.diff_node(old, new);
 
@@ -652,7 +666,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -661,7 +675,9 @@ impl VirtualDom {
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
-        machine.element_stack.push(ElementId(0));
+        machine
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         let node = self.render_vnodes(nodes);
         let created = machine.create_node(node);
         machine.mutations.append_children(created as u32);
@@ -675,7 +691,7 @@ impl VirtualDom {
     ///
     /// ```rust, ignore
     /// fn Base(cx: Scope) -> Element {
-    ///     rsx!(cx, div {})
+    ///     render!(div {})
     /// }
     ///
     /// let dom = VirtualDom::new(Base);
@@ -690,16 +706,31 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
-        create.element_stack.push(ElementId(0));
+        create
+            .element_stack
+            .push(GlobalNodeId::VNodeId(ElementId(0)));
         let created = create.create_node(old);
         create.mutations.append_children(created as u32);
 
         let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));
-        edit.element_stack.push(ElementId(0));
+        edit.element_stack.push(GlobalNodeId::VNodeId(ElementId(0)));
         edit.diff_node(old, new);
 
         (create.mutations, edit.mutations)
+    }
+
+    /// Runs a function with the template associated with a given id.
+    pub fn with_template<R>(&self, id: &TemplateId, mut f: impl FnMut(&Template) -> R) -> R {
+        self.scopes
+            .templates
+            .borrow()
+            .get(id)
+            .map(|inner| {
+                let borrow = inner;
+                f(&borrow.borrow())
+            })
+            .unwrap()
     }
 }
 

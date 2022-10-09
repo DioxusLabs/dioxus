@@ -1,6 +1,5 @@
 use crate::{GlobalAttributes, SvgAttributes};
 use dioxus_core::*;
-use std::fmt::Arguments;
 
 macro_rules! builder_constructors {
     (
@@ -28,10 +27,12 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
-                    $(#[$attr_method])*
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, None, false)
-                    }
+                    #[allow(non_upper_case_globals)]
+                    pub const $fil: AttributeDiscription = AttributeDiscription{
+                        name: stringify!($fil),
+                        namespace: None,
+                        volatile: false
+                    };
                 )*
             }
         )*
@@ -57,9 +58,13 @@ macro_rules! builder_constructors {
 
             impl $name {
                 $(
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, Some(stringify!($namespace)), false)
-                    }
+
+                    #[allow(non_upper_case_globals)]
+                    pub const $fil: AttributeDiscription = AttributeDiscription{
+                        name: stringify!($fil),
+                        namespace: Some(stringify!($namespace)),
+                        volatile: false
+                    };
                 )*
             }
         )*
@@ -181,13 +186,12 @@ builder_constructors! {
     ///
     /// # Usage
     ///
-    /// ```
+    /// ```rust, ignore
     /// html!(<h1> A header element </h1>)
     /// rsx!(h1 { "A header element" })
     /// LazyNodes::new(|f| f.el(h1).children([f.text("A header element")]).finish())
     /// ```
     h1 {};
-
 
     /// Build a
     /// [`<h2>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h2)
@@ -201,13 +205,12 @@ builder_constructors! {
     /// - The `<h2>` heading is usually a large bolded font.
     ///
     /// # Usage
-    /// ```
+    /// ```rust, ignore
     /// html!(<h2> A header element </h2>)
     /// rsx!(h2 { "A header element" })
     /// LazyNodes::new(|f| f.el(h2).children([f.text("A header element")]).finish())
     /// ```
     h2 {};
-
 
     /// Build a
     /// [`<h3>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h3)
@@ -220,14 +223,17 @@ builder_constructors! {
     /// - The <h1> heading is the first heading in the document.
     /// - The <h1> heading is usually a large bolded font.
     h3 {};
+
     /// Build a
     /// [`<h4>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h4)
     /// element.
     h4 {};
+
     /// Build a
     /// [`<h5>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h5)
     /// element.
     h5 {};
+
     /// Build a
     /// [`<h6>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/h6)
     /// element.
@@ -237,10 +243,12 @@ builder_constructors! {
     /// [`<main>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/main)
     /// element.
     main {};
+
     /// Build a
     /// [`<nav>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/nav)
     /// element.
     nav {};
+
     /// Build a
     /// [`<section>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/section)
     /// element.
@@ -274,7 +282,7 @@ builder_constructors! {
     /// Note: By default, browsers always place a line break before and after the <div> element.
     ///
     /// ## Usage
-    /// ```
+    /// ```rust, ignore
     /// html!(<div> A header element </div>)
     /// rsx!(div { "A header element" })
     /// LazyNodes::new(|f| f.element(div, &[], &[], &[], None))
@@ -1006,7 +1014,12 @@ builder_constructors! {
         open: Bool,
     };
 
-
+    /// Build dialog
+    /// [`<dialog>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/dialog)
+    /// element.
+    dialog {
+        open: Bool,
+    };
 
     /// Build a
     /// [`<summary>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/summary)
@@ -1053,13 +1066,19 @@ impl input {
     /// - `time`
     /// - `url`
     /// - `week`
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
 
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 /*
@@ -1069,41 +1088,63 @@ volatile attributes
 impl script {
     // r#async: Bool,
     // r#type: String, // TODO could be an enum
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
-    pub fn r#script<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("script", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
+
+    #[allow(non_upper_case_globals)]
+    pub const r#script: AttributeDiscription = AttributeDiscription {
+        name: "script",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 impl button {
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#type: AttributeDiscription = AttributeDiscription {
+        name: "type",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 impl select {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 impl option {
-    pub fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("selected", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const selected: AttributeDiscription = AttributeDiscription {
+        name: "selected",
+        namespace: None,
+        volatile: true,
+    };
 }
 
 impl textarea {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const value: AttributeDiscription = AttributeDiscription {
+        name: "value",
+        namespace: None,
+        volatile: true,
+    };
 }
 impl label {
-    pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("for", val, None, false)
-    }
+    #[allow(non_upper_case_globals)]
+    pub const r#for: AttributeDiscription = AttributeDiscription {
+        name: "for",
+        namespace: None,
+        volatile: false,
+    };
 }
 
 builder_constructors! {

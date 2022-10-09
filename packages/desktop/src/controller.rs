@@ -1,4 +1,5 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
+
 use dioxus_core::*;
 use std::{
     collections::HashMap,
@@ -48,6 +49,10 @@ impl DesktopController {
                 let window_context = DesktopContext::new(desktop_context_proxy);
 
                 dom.base_scope().provide_context(window_context);
+
+                // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
+                #[cfg(any(feature = "hot-reload", debug_assertions))]
+                crate::hot_reload::init(&dom);
 
                 let edits = dom.rebuild();
 

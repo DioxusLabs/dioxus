@@ -26,7 +26,7 @@
 // main thread.
 //
 // React solves this problem by breaking up the rendering process into a "diff" phase and a "render" phase. In Dioxus,
-// the diff phase is non-blocking, using "yield_now" to allow the browser to process other events. When the diff phase
+// the diff phase is non-blocking, using "work_with_deadline" to allow the browser to process other events. When the diff phase
 // is  finally complete, the VirtualDOM will return a set of "Mutations" for this crate to apply.
 //
 // Here, we schedule the "diff" phase during the browser's idle period, achieved by calling RequestIdleCallback and then
@@ -56,19 +56,19 @@
 
 use std::rc::Rc;
 
-pub use crate::cfg::WebConfig;
+pub use crate::cfg::Config;
 pub use crate::util::use_eval;
-use dioxus::SchedulerMsg;
-use dioxus::VirtualDom;
-pub use dioxus_core as dioxus;
 use dioxus_core::prelude::Component;
-use futures_util::FutureExt;
+use dioxus_core::SchedulerMsg;
+use dioxus_core::VirtualDom;
 
 mod cache;
 mod cfg;
 mod dom;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod hot_reload;
 mod rehydrate;
-mod ric_raf;
+// mod ric_raf;
 mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
@@ -88,11 +88,11 @@ mod util;
 /// }
 ///
 /// static App: Component = |cx| {
-///     rsx!(cx, div {"hello world"})
+///     render!(div {"hello world"})
 /// }
 /// ```
 pub fn launch(root_component: Component) {
-    launch_with_props(root_component, (), |c| c);
+    launch_with_props(root_component, (), Config::default());
 }
 
 /// Launch your app and run the event loop, with configuration.
@@ -101,11 +101,11 @@ pub fn launch(root_component: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_web::launch_with_props(App, |config| config.pre_render(true));
+///     dioxus_web::launch_with_props(App, Config::new().pre_render(true));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -114,8 +114,8 @@ pub fn launch(root_component: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig) {
-    launch_with_props(root, (), config_builder)
+pub fn launch_cfg(root: Component, config: Config) {
+    launch_with_props(root, (), config)
 }
 
 /// Launches the VirtualDOM from the specified component function and props.
@@ -129,7 +129,7 @@ pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -
 ///     dioxus_web::launch_with_props(
 ///         App,
 ///         RootProps { name: String::from("joe") },
-///         |config| config
+///         Config::new()
 ///     );
 /// }
 ///
@@ -139,22 +139,13 @@ pub fn launch_cfg(root: Component, config_builder: impl FnOnce(&mut WebConfig) -
 /// }
 ///
 /// static App: Component<RootProps> = |cx| {
-///     rsx!(cx, div {"hello {cx.props.name}"})
+///     render!(div {"hello {cx.props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T>(
-    root_component: Component<T>,
-    root_properties: T,
-    configuration_builder: impl FnOnce(&mut WebConfig) -> &mut WebConfig,
-) where
+pub fn launch_with_props<T>(root_component: Component<T>, root_properties: T, config: Config)
+where
     T: Send + 'static,
 {
-    if cfg!(feature = "panic_hook") {
-        console_error_panic_hook::set_once();
-    }
-
-    let mut config = WebConfig::default();
-    configuration_builder(&mut config);
     wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
 }
 
@@ -170,8 +161,15 @@ pub fn launch_with_props<T>(
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: WebConfig) {
+pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: Config) {
     let mut dom = VirtualDom::new_with_props(root, root_props);
+
+    if cfg!(feature = "panic_hook") && cfg.default_panic_hook {
+        console_error_panic_hook::set_once();
+    }
+
+    #[cfg(any(feature = "hot-reload", debug_assertions))]
+    hot_reload::init(&dom);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
         wasm_bindgen::intern(s);
@@ -215,7 +213,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         websys_dom.apply_edits(edits.edits);
     }
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    // let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
@@ -226,13 +224,14 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         log::trace!("working..");
 
         // wait for the mainthread to schedule us in
-        let mut deadline = work_loop.wait_for_idle_time().await;
+        // let mut deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let mutations = dom.work_with_deadline(|| false);
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         for edit in mutations {
             // actually apply our changes during the animation frame

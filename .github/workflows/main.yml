@@ -7,10 +7,12 @@ on:
     paths:
       - packages/**
       - examples/**
+      - docs/guide/**
       - src/**
       - .github/**
       - lib.rs
       - Cargo.toml
+      - Makefile.toml
 
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -38,10 +40,11 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev
+      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: actions-rs/cargo@v1
         with:
           command: check
+          args: --all --examples --tests
 
   test:
     if: github.event.pull_request.draft == false
@@ -56,7 +59,7 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev
+      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.3.0
@@ -96,7 +99,7 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v1
       - run: sudo apt-get update
-      - run: sudo apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev
+      - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:
@@ -117,7 +120,7 @@ jobs:
   #       run: |
   #         apt-get update &&\
   #         apt-get install build-essential &&\
-  #         apt install libwebkit2gtk-4.0-dev libappindicator3-dev libgtk-3-dev -y &&\
+  #         apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev -y &&\
   #         cargo +nightly tarpaulin --verbose --all-features --workspace --timeout 120 --out Xml
   #     - name: Upload to codecov.io
   #       uses: codecov/codecov-action@v2

@@ -1,7 +1,7 @@
-use crate::innerlude::*;
+use crate::innerlude::{VNode, VirtualDom};
 
 /// An iterator that only yields "real" [`Element`]s. IE only Elements that are
-/// not [`VNode::VComponent`] or [`VNode::VFragment`], .
+/// not [`VNode::Component`] or [`VNode::Fragment`], .
 pub struct ElementIdIterator<'a> {
     vdom: &'a VirtualDom,
 
@@ -34,7 +34,10 @@ impl<'a> Iterator for ElementIdIterator<'a> {
             if let Some((count, node)) = self.stack.last_mut() {
                 match node {
                     // We can only exit our looping when we get "real" nodes
-                    VNode::Element(_) | VNode::Text(_) | VNode::Placeholder(_) => {
+                    VNode::Element(_)
+                    | VNode::Text(_)
+                    | VNode::Placeholder(_)
+                    | VNode::TemplateRef(_) => {
                         // We've recursed INTO an element/text
                         // We need to recurse *out* of it and move forward to the next
                         // println!("Found element! Returning it!");
@@ -44,11 +47,11 @@ impl<'a> Iterator for ElementIdIterator<'a> {
 
                     // If we get a fragment we push the next child
                     VNode::Fragment(frag) => {
-                        let _count = *count as usize;
-                        if _count >= frag.children.len() {
+                        let count = *count as usize;
+                        if count >= frag.children.len() {
                             should_pop = true;
                         } else {
-                            should_push = Some(&frag.children[_count]);
+                            should_push = Some(&frag.children[count]);
                         }
                     }
 
@@ -81,3 +84,44 @@ impl<'a> Iterator for ElementIdIterator<'a> {
         returned_node
     }
 }
+
+/// This intentionally leaks once per element name to allow more flexability when hot reloding templetes
+#[cfg(all(any(feature = "hot-reload", debug_assertions), feature = "serde"))]
+mod leaky {
+    use std::sync::Mutex;
+
+    use fxhash::FxHashSet;
+    use once_cell::sync::Lazy;
+    static STATIC_CACHE: Lazy<Mutex<FxHashSet<&'static str>>> =
+        Lazy::new(|| Mutex::new(FxHashSet::default()));
+
+    pub fn deserialize_static_leaky<'de, D>(d: D) -> Result<&'static str, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize;
+        let s = <&str>::deserialize(d)?;
+        Ok(if let Some(stat) = STATIC_CACHE.lock().unwrap().get(s) {
+            *stat
+        } else {
+            Box::leak(s.into())
+        })
+    }
+
+    pub fn deserialize_static_leaky_ns<'de, D>(d: D) -> Result<Option<&'static str>, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::Deserialize;
+        Ok(<Option<&str>>::deserialize(d)?.map(|s| {
+            if let Some(stat) = STATIC_CACHE.lock().unwrap().get(s) {
+                *stat
+            } else {
+                Box::leak(s.into())
+            }
+        }))
+    }
+}
+
+#[cfg(all(any(feature = "hot-reload", debug_assertions), feature = "serde"))]
+pub use leaky::*;

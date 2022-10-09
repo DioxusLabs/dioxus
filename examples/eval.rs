@@ -1,12 +1,12 @@
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
     let script = use_state(&cx, String::new);
-    let eval = use_eval(&cx);
+    let eval = dioxus_desktop::use_eval(&cx);
 
     cx.render(rsx! {
         div {
@@ -17,7 +17,6 @@ fn app(cx: Scope) -> Element {
             }
             button {
                 onclick: move |_| eval(script),
-
                 "Execute"
             }
         }

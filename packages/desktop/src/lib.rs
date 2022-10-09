@@ -8,6 +8,8 @@ mod controller;
 mod desktop_context;
 mod escape;
 mod events;
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+mod hot_reload;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
@@ -16,10 +18,12 @@ pub use wry;
 pub use wry::application as tao;
 
 use crate::events::trigger_from_serialized;
-use cfg::DesktopConfig;
+pub use cfg::Config;
 use controller::DesktopController;
 use dioxus_core::*;
 use events::parse_ipc_message;
+pub use tao::dpi::{LogicalSize, PhysicalSize};
+pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -31,11 +35,11 @@ use wry::webview::WebViewBuilder;
 ///
 /// This function will start a multithreaded Tokio runtime as well the WebView event loop.
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus::desktop::launch(app);
+///     dioxus_desktop::launch(app);
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -45,7 +49,7 @@ use wry::webview::WebViewBuilder;
 /// }
 /// ```
 pub fn launch(root: Component) {
-    launch_with_props(root, (), |c| c)
+    launch_with_props(root, (), Config::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -54,11 +58,11 @@ pub fn launch(root: Component) {
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus::desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
+///     dioxus_desktop::launch_cfg(app, |c| c.with_window(|w| w.with_title("My App")));
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
@@ -67,10 +71,7 @@ pub fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(
-    root: Component,
-    config_builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
+pub fn launch_cfg(root: Component, config_builder: Config) {
     launch_with_props(root, (), config_builder)
 }
 
@@ -80,11 +81,11 @@ pub fn launch_cfg(
 ///
 /// You can configure the WebView window with a configuration closure
 ///
-/// ```rust
+/// ```rust, ignore
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus::desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+///     dioxus_desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
 /// }
 ///
 /// struct AppProps {
@@ -97,18 +98,23 @@ pub fn launch_cfg(
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(
-    root: Component<P>,
-    props: P,
-    builder: impl FnOnce(&mut DesktopConfig) -> &mut DesktopConfig,
-) {
-    let mut cfg = DesktopConfig::default().with_default_icon();
-    builder(&mut cfg);
-
+pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::with_user_event();
 
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
     let proxy = event_loop.create_proxy();
+
+    // We assume that if the icon is None, then the user just didnt set it
+    if cfg.window.window.window_icon.is_none() {
+        cfg.window.window.window_icon = Some(
+            tao::window::Icon::from_rgba(
+                include_bytes!("./assets/default_icon.bin").to_vec(),
+                460,
+                460,
+            )
+            .expect("image parse failed"),
+        );
+    }
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -211,13 +217,6 @@ pub fn launch_with_props<P: 'static + Send>(
             } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
-
-                WindowEvent::Resized(_) | WindowEvent::Moved(_) => {
-                    if let Some(view) = desktop.webviews.get_mut(&window_id) {
-                        let _ = view.resize();
-                    }
-                }
-
                 _ => {}
             },
 

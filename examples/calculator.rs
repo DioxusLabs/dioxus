@@ -4,17 +4,18 @@ This calculator version uses React-style state management. All state is held as 
 */
 
 use dioxus::events::*;
+use dioxus::html::input_data::keyboard_types::Key;
 use dioxus::prelude::*;
+use dioxus_desktop::{Config, WindowBuilder};
 
 fn main() {
-    use dioxus::desktop::tao::dpi::LogicalSize;
-    dioxus::desktop::launch_cfg(app, |cfg| {
-        cfg.with_window(|w| {
-            w.with_title("Calculator Demo")
-                .with_resizable(false)
-                .with_inner_size(LogicalSize::new(320.0, 530.0))
-        })
-    });
+    let config = Config::new().with_window(
+        WindowBuilder::default()
+            .with_title("Calculator")
+            .with_inner_size(dioxus_desktop::LogicalSize::new(300.0, 500.0)),
+    );
+
+    dioxus_desktop::launch_cfg(app, config);
 }
 
 fn app(cx: Scope) -> Element {
@@ -29,34 +30,39 @@ fn app(cx: Scope) -> Element {
 
     let input_operator = move |key: &str| val.make_mut().push_str(key);
 
+    let handle_key_down_event = move |evt: KeyboardEvent| match evt.key() {
+        Key::Backspace => {
+            if !val.len() != 0 {
+                val.make_mut().pop();
+            }
+        }
+        Key::Character(character) => match character.as_str() {
+            "+" => input_operator("+"),
+            "-" => input_operator("-"),
+            "/" => input_operator("/"),
+            "*" => input_operator("*"),
+            "0" => input_digit(0),
+            "1" => input_digit(1),
+            "2" => input_digit(2),
+            "3" => input_digit(3),
+            "4" => input_digit(4),
+            "5" => input_digit(5),
+            "6" => input_digit(6),
+            "7" => input_digit(7),
+            "8" => input_digit(8),
+            "9" => input_digit(9),
+            _ => {}
+        },
+        _ => {}
+    };
+
     cx.render(rsx!(
-        style { [include_str!("./assets/calculator.css")] }
+        style { include_str!("./assets/calculator.css") }
         div { id: "wrapper",
             div { class: "app",
                 div { class: "calculator",
-                    onkeydown: move |evt| match evt.key_code {
-                        KeyCode::Add => input_operator("+"),
-                        KeyCode::Subtract => input_operator("-"),
-                        KeyCode::Divide => input_operator("/"),
-                        KeyCode::Multiply => input_operator("*"),
-                        KeyCode::Num0 => input_digit(0),
-                        KeyCode::Num1 => input_digit(1),
-                        KeyCode::Num2 => input_digit(2),
-                        KeyCode::Num3 => input_digit(3),
-                        KeyCode::Num4 => input_digit(4),
-                        KeyCode::Num5 => input_digit(5),
-                        KeyCode::Num6 => input_digit(6),
-                        KeyCode::Num7 => input_digit(7),
-                        KeyCode::Num8 => input_digit(8),
-                        KeyCode::Num9 => input_digit(9),
-                        KeyCode::Backspace => {
-                            if !val.len() != 0 {
-                                val.make_mut().pop();
-                            }
-                        }
-                        _ => {}
-                    },
-                    div { class: "calculator-display", [val.to_string()] }
+                    onkeydown: handle_key_down_event,
+                    div { class: "calculator-display", val.to_string() }
                     div { class: "calculator-keypad",
                         div { class: "input-keys",
                             div { class: "function-keys",
@@ -68,7 +74,7 @@ fn app(cx: Scope) -> Element {
                                             val.set("0".into());
                                         }
                                     },
-                                    [if val.is_empty() { "C" } else { "AC" }]
+                                    if val.is_empty() { "C" } else { "AC" }
                                 }
                                 button {
                                     class: "calculator-key key-sign",

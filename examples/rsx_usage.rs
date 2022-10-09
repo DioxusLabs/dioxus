@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 //! A tour of the rsx! macro
 //! ------------------------
 //!
@@ -39,12 +41,11 @@
 //! - Allow top-level fragments
 //!
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
-/// When trying to return "nothing" to Dioxus, you'll need to specify the type parameter or Rust will be sad.
-/// This type alias specifies the type for you so you don't need to write "None as Option<()>"
-const NONE_ELEMENT: Option<()> = None;
+use core::{fmt, str::FromStr};
+use std::fmt::Display;
 
 use baller::Baller;
 use dioxus::prelude::*;
@@ -60,7 +61,7 @@ fn app(cx: Scope) -> Element {
             h1 {"Some text"}
             h1 {"Some text with {formatting}"}
             h1 {"Formatting basic expressions {formatting_tuple.0} and {formatting_tuple.1}"}
-            h1 {"Formatting without interpolation " [formatting_tuple.0] "and" [formatting_tuple.1] }
+            h1 {"Formatting without interpolation " formatting_tuple.0 "and" formatting_tuple.1 }
             h2 {
                 "Multiple"
                 "Text"
@@ -128,12 +129,8 @@ fn app(cx: Scope) -> Element {
                 None
             }
 
-
             // returning "None" without a diverging branch is a bit noisy... but rare in practice
             None as Option<()>,
-
-            // Use the Dioxus type-alias for less noise
-            NONE_ELEMENT,
 
             // can also just use empty fragments
             Fragment {}
@@ -157,7 +154,7 @@ fn app(cx: Scope) -> Element {
             // Can accept any paths
             // Notice how you still get syntax highlighting and IDE support :)
             Baller {}
-            baller::Baller { }
+            baller::Baller {}
             crate::baller::Baller {}
 
             // Can take properties
@@ -181,17 +178,44 @@ fn app(cx: Scope) -> Element {
             // Can take children too!
             Taller { a: "asd", div {"hello world!"} }
 
-            // Components can be used with the `call` syntax
             // This component's props are defined *inline* with the `inline_props` macro
-            with_inline(
-                text: "using functionc all syntax"
-            )
+            WithInline { text: "using functionc all syntax" }
+
+            // Components can be generic too
+            // This component takes i32 type to give you typed input
+            TypedInput::<TypedInputProps<i32>> {}
+
+            // Type inference can be used too
+            TypedInput { initial: 10.0 }
+
+            // geneircs with the `inline_props` macro
+            Label { text: "hello geneirc world!" }
+            Label { text: 99.9 }
+
+            // Lowercase components work too, as long as they are access using a path
+            baller::lowercase_component {}
+
+            // For in-scope lowercase components, use the `self` keyword
+            self::lowercase_helper {}
 
             // helper functions
-            // Single values must be wrapped in braces or `Some` to satisfy `IntoIterator`
-            [helper(&cx, "hello world!")]
+            // Anything that implements IntoVnode can be dropped directly into Rsx
+            helper(&cx, "hello world!")
+
+            // Strings can be supplied directly
+            String::from("Hello world!")
+
+            // So can format_args
+            format_args!("Hello {}!", "world")
+
+            // Or we can shell out to a helper function
+            format_dollars(10, 50)
         }
     })
+}
+
+fn format_dollars(dollars: u32, cents: u32) -> String {
+    format!("${}.{:02}", dollars, cents)
 }
 
 fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
@@ -200,15 +224,25 @@ fn helper<'a>(cx: &'a ScopeState, text: &str) -> Element<'a> {
     })
 }
 
+fn lowercase_helper(cx: Scope) -> Element {
+    cx.render(rsx! {
+        "asd"
+    })
+}
+
 mod baller {
     use super::*;
-    #[derive(Props, PartialEq)]
+    #[derive(Props, PartialEq, Eq)]
     pub struct BallerProps {}
 
     #[allow(non_snake_case)]
     /// This component totally balls
     pub fn Baller(_: Scope<BallerProps>) -> Element {
         todo!()
+    }
+
+    pub fn lowercase_component(cx: Scope) -> Element {
+        cx.render(rsx! { "look ma, no uppercase" })
     }
 }
 
@@ -227,8 +261,34 @@ pub fn Taller<'a>(cx: Scope<'a, TallerProps<'a>>) -> Element {
     })
 }
 
+#[derive(Props, PartialEq, Eq)]
+pub struct TypedInputProps<T> {
+    #[props(optional, default)]
+    initial: Option<T>,
+}
+
+#[allow(non_snake_case)]
+pub fn TypedInput<T>(_: Scope<TypedInputProps<T>>) -> Element
+where
+    T: FromStr + fmt::Display,
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    todo!()
+}
+
 #[inline_props]
-fn with_inline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
+fn WithInline<'a>(cx: Scope<'a>, text: &'a str) -> Element {
+    cx.render(rsx! {
+        p { "{text}" }
+    })
+}
+
+// generic component with inline_props too
+#[inline_props]
+fn Label<T>(cx: Scope, text: T) -> Element
+where
+    T: Display,
+{
     cx.render(rsx! {
         p { "{text}" }
     })

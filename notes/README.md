@@ -29,14 +29,14 @@ Dioxus is heavily inspired by React, supporting many of the same concepts:
 If you know React, then you know Dioxus.
 
 Dioxus is *substantially* more performant than many of the other Rust UI libraries (Yew/Percy) and is *significantly* more performant
-than React - roughly competitve with InfernoJS.
+than React - roughly competitive with InfernoJS.
 
 Remember: Dioxus is a library for declaring interactive user interfaces - it is not a dedicated renderer. Most 1st party renderers for Dioxus currently only support web technologies.
 
 ## Brief Overview
 
 All Dioxus apps are built by composing functions that take in a `Scope` which is generic over some `Properties` and return an `Element`.
-A `Scope` holds relevant state data for the the currently-rendered component.
+A `Scope` holds relevant state data for the currently-rendered component.
 
 To launch an app, we use the `launch` method for the specific renderer we want to use. In the launch function, we pass the app's `Component`.
 
@@ -44,7 +44,7 @@ To launch an app, we use the `launch` method for the specific renderer we want t
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -101,7 +101,7 @@ fn example(cx: Scope) -> Element {
     // both of these are equivalent
     cx.render(rsx!("hello world"))
 
-    rsx!(cx, "hello world!")
+    render!("hello world!")
 }
 ```
 
@@ -235,7 +235,7 @@ use hooks to define state and modify it from within listeners.
 fn app(cx: Scope) -> Element {
     let name = use_state(&cx, || "world");
 
-    rsx!(cx, "hello {name}!")
+    render!("hello {name}!")
 }
 ```
 
@@ -276,7 +276,7 @@ Using components, templates, and hooks, we can build a simple app.
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::desktop::launch(App);
+    dioxus_desktop::launch(App);
 }
 
 fn App(cx: Scope) -> Element {
@@ -322,4 +322,4 @@ Alternatives to Dioxus include:
 - MoonZoom/Seed: opinionated frameworks based on the Elm model (message, update) - no hooks
 
 We've put a lot of work into making Dioxus ergonomic and *familiar*.
-Our target audience is TypeSrcipt developers looking to switch to Rust for the web - so we need to be comparabale to React.
+Our target audience is TypeScript developers looking to switch to Rust for the web - so we need to be comparable to React.
