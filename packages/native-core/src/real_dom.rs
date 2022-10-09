@@ -89,20 +89,21 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     InsertAfter { root, nodes } => {
-                        let target = self.parent(self.resolve_maybe_id(root)).unwrap();
+                        let root = self.resolve_maybe_id(root);
+                        let target = self.parent(root).unwrap();
                         for id in nodes {
                             let id = RealNodeId::ElementId(ElementId(id as usize));
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child(id, target).unwrap();
+                            self.link_child_after(id, target, root).unwrap();
                         }
-                        todo!()
                     }
                     InsertBefore { root, nodes } => {
-                        let target = self.parent(self.resolve_maybe_id(root)).unwrap();
+                        let root = self.resolve_maybe_id(root);
+                        let target = self.parent(root).unwrap();
                         for id in nodes {
                             let id = RealNodeId::ElementId(ElementId(id as usize));
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child(id, target).unwrap();
+                            self.link_child_before(id, target, root).unwrap();
                         }
                     }
                     Remove { root } => {
@@ -398,6 +399,44 @@ impl<S: State> RealDom<S> {
     fn link_child(&mut self, child_id: RealNodeId, parent_id: RealNodeId) -> Option<()> {
         let parent = &mut self[parent_id];
         parent.add_child(child_id);
+        let parent_height = parent.node_data.height;
+        self[child_id].set_parent(parent_id);
+        self.set_height(child_id, parent_height + 1);
+
+        Some(())
+    }
+
+    /// Link a child and parent together with the child inserted before a marker
+    fn link_child_before(
+        &mut self,
+        child_id: RealNodeId,
+        parent_id: RealNodeId,
+        marker: RealNodeId,
+    ) -> Option<()> {
+        let parent = &mut self[parent_id];
+        if let NodeType::Element { children, .. } = &mut parent.node_data.node_type {
+            let index = children.iter().position(|a| *a == marker)?;
+            children.insert(index - 1, child_id);
+        }
+        let parent_height = parent.node_data.height;
+        self[child_id].set_parent(parent_id);
+        self.set_height(child_id, parent_height + 1);
+
+        Some(())
+    }
+
+    /// Link a child and parent together with the child inserted after a marker
+    fn link_child_after(
+        &mut self,
+        child_id: RealNodeId,
+        parent_id: RealNodeId,
+        marker: RealNodeId,
+    ) -> Option<()> {
+        let parent = &mut self[parent_id];
+        if let NodeType::Element { children, .. } = &mut parent.node_data.node_type {
+            let index = children.iter().position(|a| *a == marker)?;
+            children.insert(index + 1, child_id);
+        }
         let parent_height = parent.node_data.height;
         self[child_id].set_parent(parent_id);
         self.set_height(child_id, parent_height + 1);
