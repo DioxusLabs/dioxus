@@ -25,8 +25,8 @@ fn shared_state_test() {
     assert_eq!(
         edits,
         [
-            CreateTextNode { root: 1, text: "Hello, world!" },
-            AppendChildren { many: 1 },
+            CreateTextNode { root: Some(1), text: "Hello, world!" },
+            AppendChildren { root: Some(0), children: vec![1] },
         ]
     );
 }
