@@ -2,10 +2,7 @@ use std::collections::HashMap;
 
 use dioxus::prelude::*;
 use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_elements::KeyCode;
-use dioxus_hooks::*;
+use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 
@@ -36,12 +33,10 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
         } else {
             "☐"
         }
+    } else if *state.get() {
+        "✓"
     } else {
-        if *state.get() {
-            "✓"
-        } else {
-            " "
-        }
+        " "
     };
     let border_style = if width == "1px" || height == "1px" {
         "none"
@@ -75,7 +70,7 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
                 update();
             },
             onkeydown: move |evt| {
-                if !evt.repeat && matches!(evt.key_code, KeyCode::Space | KeyCode::Enter) {
+                if !evt.is_auto_repeating() && match evt.key(){ Key::Character(c) if c == " " =>true, Key::Enter=>true, _=>false }  {
                     update();
                 }
             },

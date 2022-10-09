@@ -1,8 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_core::prelude::fc_to_builder;
 use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 

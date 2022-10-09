@@ -3,10 +3,7 @@ use std::collections::HashMap;
 use crate::Query;
 use dioxus::prelude::*;
 use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_elements::KeyCode;
-use dioxus_hooks::*;
+use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 
@@ -59,7 +56,7 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
     let update = |value: String| {
         if let Some(oninput) = cx.props.raw_oninput {
             oninput.call(FormData {
-                value: value,
+                value,
                 values: HashMap::new(),
             });
         }
@@ -72,12 +69,12 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
             display: "flex",
             flex_direction: "row",
             onkeydown: move |event| {
-                match event.key_code {
-                    KeyCode::LeftArrow => {
+                match event.key() {
+                    Key::ArrowLeft => {
                         value_state.set((current_value - step).max(min).min(max));
                         update(value_state.current().to_string());
                     }
-                    KeyCode::RightArrow => {
+                    Key::ArrowRight => {
                         value_state.set((current_value + step).max(min).min(max));
                         update(value_state.current().to_string());
                     }
@@ -86,10 +83,11 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
             },
             onmousemove: move |evt| {
                 let mouse = evt.data;
-                if mouse.buttons != 0{
+                if !mouse.held_buttons().is_empty(){
                     let node = tui_query.get(cx.root_node().mounted_id());
                     let width = node.size().unwrap().width;
-                    value_state.set(min + size*(mouse.offset_x as f32) / width as f32);
+                    let offset = mouse.element_coordinates();
+                    value_state.set(min + size*(offset.x as f32) / width as f32);
                     update(value_state.current().to_string());
                 }
             },

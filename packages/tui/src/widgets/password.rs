@@ -1,16 +1,13 @@
+use crate::Query;
 use crossterm::{cursor::*, execute};
 use dioxus::prelude::*;
 use dioxus_core::VNode;
-use dioxus_core::*;
-use dioxus_core_macro::*;
-use dioxus_elements::KeyCode;
-use dioxus_hooks::*;
+use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
 use dioxus_native_core::utils::cursor::{Cursor, Pos};
-use taffy::{geometry::Point};
 use std::{collections::HashMap, io::stdout};
-use crate::Query;
+use taffy::geometry::Point;
 
 #[derive(Props)]
 pub(crate) struct PasswordProps<'a> {
@@ -39,7 +36,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
             String::new()
         }
     });
-    let cursor = use_ref(&cx, || Cursor::default());
+    let cursor = use_ref(&cx, Cursor::default);
     let dragging = use_state(&cx, || false);
 
     let text = text_ref.read().clone();
@@ -65,8 +62,8 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
         .width
         .map(|s| s.to_string())
         // px is the same as em in tui
-        .or(cx.props.size.map(|s| s.to_string() + "px"))
-        .unwrap_or("10px".to_string());
+        .or_else(|| cx.props.size.map(|s| s.to_string() + "px"))
+        .unwrap_or_else(|| "10px".to_string());
     let height = cx.props.height.unwrap_or("3px");
 
     // don't draw a border unless there is enough space
@@ -85,7 +82,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
     } else {
         "solid"
     };
-    
+
     cx.render({
         rsx! {
             div{
@@ -93,9 +90,9 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                 height: "{height}",
                 border_style: "{border}",
                 align_items: "left",
-                
+
                 onkeydown: move |k| {
-                    if k.key_code == KeyCode::Enter {
+                    if k.key()== Key::Enter {
                         return;
                     }
                     let mut text = text_ref.write();
@@ -121,10 +118,11 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                         execute!(stdout(), MoveTo(x, y)).unwrap();
                     }
                 },
-                
+
                 onmousemove: move |evt| {
                     if *dragging.get() {
-                        let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
+                        let offset = evt.data.element_coordinates();
+                        let mut new = Pos::new(offset.x as usize, offset.y as usize);
                         if border != "none" {
                             new.col = new.col.saturating_sub(1);
                         }
@@ -137,19 +135,20 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                     }
                 },
                 onmousedown: move |evt| {
-                    let mut new = Pos::new(evt.data.offset_x as usize, evt.data.offset_y as usize);
+                    let offset = evt.data.element_coordinates();
+                    let mut new = Pos::new(offset.x as usize, offset.y as usize);
                     if border != "none" {
                         new.col = new.col.saturating_sub(1);
                     }
                     // textboxs are only one line tall
                     new.row = 0;
-                    
+
                     new.realize_col(&text_ref.read());
                     cursor.set(Cursor::from_start(new));
                     dragging.set(true);
                     let node = tui_query_clone.get(cx.root_node().mounted_id());
                     let Point{ x, y } = node.pos().unwrap();
-                    
+
                     let Pos { col, row } = cursor.read().start;
                     let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
                     if let Ok(pos) = crossterm::cursor::position() {

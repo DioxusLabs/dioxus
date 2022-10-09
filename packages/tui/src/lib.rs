@@ -17,7 +17,7 @@ use futures::{
 use query::Query;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::{io, time::Duration};
+use std::time::Duration;
 use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::Size};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
