@@ -294,7 +294,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrExpression { name, value } => {
                 if *maybe{
                     quote! {
-                        {#value}.map(|value| dioxus_elements::#el_name.#name(__cx, value))
+                        {#value}.map(|value| __cx.attr_disciption( dioxus_elements::#el_name::#name, value) )
                     }
                 } else{
                     quote! {
@@ -314,11 +314,11 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::CustomAttrExpression { name, value } => {
                 if *maybe{
                     quote! {
-                        {#value}.map(|value| __cx.custom_attr( #name, value, None, false ) )
+                        {#value}.map(|value| __cx.custom_attr( #name, value, None, false, false ) )
                     }
                 } else{
                     quote! {
-                        __cx.custom_attr( #name, #value, None, false )
+                        __cx.custom_attr( #name, #value, None, false, false )
                     }
                 }
             }
