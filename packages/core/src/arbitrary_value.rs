@@ -303,7 +303,7 @@ impl serde::Serialize for OwnedArbitraryAttributeValue {
     }
 }
 #[cfg(feature = "serialize")]
-impl<'de, 'a> serde::Deserialize<'de> for &'a OwnedArbitraryAttributeValue {
+impl<'de> serde::Deserialize<'de> for &OwnedArbitraryAttributeValue {
     fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
