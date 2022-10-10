@@ -1,4 +1,5 @@
 use dioxus::prelude::*;
+use dioxus_core_macro::rsx_without_templates;
 use dioxus_tui::query::Query;
 use dioxus_tui::Size;
 
@@ -10,7 +11,8 @@ fn app(cx: Scope) -> Element {
     let hue = use_state(&cx, || 0.0);
     let brightness = use_state(&cx, || 0.0);
     let tui_query: Query = cx.consume_context().unwrap();
-    cx.render(rsx! {
+    // templates make some nodes not have real ids, so we explicitly deny them
+    cx.render(rsx_without_templates! {
         div{
             width: "100%",
             background_color: "hsl({hue}, 70%, {brightness}%)",

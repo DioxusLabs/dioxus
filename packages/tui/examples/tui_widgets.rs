@@ -5,7 +5,6 @@ use dioxus_tui::Config;
 
 fn main() {
     dioxus_tui::launch_cfg(app, Config::new());
-    // dioxus::desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
