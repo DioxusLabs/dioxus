@@ -65,8 +65,15 @@ pub fn rsx_without_templates(s: TokenStream) -> TokenStream {
 pub fn render(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
-        Ok(body) => quote::quote! {
-            cx.render(#body)
+        Ok(body) => {
+            let mut inner = proc_macro2::TokenStream::new();
+            body.to_tokens_without_lazynodes(&mut inner);
+            quote::quote! {
+                {
+                    let __cx = NodeFactory::new(&cx.scope);
+                    Some(#inner)
+                }
+            }
         }
         .into_token_stream()
         .into(),
