@@ -73,9 +73,11 @@ fn conditional_rendering() {
             CreateElement { root: None, tag: "span", children: 1 },
             CreateTextNode { root: None, text: "a" },
             CloneNodeChildren { id: Some(5), new_ids: vec![6] },
-            ReplaceWith { root: Some(3), nodes: vec![6] },
+            SetLastNode { id: 3 },
+            ReplaceWith { root: None, nodes: vec![6] },
             CreatePlaceholder { root: Some(7) },
-            ReplaceWith { root: Some(4), nodes: vec![7] },
+            SetLastNode { id: 4 },
+            ReplaceWith { root: None, nodes: vec![7] },
             AppendChildren { root: Some(0), children: vec![2, 3, 4] }
         ]
     )
