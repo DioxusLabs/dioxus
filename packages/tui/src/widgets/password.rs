@@ -2,6 +2,7 @@ use crate::Query;
 use crossterm::{cursor::*, execute};
 use dioxus::prelude::*;
 use dioxus_core::VNode;
+use dioxus_core_macro::rsx_without_templates;
 use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::on::FormData;
@@ -84,7 +85,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
     };
 
     cx.render({
-        rsx! {
+        rsx_without_templates! {
             div{
                 width: "{width}",
                 height: "{height}",
