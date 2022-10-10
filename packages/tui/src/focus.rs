@@ -1,7 +1,9 @@
 use crate::{node::PreventDefault, Dom};
 
-use dioxus_native_core::utils::persistant_iter::{ElementProduced, PersistantElementIter};
-use dioxus_native_core::RealNodeId;
+use dioxus_native_core::{
+    utils::persistant_iter::{ElementProduced, PersistantElementIter},
+    RealNodeId,
+};
 use dioxus_native_core_macro::sorted_str_slice;
 
 use std::{cmp::Ordering, num::NonZeroU16};

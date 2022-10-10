@@ -653,7 +653,7 @@ impl<'b> DiffState<'b> {
                             value: value.clone(),
                             is_static: false,
                         };
-                        let real_id = new.get_node_id(*node_id, template, new, diff_state);
+                        let real_id = new.get_node_id(*node_id, template, diff_state);
                         diff_state
                             .mutations
                             .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -701,7 +701,7 @@ impl<'b> DiffState<'b> {
                     value,
                     is_static: false,
                 };
-                let real_id = new.get_node_id(node.id, template, new, diff_state);
+                let real_id = new.get_node_id(node.id, template, diff_state);
                 diff_state
                     .mutations
                     .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -730,7 +730,7 @@ impl<'b> DiffState<'b> {
             let (diff, new, template, dynamic_context) = ctx;
             if let TemplateNodeType::Text(text) = &node.node_type {
                 let text = dynamic_context.resolve_text(text);
-                let real_id = new.get_node_id(node.id, template, new, diff);
+                let real_id = new.get_node_id(node.id, template, diff);
                 diff.mutations.set_text(
                     diff.current_scope_bump().alloc(text),
                     Some(real_id.as_u64()),
@@ -1239,7 +1239,7 @@ impl<'b> DiffState<'b> {
         }
     }
 
-    fn replace_node(&mut self, parent: ElementId, old: &'b VNode<'b>, new: &'b VNode<'b>) {
+    pub fn replace_node(&mut self, parent: ElementId, old: &'b VNode<'b>, new: &'b VNode<'b>) {
         let mut nodes_vec = Vec::new();
         self.create_node(parent, new, &mut nodes_vec);
         self.replace_inner(old, nodes_vec);
@@ -1297,16 +1297,12 @@ impl<'b> DiffState<'b> {
                 let templates = self.scopes.templates.borrow();
                 let template = templates.get(&template_ref.template_id).unwrap().borrow();
                 let mut root_iter = template.root_nodes().iter();
-                let first_real_id = template_ref.get_node_id(
-                    *root_iter.next().unwrap(),
-                    &template,
-                    template_ref,
-                    self,
-                );
+                let first_real_id =
+                    template_ref.get_node_id(*root_iter.next().unwrap(), &template, self);
                 self.mutations
                     .replace_with(Some(first_real_id.as_u64()), nodes_created);
                 for id in root_iter {
-                    let real_id = template_ref.get_node_id(*id, &template, template_ref, self);
+                    let real_id = template_ref.get_node_id(*id, &template, self);
                     self.mutations.remove(Some(real_id.as_u64()));
                 }
 
@@ -1387,8 +1383,7 @@ impl<'b> DiffState<'b> {
                     let template = templates.get(&template_ref.template_id).unwrap().borrow();
                     if gen_muts {
                         for id in template.root_nodes() {
-                            let real_id =
-                                template_ref.get_node_id(*id, &template, template_ref, self);
+                            let real_id = template_ref.get_node_id(*id, &template, self);
                             self.mutations.remove(Some(real_id.as_u64()));
                         }
                     }
@@ -1484,7 +1479,7 @@ impl<'b> DiffState<'b> {
                     break template
                         .root_nodes()
                         .last()
-                        .map(|id| t.get_node_id(*id, &template, t, self));
+                        .map(|id| t.get_node_id(*id, &template, self));
                 }
             }
         }
@@ -1509,7 +1504,7 @@ impl<'b> DiffState<'b> {
                     break template
                         .root_nodes()
                         .first()
-                        .map(|id| t.get_node_id(*id, &template, t, self));
+                        .map(|id| t.get_node_id(*id, &template, self));
                 }
             }
         }
@@ -1526,11 +1521,12 @@ impl<'b> DiffState<'b> {
                 let templates = self.scopes.templates.borrow();
                 let template = templates.get(&template_ref.template_id).unwrap();
                 let template = template.borrow();
-                nodes.extend(template.root_nodes().iter().map(|id| {
-                    template_ref
-                        .get_node_id(*id, &template, template_ref, self)
-                        .as_u64()
-                }));
+                nodes.extend(
+                    template
+                        .root_nodes()
+                        .iter()
+                        .map(|id| template_ref.get_node_id(*id, &template, self).as_u64()),
+                );
             }
 
             VNode::Fragment(frag) => {

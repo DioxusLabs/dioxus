@@ -79,14 +79,14 @@ impl<S: State> RealDom<S> {
                         }
                     }
                     ReplaceWith { root, nodes } => {
-                        let id = self.resolve_maybe_id(root);
-                        let root = self.remove(id).unwrap();
-                        let target = root.node_data.parent.unwrap();
+                        let id_to_replace = self.resolve_maybe_id(root);
+                        let target = self[id_to_replace].node_data.parent.unwrap();
                         for id in nodes {
                             let id = RealNodeId::ElementId(ElementId(id as usize));
                             self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child(id, target).unwrap();
+                            self.link_child_before(id, target, id_to_replace).unwrap();
                         }
+                        self.remove(id_to_replace).unwrap();
                     }
                     InsertAfter { root, nodes } => {
                         let root = self.resolve_maybe_id(root);
@@ -416,7 +416,7 @@ impl<S: State> RealDom<S> {
         let parent = &mut self[parent_id];
         if let NodeType::Element { children, .. } = &mut parent.node_data.node_type {
             let index = children.iter().position(|a| *a == marker)?;
-            children.insert(index - 1, child_id);
+            children.insert(index, child_id);
         }
         let parent_height = parent.node_data.height;
         self[child_id].set_parent(parent_id);

@@ -60,7 +60,6 @@ use std::{
     cell::{Cell, RefCell},
     hash::Hash,
     marker::PhantomData,
-    ops::Index,
     ptr,
 };
 
@@ -332,11 +331,10 @@ impl<'a> VTemplateRef<'a> {
         );
     }
 
-    pub(crate) fn get_node_id<'b>(
+    pub(crate) fn get_node_id(
         &self,
         id: TemplateNodeId,
         template: &Template,
-        template_ref: &'b VTemplateRef<'b>,
         diff_state: &mut DiffState<'a>,
     ) -> ElementId {
         let node_ids = self.node_ids.borrow();
@@ -344,34 +342,57 @@ impl<'a> VTemplateRef<'a> {
             real_id
         } else {
             drop(node_ids);
-            let path = match template {
-                Template::Static(s) => s.nodes[id.0].path,
+            match template {
+                Template::Static(s) => {
+                    let node = &s.nodes[id.0];
+                    if let TemplateNodeType::DynamicNode(idx) = node.node_type {
+                        return self.dynamic_context.resolve_node(idx).mounted_id();
+                    }
+                }
                 #[cfg(any(feature = "hot-reload", debug_assertions))]
-                Template::Owned(o) => &o.nodes[id.0].path,
-            };
-            let mut path_iter = path.iter().copied();
-            let start_node_id = template.root_nodes()[path_iter.next().unwrap()];
-            let start_id = self.node_ids.borrow()[start_node_id.0]
-                .get()
-                .unwrap()
-                .as_u64();
-            diff_state.mutations.set_last_node(start_id as u64);
-            for offset in path_iter {
-                diff_state.mutations.first_child();
-                for _ in 0..offset {
-                    diff_state.mutations.next_sibling();
+                Template::Owned(o) => {
+                    let node = &o.nodes[id.0];
+                    if let TemplateNodeType::DynamicNode(idx) = node.node_type {
+                        return self.dynamic_context.resolve_node(idx).mounted_id();
+                    }
                 }
             }
+            self.traverse_to_node(id, template, diff_state);
             let real_id = diff_state
                 .scopes
-                .reserve_template_node(template_ref.template_ref_id.get().unwrap(), id);
+                .reserve_template_node(self.template_ref_id.get().unwrap(), id);
             self.set_node_id(id, real_id);
             diff_state.mutations.store_with_id(real_id.as_u64());
             real_id
         }
     }
 
-    pub fn set_node_id(&self, id: TemplateNodeId, real_id: ElementId) {
+    pub(crate) fn traverse_to_node(
+        &self,
+        id: TemplateNodeId,
+        template: &Template,
+        diff_state: &mut DiffState<'a>,
+    ) {
+        let node_ids = self.node_ids.borrow();
+        let path = match template {
+            Template::Static(s) => s.nodes[id.0].path,
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            Template::Owned(o) => &o.nodes[id.0].path,
+        };
+        let mut path_iter = path.iter().copied();
+        let start_node_id = template.root_nodes()[path_iter.next().unwrap()];
+        let start_id = node_ids[start_node_id.0].get().unwrap().as_u64();
+        drop(node_ids);
+        diff_state.mutations.set_last_node(start_id as u64);
+        for offset in path_iter {
+            diff_state.mutations.first_child();
+            for _ in 0..offset {
+                diff_state.mutations.next_sibling();
+            }
+        }
+    }
+
+    pub(crate) fn set_node_id(&self, id: TemplateNodeId, real_id: ElementId) {
         let mut ids = self.node_ids.borrow_mut();
         if ids.len() <= id.0 {
             ids.resize(id.0 + 1, OnceCell::new());
@@ -721,12 +742,8 @@ where
                                 value: value.to_owned(),
                                 is_static: false,
                             };
-                            let real_node_id = template_ref.get_node_id(
-                                self.id,
-                                template,
-                                template_ref,
-                                diff_state,
-                            );
+                            let real_node_id =
+                                template_ref.get_node_id(self.id, template, diff_state);
                             let scope_bump = diff_state.current_scope_bump();
                             diff_state.mutations.set_attribute(
                                 scope_bump.alloc(attribute),
@@ -737,8 +754,7 @@ where
                 }
                 for listener_idx in listeners.as_ref() {
                     let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
-                    let real_node_id =
-                        template_ref.get_node_id(self.id, template, template_ref, diff_state);
+                    let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
                     listener.mounted_node.set(Some(real_node_id));
                     diff_state
                         .mutations
@@ -753,25 +769,19 @@ where
                     .dynamic_context
                     .resolve_text_into(text, &mut bump_str);
 
-                let real_node_id =
-                    template_ref.get_node_id(self.id, template, template_ref, diff_state);
+                let real_node_id = template_ref.get_node_id(self.id, template, diff_state);
                 diff_state
                     .mutations
                     .set_text(bump_str.into_bump_str(), Some(real_node_id.as_u64()));
             }
             TemplateNodeType::DynamicNode(idx) => {
                 let mut created = Vec::new();
+                let node = template_ref.dynamic_context.resolve_node(*idx);
                 // this will only be triggered for root elements
-                diff_state.create_node(
-                    parent,
-                    template_ref.dynamic_context.resolve_node(*idx),
-                    &mut created,
-                );
-                let real_node_id =
-                    template_ref.get_node_id(self.id, template, template_ref, diff_state);
-                diff_state
-                    .mutations
-                    .replace_with(Some(real_node_id.as_u64()), created);
+                diff_state.create_node(parent, node, &mut created);
+
+                template_ref.traverse_to_node(self.id, template, diff_state);
+                diff_state.mutations.replace_with(None, created);
             }
         }
         // diff_state.element_stack.pop();
@@ -907,20 +917,6 @@ where
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
 {
-    /// Returns if this node, and its children, are static.
-    pub fn fully_static<Nodes: Index<usize, Output = Self>>(&self, nodes: &Nodes) -> bool {
-        self.locally_static()
-            && match self {
-                TemplateNodeType::Element(e) => e
-                    .children
-                    .as_ref()
-                    .iter()
-                    .all(|c| nodes[c.0].fully_static(nodes)),
-                TemplateNodeType::Text(_) => true,
-                TemplateNodeType::DynamicNode(_) => unreachable!(),
-            }
-    }
-
     /// Returns if this node is static.
     pub fn locally_static(&self) -> bool {
         match self {
@@ -1078,7 +1074,6 @@ pub enum StaticAttributeValue {
 pub(crate) struct TemplateResolver {
     // maps a id to the rendererid and if that template needs to be re-created
     pub template_id_mapping: FxHashMap<TemplateId, (ElementId, bool)>,
-    pub template_count: usize,
 }
 
 impl TemplateResolver {
@@ -1108,7 +1103,6 @@ impl TemplateResolver {
             let renderer_id = scopes.reserve_phantom_node();
             self.template_id_mapping
                 .insert(template_id.clone(), (renderer_id, false));
-            self.template_count += 1;
             (renderer_id, true)
         }
     }
