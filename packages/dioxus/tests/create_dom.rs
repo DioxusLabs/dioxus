@@ -88,10 +88,8 @@ fn create() {
             NextSibling {},
             FirstChild {},
             FirstChild {},
-            StoreWithId { id: 5 },
-            ReplaceWith { root: Some(5), nodes: vec![3, 4] },
-            // add to root
-            AppendChildren { root: Some(0), children: vec![2] },
+            ReplaceWith { root: None, nodes: vec![3, 4] },
+            AppendChildren { root: Some(0), children: vec![2] }
         ]
     );
 }
@@ -197,26 +195,23 @@ fn create_components() {
             CreateTextNode { root: Some(5), text: "abc1" },
             SetLastNode { id: 3 },
             FirstChild {},
-            StoreWithId { id: 6 },
-            ReplaceWith { root: Some(6), nodes: vec![5] },
+            ReplaceWith { root: None, nodes: vec![5] },
             // clone template
-            CloneNodeChildren { id: Some(1), new_ids: vec![7, 8, 9] },
+            CloneNodeChildren { id: Some(1), new_ids: vec![6, 7, 8] },
             // update template
-            CreateTextNode { root: Some(10), text: "abc2" },
-            SetLastNode { id: 8 },
+            CreateTextNode { root: Some(9), text: "abc2" },
+            SetLastNode { id: 7 },
             FirstChild {},
-            StoreWithId { id: 11 },
-            ReplaceWith { root: Some(11), nodes: vec![10] },
+            ReplaceWith { root: None, nodes: vec![9] },
             // clone template
-            CloneNodeChildren { id: Some(1), new_ids: vec![12, 13, 14] },
+            CloneNodeChildren { id: Some(1), new_ids: vec![10, 11, 12] },
             // update template
-            CreateTextNode { root: Some(15), text: "abc3" },
-            SetLastNode { id: 13 },
+            CreateTextNode { root: Some(13), text: "abc3" },
+            SetLastNode { id: 11 },
             FirstChild {},
-            StoreWithId { id: 16 },
-            ReplaceWith { root: Some(16), nodes: vec![15] },
+            ReplaceWith { root: None, nodes: vec![13] },
             // add to root
-            AppendChildren { root: Some(0), children: vec![2, 3, 4, 7, 8, 9, 12, 13, 14] },
+            AppendChildren { root: Some(0), children: vec![2, 3, 4, 6, 7, 8, 10, 11, 12] }
         ]
     );
 }
