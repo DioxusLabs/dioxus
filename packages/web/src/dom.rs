@@ -21,8 +21,6 @@ pub struct WebsysDom {
     pub interpreter: Interpreter,
 
     pub(crate) root: Element,
-
-    pub handler: Closure<dyn FnMut(&Event)>,
 }
 
 impl WebsysDom {
@@ -97,11 +95,14 @@ impl WebsysDom {
             None => document.create_element("body").ok().unwrap(),
         };
 
-        Self {
-            interpreter: Interpreter::new(root.clone()),
-            handler: Closure::wrap(callback),
-            root,
-        }
+        let interpreter = Interpreter::new(root.clone());
+
+        let binding = Closure::wrap(callback);
+        let handler: &Function = binding.as_ref().unchecked_ref();
+
+        interpreter.set_event_handler(handler);
+
+        Self { interpreter, root }
     }
 
     pub fn apply_edits(&mut self, mut edits: Vec<DomEdit>) {
@@ -130,13 +131,8 @@ impl WebsysDom {
                 DomEdit::NewEventListener {
                     event_name, root, ..
                 } => {
-                    let handler: &Function = self.handler.as_ref().unchecked_ref();
-                    self.interpreter.NewEventListener(
-                        event_name,
-                        root,
-                        handler,
-                        event_bubbles(event_name),
-                    );
+                    self.interpreter
+                        .NewEventListener(event_name, root, event_bubbles(event_name));
                 }
 
                 DomEdit::RemoveEventListener { root, event } => self
@@ -148,21 +144,17 @@ impl WebsysDom {
                 }
 
                 DomEdit::CreateTextNode { text, root } => {
-                    let text = serde_wasm_bindgen::to_value(text).unwrap();
                     self.interpreter.CreateTextNode(text, root)
                 }
-                DomEdit::SetText { root, text } => {
-                    let text = serde_wasm_bindgen::to_value(text).unwrap();
-                    self.interpreter.SetText(root, text)
-                }
+                DomEdit::SetText { root, text } => self.interpreter.SetText(root, text),
                 DomEdit::SetAttribute {
                     root,
                     field,
                     value,
                     ns,
                 } => {
-                    let value = serde_wasm_bindgen::to_value(&value).unwrap();
-                    self.interpreter.SetAttribute(root, field, value, ns)
+                    let value = format!("{}", &value);
+                    self.interpreter.SetAttribute(root, field, &value, ns)
                 }
                 DomEdit::CloneNode { id, new_id } => self.interpreter.CloneNode(id, new_id),
                 DomEdit::CloneNodeChildren { id, new_ids } => {
@@ -175,6 +167,7 @@ impl WebsysDom {
                 DomEdit::SetLastNode { id } => self.interpreter.SetLastNode(id),
             }
         }
+        self.interpreter.flush();
     }
 }
 

@@ -55,24 +55,367 @@ class ListenerMap {
   }
 }
 
-export class Interpreter {
-  constructor(root) {
+export class JsInterpreter {
+  constructor(root, mem, _ptr_ptr, _len_ptr) {
     this.root = root;
     this.lastNode = root;
     this.listeners = new ListenerMap(root);
     this.handlers = {};
+    this.handler = () => { };
     this.nodes = [root];
     this.parents = [];
+    this.mem = new Uint8Array(mem.buffer);
+    this.ptr_ptr = _ptr_ptr;
+    this.len_ptr = _len_ptr;
   }
-  checkAppendParent() {
-    if (this.parents.length > 0) {
-      const lastParent = this.parents[this.parents.length - 1];
-      lastParent[1]--;
-      if (lastParent[1] === 0) {
-        this.parents.pop();
+
+  SetEventHandler(handler) {
+    this.handler = handler;
+  }
+
+  Work() {
+    const u8Buf = this.u8Buf;
+    this.u8BufPos = this.decodePtr(this.ptr_ptr);
+    const end = this.u8BufPos + this.decodePtr(this.len_ptr);
+    while (this.u8BufPos < end) {
+      switch (u8Buf[this.u8BufPos++]) {
+        // append children
+        case 0:
+          {
+            const parent = this.nodes[this.decodeId()];
+            const len = u8Buf[this.u8BufPos++];
+            for (let i = 0; i < len; i++) {
+              parent.appendChild(this.nodes[this.decodeId()]);
+            }
+          }
+          break;
+        // replace with
+        case 1:
+          {
+            const parent = this.nodes[this.decodeId()];
+            const len = u8Buf[this.u8BufPos++];
+            const children = [];
+            for (let i = 0; i < len; i++) {
+              children.push(this.nodes[this.decodeId()]);
+            }
+            parent.replaceWith(...children);
+          }
+          break;
+        // insert before
+        case 2:
+          {
+            const parent = this.nodes[this.decodeId()];
+            const len = u8Buf[this.u8BufPos++];
+            const children = [];
+            for (let i = 0; i < len; i++) {
+              children.push(this.nodes[this.decodeId()]);
+            }
+            parent.before(...children);
+          }
+          break;
+        // insert after
+        case 3:
+          {
+            const parent = this.nodes[this.decodeId()];
+            const len = u8Buf[this.u8BufPos++];
+            const children = [];
+            for (let i = 0; i < len; i++) {
+              children.push(this.nodes[this.decodeId()]);
+            }
+            parent.after(...children);
+          }
+          break;
+        // remove
+        case 4:
+          {
+            const id = this.decodeId();
+            this.nodes[id].remove();
+          }
+          break;
+        // create text node
+        case 5:
+          {
+            const id = this.decodeId();
+            this.lastNode = document.createTextNode(utf8Decode(u8Buf[this.u8BufPos++]));
+            if (id !== 0) {
+              globalData2.nodes[id - 1] = this.lastNode;
+            }
+          }
+          break;
+        // create element
+        case 6:
+          this.lastNode = this.CreateFullElement();
+          break;
+        // create placeholder
+        case 8:
+          {
+            const id = this.decodeId();
+            this.lastNode = document.createElement("pre");
+            this.lastNode.hidden = true;
+            globalData2.nodes[id - 1] = this.lastNode;
+          }
+          break;
+        // clone node
+        case 12:
+          {
+            const toCloneId = this.decodeId();
+            const toStoreId = this.decodeId();
+            this.lastNode = this.nodes[toCloneId].cloneNode(true);
+            if (toStoreId !== 0) {
+              globalData2.nodes[toStoreId - 1] = this.lastNode;
+            }
+          }
+          break;
+        // set parent
+        case 13:
+          {
+            const parent = this.nodes[this.decodeId()];
+            parent.appendChild(this.lastNode);
+          }
+          break;
+        // set event listener
+        case 14:
+          {
+            const id = this.decodeId();
+            const event = u8Buf[this.u8BufPos++];
+            if (event === 255) {
+              const len = u8Buf[this.u8BufPos++];
+              str = this.asciiDecode(len);
+            }
+            else {
+              str = convertEvent(event);
+            }
+            let bubbles = u8Buf[this.u8BufPos++] == 0;
+            this.NewEventListener(event, id, bubbles);
+          }
+          break;
+        // remove event listener
+        case 15:
+          {
+            const id = this.decodeId();
+            const event = u8Buf[this.u8BufPos++];
+            if (event === 255) {
+              const len = u8Buf[this.u8BufPos++];
+              str = this.asciiDecode(start, len);
+            }
+            else {
+              str = convertEvent(event);
+            }
+            let bubbles = u8Buf[this.u8BufPos++] == 0;
+            this.RemoveEventListener(event, id, bubbles);
+            console.log("todo");
+          }
+          break;
+        // set text
+        case 16:
+          {
+            const id = this.decodeId();
+            const text = utf8Decode(u8Buf[this.u8BufPos++]);
+            if (id === 0) {
+              this.lastNode.textContent = text;
+            }
+            else {
+              const node = this.nodes[id];
+              node.textContent = text;
+            }
+          }
+          break;
+        // set attribute
+        case 17:
+          {
+            const id = this.decodeId();
+            const attr = decodeAttribute();
+            const val = decodeValue();
+            if (id === 0) {
+              this.lastNode.setAttribute(attr, val);
+            }
+            else {
+              this.nodes[id].setAttribute(attr, val);
+            }
+          }
+          break;
+        // remove attribute
+        case 18:
+          {
+            let attr;
+            const id = this.decodeId();
+            const len = u8Buf[this.u8BufPos++];
+            attr = this.asciiDecode(len);
+            if (id === 0) {
+              this.lastNode.removeAttribute(attr);
+            } else {
+              this.nodes[id].removeAttribute(attr);
+            }
+          }
+          break;
+        // remove attribute ns
+        case 19:
+          {
+            let attr;
+            const id = this.decodeId();
+            {
+              const len = u8Buf[this.u8BufPos++];
+              attr = this.asciiDecode(len);
+            }
+            let len = u8Buf[this.u8BufPos];
+            const ns = this.asciiDecode(u8BufPos + 1, len);
+            if (id === 0) {
+              this.lastNode.removeAttributeNS(ns, attr);
+            } else {
+              this.nodes[id].removeAttributeNS(ns, attr);
+            }
+          }
+          break;
+        // first child
+        case 20:
+          {
+            this.lastNode = this.lastNode.firstChild;
+          }
+          break;
+        // next sibling
+        case 21:
+          {
+            this.lastNode = this.lastNode.nextSibling;
+          }
+          break;
+        // parent
+        case 22:
+          {
+            this.lastNode = this.lastNode.parentNode;
+          }
+          break;
+        // store with id
+        case 23:
+          {
+            const id = this.this.decodeId();
+            globalData2.nodes[id - 1] = this.lastNode;
+          }
+          break;
+        // set last node
+        case 24:
+          {
+            const id = this.this.decodeId();
+            this.lastNode = this.this.nodes[id];
+          }
+          break;
+        default:
+          this.u8BufPos--;
+          console.log(`unknown opcode ${u8Buf[this.u8BufPos]}`);
+          return;
       }
-      lastParent[0].appendChild(this.lastNode);
     }
+  }
+
+  utf8Decode(byteLength) {
+    const end = this.u8BufPos + byteLength;
+    let out = "";
+    while (this.u8BufPos < end) {
+      const byte1 = this.u8Buf[this.u8BufPos++];
+      if ((byte1 & 0x80) === 0) {
+        // 1 byte
+        out += String.fromCharCode(byte1);
+      } else if ((byte1 & 0xe0) === 0xc0) {
+        // 2 bytes
+        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        out += String.fromCharCode(((byte1 & 0x1f) << 6) | byte2);
+      } else if ((byte1 & 0xf0) === 0xe0) {
+        // 3 bytes
+        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte3 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        out += String.fromCharCode(((byte1 & 0x1f) << 12) | (byte2 << 6) | byte3);
+      } else if ((byte1 & 0xf8) === 0xf0) {
+        // 4 bytes
+        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte3 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte4 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        let unit = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0c) | (byte3 << 0x06) | byte4;
+        if (unit > 0xffff) {
+          unit -= 0x10000;
+          out += String.fromCharCode(((unit >>> 10) & 0x3ff) | 0xd800);
+          unit = 0xdc00 | (unit & 0x3ff);
+        }
+        out += String.fromCharCode(unit);
+      } else {
+        out += String.fromCharCode(byte1);
+      }
+    }
+
+    return out;
+  }
+
+  asciiDecode(byteLength) {
+    const end = this.u8BufPos + byteLength;
+    let out = "";
+    while (this.u8BufPos < end) {
+      out += String.fromCharCode(this.u8Buf[this.u8BufPos++]);
+    }
+    return out;
+  }
+
+  decodeId() {
+    const id_code = this.u8Buf[this.u8BufPos++];
+    if (id_code === 0) {
+      return 0;
+    }
+    else if (id_code === 1) {
+      let id = this.u8Buf[this.u8BufPos++];
+      for (let i = 1; i < 8; i++) {
+        id |= this.u8Buf[this.u8BufPos++] << (i * 8);
+      }
+      return id;
+    }
+  }
+
+  decodePtr(_start) {
+    let start = _start;
+    const u8Buf = this.u8Buf;
+    let val = u8Buf[start++];
+    for (let i = 1; i < 4; i++) {
+      val |= u8Buf[start++] << (i * 8);
+    }
+    return val;
+  }
+
+  decodeU32() {
+    let val = this.u8Buf[this.u8BufPos++];
+    for (let i = 1; i < 4; i++) {
+      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
+    }
+    return val;
+  }
+
+  CreateElement() {
+    let str;
+    const u8Buf = this.u8Buf;
+    const element = u8Buf[this.u8BufPos++];
+    if (element === 255) {
+      const len = u8Buf[this.u8BufPos++];
+      str = asciiDecode(len);
+    }
+    else {
+      str = convertElement(element);
+    }
+    return document.createElement(str);
+  }
+
+  CreateFullElement() {
+    const u8Buf = this.u8Buf;
+    const id = decodeId();
+    const element = createElement();
+    const numAttributes = u8Buf[this.u8BufPos++];
+    for (let i = 0; i < numAttributes; i++) {
+      const attribute = decodeAttribute();
+      const value = decodeValue();
+      element.setAttribute(attribute, value);
+    }
+    const numChildren = u8Buf[this.u8BufPos++];
+    for (let i = 0; i < numChildren; i++) {
+      element.appendChild(createFullElement());
+    }
+    if (id !== 0) {
+      this.nodes[id - 1] = element;
+    }
+    return element;
   }
   AppendChildren(root, children) {
     let node;
@@ -142,26 +485,6 @@ export class Interpreter {
       this.nodes[root] = this.lastNode;
     }
   }
-  CreateElement(tag, root, children) {
-    this.lastNode = document.createElement(tag);
-    this.checkAppendParent();
-    if (root !== null) {
-      this.nodes[root] = this.lastNode;
-    }
-    if (children > 0) {
-      this.parents.push([this.lastNode, children]);
-    }
-  }
-  CreateElementNs(tag, root, ns, children) {
-    this.lastNode = document.createElementNS(ns, tag);
-    this.checkAppendParent();
-    if (root !== null) {
-      this.nodes[root] = this.lastNode;
-    }
-    if (children > 0) {
-      this.parents.push([this.lastNode, children]);
-    }
-  }
   CreatePlaceholder(root) {
     this.lastNode = document.createElement("pre");
     this.lastNode.hidden = true;
@@ -170,7 +493,7 @@ export class Interpreter {
       this.nodes[root] = this.lastNode;
     }
   }
-  NewEventListener(event_name, root, handler, bubbles) {
+  NewEventListener(event_name, root, bubbles) {
     let node;
     if (root === null) {
       node = this.lastNode;
@@ -178,9 +501,9 @@ export class Interpreter {
       node = this.nodes[root];
     }
     node.setAttribute("data-dioxus-id", `${root}`);
-    this.listeners.create(event_name, node, handler, bubbles);
+    this.listeners.create(event_name, node, this.handler, bubbles);
   }
-  RemoveEventListener(root, event_name, bubbles) {
+  RemoveEventListener(event_name, root, bubbles) {
     let node;
     if (root === null) {
       node = this.lastNode;

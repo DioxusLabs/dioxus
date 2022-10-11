@@ -112,7 +112,6 @@ impl WebsysDom {
                     self.interpreter.NewEventListener(
                         listener.event,
                         Some(id.as_u64()),
-                        self.handler.as_ref().unchecked_ref(),
                         event_bubbles(listener.event),
                     );
                 }
