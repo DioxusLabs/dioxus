@@ -128,7 +128,6 @@ impl Interpreter {
         self.msg.push(Op::CreateTextNode as u8);
         self.msg.extend_from_slice(&text.len().to_le_bytes());
         self.msg.extend_from_slice(text.as_bytes());
-        self.msg.push(0);
         if let Some(id) = root {
             self.msg.extend_from_slice(&(id + 1).to_le_bytes());
         } else {
@@ -140,17 +139,17 @@ impl Interpreter {
         self.msg.push(Op::CreateElement as u8);
         self.msg.extend_from_slice(&tag.len().to_le_bytes());
         self.msg.extend_from_slice(tag.as_bytes());
-        self.msg.push(0);
         if let Some(id) = root {
             self.msg.extend_from_slice(&(id + 1).to_le_bytes());
         } else {
             self.msg.push(0);
         }
+        self.msg.push(0);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
     pub fn CreateElementNs(&mut self, tag: &str, root: Option<u64>, ns: &str, children: u32) {
-        self.msg.push(Op::CreateElementNs as u8);
+        self.msg.push(Op::CreateElement as u8);
         self.msg.extend_from_slice(&tag.len().to_le_bytes());
         self.msg.extend_from_slice(tag.as_bytes());
         self.msg.push(0);
@@ -159,8 +158,8 @@ impl Interpreter {
         } else {
             self.msg.push(0);
         }
+        self.msg.extend_from_slice(&ns.len().to_le_bytes());
         self.msg.extend_from_slice(ns.as_bytes());
-        self.msg.push(0);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
@@ -290,6 +289,7 @@ impl Interpreter {
     }
 
     pub fn flush(&mut self) {
+        assert_eq!(0usize.to_le_bytes().len(), 32 / 8);
         let ptr = self.msg.as_ptr();
         let len = self.msg.len();
         unsafe {
@@ -315,7 +315,7 @@ enum Op {
 
     // /// The ids of the children to append.
     // children: Vec<u64>,
-    AppendChildren,
+    AppendChildren = 0,
 
     /// Replace a given (single) node with a handful of nodes currently on the stack.
     // /// The ID of the node to be replaced.
@@ -323,7 +323,7 @@ enum Op {
 
     // /// The ids of the nodes to replace the root with.
     // nodes: Vec<u64>,
-    ReplaceWith,
+    ReplaceWith = 1,
 
     /// Insert a number of nodes after a given node.
     // /// The ID of the node to insert after.
@@ -331,7 +331,7 @@ enum Op {
 
     // /// The ids of the nodes to insert after the target node.
     // nodes: Vec<u64>,
-    InsertAfter,
+    InsertAfter = 2,
 
     /// Insert a number of nodes before a given node.
     // /// The ID of the node to insert before.
@@ -339,12 +339,12 @@ enum Op {
 
     // /// The ids of the nodes to insert before the target node.
     // nodes: Vec<u64>,
-    InsertBefore,
+    InsertBefore = 3,
 
     /// Remove a particular node from the DOM
     // /// The ID of the node to remove.
     // root: Option<u64>,
-    Remove,
+    Remove = 4,
 
     /// Create a new purely-text node
     // /// The ID the new node should have.
@@ -352,7 +352,7 @@ enum Op {
 
     // /// The textcontent of the node
     // text: &'bump str,
-    CreateTextNode,
+    CreateTextNode = 5,
 
     /// Create a new purely-element node
     // /// The ID the new node should have.
@@ -363,8 +363,6 @@ enum Op {
 
     // /// The number of children nodes that will follow this message.
     // children: u32,
-    CreateElement,
-
     /// Create a new purely-comment node with a given namespace
     // /// The ID the new node should have.
     // root: Option<u64>,
@@ -377,13 +375,13 @@ enum Op {
 
     // /// The number of children nodes that will follow this message.
     // children: u32,
-    CreateElementNs,
+    CreateElement = 6,
 
     /// Create a new placeholder node.
     /// In most implementations, this will either be a hidden div or a comment node.
     // /// The ID the new node should have.
     // root: Option<u64>,
-    CreatePlaceholder,
+    CreatePlaceholder = 7,
 
     /// Create a new Event Listener.
     // /// The name of the event to listen for.
@@ -394,7 +392,7 @@ enum Op {
 
     // /// The ID of the node to attach the listener to.
     // root: Option<u64>,
-    NewEventListener,
+    NewEventListener = 8,
 
     /// Remove an existing Event Listener.
     // /// The ID of the node to remove.
@@ -402,7 +400,7 @@ enum Op {
 
     // /// The name of the event to remove.
     // event: &'static str,
-    RemoveEventListener,
+    RemoveEventListener = 9,
 
     /// Set the textcontent of a node.
     // /// The ID of the node to set the textcontent of.
@@ -410,7 +408,7 @@ enum Op {
 
     // /// The textcontent of the node
     // text: &'bump str,
-    SetText,
+    SetText = 10,
 
     /// Set the value of a node's attribute.
     // /// The ID of the node to set the attribute of.
@@ -426,7 +424,7 @@ enum Op {
     // /// The (optional) namespace of the attribute.
     // /// For instance, "style" is in the "style" namespace.
     // ns: Option<&'bump str>,
-    SetAttribute,
+    SetAttribute = 11,
 
     /// Remove an attribute from a node.
     // /// The ID of the node to remove.
@@ -437,7 +435,7 @@ enum Op {
 
     // /// The namespace of the attribute.
     // ns: Option<&'bump str>,
-    RemoveAttribute,
+    RemoveAttribute = 12,
 
     /// Clones a node.
     // /// The ID of the node to clone.
@@ -445,7 +443,7 @@ enum Op {
 
     // /// The ID of the new node.
     // new_id: u64,
-    CloneNode,
+    CloneNode = 13,
 
     /// Clones the children of a node. (allows cloning fragments)
     // /// The ID of the node to clone.
@@ -453,24 +451,24 @@ enum Op {
 
     // /// The ID of the new node.
     // new_ids: Vec<u64>,
-    CloneNodeChildren,
+    CloneNodeChildren = 14,
 
     /// Navigates to the last node to the first child of the current node.
-    FirstChild,
+    FirstChild = 15,
 
     /// Navigates to the last node to the last child of the current node.
-    NextSibling,
+    NextSibling = 16,
 
     /// Navigates to the last node to the parent of the current node.
-    ParentNode,
+    ParentNode = 17,
 
     /// Stores the last node with a new id.
     // /// The ID of the node to store.
     // id: u64,
-    StoreWithId,
+    StoreWithId = 18,
 
     /// Manually set the last node.
     // /// The ID to set the last node to.
     // id: u64,
-    SetLastNode,
+    SetLastNode = 19,
 }
