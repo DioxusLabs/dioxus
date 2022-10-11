@@ -20,7 +20,7 @@ use self::{
     },
 };
 
-pub mod argument;
+mod types;
 pub mod interface;
 
 lazy_static::lazy_static! {
