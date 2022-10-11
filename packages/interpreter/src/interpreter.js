@@ -300,6 +300,17 @@ export class JsInterpreter {
     }
   }
 
+  checkAppendParent() {
+    if (this.parents.length > 0) {
+      const lastParent = this.parents[this.parents.length - 1];
+      lastParent[1]--;
+      if (lastParent[1] === 0) {
+        this.parents.pop();
+      }
+      lastParent[0].appendChild(this.lastNode);
+    }
+  }
+
   utf8Decode(byteLength) {
     const end = this.u8BufPos + byteLength;
     let out = "";
@@ -379,7 +390,6 @@ export class JsInterpreter {
   }
 
   CreateElement() {
-    const u8Buf = this.u8Buf;
     const len = this.decodeU32();
     const str = this.asciiDecode(len);
 
@@ -394,24 +404,14 @@ export class JsInterpreter {
   }
 
   CreateFullElement() {
-    const u8Buf = this.u8Buf;
     const id = this.decodeId();
-    const element = this.CreateElement();
-    const numAttributes = u8Buf[this.u8BufPos++];
-    for (let i = 0; i < numAttributes; i++) {
-      const attribute_len = this.decodeU32();
-      const attribute = this.asciiDecode(attribute_len);
-      const value_len = this.decodeU32();
-      const value = this.asciiDecode(value_len);
-      element.setAttribute(attribute, value);
-    }
-    const numChildren = this.decodeU32();
-    for (let i = 0; i < numChildren; i++) {
-      element.appendChild(this.createFullElement());
-    }
+    this.lastNode = this.CreateElement();
+    this.checkAppendParent();
     if (id !== 0) {
       this.nodes[id - 1] = element;
     }
+    const children = this.decodeU32();
+    this.parents.push([this.lastNode, children]);
     return element;
   }
   AppendChildren(root, children) {
