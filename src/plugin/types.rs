@@ -2,8 +2,6 @@ use std::collections::HashMap;
 
 use mlua::ToLua;
 
-use super::LUA;
-
 #[derive(Debug, Clone)]
 pub struct PluginConfig {
     available: bool,
@@ -38,9 +36,15 @@ impl PluginConfig {
 
             let mut config_info = HashMap::new();
 
-            let lua = LUA.lock().unwrap();
-
-            for (name, value) in tab {}
+            for (name, value) in tab {
+                if let toml::Value::Table(value) = value {
+                    let mut map = HashMap::new();
+                    for (item, info) in value {
+                        map.insert(item, Value::from_toml(info));
+                    }
+                    config_info.insert(name, map);
+                }
+            }
 
             Self {
                 available,
@@ -55,6 +59,7 @@ impl PluginConfig {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Value {
     String(String),

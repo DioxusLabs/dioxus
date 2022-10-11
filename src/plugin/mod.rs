@@ -18,10 +18,11 @@ use self::{
         command::PluginCommander, dirs::PluginDirs, fs::PluginFileSystem, log::PluginLogger,
         network::PluginNetwork, os::PluginOS, path::PluginPath,
     },
+    types::PluginConfig,
 };
 
-mod types;
 pub mod interface;
+mod types;
 
 lazy_static::lazy_static! {
     static ref LUA: Mutex<Lua> = Mutex::new(Lua::new());
@@ -50,8 +51,8 @@ impl PluginManager {
         lua.globals()
             .set("library_dir", plugin_dir.to_str().unwrap())
             .unwrap();
-        // lua.globals()
-        //     .set("config_info", );
+        let config = PluginConfig::from_toml_value(config);
+        lua.globals().set("config_info", config)?;
 
         let mut index: u32 = 1;
         let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
