@@ -15,6 +15,8 @@ pub struct PluginInfo<'lua> {
     pub author: String,
     pub version: String,
 
+    pub inner: PluginInner,
+
     pub on_init: Option<Function<'lua>>,
     pub build: PluginBuildInfo<'lua>,
     pub serve: PluginServeInfo<'lua>,
@@ -27,6 +29,8 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             repository: String::default(),
             author: String::default(),
             version: String::from("0.1.0"),
+
+            inner: Default::default(),
 
             on_init: None,
             build: Default::default(),
@@ -44,6 +48,10 @@ impl<'lua> FromLua<'lua> for PluginInfo<'lua> {
             }
             if let Ok(v) = tab.get::<_, String>("version") {
                 res.version = v;
+            }
+
+            if let Ok(v) = tab.get::<_, PluginInner>("inner") {
+                res.inner = v;
             }
 
             if let Ok(v) = tab.get::<_, Function>("on_init") {
@@ -72,11 +80,49 @@ impl<'lua> ToLua<'lua> for PluginInfo<'lua> {
         res.set("author", self.author.to_string())?;
         res.set("version", self.version.to_string())?;
 
+        res.set("inner", self.inner)?;
+
         if let Some(e) = self.on_init {
             res.set("on_init", e)?;
         }
         res.set("build", self.build)?;
         res.set("serve", self.serve)?;
+
+        Ok(mlua::Value::Table(res))
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct PluginInner {
+    pub plugin_dir: String,
+    pub from_loader: bool,
+}
+
+impl<'lua> FromLua<'lua> for PluginInner {
+    fn from_lua(lua_value: mlua::Value<'lua>, _lua: &'lua mlua::Lua) -> mlua::Result<Self> {
+        let mut res = Self {
+            plugin_dir: String::new(),
+            from_loader: false,
+        };
+
+        if let mlua::Value::Table(t) = lua_value {
+            if let Ok(v) = t.get::<_, String>("plugin_dir") {
+                res.plugin_dir = v;
+            }
+            if let Ok(v) = t.get::<_, bool>("from_loader") {
+                res.from_loader = v;
+            }
+        }
+        Ok(res)
+    }
+}
+
+impl<'lua> ToLua<'lua> for PluginInner {
+    fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
+        let res = lua.create_table()?;
+
+        res.set("plugin_dir", self.plugin_dir)?;
+        res.set("from_loader", self.from_loader)?;
 
         Ok(mlua::Value::Table(res))
     }

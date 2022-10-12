@@ -4,7 +4,7 @@ use std::{
     sync::Mutex,
 };
 
-use mlua::{AsChunk, Lua, Table};
+use mlua::{Lua, Table};
 use serde_json::json;
 
 use crate::{
@@ -32,9 +32,17 @@ pub struct PluginManager;
 
 impl PluginManager {
     pub fn init(config: toml::Value) -> anyhow::Result<()> {
+        let config = PluginConfig::from_toml_value(config);
+
+        if !config.available {
+            return Ok(());
+        }
+
         let lua = LUA.lock().unwrap();
 
         let manager = lua.create_table().unwrap();
+        let name_index = lua.create_table().unwrap();
+
         let plugin_dir = Self::init_plugin_dir();
 
         let api = lua.create_table().unwrap();
@@ -51,18 +59,27 @@ impl PluginManager {
         lua.globals()
             .set("library_dir", plugin_dir.to_str().unwrap())
             .unwrap();
-        let config = PluginConfig::from_toml_value(config);
-        lua.globals().set("config_info", config)?;
+        lua.globals().set("config_info", config.clone())?;
 
         let mut index: u32 = 1;
-        let mut init_list: Vec<(u32, PathBuf, PluginInfo)> = Vec::new();
         let dirs = std::fs::read_dir(&plugin_dir)?;
-        for entry in dirs {
-            if entry.is_err() {
-                continue;
+
+        let mut path_list = dirs
+            .filter(|v| v.is_ok())
+            .map(|v| (v.unwrap().path(), false))
+            .collect::<Vec<(PathBuf, bool)>>();
+        for i in &config.loader {
+            let path = PathBuf::from(i);
+            if !path.is_dir() {
+                // for loader dir, we need check first, because we need give a error log.
+                log::error!("Plugin loader: {:?} path is not a exists directory.", path);
             }
-            let entry = entry.unwrap();
-            let plugin_dir = entry.path().to_path_buf();
+            path_list.push((path, true));
+        }
+
+        for entry in path_list {
+            let plugin_dir = entry.0.to_path_buf();
+
             if plugin_dir.is_dir() {
                 let init_file = plugin_dir.join("init.lua");
                 if init_file.is_file() {
@@ -70,21 +87,78 @@ impl PluginManager {
                     let mut buffer = String::new();
                     file.read_to_string(&mut buffer).unwrap();
 
+                    let current_plugin_dir = plugin_dir.to_str().unwrap().to_string();
+                    let from_loader = entry.1;
+
+                    lua.globals()
+                        .set("_temp_plugin_dir", current_plugin_dir.clone())?;
+                    lua.globals().set("_temp_from_loader", from_loader)?;
+
                     let info = lua.load(&buffer).eval::<PluginInfo>();
                     match info {
-                        Ok(info) => {
-                            let _ = manager.set(index, info.clone());
-
-                            let dir_name_str = plugin_dir.name().unwrap().to_string();
-                            lua.globals().set("current_dir_name", dir_name_str).unwrap();
+                        Ok(mut info) => {
+                            if name_index.contains_key(info.name.clone()).unwrap_or(false)
+                                && !from_loader
+                            {
+                                // found same name plugin, intercept load
+                                log::warn!(
+                                    "Plugin {} has been intercepted. [mulit-load]",
+                                    info.name
+                                );
+                                continue;
+                            }
+                            info.inner.plugin_dir = current_plugin_dir;
+                            info.inner.from_loader = from_loader;
 
                             // call `on_init` if file "dcp.json" not exists
                             let dcp_file = plugin_dir.join("dcp.json");
                             if !dcp_file.is_file() {
-                                init_list.push((index, dcp_file, info));
-                            }
+                                if let Some(func) = info.clone().on_init {
+                                    let result = func.call::<_, bool>(());
+                                    match result {
+                                        Ok(true) => {
+                                            // plugin init success, create `dcp.json` file.
+                                            let mut file = std::fs::File::create(dcp_file).unwrap();
+                                            let value = json!({
+                                                "name": info.name,
+                                                "author": info.author,
+                                                "repository": info.repository,
+                                                "version": info.version,
+                                                "generate_time": chrono::Local::now().timestamp(),
+                                            });
+                                            let buffer =
+                                                serde_json::to_string_pretty(&value).unwrap();
+                                            let buffer = buffer.as_bytes();
+                                            file.write_all(buffer).unwrap();
 
-                            index += 1;
+                                            // insert plugin-info into plugin-manager
+                                            if let Ok(index) =
+                                                name_index.get::<_, u32>(info.name.clone())
+                                            {
+                                                let _ = manager.set(index, info.clone());
+                                            } else {
+                                                let _ = manager.set(index, info.clone());
+                                                index += 1;
+                                                let _ = name_index.set(info.name, index);
+                                            }
+                                        }
+                                        Ok(false) => {
+                                            log::warn!("Plugin init function result is `false`, init failed.");
+                                        }
+                                        Err(e) => {
+                                            log::warn!("Plugin init failed: {e}");
+                                        }
+                                    }
+                                }
+                            } else {
+                                if let Ok(index) = name_index.get::<_, u32>(info.name.clone()) {
+                                    let _ = manager.set(index, info.clone());
+                                } else {
+                                    let _ = manager.set(index, info.clone());
+                                    index += 1;
+                                    let _ = name_index.set(info.name, index);
+                                }
+                            }
                         }
                         Err(_e) => {
                             let dir_name = plugin_dir.file_name().unwrap().to_str().unwrap();
@@ -97,46 +171,6 @@ impl PluginManager {
 
         lua.globals().set("manager", manager).unwrap();
 
-        for (idx, path, info) in init_list {
-            let res = lua
-                .load(mlua::chunk! {
-                    manager[$idx].on_init()
-                })
-                .eval::<bool>();
-            match res {
-                Ok(true) => {
-                    // plugin init success, create `dcp.json` file.
-                    let mut file = std::fs::File::create(path).unwrap();
-                    let value = json!({
-                        "name": info.name,
-                        "author": info.author,
-                        "repository": info.repository,
-                        "version": info.version,
-                        "generate_time": chrono::Local::now().timestamp(),
-                    });
-                    let buffer = serde_json::to_string_pretty(&value).unwrap();
-                    let buffer = buffer.as_bytes();
-                    file.write_all(buffer).unwrap();
-                }
-                Ok(false) => {
-                    log::warn!("Plugin init function result is `false`, init failed.");
-                    let _ = lua
-                        .load(mlua::chunk! {
-                            table.remove(manager, $idx)
-                        })
-                        .exec();
-                }
-                Err(e) => {
-                    // plugin init failed
-                    log::warn!("Plugin init failed: {e}");
-                    let _ = lua
-                        .load(mlua::chunk! {
-                            table.remove(manager, $idx)
-                        })
-                        .exec();
-                }
-            }
-        }
         return Ok(());
     }
 
@@ -264,7 +298,7 @@ impl PluginManager {
         plugin_path
     }
 
-    pub fn plugin_list() -> Vec<String> {
+    pub fn plugin_list_from_dir() -> Vec<String> {
         let mut res = vec![];
 
         let app_path = app_path();
@@ -278,6 +312,35 @@ impl PluginManager {
                         res.push(p.file_name().to_str().unwrap().to_string());
                     }
                 }
+            }
+        }
+        res
+    }
+
+    pub fn plugin_list() -> Vec<String> {
+        let mut res = vec![];
+
+        if let Ok(lua) = LUA.lock() {
+            let list = lua
+                .load(mlua::chunk!(
+                    local list = {}
+                    for key, value in ipairs(manager) do
+                        table.insert(list, {name = value.name, loader = value.inner.from_loader})
+                    end
+                    return list
+                ))
+                .eval::<Vec<Table>>()
+                .unwrap_or_default();
+            for i in list {
+                let name = i.get::<_, String>("name").unwrap();
+                let loader = i.get::<_, bool>("loader").unwrap();
+
+                let text = if loader {
+                    format!("{name} [:loader]")
+                } else {
+                    name
+                };
+                res.push(text);
             }
         }
 

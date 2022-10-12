@@ -42,9 +42,17 @@ impl UserData for PluginFileSystem {
             let path = args.0;
             let content = args.1;
             let path = PathBuf::from(path);
-            let mut file = std::fs::File::create(path)?;
-            file.write_all(content.as_bytes())?;
-            Ok(())
+
+            let file = std::fs::File::create(path);
+            if file.is_err() {
+                return Ok(false);
+            }
+
+            if file.unwrap().write_all(content.as_bytes()).is_err() {
+                return Ok(false)
+            }
+            
+            Ok(true)
         });
         methods.add_function("unzip_file", |_, args: (String, String)| {
             let file = PathBuf::from(args.0);

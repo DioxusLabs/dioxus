@@ -4,8 +4,9 @@ use mlua::ToLua;
 
 #[derive(Debug, Clone)]
 pub struct PluginConfig {
-    available: bool,
-    config_info: HashMap<String, HashMap<String, Value>>,
+    pub available: bool,
+    pub loader: Vec<String>,
+    pub config_info: HashMap<String, HashMap<String, Value>>,
 }
 
 impl<'lua> ToLua<'lua> for PluginConfig {
@@ -13,6 +14,7 @@ impl<'lua> ToLua<'lua> for PluginConfig {
         let table = lua.create_table()?;
 
         table.set("available", self.available)?;
+        table.set("loader", self.loader)?;
 
         let config_info = lua.create_table()?;
 
@@ -34,9 +36,21 @@ impl PluginConfig {
                 .unwrap_or(&toml::Value::Boolean(true));
             let available = available.as_bool().unwrap_or(true);
 
+            let mut loader = vec![];
+            if let Some(origin) = tab.get("loader") {
+                if origin.is_array() {
+                    for i in origin.as_array().unwrap() {
+                        loader.push(i.as_str().unwrap_or_default().to_string());
+                    }
+                }
+            }
+
             let mut config_info = HashMap::new();
 
             for (name, value) in tab {
+                if name == "available" || name == "loader" {
+                    continue;
+                }
                 if let toml::Value::Table(value) = value {
                     let mut map = HashMap::new();
                     for (item, info) in value {
@@ -48,11 +62,13 @@ impl PluginConfig {
 
             Self {
                 available,
+                loader,
                 config_info,
             }
         } else {
             Self {
                 available: false,
+                loader: vec![],
                 config_info: HashMap::new(),
             }
         }
@@ -84,41 +100,39 @@ impl Value {
                     v.push(Value::from_toml(i));
                 }
                 Value::Array(v)
-            },
+            }
             cargo_toml::Value::Table(t) => {
                 let mut h = HashMap::new();
                 for (n, v) in t {
                     h.insert(n, Value::from_toml(v));
                 }
                 Value::Table(h)
-            },
+            }
         }
     }
 }
 
 impl<'lua> ToLua<'lua> for Value {
     fn to_lua(self, lua: &'lua mlua::Lua) -> mlua::Result<mlua::Value<'lua>> {
-        Ok(
-            match self {
-                Value::String(s) => mlua::Value::String(lua.create_string(&s)?),
-                Value::Integer(i) => mlua::Value::Integer(i),
-                Value::Float(f) => mlua::Value::Number(f),
-                Value::Boolean(b) => mlua::Value::Boolean(b),
-                Value::Array(a) => {
-                    let table = lua.create_table()?;
-                    for (i, v) in a.iter().enumerate() {
-                        table.set(i, v.clone())?;
-                    }
-                    mlua::Value::Table(table)
-                },
-                Value::Table(t) => {
-                    let table = lua.create_table()?;
-                    for (i, v) in t.iter() {
-                        table.set(i.clone(), v.clone())?;
-                    }
-                    mlua::Value::Table(table)
-                },
+        Ok(match self {
+            Value::String(s) => mlua::Value::String(lua.create_string(&s)?),
+            Value::Integer(i) => mlua::Value::Integer(i),
+            Value::Float(f) => mlua::Value::Number(f),
+            Value::Boolean(b) => mlua::Value::Boolean(b),
+            Value::Array(a) => {
+                let table = lua.create_table()?;
+                for (i, v) in a.iter().enumerate() {
+                    table.set(i, v.clone())?;
+                }
+                mlua::Value::Table(table)
             }
-        )
+            Value::Table(t) => {
+                let table = lua.create_table()?;
+                for (i, v) in t.iter() {
+                    table.set(i.clone(), v.clone())?;
+                }
+                mlua::Value::Table(table)
+            }
+        })
     }
 }
