@@ -298,25 +298,6 @@ impl PluginManager {
         plugin_path
     }
 
-    pub fn plugin_list_from_dir() -> Vec<String> {
-        let mut res = vec![];
-
-        let app_path = app_path();
-        let plugin_path = app_path.join("plugins");
-
-        let child_dirs = std::fs::read_dir(plugin_path).unwrap();
-        for p in child_dirs {
-            if let Ok(p) = p {
-                if p.path().is_dir() && p.file_name() != "library" {
-                    if p.path().join("init.lua").is_file() {
-                        res.push(p.file_name().to_str().unwrap().to_string());
-                    }
-                }
-            }
-        }
-        res
-    }
-
     pub fn plugin_list() -> Vec<String> {
         let mut res = vec![];
 

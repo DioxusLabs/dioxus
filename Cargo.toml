@@ -46,7 +46,7 @@ walkdir = "2"
 
 # tools download
 dirs = "4.0.0"
-reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns"] }
+reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns", "blocking"] }
 flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
