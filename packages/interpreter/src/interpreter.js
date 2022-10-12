@@ -97,7 +97,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeId()]);
+              children.push(this.nodes[this.decodeU64()]);
             }
             parent.replaceWith(...children);
           }
@@ -109,7 +109,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeId()]);
+              children.push(this.nodes[this.decodeU64()]);
             }
             parent.after(...children);
           }
@@ -121,7 +121,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeId()]);
+              children.push(this.nodes[this.decodeU64()]);
             }
             parent.before(...children);
           }
@@ -162,14 +162,8 @@ export class JsInterpreter {
         case 8:
           {
             const id = this.decodeId();
-            const event = u8Buf[this.u8BufPos++];
-            if (event === 255) {
-              const len = this.decodeU32();
-              str = this.asciiDecode(len);
-            }
-            else {
-              str = convertEvent(event);
-            }
+            const len = this.decodeU32();
+            const event = this.asciiDecode(len);
             let bubbles = u8Buf[this.u8BufPos++] == 0;
             this.NewEventListener(event, id, bubbles);
           }
@@ -178,14 +172,8 @@ export class JsInterpreter {
         case 9:
           {
             const id = this.decodeId();
-            const event = u8Buf[this.u8BufPos++];
-            if (event === 255) {
-              const len = this.decodeU32();
-              str = this.asciiDecode(start, len);
-            }
-            else {
-              str = convertEvent(event);
-            }
+            const len = this.decodeU32();
+            const event = this.asciiDecode(len);
             let bubbles = u8Buf[this.u8BufPos++] == 0;
             this.RemoveEventListener(event, id, bubbles);
           }
