@@ -78,21 +78,22 @@ export class JsInterpreter {
     this.u8BufPos = this.decodePtr(this.ptr_ptr);
     const end = this.u8BufPos + this.decodePtr(this.len_ptr);
     while (this.u8BufPos < end) {
-      switch (u8Buf[this.u8BufPos++]) {
+      const op = u8Buf[this.u8BufPos++];
+      switch (op) {
         // append children
         case 0:
           {
-            const parent = this.nodes[this.decodeId()];
+            let parent = this.getNode();
             const len = this.decodeU32();
             for (let i = 0; i < len; i++) {
-              parent.appendChild(this.nodes[this.decodeId()]);
+              parent.appendChild(this.nodes[this.decodeU64()]);
             }
           }
           break;
         // replace with
         case 1:
           {
-            const parent = this.nodes[this.decodeId()];
+            let parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -104,7 +105,7 @@ export class JsInterpreter {
         // insert after
         case 2:
           {
-            const parent = this.nodes[this.decodeId()];
+            let parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -116,7 +117,7 @@ export class JsInterpreter {
         // insert before
         case 3:
           {
-            const parent = this.nodes[this.decodeId()];
+            let parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -128,8 +129,7 @@ export class JsInterpreter {
         // remove
         case 4:
           {
-            const id = this.decodeId();
-            this.nodes[id].remove();
+            this.getNode().remove();
           }
           break;
         // create text node
@@ -138,14 +138,14 @@ export class JsInterpreter {
             const id = this.decodeId();
             const str_len = this.decodeU32();
             this.lastNode = document.createTextNode(this.utf8Decode(str_len));
-            if (id !== 0) {
-              globalData2.nodes[id - 1] = this.lastNode;
+            if (id !== null) {
+              this.nodes[id] = this.lastNode;
             }
           }
           break;
         // create element
         case 6:
-          this.lastNode = this.CreateFullElement();
+          this.CreateFullElement();
           break;
         // create placeholder
         case 7:
@@ -153,7 +153,9 @@ export class JsInterpreter {
             const id = this.decodeId();
             this.lastNode = document.createElement("pre");
             this.lastNode.hidden = true;
-            globalData2.nodes[id - 1] = this.lastNode;
+            if (id !== null) {
+              this.nodes[id] = this.lastNode;
+            }
           }
           break;
         // new event listener
@@ -186,35 +188,36 @@ export class JsInterpreter {
             }
             let bubbles = u8Buf[this.u8BufPos++] == 0;
             this.RemoveEventListener(event, id, bubbles);
-            console.log("todo");
           }
           break;
         // set text
         case 10:
           {
-            const id = this.decodeId();
+            const node = this.getNode();
             const str_len = this.decodeU32();
-            const text = utf8Decode(str_len);
-            if (id === 0) {
-              this.lastNode.textContent = text;
-            }
-            else {
-              const node = this.nodes[id];
-              node.textContent = text;
-            }
+            const text = this.utf8Decode(str_len);
+            node.textContent = text;
           }
           break;
         // set attribute
         case 11:
           {
-            const id = this.decodeId();
-            const attr = decodeAttribute();
-            const val = decodeValue();
-            if (id === 0) {
-              this.lastNode.setAttribute(attr, val);
+            const node = this.getNode();
+            const attr_len = this.decodeU32();
+            const attr = this.asciiDecode(attr_len);
+            let has_ns = this.u8Buf[this.u8BufPos++] == 1;
+            let ns;
+            if (has_ns) {
+              const ns_len = this.decodeU32();
+              ns = this.asciiDecode(ns_len);
+            }
+            const val_len = this.decodeU32();
+            const val = this.asciiDecode(val_len);
+            if (has_ns) {
+              node.setAttributeNS(ns, attr, val);
             }
             else {
-              this.nodes[id].setAttribute(attr, val);
+              node.setAttribute(attr, val);
             }
           }
           break;
@@ -222,41 +225,42 @@ export class JsInterpreter {
         case 12:
           {
             let attr;
-            const id = this.decodeId();
+            const node = this.getNode();
             {
               const len = this.decodeU32();
               attr = this.asciiDecode(len);
             }
-            let len = this.decodeU32();
-            const ns = this.asciiDecode(len);
-            if (id === 0) {
-              this.lastNode.removeAttributeNS(ns, attr);
-            } else {
-              this.nodes[id].removeAttributeNS(ns, attr);
+            let has_ns = this.u8Buf[this.u8BufPos++] == 1;
+            let ns;
+            if (has_ns) {
+              let len = this.decodeU32();
+              ns = this.asciiDecode(len);
+            }
+            if (has_ns) {
+              node.removeAttributeNS(ns, attr);
+            }
+            else {
+              node.removeAttributeNS(ns, attr);
             }
           }
           break;
         // clone node
         case 13:
           {
-            const toCloneId = this.decodeId();
+            this.lastNode = this.getNode().cloneNode(true);
             const toStoreId = this.decodeId();
-            this.lastNode = this.nodes[toCloneId].cloneNode(true);
-            if (toStoreId !== 0) {
-              this.nodes[toStoreId - 1] = this.lastNode;
+            if (toStoreId !== null) {
+              this.nodes[toStoreId] = this.lastNode;
             }
           }
           break;
         // clone node children
         case 14:
           {
-            const toCloneId = this.decodeId();
-            const childrenIds = u8Buf[this.u8BufPos++];
-            let parent = this.nodes[toCloneId].cloneNode(true);
-            let i = 0;
+            let parent = this.getNode().cloneNode(true);
             for (let current = parent.firstChild; current !== null; current = current.nextSibling) {
-              this.nodes[this.decodeId() - 1] = current;
-              i++;
+              const id = this.decodeId();
+              this.nodes[id] = current;
             }
           }
           break;
@@ -281,20 +285,19 @@ export class JsInterpreter {
         // store with id
         case 18:
           {
-            const id = this.this.decodeId();
-            this.nodes[id - 1] = this.lastNode;
+            const id = this.decodeId();
+            this.nodes[id] = this.lastNode;
           }
           break;
         // set last node
         case 19:
           {
-            const id = this.this.decodeId();
-            this.lastNode = this.this.nodes[id];
+            const id = this.decodeId();
+            this.lastNode = this.nodes[id];
           }
           break;
         default:
           this.u8BufPos--;
-          console.log(`unknown opcode ${u8Buf[this.u8BufPos]}`);
           return;
       }
     }
@@ -357,17 +360,24 @@ export class JsInterpreter {
     return out;
   }
 
+  // decodes and returns a node
+  getNode() {
+    const node_id = this.decodeId();
+    if (node_id === null) {
+      return this.lastNode;
+    }
+    else {
+      return this.nodes[node_id];
+    }
+  }
+
   decodeId() {
     const id_code = this.u8Buf[this.u8BufPos++];
     if (id_code === 0) {
-      return 0;
+      return null;
     }
     else if (id_code === 1) {
-      let id = this.u8Buf[this.u8BufPos++];
-      for (let i = 1; i < 8; i++) {
-        id |= this.u8Buf[this.u8BufPos++] << (i * 8);
-      }
-      return id;
+      return this.decodeU64();
     }
   }
 
@@ -389,30 +399,37 @@ export class JsInterpreter {
     return val;
   }
 
+  decodeU64() {
+    let val = this.u8Buf[this.u8BufPos++];
+    for (let i = 1; i < 8; i++) {
+      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
+    }
+    return val;
+  }
+
   CreateElement() {
     const len = this.decodeU32();
     const str = this.asciiDecode(len);
 
-    const ns_len = this.decodeU32();
-    if (ns_len === 0) {
-      return document.createElement(str);
-    }
-    else {
+    const has_ns = this.nodes[this.u8BufPos++];
+    if (has_ns) {
+      const ns_len = this.decodeU32();
       const ns = this.asciiDecode(ns_len);
       return document.createElementNS(str, ns);
     }
+    else {
+      return document.createElement(str);
+    }
   }
-
   CreateFullElement() {
     const id = this.decodeId();
     this.lastNode = this.CreateElement();
     this.checkAppendParent();
-    if (id !== 0) {
-      this.nodes[id - 1] = element;
+    if (id !== null) {
+      this.nodes[id] = this.lastNode;
     }
     const children = this.decodeU32();
     this.parents.push([this.lastNode, children]);
-    return element;
   }
   AppendChildren(root, children) {
     let node;

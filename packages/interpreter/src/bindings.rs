@@ -61,183 +61,117 @@ impl Interpreter {
 
     pub fn AppendChildren(&mut self, root: Option<u64>, children: Vec<u64>) {
         self.msg.push(Op::AppendChildren as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
         self.msg
-            .extend_from_slice(&(children.len() as u64).to_le_bytes());
+            .extend_from_slice(&(children.len() as u32).to_le_bytes());
         for child in children {
-            self.msg.extend_from_slice(&(child + 1).to_le_bytes());
+            self.msg.extend_from_slice(&child.to_le_bytes());
         }
     }
 
     pub fn ReplaceWith(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.msg.push(Op::ReplaceWith as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
         self.msg
-            .extend_from_slice(&(nodes.len() as u64).to_le_bytes());
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
         for node in nodes {
-            self.msg.extend_from_slice(&(node + 1).to_le_bytes());
+            self.msg.extend_from_slice(&node.to_le_bytes());
         }
     }
 
     pub fn InsertAfter(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.msg.push(Op::InsertAfter as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
         self.msg
-            .extend_from_slice(&(nodes.len() as u64).to_le_bytes());
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
         for node in nodes {
-            self.msg.extend_from_slice(&(node + 1).to_le_bytes());
+            self.msg.extend_from_slice(&node.to_le_bytes());
         }
     }
 
     pub fn InsertBefore(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         self.msg.push(Op::InsertBefore as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
         self.msg
-            .extend_from_slice(&(nodes.len() as u64).to_le_bytes());
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
         for node in nodes {
-            self.msg.extend_from_slice(&(node + 1).to_le_bytes());
+            self.msg.extend_from_slice(&node.to_le_bytes());
         }
     }
 
     pub fn Remove(&mut self, root: Option<u64>) {
         self.msg.push(Op::Remove as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
     }
 
     pub fn CreateTextNode(&mut self, text: &str, root: Option<u64>) {
         self.msg.push(Op::CreateTextNode as u8);
-        self.msg.extend_from_slice(&text.len().to_le_bytes());
-        self.msg.extend_from_slice(text.as_bytes());
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
+        self.encode_str(text);
     }
 
     pub fn CreateElement(&mut self, tag: &str, root: Option<u64>, children: u32) {
         self.msg.push(Op::CreateElement as u8);
-        self.msg.extend_from_slice(&tag.len().to_le_bytes());
-        self.msg.extend_from_slice(tag.as_bytes());
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
+        self.encode_str(tag);
         self.msg.push(0);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
     pub fn CreateElementNs(&mut self, tag: &str, root: Option<u64>, ns: &str, children: u32) {
         self.msg.push(Op::CreateElement as u8);
-        self.msg.extend_from_slice(&tag.len().to_le_bytes());
-        self.msg.extend_from_slice(tag.as_bytes());
-        self.msg.push(0);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&ns.len().to_le_bytes());
-        self.msg.extend_from_slice(ns.as_bytes());
+        self.encode_id(root);
+        self.encode_str(tag);
+        self.msg.push(1);
+        self.encode_str(ns);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
     pub fn CreatePlaceholder(&mut self, root: Option<u64>) {
         self.msg.push(Op::CreatePlaceholder as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
+        self.encode_id(root);
     }
 
     pub fn NewEventListener(&mut self, name: &str, root: Option<u64>, bubbles: bool) {
         self.msg.push(Op::NewEventListener as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&name.len().to_le_bytes());
-        self.msg.extend_from_slice(name.as_bytes());
+        self.encode_id(root);
+        self.encode_str(name);
         self.msg.push(bubbles as u8);
     }
 
     pub fn RemoveEventListener(&mut self, root: Option<u64>, name: &str, bubbles: bool) {
         self.msg.push(Op::RemoveEventListener as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&name.len().to_le_bytes());
-        self.msg.extend_from_slice(name.as_bytes());
+        self.encode_id(root);
+        self.encode_str(name);
         self.msg.push(bubbles as u8);
     }
 
     pub fn SetText(&mut self, root: Option<u64>, text: &str) {
         self.msg.push(Op::SetText as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&text.len().to_le_bytes());
-        self.msg.extend_from_slice(text.as_bytes());
+        self.encode_id(root);
+        self.encode_str(text);
     }
 
     pub fn SetAttribute(&mut self, root: Option<u64>, field: &str, value: &str, ns: Option<&str>) {
         self.msg.push(Op::SetAttribute as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&field.len().to_le_bytes());
-        self.msg.extend_from_slice(field.as_bytes());
-        self.msg.extend_from_slice(&value.len().to_le_bytes());
-        self.msg.extend_from_slice(value.as_bytes());
+        self.encode_id(root);
+        self.encode_str(field);
         if let Some(ns) = ns {
-            self.msg.extend_from_slice(&ns.len().to_le_bytes());
-            self.msg.extend_from_slice(ns.as_bytes());
+            self.msg.push(1);
+            self.encode_str(ns);
         } else {
             self.msg.push(0);
         }
+        self.encode_str(value);
     }
 
     pub fn RemoveAttribute(&mut self, root: Option<u64>, field: &str, ns: Option<&str>) {
         self.msg.push(Op::RemoveAttribute as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&field.len().to_le_bytes());
-        self.msg.extend_from_slice(field.as_bytes());
+        self.encode_id(root);
+        self.encode_str(field);
         if let Some(ns) = ns {
-            self.msg.extend_from_slice(&ns.len().to_le_bytes());
-            self.msg.extend_from_slice(ns.as_bytes());
+            self.msg.push(1);
+            self.encode_str(ns);
         } else {
             self.msg.push(0);
         }
@@ -245,24 +179,15 @@ impl Interpreter {
 
     pub fn CloneNode(&mut self, root: Option<u64>, new_id: u64) {
         self.msg.push(Op::CloneNode as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&(new_id + 1).to_le_bytes());
+        self.encode_id(root);
+        self.msg.extend_from_slice(&new_id.to_le_bytes());
     }
 
     pub fn CloneNodeChildren(&mut self, root: Option<u64>, new_ids: Vec<u64>) {
         self.msg.push(Op::CloneNodeChildren as u8);
-        if let Some(id) = root {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
-        } else {
-            self.msg.push(0);
-        }
-        self.msg.extend_from_slice(&new_ids.len().to_le_bytes());
+        self.encode_id(root);
         for id in new_ids {
-            self.msg.extend_from_slice(&(id + 1).to_le_bytes());
+            self.encode_id(Some(id));
         }
     }
 
@@ -280,12 +205,12 @@ impl Interpreter {
 
     pub fn StoreWithId(&mut self, id: u64) {
         self.msg.push(Op::StoreWithId as u8);
-        self.msg.extend_from_slice(&(id + 1).to_le_bytes());
+        self.encode_id(Some(id));
     }
 
     pub fn SetLastNode(&mut self, id: u64) {
         self.msg.push(Op::SetLastNode as u8);
-        self.msg.extend_from_slice(&(id + 1).to_le_bytes());
+        self.encode_id(Some(id));
     }
 
     pub fn flush(&mut self) {
@@ -304,6 +229,24 @@ impl Interpreter {
 
     pub fn set_event_handler(&self, handler: &Function) {
         self.js_interpreter.SetEventHandler(handler);
+    }
+
+    fn encode_id(&mut self, id: Option<u64>) {
+        match id {
+            Some(id) => {
+                self.msg.push(1);
+                self.msg.extend_from_slice(&(id as u64).to_le_bytes());
+            }
+            None => {
+                self.msg.push(0);
+            }
+        }
+    }
+
+    fn encode_str(&mut self, string: &str) {
+        self.msg
+            .extend_from_slice(&(string.len() as u32).to_le_bytes());
+        self.msg.extend_from_slice(string.as_bytes());
     }
 }
 
