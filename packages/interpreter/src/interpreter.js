@@ -138,6 +138,7 @@ export class JsInterpreter {
             const id = this.decodeId();
             const str_len = this.decodeU32();
             this.lastNode = document.createTextNode(this.utf8Decode(str_len));
+            this.checkAppendParent();
             if (id !== null) {
               this.nodes[id] = this.lastNode;
             }
@@ -153,6 +154,7 @@ export class JsInterpreter {
             const id = this.decodeId();
             this.lastNode = document.createElement("pre");
             this.lastNode.hidden = true;
+            this.checkAppendParent();
             if (id !== null) {
               this.nodes[id] = this.lastNode;
             }
@@ -201,12 +203,7 @@ export class JsInterpreter {
             }
             const val_len = this.decodeU32();
             const val = this.asciiDecode(val_len);
-            if (has_ns) {
-              node.setAttributeNS(ns, attr, val);
-            }
-            else {
-              node.setAttribute(attr, val);
-            }
+            this.SetAttribute(node, attr, val, ns);
           }
           break;
         // remove attribute
@@ -524,14 +521,8 @@ export class JsInterpreter {
     }
     node.data = text;
   }
-  SetAttribute(root, field, value, ns) {
+  SetAttribute(node, field, value, ns) {
     const name = field;
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
