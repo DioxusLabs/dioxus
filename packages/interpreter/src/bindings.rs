@@ -2,7 +2,7 @@
 
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, Node};
+use web_sys::{Element, Event, Node};
 
 #[used]
 static mut PTR: usize = 0;
@@ -27,7 +27,7 @@ extern "C" {
     pub fn SetNode(this: &JsInterpreter, id: usize, node: Node);
 
     #[wasm_bindgen(method)]
-    pub fn SetEventHandler(this: &JsInterpreter, handler: &Function);
+    pub fn SetEventHandler(this: &JsInterpreter, handler: &Closure<dyn FnMut(&Event)>);
 }
 
 pub struct Interpreter {
@@ -227,7 +227,7 @@ impl Interpreter {
         self.msg.clear();
     }
 
-    pub fn set_event_handler(&self, handler: &Function) {
+    pub fn set_event_handler(&self, handler: &Closure<dyn FnMut(&Event)>) {
         self.js_interpreter.SetEventHandler(handler);
     }
 

@@ -97,10 +97,10 @@ impl WebsysDom {
 
         let interpreter = Interpreter::new(root.clone());
 
-        let binding = Closure::wrap(callback);
-        let handler: &Function = binding.as_ref().unchecked_ref();
+        let handler = Closure::wrap(callback);
 
-        interpreter.set_event_handler(handler);
+        interpreter.set_event_handler(&handler);
+        handler.forget();
 
         Self { interpreter, root }
     }
