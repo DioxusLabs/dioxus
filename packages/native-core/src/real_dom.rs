@@ -1,5 +1,5 @@
 use anymap::AnyMap;
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
 use dioxus_core::{

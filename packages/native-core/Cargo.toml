@@ -17,7 +17,7 @@ dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 
 taffy = "0.1.0"
 smallvec = "1.6"
-fxhash = "0.2"
+rustc-hash = "1.1.0"
 anymap = "0.12.1"
 
 [dev-dependencies]

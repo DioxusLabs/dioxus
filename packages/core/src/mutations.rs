@@ -276,7 +276,7 @@ pub enum DomEdit<'bump> {
     },
 }
 
-use fxhash::FxHashSet;
+use rustc_hash::FxHashSet;
 use DomEdit::*;
 
 impl<'a> Mutations<'a> {

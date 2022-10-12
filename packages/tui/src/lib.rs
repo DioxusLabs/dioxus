@@ -133,7 +133,7 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: fxhash::FxHashSet<GlobalNodeId> =
+            let mut to_rerender: rustc_hash::FxHashSet<GlobalNodeId> =
                 vec![GlobalNodeId::VNodeId(ElementId(0))]
                     .into_iter()
                     .collect();

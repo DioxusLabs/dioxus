@@ -318,7 +318,7 @@ fn state_reduce_parent_called_minimally_on_update() {
             value: AttributeValue::Text("99%"),
             ns: Some("style"),
         }],
-        dirty_scopes: fxhash::FxHashSet::default(),
+        dirty_scopes: rustc_hash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
@@ -387,7 +387,7 @@ fn state_reduce_child_called_minimally_on_update() {
             value: AttributeValue::Text("99%"),
             ns: Some("style"),
         }],
-        dirty_scopes: fxhash::FxHashSet::default(),
+        dirty_scopes: rustc_hash::FxHashSet::default(),
         refs: Vec::new(),
     }]);
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());

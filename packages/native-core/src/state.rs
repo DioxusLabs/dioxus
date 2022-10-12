@@ -2,7 +2,7 @@ use std::{cmp::Ordering, fmt::Debug};
 
 use anymap::AnyMap;
 use dioxus_core::GlobalNodeId;
-use fxhash::FxHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::node_ref::{NodeMask, NodeView};
 use crate::real_dom::NodeData;
