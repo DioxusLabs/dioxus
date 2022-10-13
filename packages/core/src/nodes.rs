@@ -5,8 +5,8 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState, Template,
-        TemplateId,
+        AttributeValue, ComponentPtr, Element, IntoAttributeValue, Properties, Scope, ScopeId,
+        ScopeState, Template, TemplateId,
     },
     lazynodes::LazyNodes,
     template::{TemplateNodeId, VTemplateRef},
@@ -698,13 +698,12 @@ impl<'a> NodeFactory<'a> {
     pub fn attr_disciption(
         &self,
         discription: AttributeDiscription,
-        val: Arguments,
+        val: impl IntoAttributeValue<'a>,
     ) -> Attribute<'a> {
-        let (value, is_static) = self.raw_text(val);
         Attribute {
             attribute: discription,
-            is_static,
-            value: AttributeValue::Text(value),
+            is_static: false,
+            value: val.into_value(self.bump),
         }
     }
 
@@ -712,19 +711,18 @@ impl<'a> NodeFactory<'a> {
     pub fn attr(
         &self,
         name: &'static str,
-        val: Arguments,
+        val: impl IntoAttributeValue<'a>,
         namespace: Option<&'static str>,
         is_volatile: bool,
     ) -> Attribute<'a> {
-        let (value, is_static) = self.raw_text(val);
         Attribute {
             attribute: AttributeDiscription {
                 name,
                 namespace,
                 volatile: is_volatile,
             },
-            is_static,
-            value: AttributeValue::Text(value),
+            is_static: false,
+            value: val.into_value(self.bump),
         }
     }
 
