@@ -152,8 +152,12 @@ impl WebsysDom {
                     value,
                     ns,
                 } => {
-                    let value = format!("{}", &value);
-                    self.interpreter.SetAttribute(root, field, &value, ns)
+                    if let Some(string) = value.as_text() {
+                        self.interpreter.SetAttribute(root, field, string, ns)
+                    } else {
+                        let value = format!("{}", &value);
+                        self.interpreter.SetAttribute(root, field, &value, ns)
+                    }
                 }
                 DomEdit::CloneNode { id, new_id } => self.interpreter.CloneNode(id, new_id),
                 DomEdit::CloneNodeChildren { id, new_ids } => {
