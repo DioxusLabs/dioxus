@@ -4,16 +4,30 @@ use wasm_bindgen::prelude::*;
 use web_sys::{Element, Event, Node};
 
 #[used]
-static mut PTR: usize = 0;
+static mut MSG_PTR: usize = 0;
 #[used]
-static mut PTR_PTR: *const usize = unsafe { &PTR } as *const usize;
+static mut MSG_PTR_PTR: *const usize = unsafe { &MSG_PTR } as *const usize;
+#[used]
+static mut STR_PTR: usize = 0;
+#[used]
+static mut STR_PTR_PTR: *const usize = unsafe { &STR_PTR } as *const usize;
+#[used]
+static mut STR_LEN: usize = 0;
+#[used]
+static mut STR_LEN_PTR: *const usize = unsafe { &STR_LEN } as *const usize;
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
     pub type JsInterpreter;
 
     #[wasm_bindgen(constructor)]
-    pub fn new(arg: Element, mem: JsValue, ptr: usize) -> JsInterpreter;
+    pub fn new(
+        arg: Element,
+        mem: JsValue,
+        msg_ptr: usize,
+        str_ptr: usize,
+        str_len_ptr: usize,
+    ) -> JsInterpreter;
 
     #[wasm_bindgen(method)]
     pub fn Work(this: &JsInterpreter, mem: JsValue);
@@ -28,18 +42,33 @@ extern "C" {
 pub struct Interpreter {
     js_interpreter: JsInterpreter,
     msg: Vec<u8>,
+    /// A separate buffer for batched string decoding to avoid js-native overhead
+    str_buf: Vec<u8>,
     id_size: u8,
 }
 
 #[allow(non_snake_case)]
 impl Interpreter {
     pub fn new(arg: Element) -> Interpreter {
-        format!("init: {:?}", unsafe { PTR_PTR as usize });
-        let js_interpreter =
-            unsafe { JsInterpreter::new(arg, wasm_bindgen::memory(), PTR_PTR as usize) };
+        format!(
+            "init: {:?}, {:?}, {:?}",
+            unsafe { MSG_PTR_PTR as usize },
+            unsafe { STR_PTR_PTR as usize },
+            unsafe { STR_LEN_PTR as usize }
+        );
+        let js_interpreter = unsafe {
+            JsInterpreter::new(
+                arg,
+                wasm_bindgen::memory(),
+                MSG_PTR_PTR as usize,
+                STR_PTR_PTR as usize,
+                STR_LEN_PTR as usize,
+            )
+        };
         Interpreter {
             js_interpreter,
             msg: Vec::new(),
+            str_buf: Vec::new(),
             id_size: 1,
         }
     }
@@ -274,13 +303,17 @@ impl Interpreter {
     pub fn flush(&mut self) {
         assert_eq!(0usize.to_le_bytes().len(), 32 / 8);
         self.msg.push(Op::Stop as u8);
-        let ptr = self.msg.as_ptr();
         unsafe {
-            let mut_ptr_ptr: *mut usize = std::mem::transmute(PTR_PTR);
-            *mut_ptr_ptr = ptr as usize;
+            let mut_ptr_ptr: *mut usize = std::mem::transmute(MSG_PTR_PTR);
+            *mut_ptr_ptr = self.msg.as_ptr() as usize;
+            let mut_str_ptr_ptr: *mut usize = std::mem::transmute(STR_PTR_PTR);
+            *mut_str_ptr_ptr = self.str_buf.as_ptr() as usize;
+            let mut_str_len_ptr: *mut usize = std::mem::transmute(STR_LEN_PTR);
+            *mut_str_len_ptr = self.str_buf.len() as usize;
         }
         self.js_interpreter.Work(wasm_bindgen::memory());
         self.msg.clear();
+        self.str_buf.clear();
     }
 
     pub fn set_event_handler(&self, handler: &Closure<dyn FnMut(&Event)>) {
@@ -327,7 +360,7 @@ impl Interpreter {
     fn encode_str(&mut self, string: &str) {
         self.msg
             .extend_from_slice(&(string.len() as u16).to_le_bytes());
-        self.msg.extend_from_slice(string.as_bytes());
+        self.str_buf.extend_from_slice(string.as_bytes());
     }
 }
 

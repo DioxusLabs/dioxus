@@ -56,7 +56,7 @@ class ListenerMap {
 }
 
 export class JsInterpreter {
-  constructor(root, mem, _ptr_ptr) {
+  constructor(root, mem, _ptr_ptr, _str_ptr_ptr, _str_len_ptr) {
     this.root = root;
     this.lastNode = root;
     this.listeners = new ListenerMap(root);
@@ -67,6 +67,11 @@ export class JsInterpreter {
     this.view = new DataView(mem.buffer);
     this.idSize = 1;
     this.ptr_ptr = _ptr_ptr;
+    this.str_ptr_ptr = _str_ptr_ptr;
+    this.str_len_ptr = _str_len_ptr;
+    this.strings = "";
+    this.strPos = 0;
+    this.decoder = new TextDecoder();
   }
 
   SetEventHandler(handler) {
@@ -77,6 +82,11 @@ export class JsInterpreter {
     this.view = new DataView(mem.buffer);
     const view = this.view;
     this.u8BufPos = this.decodePtr(this.ptr_ptr);
+    const str_ptr = this.decodePtr(this.str_ptr_ptr);
+    const str_len = view.getUint32(this.str_len_ptr, true);
+    const str_view = new DataView(mem.buffer, str_ptr, str_len);
+    this.strings = this.decoder.decode(str_view);
+    this.strPos = 0;
     while (true) {
       const op = view.getUint8(this.u8BufPos++);
       switch (op) {
@@ -165,12 +175,9 @@ export class JsInterpreter {
           {
             const id = this.decodeMaybeId();
             const len = this.decodeU16();
-            const event = this.asciiDecode(len);
+            const event = this.utf8Decode(len);
             const val = view.getUint8(this.u8BufPos++);
             let bubbles = val == 1;
-            if (!bubbles) {
-              console.log(val);
-            }
             this.NewEventListener(event, id, bubbles);
           }
           break;
@@ -179,7 +186,7 @@ export class JsInterpreter {
           {
             const id = this.decodeMaybeId();
             const len = this.decodeU16();
-            const event = this.asciiDecode(len);
+            const event = this.utf8Decode(len);
             let bubbles = view.getUint8(this.u8BufPos++) == 0;
             this.RemoveEventListener(event, id, bubbles);
           }
@@ -198,15 +205,15 @@ export class JsInterpreter {
           {
             const node = this.getNode();
             const attr_len = this.decodeU16();
-            const attr = this.asciiDecode(attr_len);
+            const attr = this.utf8Decode(attr_len);
             let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
             let ns;
             if (has_ns) {
               const ns_len = this.decodeU16();
-              ns = this.asciiDecode(ns_len);
+              ns = this.utf8Decode(ns_len);
             }
             const val_len = this.decodeU16();
-            const val = this.asciiDecode(val_len);
+            const val = this.utf8Decode(val_len);
             this.SetAttribute(node, attr, val, ns);
           }
           break;
@@ -217,13 +224,13 @@ export class JsInterpreter {
             const node = this.getNode();
             {
               const len = this.decodeU16();
-              attr = this.asciiDecode(len);
+              attr = this.utf8Decode(len);
             }
             let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
             let ns;
             if (has_ns) {
               let len = this.decodeU16();
-              ns = this.asciiDecode(len);
+              ns = this.utf8Decode(len);
             }
             if (has_ns) {
               node.removeAttributeNS(ns, attr);
@@ -313,49 +320,9 @@ export class JsInterpreter {
   }
 
   utf8Decode(byteLength) {
-    const end = this.u8BufPos + byteLength;
-    let out = "";
-    while (this.u8BufPos < end) {
-      const byte1 = this.view.getUint8(this.u8BufPos++);
-      if ((byte1 & 0x80) === 0) {
-        // 1 byte
-        out += String.fromCharCode(byte1);
-      } else if ((byte1 & 0xe0) === 0xc0) {
-        // 2 bytes
-        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        out += String.fromCharCode(((byte1 & 0x1f) << 6) | byte2);
-      } else if ((byte1 & 0xf0) === 0xe0) {
-        // 3 bytes
-        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        const byte3 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        out += String.fromCharCode(((byte1 & 0x1f) << 12) | (byte2 << 6) | byte3);
-      } else if ((byte1 & 0xf8) === 0xf0) {
-        // 4 bytes
-        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        const byte3 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        const byte4 = this.view.getUint8(this.u8BufPos++) & 0x3f;
-        let unit = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0c) | (byte3 << 0x06) | byte4;
-        if (unit > 0xffff) {
-          unit -= 0x10000;
-          out += String.fromCharCode(((unit >>> 10) & 0x3ff) | 0xd800);
-          unit = 0xdc00 | (unit & 0x3ff);
-        }
-        out += String.fromCharCode(unit);
-      } else {
-        out += String.fromCharCode(byte1);
-      }
-    }
-
-    return out;
-  }
-
-  asciiDecode(byteLength) {
-    const end = this.u8BufPos + byteLength;
-    let out = "";
-    while (this.u8BufPos < end) {
-      out += String.fromCharCode(this.view.getUint8(this.u8BufPos++));
-    }
-    return out;
+    const str = this.strings.substring(this.strPos, this.strPos + byteLength);
+    this.strPos += byteLength;
+    return str;
   }
 
   // decodes and returns a node
@@ -400,13 +367,6 @@ export class JsInterpreter {
 
   decodePtr(_start) {
     return this.view.getUint32(_start, true);
-    // let start = _start;
-    // const raw = this.view.getUint8(start++);
-    // let val = BigInt(raw);
-    // for (let i = 1; i < 4; i++) {
-    //   val |= BigInt(this.view.getUint8(start++) << (i * 8));
-    // }
-    // return val;
   }
 
   decodeU64() {
@@ -419,28 +379,22 @@ export class JsInterpreter {
     const res = this.view.getUint32(this.u8BufPos, true);
     this.u8BufPos += 4;
     return res;
-    // let val = this.view.getUint8(this.u8BufPos++);
-    // for (let i = 1; i < 4; i++) {
-    //   val |= this.view.getUint8(this.u8BufPos++) << (i * 8);
-    // }
-    // return val;
   }
 
   decodeU16() {
     const res = this.view.getUint16(this.u8BufPos, true);
     this.u8BufPos += 2;
     return res;
-    // return this.view.getUint8(this.u8BufPos++] | (this.view.getUint8(this.u8BufPos++)) << 8);
   }
 
   CreateElement() {
     const len = this.decodeU16();
-    const str = this.asciiDecode(len);
+    const str = this.utf8Decode(len);
 
     const has_ns = this.nodes[this.u8BufPos++];
     if (has_ns) {
       const ns_len = this.decodeU16();
-      const ns = this.asciiDecode(ns_len);
+      const ns = this.utf8Decode(ns_len);
       return document.createElementNS(str, ns);
     }
     else {
