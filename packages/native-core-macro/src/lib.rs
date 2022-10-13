@@ -191,7 +191,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
                         let mut dirty_elements = rustc_hash::FxHashSet::default();
                         // the states of any elements that are dirty
-                        let mut states: rustc_hash::FxHashMap<dioxus_core::GlobalNodeId, MembersDirty> = rustc_hash::FxHashMap::default();
+                        let mut states: rustc_hash::FxHashMap<dioxus_native_core::RealNodeId, MembersDirty> = rustc_hash::FxHashMap::default();
 
                         for (id, mask) in dirty {
                             let members_dirty = MembersDirty {
