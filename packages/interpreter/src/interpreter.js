@@ -93,7 +93,7 @@ export class JsInterpreter {
         // append children
         case 0:
           {
-            let parent = this.getNode();
+            const parent = this.getNode();
             const len = this.decodeU32();
             for (let i = 0; i < len; i++) {
               parent.appendChild(this.nodes[this.decodeId()]);
@@ -103,7 +103,7 @@ export class JsInterpreter {
         // replace with
         case 1:
           {
-            let parent = this.getNode();
+            const parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -115,7 +115,7 @@ export class JsInterpreter {
         // insert after
         case 2:
           {
-            let parent = this.getNode();
+            const parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -127,7 +127,7 @@ export class JsInterpreter {
         // insert before
         case 3:
           {
-            let parent = this.getNode();
+            const parent = this.getNode();
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
@@ -146,8 +146,7 @@ export class JsInterpreter {
         case 5:
           {
             const id = this.decodeMaybeId();
-            const str_len = this.decodeU16();
-            this.lastNode = document.createTextNode(this.utf8Decode(str_len));
+            this.lastNode = document.createTextNode(this.utf8Decode(this.decodeU16()));
             this.checkAppendParent();
             if (id !== null) {
               this.nodes[id] = this.lastNode;
@@ -173,30 +172,24 @@ export class JsInterpreter {
         // new event listener
         case 8:
           {
-            const id = this.decodeMaybeId();
-            const len = this.decodeU16();
-            const event = this.utf8Decode(len);
-            const val = view.getUint8(this.u8BufPos++);
-            let bubbles = val == 1;
-            this.NewEventListener(event, id, bubbles);
+            const id = this.decodeId();
+            const event = this.utf8Decode(this.decodeU16());
+            this.NewEventListener(event, this.nodes[id], id, view.getUint8(this.u8BufPos++) == 1);
           }
           break;
         // remove event listener
         case 9:
           {
-            const id = this.decodeMaybeId();
-            const len = this.decodeU16();
-            const event = this.utf8Decode(len);
-            let bubbles = view.getUint8(this.u8BufPos++) == 0;
-            this.RemoveEventListener(event, id, bubbles);
+            const node = this.getNode();
+            const event = this.utf8Decode(this.decodeU16());
+            this.RemoveEventListener(event, node, view.getUint8(this.u8BufPos++) == 0);
           }
           break;
         // set text
         case 10:
           {
             const node = this.getNode();
-            const str_len = this.decodeU16();
-            const text = this.utf8Decode(str_len);
+            const text = this.utf8Decode(this.decodeU16());
             node.textContent = text;
           }
           break;
@@ -204,16 +197,12 @@ export class JsInterpreter {
         case 11:
           {
             const node = this.getNode();
-            const attr_len = this.decodeU16();
-            const attr = this.utf8Decode(attr_len);
-            let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
+            const attr = this.utf8Decode(this.decodeU16());
             let ns;
-            if (has_ns) {
-              const ns_len = this.decodeU16();
-              ns = this.utf8Decode(ns_len);
+            if (this.view.getUint8(this.u8BufPos++) == 1) {
+              ns = this.utf8Decode(this.decodeU16());
             }
-            const val_len = this.decodeU16();
-            const val = this.utf8Decode(val_len);
+            const val = this.utf8Decode(this.decodeU16());
             this.SetAttribute(node, attr, val, ns);
           }
           break;
@@ -222,15 +211,11 @@ export class JsInterpreter {
           {
             let attr;
             const node = this.getNode();
-            {
-              const len = this.decodeU16();
-              attr = this.utf8Decode(len);
-            }
+            attr = this.utf8Decode(this.decodeU16());
             let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
             let ns;
             if (has_ns) {
-              let len = this.decodeU16();
-              ns = this.utf8Decode(len);
+              ns = this.utf8Decode(this.decodeU16());
             }
             if (has_ns) {
               node.removeAttributeNS(ns, attr);
@@ -253,8 +238,7 @@ export class JsInterpreter {
         // clone node children
         case 14:
           {
-            let parent = this.getNode().cloneNode(true);
-            for (let current = parent.firstChild; current !== null; current = current.nextSibling) {
+            for (let current = this.getNode().cloneNode(true).firstChild; current !== null; current = current.nextSibling) {
               const id = this.decodeMaybeId();
               this.nodes[id] = current;
             }
@@ -288,8 +272,7 @@ export class JsInterpreter {
         // set last node
         case 19:
           {
-            const id = this.decodeMaybeId();
-            this.lastNode = this.nodes[id];
+            this.lastNode = this.getNode();
           }
           break;
         // set id size
@@ -413,111 +396,6 @@ export class JsInterpreter {
       this.parents.push([this.lastNode, children]);
     }
   }
-  AppendChildren(root, children) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    for (let i = 0; i < children.length; i++) {
-      node.appendChild(this.nodes[children[i]]);
-    }
-  }
-  ReplaceWith(root, nodes) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    let els = [];
-    for (let i = 0; i < nodes.length; i++) {
-      els.push(this.nodes[nodes[i]])
-    }
-    node.replaceWith(...els);
-  }
-  InsertAfter(root, nodes) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    let els = [];
-    for (let i = 0; i < nodes.length; i++) {
-      els.push(this.nodes[nodes[i]])
-    }
-    node.after(...els);
-  }
-  InsertBefore(root, nodes) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    let els = [];
-    for (let i = 0; i < nodes.length; i++) {
-      els.push(this.nodes[nodes[i]])
-    }
-    node.before(...els);
-  }
-  Remove(root) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    if (node !== undefined) {
-      node.remove();
-    }
-  }
-  CreateTextNode(text, root) {
-    this.lastNode = document.createTextNode(text);
-    this.checkAppendParent();
-    if (root !== null) {
-      this.nodes[root] = this.lastNode;
-    }
-  }
-  CreatePlaceholder(root) {
-    this.lastNode = document.createElement("pre");
-    this.lastNode.hidden = true;
-    this.checkAppendParent();
-    if (root !== null) {
-      this.nodes[root] = this.lastNode;
-    }
-  }
-  NewEventListener(event_name, root, bubbles) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    node.setAttribute("data-dioxus-id", `${root}`);
-    this.listeners.create(event_name, node, this.handler, bubbles);
-  }
-  RemoveEventListener(event_name, root, bubbles) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    node.removeAttribute(`data-dioxus-id`);
-    this.listeners.remove(node, event_name, bubbles);
-  }
-  SetText(root, text) {
-    let node;
-    if (root === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[root];
-    }
-    node.data = text;
-  }
   SetAttribute(node, field, value, ns) {
     const name = field;
     if (ns === "style") {
@@ -575,42 +453,13 @@ export class JsInterpreter {
       node.removeAttribute(name);
     }
   }
-  CloneNode(old, new_id) {
-    let node;
-    if (old === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[old];
-    }
-    this.nodes[new_id] = node.cloneNode(true);
+  NewEventListener(event_name, node, root, bubbles) {
+    node.setAttribute("data-dioxus-id", root);
+    this.listeners.create(event_name, node, this.handler, bubbles);
   }
-  CloneNodeChildren(old, new_ids) {
-    let node;
-    if (old === null) {
-      node = this.lastNode;
-    } else {
-      node = this.nodes[old];
-    }
-    const old_node = node.cloneNode(true);
-    let i = 0;
-    for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
-      this.nodes[new_ids[i++]] = node;
-    }
-  }
-  FirstChild() {
-    this.lastNode = this.lastNode.firstChild;
-  }
-  NextSibling() {
-    this.lastNode = this.lastNode.nextSibling;
-  }
-  ParentNode() {
-    this.lastNode = this.lastNode.parentNode;
-  }
-  StoreWithId(id) {
-    this.nodes[id] = this.lastNode;
-  }
-  SetLastNode(root) {
-    this.lastNode = this.nodes[root];
+  RemoveEventListener(event_name, node, bubbles) {
+    node.removeAttribute(`data-dioxus-id`);
+    this.listeners.remove(node, event_name, bubbles);
   }
   handleEdits(edits) {
     for (let edit of edits) {

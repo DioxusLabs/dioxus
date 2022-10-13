@@ -172,9 +172,10 @@ impl Interpreter {
     }
 
     pub fn NewEventListener(&mut self, name: &str, root: Option<u64>, bubbles: bool) {
-        let root = root.map(|id| self.check_id(id));
+        let root = unsafe { root.unwrap_unchecked() };
+        let root = self.check_id(root);
         self.msg.push(Op::NewEventListener as u8);
-        self.encode_maybe_id(root);
+        self.encode_id(root);
         self.encode_str(name);
         self.msg.push(if bubbles { 1 } else { 0 });
     }

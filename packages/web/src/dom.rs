@@ -104,8 +104,8 @@ impl WebsysDom {
         Self { interpreter, root }
     }
 
-    pub fn apply_edits(&mut self, mut edits: Vec<DomEdit>) {
-        for edit in edits.drain(..) {
+    pub fn apply_edits(&mut self, edits: Vec<DomEdit>) {
+        for edit in edits {
             match edit {
                 DomEdit::AppendChildren { root, children } => {
                     self.interpreter.AppendChildren(root, children);
