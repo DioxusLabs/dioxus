@@ -280,7 +280,8 @@ impl Interpreter {
     }
 
     pub fn should_flush(&self) -> bool {
-        self.msg.len() > 4096
+        // self.msg.len() > 4096
+        false
     }
 
     pub fn flush(&mut self) {
@@ -340,7 +341,7 @@ impl Interpreter {
 
     fn encode_str(&mut self, string: &str) {
         self.msg
-            .extend_from_slice(&(string.len() as u32).to_le_bytes());
+            .extend_from_slice(&(string.len() as u16).to_le_bytes());
         self.msg.extend_from_slice(string.as_bytes());
     }
 }

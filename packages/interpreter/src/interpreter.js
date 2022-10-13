@@ -64,7 +64,7 @@ export class JsInterpreter {
     this.handler = () => { };
     this.nodes = [root];
     this.parents = [];
-    this.u8Buf = new Uint8Array(mem.buffer);
+    this.view = new DataView(mem.buffer);
     this.idSize = 1;
     this.ptr_ptr = _ptr_ptr;
     this.len_ptr = _len_ptr;
@@ -75,13 +75,13 @@ export class JsInterpreter {
   }
 
   Work(mem) {
-    this.u8Buf = new Uint8Array(mem.buffer);
-    const u8Buf = this.u8Buf;
+    this.view = new DataView(mem.buffer);
+    const view = this.view;
     this.u8BufPos = this.decodePtr(this.ptr_ptr);
     const len = this.decodePtr(this.len_ptr);
     const end = this.u8BufPos + len;
     while (this.u8BufPos < end) {
-      const op = u8Buf[this.u8BufPos++];
+      const op = view.getUint8(this.u8BufPos++);
       switch (op) {
         // append children
         case 0:
@@ -139,7 +139,7 @@ export class JsInterpreter {
         case 5:
           {
             const id = this.decodeMaybeId();
-            const str_len = this.decodeU32();
+            const str_len = this.decodeU16();
             this.lastNode = document.createTextNode(this.utf8Decode(str_len));
             this.checkAppendParent();
             if (id !== null) {
@@ -167,9 +167,9 @@ export class JsInterpreter {
         case 8:
           {
             const id = this.decodeMaybeId();
-            const len = this.decodeU32();
+            const len = this.decodeU16();
             const event = this.asciiDecode(len);
-            let bubbles = u8Buf[this.u8BufPos++] == 0;
+            let bubbles = view.getUint8(this.u8BufPos++) == 0;
             this.NewEventListener(event, id, bubbles);
           }
           break;
@@ -177,9 +177,9 @@ export class JsInterpreter {
         case 9:
           {
             const id = this.decodeMaybeId();
-            const len = this.decodeU32();
+            const len = this.decodeU16();
             const event = this.asciiDecode(len);
-            let bubbles = u8Buf[this.u8BufPos++] == 0;
+            let bubbles = view.getUint8(this.u8BufPos++) == 0;
             this.RemoveEventListener(event, id, bubbles);
           }
           break;
@@ -187,7 +187,7 @@ export class JsInterpreter {
         case 10:
           {
             const node = this.getNode();
-            const str_len = this.decodeU32();
+            const str_len = this.decodeU16();
             const text = this.utf8Decode(str_len);
             node.textContent = text;
           }
@@ -196,15 +196,15 @@ export class JsInterpreter {
         case 11:
           {
             const node = this.getNode();
-            const attr_len = this.decodeU32();
+            const attr_len = this.decodeU16();
             const attr = this.asciiDecode(attr_len);
-            let has_ns = this.u8Buf[this.u8BufPos++] == 1;
+            let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
             let ns;
             if (has_ns) {
-              const ns_len = this.decodeU32();
+              const ns_len = this.decodeU16();
               ns = this.asciiDecode(ns_len);
             }
-            const val_len = this.decodeU32();
+            const val_len = this.decodeU16();
             const val = this.asciiDecode(val_len);
             this.SetAttribute(node, attr, val, ns);
           }
@@ -215,13 +215,13 @@ export class JsInterpreter {
             let attr;
             const node = this.getNode();
             {
-              const len = this.decodeU32();
+              const len = this.decodeU16();
               attr = this.asciiDecode(len);
             }
-            let has_ns = this.u8Buf[this.u8BufPos++] == 1;
+            let has_ns = this.view.getUint8(this.u8BufPos++) == 1;
             let ns;
             if (has_ns) {
-              let len = this.decodeU32();
+              let len = this.decodeU16();
               ns = this.asciiDecode(len);
             }
             if (has_ns) {
@@ -287,7 +287,7 @@ export class JsInterpreter {
         // set id size
         case 20:
           {
-            this.idSize = this.u8Buf[this.u8BufPos++];
+            this.idSize = this.view.getUint8(this.u8BufPos++);
           }
           break;
         default:
@@ -309,27 +309,27 @@ export class JsInterpreter {
   }
 
   utf8Decode(byteLength) {
-    const end = this.u8BufPos + BigInt(byteLength);
+    const end = this.u8BufPos + byteLength;
     let out = "";
     while (this.u8BufPos < end) {
-      const byte1 = this.u8Buf[this.u8BufPos++];
+      const byte1 = this.view.getUint8(this.u8BufPos++);
       if ((byte1 & 0x80) === 0) {
         // 1 byte
         out += String.fromCharCode(byte1);
       } else if ((byte1 & 0xe0) === 0xc0) {
         // 2 bytes
-        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
         out += String.fromCharCode(((byte1 & 0x1f) << 6) | byte2);
       } else if ((byte1 & 0xf0) === 0xe0) {
         // 3 bytes
-        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
-        const byte3 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
+        const byte3 = this.view.getUint8(this.u8BufPos++) & 0x3f;
         out += String.fromCharCode(((byte1 & 0x1f) << 12) | (byte2 << 6) | byte3);
       } else if ((byte1 & 0xf8) === 0xf0) {
         // 4 bytes
-        const byte2 = this.u8Buf[this.u8BufPos++] & 0x3f;
-        const byte3 = this.u8Buf[this.u8BufPos++] & 0x3f;
-        const byte4 = this.u8Buf[this.u8BufPos++] & 0x3f;
+        const byte2 = this.view.getUint8(this.u8BufPos++) & 0x3f;
+        const byte3 = this.view.getUint8(this.u8BufPos++) & 0x3f;
+        const byte4 = this.view.getUint8(this.u8BufPos++) & 0x3f;
         let unit = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0c) | (byte3 << 0x06) | byte4;
         if (unit > 0xffff) {
           unit -= 0x10000;
@@ -346,10 +346,10 @@ export class JsInterpreter {
   }
 
   asciiDecode(byteLength) {
-    const end = this.u8BufPos + BigInt(byteLength);
+    const end = this.u8BufPos + byteLength;
     let out = "";
     while (this.u8BufPos < end) {
-      out += String.fromCharCode(this.u8Buf[this.u8BufPos++]);
+      out += String.fromCharCode(this.view.getUint8(this.u8BufPos++));
     }
     return out;
   }
@@ -366,7 +366,7 @@ export class JsInterpreter {
   }
 
   decodeMaybeId() {
-    const id_code = this.u8Buf[this.u8BufPos++];
+    const id_code = this.view.getUint8(this.u8BufPos++);
     if (id_code === 0) {
       return null;
     }
@@ -376,38 +376,66 @@ export class JsInterpreter {
   }
 
   decodeId() {
-    let val = this.u8Buf[this.u8BufPos++];
-    for (let i = 1; i < this.idSize; i++) {
-      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
+    switch (this.idSize) {
+      case 1:
+        return this.view.getUint8(this.u8BufPos++);
+      case 2:
+        return this.decodeU16();
+      case 4:
+        return this.decodeU32();
+      case 8:
+        return this.decodeU64();
+      default:
+        let val = this.view.getUint8(this.u8BufPos++);
+        for (let i = 1; i < this.idSize; i++) {
+          val |= this.view.getUint8(this.u8BufPos++) << (i * 8);
+        }
+        return val;
     }
-    return val;
   }
 
   decodePtr(_start) {
-    let start = _start;
-    const raw = this.u8Buf[start++];
-    let val = BigInt(raw);
-    for (let i = 1; i < 4; i++) {
-      val |= BigInt(this.u8Buf[start++] << (i * 8));
-    }
-    return val;
+    return this.view.getUint32(_start, true);
+    // let start = _start;
+    // const raw = this.view.getUint8(start++);
+    // let val = BigInt(raw);
+    // for (let i = 1; i < 4; i++) {
+    //   val |= BigInt(this.view.getUint8(start++) << (i * 8));
+    // }
+    // return val;
+  }
+
+  decodeU64() {
+    const res = this.view.getUint64(this.u8BufPos, true);
+    this.u8BufPos += 8;
+    return res;
   }
 
   decodeU32() {
-    let val = this.u8Buf[this.u8BufPos++];
-    for (let i = 1; i < 4; i++) {
-      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
-    }
-    return val;
+    const res = this.view.getUint32(this.u8BufPos, true);
+    this.u8BufPos += 4;
+    return res;
+    // let val = this.view.getUint8(this.u8BufPos++);
+    // for (let i = 1; i < 4; i++) {
+    //   val |= this.view.getUint8(this.u8BufPos++) << (i * 8);
+    // }
+    // return val;
+  }
+
+  decodeU16() {
+    const res = this.view.getUint16(this.u8BufPos, true);
+    this.u8BufPos += 2;
+    return res;
+    // return this.view.getUint8(this.u8BufPos++] | (this.view.getUint8(this.u8BufPos++)) << 8);
   }
 
   CreateElement() {
-    const len = this.decodeU32();
+    const len = this.decodeU16();
     const str = this.asciiDecode(len);
 
     const has_ns = this.nodes[this.u8BufPos++];
     if (has_ns) {
-      const ns_len = this.decodeU32();
+      const ns_len = this.decodeU16();
       const ns = this.asciiDecode(ns_len);
       return document.createElementNS(str, ns);
     }
