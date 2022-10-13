@@ -1,6 +1,6 @@
 use anymap::AnyMap;
 use dioxus_core::{AttributeDiscription, ElementId, Mutations, OwnedAttributeValue, VNode};
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::ops::{Index, IndexMut};
 

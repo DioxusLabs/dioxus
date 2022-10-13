@@ -54,7 +54,6 @@
 //! 1) The template allow diffing to scale with reactivity.
 //! With a virtual dom the diffing cost scales with the number of nodes in the dom. With templates the cost scales with the number of dynamic parts of the dom. The dynamic template context links any parts of the template that can change which allows the diffing algorithm to skip traversing the template and find what part to hydrate in constant time.
 
-use fxhash::FxHashMap;
 use once_cell::unsync::OnceCell;
 use std::{
     cell::{Cell, RefCell},
@@ -62,6 +61,8 @@ use std::{
     marker::PhantomData,
     ptr,
 };
+
+use rustc_hash::FxHashMap;
 
 use bumpalo::Bump;
 
