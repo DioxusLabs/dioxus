@@ -61,8 +61,6 @@ use std::{
     marker::PhantomData,
     ptr,
 };
-/// The maxiumum integer in JS
-pub const JS_MAX_INT: u64 = 9007199254740991;
 
 use rustc_hash::FxHashMap;
 
