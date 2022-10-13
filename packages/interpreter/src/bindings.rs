@@ -7,17 +7,13 @@ use web_sys::{Element, Event, Node};
 static mut PTR: usize = 0;
 #[used]
 static mut PTR_PTR: *const usize = unsafe { &PTR } as *const usize;
-#[used]
-static mut LEN_PTR: usize = 0;
-#[used]
-static mut LEN_PTR_PTR: *const usize = unsafe { &LEN_PTR } as *const usize;
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
     pub type JsInterpreter;
 
     #[wasm_bindgen(constructor)]
-    pub fn new(arg: Element, mem: JsValue, ptr: usize, size: usize) -> JsInterpreter;
+    pub fn new(arg: Element, mem: JsValue, ptr: usize) -> JsInterpreter;
 
     #[wasm_bindgen(method)]
     pub fn Work(this: &JsInterpreter, mem: JsValue);
@@ -38,17 +34,9 @@ pub struct Interpreter {
 #[allow(non_snake_case)]
 impl Interpreter {
     pub fn new(arg: Element) -> Interpreter {
-        format!("init: {:?}, {:?}", unsafe { PTR_PTR as usize }, unsafe {
-            LEN_PTR_PTR as usize
-        });
-        let js_interpreter = unsafe {
-            JsInterpreter::new(
-                arg,
-                wasm_bindgen::memory(),
-                PTR_PTR as usize,
-                LEN_PTR_PTR as usize,
-            )
-        };
+        format!("init: {:?}", unsafe { PTR_PTR as usize });
+        let js_interpreter =
+            unsafe { JsInterpreter::new(arg, wasm_bindgen::memory(), PTR_PTR as usize) };
         Interpreter {
             js_interpreter,
             msg: Vec::new(),
@@ -286,13 +274,11 @@ impl Interpreter {
 
     pub fn flush(&mut self) {
         assert_eq!(0usize.to_le_bytes().len(), 32 / 8);
+        self.msg.push(Op::Stop as u8);
         let ptr = self.msg.as_ptr();
-        let len = self.msg.len();
         unsafe {
             let mut_ptr_ptr: *mut usize = std::mem::transmute(PTR_PTR);
             *mut_ptr_ptr = ptr as usize;
-            let mut_len_ptr_ptr: *mut usize = std::mem::transmute(LEN_PTR_PTR);
-            *mut_len_ptr_ptr = len as usize;
         }
         self.js_interpreter.Work(wasm_bindgen::memory());
         self.msg.clear();
@@ -513,4 +499,7 @@ enum Op {
 
     /// Set id size
     SetIdSize = 20,
+
+    /// Stop
+    Stop = 21,
 }

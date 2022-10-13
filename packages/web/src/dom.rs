@@ -12,7 +12,7 @@ use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{console, Document, Element, Event, HtmlElement};
+use web_sys::{Document, Element, Event, HtmlElement};
 
 use crate::Config;
 

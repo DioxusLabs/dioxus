@@ -56,7 +56,7 @@ class ListenerMap {
 }
 
 export class JsInterpreter {
-  constructor(root, mem, _ptr_ptr, _len_ptr) {
+  constructor(root, mem, _ptr_ptr) {
     this.root = root;
     this.lastNode = root;
     this.listeners = new ListenerMap(root);
@@ -67,7 +67,6 @@ export class JsInterpreter {
     this.view = new DataView(mem.buffer);
     this.idSize = 1;
     this.ptr_ptr = _ptr_ptr;
-    this.len_ptr = _len_ptr;
   }
 
   SetEventHandler(handler) {
@@ -78,9 +77,7 @@ export class JsInterpreter {
     this.view = new DataView(mem.buffer);
     const view = this.view;
     this.u8BufPos = this.decodePtr(this.ptr_ptr);
-    const len = this.decodePtr(this.len_ptr);
-    const end = this.u8BufPos + len;
-    while (this.u8BufPos < end) {
+    while (true) {
       const op = view.getUint8(this.u8BufPos++);
       switch (op) {
         // append children
@@ -290,6 +287,9 @@ export class JsInterpreter {
             this.idSize = this.view.getUint8(this.u8BufPos++);
           }
           break;
+        // stop
+        case 21:
+          return;
         default:
           this.u8BufPos--;
           return;
