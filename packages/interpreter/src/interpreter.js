@@ -455,7 +455,9 @@ export class JsInterpreter {
       this.nodes[id] = this.lastNode;
     }
     const children = this.decodeU32();
-    this.parents.push([this.lastNode, children]);
+    if (children > 0) {
+      this.parents.push([this.lastNode, children]);
+    }
   }
   AppendChildren(root, children) {
     let node;

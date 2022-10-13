@@ -268,8 +268,7 @@ impl Interpreter {
     }
 
     pub fn should_flush(&self) -> bool {
-        // self.msg.len() > 4096
-        false
+        self.msg.len() > 1024
     }
 
     pub fn flush(&mut self) {
