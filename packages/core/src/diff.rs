@@ -104,7 +104,7 @@ use crate::{
     Attribute, TemplateAttributeValue,
 };
 use bumpalo::Bump;
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct DiffState<'bump> {
@@ -886,7 +886,7 @@ impl<'b> DiffState<'b> {
     // The stack is empty upon entry.
     fn diff_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if cfg!(debug_assertions) {
-            let mut keys = fxhash::FxHashSet::default();
+            let mut keys = rustc_hash::FxHashSet::default();
             let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
                 keys.clear();
                 for child in children {

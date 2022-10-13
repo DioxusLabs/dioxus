@@ -6,8 +6,8 @@ use crate::diff::DiffState;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
-use fxhash::FxHashSet;
 use indexmap::IndexSet;
+use rustc_hash::FxHashSet;
 use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.

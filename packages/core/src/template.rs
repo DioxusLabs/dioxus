@@ -60,7 +60,7 @@
 /// The maxiumum integer in JS
 pub const JS_MAX_INT: u64 = 9007199254740991;
 
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;

@@ -23,5 +23,5 @@ dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 dioxus = { path = "../dioxus" }
 
 smallvec = "1.6"
-fxhash = "0.2"
+rustc-hash = "1.1.0"
 anymap = "0.12.1"

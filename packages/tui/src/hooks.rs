@@ -2,7 +2,7 @@ use crossterm::event::{
     Event as TermEvent, KeyCode as TermKeyCode, KeyModifiers, MouseButton, MouseEventKind,
 };
 use dioxus_core::*;
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
 use dioxus_html::geometry::{

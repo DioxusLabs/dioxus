@@ -9,7 +9,7 @@ use crate::{
 };
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
