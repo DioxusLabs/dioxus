@@ -10,10 +10,9 @@
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
-use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{Document, Element, Event, HtmlElement};
+use web_sys::{console, Document, Element, Event, HtmlElement};
 
 use crate::Config;
 
@@ -165,6 +164,9 @@ impl WebsysDom {
                 DomEdit::ParentNode {} => self.interpreter.ParentNode(),
                 DomEdit::StoreWithId { id } => self.interpreter.StoreWithId(id),
                 DomEdit::SetLastNode { id } => self.interpreter.SetLastNode(id),
+            }
+            if self.interpreter.should_flush() {
+                self.interpreter.flush();
             }
         }
         self.interpreter.flush();

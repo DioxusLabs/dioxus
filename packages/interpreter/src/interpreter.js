@@ -65,6 +65,7 @@ export class JsInterpreter {
     this.nodes = [root];
     this.parents = [];
     this.u8Buf = new Uint8Array(mem.buffer);
+    this.idSize = 1;
     this.ptr_ptr = _ptr_ptr;
     this.len_ptr = _len_ptr;
   }
@@ -73,10 +74,12 @@ export class JsInterpreter {
     this.handler = handler;
   }
 
-  Work() {
+  Work(mem) {
+    this.u8Buf = new Uint8Array(mem.buffer);
     const u8Buf = this.u8Buf;
     this.u8BufPos = this.decodePtr(this.ptr_ptr);
-    const end = this.u8BufPos + this.decodePtr(this.len_ptr);
+    const len = this.decodePtr(this.len_ptr);
+    const end = this.u8BufPos + len;
     while (this.u8BufPos < end) {
       const op = u8Buf[this.u8BufPos++];
       switch (op) {
@@ -86,7 +89,7 @@ export class JsInterpreter {
             let parent = this.getNode();
             const len = this.decodeU32();
             for (let i = 0; i < len; i++) {
-              parent.appendChild(this.nodes[this.decodeU64()]);
+              parent.appendChild(this.nodes[this.decodeId()]);
             }
           }
           break;
@@ -97,7 +100,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeU64()]);
+              children.push(this.nodes[this.decodeId()]);
             }
             parent.replaceWith(...children);
           }
@@ -109,7 +112,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeU64()]);
+              children.push(this.nodes[this.decodeId()]);
             }
             parent.after(...children);
           }
@@ -121,7 +124,7 @@ export class JsInterpreter {
             const len = this.decodeU32();
             const children = [];
             for (let i = 0; i < len; i++) {
-              children.push(this.nodes[this.decodeU64()]);
+              children.push(this.nodes[this.decodeId()]);
             }
             parent.before(...children);
           }
@@ -135,7 +138,7 @@ export class JsInterpreter {
         // create text node
         case 5:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             const str_len = this.decodeU32();
             this.lastNode = document.createTextNode(this.utf8Decode(str_len));
             this.checkAppendParent();
@@ -151,7 +154,7 @@ export class JsInterpreter {
         // create placeholder
         case 7:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             this.lastNode = document.createElement("pre");
             this.lastNode.hidden = true;
             this.checkAppendParent();
@@ -163,7 +166,7 @@ export class JsInterpreter {
         // new event listener
         case 8:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             const len = this.decodeU32();
             const event = this.asciiDecode(len);
             let bubbles = u8Buf[this.u8BufPos++] == 0;
@@ -173,7 +176,7 @@ export class JsInterpreter {
         // remove event listener
         case 9:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             const len = this.decodeU32();
             const event = this.asciiDecode(len);
             let bubbles = u8Buf[this.u8BufPos++] == 0;
@@ -233,7 +236,7 @@ export class JsInterpreter {
         case 13:
           {
             this.lastNode = this.getNode().cloneNode(true);
-            const toStoreId = this.decodeId();
+            const toStoreId = this.decodeMaybeId();
             if (toStoreId !== null) {
               this.nodes[toStoreId] = this.lastNode;
             }
@@ -244,7 +247,7 @@ export class JsInterpreter {
           {
             let parent = this.getNode().cloneNode(true);
             for (let current = parent.firstChild; current !== null; current = current.nextSibling) {
-              const id = this.decodeId();
+              const id = this.decodeMaybeId();
               this.nodes[id] = current;
             }
           }
@@ -270,15 +273,21 @@ export class JsInterpreter {
         // store with id
         case 18:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             this.nodes[id] = this.lastNode;
           }
           break;
         // set last node
         case 19:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             this.lastNode = this.nodes[id];
+          }
+          break;
+        // set id size
+        case 20:
+          {
+            this.idSize = this.u8Buf[this.u8BufPos++];
           }
           break;
         default:
@@ -300,7 +309,7 @@ export class JsInterpreter {
   }
 
   utf8Decode(byteLength) {
-    const end = this.u8BufPos + byteLength;
+    const end = this.u8BufPos + BigInt(byteLength);
     let out = "";
     while (this.u8BufPos < end) {
       const byte1 = this.u8Buf[this.u8BufPos++];
@@ -337,7 +346,7 @@ export class JsInterpreter {
   }
 
   asciiDecode(byteLength) {
-    const end = this.u8BufPos + byteLength;
+    const end = this.u8BufPos + BigInt(byteLength);
     let out = "";
     while (this.u8BufPos < end) {
       out += String.fromCharCode(this.u8Buf[this.u8BufPos++]);
@@ -347,7 +356,7 @@ export class JsInterpreter {
 
   // decodes and returns a node
   getNode() {
-    const node_id = this.decodeId();
+    const node_id = this.decodeMaybeId();
     if (node_id === null) {
       return this.lastNode;
     }
@@ -356,22 +365,30 @@ export class JsInterpreter {
     }
   }
 
-  decodeId() {
+  decodeMaybeId() {
     const id_code = this.u8Buf[this.u8BufPos++];
     if (id_code === 0) {
       return null;
     }
     else if (id_code === 1) {
-      return this.decodeU64();
+      return this.decodeId();
     }
+  }
+
+  decodeId() {
+    let val = this.u8Buf[this.u8BufPos++];
+    for (let i = 1; i < this.idSize; i++) {
+      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
+    }
+    return val;
   }
 
   decodePtr(_start) {
     let start = _start;
-    const u8Buf = this.u8Buf;
-    let val = u8Buf[start++];
+    const raw = this.u8Buf[start++];
+    let val = BigInt(raw);
     for (let i = 1; i < 4; i++) {
-      val |= u8Buf[start++] << (i * 8);
+      val |= BigInt(this.u8Buf[start++] << (i * 8));
     }
     return val;
   }
@@ -379,14 +396,6 @@ export class JsInterpreter {
   decodeU32() {
     let val = this.u8Buf[this.u8BufPos++];
     for (let i = 1; i < 4; i++) {
-      val |= this.u8Buf[this.u8BufPos++] << (i * 8);
-    }
-    return val;
-  }
-
-  decodeU64() {
-    let val = this.u8Buf[this.u8BufPos++];
-    for (let i = 1; i < 8; i++) {
       val |= this.u8Buf[this.u8BufPos++] << (i * 8);
     }
     return val;
@@ -407,7 +416,7 @@ export class JsInterpreter {
     }
   }
   CreateFullElement() {
-    const id = this.decodeId();
+    const id = this.decodeMaybeId();
     this.lastNode = this.CreateElement();
     this.checkAppendParent();
     if (id !== null) {
