@@ -166,7 +166,11 @@ export class JsInterpreter {
             const id = this.decodeMaybeId();
             const len = this.decodeU16();
             const event = this.asciiDecode(len);
-            let bubbles = view.getUint8(this.u8BufPos++) == 0;
+            const val = view.getUint8(this.u8BufPos++);
+            let bubbles = val == 1;
+            if (!bubbles) {
+              console.log(val);
+            }
             this.NewEventListener(event, id, bubbles);
           }
           break;

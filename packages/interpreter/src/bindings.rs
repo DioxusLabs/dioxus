@@ -167,7 +167,7 @@ impl Interpreter {
         self.msg.push(Op::NewEventListener as u8);
         self.encode_maybe_id(root);
         self.encode_str(name);
-        self.msg.push(bubbles as u8);
+        self.msg.push(if bubbles { 1 } else { 0 });
     }
 
     pub fn RemoveEventListener(&mut self, root: Option<u64>, name: &str, bubbles: bool) {
@@ -177,7 +177,7 @@ impl Interpreter {
         self.msg.push(Op::RemoveEventListener as u8);
         self.encode_maybe_id(root);
         self.encode_str(name);
-        self.msg.push(bubbles as u8);
+        self.msg.push(if bubbles { 1 } else { 0 });
     }
 
     pub fn SetText(&mut self, root: Option<u64>, text: &str) {
