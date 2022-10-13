@@ -3,7 +3,7 @@ use crossterm::event::{
 };
 use dioxus_core::*;
 use dioxus_native_core::RealNodeId;
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use dioxus_html::geometry::euclid::{Point2D, Rect, Size2D};
 use dioxus_html::geometry::{
