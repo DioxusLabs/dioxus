@@ -119,16 +119,17 @@ impl ToTokens for TemplateElementBuilder {
             }
             None => quote! {None},
         };
-        tokens.append_all(quote! {
+        tokens.append_all(quote! {{
+            use dioxus_elements::*;
             TemplateElement::new(
-                dioxus_elements::#tag::TAG_NAME,
-                dioxus_elements::#tag::NAME_SPACE,
+                #tag::TAG_NAME,
+                #tag::NAME_SPACE,
                 &[#(#attributes),*],
                 &[#(#children),*],
                 &[#(#listeners),*],
                 #parent,
             )
-        })
+        }})
     }
 }
 
@@ -223,12 +224,13 @@ impl ToTokens for TemplateAttributeBuilder {
             TemplateAttributeValue::Dynamic(idx) => quote! {TemplateAttributeValue::Dynamic(#idx)},
         };
         match name {
-            AttributeName::Ident(name) => tokens.append_all(quote! {
+            AttributeName::Ident(name) => tokens.append_all(quote! {{
+                use dioxus_elements::*;
                 TemplateAttribute{
-                    attribute: dioxus_elements::#element_tag::#name,
+                    attribute: #element_tag::#name,
                     value: #value,
                 }
-            }),
+            }}),
             AttributeName::Str(lit) => tokens.append_all(quote! {
                 TemplateAttribute{
                     attribute: dioxus::prelude::AttributeDiscription{

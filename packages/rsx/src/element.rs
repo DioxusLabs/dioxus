@@ -178,15 +178,16 @@ impl ToTokens for Element {
             .iter()
             .filter(|f| !matches!(f.attr, ElementAttr::EventTokens { .. }));
 
-        tokens.append_all(quote! {
+        tokens.append_all(quote! {{
+            use dioxus_elements::*;
             __cx.element(
-                dioxus_elements::#name,
+                #name,
                 __cx.bump().alloc([ #(#listeners),* ]),
                 __cx.bump().alloc([ #(#attr),* ]),
                 __cx.bump().alloc([ #(#children),* ]),
                 #key,
             )
-        });
+        }});
     }
 }
 
@@ -243,14 +244,16 @@ impl ToTokens for ElementAttrNamed {
 
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
-                quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
-                }
+                quote! {{
+                    use dioxus_elements::*;
+                    __cx.attr_disciption( #el_name::#name, #value)
+                }}
             }
             ElementAttr::AttrExpression { name, value } => {
-                quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
-                }
+                quote! {{
+                    use dioxus_elements::*;
+                    __cx.attr_disciption( #el_name::#name, #value)
+                }}
             }
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {

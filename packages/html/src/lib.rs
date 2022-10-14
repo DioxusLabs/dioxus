@@ -24,3 +24,27 @@ mod web_sys_bind;
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;
+
+#[macro_export]
+macro_rules! custom_elements {
+    (
+        $( $ele:ident( $tag:expr, $( $attr:ident ),* ); )+
+    ) => {$(
+        #[allow(non_camel_case_types)]
+        pub struct $ele;
+
+        impl DioxusElement for $ele {
+            const TAG_NAME: &'static str = $tag;
+            const NAME_SPACE: Option<&'static str> = None;
+        }
+        impl GlobalAttributes for $ele {}
+        impl $ele {$(
+            #[allow(non_upper_case_globals)]
+            pub const $attr: AttributeDiscription = AttributeDiscription {
+                name: stringify!($attr),
+                namespace: None,
+                volatile: false,
+            };
+        )*}
+    )+}
+}
