@@ -15,9 +15,9 @@ use std::{any::Any, fmt::Debug};
 /// applied the edits.
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
-pub struct Mutations<'a> {
+pub struct Mutations<'a, E: Edits<'a>> {
     /// The list of edits that need to be applied for the RealDOM to match the VirtualDOM.
-    pub edits: Vec<DomEdit<'a>>,
+    pub edits: E,
 
     /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,
@@ -26,7 +26,7 @@ pub struct Mutations<'a> {
     pub refs: Vec<NodeRefMutation<'a>>,
 }
 
-impl Debug for Mutations<'_> {
+impl<'a, E: Debug + Edits<'a>> Debug for Mutations<'a, E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Mutations")
             .field("edits", &self.edits)
@@ -38,11 +38,6 @@ impl Debug for Mutations<'_> {
 /// A `DomEdit` represents a serialized form of the VirtualDom's trait-based API. This allows streaming edits across the
 /// network or through FFI boundaries.
 #[derive(Debug, PartialEq)]
-#[cfg_attr(
-    feature = "serialize",
-    derive(serde::Serialize, serde::Deserialize),
-    serde(tag = "type")
-)]
 pub enum DomEdit<'bump> {
     /// Pop the topmost node from our stack and append them to the node
     /// at the top of the stack.
@@ -169,7 +164,7 @@ pub enum DomEdit<'bump> {
         field: &'static str,
 
         /// The value of the attribute.
-        value: AttributeValue<'bump>,
+        value: &'bump AttributeValue<'bump>,
 
         // value: &'bump str,
         /// The (optional) namespace of the attribute.
@@ -230,42 +225,236 @@ pub enum DomEdit<'bump> {
 }
 
 use rustc_hash::FxHashSet;
+
+#[allow(unused)]
+pub trait Edits<'a>: Default {
+    fn is_empty(&self) -> bool;
+
+    fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>);
+
+    fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>);
+
+    fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>);
+
+    fn append_children(&mut self, root: Option<u64>, children: Vec<u64>);
+
+    // Remove Nodes from the dom
+    fn remove(&mut self, id: Option<u64>);
+
+    // Create
+    fn create_text_node(&mut self, text: &'a str, id: Option<u64>);
+
+    fn create_element(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: Option<u64>,
+        children: u32,
+    );
+
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    fn create_placeholder(&mut self, id: Option<u64>);
+
+    // events
+    fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId);
+
+    fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>);
+
+    // modify
+    fn set_text(&mut self, text: &'a str, root: Option<u64>);
+
+    fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>);
+
+    fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>);
+
+    fn clone_node(&mut self, id: Option<u64>, new_id: u64);
+
+    fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>);
+
+    fn first_child(&mut self);
+
+    fn next_sibling(&mut self);
+
+    fn parent_node(&mut self);
+
+    fn store_with_id(&mut self, id: u64);
+
+    fn set_last_node(&mut self, id: u64);
+}
+
 use DomEdit::*;
 
 #[allow(unused)]
-impl<'a> Mutations<'a> {
+impl<'a> Edits<'a> for Vec<DomEdit<'a>> {
+    fn is_empty(&self) -> bool {
+        self.is_empty()
+    }
+
+    fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        self.push(ReplaceWith { nodes, root });
+    }
+
+    fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        self.push(InsertAfter { nodes, root });
+    }
+
+    fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        self.push(InsertBefore { nodes, root });
+    }
+
+    fn append_children(&mut self, root: Option<u64>, children: Vec<u64>) {
+        self.push(AppendChildren { root, children });
+    }
+
+    // Remove Nodes from the dom
+    fn remove(&mut self, id: Option<u64>) {
+        self.push(Remove { root: id });
+    }
+
+    // Create
+    fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
+        self.push(CreateTextNode { text, root: id });
+    }
+
+    fn create_element(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: Option<u64>,
+        children: u32,
+    ) {
+        match ns {
+            Some(ns) => self.push(CreateElementNs {
+                root: id,
+                ns,
+                tag,
+                children,
+            }),
+            None => self.push(CreateElement {
+                root: id,
+                tag,
+                children,
+            }),
+        }
+    }
+
+    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    fn create_placeholder(&mut self, id: Option<u64>) {
+        self.push(CreatePlaceholder { root: id });
+    }
+
+    // events
+    fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
+        let Listener {
+            event,
+            mounted_node,
+            ..
+        } = listener;
+
+        let element_id = Some(mounted_node.get().unwrap().into());
+
+        self.push(NewEventListener {
+            scope,
+            event_name: event,
+            root: element_id,
+        });
+    }
+
+    fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>) {
+        self.push(RemoveEventListener { event, root });
+    }
+
+    // modify
+    fn set_text(&mut self, text: &'a str, root: Option<u64>) {
+        self.push(SetText { text, root });
+    }
+
+    fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>) {
+        let Attribute {
+            value, attribute, ..
+        } = attribute;
+
+        self.push(SetAttribute {
+            field: attribute.name,
+            value,
+            ns: attribute.namespace,
+            root,
+        });
+    }
+
+    fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>) {
+        let Attribute { attribute, .. } = attribute;
+
+        self.push(RemoveAttribute {
+            name: attribute.name,
+            ns: attribute.namespace,
+            root,
+        });
+    }
+
+    fn clone_node(&mut self, id: Option<u64>, new_id: u64) {
+        self.push(CloneNode { id, new_id });
+    }
+
+    fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>) {
+        self.push(CloneNodeChildren { id, new_ids });
+    }
+
+    fn first_child(&mut self) {
+        self.push(FirstChild {});
+    }
+
+    fn next_sibling(&mut self) {
+        self.push(NextSibling {});
+    }
+
+    fn parent_node(&mut self) {
+        self.push(ParentNode {});
+    }
+
+    fn store_with_id(&mut self, id: u64) {
+        self.push(StoreWithId { id });
+    }
+
+    fn set_last_node(&mut self, id: u64) {
+        self.push(SetLastNode { id });
+    }
+}
+
+#[allow(unused)]
+impl<'a, E: Edits<'a>> Mutations<'a, E> {
     pub(crate) fn new() -> Self {
         Self {
-            edits: Vec::new(),
+            edits: E::default(),
             refs: Vec::new(),
             dirty_scopes: Default::default(),
         }
     }
 
     pub(crate) fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(ReplaceWith { nodes, root });
+        self.edits.replace_with(root, nodes);
     }
 
     pub(crate) fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(InsertAfter { nodes, root });
+        self.edits.insert_after(root, nodes);
     }
 
     pub(crate) fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(InsertBefore { nodes, root });
+        self.edits.insert_before(root, nodes);
     }
 
     pub(crate) fn append_children(&mut self, root: Option<u64>, children: Vec<u64>) {
-        self.edits.push(AppendChildren { root, children });
+        self.edits.append_children(root, children);
     }
 
     // Remove Nodes from the dom
     pub(crate) fn remove(&mut self, id: Option<u64>) {
-        self.edits.push(Remove { root: id });
+        self.edits.remove(id);
     }
 
     // Create
     pub(crate) fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
-        self.edits.push(CreateTextNode { text, root: id });
+        self.edits.create_text_node(text, id);
     }
 
     pub(crate) fn create_element(
@@ -275,73 +464,34 @@ impl<'a> Mutations<'a> {
         id: Option<u64>,
         children: u32,
     ) {
-        match ns {
-            Some(ns) => self.edits.push(CreateElementNs {
-                root: id,
-                ns,
-                tag,
-                children,
-            }),
-            None => self.edits.push(CreateElement {
-                root: id,
-                tag,
-                children,
-            }),
-        }
+        self.edits.create_element(tag, ns, id, children);
     }
 
     // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
     pub(crate) fn create_placeholder(&mut self, id: Option<u64>) {
-        self.edits.push(CreatePlaceholder { root: id });
+        self.edits.create_placeholder(id);
     }
 
     // events
     pub(crate) fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
-        let Listener {
-            event,
-            mounted_node,
-            ..
-        } = listener;
-
-        let element_id = Some(mounted_node.get().unwrap().into());
-
-        self.edits.push(NewEventListener {
-            scope,
-            event_name: event,
-            root: element_id,
-        });
+        self.edits.new_event_listener(listener, scope);
     }
 
     pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>) {
-        self.edits.push(RemoveEventListener { event, root });
+        self.edits.remove_event_listener(event, root);
     }
 
     // modify
     pub(crate) fn set_text(&mut self, text: &'a str, root: Option<u64>) {
-        self.edits.push(SetText { text, root });
+        self.edits.set_text(text, root);
     }
 
     pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>) {
-        let Attribute {
-            value, attribute, ..
-        } = attribute;
-
-        self.edits.push(SetAttribute {
-            field: attribute.name,
-            value: value.clone(),
-            ns: attribute.namespace,
-            root,
-        });
+        self.edits.set_attribute(attribute, root);
     }
 
     pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>) {
-        let Attribute { attribute, .. } = attribute;
-
-        self.edits.push(RemoveAttribute {
-            name: attribute.name,
-            ns: attribute.namespace,
-            root,
-        });
+        self.edits.remove_attribute(attribute, root);
     }
 
     pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
@@ -349,31 +499,31 @@ impl<'a> Mutations<'a> {
     }
 
     pub(crate) fn clone_node(&mut self, id: Option<u64>, new_id: u64) {
-        self.edits.push(CloneNode { id, new_id });
+        self.edits.clone_node(id, new_id);
     }
 
     pub(crate) fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>) {
-        self.edits.push(CloneNodeChildren { id, new_ids });
+        self.edits.clone_node_children(id, new_ids);
     }
 
     pub(crate) fn first_child(&mut self) {
-        self.edits.push(FirstChild {});
+        self.edits.first_child();
     }
 
     pub(crate) fn next_sibling(&mut self) {
-        self.edits.push(NextSibling {});
+        self.edits.next_sibling();
     }
 
     pub(crate) fn parent_node(&mut self) {
-        self.edits.push(ParentNode {});
+        self.edits.parent_node();
     }
 
     pub(crate) fn store_with_id(&mut self, id: u64) {
-        self.edits.push(StoreWithId { id });
+        self.edits.store_with_id(id);
     }
 
     pub(crate) fn set_last_node(&mut self, id: u64) {
-        self.edits.push(SetLastNode { id });
+        self.edits.set_last_node(id);
     }
 }
 

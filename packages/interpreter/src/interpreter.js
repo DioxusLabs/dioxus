@@ -87,7 +87,8 @@ export class JsInterpreter {
     const str_view = new DataView(mem.buffer, str_ptr, str_len);
     this.strings = this.decoder.decode(str_view);
     this.strPos = 0;
-    while (true) {
+    // this is faster than a while(true) loop
+    for (; ;) {
       const op = view.getUint8(this.u8BufPos++);
       switch (op) {
         // append children
@@ -265,14 +266,13 @@ export class JsInterpreter {
         // store with id
         case 18:
           {
-            const id = this.decodeMaybeId();
-            this.nodes[id] = this.lastNode;
+            this.nodes[this.decodeId()] = this.lastNode;
           }
           break;
         // set last node
         case 19:
           {
-            this.lastNode = this.getNode();
+            this.lastNode = this.nodes[this.decodeId()];
           }
           break;
         // set id size

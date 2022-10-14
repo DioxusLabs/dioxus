@@ -67,9 +67,9 @@ use rustc_hash::FxHashMap;
 use bumpalo::Bump;
 
 use crate::{
-    diff::DiffState, dynamic_template_context::TemplateContext, nodes::AttributeDiscription,
-    scopes::ScopeArena, Attribute, AttributeValue, ElementId, Mutations, OwnedAttributeValue,
-    StaticDynamicNodeMapping,
+    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::Edits,
+    nodes::AttributeDiscription, scopes::ScopeArena, Attribute, AttributeValue, ElementId,
+    Mutations, OwnedAttributeValue, StaticDynamicNodeMapping,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -293,21 +293,33 @@ pub struct VTemplateRef<'a> {
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b: 'a>(
+    pub(crate) fn hydrate<'b: 'a, E: Edits<'a>>(
         &'b self,
         parent: ElementId,
         template: &Template,
-        diff_state: &mut DiffState<'a>,
+        diff_state: &mut DiffState<'a, E>,
     ) {
-        fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+        fn hydrate_inner<
+            'b,
+            E,
+            Nodes,
+            Attributes,
+            V,
+            Children,
+            Listeners,
+            TextSegments,
+            Text,
+            Path,
+        >(
             nodes: &Nodes,
             ctx: (
-                &mut DiffState<'b>,
+                &mut DiffState<'b, E>,
                 &'b VTemplateRef<'b>,
                 &Template,
                 ElementId,
             ),
         ) where
+            E: Edits<'b>,
             Nodes:
                 AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -332,11 +344,11 @@ impl<'a> VTemplateRef<'a> {
         );
     }
 
-    pub(crate) fn get_node_id(
+    pub(crate) fn get_node_id<E: Edits<'a>>(
         &self,
         id: TemplateNodeId,
         template: &Template,
-        diff_state: &mut DiffState<'a>,
+        diff_state: &mut DiffState<'a, E>,
     ) -> ElementId {
         let node_ids = self.node_ids.borrow();
         if let Some(real_id) = node_ids.get(id.0).and_then(|o| o.get().copied()) {
@@ -368,11 +380,11 @@ impl<'a> VTemplateRef<'a> {
         }
     }
 
-    pub(crate) fn traverse_to_node(
+    pub(crate) fn traverse_to_node<E: Edits<'a>>(
         &self,
         id: TemplateNodeId,
         template: &Template,
-        diff_state: &mut DiffState<'a>,
+        diff_state: &mut DiffState<'a, E>,
     ) {
         let node_ids = self.node_ids.borrow();
         let path = match template {
@@ -440,7 +452,12 @@ pub enum Template {
 }
 
 impl Template {
-    pub(crate) fn create<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: ElementId) {
+    pub(crate) fn create<'b, E: Edits<'b>>(
+        &self,
+        mutations: &mut Mutations<'b, E>,
+        bump: &'b Bump,
+        id: ElementId,
+    ) {
         let children = match self {
             Template::Static(s) => s.root_nodes.len(),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -464,11 +481,17 @@ impl Template {
         }
     }
 
-    fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
-        fn crate_node_inner<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+    fn create_node<'b, E: Edits<'b>>(
+        &self,
+        mutations: &mut Mutations<'b, E>,
+        bump: &'b Bump,
+        id: TemplateNodeId,
+    ) {
+        fn crate_node_inner<'b, E, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
             node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
-            ctx: (&mut Mutations<'b>, &'b Bump, &Template),
+            ctx: (&mut Mutations<'b, E>, &'b Bump, &Template),
         ) where
+            E: Edits<'b>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
@@ -716,10 +739,10 @@ where
     Text: AsRef<str>,
     Path: AsRef<[usize]>,
 {
-    fn hydrate<'b>(
+    fn hydrate<'b, E: Edits<'b>>(
         &self,
         parent: ElementId,
-        diff_state: &mut DiffState<'b>,
+        diff_state: &mut DiffState<'b, E>,
         template_ref: &'b VTemplateRef<'b>,
         template: &Template,
     ) {

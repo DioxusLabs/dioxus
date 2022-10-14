@@ -254,7 +254,10 @@ fn round_to_words(len: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::innerlude::{Element, Scope, VirtualDom};
+    use crate::{
+        innerlude::{Element, Scope, VirtualDom},
+        DomEdit,
+    };
 
     #[test]
     fn it_works() {
@@ -263,7 +266,7 @@ mod tests {
         }
 
         let mut dom = VirtualDom::new(app);
-        dom.rebuild();
+        dom.rebuild::<Vec<DomEdit>>();
 
         let g = dom.base_scope().root_node();
         dbg!(g);
@@ -313,7 +316,7 @@ mod tests {
                 inner: inner.clone(),
             },
         );
-        dom.rebuild();
+        dom.rebuild::<Vec<DomEdit>>();
 
         drop(dom);
 

@@ -94,8 +94,8 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment,
-        VNode, VPlaceholder, VText,
+        AnyProps, Edits, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement,
+        VFragment, VNode, VPlaceholder, VText,
     },
     template::{
         Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
@@ -107,14 +107,14 @@ use bumpalo::Bump;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-pub(crate) struct DiffState<'bump> {
+pub(crate) struct DiffState<'bump, E: Edits<'bump>> {
     pub(crate) scopes: &'bump ScopeArena,
-    pub(crate) mutations: Mutations<'bump>,
+    pub(crate) mutations: Mutations<'bump, E>,
     pub(crate) force_diff: bool,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
-impl<'b> DiffState<'b> {
+impl<'b, E: Edits<'b>> DiffState<'b, E> {
     pub fn new(scopes: &'b ScopeArena) -> Self {
         Self {
             scopes,
@@ -614,6 +614,7 @@ impl<'b> DiffState<'b> {
     ) {
         fn diff_attributes<
             'b,
+            E,
             Nodes,
             Attributes,
             V,
@@ -625,13 +626,14 @@ impl<'b> DiffState<'b> {
         >(
             nodes: &Nodes,
             ctx: (
-                &mut DiffState<'b>,
+                &mut DiffState<'b, E>,
                 &'b Bump,
                 &'b VTemplateRef<'b>,
                 &Template,
                 usize,
             ),
         ) where
+            E: Edits<'b>,
             Nodes:
                 AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -662,16 +664,17 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+        fn set_attribute<'b, E, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
             node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
             ctx: (
-                &mut DiffState<'b>,
+                &mut DiffState<'b, E>,
                 &'b Bump,
                 &'b VTemplateRef<'b>,
                 &Template,
                 usize,
             ),
         ) where
+            E: Edits<'b>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
@@ -704,15 +707,16 @@ impl<'b> DiffState<'b> {
             }
         }
 
-        fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
+        fn diff_text<'b, E, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
             node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
             ctx: (
-                &mut DiffState<'b>,
+                &mut DiffState<'b, E>,
                 &'b VTemplateRef<'b>,
                 &Template,
                 &TemplateContext<'b>,
             ),
         ) where
+            E: Edits<'b>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,

@@ -59,6 +59,7 @@ use std::rc::Rc;
 pub use crate::cfg::Config;
 pub use crate::util::use_eval;
 use dioxus_core::prelude::Component;
+use dioxus_core::DomEdit;
 use dioxus_core::SchedulerMsg;
 use dioxus_core::VirtualDom;
 
@@ -192,7 +193,7 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
     if should_hydrate {
         // todo: we need to split rebuild and initialize into two phases
         // it's a waste to produce edits just to get the vdom loaded
-        let _ = dom.rebuild();
+        let _ = dom.rebuild::<Vec<DomEdit>>();
 
         if let Err(err) = websys_dom.rehydrate(&dom) {
             log::error!(

@@ -73,10 +73,12 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn SetNode(&mut self, id: usize, node: Node) {
         self.js_interpreter.SetNode(id, node);
     }
 
+    #[inline]
     pub fn AppendChildren(&mut self, root: Option<u64>, children: Vec<u64>) {
         let root = root.map(|id| self.check_id(id));
         for child in &children {
@@ -91,6 +93,7 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn ReplaceWith(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         let root = root.map(|id| self.check_id(id));
         for child in &nodes {
@@ -105,6 +108,7 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn InsertAfter(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         let root = root.map(|id| self.check_id(id));
         for child in &nodes {
@@ -119,6 +123,7 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn InsertBefore(&mut self, root: Option<u64>, nodes: Vec<u64>) {
         let root = root.map(|id| self.check_id(id));
         for child in &nodes {
@@ -133,12 +138,14 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn Remove(&mut self, root: Option<u64>) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::Remove as u8);
         self.encode_maybe_id(root);
     }
 
+    #[inline]
     pub fn CreateTextNode(&mut self, text: &str, root: Option<u64>) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::CreateTextNode as u8);
@@ -146,48 +153,54 @@ impl Interpreter {
         self.encode_str(text);
     }
 
+    #[inline]
     pub fn CreateElement(&mut self, tag: &str, root: Option<u64>, children: u32) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::CreateElement as u8);
         self.encode_maybe_id(root);
-        self.encode_str(tag);
+        self.encode_cachable_str(tag);
         self.msg.push(0);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
+    #[inline]
     pub fn CreateElementNs(&mut self, tag: &str, root: Option<u64>, ns: &str, children: u32) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::CreateElement as u8);
         self.encode_maybe_id(root);
-        self.encode_str(tag);
+        self.encode_cachable_str(tag);
         self.msg.push(1);
-        self.encode_str(ns);
+        self.encode_cachable_str(ns);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
+    #[inline]
     pub fn CreatePlaceholder(&mut self, root: Option<u64>) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::CreatePlaceholder as u8);
         self.encode_maybe_id(root);
     }
 
+    #[inline]
     pub fn NewEventListener(&mut self, name: &str, root: Option<u64>, bubbles: bool) {
         let root = unsafe { root.unwrap_unchecked() };
         let root = self.check_id(root);
         self.msg.push(Op::NewEventListener as u8);
         self.encode_id(root);
-        self.encode_str(name);
+        self.encode_cachable_str(name);
         self.msg.push(if bubbles { 1 } else { 0 });
     }
 
+    #[inline]
     pub fn RemoveEventListener(&mut self, root: Option<u64>, name: &str, bubbles: bool) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::RemoveEventListener as u8);
         self.encode_maybe_id(root);
-        self.encode_str(name);
+        self.encode_cachable_str(name);
         self.msg.push(if bubbles { 1 } else { 0 });
     }
 
+    #[inline]
     pub fn SetText(&mut self, root: Option<u64>, text: &str) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::SetText as u8);
@@ -195,33 +208,36 @@ impl Interpreter {
         self.encode_str(text);
     }
 
+    #[inline]
     pub fn SetAttribute(&mut self, root: Option<u64>, field: &str, value: &str, ns: Option<&str>) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::SetAttribute as u8);
         self.encode_maybe_id(root);
-        self.encode_str(field);
+        self.encode_cachable_str(field);
         if let Some(ns) = ns {
             self.msg.push(1);
-            self.encode_str(ns);
+            self.encode_cachable_str(ns);
         } else {
             self.msg.push(0);
         }
         self.encode_str(value);
     }
 
+    #[inline]
     pub fn RemoveAttribute(&mut self, root: Option<u64>, field: &str, ns: Option<&str>) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::RemoveAttribute as u8);
         self.encode_maybe_id(root);
-        self.encode_str(field);
+        self.encode_cachable_str(field);
         if let Some(ns) = ns {
             self.msg.push(1);
-            self.encode_str(ns);
+            self.encode_cachable_str(ns);
         } else {
             self.msg.push(0);
         }
     }
 
+    #[inline]
     pub fn CloneNode(&mut self, root: Option<u64>, new_id: u64) {
         let root = root.map(|id| self.check_id(id));
         self.msg.push(Op::CloneNode as u8);
@@ -229,6 +245,7 @@ impl Interpreter {
         self.msg.extend_from_slice(&new_id.to_le_bytes());
     }
 
+    #[inline]
     pub fn CloneNodeChildren(&mut self, root: Option<u64>, new_ids: Vec<u64>) {
         let root = root.map(|id| self.check_id(id));
         for id in &new_ids {
@@ -241,34 +258,42 @@ impl Interpreter {
         }
     }
 
+    #[inline]
     pub fn FirstChild(&mut self) {
         self.msg.push(Op::FirstChild as u8);
     }
 
+    #[inline]
     pub fn NextSibling(&mut self) {
         self.msg.push(Op::NextSibling as u8);
     }
 
+    #[inline]
     pub fn ParentNode(&mut self) {
         self.msg.push(Op::ParentNode as u8);
     }
 
+    #[inline]
     pub fn StoreWithId(&mut self, id: u64) {
         let id = self.check_id(id);
         self.msg.push(Op::StoreWithId as u8);
-        self.encode_maybe_id(Some(id));
+        self.encode_id(id);
     }
 
+    #[inline]
     pub fn SetLastNode(&mut self, id: u64) {
         let id = self.check_id(id);
         self.msg.push(Op::SetLastNode as u8);
-        self.encode_maybe_id(Some(id));
+        self.encode_id(id);
     }
 
+    #[inline]
     pub fn should_flush(&self) -> bool {
-        self.msg.len() > 16384
+        // self.msg.len() > 16384
+        false
     }
 
+    #[inline]
     pub fn flush(&mut self) {
         assert_eq!(0usize.to_le_bytes().len(), 32 / 8);
         self.msg.push(Op::Stop as u8);
@@ -285,6 +310,7 @@ impl Interpreter {
         self.str_buf.clear();
     }
 
+    #[inline]
     pub fn set_event_handler(&self, handler: &Closure<dyn FnMut(&Event)>) {
         self.js_interpreter.SetEventHandler(handler);
     }
@@ -319,6 +345,7 @@ impl Interpreter {
         bytes
     }
 
+    #[inline]
     fn set_byte_size(&mut self, byte_size: u8) {
         self.id_size = byte_size;
         self.msg.push(Op::SetIdSize as u8);
@@ -326,6 +353,12 @@ impl Interpreter {
     }
 
     fn encode_str(&mut self, string: &str) {
+        self.msg
+            .extend_from_slice(&(string.len() as u16).to_le_bytes());
+        self.str_buf.extend_from_slice(string.as_bytes());
+    }
+
+    fn encode_cachable_str(&mut self, string: &str) {
         self.msg
             .extend_from_slice(&(string.len() as u16).to_le_bytes());
         self.str_buf.extend_from_slice(string.as_bytes());
