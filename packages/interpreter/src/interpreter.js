@@ -12,60 +12,49 @@ export function work_last_created(mem) {
 }
 
 class ListenerMap {
-  constructor(root) {
+  constructor(root, handler) {
     // bubbling events can listen at the root element
-    this.global = {};
-    // non bubbling events listen at the element the listener was created at
-    this.local = {};
+    this.global = new Map();
     this.root = root;
+    this.handler = handler;
   }
 
-  create(event_name, element, handler, bubbles) {
+  create(event_name, element, bubbles) {
     if (bubbles) {
       if (this.global[event_name] === undefined) {
-        this.global[event_name] = {};
-        this.global[event_name].active = 1;
-        this.global[event_name].callback = handler;
-        this.root.addEventListener(event_name, handler);
+        this.global[event_name] = 1;
+        this.root.addEventListener(event_name, this.handler);
       } else {
-        this.global[event_name].active++;
+        this.global[event_name]++;
       }
     }
     else {
-      const id = element.getAttribute("data-dioxus-id");
-      if (!this.local[id]) {
-        this.local[id] = {};
-      }
-      this.local[id][event_name] = handler;
-      element.addEventListener(event_name, handler);
+      element.addEventListener(event_name, this.handler);
     }
   }
 
   remove(element, event_name, bubbles) {
     if (bubbles) {
-      this.global[event_name].active--;
-      if (this.global[event_name].active === 0) {
-        this.root.removeEventListener(event_name, this.global[event_name].callback);
+      this.global[event_name]--;
+      if (this.global[event_name] === 0) {
+        this.root.removeEventListener(event_name, this.handler);
         delete this.global[event_name];
       }
     }
     else {
-      const id = element.getAttribute("data-dioxus-id");
-      delete this.local[id][event_name];
-      if (this.local[id].length === 0) {
-        delete this.local[id];
-      }
-      element.removeEventListener(event_name, handler);
+      element.removeEventListener(event_name, this.handler);
     }
   }
 }
 
 
+let parent, len, children, id, node, event, ns, attr, text, i, name, value;
+
 export class JsInterpreter {
-  constructor(root, mem, _ptr_ptr, _str_ptr_ptr, _str_len_ptr) {
+  constructor(root, mem, _ptr_ptr, _str_ptr_ptr, _str_len_ptr, handler) {
     this.root = root;
     this.lastNode = root;
-    this.listeners = new ListenerMap(root);
+    this.listeners = new ListenerMap(root, handler);
     this.handlers = {};
     this.handler = () => { };
     this.nodes = [root];
@@ -78,26 +67,18 @@ export class JsInterpreter {
     this.strings = "";
     this.strPos = 0;
     this.decoder = new TextDecoder();
+    this.handler = handler;
     window.interpreter = this;
   }
 
-  SetEventHandler(handler) {
-    this.handler = handler;
-  }
-
   Work(mem) {
-    let parent, len, children, id, node, event, ns, attr, text, i, name, value;
     this.view = new DataView(mem.buffer);
-    const view = this.view;
     this.u8BufPos = this.view.getUint32(this.ptr_ptr, true);
-    const str_ptr = this.view.getUint32(this.str_ptr_ptr, true);
-    const str_len = view.getUint32(this.str_len_ptr, true);
-    const str_view = new DataView(mem.buffer, str_ptr, str_len);
-    this.strings = this.decoder.decode(str_view);
+    this.strings = this.decoder.decode(new DataView(mem.buffer, this.view.getUint32(this.str_ptr_ptr, true), this.view.getUint32(this.str_len_ptr, true)));
     this.strPos = 0;
     // this is faster than a while(true) loop
     for (; ;) {
-      switch (view.getUint8(this.u8BufPos++)) {
+      switch (this.view.getUint8(this.u8BufPos++)) {
         // append children
         case 0:
           parent = this.getNode();
@@ -181,13 +162,13 @@ export class JsInterpreter {
           event = this.strings.substring(this.strPos, this.strPos += this.decodeU16());
           node = this.nodes[id];
           node.setAttribute("data-dioxus-id", id);
-          this.listeners.create(event, node, this.handler, view.getUint8(this.u8BufPos++) == 1);
+          this.listeners.create(event, node, this.view.getUint8(this.u8BufPos++) == 1);
           break;
         // remove event listener
         case 9:
           node = this.getNode();
           node.removeAttribute(`data-dioxus-id`);
-          this.listeners.remove(node, this.strings.substring(this.strPos, this.strPos += this.decodeU16()), view.getUint8(this.u8BufPos++) == 0);
+          this.listeners.remove(node, this.strings.substring(this.strPos, this.strPos += this.decodeU16()), this.view.getUint8(this.u8BufPos++) == 0);
           break;
         // set text
         case 10:
@@ -202,14 +183,16 @@ export class JsInterpreter {
           ns = null;
           if (this.view.getUint8(this.u8BufPos++) == 1) {
             ns = this.strings.substring(this.strPos, this.strPos += this.decodeU16());
+            value = this.strings.substring(this.strPos, this.strPos += this.decodeU16());
+            if (ns === "style") {
+              // @ts-ignore
+              node.style[attr] = value;
+            } else if (ns != null || ns != undefined) {
+              node.setAttributeNS(ns, attr, value);
+            }
           }
-          value = this.strings.substring(this.strPos, this.strPos += this.decodeU16());
-          if (ns === "style") {
-            // @ts-ignore
-            node.style[attr] = value;
-          } else if (ns != null || ns != undefined) {
-            node.setAttributeNS(ns, attr, value);
-          } else {
+          else {
+            value = this.strings.substring(this.strPos, this.strPos += this.decodeU16());
             switch (attr) {
               case "value":
                 if (value !== node.value) {

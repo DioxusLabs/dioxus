@@ -93,11 +93,9 @@ impl WebsysDom {
             None => document.create_element("body").ok().unwrap(),
         };
 
-        let interpreter = Interpreter::new(root.clone());
-
         let handler = Closure::wrap(callback);
 
-        interpreter.set_event_handler(&handler);
+        let interpreter = Interpreter::new(root.clone(), &handler);
         handler.forget();
 
         Self { interpreter, root }

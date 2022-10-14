@@ -42,6 +42,7 @@ extern "C" {
         msg_ptr: usize,
         str_ptr: usize,
         str_len_ptr: usize,
+        handler: &Closure<dyn FnMut(&Event)>,
     ) -> JsInterpreter;
 
     #[wasm_bindgen(method)]
@@ -49,9 +50,6 @@ extern "C" {
 
     #[wasm_bindgen(method)]
     pub fn SetNode(this: &JsInterpreter, id: usize, node: Node);
-
-    #[wasm_bindgen(method)]
-    pub fn SetEventHandler(this: &JsInterpreter, handler: &Closure<dyn FnMut(&Event)>);
 }
 
 pub struct Interpreter {
@@ -280,7 +278,7 @@ impl<'a> Edits<'a> for InterpreterEdits {
 
 #[allow(non_snake_case)]
 impl Interpreter {
-    pub fn new(arg: Element) -> Interpreter {
+    pub fn new(arg: Element, handler: &Closure<dyn FnMut(&Event)>) -> Interpreter {
         format!(
             "init: {:?}, {:?}, {:?}",
             unsafe { MSG_PTR_PTR as usize },
@@ -294,6 +292,7 @@ impl Interpreter {
                 MSG_PTR_PTR as usize,
                 STR_PTR_PTR as usize,
                 STR_LEN_PTR as usize,
+                handler,
             )
         };
         Interpreter { js_interpreter }
@@ -319,11 +318,6 @@ impl Interpreter {
         work_last_created(wasm_bindgen::memory());
         edits.msg.clear();
         edits.str_buf.clear();
-    }
-
-    #[inline]
-    pub fn set_event_handler(&self, handler: &Closure<dyn FnMut(&Event)>) {
-        self.js_interpreter.SetEventHandler(handler);
     }
 }
 
