@@ -5,6 +5,11 @@ export function main() {
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
+let interpreter;
+
+export function work_last_created(mem) {
+  interpreter.Work(mem);
+}
 
 class ListenerMap {
   constructor(root) {
@@ -72,6 +77,7 @@ export class JsInterpreter {
     this.strings = "";
     this.strPos = 0;
     this.decoder = new TextDecoder();
+    interpreter = this;
   }
 
   SetEventHandler(handler) {
@@ -173,7 +179,7 @@ export class JsInterpreter {
         // new event listener
         case 8:
           {
-            const id = this.decodeId();
+            const id = this.decodeMaybeId();
             const event = this.utf8Decode(this.decodeU16());
             this.NewEventListener(event, this.nodes[id], id, view.getUint8(this.u8BufPos++) == 1);
           }

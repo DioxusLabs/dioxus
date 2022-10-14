@@ -17,7 +17,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 wasm-bindgen = { version = "0.2.79", optional = true }
 js-sys = { version = "0.3.56", optional = true }
 web-sys = { version = "0.3.56", optional = true, features = ["Element", "Node"] }
-
+dioxus-core = { path = "../core" }
+dioxus-html = { path = "../html" }
 
 [features]
 default = []

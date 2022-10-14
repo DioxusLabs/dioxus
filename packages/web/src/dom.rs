@@ -7,9 +7,8 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
-use dioxus_html::event_bubbles;
-use dioxus_interpreter_js::Interpreter;
+use dioxus_core::{ElementId, SchedulerMsg, UserEvent};
+use dioxus_interpreter_js::{Interpreter, InterpreterEdits};
 use std::{any::Any, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
@@ -104,76 +103,8 @@ impl WebsysDom {
         Self { interpreter, root }
     }
 
-    pub fn apply_edits(&mut self, edits: Vec<DomEdit>) {
-        for edit in edits {
-            match edit {
-                DomEdit::AppendChildren { root, children } => {
-                    self.interpreter.AppendChildren(root, children);
-                }
-                DomEdit::ReplaceWith { root, nodes } => self.interpreter.ReplaceWith(root, nodes),
-                DomEdit::InsertAfter { root, nodes } => self.interpreter.InsertAfter(root, nodes),
-                DomEdit::InsertBefore { root, nodes } => self.interpreter.InsertBefore(root, nodes),
-                DomEdit::Remove { root } => self.interpreter.Remove(root),
-
-                DomEdit::CreateElement {
-                    root,
-                    tag,
-                    children,
-                } => self.interpreter.CreateElement(tag, root, children),
-                DomEdit::CreateElementNs {
-                    root,
-                    tag,
-                    ns,
-                    children,
-                } => self.interpreter.CreateElementNs(tag, root, ns, children),
-                DomEdit::CreatePlaceholder { root } => self.interpreter.CreatePlaceholder(root),
-                DomEdit::NewEventListener {
-                    event_name, root, ..
-                } => {
-                    self.interpreter
-                        .NewEventListener(event_name, root, event_bubbles(event_name));
-                }
-
-                DomEdit::RemoveEventListener { root, event } => self
-                    .interpreter
-                    .RemoveEventListener(root, event, event_bubbles(event)),
-
-                DomEdit::RemoveAttribute { root, name, ns } => {
-                    self.interpreter.RemoveAttribute(root, name, ns)
-                }
-
-                DomEdit::CreateTextNode { text, root } => {
-                    self.interpreter.CreateTextNode(text, root)
-                }
-                DomEdit::SetText { root, text } => self.interpreter.SetText(root, text),
-                DomEdit::SetAttribute {
-                    root,
-                    field,
-                    value,
-                    ns,
-                } => {
-                    if let Some(string) = value.as_text() {
-                        self.interpreter.SetAttribute(root, field, string, ns)
-                    } else {
-                        let value = format!("{}", &value);
-                        self.interpreter.SetAttribute(root, field, &value, ns)
-                    }
-                }
-                DomEdit::CloneNode { id, new_id } => self.interpreter.CloneNode(id, new_id),
-                DomEdit::CloneNodeChildren { id, new_ids } => {
-                    self.interpreter.CloneNodeChildren(id, new_ids)
-                }
-                DomEdit::FirstChild {} => self.interpreter.FirstChild(),
-                DomEdit::NextSibling {} => self.interpreter.NextSibling(),
-                DomEdit::ParentNode {} => self.interpreter.ParentNode(),
-                DomEdit::StoreWithId { id } => self.interpreter.StoreWithId(id),
-                DomEdit::SetLastNode { id } => self.interpreter.SetLastNode(id),
-            }
-            if self.interpreter.should_flush() {
-                self.interpreter.flush();
-            }
-        }
-        self.interpreter.flush();
+    pub fn apply_edits(&mut self, edits: InterpreterEdits) {
+        self.interpreter.apply_edits(edits);
     }
 }
 

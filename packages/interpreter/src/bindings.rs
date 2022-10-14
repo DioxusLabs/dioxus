@@ -1,5 +1,7 @@
 #![allow(clippy::unused_unit, non_upper_case_globals)]
 
+use dioxus_core::Edits;
+use dioxus_html::event_bubbles;
 use wasm_bindgen::prelude::*;
 use web_sys::{Element, Event, Node};
 
@@ -15,9 +17,21 @@ static mut STR_PTR_PTR: *const usize = unsafe { &STR_PTR } as *const usize;
 static mut STR_LEN: usize = 0;
 #[used]
 static mut STR_LEN_PTR: *const usize = unsafe { &STR_LEN } as *const usize;
+static mut ID_SIZE: u8 = 1;
+
+fn get_id_size() -> u8 {
+    unsafe { ID_SIZE }
+}
+fn set_id_size(size: u8) {
+    unsafe {
+        ID_SIZE = size;
+    }
+}
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
+    fn work_last_created(mem: JsValue);
+
     pub type JsInterpreter;
 
     #[wasm_bindgen(constructor)]
@@ -41,10 +55,226 @@ extern "C" {
 
 pub struct Interpreter {
     js_interpreter: JsInterpreter,
+}
+
+#[derive(Default)]
+pub struct InterpreterEdits {
     msg: Vec<u8>,
     /// A separate buffer for batched string decoding to avoid js-native overhead
     str_buf: Vec<u8>,
-    id_size: u8,
+}
+
+impl<'a> Edits<'a> for InterpreterEdits {
+    fn is_empty(&self) -> bool {
+        self.msg.is_empty()
+    }
+
+    fn append_children(&mut self, root: Option<u64>, children: Vec<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        for child in &children {
+            self.check_id(*child);
+        }
+        self.msg.push(Op::AppendChildren as u8);
+        self.encode_maybe_id(root);
+        self.msg
+            .extend_from_slice(&(children.len() as u32).to_le_bytes());
+        for child in children {
+            self.encode_id(child.to_le_bytes());
+        }
+    }
+
+    fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        for child in &nodes {
+            self.check_id(*child);
+        }
+        self.msg.push(Op::ReplaceWith as u8);
+        self.encode_maybe_id(root);
+        self.msg
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
+        for node in nodes {
+            self.encode_id(node.to_le_bytes());
+        }
+    }
+
+    fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        for child in &nodes {
+            self.check_id(*child);
+        }
+        self.msg.push(Op::InsertAfter as u8);
+        self.encode_maybe_id(root);
+        self.msg
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
+        for node in nodes {
+            self.encode_id(node.to_le_bytes());
+        }
+    }
+
+    fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        for child in &nodes {
+            self.check_id(*child);
+        }
+        self.msg.push(Op::InsertBefore as u8);
+        self.encode_maybe_id(root);
+        self.msg
+            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
+        for node in nodes {
+            self.encode_id(node.to_le_bytes());
+        }
+    }
+
+    fn remove(&mut self, id: Option<u64>) {
+        let root = id.map(|id| self.check_id(id));
+        self.msg.push(Op::Remove as u8);
+        self.encode_maybe_id(root);
+    }
+
+    fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
+        let root = id.map(|id| self.check_id(id));
+        self.msg.push(Op::CreateTextNode as u8);
+        self.encode_maybe_id(root);
+        self.encode_str(text);
+    }
+
+    fn create_element(
+        &mut self,
+        tag: &'static str,
+        ns: Option<&'static str>,
+        id: Option<u64>,
+        children: u32,
+    ) {
+        let root = id.map(|id| self.check_id(id));
+        self.msg.push(Op::CreateElement as u8);
+        self.encode_maybe_id(root);
+        self.encode_cachable_str(tag);
+        if let Some(ns) = ns {
+            self.msg.push(1);
+            self.encode_cachable_str(ns);
+        } else {
+            self.msg.push(0);
+        }
+        self.msg.extend_from_slice(&children.to_le_bytes());
+    }
+
+    fn create_placeholder(&mut self, id: Option<u64>) {
+        let root = id.map(|id| self.check_id(id));
+        self.msg.push(Op::CreatePlaceholder as u8);
+        self.encode_maybe_id(root);
+    }
+
+    fn new_event_listener(
+        &mut self,
+        listener: &dioxus_core::Listener,
+        _scope: dioxus_core::ScopeId,
+    ) {
+        let root = listener
+            .mounted_node
+            .get()
+            .map(|id| self.check_id(id.0 as u64));
+        let name = listener.event;
+        let bubbles = event_bubbles(name);
+        self.msg.push(Op::NewEventListener as u8);
+        self.encode_maybe_id(root);
+        self.encode_cachable_str(name);
+        self.msg.push(if bubbles { 1 } else { 0 });
+    }
+
+    fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>) {
+        let name = event;
+        let bubbles = event_bubbles(name);
+        let root = root.map(|id| self.check_id(id));
+        self.msg.push(Op::RemoveEventListener as u8);
+        self.encode_maybe_id(root);
+        self.encode_cachable_str(name);
+        self.msg.push(if bubbles { 1 } else { 0 });
+    }
+
+    fn set_text(&mut self, text: &'a str, root: Option<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        self.msg.push(Op::SetText as u8);
+        self.encode_maybe_id(root);
+        self.encode_str(text);
+    }
+
+    fn set_attribute(&mut self, attribute: &'a dioxus_core::Attribute<'a>, root: Option<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        let field = attribute.attribute.name;
+        let ns = attribute.attribute.namespace;
+        self.msg.push(Op::SetAttribute as u8);
+        self.encode_maybe_id(root);
+        self.encode_cachable_str(field);
+        if let Some(ns) = ns {
+            self.msg.push(1);
+            self.encode_cachable_str(ns);
+        } else {
+            self.msg.push(0);
+        }
+        if let Some(s) = attribute.value.as_text() {
+            self.encode_str(s);
+        } else {
+            self.encode_str(&attribute.value.to_string());
+        }
+    }
+
+    fn remove_attribute(&mut self, attribute: &dioxus_core::Attribute, root: Option<u64>) {
+        let root = root.map(|id| self.check_id(id));
+        let field = attribute.attribute.name;
+        let ns = attribute.attribute.namespace;
+        self.msg.push(Op::RemoveAttribute as u8);
+        self.encode_maybe_id(root);
+        self.encode_cachable_str(field);
+        if let Some(ns) = ns {
+            self.msg.push(1);
+            self.encode_cachable_str(ns);
+        } else {
+            self.msg.push(0);
+        }
+    }
+
+    fn clone_node(&mut self, id: Option<u64>, new_id: u64) {
+        let root = id.map(|id| self.check_id(id));
+        self.msg.push(Op::CloneNode as u8);
+        self.encode_maybe_id(root);
+        self.msg.extend_from_slice(&new_id.to_le_bytes());
+    }
+
+    fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>) {
+        let root = id.map(|id| self.check_id(id));
+        for id in &new_ids {
+            self.check_id(*id);
+        }
+        self.msg.push(Op::CloneNodeChildren as u8);
+        self.encode_maybe_id(root);
+        for id in new_ids {
+            self.encode_maybe_id(Some(id.to_le_bytes()));
+        }
+    }
+
+    fn first_child(&mut self) {
+        self.msg.push(Op::FirstChild as u8);
+    }
+
+    fn next_sibling(&mut self) {
+        self.msg.push(Op::NextSibling as u8);
+    }
+
+    fn parent_node(&mut self) {
+        self.msg.push(Op::ParentNode as u8);
+    }
+
+    fn store_with_id(&mut self, id: u64) {
+        let id = self.check_id(id);
+        self.msg.push(Op::StoreWithId as u8);
+        self.encode_id(id);
+    }
+
+    fn set_last_node(&mut self, id: u64) {
+        let id = self.check_id(id);
+        self.msg.push(Op::SetLastNode as u8);
+        self.encode_id(id);
+    }
 }
 
 #[allow(non_snake_case)]
@@ -65,12 +295,7 @@ impl Interpreter {
                 STR_LEN_PTR as usize,
             )
         };
-        Interpreter {
-            js_interpreter,
-            msg: Vec::new(),
-            str_buf: Vec::new(),
-            id_size: 1,
-        }
+        Interpreter { js_interpreter }
     }
 
     #[inline]
@@ -79,240 +304,33 @@ impl Interpreter {
     }
 
     #[inline]
-    pub fn AppendChildren(&mut self, root: Option<u64>, children: Vec<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        for child in &children {
-            self.check_id(*child);
-        }
-        self.msg.push(Op::AppendChildren as u8);
-        self.encode_maybe_id(root);
-        self.msg
-            .extend_from_slice(&(children.len() as u32).to_le_bytes());
-        for child in children {
-            self.encode_id(child.to_le_bytes());
-        }
-    }
-
-    #[inline]
-    pub fn ReplaceWith(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        for child in &nodes {
-            self.check_id(*child);
-        }
-        self.msg.push(Op::ReplaceWith as u8);
-        self.encode_maybe_id(root);
-        self.msg
-            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
-        for node in nodes {
-            self.encode_id(node.to_le_bytes());
-        }
-    }
-
-    #[inline]
-    pub fn InsertAfter(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        for child in &nodes {
-            self.check_id(*child);
-        }
-        self.msg.push(Op::InsertAfter as u8);
-        self.encode_maybe_id(root);
-        self.msg
-            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
-        for node in nodes {
-            self.encode_id(node.to_le_bytes());
-        }
-    }
-
-    #[inline]
-    pub fn InsertBefore(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        for child in &nodes {
-            self.check_id(*child);
-        }
-        self.msg.push(Op::InsertBefore as u8);
-        self.encode_maybe_id(root);
-        self.msg
-            .extend_from_slice(&(nodes.len() as u32).to_le_bytes());
-        for node in nodes {
-            self.encode_id(node.to_le_bytes());
-        }
-    }
-
-    #[inline]
-    pub fn Remove(&mut self, root: Option<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::Remove as u8);
-        self.encode_maybe_id(root);
-    }
-
-    #[inline]
-    pub fn CreateTextNode(&mut self, text: &str, root: Option<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::CreateTextNode as u8);
-        self.encode_maybe_id(root);
-        self.encode_str(text);
-    }
-
-    #[inline]
-    pub fn CreateElement(&mut self, tag: &str, root: Option<u64>, children: u32) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::CreateElement as u8);
-        self.encode_maybe_id(root);
-        self.encode_cachable_str(tag);
-        self.msg.push(0);
-        self.msg.extend_from_slice(&children.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn CreateElementNs(&mut self, tag: &str, root: Option<u64>, ns: &str, children: u32) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::CreateElement as u8);
-        self.encode_maybe_id(root);
-        self.encode_cachable_str(tag);
-        self.msg.push(1);
-        self.encode_cachable_str(ns);
-        self.msg.extend_from_slice(&children.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn CreatePlaceholder(&mut self, root: Option<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::CreatePlaceholder as u8);
-        self.encode_maybe_id(root);
-    }
-
-    #[inline]
-    pub fn NewEventListener(&mut self, name: &str, root: Option<u64>, bubbles: bool) {
-        let root = unsafe { root.unwrap_unchecked() };
-        let root = self.check_id(root);
-        self.msg.push(Op::NewEventListener as u8);
-        self.encode_id(root);
-        self.encode_cachable_str(name);
-        self.msg.push(if bubbles { 1 } else { 0 });
-    }
-
-    #[inline]
-    pub fn RemoveEventListener(&mut self, root: Option<u64>, name: &str, bubbles: bool) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::RemoveEventListener as u8);
-        self.encode_maybe_id(root);
-        self.encode_cachable_str(name);
-        self.msg.push(if bubbles { 1 } else { 0 });
-    }
-
-    #[inline]
-    pub fn SetText(&mut self, root: Option<u64>, text: &str) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::SetText as u8);
-        self.encode_maybe_id(root);
-        self.encode_str(text);
-    }
-
-    #[inline]
-    pub fn SetAttribute(&mut self, root: Option<u64>, field: &str, value: &str, ns: Option<&str>) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::SetAttribute as u8);
-        self.encode_maybe_id(root);
-        self.encode_cachable_str(field);
-        if let Some(ns) = ns {
-            self.msg.push(1);
-            self.encode_cachable_str(ns);
-        } else {
-            self.msg.push(0);
-        }
-        self.encode_str(value);
-    }
-
-    #[inline]
-    pub fn RemoveAttribute(&mut self, root: Option<u64>, field: &str, ns: Option<&str>) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::RemoveAttribute as u8);
-        self.encode_maybe_id(root);
-        self.encode_cachable_str(field);
-        if let Some(ns) = ns {
-            self.msg.push(1);
-            self.encode_cachable_str(ns);
-        } else {
-            self.msg.push(0);
-        }
-    }
-
-    #[inline]
-    pub fn CloneNode(&mut self, root: Option<u64>, new_id: u64) {
-        let root = root.map(|id| self.check_id(id));
-        self.msg.push(Op::CloneNode as u8);
-        self.encode_maybe_id(root);
-        self.msg.extend_from_slice(&new_id.to_le_bytes());
-    }
-
-    #[inline]
-    pub fn CloneNodeChildren(&mut self, root: Option<u64>, new_ids: Vec<u64>) {
-        let root = root.map(|id| self.check_id(id));
-        for id in &new_ids {
-            self.check_id(*id);
-        }
-        self.msg.push(Op::CloneNodeChildren as u8);
-        self.encode_maybe_id(root);
-        for id in new_ids {
-            self.encode_maybe_id(Some(id.to_le_bytes()));
-        }
-    }
-
-    #[inline]
-    pub fn FirstChild(&mut self) {
-        self.msg.push(Op::FirstChild as u8);
-    }
-
-    #[inline]
-    pub fn NextSibling(&mut self) {
-        self.msg.push(Op::NextSibling as u8);
-    }
-
-    #[inline]
-    pub fn ParentNode(&mut self) {
-        self.msg.push(Op::ParentNode as u8);
-    }
-
-    #[inline]
-    pub fn StoreWithId(&mut self, id: u64) {
-        let id = self.check_id(id);
-        self.msg.push(Op::StoreWithId as u8);
-        self.encode_id(id);
-    }
-
-    #[inline]
-    pub fn SetLastNode(&mut self, id: u64) {
-        let id = self.check_id(id);
-        self.msg.push(Op::SetLastNode as u8);
-        self.encode_id(id);
-    }
-
-    #[inline]
-    pub fn should_flush(&self) -> bool {
-        // self.msg.len() > 16384
-        false
-    }
-
-    #[inline]
-    pub fn flush(&mut self) {
+    pub fn apply_edits(&mut self, mut edits: InterpreterEdits) {
         assert_eq!(0usize.to_le_bytes().len(), 32 / 8);
-        self.msg.push(Op::Stop as u8);
+        edits.msg.push(Op::Stop as u8);
         unsafe {
             let mut_ptr_ptr: *mut usize = std::mem::transmute(MSG_PTR_PTR);
-            *mut_ptr_ptr = self.msg.as_ptr() as usize;
+            *mut_ptr_ptr = edits.msg.as_ptr() as usize;
             let mut_str_ptr_ptr: *mut usize = std::mem::transmute(STR_PTR_PTR);
-            *mut_str_ptr_ptr = self.str_buf.as_ptr() as usize;
+            *mut_str_ptr_ptr = edits.str_buf.as_ptr() as usize;
             let mut_str_len_ptr: *mut usize = std::mem::transmute(STR_LEN_PTR);
-            *mut_str_len_ptr = self.str_buf.len() as usize;
+            *mut_str_len_ptr = edits.str_buf.len() as usize;
         }
-        self.js_interpreter.Work(wasm_bindgen::memory());
-        self.msg.clear();
-        self.str_buf.clear();
+        work_last_created(wasm_bindgen::memory());
+        edits.msg.clear();
+        edits.str_buf.clear();
     }
 
     #[inline]
     pub fn set_event_handler(&self, handler: &Closure<dyn FnMut(&Event)>) {
         self.js_interpreter.SetEventHandler(handler);
+    }
+}
+
+impl InterpreterEdits {
+    #[inline]
+    pub fn should_flush(&self) -> bool {
+        // self.msg.len() > 16384
+        false
     }
 
     #[inline]
@@ -331,7 +349,7 @@ impl Interpreter {
     #[inline]
     fn encode_id(&mut self, bytes: [u8; 8]) {
         self.msg
-            .extend_from_slice(&bytes[..(self.id_size as usize)]);
+            .extend_from_slice(&bytes[..(get_id_size() as usize)]);
     }
 
     #[inline]
@@ -339,7 +357,7 @@ impl Interpreter {
         let bytes = id.to_le_bytes();
         let first_contentful_byte = bytes.iter().rev().position(|&b| b != 0).unwrap_or(8);
         let byte_size = (8 - first_contentful_byte) as u8;
-        if byte_size > self.id_size {
+        if byte_size > get_id_size() {
             self.set_byte_size(byte_size);
         }
         bytes
@@ -347,7 +365,7 @@ impl Interpreter {
 
     #[inline]
     fn set_byte_size(&mut self, byte_size: u8) {
-        self.id_size = byte_size;
+        set_id_size(byte_size);
         self.msg.push(Op::SetIdSize as u8);
         self.msg.push(byte_size);
     }

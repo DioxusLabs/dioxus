@@ -4,4 +4,4 @@ pub static INTERPRETER_JS: &str = include_str!("./interpreter.js");
 mod bindings;
 
 #[cfg(feature = "web")]
-pub use bindings::Interpreter;
+pub use bindings::{Interpreter, InterpreterEdits};

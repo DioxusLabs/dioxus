@@ -39,8 +39,7 @@ impl<'a, E: Debug + Edits<'a>> Debug for Mutations<'a, E> {
 /// network or through FFI boundaries.
 #[derive(Debug, PartialEq)]
 pub enum DomEdit<'bump> {
-    /// Pop the topmost node from our stack and append them to the node
-    /// at the top of the stack.
+    /// Append one or more nodes to a parent node.
     AppendChildren {
         /// The parent to append nodes to.
         root: Option<u64>,
@@ -49,7 +48,7 @@ pub enum DomEdit<'bump> {
         children: Vec<u64>,
     },
 
-    /// Replace a given (single) node with a handful of nodes currently on the stack.
+    /// Replace a given (single) node with a handful of nodes.
     ReplaceWith {
         /// The ID of the node to be replaced.
         root: Option<u64>,
@@ -226,24 +225,31 @@ pub enum DomEdit<'bump> {
 
 use rustc_hash::FxHashSet;
 
+/// Edits are a set of mutations that can be applied to a DOM.
 #[allow(unused)]
 pub trait Edits<'a>: Default {
+    /// If any edits have been made.
     fn is_empty(&self) -> bool;
 
+    /// Replace a given (single) node with a handful of nodes.
     fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>);
 
+    /// Insert a number of nodes after a given node.
     fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>);
 
+    /// Insert a number of nodes before a given node.
     fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>);
 
+    /// Append one or more nodes to a parent node.
     fn append_children(&mut self, root: Option<u64>, children: Vec<u64>);
 
-    // Remove Nodes from the dom
+    /// Remove a Node from the dom
     fn remove(&mut self, id: Option<u64>);
 
-    // Create
+    /// Create a new-text node
     fn create_text_node(&mut self, text: &'a str, id: Option<u64>);
 
+    /// Create a new-element node
     fn create_element(
         &mut self,
         tag: &'static str,
@@ -252,33 +258,43 @@ pub trait Edits<'a>: Default {
         children: u32,
     );
 
-    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
+    /// Create a new placeholder node
     fn create_placeholder(&mut self, id: Option<u64>);
 
-    // events
+    /// Create a new Event Listener.
     fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId);
 
+    /// Remove an existing Event Listener.
     fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>);
 
-    // modify
+    /// Set the textcontent of a node.
     fn set_text(&mut self, text: &'a str, root: Option<u64>);
 
+    /// Set the value of a node's attribute.
     fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>);
 
+    /// Remove an attribute from a node.
     fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>);
 
+    /// Clone a node
     fn clone_node(&mut self, id: Option<u64>, new_id: u64);
 
+    /// Clone the children of a node.
     fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>);
 
+    /// Navigates the last node to the first child of the current node.
     fn first_child(&mut self);
 
+    /// Navigates the last node to the last child of the current node.
     fn next_sibling(&mut self);
 
+    /// Navigates the last node to the parent of the current node.
     fn parent_node(&mut self);
 
+    /// Stores the last node with a new id.
     fn store_with_id(&mut self, id: u64);
 
+    /// Manually set the last node.
     fn set_last_node(&mut self, id: u64);
 }
 

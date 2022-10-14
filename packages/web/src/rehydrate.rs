@@ -1,6 +1,6 @@
 use crate::dom::WebsysDom;
-use dioxus_core::{VNode, VirtualDom};
-use dioxus_html::event_bubbles;
+use dioxus_core::{Edits, ScopeId, VNode, VirtualDom};
+use dioxus_interpreter_js::InterpreterEdits;
 use wasm_bindgen::JsCast;
 use web_sys::{Comment, Element, Node, Text};
 
@@ -30,6 +30,7 @@ impl WebsysDom {
 
         let mut last_node_was_text = false;
 
+        let mut edits = InterpreterEdits::default();
         // Recursively rehydrate the dom from the VirtualDom
         self.rehydrate_single(
             &mut nodes,
@@ -37,7 +38,10 @@ impl WebsysDom {
             dom,
             root_node,
             &mut last_node_was_text,
-        )
+            &mut edits,
+        )?;
+        self.interpreter.apply_edits(edits);
+        Ok(())
     }
 
     fn rehydrate_single(
@@ -47,6 +51,7 @@ impl WebsysDom {
         dom: &VirtualDom,
         node: &VNode,
         last_node_was_text: &mut bool,
+        edits: &mut InterpreterEdits,
     ) -> Result<(), RehydrationError> {
         match node {
             VNode::Text(t) => {
@@ -104,16 +109,18 @@ impl WebsysDom {
                 // we cant have the last node be text
                 let mut last_node_was_text = false;
                 for child in vel.children {
-                    self.rehydrate_single(nodes, place, dom, child, &mut last_node_was_text)?;
+                    self.rehydrate_single(
+                        nodes,
+                        place,
+                        dom,
+                        child,
+                        &mut last_node_was_text,
+                        edits,
+                    )?;
                 }
 
                 for listener in vel.listeners {
-                    let id = listener.mounted_node.get().unwrap();
-                    self.interpreter.NewEventListener(
-                        listener.event,
-                        Some(id.as_u64()),
-                        event_bubbles(listener.event),
-                    );
+                    edits.new_event_listener(listener, ScopeId(0));
                 }
 
                 if !vel.listeners.is_empty() {
@@ -156,14 +163,14 @@ impl WebsysDom {
 
             VNode::Fragment(el) => {
                 for el in el.children {
-                    self.rehydrate_single(nodes, place, dom, el, last_node_was_text)?;
+                    self.rehydrate_single(nodes, place, dom, el, last_node_was_text, edits)?;
                 }
             }
 
             VNode::Component(el) => {
                 let scope = dom.get_scope(el.scope.get().unwrap()).unwrap();
                 let node = scope.root_node();
-                self.rehydrate_single(nodes, place, dom, node, last_node_was_text)?;
+                self.rehydrate_single(nodes, place, dom, node, last_node_was_text, edits)?;
             }
             VNode::TemplateRef(_) => todo!(),
         }

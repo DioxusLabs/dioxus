@@ -68,7 +68,7 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     AnyEvent, ArbitraryAttributeValue, Attribute, AttributeDiscription, AttributeValue,
-    CodeLocation, Component, DioxusElement, DomEdit, DynamicNodeMapping, Element, ElementId,
+    CodeLocation, Component, DioxusElement, DomEdit, DynamicNodeMapping, Edits, Element, ElementId,
     ElementIdIterator, EventHandler, EventPriority, IntoAttributeValue, IntoVNode, LazyNodes,
     Listener, Mutations, NodeFactory, OwnedAttributeValue, Properties, RendererTemplateId,
     SchedulerMsg, Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping,
