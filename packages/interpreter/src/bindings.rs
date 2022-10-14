@@ -28,7 +28,8 @@ fn set_id_size(size: u8) {
     }
 }
 
-#[wasm_bindgen(module = "/src/interpreter.js")]
+// #[wasm_bindgen(module = "/src/interpreter.js")]
+#[wasm_bindgen(module = "/src/interpreter_opt.js")]
 extern "C" {
     fn work_last_created(mem: JsValue);
 
@@ -134,8 +135,8 @@ impl<'a> Edits<'a> for InterpreterEdits {
     fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
         let root = id.map(|id| self.check_id(id));
         self.msg.push(Op::CreateTextNode as u8);
-        self.encode_maybe_id(root);
         self.encode_str(text);
+        self.encode_maybe_id(root);
     }
 
     fn create_element(
@@ -147,7 +148,6 @@ impl<'a> Edits<'a> for InterpreterEdits {
     ) {
         let root = id.map(|id| self.check_id(id));
         self.msg.push(Op::CreateElement as u8);
-        self.encode_maybe_id(root);
         self.encode_cachable_str(tag);
         if let Some(ns) = ns {
             self.msg.push(1);
@@ -155,6 +155,7 @@ impl<'a> Edits<'a> for InterpreterEdits {
         } else {
             self.msg.push(0);
         }
+        self.encode_maybe_id(root);
         self.msg.extend_from_slice(&children.to_le_bytes());
     }
 
