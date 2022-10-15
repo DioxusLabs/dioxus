@@ -78,7 +78,6 @@ class Template {
     this.template_id = template_id;
     this.id = id;
     this.template = document.createElement("template");
-    this.reconstructingRefrencesIndex = null;
   }
 
   finalize(roots) {
@@ -123,7 +122,14 @@ class Template {
     for (let node = template.firstChild; node != null; node = node.nextSibling) {
       roots.push(node);
     }
-    return new TemplateRef(template, this.dynamicNodePaths, roots, id);
+    let ref = new TemplateRef(template, this.dynamicNodePaths, roots, id);
+    // resolve ids for any nodes that can change
+    for (let i = 0; i < this.dynamicNodePaths.length; i++) {
+      if (this.dynamicNodePaths[i]) {
+        ref.build(i);
+      }
+    }
+    return ref;
   }
 }
 
