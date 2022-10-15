@@ -725,8 +725,6 @@ where
     /// The depth of the node in the template node tree
     /// Root nodes have a depth of 0
     pub depth: usize,
-    /// If the this node can ever be changed
-    pub locally_static: bool,
     /// The type of the [`TemplateNode`].
     pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
     /// The parent of this node.
@@ -915,34 +913,6 @@ where
     /// A dynamic node (e.g. (0..10).map(|i| cx.render(rsx!{div{}})))
     /// The index in the dynamic node array this node should be replaced with
     DynamicNode(usize),
-}
-
-impl<Attributes, V, Children, Listeners, TextSegments, Text>
-    TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
-where
-    Attributes: AsRef<[TemplateAttribute<V>]>,
-    Children: AsRef<[TemplateNodeId]>,
-    Listeners: AsRef<[usize]>,
-    V: TemplateValue,
-    TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-    Text: AsRef<str>,
-{
-    /// Returns if this node is static.
-    pub fn locally_static(&self) -> bool {
-        match self {
-            TemplateNodeType::Element(e) => {
-                e.attributes.as_ref().iter().all(|a| match a.value {
-                    TemplateAttributeValue::Static(_) => true,
-                    TemplateAttributeValue::Dynamic(_) => false,
-                }) && e.listeners.as_ref().is_empty()
-            }
-            TemplateNodeType::Text(t) => t.segments.as_ref().iter().all(|seg| match seg {
-                TextTemplateSegment::Static(_) => true,
-                TextTemplateSegment::Dynamic(_) => false,
-            }),
-            TemplateNodeType::DynamicNode(_) => false,
-        }
-    }
 }
 
 type StaticStr = &'static str;

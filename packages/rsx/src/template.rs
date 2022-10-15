@@ -310,27 +310,10 @@ impl TemplateNodeBuilder {
         Ok(OwnedTemplateNode {
             id,
             node_type,
-            locally_static: false,
             parent,
             depth,
             path,
         })
-    }
-
-    fn is_locally_static(&self) -> bool {
-        match &self.node_type {
-            TemplateNodeTypeBuilder::Element(el) => {
-                el.attributes.iter().all(|attr| match &attr.value {
-                    TemplateAttributeValue::Static(_) => true,
-                    TemplateAttributeValue::Dynamic(_) => false,
-                }) && el.listeners.is_empty()
-            }
-            TemplateNodeTypeBuilder::Text(txt) => txt.segments.iter().all(|seg| match seg {
-                TextTemplateSegment::Static(_) => true,
-                TextTemplateSegment::Dynamic(_) => false,
-            }),
-            TemplateNodeTypeBuilder::DynamicNode(_) => false,
-        }
     }
 
     fn to_tokens(&self, tokens: &mut TokenStream) {
@@ -342,7 +325,6 @@ impl TemplateNodeBuilder {
             path,
         } = self;
         let raw_id = id.0;
-        let locally_static = self.is_locally_static();
         let parent = match parent {
             Some(id) => {
                 let id = id.0;
@@ -355,7 +337,6 @@ impl TemplateNodeBuilder {
             TemplateNode {
                 id: TemplateNodeId(#raw_id),
                 node_type: #node_type,
-                locally_static: #locally_static,
                 parent: #parent,
                 depth: #depth,
                 path: &[#(#path),*],
