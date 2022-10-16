@@ -342,15 +342,11 @@ impl<'a> VTemplateRef<'a> {
                         match &node.node_type {
                             TemplateNodeType::DynamicNode(idx) => {
                                 if current_node_id.is_none() {
-                                    if let Some(real_id) = template_ref.try_get_node_id(*id) {
-                                        current_node_id = Some(real_id);
-                                    } else {
-                                        // create a temporary node to come back to later
-                                        let id = diff_state.scopes.reserve_phantom_node();
-                                        diff_state.mutations.store_with_id(id.as_u64());
-                                        temp_id = true;
-                                        current_node_id = Some(id);
-                                    }
+                                    // create a temporary node to come back to later
+                                    let id = diff_state.scopes.reserve_phantom_node();
+                                    diff_state.mutations.store_with_id(id.as_u64());
+                                    temp_id = true;
+                                    current_node_id = Some(id);
                                 }
                                 let id = current_node_id.unwrap();
                                 let mut created = Vec::new();
@@ -392,8 +388,15 @@ impl<'a> VTemplateRef<'a> {
                     traverse_seg(sibling, nodes, diff_state, template_ref, parent);
                 }
                 (Some(seg), None) => {
+                    if current_node_id.is_none() {
+                        let id = diff_state.scopes.reserve_phantom_node();
+                        diff_state.mutations.store_with_id(id.as_u64());
+                        temp_id = true;
+                        current_node_id = Some(id);
+                    }
+                    let id = current_node_id.unwrap();
                     diff_state.mutations.first_child();
-                    traverse_seg(seg, nodes, diff_state, template_ref, parent);
+                    traverse_seg(seg, nodes, diff_state, template_ref, id);
                 }
                 (None, Some(seg)) => {
                     diff_state.mutations.next_sibling();

@@ -76,7 +76,7 @@ export class Interpreter {
   }
   AppendChildren(root, children) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -87,7 +87,7 @@ export class Interpreter {
   }
   ReplaceWith(root, nodes) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -100,7 +100,7 @@ export class Interpreter {
   }
   InsertAfter(root, nodes) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -113,7 +113,7 @@ export class Interpreter {
   }
   InsertBefore(root, nodes) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -126,7 +126,7 @@ export class Interpreter {
   }
   Remove(root) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -138,14 +138,14 @@ export class Interpreter {
   CreateTextNode(text, root) {
     this.lastNode = document.createTextNode(text);
     this.checkAppendParent();
-    if (root !== null) {
+    if (root != null) {
       this.nodes[root] = this.lastNode;
     }
   }
   CreateElement(tag, root, children) {
     this.lastNode = document.createElement(tag);
     this.checkAppendParent();
-    if (root !== null) {
+    if (root != null) {
       this.nodes[root] = this.lastNode;
     }
     if (children > 0) {
@@ -155,7 +155,7 @@ export class Interpreter {
   CreateElementNs(tag, root, ns, children) {
     this.lastNode = document.createElementNS(ns, tag);
     this.checkAppendParent();
-    if (root !== null) {
+    if (root != null) {
       this.nodes[root] = this.lastNode;
     }
     if (children > 0) {
@@ -166,13 +166,13 @@ export class Interpreter {
     this.lastNode = document.createElement("pre");
     this.lastNode.hidden = true;
     this.checkAppendParent();
-    if (root !== null) {
+    if (root != null) {
       this.nodes[root] = this.lastNode;
     }
   }
   NewEventListener(event_name, root, handler, bubbles) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -182,7 +182,7 @@ export class Interpreter {
   }
   RemoveEventListener(root, event_name, bubbles) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -192,7 +192,7 @@ export class Interpreter {
   }
   SetText(root, text) {
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -202,7 +202,7 @@ export class Interpreter {
   SetAttribute(root, field, value, ns) {
     const name = field;
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -241,7 +241,7 @@ export class Interpreter {
   RemoveAttribute(root, field, ns) {
     const name = field;
     let node;
-    if (!root) {
+    if (root == null) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -264,7 +264,7 @@ export class Interpreter {
   }
   CloneNode(old, new_id) {
     let node;
-    if (!old) {
+    if (old === null) {
       node = this.lastNode;
     } else {
       node = this.nodes[old];
@@ -273,7 +273,7 @@ export class Interpreter {
   }
   CloneNodeChildren(old, new_ids) {
     let node;
-    if (!old) {
+    if (old === null) {
       node = this.lastNode;
     } else {
       node = this.nodes[old];
