@@ -800,6 +800,9 @@ impl TemplateBuilder {
                 if !el.locally_static || n.parent.is_none() {
                     ops.push(UpdateOp::StoreNode(node_id));
                 }
+                for child in children_to_append.into_iter().rev() {
+                    ops.push(UpdateOp::AppendChild(child));
+                }
                 Some(OwnedPathSeg {
                     ops,
                     traverse: match last_seg {

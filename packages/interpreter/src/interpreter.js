@@ -76,7 +76,7 @@ export class Interpreter {
   }
   AppendChildren(root, children) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -87,7 +87,7 @@ export class Interpreter {
   }
   ReplaceWith(root, nodes) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -100,7 +100,7 @@ export class Interpreter {
   }
   InsertAfter(root, nodes) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -113,7 +113,7 @@ export class Interpreter {
   }
   InsertBefore(root, nodes) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -126,7 +126,7 @@ export class Interpreter {
   }
   Remove(root) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -172,7 +172,7 @@ export class Interpreter {
   }
   NewEventListener(event_name, root, handler, bubbles) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -182,7 +182,7 @@ export class Interpreter {
   }
   RemoveEventListener(root, event_name, bubbles) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -192,7 +192,7 @@ export class Interpreter {
   }
   SetText(root, text) {
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -202,7 +202,7 @@ export class Interpreter {
   SetAttribute(root, field, value, ns) {
     const name = field;
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -241,7 +241,7 @@ export class Interpreter {
   RemoveAttribute(root, field, ns) {
     const name = field;
     let node;
-    if (root === null) {
+    if (!root) {
       node = this.lastNode;
     } else {
       node = this.nodes[root];
@@ -264,7 +264,7 @@ export class Interpreter {
   }
   CloneNode(old, new_id) {
     let node;
-    if (old === null) {
+    if (!old) {
       node = this.lastNode;
     } else {
       node = this.nodes[old];
@@ -273,7 +273,7 @@ export class Interpreter {
   }
   CloneNodeChildren(old, new_ids) {
     let node;
-    if (old === null) {
+    if (!old) {
       node = this.lastNode;
     } else {
       node = this.nodes[old];
@@ -300,7 +300,6 @@ export class Interpreter {
     this.lastNode = this.nodes[root];
   }
   handleEdits(edits) {
-    console.log("handleEdits", edits);
     for (let edit of edits) {
       this.handleEdit(edit);
     }

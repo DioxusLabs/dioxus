@@ -317,6 +317,7 @@ impl<'a> VTemplateRef<'a> {
             O: AsRef<[UpdateOp]>,
         {
             let mut current_node_id = None;
+            let mut temp_id = false;
             for op in seg.ops.as_ref() {
                 match op {
                     UpdateOp::StoreNode(id) => {
@@ -334,73 +335,62 @@ impl<'a> VTemplateRef<'a> {
                             nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
                         }
                     }
-                    UpdateOp::InsertBefore(id) => {
+                    UpdateOp::InsertBefore(id)
+                    | UpdateOp::AppendChild(id)
+                    | UpdateOp::InsertAfter(id) => {
                         let node = &nodes.as_ref()[id.0];
                         match &node.node_type {
                             TemplateNodeType::DynamicNode(idx) => {
+                                if current_node_id.is_none() {
+                                    if let Some(real_id) = template_ref.try_get_node_id(*id) {
+                                        current_node_id = Some(real_id);
+                                    } else {
+                                        // create a temporary node to come back to later
+                                        let id = diff_state.scopes.reserve_phantom_node();
+                                        diff_state.mutations.store_with_id(id.as_u64());
+                                        temp_id = true;
+                                        current_node_id = Some(id);
+                                    }
+                                }
+                                let id = current_node_id.unwrap();
                                 let mut created = Vec::new();
                                 let node = template_ref.dynamic_context.resolve_node(*idx);
-                                // this will only be triggered for root elements
                                 diff_state.create_node(parent, node, &mut created);
-
-                                diff_state.mutations.insert_before(None, created);
+                                diff_state.mutations.set_last_node(id.as_u64());
+                                match op {
+                                    UpdateOp::InsertBefore(_) => {
+                                        diff_state.mutations.insert_before(None, created);
+                                    }
+                                    UpdateOp::InsertAfter(_) => {
+                                        diff_state.mutations.insert_after(None, created);
+                                    }
+                                    UpdateOp::AppendChild(_) => {
+                                        diff_state.mutations.append_children(None, created);
+                                    }
+                                    _ => unreachable!(),
+                                }
                             }
                             _ => panic!("can only insert dynamic nodes"),
-                        }
-                    }
-                    UpdateOp::InsertAfter(id) => {
-                        let node = &nodes.as_ref()[id.0];
-                        match &node.node_type {
-                            TemplateNodeType::DynamicNode(idx) => {
-                                let mut created = Vec::new();
-                                let node = template_ref.dynamic_context.resolve_node(*idx);
-                                // this will only be triggered for root elements
-                                diff_state.create_node(parent, node, &mut created);
-
-                                diff_state.mutations.insert_after(None, created);
-                            }
-                            _ => panic!("can only insert dynamic nodes"),
-                        }
-                    }
-                    UpdateOp::AppendChild(id) => {
-                        let node = &nodes.as_ref()[id.0];
-                        match &node.node_type {
-                            TemplateNodeType::DynamicNode(idx) => {
-                                let mut created = Vec::new();
-                                let node = template_ref.dynamic_context.resolve_node(*idx);
-                                // this will only be triggered for root elements
-                                diff_state.create_node(parent, node, &mut created);
-
-                                diff_state.mutations.append_children(None, created);
-                            }
-                            _ => panic!("can only append dynamic nodes"),
                         }
                     }
                 }
             }
             match (seg.traverse.first_child(), seg.traverse.next_sibling()) {
-                (Some(child), Some(sibling)) => match current_node_id {
-                    Some(id) => {
-                        diff_state.mutations.first_child();
-                        traverse_seg(child, nodes, diff_state, template_ref, id);
-                        diff_state.mutations.set_last_node(id.as_u64());
-                        diff_state.mutations.next_sibling();
-                        traverse_seg(sibling, nodes, diff_state, template_ref, parent);
-                    }
-                    None => {
+                (Some(child), Some(sibling)) => {
+                    if current_node_id.is_none() {
                         // create a temporary node to come back to later
                         let id = diff_state.scopes.reserve_phantom_node();
                         diff_state.mutations.store_with_id(id.as_u64());
-                        println!("storing phantom node {}", id.as_u64());
-                        diff_state.mutations.first_child();
-                        traverse_seg(child, nodes, diff_state, template_ref, parent);
-                        diff_state.mutations.set_last_node(id.as_u64());
-                        diff_state.mutations.next_sibling();
-                        traverse_seg(sibling, nodes, diff_state, template_ref, parent);
-                        // remove the temporary node
-                        diff_state.scopes.collect_garbage(id);
+                        temp_id = true;
+                        current_node_id = Some(id);
                     }
-                },
+                    let id = current_node_id.unwrap();
+                    diff_state.mutations.first_child();
+                    traverse_seg(child, nodes, diff_state, template_ref, id);
+                    diff_state.mutations.set_last_node(id.as_u64());
+                    diff_state.mutations.next_sibling();
+                    traverse_seg(sibling, nodes, diff_state, template_ref, parent);
+                }
                 (Some(seg), None) => {
                     diff_state.mutations.first_child();
                     traverse_seg(seg, nodes, diff_state, template_ref, parent);
@@ -410,6 +400,12 @@ impl<'a> VTemplateRef<'a> {
                     traverse_seg(seg, nodes, diff_state, template_ref, parent);
                 }
                 (None, None) => {}
+            }
+            if temp_id {
+                if let Some(id) = current_node_id {
+                    // remove the temporary node
+                    diff_state.scopes.collect_garbage(id);
+                }
             }
         }
         fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
@@ -464,7 +460,7 @@ impl<'a> VTemplateRef<'a> {
 
     pub(crate) fn try_get_node_id(&self, id: TemplateNodeId) -> Option<ElementId> {
         let node_ids = self.node_ids.borrow();
-        node_ids.get(id.0).unwrap().get().copied()
+        node_ids.get(id.0).and_then(|cell| cell.get().copied())
     }
 
     pub(crate) fn set_node_id(&self, id: TemplateNodeId, real_id: ElementId) {
@@ -520,9 +516,9 @@ pub enum Template {
 impl Template {
     pub(crate) fn create<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: ElementId) {
         let children = match self {
-            Template::Static(s) => s.root_nodes.len(),
+            Template::Static(s) => self.count_real_nodes(s.root_nodes),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
-            Template::Owned(o) => o.root_nodes.len(),
+            Template::Owned(o) => self.count_real_nodes(&o.root_nodes),
         };
         mutations.create_element("template", None, Some(id.into()), children as u32);
         let empty = match self {
@@ -564,7 +560,12 @@ impl Template {
                         children,
                         ..
                     } = el;
-                    mutations.create_element(tag, *namespace, None, children.as_ref().len() as u32);
+                    mutations.create_element(
+                        tag,
+                        *namespace,
+                        None,
+                        template.count_real_nodes(children.as_ref()) as u32,
+                    );
                     for attr in attributes.as_ref() {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
                             let val: AttributeValue<'b> = val.allocate(bump);
@@ -657,6 +658,31 @@ impl Template {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
         }
+    }
+
+    fn count_real_nodes(&self, ids: &[TemplateNodeId]) -> usize {
+        fn count_real_nodes_inner<Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+            nodes: &Nodes,
+            id: TemplateNodeId,
+        ) -> usize
+        where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            match &nodes.as_ref()[id.0].node_type {
+                TemplateNodeType::DynamicNode(_) => 0,
+                TemplateNodeType::Element(_) => 1,
+                TemplateNodeType::Text(_) => 1,
+            }
+        }
+        ids.iter()
+            .map(|id| self.with_nodes(count_real_nodes_inner, count_real_nodes_inner, *id))
+            .sum()
     }
 
     pub(crate) fn volatile_attributes<'a>(
