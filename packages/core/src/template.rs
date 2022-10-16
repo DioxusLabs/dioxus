@@ -320,14 +320,19 @@ impl<'a> VTemplateRef<'a> {
             for op in seg.ops.as_ref() {
                 match op {
                     UpdateOp::StoreNode(id) => {
-                        let real_id = diff_state.scopes.reserve_template_node(
-                            template_ref.template_ref_id.get().unwrap(),
-                            *id,
-                        );
-                        current_node_id = Some(real_id);
-                        template_ref.set_node_id(*id, real_id);
-                        diff_state.mutations.store_with_id(real_id.as_u64());
-                        nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
+                        if let Some(real_id) = template_ref.try_get_node_id(*id) {
+                            current_node_id = Some(real_id);
+                            nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
+                        } else {
+                            let real_id = diff_state.scopes.reserve_template_node(
+                                template_ref.template_ref_id.get().unwrap(),
+                                *id,
+                            );
+                            current_node_id = Some(real_id);
+                            template_ref.set_node_id(*id, real_id);
+                            diff_state.mutations.store_with_id(real_id.as_u64());
+                            nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
+                        }
                     }
                     UpdateOp::InsertBefore(id) => {
                         let node = &nodes.as_ref()[id.0];
@@ -339,6 +344,20 @@ impl<'a> VTemplateRef<'a> {
                                 diff_state.create_node(parent, node, &mut created);
 
                                 diff_state.mutations.insert_before(None, created);
+                            }
+                            _ => panic!("can only insert dynamic nodes"),
+                        }
+                    }
+                    UpdateOp::InsertAfter(id) => {
+                        let node = &nodes.as_ref()[id.0];
+                        match &node.node_type {
+                            TemplateNodeType::DynamicNode(idx) => {
+                                let mut created = Vec::new();
+                                let node = template_ref.dynamic_context.resolve_node(*idx);
+                                // this will only be triggered for root elements
+                                diff_state.create_node(parent, node, &mut created);
+
+                                diff_state.mutations.insert_after(None, created);
                             }
                             _ => panic!("can only insert dynamic nodes"),
                         }
@@ -362,21 +381,32 @@ impl<'a> VTemplateRef<'a> {
             match (seg.traverse.first_child(), seg.traverse.next_sibling()) {
                 (Some(child), Some(sibling)) => match current_node_id {
                     Some(id) => {
+                        diff_state.mutations.first_child();
                         traverse_seg(child, nodes, diff_state, template_ref, id);
                         diff_state.mutations.set_last_node(id.as_u64());
+                        diff_state.mutations.next_sibling();
                         traverse_seg(sibling, nodes, diff_state, template_ref, parent);
                     }
                     None => {
                         // create a temporary node to come back to later
                         let id = diff_state.scopes.reserve_phantom_node();
+                        diff_state.mutations.store_with_id(id.as_u64());
+                        println!("storing phantom node {}", id.as_u64());
+                        diff_state.mutations.first_child();
                         traverse_seg(child, nodes, diff_state, template_ref, parent);
                         diff_state.mutations.set_last_node(id.as_u64());
+                        diff_state.mutations.next_sibling();
                         traverse_seg(sibling, nodes, diff_state, template_ref, parent);
                         // remove the temporary node
                         diff_state.scopes.collect_garbage(id);
                     }
                 },
-                (Some(seg), None) | (None, Some(seg)) => {
+                (Some(seg), None) => {
+                    diff_state.mutations.first_child();
+                    traverse_seg(seg, nodes, diff_state, template_ref, parent);
+                }
+                (None, Some(seg)) => {
+                    diff_state.mutations.next_sibling();
                     traverse_seg(seg, nodes, diff_state, template_ref, parent);
                 }
                 (None, None) => {}
@@ -403,18 +433,18 @@ impl<'a> VTemplateRef<'a> {
 
             match template {
                 Template::Static(s) => {
-                    for (root, seg) in s.dynamic_path {
-                        diff_state
-                            .mutations
-                            .set_last_node(template_ref.get_node_id(*root).as_u64());
+                    if let Some(seg) = &s.dynamic_path {
+                        diff_state.mutations.set_last_node(
+                            template_ref.get_node_id(template.root_nodes()[0]).as_u64(),
+                        );
                         traverse_seg(seg, nodes, diff_state, template_ref, parent);
                     }
                 }
                 Template::Owned(o) => {
-                    for (root, seg) in &o.dynamic_path {
-                        diff_state
-                            .mutations
-                            .set_last_node(template_ref.get_node_id(*root).as_u64());
+                    if let Some(seg) = &o.dynamic_path {
+                        diff_state.mutations.set_last_node(
+                            template_ref.get_node_id(template.root_nodes()[0]).as_u64(),
+                        );
                         traverse_seg(seg, nodes, diff_state, template_ref, parent);
                     }
                 }
@@ -429,8 +459,12 @@ impl<'a> VTemplateRef<'a> {
     }
 
     pub(crate) fn get_node_id(&self, id: TemplateNodeId) -> ElementId {
+        self.try_get_node_id(id).unwrap()
+    }
+
+    pub(crate) fn try_get_node_id(&self, id: TemplateNodeId) -> Option<ElementId> {
         let node_ids = self.node_ids.borrow();
-        *node_ids.get(id.0).unwrap().get().unwrap()
+        node_ids.get(id.0).unwrap().get().copied()
     }
 
     pub(crate) fn set_node_id(&self, id: TemplateNodeId, real_id: ElementId) {
@@ -451,8 +485,8 @@ pub struct StaticTemplate {
     pub root_nodes: StaticRootNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
     pub dynamic_mapping: StaticDynamicNodeMapping,
-    /// The path to take to update the template with dynamic content
-    pub dynamic_path: &'static [(TemplateNodeId, StaticPathSeg)],
+    /// The path to take to update the template with dynamic content (starts from the first root node)
+    pub dynamic_path: Option<StaticPathSeg>,
 }
 
 /// A template that is created at runtime
@@ -470,7 +504,7 @@ pub struct OwnedTemplate {
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
     pub dynamic_mapping: OwnedDynamicNodeMapping,
     /// The path to take to update the template with dynamic content
-    pub dynamic_path: Vec<(TemplateNodeId, OwnedPathSeg)>,
+    pub dynamic_path: Option<OwnedPathSeg>,
 }
 
 /// A template used to skip diffing on some static parts of the rsx
@@ -1095,7 +1129,8 @@ impl TemplateResolver {
 pub struct SetTemplateMsg(pub TemplateId, pub OwnedTemplate);
 
 #[cfg(any(feature = "hot-reload", debug_assertions))]
-type OwnedPathSeg = PathSeg<OwnedTraverse, Vec<UpdateOp>>;
+/// A path segment that lives on the heap.
+pub type OwnedPathSeg = PathSeg<OwnedTraverse, Vec<UpdateOp>>;
 
 #[cfg(any(feature = "hot-reload", debug_assertions))]
 #[cfg_attr(
@@ -1103,9 +1138,15 @@ type OwnedPathSeg = PathSeg<OwnedTraverse, Vec<UpdateOp>>;
     derive(serde::Serialize, serde::Deserialize)
 )]
 #[derive(Debug, Clone, PartialEq)]
+/// A traverse message that lives on the heap.
 pub enum OwnedTraverse {
+    /// Halt traversal
+    Halt,
+    /// Traverse to the first child of the current node.
     FirstChild(Box<OwnedPathSeg>),
+    /// Traverse to the next sibling of the current node.
     NextSibling(Box<OwnedPathSeg>),
+    /// Traverse to the both the first child and next sibling of the current node.
     Both(Box<(OwnedPathSeg, OwnedPathSeg)>),
 }
 
@@ -1114,26 +1155,33 @@ impl Traversable<Vec<UpdateOp>> for OwnedTraverse {
     fn first_child(&self) -> Option<&OwnedPathSeg> {
         match self {
             OwnedTraverse::FirstChild(p) => Some(p),
-            OwnedTraverse::NextSibling(_) => None,
             OwnedTraverse::Both(ps) => Some(&ps.0),
+            _ => None,
         }
     }
 
     fn next_sibling(&self) -> Option<&OwnedPathSeg> {
         match self {
-            OwnedTraverse::FirstChild(_) => None,
             OwnedTraverse::NextSibling(p) => Some(p),
             OwnedTraverse::Both(ps) => Some(&ps.1),
+            _ => None,
         }
     }
 }
 
+/// A path segment that lives on the stack.
 pub type StaticPathSeg = PathSeg<StaticTraverse, &'static [UpdateOp]>;
 
 #[derive(Debug, Clone, PartialEq)]
+/// A traverse message that lives on the stack.
 pub enum StaticTraverse {
+    /// Halt traversal
+    Halt,
+    /// Traverse to the first child of the current node.
     FirstChild(&'static StaticPathSeg),
+    /// Traverse to the next sibling of the current node.
     NextSibling(&'static StaticPathSeg),
+    /// Traverse to the both the first child and next sibling of the current node.
     Both(&'static (StaticPathSeg, StaticPathSeg)),
 }
 
@@ -1141,16 +1189,16 @@ impl Traversable<&'static [UpdateOp]> for StaticTraverse {
     fn first_child(&self) -> Option<&StaticPathSeg> {
         match self {
             StaticTraverse::FirstChild(p) => Some(p),
-            StaticTraverse::NextSibling(_) => None,
             StaticTraverse::Both((p, _)) => Some(p),
+            _ => None,
         }
     }
 
     fn next_sibling(&self) -> Option<&StaticPathSeg> {
         match self {
-            StaticTraverse::FirstChild(_) => None,
             StaticTraverse::NextSibling(p) => Some(p),
             StaticTraverse::Both((_, p)) => Some(p),
+            _ => None,
         }
     }
 }
@@ -1168,9 +1216,12 @@ where
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
 )]
+/// A path segment that defines a way to traverse a template node and resolve dynamic sections.
 pub struct PathSeg<T: Traversable<O>, O: AsRef<[UpdateOp]>> {
-    ops: O,
-    traverse: T,
+    /// The operation to perform on the current node.
+    pub ops: O,
+    /// The next traversal step.
+    pub traverse: T,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1178,8 +1229,14 @@ pub struct PathSeg<T: Traversable<O>, O: AsRef<[UpdateOp]>> {
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
 )]
+/// A operation that can be applied to a template node when intially updating it.
 pub enum UpdateOp {
+    /// Store a dynamic node on the renderer
     StoreNode(TemplateNodeId),
+    /// Insert a dynamic node before the current node
     InsertBefore(TemplateNodeId),
+    /// Insert a dynamic node after the current node
+    InsertAfter(TemplateNodeId),
+    /// Append a dynamic node to the current node
     AppendChild(TemplateNodeId),
 }

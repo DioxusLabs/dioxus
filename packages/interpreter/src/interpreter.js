@@ -300,6 +300,7 @@ export class Interpreter {
     this.lastNode = this.nodes[root];
   }
   handleEdits(edits) {
+    console.log("handleEdits", edits);
     for (let edit of edits) {
       this.handleEdit(edit);
     }
