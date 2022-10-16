@@ -504,7 +504,9 @@ builder_constructors! {
     /// Build a
     /// [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
     /// element.
-    time {};
+    time {
+        datetime: Datetime,
+    };
 
     /// Build a
     /// [`<u>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/u)
