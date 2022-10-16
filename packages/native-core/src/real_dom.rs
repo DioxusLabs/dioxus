@@ -117,7 +117,7 @@ impl<S: State> RealDom<S> {
                         let n = Node::new(NodeType::Text {
                             text: text.to_string(),
                         });
-                        let id = self.insert(n, root);
+                        let id = self.insert(n, root, &mut nodes_updated);
                         self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
@@ -141,7 +141,7 @@ impl<S: State> RealDom<S> {
                             listeners: FxHashSet::default(),
                             children: Vec::new(),
                         });
-                        let id = self.insert(n, root);
+                        let id = self.insert(n, root, &mut nodes_updated);
                         self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
@@ -169,7 +169,7 @@ impl<S: State> RealDom<S> {
                             listeners: FxHashSet::default(),
                             children: Vec::new(),
                         });
-                        let id = self.insert(n, root);
+                        let id = self.insert(n, root, &mut nodes_updated);
                         self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
@@ -186,7 +186,7 @@ impl<S: State> RealDom<S> {
                     }
                     CreatePlaceholder { root } => {
                         let n = Node::new(NodeType::Placeholder);
-                        let id = self.insert(n, root);
+                        let id = self.insert(n, root, &mut nodes_updated);
                         self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                         if let Some((parent, remaining)) = self.parents_queued.last_mut() {
                             *remaining -= 1;
@@ -329,35 +329,8 @@ impl<S: State> RealDom<S> {
                     StoreWithId { id } => {
                         let old_id = self.last.unwrap();
                         let node = self.internal_nodes.remove(old_id.as_unaccessable_id());
-                        let new_id = self.insert(*node, Some(id));
-                        // this is safe because a node cannot have itself as a child or parent
-                        let unbouned_self = unsafe { &mut *(self as *mut Self) };
-                        // update parent's link to child id
-                        if let Some(parent) = self[new_id].node_data.parent {
-                            if let NodeType::Element { children, .. } =
-                                &mut self[parent].node_data.node_type
-                            {
-                                for c in children {
-                                    if *c == old_id {
-                                        *c = new_id;
-                                    }
-                                }
-                            }
-                        }
-                        // update child's link to parent id
-                        if let NodeType::Element { children, .. } =
-                            &self[new_id].node_data.node_type
-                        {
-                            for child_id in children {
-                                unbouned_self[*child_id].node_data.parent = Some(new_id);
-                            }
-                        }
-                        self.last = Some(new_id);
-                        for (node, _) in &mut nodes_updated {
-                            if *node == old_id {
-                                *node = new_id;
-                            }
-                        }
+                        let new_id = self.insert(*node, Some(id), &mut nodes_updated);
+                        self.update_id(old_id, new_id, &mut nodes_updated);
                     }
                     SetLastNode { id } => {
                         self.last =
@@ -374,6 +347,53 @@ impl<S: State> RealDom<S> {
         });
 
         nodes_updated
+    }
+
+    /// Update refrences to an old node id to a new node id
+    fn update_id(
+        &mut self,
+        old_id: RealNodeId,
+        new_id: RealNodeId,
+        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
+    ) {
+        // this is safe because a node cannot have itself as a child or parent
+        let unbouned_self = unsafe { &mut *(self as *mut Self) };
+        // update parent's link to child id
+        if let Some(parent) = self[new_id].node_data.parent {
+            if let NodeType::Element { children, .. } = &mut self[parent].node_data.node_type {
+                for c in children {
+                    if *c == old_id {
+                        *c = new_id;
+                        break;
+                    }
+                }
+            }
+        }
+        // update child's link to parent id
+        if let NodeType::Element { children, .. } = &self[new_id].node_data.node_type {
+            for child_id in children {
+                unbouned_self[*child_id].node_data.parent = Some(new_id);
+            }
+        }
+        // update dirty nodes
+        for (node, _) in nodes_updated {
+            if *node == old_id {
+                *node = new_id;
+            }
+        }
+        // update nodes listening
+        for v in self.nodes_listening.values_mut() {
+            if v.contains(&old_id) {
+                v.remove(&old_id);
+                v.insert(new_id);
+            }
+        }
+        // update last
+        if let Some(last) = self.last {
+            if last == old_id {
+                self.last = Some(new_id);
+            }
+        }
     }
 
     fn mark_dirty(
@@ -493,13 +513,28 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    fn insert(&mut self, mut node: Node<S>, id: Option<u64>) -> RealNodeId {
+    fn insert(
+        &mut self,
+        mut node: Node<S>,
+        id: Option<u64>,
+        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
+    ) -> RealNodeId {
         match id {
             Some(id) => {
                 let id = id as usize;
                 self.resize_to(id);
                 let real_id = RealNodeId::ElementId(ElementId(id));
                 node.node_data.id = Some(real_id);
+                // move the old node to a new unaccessable id
+                if let Some(mut old) = self.nodes[id].take() {
+                    let old_id = old.node_data.id.unwrap();
+                    let entry = self.internal_nodes.vacant_entry();
+                    let id = entry.key();
+                    let new_id = RealNodeId::UnaccessableId(id);
+                    old.node_data.id = Some(real_id);
+                    entry.insert(old);
+                    self.update_id(old_id, new_id, nodes_updated);
+                }
                 self.nodes[id] = Some(Box::new(node));
                 real_id
             }
@@ -669,7 +704,7 @@ impl<S: State> RealDom<S> {
         nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
         new_id: Option<u64>,
     ) -> RealNodeId {
-        let new_id = self.insert(self[id].clone(), new_id);
+        let new_id = self.insert(self[id].clone(), new_id, nodes_updated);
         nodes_updated.push((new_id, NodeMask::ALL));
         // this is safe because no node has itself as a child.
         let unbounded_self = unsafe { &mut *(self as *mut Self) };

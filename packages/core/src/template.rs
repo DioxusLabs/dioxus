@@ -335,9 +335,28 @@ impl<'a> VTemplateRef<'a> {
                             nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
                         }
                     }
-                    UpdateOp::InsertBefore(id)
-                    | UpdateOp::AppendChild(id)
-                    | UpdateOp::InsertAfter(id) => {
+                    UpdateOp::AppendChild(id) => {
+                        let node = &nodes.as_ref()[id.0];
+                        match &node.node_type {
+                            TemplateNodeType::DynamicNode(idx) => {
+                                if current_node_id.is_none() {
+                                    // create a temporary node to come back to later
+                                    let id = diff_state.scopes.reserve_phantom_node();
+                                    diff_state.mutations.store_with_id(id.as_u64());
+                                    temp_id = true;
+                                    current_node_id = Some(id);
+                                }
+                                let id = current_node_id.unwrap();
+                                let mut created = Vec::new();
+                                let node = template_ref.dynamic_context.resolve_node(*idx);
+                                diff_state.create_node(id, node, &mut created);
+                                diff_state.mutations.set_last_node(id.as_u64());
+                                diff_state.mutations.append_children(None, created);
+                            }
+                            _ => panic!("can only insert dynamic nodes"),
+                        }
+                    }
+                    UpdateOp::InsertBefore(id) | UpdateOp::InsertAfter(id) => {
                         let node = &nodes.as_ref()[id.0];
                         match &node.node_type {
                             TemplateNodeType::DynamicNode(idx) => {
@@ -359,9 +378,6 @@ impl<'a> VTemplateRef<'a> {
                                     }
                                     UpdateOp::InsertAfter(_) => {
                                         diff_state.mutations.insert_after(None, created);
-                                    }
-                                    UpdateOp::AppendChild(_) => {
-                                        diff_state.mutations.append_children(None, created);
                                     }
                                     _ => unreachable!(),
                                 }
