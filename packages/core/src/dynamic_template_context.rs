@@ -96,28 +96,6 @@ where
             nodes_with_listeners: listeners,
         }
     }
-
-    pub(crate) fn all_dynamic(&self) -> impl Iterator<Item = TemplateNodeId> + '_ {
-        self.nodes
-            .as_ref()
-            .iter()
-            .filter_map(|o| o.as_ref())
-            .chain(
-                self.text
-                    .as_ref()
-                    .iter()
-                    .flat_map(|ids| ids.as_ref().iter()),
-            )
-            .copied()
-            .chain(
-                self.attributes
-                    .as_ref()
-                    .iter()
-                    .flat_map(|ids| ids.as_ref().iter())
-                    .map(|dynamic| dynamic.0),
-            )
-            .chain(self.nodes_with_listeners.as_ref().iter().copied())
-    }
 }
 
 /// A dynamic node mapping that is stack allocated

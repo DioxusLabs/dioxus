@@ -447,17 +447,7 @@ impl ScopeArena {
             }
         }
 
-        fn bubble_template<
-            'b,
-            Attributes,
-            V,
-            Children,
-            Listeners,
-            TextSegments,
-            Text,
-            Nodes,
-            Path,
-        >(
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text, Nodes>(
             nodes: &Nodes,
             ctx: (
                 TemplateNodeId,
@@ -467,15 +457,13 @@ impl ScopeArena {
             ),
         ) -> Option<ElementId>
         where
-            Nodes:
-                AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
-            Path: AsRef<[usize]>,
         {
             let (start, template_ref, event, state) = ctx;
             let dynamic_context = &template_ref.dynamic_context;

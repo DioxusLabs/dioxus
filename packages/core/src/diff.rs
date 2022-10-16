@@ -612,18 +612,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        fn diff_attributes<
-            'b,
-            E,
-            Nodes,
-            Attributes,
-            V,
-            Children,
-            Listeners,
-            TextSegments,
-            Text,
-            Path,
-        >(
+        fn diff_attributes<'b, E, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
             ctx: (
                 &mut DiffState<'b, E>,
@@ -634,15 +623,13 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
             ),
         ) where
             E: Edits<'b>,
-            Nodes:
-                AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>]>,
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
-            Path: AsRef<[usize]>,
         {
             let (diff_state, scope_bump, new, template, idx) = ctx;
             for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
@@ -654,7 +641,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                         value: new.dynamic_context.resolve_attribute(idx).clone(),
                         is_static: false,
                     };
-                    let real_id = new.get_node_id(*node_id, template, diff_state);
+                    let real_id = new.get_node_id(*node_id);
                     diff_state
                         .mutations
                         .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -664,15 +651,9 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
             }
         }
 
-        fn set_attribute<'b, E, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
-            ctx: (
-                &mut DiffState<'b, E>,
-                &'b Bump,
-                &'b VTemplateRef<'b>,
-                &Template,
-                usize,
-            ),
+        fn set_attribute<'b, E, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+            ctx: (&mut DiffState<'b, E>, &'b Bump, &'b VTemplateRef<'b>, usize),
         ) where
             E: Edits<'b>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -681,9 +662,8 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
-            Path: AsRef<[usize]>,
         {
-            let (diff_state, scope_bump, new, template, template_attr_idx) = ctx;
+            let (diff_state, scope_bump, new, template_attr_idx) = ctx;
             if let TemplateNodeType::Element(el) = &node.node_type {
                 let TemplateElement { attributes, .. } = el;
                 let attr = &attributes.as_ref()[template_attr_idx];
@@ -698,7 +678,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                     value,
                     is_static: false,
                 };
-                let real_id = new.get_node_id(node.id, template, diff_state);
+                let real_id = new.get_node_id(node.id);
                 diff_state
                     .mutations
                     .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
@@ -707,12 +687,11 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
             }
         }
 
-        fn diff_text<'b, E, Attributes, V, Children, Listeners, TextSegments, Text, Path>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text, Path>,
+        fn diff_text<'b, E, Attributes, V, Children, Listeners, TextSegments, Text>(
+            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
             ctx: (
                 &mut DiffState<'b, E>,
                 &'b VTemplateRef<'b>,
-                &Template,
                 &TemplateContext<'b>,
             ),
         ) where
@@ -723,12 +702,11 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
             Listeners: AsRef<[usize]>,
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
-            Path: AsRef<[usize]>,
         {
-            let (diff, new, template, dynamic_context) = ctx;
+            let (diff, new, dynamic_context) = ctx;
             if let TemplateNodeType::Text(text) = &node.node_type {
                 let text = dynamic_context.resolve_text(text);
-                let real_id = new.get_node_id(node.id, template, diff);
+                let real_id = new.get_node_id(node.id);
                 diff.mutations.set_text(
                     diff.current_scope_bump().alloc(text),
                     Some(real_id.as_u64()),
@@ -795,7 +773,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                 id,
                 set_attribute,
                 set_attribute,
-                (self, scope_bump, new, &template, idx),
+                (self, scope_bump, new, idx),
             );
         }
 
@@ -830,7 +808,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                 node_id,
                 diff_text,
                 diff_text,
-                (self, new, &template, &new.dynamic_context),
+                (self, new, &new.dynamic_context),
             );
         }
     }
@@ -1295,12 +1273,11 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                 let templates = self.scopes.templates.borrow();
                 let template = templates.get(&template_ref.template_id).unwrap().borrow();
                 let mut root_iter = template.root_nodes().iter();
-                let first_real_id =
-                    template_ref.get_node_id(*root_iter.next().unwrap(), &template, self);
+                let first_real_id = template_ref.get_node_id(*root_iter.next().unwrap());
                 self.mutations
                     .replace_with(Some(first_real_id.as_u64()), nodes_created);
                 for id in root_iter {
-                    let real_id = template_ref.get_node_id(*id, &template, self);
+                    let real_id = template_ref.get_node_id(*id);
                     self.mutations.remove(Some(real_id.as_u64()));
                 }
 
@@ -1381,7 +1358,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                     let template = templates.get(&template_ref.template_id).unwrap().borrow();
                     if gen_muts {
                         for id in template.root_nodes() {
-                            let real_id = template_ref.get_node_id(*id, &template, self);
+                            let real_id = template_ref.get_node_id(*id);
                             self.mutations.remove(Some(real_id.as_u64()));
                         }
                     }
@@ -1474,10 +1451,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
                     let template = template.borrow();
-                    break template
-                        .root_nodes()
-                        .last()
-                        .map(|id| t.get_node_id(*id, &template, self));
+                    break template.root_nodes().last().map(|id| t.get_node_id(*id));
                 }
             }
         }
@@ -1499,10 +1473,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                     let templates = self.scopes.templates.borrow();
                     let template = templates.get(&t.template_id).unwrap();
                     let template = template.borrow();
-                    break template
-                        .root_nodes()
-                        .first()
-                        .map(|id| t.get_node_id(*id, &template, self));
+                    break template.root_nodes().first().map(|id| t.get_node_id(*id));
                 }
             }
         }
@@ -1523,7 +1494,7 @@ impl<'b, E: Edits<'b>> DiffState<'b, E> {
                     template
                         .root_nodes()
                         .iter()
-                        .map(|id| template_ref.get_node_id(*id, &template, self).as_u64()),
+                        .map(|id| template_ref.get_node_id(*id).as_u64()),
                 );
             }
 
