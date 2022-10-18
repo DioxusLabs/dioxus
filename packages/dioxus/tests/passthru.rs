@@ -45,10 +45,10 @@ fn nested_passthru_creates() {
     assert_eq!(
         edits.edits,
         [
-            CreateElement { tag: "div", root: 1 },
-            CreateTextNode { text: "hi", root: 2 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
+            CreateElement { tag: "div", root: Some(1), children: 0 },
+            CreateTextNode { text: "hi", root: Some(2) },
+            AppendChildren { root: Some(1), children: vec![2] },
+            AppendChildren { root: Some(0), children: vec![1] },
         ]
     )
 }
@@ -88,13 +88,13 @@ fn nested_passthru_creates_add() {
     assert_eq!(
         edits.edits,
         [
-            CreateTextNode { text: "1", root: 1 },
-            CreateTextNode { text: "2", root: 2 },
-            CreateTextNode { text: "3", root: 3 },
-            CreateElement { tag: "div", root: 4 },
-            CreateTextNode { text: "hi", root: 5 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 4 },
+            CreateTextNode { text: "1", root: Some(1) },
+            CreateTextNode { text: "2", root: Some(2) },
+            CreateTextNode { text: "3", root: Some(3) },
+            CreateElement { tag: "div", root: Some(4), children: 0 },
+            CreateTextNode { text: "hi", root: Some(5) },
+            AppendChildren { root: Some(4), children: vec![5] },
+            AppendChildren { root: Some(0), children: vec![1, 2, 3, 4] },
         ]
     )
 }

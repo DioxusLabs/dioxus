@@ -1,9 +1,10 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
+use dioxus_tui::Config;
 
 fn main() {
-    dioxus_tui::launch(app);
+    dioxus_tui::launch_cfg(app, Config::default());
 }
 
 #[derive(Props, PartialEq)]

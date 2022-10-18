@@ -5,67 +5,19 @@
 use crate::{
     dynamic_template_context::TemplateContext,
     innerlude::{
-        AttributeValue, ComponentPtr, Element, Properties, Scope, ScopeId, ScopeState, Template,
-        TemplateId,
+        AttributeValue, ComponentPtr, Element, IntoAttributeValue, Properties, Scope, ScopeId,
+        ScopeState, Template, TemplateId,
     },
     lazynodes::LazyNodes,
-    template::{TemplateNodeId, VTemplateRef},
+    template::VTemplateRef,
     AnyEvent, Component,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug, Formatter},
-    num::ParseIntError,
     rc::Rc,
-    str::FromStr,
 };
-
-/// The ID of a node in the vdom that is either standalone or in a template
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
-pub enum GlobalNodeId {
-    /// The ID of a node and the template that contains it
-    TemplateId {
-        /// The template that contains the node
-        template_ref_id: ElementId,
-        /// The ID of the node in the template
-        template_node_id: TemplateNodeId,
-    },
-    /// The ID of a regular node
-    VNodeId(ElementId),
-}
-
-impl From<ElementId> for GlobalNodeId {
-    fn from(id: ElementId) -> GlobalNodeId {
-        GlobalNodeId::VNodeId(id)
-    }
-}
-
-impl PartialEq<ElementId> for GlobalNodeId {
-    fn eq(&self, other: &ElementId) -> bool {
-        match self {
-            GlobalNodeId::TemplateId { .. } => false,
-            GlobalNodeId::VNodeId(id) => id == other,
-        }
-    }
-}
-
-impl FromStr for GlobalNodeId {
-    type Err = ParseIntError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Some((tmpl_id, node_id)) = s.split_once(',') {
-            Ok(GlobalNodeId::TemplateId {
-                template_ref_id: ElementId(tmpl_id.parse()?),
-                template_node_id: TemplateNodeId(node_id.parse()?),
-            })
-        } else {
-            Ok(GlobalNodeId::VNodeId(ElementId(s.parse()?)))
-        }
-    }
-}
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
@@ -201,7 +153,7 @@ impl<'src> VNode<'src> {
             VNode::Placeholder(el) => el.id.get(),
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
-            VNode::TemplateRef(t) => t.id.get(),
+            VNode::TemplateRef(_) => None,
         }
     }
 
@@ -252,7 +204,6 @@ impl Debug for VNode<'_> {
             VNode::TemplateRef(temp) => s
                 .debug_struct("VNode::TemplateRef")
                 .field("template_id", &temp.template_id)
-                .field("id", &temp.id)
                 .finish(),
         }
     }
@@ -340,7 +291,7 @@ pub struct VElement<'a> {
     /// The parent of the Element (if any).
     ///
     /// Used when bubbling events
-    pub parent: Cell<Option<GlobalNodeId>>,
+    pub parent: Cell<Option<ElementId>>,
 
     /// The Listeners of the VElement.
     pub listeners: &'a [Listener<'a>],
@@ -456,7 +407,7 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The ID of the node that this listener is mounted to
     /// Used to generate the event listener's ID on the DOM
-    pub mounted_node: Cell<Option<GlobalNodeId>>,
+    pub mounted_node: Cell<Option<ElementId>>,
 
     /// The type of event to listen for.
     ///
@@ -515,9 +466,13 @@ impl<'a, T> Default for EventHandler<'a, T> {
 impl<T> EventHandler<'_, T> {
     /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
+        #[cfg(feature = "dev")]
+        log::trace!("calling event handler");
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
+        #[cfg(feature = "dev")]
+        log::trace!("done");
     }
 
     /// Forcibly drop the internal handler callback, releasing memory
@@ -698,13 +653,12 @@ impl<'a> NodeFactory<'a> {
     pub fn attr_disciption(
         &self,
         discription: AttributeDiscription,
-        val: Arguments,
+        val: impl IntoAttributeValue<'a>,
     ) -> Attribute<'a> {
-        let (value, is_static) = self.raw_text(val);
         Attribute {
             attribute: discription,
-            is_static,
-            value: AttributeValue::Text(value),
+            is_static: false,
+            value: val.into_value(self.bump),
         }
     }
 
@@ -712,19 +666,18 @@ impl<'a> NodeFactory<'a> {
     pub fn attr(
         &self,
         name: &'static str,
-        val: Arguments,
+        val: impl IntoAttributeValue<'a>,
         namespace: Option<&'static str>,
         is_volatile: bool,
     ) -> Attribute<'a> {
-        let (value, is_static) = self.raw_text(val);
         Attribute {
             attribute: AttributeDiscription {
                 name,
                 namespace,
                 volatile: is_volatile,
             },
-            is_static,
-            value: AttributeValue::Text(value),
+            is_static: false,
+            value: val.into_value(self.bump),
         }
     }
 
@@ -872,9 +825,11 @@ impl<'a> NodeFactory<'a> {
             borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
         }
         VNode::TemplateRef(self.bump.alloc(VTemplateRef {
-            id: empty_cell(),
             dynamic_context,
             template_id: id,
+            node_ids: RefCell::new(Vec::new()),
+            parent: Cell::new(None),
+            template_ref_id: Cell::new(None),
         }))
     }
 }

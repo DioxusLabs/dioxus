@@ -3,7 +3,7 @@
 //!
 //! This is all kinda WIP, but the bones are there.
 
-use crate::{nodes::GlobalNodeId, ScopeId};
+use crate::{ElementId, ScopeId};
 use std::{any::Any, cell::Cell, fmt::Debug, rc::Rc, sync::Arc};
 
 pub(crate) struct BubbleState {
@@ -58,7 +58,7 @@ pub struct UserEvent {
     pub priority: EventPriority,
 
     /// The optional real node associated with the trigger
-    pub element: Option<GlobalNodeId>,
+    pub element: Option<ElementId>,
 
     /// The event type IE "onclick" or "onmouseover"
     pub name: &'static str,

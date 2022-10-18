@@ -8,7 +8,7 @@
 //! - Partial delegation?>
 
 use dioxus_core::{DomEdit, ElementId, SchedulerMsg, ScopeId, UserEvent};
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use std::{any::Any, fmt::Debug, rc::Rc, sync::Arc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{

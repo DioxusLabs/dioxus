@@ -1,17 +1,18 @@
 use crate::{
     real_dom::{NodeType, RealDom},
     state::State,
+    RealNodeId,
 };
-use dioxus_core::{DomEdit, ElementId, GlobalNodeId, Mutations};
+use dioxus_core::{DomEdit, ElementId, Mutations};
 
 pub enum ElementProduced {
     /// The iterator produced an element by progressing to the next node in a depth first order.
-    Progressed(GlobalNodeId),
+    Progressed(RealNodeId),
     /// The iterator reached the end of the tree and looped back to the root
-    Looped(GlobalNodeId),
+    Looped(RealNodeId),
 }
 impl ElementProduced {
-    pub fn id(&self) -> GlobalNodeId {
+    pub fn id(&self) -> RealNodeId {
         match self {
             ElementProduced::Progressed(id) => *id,
             ElementProduced::Looped(id) => *id,
@@ -50,16 +51,13 @@ impl NodePosition {
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
     // stack of elements and fragments
-    stack: smallvec::SmallVec<[(GlobalNodeId, NodePosition); 5]>,
+    stack: smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
 }
 
 impl Default for PersistantElementIter {
     fn default() -> Self {
         PersistantElementIter {
-            stack: smallvec::smallvec![(
-                GlobalNodeId::VNodeId(dioxus_core::ElementId(0)),
-                NodePosition::AtNode
-            )],
+            stack: smallvec::smallvec![(RealNodeId::ElementId(ElementId(0)), NodePosition::AtNode)],
         }
     }
 }
@@ -79,7 +77,7 @@ impl PersistantElementIter {
             .filter_map(|e| {
                 // nodes within templates will never be removed
                 if let DomEdit::Remove { root } = e {
-                    let id = rdom.decode_id(*root);
+                    let id = rdom.resolve_maybe_id(*root);
                     Some(id)
                 } else {
                     None
@@ -102,21 +100,23 @@ impl PersistantElementIter {
                     for m in &mutations.edits {
                         match m {
                             DomEdit::Remove { root } => {
-                                let id = rdom.decode_id(*root);
+                                let id = rdom.resolve_maybe_id(*root);
                                 if children.iter().take(*child_idx + 1).any(|c| *c == id) {
                                     *child_idx -= 1;
                                 }
                             }
-                            DomEdit::InsertBefore { root, n } => {
-                                let id = rdom.decode_id(*root);
+                            DomEdit::InsertBefore { root, nodes } => {
+                                let id = rdom.resolve_maybe_id(*root);
+                                let n = nodes.len();
                                 if children.iter().take(*child_idx + 1).any(|c| *c == id) {
-                                    *child_idx += *n as usize;
+                                    *child_idx += n as usize;
                                 }
                             }
-                            DomEdit::InsertAfter { root, n } => {
-                                let id = rdom.decode_id(*root);
+                            DomEdit::InsertAfter { root, nodes } => {
+                                let id = rdom.resolve_maybe_id(*root);
+                                let n = nodes.len();
                                 if children.iter().take(*child_idx).any(|c| *c == id) {
-                                    *child_idx += *n as usize;
+                                    *child_idx += n as usize;
                                 }
                             }
                             _ => (),
@@ -131,7 +131,7 @@ impl PersistantElementIter {
     /// get the next element
     pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         if self.stack.is_empty() {
-            let id = GlobalNodeId::VNodeId(ElementId(0));
+            let id = RealNodeId::ElementId(ElementId(0));
             let new = (id, NodePosition::AtNode);
             self.stack.push(new);
             ElementProduced::Looped(id)
@@ -167,10 +167,10 @@ impl PersistantElementIter {
     pub fn prev<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         // recursively add the last child element to the stack
         fn push_back<S: State>(
-            stack: &mut smallvec::SmallVec<[(GlobalNodeId, NodePosition); 5]>,
-            new_node: GlobalNodeId,
+            stack: &mut smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
+            new_node: RealNodeId,
             rdom: &RealDom<S>,
-        ) -> GlobalNodeId {
+        ) -> RealNodeId {
             match &rdom[new_node].node_data.node_type {
                 NodeType::Element { children, .. } => {
                     if children.is_empty() {
@@ -184,7 +184,7 @@ impl PersistantElementIter {
             }
         }
         if self.stack.is_empty() {
-            let new_node = GlobalNodeId::VNodeId(ElementId(0));
+            let new_node = RealNodeId::ElementId(ElementId(0));
             ElementProduced::Looped(push_back(&mut self.stack, new_node, rdom))
         } else {
             let (last, o_child_idx) = self.stack.last_mut().unwrap();
@@ -223,7 +223,7 @@ impl PersistantElementIter {
         }
     }
 
-    fn pop(&mut self) -> GlobalNodeId {
+    fn pop(&mut self) -> RealNodeId {
         self.stack.pop().unwrap().0
     }
 }

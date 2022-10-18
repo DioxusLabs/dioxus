@@ -37,37 +37,31 @@ fn test_early_abort() {
     assert_eq!(
         edits.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate {
-                root: 4503599627370496,
-                text: "Hello, world!",
-                locally_static: true
-            },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            AppendChildren { many: 1 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateTextNode { root: None, text: "Hello, world!" },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            AppendChildren { root: Some(0), children: vec![2] }
         ]
     );
 
     let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
-        [CreatePlaceholder { root: 2 }, ReplaceWith { root: 1, m: 1 },],
+        [
+            CreatePlaceholder { root: Some(3) },
+            ReplaceWith { root: Some(2), nodes: vec![3] }
+        ]
     );
 
     let edits = dom.hard_diff(ScopeId(0));
     assert_eq!(
         edits.edits,
         [
-            CreateTemplateRef { id: 1, template_id: 0 }, // gets reused
-            ReplaceWith { root: 2, m: 1 }
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            ReplaceWith { root: Some(3), nodes: vec![2] }
         ]
     );
 }
