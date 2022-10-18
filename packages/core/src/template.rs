@@ -51,25 +51,29 @@
 //! To minimize the cost of allowing hot reloading on applications that do not use it there are &'static and owned versions of template nodes, and dynamic node mapping.
 //!
 //! Notes:
-//! 1) Why does the template need to exist outside of the virtual dom?
-//! The main use of the template is skipping diffing on static parts of the dom, but it is also used to make renderes more efficient. Renderers can create a template once and the clone it into place.
-//! When the renderers clone the template we could those new nodes as normal vnodes, but that would interfere with the passive memory management of the nodes. This would mean that static nodes memory must be managed by the virtual dom even though those static nodes do not exist in the virtual dom.
-//! 2) The template allow diffing to scale with reactivity.
+//! 1) The template allow diffing to scale with reactivity.
 //! With a virtual dom the diffing cost scales with the number of nodes in the dom. With templates the cost scales with the number of dynamic parts of the dom. The dynamic template context links any parts of the template that can change which allows the diffing algorithm to skip traversing the template and find what part to hydrate in constant time.
 
-/// The maxiumum integer in JS
-pub const JS_MAX_INT: u64 = 9007199254740991;
+use once_cell::unsync::OnceCell;
+use std::{
+    cell::{Cell, RefCell},
+    hash::Hash,
+    marker::PhantomData,
+    ptr,
+};
 
 use rustc_hash::FxHashMap;
-use std::{cell::Cell, hash::Hash, marker::PhantomData, ops::Index};
 
 use bumpalo::Bump;
 
 use crate::{
-    diff::DiffState, dynamic_template_context::TemplateContext, innerlude::GlobalNodeId,
-    nodes::AttributeDiscription, Attribute, AttributeValue, ElementId, Mutations,
-    OwnedAttributeValue, StaticDynamicNodeMapping,
+    diff::DiffState, dynamic_template_context::TemplateContext, nodes::AttributeDiscription,
+    scopes::ScopeArena, Attribute, AttributeValue, ElementId, Mutations, OwnedAttributeValue,
+    OwnedDynamicNodeMapping, StaticDynamicNodeMapping,
 };
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct TemplateRefId(pub usize);
 
 /// The location of a charicter. Used to track the location of rsx calls for hot reloading.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -140,10 +144,8 @@ impl Hash for CodeLocation {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             CodeLocation::Static(loc) => {
-                loc.crate_path.hash(state);
-                loc.file_path.hash(state);
-                state.write_u32(loc.line);
-                state.write_u32(loc.column);
+                let loc: &'static _ = *loc;
+                state.write_usize((loc as *const _) as usize);
             }
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             CodeLocation::Dynamic(loc) => {
@@ -160,7 +162,7 @@ impl Hash for CodeLocation {
 impl PartialEq for CodeLocation {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Static(l), Self::Static(r)) => l == r,
+            (Self::Static(l), Self::Static(r)) => ptr::eq(*l, *r),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             (Self::Dynamic(l), Self::Dynamic(r)) => l == r,
             #[cfg(any(feature = "hot-reload", debug_assertions))]
@@ -278,25 +280,161 @@ impl From<RendererTemplateId> for u64 {
 #[cfg_attr(feature = "serialize", serde(transparent))]
 pub struct TemplateNodeId(pub usize);
 
-impl From<TemplateNodeId> for u64 {
-    fn from(id: TemplateNodeId) -> u64 {
-        JS_MAX_INT / 2 + id.0 as u64
-    }
-}
-
 /// A refrence to a template along with any context needed to hydrate it
 pub struct VTemplateRef<'a> {
-    pub id: Cell<Option<ElementId>>,
+    pub(crate) template_ref_id: Cell<Option<TemplateRefId>>,
     pub template_id: TemplateId,
     pub dynamic_context: TemplateContext<'a>,
+    /// The parent of the template
+    pub(crate) parent: Cell<Option<ElementId>>,
+    // any nodes that already have ids assigned to them in the renderer
+    pub node_ids: RefCell<Vec<OnceCell<ElementId>>>,
 }
 
 impl<'a> VTemplateRef<'a> {
     // update the template with content from the dynamic context
-    pub(crate) fn hydrate<'b>(&self, template: &'b Template, diff_state: &mut DiffState<'a>) {
+    pub(crate) fn hydrate<'b: 'a>(
+        &'b self,
+        parent: ElementId,
+        template: &Template,
+        diff_state: &mut DiffState<'a>,
+    ) {
+        fn traverse_seg<'b, T, O, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+            seg: &PathSeg<T, O>,
+            nodes: &Nodes,
+            diff_state: &mut DiffState<'b>,
+            template_ref: &'b VTemplateRef<'b>,
+            parent: ElementId,
+        ) where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+            T: Traversable<O>,
+            O: AsRef<[UpdateOp]>,
+        {
+            let mut current_node_id = None;
+            let mut temp_id = false;
+            for op in seg.ops.as_ref() {
+                match op {
+                    UpdateOp::StoreNode(id) => {
+                        if let Some(real_id) = template_ref.try_get_node_id(*id) {
+                            current_node_id = Some(real_id);
+                            nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
+                        } else {
+                            let real_id = diff_state.scopes.reserve_template_node(
+                                template_ref.template_ref_id.get().unwrap(),
+                                *id,
+                            );
+                            current_node_id = Some(real_id);
+                            template_ref.set_node_id(*id, real_id);
+                            diff_state.mutations.store_with_id(real_id.as_u64());
+                            nodes.as_ref()[id.0].hydrate(real_id, diff_state, template_ref);
+                        }
+                    }
+                    UpdateOp::AppendChild(id) => {
+                        let node = &nodes.as_ref()[id.0];
+                        match &node.node_type {
+                            TemplateNodeType::DynamicNode(idx) => {
+                                if current_node_id.is_none() {
+                                    // create a temporary node to come back to later
+                                    let id = diff_state.scopes.reserve_phantom_node();
+                                    diff_state.mutations.store_with_id(id.as_u64());
+                                    temp_id = true;
+                                    current_node_id = Some(id);
+                                }
+                                let id = current_node_id.unwrap();
+                                let mut created = Vec::new();
+                                let node = template_ref.dynamic_context.resolve_node(*idx);
+                                diff_state.create_node(id, node, &mut created);
+                                diff_state.mutations.set_last_node(id.as_u64());
+                                diff_state.mutations.append_children(None, created);
+                            }
+                            _ => panic!("can only insert dynamic nodes"),
+                        }
+                    }
+                    UpdateOp::InsertBefore(id) | UpdateOp::InsertAfter(id) => {
+                        let node = &nodes.as_ref()[id.0];
+                        match &node.node_type {
+                            TemplateNodeType::DynamicNode(idx) => {
+                                if current_node_id.is_none() {
+                                    // create a temporary node to come back to later
+                                    let id = diff_state.scopes.reserve_phantom_node();
+                                    diff_state.mutations.store_with_id(id.as_u64());
+                                    temp_id = true;
+                                    current_node_id = Some(id);
+                                }
+                                let id = current_node_id.unwrap();
+                                let mut created = Vec::new();
+                                let node = template_ref.dynamic_context.resolve_node(*idx);
+                                diff_state.create_node(parent, node, &mut created);
+                                diff_state.mutations.set_last_node(id.as_u64());
+                                match op {
+                                    UpdateOp::InsertBefore(_) => {
+                                        diff_state.mutations.insert_before(None, created);
+                                    }
+                                    UpdateOp::InsertAfter(_) => {
+                                        diff_state.mutations.insert_after(None, created);
+                                    }
+                                    _ => unreachable!(),
+                                }
+                            }
+                            _ => panic!("can only insert dynamic nodes"),
+                        }
+                    }
+                }
+            }
+            match (seg.traverse.first_child(), seg.traverse.next_sibling()) {
+                (Some(child), Some(sibling)) => {
+                    if current_node_id.is_none() {
+                        // create a temporary node to come back to later
+                        let id = diff_state.scopes.reserve_phantom_node();
+                        diff_state.mutations.store_with_id(id.as_u64());
+                        temp_id = true;
+                        current_node_id = Some(id);
+                    }
+                    let id = current_node_id.unwrap();
+                    diff_state.mutations.first_child();
+                    traverse_seg(child, nodes, diff_state, template_ref, id);
+                    diff_state.mutations.set_last_node(id.as_u64());
+                    diff_state.mutations.next_sibling();
+                    traverse_seg(sibling, nodes, diff_state, template_ref, parent);
+                }
+                (Some(seg), None) => {
+                    if current_node_id.is_none() {
+                        let id = diff_state.scopes.reserve_phantom_node();
+                        diff_state.mutations.store_with_id(id.as_u64());
+                        temp_id = true;
+                        current_node_id = Some(id);
+                    }
+                    let id = current_node_id.unwrap();
+                    diff_state.mutations.first_child();
+                    traverse_seg(seg, nodes, diff_state, template_ref, id);
+                }
+                (None, Some(seg)) => {
+                    diff_state.mutations.next_sibling();
+                    traverse_seg(seg, nodes, diff_state, template_ref, parent);
+                }
+                (None, None) => {}
+            }
+            if temp_id {
+                if let Some(id) = current_node_id {
+                    // remove the temporary node
+                    diff_state.scopes.collect_garbage(id);
+                }
+            }
+        }
         fn hydrate_inner<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
             nodes: &Nodes,
-            ctx: (&mut DiffState<'b>, &VTemplateRef<'b>, &Template),
+            ctx: (
+                &mut DiffState<'b>,
+                &'b VTemplateRef<'b>,
+                &Template,
+                ElementId,
+            ),
         ) where
             Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
@@ -306,14 +444,50 @@ impl<'a> VTemplateRef<'a> {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (diff_state, template_ref, template) = ctx;
-            for id in template.all_dynamic() {
-                let dynamic_node = &nodes.as_ref()[id.0];
-                dynamic_node.hydrate(diff_state, template_ref);
+            let (diff_state, template_ref, template, parent) = ctx;
+
+            match template {
+                Template::Static(s) => {
+                    if let Some(seg) = &s.dynamic_path {
+                        diff_state.mutations.set_last_node(
+                            template_ref.get_node_id(template.root_nodes()[0]).as_u64(),
+                        );
+                        traverse_seg(seg, nodes, diff_state, template_ref, parent);
+                    }
+                }
+                Template::Owned(o) => {
+                    if let Some(seg) = &o.dynamic_path {
+                        diff_state.mutations.set_last_node(
+                            template_ref.get_node_id(template.root_nodes()[0]).as_u64(),
+                        );
+                        traverse_seg(seg, nodes, diff_state, template_ref, parent);
+                    }
+                }
             }
         }
 
-        template.with_nodes(hydrate_inner, hydrate_inner, (diff_state, self, template));
+        template.with_nodes(
+            hydrate_inner,
+            hydrate_inner,
+            (diff_state, self, template, parent),
+        );
+    }
+
+    pub(crate) fn get_node_id(&self, id: TemplateNodeId) -> ElementId {
+        self.try_get_node_id(id).unwrap()
+    }
+
+    pub(crate) fn try_get_node_id(&self, id: TemplateNodeId) -> Option<ElementId> {
+        let node_ids = self.node_ids.borrow();
+        node_ids.get(id.0).and_then(|cell| cell.get().copied())
+    }
+
+    pub(crate) fn set_node_id(&self, id: TemplateNodeId, real_id: ElementId) {
+        let mut ids = self.node_ids.borrow_mut();
+        if ids.len() <= id.0 {
+            ids.resize(id.0 + 1, OnceCell::new());
+        }
+        ids[id.0].set(real_id).unwrap();
     }
 }
 
@@ -326,6 +500,8 @@ pub struct StaticTemplate {
     pub root_nodes: StaticRootNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
     pub dynamic_mapping: StaticDynamicNodeMapping,
+    /// The path to take to update the template with dynamic content (starts from the first root node)
+    pub dynamic_path: Option<StaticPathSeg>,
 }
 
 /// A template that is created at runtime
@@ -341,7 +517,9 @@ pub struct OwnedTemplate {
     /// The ids of the root nodes in the template
     pub root_nodes: OwnedRootNodes,
     /// Any nodes that contain dynamic components. This is stored in the tmeplate to avoid traversing the tree every time a template is refrenced.
-    pub dynamic_mapping: crate::OwnedDynamicNodeMapping,
+    pub dynamic_mapping: OwnedDynamicNodeMapping,
+    /// The path to take to update the template with dynamic content
+    pub dynamic_path: Option<OwnedPathSeg>,
 }
 
 /// A template used to skip diffing on some static parts of the rsx
@@ -355,19 +533,18 @@ pub enum Template {
 }
 
 impl Template {
-    pub(crate) fn create<'b>(
-        &self,
-        mutations: &mut Mutations<'b>,
-        bump: &'b Bump,
-        id: RendererTemplateId,
-    ) {
-        mutations.create_templete(id);
+    pub(crate) fn create<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: ElementId) {
+        let children = match self {
+            Template::Static(s) => self.count_real_nodes(s.root_nodes),
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            Template::Owned(o) => self.count_real_nodes(&o.root_nodes),
+        };
+        mutations.create_element("template", None, Some(id.into()), children as u32);
         let empty = match self {
             Template::Static(s) => s.nodes.is_empty(),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => o.nodes.is_empty(),
         };
-        let mut len = 0;
         if !empty {
             let roots = match self {
                 Template::Static(s) => s.root_nodes,
@@ -375,11 +552,9 @@ impl Template {
                 Template::Owned(o) => &o.root_nodes,
             };
             for root in roots {
-                len += 1;
                 self.create_node(mutations, bump, *root);
             }
         }
-        mutations.finish_templete(len as u32);
     }
 
     fn create_node<'b>(&self, mutations: &mut Mutations<'b>, bump: &'b Bump, id: TemplateNodeId) {
@@ -395,9 +570,6 @@ impl Template {
             Text: AsRef<str>,
         {
             let (mutations, bump, template) = ctx;
-            let id = node.id;
-            let locally_static = node.locally_static;
-            let fully_static = node.fully_static;
             match &node.node_type {
                 TemplateNodeType::Element(el) => {
                     let TemplateElement {
@@ -407,12 +579,11 @@ impl Template {
                         children,
                         ..
                     } = el;
-                    mutations.create_element_template(
+                    mutations.create_element(
                         tag,
                         *namespace,
-                        id,
-                        locally_static,
-                        fully_static,
+                        None,
+                        template.count_real_nodes(children.as_ref()) as u32,
                     );
                     for attr in attributes.as_ref() {
                         if let TemplateAttributeValue::Static(val) = &attr.value {
@@ -422,34 +593,24 @@ impl Template {
                                 is_static: true,
                                 value: val,
                             };
-                            mutations.set_attribute(bump.alloc(attribute), id);
+                            mutations.set_attribute(bump.alloc(attribute), None);
                         }
                     }
-                    let mut children_created = 0;
                     for child in children.as_ref() {
                         template.create_node(mutations, bump, *child);
-                        children_created += 1;
                     }
-
-                    mutations.append_children(children_created);
                 }
                 TemplateNodeType::Text(text) => {
                     let mut text_iter = text.segments.as_ref().iter();
                     if let (Some(TextTemplateSegment::Static(txt)), None) =
                         (text_iter.next(), text_iter.next())
                     {
-                        mutations.create_text_node_template(
-                            bump.alloc_str(txt.as_ref()),
-                            id,
-                            locally_static,
-                        );
+                        mutations.create_text_node(bump.alloc_str(txt.as_ref()), None);
                     } else {
-                        mutations.create_text_node_template("", id, locally_static);
+                        mutations.create_text_node("", None);
                     }
                 }
-                TemplateNodeType::DynamicNode(_) => {
-                    mutations.create_placeholder_template(id);
-                }
+                TemplateNodeType::DynamicNode(_) => {}
             }
         }
         self.with_node(
@@ -496,10 +657,10 @@ impl Template {
     }
 
     #[cfg(any(feature = "hot-reload", debug_assertions))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx)
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx, R>(&'a self, mut f1: F1, mut f2: F2, ctx: Ctx) -> R
     where
-        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-        F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx),
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
+        F2: FnMut(&'a Vec<OwnedTemplateNode>, Ctx) -> R,
     {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
@@ -508,22 +669,39 @@ impl Template {
     }
 
     #[cfg(not(any(feature = "hot-reload", debug_assertions)))]
-    pub(crate) fn with_nodes<'a, F1, F2, Ctx>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx)
+    pub(crate) fn with_nodes<'a, F1, F2, Ctx, R>(&'a self, mut f1: F1, _f2: F2, ctx: Ctx) -> R
     where
-        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx),
-        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx),
+        F1: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
+        F2: FnMut(&'a &'static [StaticTemplateNode], Ctx) -> R,
     {
         match self {
             Template::Static(s) => f1(&s.nodes, ctx),
         }
     }
 
-    pub(crate) fn all_dynamic<'a>(&'a self) -> Box<dyn Iterator<Item = TemplateNodeId> + 'a> {
-        match self {
-            Template::Static(s) => Box::new(s.dynamic_mapping.all_dynamic()),
-            #[cfg(any(feature = "hot-reload", debug_assertions))]
-            Template::Owned(o) => Box::new(o.dynamic_mapping.all_dynamic()),
+    fn count_real_nodes(&self, ids: &[TemplateNodeId]) -> usize {
+        fn count_real_nodes_inner<Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
+            nodes: &Nodes,
+            id: TemplateNodeId,
+        ) -> usize
+        where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
+            Attributes: AsRef<[TemplateAttribute<V>]>,
+            V: TemplateValue,
+            Children: AsRef<[TemplateNodeId]>,
+            Listeners: AsRef<[usize]>,
+            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
+            Text: AsRef<str>,
+        {
+            match &nodes.as_ref()[id.0].node_type {
+                TemplateNodeType::DynamicNode(_) => 0,
+                TemplateNodeType::Element(_) => 1,
+                TemplateNodeType::Text(_) => 1,
+            }
         }
+        ids.iter()
+            .map(|id| self.with_nodes(count_real_nodes_inner, count_real_nodes_inner, *id))
+            .sum()
     }
 
     pub(crate) fn volatile_attributes<'a>(
@@ -539,14 +717,6 @@ impl Template {
             ),
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => Box::new(o.dynamic_mapping.volatile_attributes.iter().copied()),
-        }
-    }
-
-    pub(crate) fn get_dynamic_nodes_for_node_index(&self, idx: usize) -> Option<TemplateNodeId> {
-        match self {
-            Template::Static(s) => s.dynamic_mapping.nodes[idx],
-            #[cfg(any(feature = "hot-reload", debug_assertions))]
-            Template::Owned(o) => o.dynamic_mapping.nodes[idx],
         }
     }
 
@@ -566,6 +736,14 @@ impl Template {
             Template::Static(s) => s.dynamic_mapping.attributes[idx],
             #[cfg(any(feature = "hot-reload", debug_assertions))]
             Template::Owned(o) => o.dynamic_mapping.attributes[idx].as_ref(),
+        }
+    }
+
+    pub(crate) fn root_nodes(&self) -> &[TemplateNodeId] {
+        match self {
+            Template::Static(s) => s.root_nodes,
+            #[cfg(any(feature = "hot-reload", debug_assertions))]
+            Template::Owned(o) => &o.root_nodes,
         }
     }
 }
@@ -607,7 +785,7 @@ pub type OwnedRootNodes = Vec<TemplateNodeId>;
 /// Templates can only contain a limited subset of VNodes and keys are not needed, as diffing will be skipped.
 /// Dynamic parts of the Template are inserted into the VNode using the `TemplateContext` by traversing the tree in order and filling in dynamic parts
 /// This template node is generic over the storage of the nodes to allow for owned and &'static versions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
     derive(serde::Serialize, serde::Deserialize)
@@ -623,12 +801,13 @@ where
 {
     /// The ID of the [`TemplateNode`]. Note that this is not an elenemt id, and should be allocated seperately from VNodes on the frontend.
     pub id: TemplateNodeId,
-    /// If the id of the node must be kept in the refrences
-    pub locally_static: bool,
-    /// If any children of this node must be kept in the references
-    pub fully_static: bool,
+    /// The depth of the node in the template node tree
+    /// Root nodes have a depth of 0
+    pub depth: usize,
     /// The type of the [`TemplateNode`].
     pub node_type: TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>,
+    /// The parent of this node.
+    pub parent: Option<TemplateNodeId>,
 }
 
 impl<Attributes, V, Children, Listeners, TextSegments, Text>
@@ -641,14 +820,12 @@ where
     TextSegments: AsRef<[TextTemplateSegment<Text>]>,
     Text: AsRef<str>,
 {
-    fn hydrate<'b>(&self, diff_state: &mut DiffState<'b>, template_ref: &VTemplateRef<'b>) {
-        let real_id = template_ref.id.get().unwrap();
-
-        diff_state.element_stack.push(GlobalNodeId::TemplateId {
-            template_ref_id: real_id,
-            template_node_id: self.id,
-        });
-        diff_state.mutations.enter_template_ref(real_id);
+    fn hydrate<'b>(
+        &self,
+        real_node_id: ElementId,
+        diff_state: &mut DiffState<'b>,
+        template_ref: &'b VTemplateRef<'b>,
+    ) {
         match &self.node_type {
             TemplateNodeType::Element(el) => {
                 let TemplateElement {
@@ -667,41 +844,34 @@ where
                             is_static: false,
                         };
                         let scope_bump = diff_state.current_scope_bump();
-                        diff_state
-                            .mutations
-                            .set_attribute(scope_bump.alloc(attribute), self.id);
+                        diff_state.mutations.set_attribute(
+                            scope_bump.alloc(attribute),
+                            Some(real_node_id.as_u64()),
+                        );
                     }
                 }
                 for listener_idx in listeners.as_ref() {
                     let listener = template_ref.dynamic_context.resolve_listener(*listener_idx);
-                    let global_id = GlobalNodeId::TemplateId {
-                        template_ref_id: real_id,
-                        template_node_id: self.id,
-                    };
-                    listener.mounted_node.set(Some(global_id));
+                    listener.mounted_node.set(Some(real_node_id));
                     diff_state
                         .mutations
                         .new_event_listener(listener, diff_state.current_scope());
                 }
             }
             TemplateNodeType::Text(text) => {
-                let new_text = template_ref
-                    .dynamic_context
-                    .resolve_text(&text.segments.as_ref());
                 let scope_bump = diff_state.current_scope_bump();
+                let mut bump_str =
+                    bumpalo::collections::String::with_capacity_in(text.min_size, scope_bump);
+                template_ref
+                    .dynamic_context
+                    .resolve_text_into(text, &mut bump_str);
+
                 diff_state
                     .mutations
-                    .set_text(scope_bump.alloc(new_text), self.id)
+                    .set_text(bump_str.into_bump_str(), Some(real_node_id.as_u64()));
             }
-            TemplateNodeType::DynamicNode(idx) => {
-                // this will only be triggered for root elements
-                let created =
-                    diff_state.create_node(template_ref.dynamic_context.resolve_node(*idx));
-                diff_state.mutations.replace_with(self.id, created as u32);
-            }
+            TemplateNodeType::DynamicNode(_) => {}
         }
-        diff_state.mutations.exit_template_ref();
-        diff_state.element_stack.pop();
     }
 }
 
@@ -824,48 +994,6 @@ where
     DynamicNode(usize),
 }
 
-impl<Attributes, V, Children, Listeners, TextSegments, Text>
-    TemplateNodeType<Attributes, V, Children, Listeners, TextSegments, Text>
-where
-    Attributes: AsRef<[TemplateAttribute<V>]>,
-    Children: AsRef<[TemplateNodeId]>,
-    Listeners: AsRef<[usize]>,
-    V: TemplateValue,
-    TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-    Text: AsRef<str>,
-{
-    /// Returns if this node, and its children, are static.
-    pub fn fully_static<Nodes: Index<usize, Output = Self>>(&self, nodes: &Nodes) -> bool {
-        self.locally_static()
-            && match self {
-                TemplateNodeType::Element(e) => e
-                    .children
-                    .as_ref()
-                    .iter()
-                    .all(|c| nodes[c.0].fully_static(nodes)),
-                TemplateNodeType::Text(_) => true,
-                TemplateNodeType::DynamicNode(_) => unreachable!(),
-            }
-    }
-
-    /// Returns if this node is static.
-    pub fn locally_static(&self) -> bool {
-        match self {
-            TemplateNodeType::Element(e) => {
-                e.attributes.as_ref().iter().all(|a| match a.value {
-                    TemplateAttributeValue::Static(_) => true,
-                    TemplateAttributeValue::Dynamic(_) => false,
-                }) && e.listeners.as_ref().is_empty()
-            }
-            TemplateNodeType::Text(t) => t.segments.as_ref().iter().all(|seg| match seg {
-                TextTemplateSegment::Static(_) => true,
-                TextTemplateSegment::Dynamic(_) => false,
-            }),
-            TemplateNodeType::DynamicNode(_) => false,
-        }
-    }
-}
-
 type StaticStr = &'static str;
 
 /// A element template
@@ -899,8 +1027,6 @@ where
     pub children: Children,
     /// The ids of the listeners of the element
     pub listeners: Listeners,
-    /// The parent of the element
-    pub parent: Option<TemplateNodeId>,
     value: PhantomData<V>,
 }
 
@@ -918,7 +1044,6 @@ where
         attributes: Attributes,
         children: Children,
         listeners: Listeners,
-        parent: Option<TemplateNodeId>,
     ) -> Self {
         TemplateElement {
             tag,
@@ -926,7 +1051,6 @@ where
             attributes,
             children,
             listeners,
-            parent,
             value: PhantomData,
         }
     }
@@ -945,6 +1069,8 @@ where
 {
     /// The segments of the template.
     pub segments: Segments,
+    /// The minimum size of the output text.
+    pub min_size: usize,
     text: PhantomData<Text>,
 }
 
@@ -954,9 +1080,10 @@ where
     Text: AsRef<str>,
 {
     /// create a new template from the segments it is composed of.
-    pub const fn new(segments: Segments) -> Self {
+    pub const fn new(segments: Segments, min_size: usize) -> Self {
         TextTemplate {
             segments,
+            min_size,
             text: PhantomData,
         }
     }
@@ -1005,8 +1132,7 @@ pub enum StaticAttributeValue {
 #[derive(Default)]
 pub(crate) struct TemplateResolver {
     // maps a id to the rendererid and if that template needs to be re-created
-    pub template_id_mapping: FxHashMap<TemplateId, (RendererTemplateId, bool)>,
-    pub template_count: usize,
+    pub template_id_mapping: FxHashMap<TemplateId, (ElementId, bool)>,
 }
 
 impl TemplateResolver {
@@ -1028,15 +1154,14 @@ impl TemplateResolver {
     pub fn get_or_create_client_id(
         &mut self,
         template_id: &TemplateId,
-    ) -> (RendererTemplateId, bool) {
+        scopes: &ScopeArena,
+    ) -> (ElementId, bool) {
         if let Some(id) = self.template_id_mapping.get(template_id) {
             *id
         } else {
-            let id = self.template_count;
-            let renderer_id = RendererTemplateId(id);
+            let renderer_id = scopes.reserve_phantom_node();
             self.template_id_mapping
                 .insert(template_id.clone(), (renderer_id, false));
-            self.template_count += 1;
             (renderer_id, true)
         }
     }
@@ -1047,3 +1172,116 @@ impl TemplateResolver {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub struct SetTemplateMsg(pub TemplateId, pub OwnedTemplate);
+
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+/// A path segment that lives on the heap.
+pub type OwnedPathSeg = PathSeg<OwnedTraverse, Vec<UpdateOp>>;
+
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+#[cfg_attr(
+    all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+#[derive(Debug, Clone, PartialEq)]
+/// A traverse message that lives on the heap.
+pub enum OwnedTraverse {
+    /// Halt traversal
+    Halt,
+    /// Traverse to the first child of the current node.
+    FirstChild(Box<OwnedPathSeg>),
+    /// Traverse to the next sibling of the current node.
+    NextSibling(Box<OwnedPathSeg>),
+    /// Traverse to the both the first child and next sibling of the current node.
+    Both(Box<(OwnedPathSeg, OwnedPathSeg)>),
+}
+
+#[cfg(any(feature = "hot-reload", debug_assertions))]
+impl Traversable<Vec<UpdateOp>> for OwnedTraverse {
+    fn first_child(&self) -> Option<&OwnedPathSeg> {
+        match self {
+            OwnedTraverse::FirstChild(p) => Some(p),
+            OwnedTraverse::Both(ps) => Some(&ps.0),
+            _ => None,
+        }
+    }
+
+    fn next_sibling(&self) -> Option<&OwnedPathSeg> {
+        match self {
+            OwnedTraverse::NextSibling(p) => Some(p),
+            OwnedTraverse::Both(ps) => Some(&ps.1),
+            _ => None,
+        }
+    }
+}
+
+/// A path segment that lives on the stack.
+pub type StaticPathSeg = PathSeg<StaticTraverse, &'static [UpdateOp]>;
+
+#[derive(Debug, Clone, PartialEq)]
+/// A traverse message that lives on the stack.
+pub enum StaticTraverse {
+    /// Halt traversal
+    Halt,
+    /// Traverse to the first child of the current node.
+    FirstChild(&'static StaticPathSeg),
+    /// Traverse to the next sibling of the current node.
+    NextSibling(&'static StaticPathSeg),
+    /// Traverse to the both the first child and next sibling of the current node.
+    Both(&'static (StaticPathSeg, StaticPathSeg)),
+}
+
+impl Traversable<&'static [UpdateOp]> for StaticTraverse {
+    fn first_child(&self) -> Option<&StaticPathSeg> {
+        match self {
+            StaticTraverse::FirstChild(p) => Some(p),
+            StaticTraverse::Both((p, _)) => Some(p),
+            _ => None,
+        }
+    }
+
+    fn next_sibling(&self) -> Option<&StaticPathSeg> {
+        match self {
+            StaticTraverse::NextSibling(p) => Some(p),
+            StaticTraverse::Both((_, p)) => Some(p),
+            _ => None,
+        }
+    }
+}
+
+pub trait Traversable<O: AsRef<[UpdateOp]>>
+where
+    Self: Sized,
+{
+    fn first_child(&self) -> Option<&PathSeg<Self, O>>;
+    fn next_sibling(&self) -> Option<&PathSeg<Self, O>>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+/// A path segment that defines a way to traverse a template node and resolve dynamic sections.
+pub struct PathSeg<T: Traversable<O>, O: AsRef<[UpdateOp]>> {
+    /// The operation to perform on the current node.
+    pub ops: O,
+    /// The next traversal step.
+    pub traverse: T,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    all(feature = "serialize", any(feature = "hot-reload", debug_assertions)),
+    derive(serde::Serialize, serde::Deserialize)
+)]
+/// A operation that can be applied to a template node when intially updating it.
+pub enum UpdateOp {
+    /// Store a dynamic node on the renderer
+    StoreNode(TemplateNodeId),
+    /// Insert a dynamic node before the current node
+    InsertBefore(TemplateNodeId),
+    /// Insert a dynamic node after the current node
+    InsertAfter(TemplateNodeId),
+    /// Append a dynamic node to the current node
+    AppendChild(TemplateNodeId),
+}

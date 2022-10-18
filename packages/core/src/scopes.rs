@@ -1,25 +1,28 @@
-use crate::{
-    dynamic_template_context::TemplateContext,
-    innerlude::*,
-    template::{
-        TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId, TemplateNodeType,
-        TemplateValue, TextTemplateSegment,
-    },
-    unsafe_utils::extend_vnode,
-};
+use crate::{innerlude::*, template::TemplateNodeId, unsafe_utils::extend_vnode};
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
 use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, Ref, RefCell},
+    cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
     future::Future,
     pin::Pin,
     rc::Rc,
     sync::Arc,
 };
+
+pub(crate) enum NodePtr {
+    VNode(*const VNode<'static>),
+    TemplateNode {
+        template_ref: TemplateRefId,
+        node_id: TemplateNodeId,
+    },
+    Phantom,
+}
+
+pub(crate) type NodeSlab = Slab<NodePtr>;
 
 /// for traceability, we use the raw fn pointer to identify the function
 /// we also get the component name, but that's not necessarily unique in the app
@@ -40,12 +43,16 @@ pub(crate) struct ScopeArena {
     pub scopes: RefCell<FxHashMap<ScopeId, *mut ScopeState>>,
     pub heuristics: RefCell<FxHashMap<ComponentPtr, Heuristic>>,
     pub free_scopes: RefCell<Vec<*mut ScopeState>>,
-    pub nodes: RefCell<Slab<*const VNode<'static>>>,
+    // All nodes are stored here. This mimics the allocations needed on the renderer side.
+    // Some allocations are needed on the renderer to render nodes in templates that are
+    // not needed in dioxus, for these allocations None is used so that the id is preseved and passive memory managment is preserved.
+    pub nodes: RefCell<NodeSlab>,
     pub tasks: Rc<TaskQueue>,
     pub template_resolver: RefCell<TemplateResolver>,
     pub templates: Rc<RefCell<FxHashMap<TemplateId, Rc<RefCell<Template>>>>>,
     // this is used to store intermidiate artifacts of creating templates, so that the lifetime aligns with Mutations<'bump>.
     pub template_bump: Bump,
+    pub template_refs: RefCell<Slab<*const VTemplateRef<'static>>>,
 }
 
 impl ScopeArena {
@@ -68,7 +75,9 @@ impl ScopeArena {
 
         let node = bump.alloc(VNode::Element(el));
         let mut nodes = Slab::new();
-        let root_id = nodes.insert(unsafe { std::mem::transmute(node as *const _) });
+        let root_id = nodes.insert(NodePtr::VNode(unsafe {
+            std::mem::transmute(node as *const _)
+        }));
 
         debug_assert_eq!(root_id, 0);
 
@@ -88,6 +97,7 @@ impl ScopeArena {
             template_resolver: RefCell::new(TemplateResolver::default()),
             templates: Rc::new(RefCell::new(FxHashMap::default())),
             template_bump: Bump::new(),
+            template_refs: RefCell::new(Slab::new()),
         }
     }
 
@@ -107,7 +117,7 @@ impl ScopeArena {
         fc_ptr: ComponentPtr,
         vcomp: Box<dyn AnyProps>,
         parent_scope: Option<ScopeId>,
-        container: GlobalNodeId,
+        container: ElementId,
     ) -> ScopeId {
         // Increment the ScopeId system. ScopeIDs are never reused
         let new_scope_id = ScopeId(self.scope_gen.get());
@@ -217,13 +227,61 @@ impl ScopeArena {
         let key = entry.key();
         let id = ElementId(key);
         let node = unsafe { extend_vnode(node) };
-        entry.insert(node as *const _);
+        entry.insert(NodePtr::VNode(node as *const _));
+        id
+    }
+
+    pub fn reserve_template_ref<'a>(&self, template_ref: &'a VTemplateRef<'a>) -> TemplateRefId {
+        let mut refs = self.template_refs.borrow_mut();
+        let entry = refs.vacant_entry();
+        let key = entry.key();
+        let id = TemplateRefId(key);
+        let static_ref: &VTemplateRef<'static> = unsafe { std::mem::transmute(template_ref) };
+        entry.insert(static_ref as *const _);
+        id
+    }
+
+    pub fn reserve_template_node(
+        &self,
+        template_ref_id: TemplateRefId,
+        node_id: TemplateNodeId,
+    ) -> ElementId {
+        let mut els = self.nodes.borrow_mut();
+        let entry = els.vacant_entry();
+        let key = entry.key();
+        let id = ElementId(key);
+        entry.insert(NodePtr::TemplateNode {
+            template_ref: template_ref_id,
+            node_id,
+        });
+        id
+    }
+
+    pub fn reserve_phantom_node(&self) -> ElementId {
+        let mut els = self.nodes.borrow_mut();
+        let entry = els.vacant_entry();
+        let key = entry.key();
+        let id = ElementId(key);
+        entry.insert(NodePtr::Phantom);
         id
     }
 
     pub fn update_node<'a>(&self, node: &'a VNode<'a>, id: ElementId) {
         let node = unsafe { extend_vnode(node) };
-        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = node;
+        *self.nodes.borrow_mut().get_mut(id.0).unwrap() = NodePtr::VNode(node);
+    }
+
+    pub fn update_template_ref<'a>(
+        &self,
+        template_ref_id: TemplateRefId,
+        template_ref: &'a VTemplateRef<'a>,
+    ) {
+        let template_ref = unsafe { std::mem::transmute(template_ref) };
+        *self
+            .template_refs
+            .borrow_mut()
+            .get_mut(template_ref_id.0)
+            .unwrap() = template_ref;
     }
 
     pub fn collect_garbage(&self, id: ElementId) {
@@ -324,7 +382,7 @@ impl ScopeArena {
         scope.cycle_frame();
     }
 
-    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: GlobalNodeId) {
+    pub fn call_listener_with_bubbling(&self, event: &UserEvent, element: ElementId) {
         let nodes = self.nodes.borrow();
         let mut cur_el = Some(element);
 
@@ -335,39 +393,10 @@ impl ScopeArena {
                 // stop bubbling if canceled
                 return;
             }
-            match id {
-                GlobalNodeId::TemplateId {
-                    template_ref_id,
-                    template_node_id,
-                } => {
-                    log::trace!(
-                        "looking for listener in {:?} in node {:?}",
-                        template_ref_id,
-                        template_node_id
-                    );
-                    if let Some(template) = nodes.get(template_ref_id.0) {
-                        let template = unsafe { &**template };
-                        if let VNode::TemplateRef(template_ref) = template {
-                            let templates = self.templates.borrow();
-                            let template = templates.get(&template_ref.template_id).unwrap();
-                            cur_el = template.borrow().with_node(
-                                template_node_id,
-                                bubble_template,
-                                bubble_template,
-                                (
-                                    &nodes,
-                                    &template_ref.dynamic_context,
-                                    event,
-                                    &state,
-                                    template_ref_id,
-                                ),
-                            );
-                        }
-                    }
-                }
-                GlobalNodeId::VNodeId(id) => {
-                    if let Some(el) = nodes.get(id.0) {
-                        let real_el = unsafe { &**el };
+            if let Some(ptr) = nodes.get(id.0) {
+                match ptr {
+                    NodePtr::VNode(ptr) => {
+                        let real_el = unsafe { &**ptr };
                         log::trace!("looking for listener on {:?}", real_el);
 
                         if let VNode::Element(real_el) = real_el {
@@ -393,24 +422,42 @@ impl ScopeArena {
                             cur_el = real_el.parent.get();
                         }
                     }
+                    NodePtr::TemplateNode {
+                        node_id,
+                        template_ref,
+                    } => {
+                        let template_refs = self.template_refs.borrow();
+                        let template_ptr = template_refs.get(template_ref.0).unwrap();
+                        let template_ref = unsafe { &**template_ptr };
+                        log::trace!("looking for listener in node {:?}", node_id);
+                        let templates = self.templates.borrow();
+                        let template = templates.get(&template_ref.template_id).unwrap();
+                        cur_el = template.borrow().with_nodes(
+                            bubble_template,
+                            bubble_template,
+                            (*node_id, template_ref, event, &state),
+                        );
+                    }
+                    _ => panic!("Expected Real Node"),
                 }
             }
+
             if !event.bubbles {
                 return;
             }
         }
 
-        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
+        fn bubble_template<'b, Attributes, V, Children, Listeners, TextSegments, Text, Nodes>(
+            nodes: &Nodes,
             ctx: (
-                &Ref<Slab<*const VNode>>,
-                &TemplateContext<'b>,
+                TemplateNodeId,
+                &VTemplateRef<'b>,
                 &UserEvent,
                 &Rc<BubbleState>,
-                ElementId,
             ),
-        ) -> Option<GlobalNodeId>
+        ) -> Option<ElementId>
         where
+            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
             Attributes: AsRef<[TemplateAttribute<V>]>,
             V: TemplateValue,
             Children: AsRef<[TemplateNodeId]>,
@@ -418,46 +465,40 @@ impl ScopeArena {
             TextSegments: AsRef<[TextTemplateSegment<Text>]>,
             Text: AsRef<str>,
         {
-            let (vnodes, dynamic_context, event, state, template_ref_id) = ctx;
-            if let TemplateNodeType::Element(el) = &node.node_type {
-                let TemplateElement { listeners, .. } = el;
-                for listener_idx in listeners.as_ref() {
-                    let listener = dynamic_context.resolve_listener(*listener_idx);
-                    if listener.event == event.name {
-                        log::trace!("calling listener {:?}", listener.event);
+            let (start, template_ref, event, state) = ctx;
+            let dynamic_context = &template_ref.dynamic_context;
+            let mut current = &nodes.as_ref()[start.0];
+            loop {
+                if let TemplateNodeType::Element(el) = &current.node_type {
+                    let TemplateElement { listeners, .. } = el;
+                    for listener_idx in listeners.as_ref() {
+                        let listener = dynamic_context.resolve_listener(*listener_idx);
+                        if listener.event == event.name {
+                            log::trace!("calling listener {:?}", listener.event);
 
-                        let mut cb = listener.callback.borrow_mut();
-                        if let Some(cb) = cb.as_mut() {
-                            // todo: arcs are pretty heavy to clone
-                            // we really want to convert arc to rc
-                            // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
-                            // we could convert arc to rc internally or something
-                            (cb)(AnyEvent {
-                                bubble_state: state.clone(),
-                                data: event.data.clone(),
-                            });
+                            let mut cb = listener.callback.borrow_mut();
+                            if let Some(cb) = cb.as_mut() {
+                                // todo: arcs are pretty heavy to clone
+                                // we really want to convert arc to rc
+                                // unfortunately, the SchedulerMsg must be send/sync to be sent across threads
+                                // we could convert arc to rc internally or something
+                                (cb)(AnyEvent {
+                                    bubble_state: state.clone(),
+                                    data: event.data.clone(),
+                                });
+                            }
+                            break;
                         }
-                        break;
                     }
-                }
 
-                if let Some(id) = el.parent {
-                    Some(GlobalNodeId::TemplateId {
-                        template_ref_id,
-                        template_node_id: id,
-                    })
+                    if let Some(id) = current.parent {
+                        current = &nodes.as_ref()[id.0];
+                    } else {
+                        return template_ref.parent.get();
+                    }
                 } else {
-                    vnodes.get(template_ref_id.0).and_then(|el| {
-                        let real_el = unsafe { &**el };
-                        if let VNode::Element(real_el) = real_el {
-                            real_el.parent.get()
-                        } else {
-                            None
-                        }
-                    })
+                    return None;
                 }
-            } else {
-                None
             }
         }
     }
@@ -484,11 +525,10 @@ impl ScopeArena {
 
     // this is totally okay since all our nodes are always in a valid state
     pub fn get_element(&self, id: ElementId) -> Option<&VNode> {
-        self.nodes
-            .borrow()
-            .get(id.0)
-            .copied()
-            .map(|ptr| unsafe { extend_vnode(&*ptr) })
+        self.nodes.borrow().get(id.0).and_then(|ptr| match ptr {
+            NodePtr::VNode(ptr) => Some(unsafe { extend_vnode(&**ptr) }),
+            _ => None,
+        })
     }
 }
 
@@ -569,7 +609,7 @@ pub struct TaskId {
 /// use case they might have.
 pub struct ScopeState {
     pub(crate) parent_scope: Option<*mut ScopeState>,
-    pub(crate) container: GlobalNodeId,
+    pub(crate) container: ElementId,
     pub(crate) our_arena_idx: ScopeId,
     pub(crate) height: u32,
     pub(crate) fnptr: ComponentPtr,

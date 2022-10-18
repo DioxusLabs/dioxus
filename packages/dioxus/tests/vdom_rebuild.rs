@@ -63,38 +63,22 @@ fn conditional_rendering() {
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "h1",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
-            AppendChildren { many: 1 },
-            CreatePlaceholderTemplate { root: 4503599627370497 },
-            CreatePlaceholderTemplate { root: 4503599627370498 },
-            FinishTemplate { len: 3 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            EnterTemplateRef { root: 1 },
-            CreateTemplate { id: 1 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "span",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate { root: 4503599627370496, text: "a", locally_static: true },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 2, template_id: 1 },
-            ReplaceWith { root: 4503599627370497, m: 1 },
-            ExitTemplateRef {},
-            EnterTemplateRef { root: 1 },
-            CreatePlaceholder { root: 3 },
-            ReplaceWith { root: 4503599627370498, m: 1 },
-            ExitTemplateRef {},
-            AppendChildren { many: 1 }
+            CreateElement { root: Some(1), tag: "template", children: 3 },
+            CreateElement { root: None, tag: "h1", children: 1 },
+            CreateTextNode { root: None, text: "hello" },
+            CreatePlaceholder { root: None },
+            CreatePlaceholder { root: None },
+            CloneNodeChildren { id: Some(1), new_ids: vec![2, 3, 4] },
+            CreateElement { root: Some(5), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "span", children: 1 },
+            CreateTextNode { root: None, text: "a" },
+            CloneNodeChildren { id: Some(5), new_ids: vec![6] },
+            SetLastNode { id: 3 },
+            ReplaceWith { root: None, nodes: vec![6] },
+            CreatePlaceholder { root: Some(7) },
+            SetLastNode { id: 4 },
+            ReplaceWith { root: None, nodes: vec![7] },
+            AppendChildren { root: Some(0), children: vec![2, 3, 4] }
         ]
     )
 }

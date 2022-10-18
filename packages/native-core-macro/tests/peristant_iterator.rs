@@ -1,4 +1,3 @@
-use dioxus::core as dioxus_core;
 use dioxus::core_macro::rsx_without_templates;
 use dioxus::prelude::*;
 use dioxus_native_core::{

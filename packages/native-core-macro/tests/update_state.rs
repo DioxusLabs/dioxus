@@ -1,12 +1,11 @@
 use anymap::AnyMap;
 use dioxus::core::ElementId;
-use dioxus::core::{self as dioxus_core, GlobalNodeId};
 use dioxus::core::{AttributeValue, DomEdit, Mutations};
 use dioxus::core_macro::rsx_without_templates;
 use dioxus::prelude::*;
-use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
+use dioxus_native_core::{node_ref::*, RealNodeId};
 use dioxus_native_core_macro::State;
 
 #[derive(Debug, Clone, Default, State)]
@@ -195,10 +194,7 @@ fn state_initial() {
     ctx.insert(42u32);
     let _to_rerender = dom.update_state(nodes_updated, ctx);
 
-    let root_div = &dom[GlobalNodeId::TemplateId {
-        template_ref_id: dioxus_core::ElementId(1),
-        template_node_id: dioxus::prelude::TemplateNodeId(0),
-    }];
+    let root_div = &dom[RealNodeId::ElementId(ElementId(2))];
     assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
     assert_eq!(
         root_div.state.bubbled.1,
@@ -218,10 +214,7 @@ fn state_initial() {
     assert_eq!(root_div.state.node.0, Some("div".to_string()));
     assert_eq!(root_div.state.node.1, vec![]);
 
-    let child_p = &dom[GlobalNodeId::TemplateId {
-        template_ref_id: dioxus_core::ElementId(1),
-        template_node_id: dioxus::prelude::TemplateNodeId(1),
-    }];
+    let child_p = &dom[RealNodeId::UnaccessableId(3)];
     assert_eq!(child_p.state.bubbled.0, Some("p".to_string()));
     assert_eq!(child_p.state.bubbled.1, Vec::new());
     assert_eq!(child_p.state.pushed.0, Some("p".to_string()));
@@ -241,10 +234,7 @@ fn state_initial() {
         vec![("color".to_string(), "red".to_string())]
     );
 
-    let child_h1 = &dom[GlobalNodeId::TemplateId {
-        template_ref_id: dioxus_core::ElementId(1),
-        template_node_id: dioxus::prelude::TemplateNodeId(2),
-    }];
+    let child_h1 = &dom[RealNodeId::UnaccessableId(4)];
     assert_eq!(child_h1.state.bubbled.0, Some("h1".to_string()));
     assert_eq!(child_h1.state.bubbled.1, Vec::new());
     assert_eq!(child_h1.state.pushed.0, Some("h1".to_string()));
@@ -313,7 +303,7 @@ fn state_reduce_parent_called_minimally_on_update() {
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
-            root: 1,
+            root: Some(1),
             field: "width",
             value: AttributeValue::Text("99%"),
             ns: Some("style"),
@@ -382,7 +372,7 @@ fn state_reduce_child_called_minimally_on_update() {
     let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
     let nodes_updated = dom.apply_mutations(vec![Mutations {
         edits: vec![DomEdit::SetAttribute {
-            root: 4,
+            root: Some(4),
             field: "width",
             value: AttributeValue::Text("99%"),
             ns: Some("style"),
@@ -395,7 +385,7 @@ fn state_reduce_child_called_minimally_on_update() {
     dom.traverse_depth_first(|n| {
         assert_eq!(
             n.state.part1.child_counter.0,
-            if let GlobalNodeId::VNodeId(ElementId(id)) = n.node_data.id {
+            if let Some(RealNodeId::ElementId(ElementId(id))) = n.node_data.id {
                 if id > 4 {
                     1
                 } else {
@@ -407,7 +397,7 @@ fn state_reduce_child_called_minimally_on_update() {
         );
         assert_eq!(
             n.state.child_counter.0,
-            if let GlobalNodeId::VNodeId(ElementId(id)) = n.node_data.id {
+            if let Some(RealNodeId::ElementId(ElementId(id))) = n.node_data.id {
                 if id > 4 {
                     1
                 } else {

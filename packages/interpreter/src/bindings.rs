@@ -15,102 +15,83 @@ extern "C" {
     pub fn SetNode(this: &Interpreter, id: usize, node: Node);
 
     #[wasm_bindgen(method)]
-    pub fn PushRoot(this: &Interpreter, root: u64);
+    pub fn AppendChildren(this: &Interpreter, root: Option<u64>, children: Vec<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn PopRoot(this: &Interpreter);
+    pub fn ReplaceWith(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn AppendChildren(this: &Interpreter, many: u32);
+    pub fn InsertAfter(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn ReplaceWith(this: &Interpreter, root: u64, m: u32);
+    pub fn InsertBefore(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn InsertAfter(this: &Interpreter, root: u64, n: u32);
+    pub fn Remove(this: &Interpreter, root: Option<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn InsertBefore(this: &Interpreter, root: u64, n: u32);
+    pub fn CreateTextNode(this: &Interpreter, text: JsValue, root: Option<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn Remove(this: &Interpreter, root: u64);
+    pub fn CreateElement(this: &Interpreter, tag: &str, root: Option<u64>, children: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreateTextNode(this: &Interpreter, text: JsValue, root: u64);
+    pub fn CreateElementNs(
+        this: &Interpreter,
+        tag: &str,
+        root: Option<u64>,
+        ns: &str,
+        children: u32,
+    );
 
     #[wasm_bindgen(method)]
-    pub fn CreateElement(this: &Interpreter, tag: &str, root: u64);
-
-    #[wasm_bindgen(method)]
-    pub fn CreateElementNs(this: &Interpreter, tag: &str, root: u64, ns: &str);
-
-    #[wasm_bindgen(method)]
-    pub fn CreatePlaceholder(this: &Interpreter, root: u64);
+    pub fn CreatePlaceholder(this: &Interpreter, root: Option<u64>);
 
     #[wasm_bindgen(method)]
     pub fn NewEventListener(
         this: &Interpreter,
         name: &str,
-        root: u64,
+        root: Option<u64>,
         handler: &Function,
         bubbles: bool,
     );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveEventListener(this: &Interpreter, root: u64, name: &str, bubbles: bool);
+    pub fn RemoveEventListener(this: &Interpreter, root: Option<u64>, name: &str, bubbles: bool);
 
     #[wasm_bindgen(method)]
-    pub fn SetText(this: &Interpreter, root: u64, text: JsValue);
+    pub fn SetText(this: &Interpreter, root: Option<u64>, text: JsValue);
 
     #[wasm_bindgen(method)]
     pub fn SetAttribute(
         this: &Interpreter,
-        root: u64,
+        root: Option<u64>,
         field: &str,
         value: JsValue,
         ns: Option<&str>,
     );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveAttribute(this: &Interpreter, root: u64, field: &str, ns: Option<&str>);
+    pub fn RemoveAttribute(this: &Interpreter, root: Option<u64>, field: &str, ns: Option<&str>);
 
     #[wasm_bindgen(method)]
-    pub fn CreateTemplateRef(this: &Interpreter, id: u64, template_id: u64);
+    pub fn CloneNode(this: &Interpreter, root: Option<u64>, new_id: u64);
 
     #[wasm_bindgen(method)]
-    pub fn CreateTemplate(this: &Interpreter, id: u64);
+    pub fn CloneNodeChildren(this: &Interpreter, root: Option<u64>, new_ids: Vec<u64>);
 
     #[wasm_bindgen(method)]
-    pub fn FinishTemplate(this: &Interpreter, len: u32);
+    pub fn FirstChild(this: &Interpreter);
 
     #[wasm_bindgen(method)]
-    pub fn EnterTemplateRef(this: &Interpreter, id: u64);
+    pub fn NextSibling(this: &Interpreter);
 
     #[wasm_bindgen(method)]
-    pub fn ExitTemplateRef(this: &Interpreter);
+    pub fn ParentNode(this: &Interpreter);
 
     #[wasm_bindgen(method)]
-    pub fn CreateElementTemplate(
-        this: &Interpreter,
-        tag: &str,
-        root: u64,
-        locally_static: bool,
-        fully_static: bool,
-    );
+    pub fn StoreWithId(this: &Interpreter, id: u64);
 
     #[wasm_bindgen(method)]
-    pub fn CreateElementNsTemplate(
-        this: &Interpreter,
-        tag: &str,
-        id: u64,
-        ns: &str,
-        locally_static: bool,
-        fully_static: bool,
-    );
-
-    #[wasm_bindgen(method)]
-    pub fn CreateTextNodeTemplate(this: &Interpreter, text: &str, root: u64, locally_static: bool);
-
-    #[wasm_bindgen(method)]
-    pub fn CreatePlaceholderTemplate(this: &Interpreter, root: u64);
+    pub fn SetLastNode(this: &Interpreter, id: u64);
 }

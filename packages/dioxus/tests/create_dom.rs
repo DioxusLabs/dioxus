@@ -30,29 +30,15 @@ fn test_original_diff() {
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateElementTemplate {
-                root: 4503599627370496,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate {
-                root: 4503599627370497,
-                text: "Hello, world!",
-                locally_static: true
-            },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            AppendChildren { many: 1 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateTextNode { root: None, text: "Hello, world!" },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            // add to root
+            AppendChildren { root: Some(0), children: vec![2] },
         ]
     );
 }
@@ -83,49 +69,27 @@ fn create() {
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: false
-            },
-            CreateElementTemplate {
-                root: 4503599627370496,
-                tag: "div",
-                locally_static: true,
-                fully_static: false
-            },
-            CreateTextNodeTemplate {
-                root: 4503599627370497,
-                text: "Hello, world!",
-                locally_static: true
-            },
-            CreateElementTemplate {
-                root: 4503599627370498,
-                tag: "div",
-                locally_static: true,
-                fully_static: false
-            },
-            CreateElementTemplate {
-                root: 4503599627370499,
-                tag: "div",
-                locally_static: true,
-                fully_static: false
-            },
-            CreatePlaceholderTemplate { root: 4503599627370500 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 2 },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            EnterTemplateRef { root: 1 },
-            CreateTextNode { root: 2, text: "hello" },
-            CreateTextNode { root: 3, text: "world" },
-            ReplaceWith { root: 4503599627370500, m: 2 },
-            ExitTemplateRef {},
-            AppendChildren { many: 1 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateElement { root: None, tag: "div", children: 2 },
+            CreateTextNode { root: None, text: "Hello, world!" },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreatePlaceholder { root: None },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            CreateTextNode { root: Some(3), text: "hello" },
+            CreateTextNode { root: Some(4), text: "world" },
+            // update template
+            SetLastNode { id: 2 },
+            FirstChild {},
+            FirstChild {},
+            NextSibling {},
+            FirstChild {},
+            FirstChild {},
+            ReplaceWith { root: None, nodes: vec![3, 4] },
+            AppendChildren { root: Some(0), children: vec![2] }
         ]
     );
 }
@@ -143,24 +107,19 @@ fn create_list() {
     let mut dom = new_dom(APP, ());
     let mutations = dom.rebuild();
 
-    // copilot wrote this test :P
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            CreateTemplateRef { id: 2, template_id: 0 },
-            CreateTemplateRef { id: 3, template_id: 0 },
-            AppendChildren { many: 3 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateTextNode { root: None, text: "hello" },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            CloneNodeChildren { id: Some(1), new_ids: vec![3] },
+            CloneNodeChildren { id: Some(1), new_ids: vec![4] },
+            // add to root
+            AppendChildren { root: Some(0), children: vec![2, 3, 4] },
         ]
     );
 }
@@ -179,42 +138,19 @@ fn create_simple() {
     let mut dom = new_dom(APP, ());
     let mutations = dom.rebuild();
 
-    // copilot wrote this test :P
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            CreateElementTemplate {
-                root: 4503599627370496,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            CreateElementTemplate {
-                root: 4503599627370497,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            CreateElementTemplate {
-                root: 4503599627370498,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            FinishTemplate { len: 4 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            AppendChildren { many: 1 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 4 },
+            CreateElement { root: None, tag: "div", children: 0 },
+            CreateElement { root: None, tag: "div", children: 0 },
+            CreateElement { root: None, tag: "div", children: 0 },
+            CreateElement { root: None, tag: "div", children: 0 },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2, 3, 4, 5] },
+            // add to root
+            AppendChildren { root: Some(0), children: vec![2, 3, 4, 5] },
         ]
     );
 }
@@ -247,46 +183,35 @@ fn create_components() {
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "h1",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            CreateElementTemplate {
-                root: 4503599627370496,
-                tag: "div",
-                locally_static: true,
-                fully_static: false
-            },
-            CreatePlaceholderTemplate { root: 4503599627370497 },
-            AppendChildren { many: 1 },
-            CreateElementTemplate {
-                root: 4503599627370498,
-                tag: "p",
-                locally_static: true,
-                fully_static: true
-            },
-            AppendChildren { many: 0 },
-            FinishTemplate { len: 3 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            EnterTemplateRef { root: 1 },
-            CreateTextNode { root: 2, text: "abc1" },
-            ReplaceWith { root: 4503599627370497, m: 1 },
-            ExitTemplateRef {},
-            CreateTemplateRef { id: 3, template_id: 0 },
-            EnterTemplateRef { root: 3 },
-            CreateTextNode { root: 4, text: "abc2" },
-            ReplaceWith { root: 4503599627370497, m: 1 },
-            ExitTemplateRef {},
-            CreateTemplateRef { id: 5, template_id: 0 },
-            EnterTemplateRef { root: 5 },
-            CreateTextNode { root: 6, text: "abc3" },
-            ReplaceWith { root: 4503599627370497, m: 1 },
-            ExitTemplateRef {},
-            AppendChildren { many: 3 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 3 },
+            CreateElement { root: None, tag: "h1", children: 0 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreatePlaceholder { root: None },
+            CreateElement { root: None, tag: "p", children: 0 },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2, 3, 4] },
+            // update template
+            CreateTextNode { root: Some(5), text: "abc1" },
+            SetLastNode { id: 3 },
+            FirstChild {},
+            ReplaceWith { root: None, nodes: vec![5] },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![6, 7, 8] },
+            // update template
+            CreateTextNode { root: Some(9), text: "abc2" },
+            SetLastNode { id: 7 },
+            FirstChild {},
+            ReplaceWith { root: None, nodes: vec![9] },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![10, 11, 12] },
+            // update template
+            CreateTextNode { root: Some(13), text: "abc3" },
+            SetLastNode { id: 11 },
+            FirstChild {},
+            ReplaceWith { root: None, nodes: vec![13] },
+            // add to root
+            AppendChildren { root: Some(0), children: vec![2, 3, 4, 6, 7, 8, 10, 11, 12] }
         ]
     );
 }
@@ -302,22 +227,19 @@ fn anchors() {
 
     let mut dom = new_dom(App, ());
     let mutations = dom.rebuild();
+
     assert_eq!(
         mutations.edits,
         [
-            CreateTemplate { id: 0 },
-            CreateElementTemplate {
-                root: 4503599627370495,
-                tag: "div",
-                locally_static: true,
-                fully_static: true
-            },
-            CreateTextNodeTemplate { root: 4503599627370496, text: "hello", locally_static: true },
-            AppendChildren { many: 1 },
-            FinishTemplate { len: 1 },
-            CreateTemplateRef { id: 1, template_id: 0 },
-            CreatePlaceholder { root: 2 },
-            AppendChildren { many: 2 }
+            // create template
+            CreateElement { root: Some(1), tag: "template", children: 1 },
+            CreateElement { root: None, tag: "div", children: 1 },
+            CreateTextNode { root: None, text: "hello" },
+            // clone template
+            CloneNodeChildren { id: Some(1), new_ids: vec![2] },
+            CreatePlaceholder { root: Some(3) },
+            // add to root
+            AppendChildren { root: Some(0), children: vec![2, 3] },
         ]
     );
 }

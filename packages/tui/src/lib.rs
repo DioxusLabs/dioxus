@@ -7,7 +7,7 @@ use crossterm::{
 };
 use dioxus_core::exports::futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::real_dom::RealDom;
+use dioxus_native_core::{real_dom::RealDom, RealNodeId};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -133,8 +133,8 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: rustc_hash::FxHashSet<GlobalNodeId> =
-                vec![GlobalNodeId::VNodeId(ElementId(0))]
+            let mut to_rerender: rustc_hash::FxHashSet<RealNodeId> =
+                vec![RealNodeId::ElementId(ElementId(0))]
                     .into_iter()
                     .collect();
             let mut updated = true;

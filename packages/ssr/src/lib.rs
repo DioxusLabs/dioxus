@@ -433,7 +433,7 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
 
                 *last_node_was_text = true;
 
-                let text = dynamic_context.resolve_text(&txt.segments);
+                let text = dynamic_context.resolve_text(txt);
 
                 write!(f, "{}", text)?
             }

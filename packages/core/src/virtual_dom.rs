@@ -103,6 +103,7 @@ use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 /// }
 /// ```
 pub struct VirtualDom {
+    root: ElementId,
     scopes: ScopeArena,
 
     pending_messages: VecDeque<SchedulerMsg>,
@@ -230,10 +231,11 @@ impl VirtualDom {
                 render_fn: root,
             }),
             None,
-            GlobalNodeId::VNodeId(ElementId(0)),
+            ElementId(0),
         );
 
         Self {
+            root: ElementId(0),
             scopes,
             channel,
             dirty_scopes: IndexSet::from_iter([ScopeId(0)]),
@@ -495,7 +497,7 @@ impl VirtualDom {
 
                     self.scopes.run_scope(scopeid);
 
-                    diff_state.diff_scope(scopeid);
+                    diff_state.diff_scope(self.root, scopeid);
 
                     let DiffState { mutations, .. } = diff_state;
 
@@ -551,15 +553,15 @@ impl VirtualDom {
         let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
-        diff_state
-            .element_stack
-            .push(GlobalNodeId::VNodeId(ElementId(0)));
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
-        let created = diff_state.create_node(node);
+        let mut created = Vec::new();
+        diff_state.create_node(self.root, node, &mut created);
 
-        diff_state.mutations.append_children(created as u32);
+        diff_state
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
 
         self.dirty_scopes.clear();
         assert!(self.dirty_scopes.is_empty());
@@ -609,9 +611,8 @@ impl VirtualDom {
         diff_machine.force_diff = true;
         diff_machine.scope_stack.push(scope_id);
         let scope = diff_machine.scopes.get_scope(scope_id).unwrap();
-        diff_machine.element_stack.push(scope.container);
 
-        diff_machine.diff_node(old, new);
+        diff_machine.diff_node(scope.container, old, new);
 
         diff_machine.mutations
     }
@@ -650,11 +651,8 @@ impl VirtualDom {
     /// ```
     pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
-        machine
-            .element_stack
-            .push(GlobalNodeId::VNodeId(ElementId(0)));
         machine.scope_stack.push(ScopeId(0));
-        machine.diff_node(old, new);
+        machine.diff_node(self.root, old, new);
 
         machine.mutations
     }
@@ -675,12 +673,12 @@ impl VirtualDom {
     pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
         let mut machine = DiffState::new(&self.scopes);
         machine.scope_stack.push(ScopeId(0));
-        machine
-            .element_stack
-            .push(GlobalNodeId::VNodeId(ElementId(0)));
         let node = self.render_vnodes(nodes);
-        let created = machine.create_node(node);
-        machine.mutations.append_children(created as u32);
+        let mut created = Vec::new();
+        machine.create_node(self.root, node, &mut created);
+        machine
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
         machine.mutations
     }
 
@@ -706,16 +704,15 @@ impl VirtualDom {
 
         let mut create = DiffState::new(&self.scopes);
         create.scope_stack.push(ScopeId(0));
+        let mut created = Vec::new();
+        create.create_node(self.root, old, &mut created);
         create
-            .element_stack
-            .push(GlobalNodeId::VNodeId(ElementId(0)));
-        let created = create.create_node(old);
-        create.mutations.append_children(created as u32);
+            .mutations
+            .append_children(Some(self.root.as_u64()), created);
 
         let mut edit = DiffState::new(&self.scopes);
         edit.scope_stack.push(ScopeId(0));
-        edit.element_stack.push(GlobalNodeId::VNodeId(ElementId(0)));
-        edit.diff_node(old, new);
+        edit.diff_node(self.root, old, new);
 
         (create.mutations, edit.mutations)
     }

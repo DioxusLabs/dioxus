@@ -19,6 +19,7 @@ taffy = "0.1.0"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "0.12.1"
+slab = "0.4"
 
 [dev-dependencies]
 rand = "0.8.5"

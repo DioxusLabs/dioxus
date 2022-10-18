@@ -164,59 +164,12 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
             let gen = quote! {
                 impl State for #type_name {
-                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = dioxus_core::GlobalNodeId>,T2: dioxus_native_core::traversable::Traversable<Node = dioxus_native_core::real_dom::NodeData, Id = dioxus_core::GlobalNodeId>>(
-                        dirty: &[(dioxus_core::GlobalNodeId, dioxus_native_core::node_ref::NodeMask)],
+                    fn update<'a, T: dioxus_native_core::traversable::Traversable<Node = Self, Id = dioxus_native_core::RealNodeId>,T2: dioxus_native_core::traversable::Traversable<Node = dioxus_native_core::real_dom::NodeData, Id = dioxus_native_core::RealNodeId>>(
+                        dirty: &[(dioxus_native_core::RealNodeId, dioxus_native_core::node_ref::NodeMask)],
                         state_tree: &'a mut T,
                         rdom: &'a T2,
                         ctx: &anymap::AnyMap,
-                    ) -> rustc_hash::FxHashSet<dioxus_core::GlobalNodeId>{
-                        #[derive(Eq, PartialEq)]
-                        struct HeightOrdering {
-                            height: u16,
-                            id: dioxus_core::GlobalNodeId,
-                        }
-
-                        impl HeightOrdering {
-                            fn new(height: u16, id: dioxus_core::GlobalNodeId) -> Self {
-                                HeightOrdering {
-                                    height,
-                                    id,
-                                }
-                            }
-                        }
-
-                        // not the ordering after height is just for deduplication it can be any ordering as long as it is consistent
-                        impl Ord for HeightOrdering {
-                            fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                                self.height.cmp(&other.height).then(match (self.id, other.id){
-                                    (
-                                        dioxus_core::GlobalNodeId::TemplateId {
-                                            template_ref_id,
-                                            template_node_id,
-                                        },
-                                        dioxus_core::GlobalNodeId::TemplateId {
-                                            template_ref_id: o_template_ref_id,
-                                            template_node_id: o_template_node_id,
-                                        },
-                                    ) => template_ref_id
-                                        .0
-                                        .cmp(&o_template_ref_id.0)
-                                        .then(template_node_id.0.cmp(&o_template_node_id.0)),
-                                    (dioxus_core::GlobalNodeId::TemplateId { .. }, dioxus_core::GlobalNodeId::VNodeId(_)) => std::cmp::Ordering::Less,
-                                    (dioxus_core::GlobalNodeId::VNodeId(_), dioxus_core::GlobalNodeId::TemplateId { .. }) => {
-                                        std::cmp::Ordering::Greater
-                                    }
-                                    (dioxus_core::GlobalNodeId::VNodeId(s_id), dioxus_core::GlobalNodeId::VNodeId(o_id)) => s_id.0.cmp(&o_id.0),
-                                })
-                            }
-                        }
-
-                        impl PartialOrd for HeightOrdering {
-                            fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                                Some(self.cmp(&other))
-                            }
-                        }
-
+                    ) -> rustc_hash::FxHashSet<dioxus_native_core::RealNodeId>{
                         #[derive(Clone, Copy)]
                         struct MembersDirty {
                             #(#members: bool, )*
@@ -238,7 +191,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
 
                         let mut dirty_elements = rustc_hash::FxHashSet::default();
                         // the states of any elements that are dirty
-                        let mut states: rustc_hash::FxHashMap<dioxus_core::GlobalNodeId, MembersDirty> = rustc_hash::FxHashMap::default();
+                        let mut states: rustc_hash::FxHashMap<dioxus_native_core::RealNodeId, MembersDirty> = rustc_hash::FxHashMap::default();
 
                         for (id, mask) in dirty {
                             let members_dirty = MembersDirty {
@@ -408,7 +361,7 @@ impl<'a> StateStruct<'a> {
             let insert = dep.child.iter().map(|d|{
                 if *d == mem {
                     quote! {
-                        let seeking = HeightOrdering::new(state_tree.height(parent_id).unwrap(), parent_id);
+                        let seeking = dioxus_native_core::HeightOrdering::new(state_tree.height(parent_id).unwrap(), parent_id);
                         if let Err(idx) = resolution_order
                             .binary_search_by(|ordering| ordering.cmp(&seeking).reverse()){
                             resolution_order.insert(
@@ -453,7 +406,7 @@ impl<'a> StateStruct<'a> {
             let insert = dep.parent.iter().map(|d| {
                 if *d == mem {
                     quote! {
-                        let seeking = HeightOrdering::new(state_tree.height(*child_id).unwrap(), *child_id);
+                        let seeking = dioxus_native_core::HeightOrdering::new(state_tree.height(*child_id).unwrap(), *child_id);
                         if let Err(idx) = resolution_order
                             .binary_search(&seeking){
                             resolution_order.insert(
@@ -508,7 +461,7 @@ impl<'a> StateStruct<'a> {
             DependencyKind::Parent => {
                 quote! {
                     // resolve parent dependant state
-                    let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
+                    let mut resolution_order = states.keys().copied().map(|id| dioxus_native_core::HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
                     resolution_order.sort();
                     let mut i = 0;
                     while i < resolution_order.len(){
@@ -528,7 +481,7 @@ impl<'a> StateStruct<'a> {
             DependencyKind::Child => {
                 quote! {
                     // resolve child dependant state
-                    let mut resolution_order = states.keys().copied().map(|id| HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
+                    let mut resolution_order = states.keys().copied().map(|id| dioxus_native_core::HeightOrdering::new(state_tree.height(id).unwrap(), id)).collect::<Vec<_>>();
                     resolution_order.sort_by(|height_ordering1, height_ordering2| {
                         height_ordering1.cmp(&height_ordering2).reverse()
                     });
