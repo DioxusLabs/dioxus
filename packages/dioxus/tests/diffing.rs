@@ -25,14 +25,17 @@ fn html_and_rsx_generate_the_same_output() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "Hello world" },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 1 },
+            CreateElement { root: Some(1,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(2,), text: "Hello world" },
+            AppendChildren { root: Some(1,), children: vec![2] },
+            AppendChildren { root: Some(0,), children: vec![1] },
         ]
     );
 
-    assert_eq!(change.edits, [SetText { text: "Goodbye world", root: 2 },]);
+    assert_eq!(
+        change.edits,
+        [SetText { root: Some(2,), text: "Goodbye world" },]
+    );
 }
 
 /// Should result in 3 elements on the stack
@@ -49,16 +52,16 @@ fn fragments_create_properly() {
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { root: 2, text: "Hello a" },
-            AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "div" },
-            CreateTextNode { root: 4, text: "Hello b" },
-            AppendChildren { many: 1 },
-            CreateElement { root: 5, tag: "div" },
-            CreateTextNode { root: 6, text: "Hello c" },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 3 },
+            CreateElement { root: Some(1,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(2,), text: "Hello a" },
+            AppendChildren { root: Some(1,), children: vec![2,] },
+            CreateElement { root: Some(3,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(4,), text: "Hello b" },
+            AppendChildren { root: Some(3,), children: vec![4,] },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(6,), text: "Hello c" },
+            AppendChildren { root: Some(5,), children: vec![6,] },
+            AppendChildren { root: Some(0,), children: vec![1, 3, 5,] },
         ]
     );
 }
@@ -75,13 +78,16 @@ fn empty_fragments_create_anchors() {
 
     assert_eq!(
         create.edits,
-        [CreatePlaceholder { root: 1 }, AppendChildren { many: 1 }]
+        [
+            CreatePlaceholder { root: Some(1,) },
+            AppendChildren { root: Some(0,), children: vec![1,] },
+        ]
     );
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 2, tag: "div" },
-            ReplaceWith { m: 1, root: 1 }
+            CreateElement { root: Some(2,), tag: "div", children: 0 },
+            ReplaceWith { root: Some(1,), nodes: vec![2,] },
         ]
     );
 }
@@ -95,20 +101,24 @@ fn empty_fragments_create_many_anchors() {
     let right = rsx_without_templates!({ (0..5).map(|_f| rsx_without_templates! { div {}}) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         create.edits,
-        [CreatePlaceholder { root: 1 }, AppendChildren { many: 1 }]
+        [
+            CreatePlaceholder { root: Some(1,) },
+            AppendChildren { root: Some(0,), children: vec![1,] },
+        ]
     );
 
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 2, tag: "div" },
-            CreateElement { root: 3, tag: "div" },
-            CreateElement { root: 4, tag: "div" },
-            CreateElement { root: 5, tag: "div" },
-            CreateElement { root: 6, tag: "div" },
-            ReplaceWith { m: 5, root: 1 }
+            CreateElement { root: Some(2,), tag: "div", children: 0 },
+            CreateElement { root: Some(3,), tag: "div", children: 0 },
+            CreateElement { root: Some(4,), tag: "div", children: 0 },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            CreateElement { root: Some(6,), tag: "div", children: 0 },
+            ReplaceWith { root: Some(1,), nodes: vec![2, 3, 4, 5, 6,] },
         ]
     );
 }
@@ -127,24 +137,28 @@ fn empty_fragments_create_anchors_with_many_children() {
     });
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         create.edits,
-        [CreatePlaceholder { root: 1 }, AppendChildren { many: 1 }]
+        [
+            CreatePlaceholder { root: Some(1,) },
+            AppendChildren { root: Some(0,), children: vec![1,] },
+        ]
     );
 
     assert_eq!(
         change.edits,
         [
-            CreateElement { tag: "div", root: 2 },
-            CreateTextNode { text: "hello: 0", root: 3 },
-            AppendChildren { many: 1 },
-            CreateElement { tag: "div", root: 4 },
-            CreateTextNode { text: "hello: 1", root: 5 },
-            AppendChildren { many: 1 },
-            CreateElement { tag: "div", root: 6 },
-            CreateTextNode { text: "hello: 2", root: 7 },
-            AppendChildren { many: 1 },
-            ReplaceWith { root: 1, m: 3 }
+            CreateElement { root: Some(2,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(3,), text: "hello: 0" },
+            AppendChildren { root: Some(2,), children: vec![3,] },
+            CreateElement { root: Some(4,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(5,), text: "hello: 1" },
+            AppendChildren { root: Some(4,), children: vec![5,] },
+            CreateElement { root: Some(6,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(7,), text: "hello: 2" },
+            AppendChildren { root: Some(6,), children: vec![7,] },
+            ReplaceWith { root: Some(1,), nodes: vec![2, 4, 6,] },
         ]
     );
 }
@@ -162,25 +176,26 @@ fn many_items_become_fragment() {
     let right = rsx_without_templates!({ (0..0).map(|_| rsx_without_templates! { div {} }) });
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateTextNode { text: "hello", root: 2 },
-            AppendChildren { many: 1 },
-            CreateElement { root: 3, tag: "div" },
-            CreateTextNode { text: "hello", root: 4 },
-            AppendChildren { many: 1 },
-            AppendChildren { many: 2 },
+            CreateElement { root: Some(1,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(2,), text: "hello" },
+            AppendChildren { root: Some(1,), children: vec![2,] },
+            CreateElement { root: Some(3,), tag: "div", children: 0 },
+            CreateTextNode { root: Some(4,), text: "hello" },
+            AppendChildren { root: Some(3,), children: vec![4,] },
+            AppendChildren { root: Some(0,), children: vec![1, 3,] },
         ]
     );
 
     assert_eq!(
         change.edits,
         [
-            CreatePlaceholder { root: 5 },
-            ReplaceWith { root: 1, m: 1 },
-            Remove { root: 3 },
+            CreatePlaceholder { root: Some(5,) },
+            ReplaceWith { root: Some(1,), nodes: vec![5,] },
+            Remove { root: Some(3,) },
         ]
     );
 }
@@ -220,20 +235,17 @@ fn two_fragments_with_differrent_elements_are_differet() {
     );
 
     let (_create, changes) = dom.diff_lazynodes(left, right);
-    println!("{:#?}", &changes);
     assert_eq!(
         changes.edits,
         [
-            // create the new h1s
-            CreateElement { tag: "h1", root: 4 },
-            CreateElement { tag: "h1", root: 5 },
-            CreateElement { tag: "h1", root: 6 },
-            InsertAfter { root: 2, n: 3 },
-            // replace the divs with new h1s
-            CreateElement { tag: "h1", root: 7 },
-            ReplaceWith { root: 1, m: 1 },
-            CreateElement { tag: "h1", root: 1 }, // notice how 1 gets re-used
-            ReplaceWith { root: 2, m: 1 },
+            CreateElement { root: Some(4,), tag: "h1", children: 0 },
+            CreateElement { root: Some(5,), tag: "h1", children: 0 },
+            CreateElement { root: Some(6,), tag: "h1", children: 0 },
+            InsertAfter { root: Some(2,), nodes: vec![4, 5, 6,] },
+            CreateElement { root: Some(7,), tag: "h1", children: 0 },
+            ReplaceWith { root: Some(1,), nodes: vec![7,] }, // notice how 1 gets re-used
+            CreateElement { root: Some(1,), tag: "h1", children: 0 },
+            ReplaceWith { root: Some(2,), nodes: vec![1,] },
         ]
     );
 }
@@ -253,16 +265,17 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
     );
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateElement { root: 3, tag: "div" },
-            CreateElement { root: 4, tag: "div" },
-            CreateElement { root: 5, tag: "div" },
-            CreateElement { root: 6, tag: "p" },
-            AppendChildren { many: 6 },
+            CreateElement { root: Some(1,), tag: "div", children: 0 },
+            CreateElement { root: Some(2,), tag: "div", children: 0 },
+            CreateElement { root: Some(3,), tag: "div", children: 0 },
+            CreateElement { root: Some(4,), tag: "div", children: 0 },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            CreateElement { root: Some(6,), tag: "p", children: 0 },
+            AppendChildren { root: Some(0,), children: vec![1, 2, 3, 4, 5, 6,] },
         ]
     );
 
@@ -271,13 +284,13 @@ fn two_fragments_with_differrent_elements_are_differet_shorter() {
     assert_eq!(
         change.edits,
         [
-            Remove { root: 3 },
-            Remove { root: 4 },
-            Remove { root: 5 },
-            CreateElement { root: 5, tag: "h1" }, // 3 gets reused
-            ReplaceWith { root: 1, m: 1 },        // 1 gets deleted
-            CreateElement { root: 1, tag: "h1" }, // 1 gets reused
-            ReplaceWith { root: 2, m: 1 },
+            Remove { root: Some(3,) },
+            Remove { root: Some(4,) },
+            Remove { root: Some(5,) },
+            CreateElement { root: Some(5,), tag: "h1", children: 0 }, // 5 gets reused
+            ReplaceWith { root: Some(1,), nodes: vec![5,] },          // 1 gets deleted
+            CreateElement { root: Some(1,), tag: "h1", children: 0 }, // 1 gets reused
+            ReplaceWith { root: Some(2,), nodes: vec![1,] },
         ]
     );
 }
@@ -297,22 +310,23 @@ fn two_fragments_with_same_elements_are_differet() {
     );
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         create.edits,
         [
-            CreateElement { root: 1, tag: "div" },
-            CreateElement { root: 2, tag: "div" },
-            CreateElement { root: 3, tag: "p" },
-            AppendChildren { many: 3 },
+            CreateElement { root: Some(1,), tag: "div", children: 0 },
+            CreateElement { root: Some(2,), tag: "div", children: 0 },
+            CreateElement { root: Some(3,), tag: "p", children: 0 },
+            AppendChildren { root: Some(0,), children: vec![1, 2, 3,] },
         ]
     );
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 4, tag: "div" },
-            CreateElement { root: 5, tag: "div" },
-            CreateElement { root: 6, tag: "div" },
-            InsertAfter { root: 2, n: 3 },
+            CreateElement { root: Some(4,), tag: "div", children: 0 },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            CreateElement { root: Some(6,), tag: "div", children: 0 },
+            InsertAfter { root: Some(2,), nodes: vec![4, 5, 6,] },
         ]
     );
 }
@@ -332,9 +346,14 @@ fn keyed_diffing_order() {
     );
 
     let (create, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
-        [Remove { root: 3 }, Remove { root: 4 }, Remove { root: 5 },]
+        [
+            Remove { root: Some(3,) },
+            Remove { root: Some(4,) },
+            Remove { root: Some(5,) },
+        ]
     );
 }
 
@@ -356,10 +375,10 @@ fn keyed_diffing_out_of_order() {
     });
 
     let (_, changes) = dom.diff_lazynodes(left, right);
-    println!("{:?}", &changes);
+
     assert_eq!(
         changes.edits,
-        [PushRoot { root: 7 }, InsertBefore { root: 5, n: 1 }]
+        [InsertBefore { root: Some(5,), nodes: vec![7,] },]
     );
 }
 
@@ -381,16 +400,13 @@ fn keyed_diffing_out_of_order_adds() {
     });
 
     let (_, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
-        [
-            PushRoot { root: 5 },
-            PushRoot { root: 4 },
-            InsertBefore { n: 2, root: 1 }
-        ]
+        [InsertBefore { root: Some(1,), nodes: vec![5, 4,] },]
     );
 }
-/// Should result in moves onl
+/// Should result in moves only
 #[test]
 fn keyed_diffing_out_of_order_adds_2() {
     let dom = new_dom();
@@ -408,13 +424,10 @@ fn keyed_diffing_out_of_order_adds_2() {
     });
 
     let (_, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
-        [
-            PushRoot { root: 4 },
-            PushRoot { root: 5 },
-            InsertBefore { n: 2, root: 1 }
-        ]
+        [InsertBefore { root: Some(1,), nodes: vec![4, 5,] },]
     );
 }
 
@@ -436,13 +449,10 @@ fn keyed_diffing_out_of_order_adds_3() {
     });
 
     let (_, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
-        [
-            PushRoot { root: 5 },
-            PushRoot { root: 4 },
-            InsertBefore { n: 2, root: 2 }
-        ]
+        [InsertBefore { root: Some(2,), nodes: vec![5, 4,] },]
     );
 }
 
@@ -464,13 +474,10 @@ fn keyed_diffing_out_of_order_adds_4() {
     });
 
     let (_, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
-        [
-            PushRoot { root: 5 },
-            PushRoot { root: 4 },
-            InsertBefore { n: 2, root: 3 }
-        ]
+        [InsertBefore { root: Some(3), nodes: vec![5, 4,] },]
     );
 }
 
@@ -494,7 +501,7 @@ fn keyed_diffing_out_of_order_adds_5() {
     let (_, change) = dom.diff_lazynodes(left, right);
     assert_eq!(
         change.edits,
-        [PushRoot { root: 5 }, InsertBefore { n: 1, root: 4 }]
+        [InsertBefore { root: Some(4), nodes: vec![5] }]
     );
 }
 
@@ -515,12 +522,13 @@ fn keyed_diffing_additions() {
     });
 
     let (_, change) = dom.diff_lazynodes(left, right);
+
     assert_eq!(
         change.edits,
         [
-            CreateElement { root: 6, tag: "div" },
-            CreateElement { root: 7, tag: "div" },
-            InsertAfter { n: 2, root: 5 }
+            CreateElement { root: Some(6,), tag: "div", children: 0 },
+            CreateElement { root: Some(7,), tag: "div", children: 0 },
+            InsertAfter { root: Some(5,), nodes: vec![6, 7,] },
         ]
     );
 }
@@ -547,12 +555,11 @@ fn keyed_diffing_additions_and_moves_on_ends() {
         change.edits,
         [
             // create 11, 12
-            CreateElement { tag: "div", root: 5 },
-            CreateElement { tag: "div", root: 6 },
-            InsertAfter { root: 3, n: 2 },
-            // move 7 to the front
-            PushRoot { root: 4 },
-            InsertBefore { root: 1, n: 1 }
+            CreateElement { root: Some(5), tag: "div", children: 0 },
+            CreateElement { root: Some(6), tag: "div", children: 0 },
+            InsertAfter { root: Some(3), nodes: vec![5, 6] },
+            // // move 7 to the front
+            InsertBefore { root: Some(1), nodes: vec![4] }
         ]
     );
 }
@@ -580,16 +587,15 @@ fn keyed_diffing_additions_and_moves_in_middle() {
         change.edits,
         [
             // create 5, 6
-            CreateElement { tag: "div", root: 5 },
-            CreateElement { tag: "div", root: 6 },
-            InsertBefore { root: 3, n: 2 },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            CreateElement { root: Some(6,), tag: "div", children: 0 },
+            InsertBefore { root: Some(3,), nodes: vec![5, 6,] },
             // create 7, 8
-            CreateElement { tag: "div", root: 7 },
-            CreateElement { tag: "div", root: 8 },
-            InsertBefore { root: 2, n: 2 },
+            CreateElement { root: Some(7,), tag: "div", children: 0 },
+            CreateElement { root: Some(8,), tag: "div", children: 0 },
+            InsertBefore { root: Some(2,), nodes: vec![7, 8,] },
             // move 7
-            PushRoot { root: 4 },
-            InsertBefore { root: 1, n: 1 }
+            InsertBefore { root: Some(1,), nodes: vec![4,] },
         ]
     );
 }
@@ -616,18 +622,16 @@ fn controlled_keyed_diffing_out_of_order() {
     assert_eq!(
         changes.edits,
         [
-            Remove { root: 4 },
-            // move 4 to after 6
-            PushRoot { root: 1 },
-            InsertAfter { n: 1, root: 3 },
             // remove 7
-
+            Remove { root: Some(4,) },
+            // move 4 to after 6
+            InsertAfter { root: Some(3,), nodes: vec![1,] },
             // create 9 and insert before 6
-            CreateElement { root: 4, tag: "div" },
-            InsertBefore { n: 1, root: 3 },
+            CreateElement { root: Some(4,), tag: "div", children: 0 },
+            InsertBefore { root: Some(3,), nodes: vec![4,] },
             // create 0 and insert before 5
-            CreateElement { root: 5, tag: "div" },
-            InsertBefore { n: 1, root: 2 },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            InsertBefore { root: Some(2,), nodes: vec![5,] },
         ]
     );
 }
@@ -653,11 +657,10 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
     assert_eq!(
         changes.edits,
         [
-            Remove { root: 5 },
-            CreateElement { root: 5, tag: "div" },
-            InsertBefore { n: 1, root: 3 },
-            PushRoot { root: 4 },
-            InsertBefore { n: 1, root: 1 },
+            Remove { root: Some(5,) },
+            CreateElement { root: Some(5,), tag: "div", children: 0 },
+            InsertBefore { root: Some(3,), nodes: vec![5,] },
+            InsertBefore { root: Some(1,), nodes: vec![4,] },
         ]
     );
 }
@@ -687,11 +690,11 @@ fn remove_list() {
 
     assert_eq!(
         changes.edits,
+        // remove 5, 4, 3
         [
-            // remove 5, 4, 3
-            Remove { root: 3 },
-            Remove { root: 4 },
-            Remove { root: 5 },
+            Remove { root: Some(3) },
+            Remove { root: Some(4) },
+            Remove { root: Some(5) }
         ]
     );
 }
@@ -720,9 +723,9 @@ fn remove_list_nokeyed() {
         changes.edits,
         [
             // remove 5, 4, 3
-            Remove { root: 3 },
-            Remove { root: 4 },
-            Remove { root: 5 },
+            Remove { root: Some(3) },
+            Remove { root: Some(4) },
+            Remove { root: Some(5) },
         ]
     );
 }
@@ -745,10 +748,8 @@ fn add_nested_elements() {
     assert_eq!(
         change.edits,
         [
-            PushRoot { root: 1 },
-            CreateElement { root: 2, tag: "div" },
-            AppendChildren { many: 1 },
-            PopRoot {},
+            CreateElement { root: Some(2), tag: "div", children: 0 },
+            AppendChildren { root: Some(1), children: vec![2] },
         ]
     );
 }
@@ -772,8 +773,8 @@ fn add_listeners() {
     assert_eq!(
         change.edits,
         [
-            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 1 },
-            NewEventListener { event_name: "keydown", scope: ScopeId(0), root: 1 },
+            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: Some(1) },
+            NewEventListener { event_name: "keydown", scope: ScopeId(0), root: Some(1) },
         ]
     );
 }
@@ -797,8 +798,8 @@ fn remove_listeners() {
     assert_eq!(
         change.edits,
         [
-            RemoveEventListener { event: "keyup", root: 1 },
-            RemoveEventListener { event: "keydown", root: 1 },
+            RemoveEventListener { event: "keyup", root: Some(1) },
+            RemoveEventListener { event: "keydown", root: Some(1) },
         ]
     );
 }
@@ -823,8 +824,8 @@ fn diff_listeners() {
     assert_eq!(
         change.edits,
         [
-            RemoveEventListener { root: 1, event: "keydown" },
-            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: 1 }
+            RemoveEventListener { root: Some(1), event: "keydown" },
+            NewEventListener { event_name: "keyup", scope: ScopeId(0), root: Some(1) }
         ]
     );
 }

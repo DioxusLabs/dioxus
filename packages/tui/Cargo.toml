@@ -25,7 +25,7 @@ tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
 taffy = "0.1.0"
 smallvec = "1.6"
-fxhash = "0.2"
+rustc-hash = "1.1.0"
 anymap = "0.12.1"
 
 [dev-dependencies]

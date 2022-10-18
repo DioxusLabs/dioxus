@@ -90,8 +90,8 @@ impl<'a> Iterator for ElementIdIterator<'a> {
 mod leaky {
     use std::sync::Mutex;
 
-    use fxhash::FxHashSet;
     use once_cell::sync::Lazy;
+    use rustc_hash::FxHashSet;
     static STATIC_CACHE: Lazy<Mutex<FxHashSet<&'static str>>> =
         Lazy::new(|| Mutex::new(FxHashSet::default()));
 

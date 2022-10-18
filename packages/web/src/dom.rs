@@ -7,7 +7,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{DomEdit, SchedulerMsg, UserEvent};
+use dioxus_core::{DomEdit, ElementId, SchedulerMsg, UserEvent};
 use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
@@ -43,7 +43,7 @@ impl WebsysDom {
                         break Ok(UserEvent {
                             name: event_name_from_typ(&typ),
                             data: virtual_event_from_websys_event(event.clone(), target.clone()),
-                            element: Some(id),
+                            element: Some(ElementId(id)),
                             scope_id: None,
                             priority: dioxus_core::EventPriority::Medium,
                             bubbles: event.bubbles(),
@@ -107,18 +107,25 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<DomEdit>) {
         for edit in edits.drain(..) {
             match edit {
-                DomEdit::PushRoot { root } => self.interpreter.PushRoot(root),
-                DomEdit::PopRoot {} => self.interpreter.PopRoot(),
-                DomEdit::AppendChildren { many } => self.interpreter.AppendChildren(many),
-                DomEdit::ReplaceWith { root, m } => self.interpreter.ReplaceWith(root, m),
-                DomEdit::InsertAfter { root, n } => self.interpreter.InsertAfter(root, n),
-                DomEdit::InsertBefore { root, n } => self.interpreter.InsertBefore(root, n),
+                DomEdit::AppendChildren { root, children } => {
+                    self.interpreter.AppendChildren(root, children);
+                }
+                DomEdit::ReplaceWith { root, nodes } => self.interpreter.ReplaceWith(root, nodes),
+                DomEdit::InsertAfter { root, nodes } => self.interpreter.InsertAfter(root, nodes),
+                DomEdit::InsertBefore { root, nodes } => self.interpreter.InsertBefore(root, nodes),
                 DomEdit::Remove { root } => self.interpreter.Remove(root),
 
-                DomEdit::CreateElement { tag, root } => self.interpreter.CreateElement(tag, root),
-                DomEdit::CreateElementNs { tag, root, ns } => {
-                    self.interpreter.CreateElementNs(tag, root, ns)
-                }
+                DomEdit::CreateElement {
+                    root,
+                    tag,
+                    children,
+                } => self.interpreter.CreateElement(tag, root, children),
+                DomEdit::CreateElementNs {
+                    root,
+                    tag,
+                    ns,
+                    children,
+                } => self.interpreter.CreateElementNs(tag, root, ns, children),
                 DomEdit::CreatePlaceholder { root } => self.interpreter.CreatePlaceholder(root),
                 DomEdit::NewEventListener {
                     event_name, root, ..
@@ -157,45 +164,15 @@ impl WebsysDom {
                     let value = serde_wasm_bindgen::to_value(&value).unwrap();
                     self.interpreter.SetAttribute(root, field, value, ns)
                 }
-                DomEdit::CreateTemplateRef { id, template_id } => {
-                    self.interpreter.CreateTemplateRef(id, template_id)
+                DomEdit::CloneNode { id, new_id } => self.interpreter.CloneNode(id, new_id),
+                DomEdit::CloneNodeChildren { id, new_ids } => {
+                    self.interpreter.CloneNodeChildren(id, new_ids)
                 }
-                DomEdit::CreateTemplate { id } => self.interpreter.CreateTemplate(id),
-                DomEdit::FinishTemplate { len } => self.interpreter.FinishTemplate(len),
-                DomEdit::EnterTemplateRef { root } => self.interpreter.EnterTemplateRef(root),
-                DomEdit::ExitTemplateRef {} => self.interpreter.ExitTemplateRef(),
-                DomEdit::CreateTextNodeTemplate {
-                    root,
-                    text,
-                    locally_static,
-                } => self
-                    .interpreter
-                    .CreateTextNodeTemplate(text, root, locally_static),
-                DomEdit::CreateElementTemplate {
-                    root,
-                    tag,
-                    locally_static,
-                    fully_static,
-                } => {
-                    self.interpreter
-                        .CreateElementTemplate(tag, root, locally_static, fully_static)
-                }
-                DomEdit::CreateElementNsTemplate {
-                    root,
-                    tag,
-                    ns,
-                    locally_static,
-                    fully_static,
-                } => self.interpreter.CreateElementNsTemplate(
-                    tag,
-                    root,
-                    ns,
-                    locally_static,
-                    fully_static,
-                ),
-                DomEdit::CreatePlaceholderTemplate { root } => {
-                    self.interpreter.CreatePlaceholderTemplate(root)
-                }
+                DomEdit::FirstChild {} => self.interpreter.FirstChild(),
+                DomEdit::NextSibling {} => self.interpreter.NextSibling(),
+                DomEdit::ParentNode {} => self.interpreter.ParentNode(),
+                DomEdit::StoreWithId { id } => self.interpreter.StoreWithId(id),
+                DomEdit::SetLastNode { id } => self.interpreter.SetLastNode(id),
             }
         }
     }
