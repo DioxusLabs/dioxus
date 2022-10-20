@@ -1,4 +1,4 @@
-use dioxus_core::{SchedulerMsg, SetTemplateMsg, VirtualDom};
+use dioxus_core::{SchedulerMsg, VirtualDom};
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
@@ -32,10 +32,11 @@ pub(crate) fn init(dom: &VirtualDom) {
                 let mut buf = String::new();
                 match conn.read_line(&mut buf) {
                     Ok(_) => {
-                        let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
-                        channel
-                            .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
-                            .unwrap();
+                        todo!()
+                        // let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
+                        // channel
+                        //     .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
+                        //     .unwrap();
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {

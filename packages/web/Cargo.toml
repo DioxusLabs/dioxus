@@ -80,7 +80,6 @@ features = [
 [features]
 default = ["panic_hook"]
 panic_hook = ["console_error_panic_hook"]
-hot-reload = ["dioxus/hot-reload"]
 
 
 [dev-dependencies]

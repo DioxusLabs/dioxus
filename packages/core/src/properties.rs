@@ -64,36 +64,36 @@ impl<'a> Properties for FragmentProps<'a> {
     }
 }
 
-/// Create inline fragments using Component syntax.
-///
-/// ## Details
-///
-/// Fragments capture a series of children without rendering extra nodes.
-///
-/// Creating fragments explicitly with the Fragment component is particularly useful when rendering lists or tables and
-/// a key is needed to identify each item.
-///
-/// ## Example
-///
-/// ```rust, ignore
-/// rsx!{
-///     Fragment { key: "abc" }
-/// }
-/// ```
-///
-/// ## Usage
-///
-/// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
-/// Try to avoid highly nested fragments if you can. Unlike React, there is no protection against infinitely nested fragments.
-///
-/// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
-///
-/// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
-#[allow(non_upper_case_globals, non_snake_case)]
-pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
-    let i = cx.props.0.as_ref().map(|f| f.decouple());
-    cx.render(LazyNodes::new(|f| f.fragment_from_iter(i)))
-}
+// /// Create inline fragments using Component syntax.
+// ///
+// /// ## Details
+// ///
+// /// Fragments capture a series of children without rendering extra nodes.
+// ///
+// /// Creating fragments explicitly with the Fragment component is particularly useful when rendering lists or tables and
+// /// a key is needed to identify each item.
+// ///
+// /// ## Example
+// ///
+// /// ```rust, ignore
+// /// rsx!{
+// ///     Fragment { key: "abc" }
+// /// }
+// /// ```
+// ///
+// /// ## Usage
+// ///
+// /// Fragments are incredibly useful when necessary, but *do* add cost in the diffing phase.
+// /// Try to avoid highly nested fragments if you can. Unlike React, there is no protection against infinitely nested fragments.
+// ///
+// /// This function defines a dedicated `Fragment` component that can be used to create inline fragments in the RSX macro.
+// ///
+// /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
+// #[allow(non_upper_case_globals, non_snake_case)]
+// pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
+//     let i = cx.props.0.as_ref().map(|f| f.decouple());
+//     cx.render(LazyNodes::new(|f| f.fragment_from_iter(i)))
+// }
 
 /// Every "Props" used for a component must implement the `Properties` trait. This trait gives some hints to Dioxus
 /// on how to memoize the props and some additional optimizations that can be made. We strongly encourage using the

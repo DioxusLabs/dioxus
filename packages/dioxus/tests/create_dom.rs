@@ -7,7 +7,7 @@
 
 use dioxus::prelude::*;
 
-use dioxus_core::DomEdit::*;
+use dioxus_edit_stream::DomEdit::*;
 
 fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
     VirtualDom::new_with_props(app, props)

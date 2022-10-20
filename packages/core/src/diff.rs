@@ -38,20 +38,6 @@
 //! Other implementations either don't support fragments or use a "child + sibling" pattern to represent them. Our code is
 //! vastly simpler and more performant when we can just create a placeholder element while the fragment has no children.
 //!
-//! ### Suspense
-//! ------------
-//! Dioxus implements Suspense slightly differently than React. In React, each fiber is manually progressed until it runs
-//! into a promise-like value. React will then work on the next "ready" fiber, checking back on the previous fiber once
-//! it has finished its new work. In Dioxus, we use a similar approach, but try to completely render the tree before
-//! switching sub-fibers. Instead, each future is submitted into a futures-queue and the node is manually loaded later on.
-//! Due to the frequent calls to [`crate::virtual_dom::VirtualDom::work_with_deadline`] we can get the pure "fetch-as-you-render" behavior of React Fiber.
-//!
-//! We're able to use this approach because we use placeholder nodes - futures that aren't ready still get submitted to
-//! DOM, but as a placeholder.
-//!
-//! Right now, the "suspense" queue is intertwined with hooks. In the future, we should allow any future to drive attributes
-//! and contents, without the need for a `use_suspense` hook. In the interim, this is the quickest way to get Suspense working.
-//!
 //! ## Subtree Memoization
 //! -----------------------
 //! We also employ "subtree memoization" which saves us from having to check trees which hold no dynamic content. We can
@@ -91,65 +77,52 @@
 //! More info on how to improve this diffing algorithm:
 //!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
 
-use crate::{
-    dynamic_template_context::TemplateContext,
-    innerlude::{
-        AnyProps, ElementId, Mutations, ScopeArena, ScopeId, VComponent, VElement, VFragment,
-        VNode, VPlaceholder, VText,
-    },
-    template::{
-        Template, TemplateAttribute, TemplateElement, TemplateNode, TemplateNodeId,
-        TemplateNodeType, TemplateValue, TextTemplateSegment, VTemplateRef,
-    },
-    Attribute, TemplateAttributeValue,
+use crate::innerlude::{
+    AnyProps, ElementId, Renderer, ScopeArena, ScopeId, TemplateNode, VComponent, VElement,
+    VFragment, VNode, VTemplate, VText,
 };
-use bumpalo::Bump;
-use rustc_hash::{FxHashMap, FxHashSet};
+use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
-pub(crate) struct DiffState<'bump> {
+pub(crate) struct DiffState<'a, 'bump, R: Renderer<'bump>> {
     pub(crate) scopes: &'bump ScopeArena,
-    pub(crate) mutations: Mutations<'bump>,
+    pub(crate) mutations: &'a mut R,
     pub(crate) force_diff: bool,
+    pub(crate) element_stack: SmallVec<[ElementId; 10]>,
     pub(crate) scope_stack: SmallVec<[ScopeId; 5]>,
 }
 
-impl<'b> DiffState<'b> {
-    pub fn new(scopes: &'b ScopeArena) -> Self {
+impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
+    pub fn new(scopes: &'b ScopeArena, renderer: &'a mut R) -> Self {
         Self {
             scopes,
-            mutations: Mutations::new(),
+            mutations: renderer,
             force_diff: false,
+            element_stack: smallvec![],
             scope_stack: smallvec![],
         }
     }
 
-    pub fn diff_scope(&mut self, parent: ElementId, scopeid: ScopeId) {
+    pub fn diff_scope(&mut self, scopeid: ScopeId) {
         let (old, new) = (self.scopes.wip_head(scopeid), self.scopes.fin_head(scopeid));
+        let scope = self.scopes.get_scope(scopeid).unwrap();
 
         self.scope_stack.push(scopeid);
+        self.element_stack.push(scope.container);
         {
-            self.diff_node(parent, old, new);
+            self.diff_node(old, new);
         }
+        self.element_stack.pop();
         self.scope_stack.pop();
 
         self.mutations.mark_dirty_scope(scopeid);
     }
 
-    pub fn diff_node(
-        &mut self,
-        parent: ElementId,
-        old_node: &'b VNode<'b>,
-        new_node: &'b VNode<'b>,
-    ) {
-        use VNode::{Component, Element, Fragment, Placeholder, TemplateRef, Text};
+    pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
+        use VNode::{Component, Element, Fragment, Template, Text};
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 self.diff_text_nodes(old, new, old_node, new_node);
-            }
-
-            (Placeholder(old), Placeholder(new)) => {
-                self.diff_placeholder_nodes(old, new, old_node, new_node);
             }
 
             (Element(old), Element(new)) => {
@@ -157,62 +130,42 @@ impl<'b> DiffState<'b> {
             }
 
             (Component(old), Component(new)) => {
-                self.diff_component_nodes(parent, old, new, old_node, new_node);
+                self.diff_component_nodes(old_node, new_node, *old, *new);
             }
 
             (Fragment(old), Fragment(new)) => {
-                self.diff_fragment_nodes(parent, old, new);
+                self.diff_fragment_nodes(old, new);
             }
 
-            (TemplateRef(old), TemplateRef(new)) => {
-                self.diff_template_ref_nodes(parent, old, new, old_node, new_node);
+            (Template(old), Template(new)) => {
+                self.diff_templates(old, new, old_node, new_node);
             }
 
             (
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_) | TemplateRef(_),
-                Component(_) | Fragment(_) | Text(_) | Element(_) | Placeholder(_) | TemplateRef(_),
-            ) => self.replace_node(parent, old_node, new_node),
+                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_),
+                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_),
+            ) => self.replace_node(old_node, new_node),
         }
     }
 
-    pub fn create_node(&mut self, parent: ElementId, node: &'b VNode<'b>, nodes: &mut Vec<u64>) {
+    pub fn create_node(&mut self, node: &'b VNode<'b>) -> usize {
         match node {
-            VNode::Text(vtext) => self.create_text_node(vtext, node, nodes),
-            VNode::Placeholder(anchor) => self.create_anchor_node(anchor, node, nodes),
-            VNode::Element(element) => self.create_element_node(parent, element, node, nodes),
-            VNode::Fragment(frag) => self.create_fragment_node(parent, frag, nodes),
-            VNode::Component(component) => self.create_component_node(parent, component, nodes),
-            VNode::TemplateRef(temp) => self.create_template_ref_node(parent, temp, node, nodes),
+            VNode::Text(vtext) => self.create_text_node(vtext, node),
+            VNode::Element(element) => self.create_element_node(element, node),
+            VNode::Fragment(frag) => self.create_fragment_node(*frag),
+            VNode::Component(component) => self.create_component_node(*component),
+            VNode::Template(template) => self.create_template_node(template, node),
         }
     }
 
-    fn create_text_node(&mut self, text: &'b VText<'b>, node: &'b VNode<'b>, nodes: &mut Vec<u64>) {
+    fn create_text_node(&mut self, text: &'b VText<'b>, node: &'b VNode<'b>) -> usize {
         let real_id = self.scopes.reserve_node(node);
         text.id.set(Some(real_id));
-        self.mutations
-            .create_text_node(text.text, Some(real_id.as_u64()));
-        nodes.push(real_id.0 as u64);
+        self.mutations.create_text_node(text.text, real_id);
+        1
     }
 
-    fn create_anchor_node(
-        &mut self,
-        anchor: &'b VPlaceholder,
-        node: &'b VNode<'b>,
-        nodes: &mut Vec<u64>,
-    ) {
-        let real_id = self.scopes.reserve_node(node);
-        anchor.id.set(Some(real_id));
-        self.mutations.create_placeholder(Some(real_id.as_u64()));
-        nodes.push(real_id.0 as u64);
-    }
-
-    fn create_element_node(
-        &mut self,
-        parent: ElementId,
-        element: &'b VElement<'b>,
-        node: &'b VNode<'b>,
-        nodes: &mut Vec<u64>,
-    ) {
+    fn create_element_node(&mut self, element: &'b VElement<'b>, node: &'b VNode<'b>) -> usize {
         let VElement {
             tag: tag_name,
             listeners,
@@ -224,15 +177,15 @@ impl<'b> DiffState<'b> {
             ..
         } = &element;
 
-        parent_id.set(Some(parent));
+        parent_id.set(self.element_stack.last().copied());
 
         let real_id = self.scopes.reserve_node(node);
 
         dom_id.set(Some(real_id));
 
+        self.element_stack.push(real_id);
         {
-            self.mutations
-                .create_element(tag_name, *namespace, Some(real_id.as_u64()), 0);
+            self.mutations.create_element(tag_name, *namespace, real_id);
 
             let cur_scope_id = self.current_scope();
 
@@ -242,32 +195,23 @@ impl<'b> DiffState<'b> {
             }
 
             for attr in attributes.iter() {
-                self.mutations.set_attribute(attr, Some(real_id.as_u64()));
+                self.mutations.set_attribute(attr, real_id);
             }
 
             if !children.is_empty() {
-                self.create_and_append_children(real_id, children);
+                self.create_and_append_children(children);
             }
         }
+        self.element_stack.pop();
 
-        nodes.push(real_id.0 as u64);
+        1
     }
 
-    fn create_fragment_node(
-        &mut self,
-        parent: ElementId,
-        frag: &'b VFragment<'b>,
-        nodes: &mut Vec<u64>,
-    ) {
-        self.create_children(parent, frag.children, nodes);
+    fn create_fragment_node(&mut self, frag: &'b VFragment<'b>) -> usize {
+        self.create_children(frag.children)
     }
 
-    fn create_component_node(
-        &mut self,
-        parent: ElementId,
-        vcomponent: &'b VComponent<'b>,
-        nodes: &mut Vec<u64>,
-    ) {
+    fn create_component_node(&mut self, vcomponent: &'b VComponent<'b>) -> usize {
         let parent_idx = self.current_scope();
 
         // the component might already exist - if it does, we need to reuse it
@@ -279,8 +223,13 @@ impl<'b> DiffState<'b> {
             // Insert a new scope into our component list
             let props: Box<dyn AnyProps + 'b> = vcomponent.props.borrow_mut().take().unwrap();
             let props: Box<dyn AnyProps + 'static> = unsafe { std::mem::transmute(props) };
-            self.scopes
-                .new_with_key(vcomponent.user_fc, props, Some(parent_idx), parent)
+            self.scopes.new_with_key(
+                vcomponent.user_fc,
+                props,
+                Some(parent_idx),
+                self.element_stack.last().copied().unwrap(),
+                0,
+            )
         };
 
         // Actually initialize the caller's slot with the right address
@@ -301,57 +250,19 @@ impl<'b> DiffState<'b> {
 
         self.enter_scope(new_idx);
 
-        // Run the scope for one iteration to initialize it
-        self.scopes.run_scope(new_idx);
-        self.mutations.mark_dirty_scope(new_idx);
+        let created = {
+            // Run the scope for one iteration to initialize it
+            self.scopes.run_scope(new_idx);
+            self.mutations.mark_dirty_scope(new_idx);
 
-        // Take the node that was just generated from running the component
-        let nextnode = self.scopes.fin_head(new_idx);
-        self.create_node(parent, nextnode, nodes);
+            // Take the node that was just generated from running the component
+            let nextnode = self.scopes.fin_head(new_idx);
+            self.create_node(nextnode)
+        };
 
         self.leave_scope();
-    }
 
-    pub(crate) fn create_template_ref_node(
-        &mut self,
-        parent: ElementId,
-        new: &'b VTemplateRef<'b>,
-        _node: &'b VNode<'b>,
-        nodes: &mut Vec<u64>,
-    ) {
-        let (id, just_created) = {
-            let mut resolver = self.scopes.template_resolver.borrow_mut();
-            resolver.get_or_create_client_id(&new.template_id, self.scopes)
-        };
-
-        let template = {
-            let templates = self.scopes.templates.borrow();
-            templates.get(&new.template_id).unwrap().clone()
-        };
-        let template = template.borrow();
-
-        if just_created {
-            self.register_template(&template, id);
-        }
-
-        new.template_ref_id
-            .set(Some(self.scopes.reserve_template_ref(new)));
-
-        let template_ref_id = new.template_ref_id.get().unwrap();
-
-        let root_nodes = template.root_nodes();
-        nodes.extend(root_nodes.iter().map(|node_id| {
-            let real_id = self.scopes.reserve_template_node(template_ref_id, *node_id);
-            new.set_node_id(*node_id, real_id);
-            real_id.as_u64()
-        }));
-
-        self.mutations.clone_node_children(
-            Some(id.as_u64()),
-            nodes[(nodes.len() - root_nodes.len())..].to_vec(),
-        );
-
-        new.hydrate(parent, &template, self);
+        created
     }
 
     pub(crate) fn diff_text_nodes(
@@ -372,7 +283,7 @@ impl<'b> DiffState<'b> {
         };
 
         if old.text != new.text {
-            self.mutations.set_text(new.text, Some(root.as_u64()));
+            self.mutations.set_text(new.text, root);
         }
 
         self.scopes.update_node(new_node, root);
@@ -380,25 +291,110 @@ impl<'b> DiffState<'b> {
         new.id.set(Some(root));
     }
 
-    pub(crate) fn diff_placeholder_nodes(
+    fn diff_templates(
         &mut self,
-        old: &'b VPlaceholder,
-        new: &'b VPlaceholder,
-        _old_node: &'b VNode<'b>,
+        old: &'b VTemplate<'b>,
+        new: &'b VTemplate<'b>,
+        old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
     ) {
-        if std::ptr::eq(old, new) {
-            return;
+        if old.template.id == new.template.id {
+            // if they're the same, just diff the dynamic nodes directly
+            for (left, right) in old.dynamic_nodes.iter().zip(new.dynamic_nodes.iter()) {
+                self.diff_node(left, right);
+            }
+        } else {
+            // else, diff them manually, taking the slow path
+            self.replace_node(old_node, new_node);
         }
+    }
 
-        // if the node is comming back not assigned, that means it was borrowed but removed
-        let root = match old.id.get() {
-            Some(id) => id,
-            None => self.scopes.reserve_node(new_node),
-        };
+    /// Create the template from scratch using instructions, cache it, and then use the instructions to build it
+    fn create_template_node(
+        &mut self,
+        template: &'b VTemplate<'b>,
+        temp_node: &'b VNode<'b>,
+    ) -> usize {
+        /*
+        - Use a document fragment for holding nodes
+        - Assign IDs to any root nodes so we can find them later for shuffling around
+        - Build dynamic nodes in reverse order so indexing is preserved
+        */
 
-        self.scopes.update_node(new_node, root);
-        new.id.set(Some(root));
+        todo!()
+
+        // let def = template.template;
+
+        // let mut templates = self.scopes.template_cache.borrow_mut();
+
+        // if !templates.contains(&def) {
+        //     // self.create_template_def(def);
+        //     templates.insert(def);
+        // }
+
+        // let mut nodes_created = 0;
+        // let mut dynamic_nodes = template.dynamic_nodes.iter().enumerate().rev();
+
+        // for node in template.rendered_nodes {
+        //     match node {
+        //         // Give it an ID
+        //         crate::innerlude::TemplateRoots::Static(_) => todo!(),
+
+        //         // let the creation step give it an ID
+        //         crate::innerlude::TemplateRoots::Runtime(_) => todo!(),
+        //     }
+        // }
+
+        // // Create all the dynamic nodes and merge them into the template
+        // for (index, node) in dynamic_nodes {
+        //     let new_created = self.create_node(node);
+        //     self.mutations.edits.push(DomEdit::MergeTemplate {
+        //         index: index as u32,
+        //         num_children: new_created as u32,
+        //     })
+        // }
+
+        // nodes_created
+    }
+
+    fn create_template_static_node(&mut self, nodes: &'static [TemplateNode]) -> usize {
+        todo!()
+        // let mut created = 0;
+        // for node in nodes {
+        //     match *node {
+        //         TemplateNode::Element(el) => {
+        //             for attr in el.attributes {
+        //                 match attr {
+        //                     crate::template::TemplateAttribute::Dynamic => todo!(),
+        //                     crate::template::TemplateAttribute::Static { attr } => {
+        //                         self.mutations.set_attribute(attr, 0);
+        //                     }
+        //                 }
+        //             }
+
+        //             self.mutations.create_element(el.tag, None, ElementId(0));
+
+        //             if !nodes.is_empty() {
+        //                 let res = self.create_template_static_node(nodes);
+        //                 self.mutations.append_children(res as u32);
+        //             }
+
+        //             created += 1;
+        //         }
+        //         TemplateNode::StaticText(text) => {
+        //             self.mutations.create_text_node(text, ElementId(0));
+        //             created += 1;
+        //         }
+        //         TemplateNode::DynamicText(_)
+        //         | TemplateNode::DynamicExpr(_)
+        //         | TemplateNode::DynamicComponent(_) => {
+        //             self.mutations.create_placeholder(ElementId(0));
+        //             created += 1;
+        //         }
+        //     }
+        // }
+
+        // created
     }
 
     fn diff_element_nodes(
@@ -423,7 +419,7 @@ impl<'b> DiffState<'b> {
         //
         // This case is rather rare (typically only in non-keyed lists)
         if new.tag != old.tag || new.namespace != old.namespace {
-            self.replace_node(root, old_node, new_node);
+            self.replace_node(old_node, new_node);
             return;
         }
 
@@ -445,19 +441,16 @@ impl<'b> DiffState<'b> {
         // TODO: take a more efficient path than this
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
-                if !old_attr.is_static && old_attr.value != new_attr.value
-                    || new_attr.attribute.volatile
-                {
-                    self.mutations.set_attribute(new_attr, Some(root.as_u64()));
+                if old_attr.value != new_attr.value || new_attr.volatile {
+                    self.mutations.set_attribute(new_attr, root);
                 }
             }
         } else {
             for attribute in old.attributes {
-                self.mutations
-                    .remove_attribute(attribute, Some(root.as_u64()));
+                self.mutations.remove_attribute(attribute, root);
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute, Some(root.as_u64()));
+                self.mutations.set_attribute(attribute, root);
             }
         }
 
@@ -475,15 +468,13 @@ impl<'b> DiffState<'b> {
             for (old_l, new_l) in old.listeners.iter().zip(new.listeners.iter()) {
                 new_l.mounted_node.set(old_l.mounted_node.get());
                 if old_l.event != new_l.event {
-                    self.mutations
-                        .remove_event_listener(old_l.event, Some(root.as_u64()));
+                    self.mutations.remove_event_listener(old_l.event, root);
                     self.mutations.new_event_listener(new_l, cur_scope_id);
                 }
             }
         } else {
             for listener in old.listeners {
-                self.mutations
-                    .remove_event_listener(listener.event, Some(root.as_u64()));
+                self.mutations.remove_event_listener(listener.event, root);
             }
             for listener in new.listeners {
                 listener.mounted_node.set(Some(root));
@@ -494,21 +485,21 @@ impl<'b> DiffState<'b> {
         match (old.children.len(), new.children.len()) {
             (0, 0) => {}
             (0, _) => {
-                let mut created = Vec::new();
-                self.create_children(root, new.children, &mut created);
-                self.mutations.append_children(Some(root.as_u64()), created);
+                self.mutations.push_root(root);
+                let created = self.create_children(new.children);
+                self.mutations.append_children(created as u32);
+                self.mutations.pop_root();
             }
-            (_, _) => self.diff_children(root, old.children, new.children),
+            (_, _) => self.diff_children(old.children, new.children),
         };
     }
 
     fn diff_component_nodes(
         &mut self,
-        parent: ElementId,
-        old: &'b VComponent<'b>,
-        new: &'b VComponent<'b>,
         old_node: &'b VNode<'b>,
         new_node: &'b VNode<'b>,
+        old: &'b VComponent<'b>,
+        new: &'b VComponent<'b>,
     ) {
         let scope_addr = old
             .scope
@@ -563,7 +554,6 @@ impl<'b> DiffState<'b> {
                     self.mutations.mark_dirty_scope(scope_addr);
 
                     self.diff_node(
-                        parent,
                         self.scopes.wip_head(scope_addr),
                         self.scopes.fin_head(scope_addr),
                     );
@@ -574,240 +564,29 @@ impl<'b> DiffState<'b> {
             }
             self.leave_scope();
         } else {
-            self.replace_node(parent, old_node, new_node);
+            self.replace_node(old_node, new_node);
         }
     }
 
-    fn diff_fragment_nodes(
-        &mut self,
-        parent: ElementId,
-        old: &'b VFragment<'b>,
-        new: &'b VFragment<'b>,
-    ) {
+    fn diff_fragment_nodes(&mut self, old: &'b VFragment<'b>, new: &'b VFragment<'b>) {
         if std::ptr::eq(old, new) {
             return;
         }
 
-        // This is the case where options or direct vnodes might be used.
-        // In this case, it's faster to just skip ahead to their diff
-        if old.children.len() == 1 && new.children.len() == 1 {
-            if !std::ptr::eq(old, new) {
-                self.diff_node(parent, &old.children[0], &new.children[0]);
-            }
-            return;
-        }
+        todo!()
+        // // This is the case where options or direct vnodes might be used.
+        // // In this case, it's faster to just skip ahead to their diff
+        // if old.children.len() == 1 && new.children.len() == 1 {
+        //     if !std::ptr::eq(old, new) {
+        //         self.diff_node(&old.children[0], &new.children[0]);
+        //     }
+        //     return;
+        // }
 
-        debug_assert!(!old.children.is_empty());
-        debug_assert!(!new.children.is_empty());
+        // debug_assert!(!old.children.is_empty());
+        // debug_assert!(!new.children.is_empty());
 
-        self.diff_children(parent, old.children, new.children);
-    }
-
-    #[allow(clippy::too_many_lines)]
-    fn diff_template_ref_nodes(
-        &mut self,
-        parent: ElementId,
-        old: &'b VTemplateRef<'b>,
-        new: &'b VTemplateRef<'b>,
-        old_node: &'b VNode<'b>,
-        new_node: &'b VNode<'b>,
-    ) {
-        fn diff_attributes<'b, Nodes, Attributes, V, Children, Listeners, TextSegments, Text>(
-            nodes: &Nodes,
-            ctx: (
-                &mut DiffState<'b>,
-                &'b Bump,
-                &'b VTemplateRef<'b>,
-                &Template,
-                usize,
-            ),
-        ) where
-            Nodes: AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (diff_state, scope_bump, new, template, idx) = ctx;
-            for (node_id, attr_idx) in template.get_dynamic_nodes_for_attribute_index(idx) {
-                if let TemplateNodeType::Element(el) = &nodes.as_ref()[node_id.0].node_type {
-                    let TemplateElement { attributes, .. } = el;
-                    let attr = &attributes.as_ref()[*attr_idx];
-                    let attribute = Attribute {
-                        attribute: attr.attribute,
-                        value: new.dynamic_context.resolve_attribute(idx).clone(),
-                        is_static: false,
-                    };
-                    let real_id = new.get_node_id(*node_id);
-                    diff_state
-                        .mutations
-                        .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
-                } else {
-                    panic!("expected element node");
-                }
-            }
-        }
-
-        fn set_attribute<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-            ctx: (&mut DiffState<'b>, &'b Bump, &'b VTemplateRef<'b>, usize),
-        ) where
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (diff_state, scope_bump, new, template_attr_idx) = ctx;
-            if let TemplateNodeType::Element(el) = &node.node_type {
-                let TemplateElement { attributes, .. } = el;
-                let attr = &attributes.as_ref()[template_attr_idx];
-                let value = match &attr.value {
-                    TemplateAttributeValue::Dynamic(idx) => {
-                        new.dynamic_context.resolve_attribute(*idx).clone()
-                    }
-                    TemplateAttributeValue::Static(value) => value.allocate(scope_bump),
-                };
-                let attribute = Attribute {
-                    attribute: attr.attribute,
-                    value,
-                    is_static: false,
-                };
-                let real_id = new.get_node_id(node.id);
-                diff_state
-                    .mutations
-                    .set_attribute(scope_bump.alloc(attribute), Some(real_id.as_u64()));
-            } else {
-                panic!("expected element node");
-            }
-        }
-
-        fn diff_text<'b, Attributes, V, Children, Listeners, TextSegments, Text>(
-            node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-            ctx: (
-                &mut DiffState<'b>,
-                &'b VTemplateRef<'b>,
-                &TemplateContext<'b>,
-            ),
-        ) where
-            Attributes: AsRef<[TemplateAttribute<V>]>,
-            V: TemplateValue,
-            Children: AsRef<[TemplateNodeId]>,
-            Listeners: AsRef<[usize]>,
-            TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-            Text: AsRef<str>,
-        {
-            let (diff, new, dynamic_context) = ctx;
-            if let TemplateNodeType::Text(text) = &node.node_type {
-                let text = dynamic_context.resolve_text(text);
-                let real_id = new.get_node_id(node.id);
-                diff.mutations.set_text(
-                    diff.current_scope_bump().alloc(text),
-                    Some(real_id.as_u64()),
-                );
-            } else {
-                panic!("expected text node");
-            }
-        }
-
-        if std::ptr::eq(old, new) {
-            return;
-        }
-
-        // if the templates are different, just rebuild it
-        if old.template_id != new.template_id
-            || self
-                .scopes
-                .template_resolver
-                .borrow()
-                .is_dirty(&new.template_id)
-        {
-            self.replace_node(parent, old_node, new_node);
-            return;
-        }
-
-        if let Some(template_ref_id) = old.template_ref_id.get() {
-            self.scopes.update_template_ref(template_ref_id, new);
-            new.template_ref_id.set(Some(template_ref_id));
-        } else {
-            new.template_ref_id
-                .set(Some(self.scopes.reserve_template_ref(new)));
-        }
-        new.parent.set(Some(parent));
-        new.node_ids.replace(old.node_ids.take());
-
-        let scope_bump = &self.current_scope_bump();
-
-        let template = {
-            let templates = self.scopes.templates.borrow();
-            templates.get(&new.template_id).unwrap().clone()
-        };
-        let template = template.borrow();
-
-        // diff dynamic attributes
-        for (idx, (old_attr, new_attr)) in old
-            .dynamic_context
-            .attributes
-            .iter()
-            .zip(new.dynamic_context.attributes.iter())
-            .enumerate()
-        {
-            if old_attr != new_attr {
-                template.with_nodes(
-                    diff_attributes,
-                    diff_attributes,
-                    (self, scope_bump, new, &template, idx),
-                );
-            }
-        }
-
-        // set all volatile attributes
-        for (id, idx) in template.volatile_attributes() {
-            template.with_node(
-                id,
-                set_attribute,
-                set_attribute,
-                (self, scope_bump, new, idx),
-            );
-        }
-
-        // diff dynmaic nodes
-        for (old_node, new_node) in old
-            .dynamic_context
-            .nodes
-            .iter()
-            .zip(new.dynamic_context.nodes.iter())
-        {
-            self.diff_node(parent, old_node, new_node);
-        }
-
-        // diff dynamic text
-        // text nodes could rely on multiple dynamic text parts, so we keep a record of which ones to rerender and send the diffs at the end
-        let mut dirty_text_nodes = FxHashSet::default();
-        for (idx, (old_text, new_text)) in old
-            .dynamic_context
-            .text_segments
-            .iter()
-            .zip(new.dynamic_context.text_segments.iter())
-            .enumerate()
-        {
-            if old_text != new_text {
-                for node_id in template.get_dynamic_nodes_for_text_index(idx) {
-                    dirty_text_nodes.insert(*node_id);
-                }
-            }
-        }
-        for node_id in dirty_text_nodes {
-            template.with_node(
-                node_id,
-                diff_text,
-                diff_text,
-                (self, new, &new.dynamic_context),
-            );
-        }
+        // self.diff_children(old.children, new.children);
     }
 
     // Diff the given set of old and new children.
@@ -825,7 +604,7 @@ impl<'b> DiffState<'b> {
     //
     // Fragment nodes cannot generate empty children lists, so we can assume that when a list is empty, it belongs only
     // to an element, and appending makes sense.
-    fn diff_children(&mut self, parent: ElementId, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
+    fn diff_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if std::ptr::eq(old, new) {
             return;
         }
@@ -833,7 +612,7 @@ impl<'b> DiffState<'b> {
         // Remember, fragments can never be empty (they always have a single child)
         match (old, new) {
             ([], []) => {}
-            ([], _) => self.create_and_append_children(parent, new),
+            ([], _) => self.create_and_append_children(new),
             (_, []) => self.remove_nodes(old, true),
             _ => {
                 let new_is_keyed = new[0].key().is_some();
@@ -849,9 +628,9 @@ impl<'b> DiffState<'b> {
                 );
 
                 if new_is_keyed && old_is_keyed {
-                    self.diff_keyed_children(parent, old, new);
+                    self.diff_keyed_children(old, new);
                 } else {
-                    self.diff_non_keyed_children(parent, old, new);
+                    self.diff_non_keyed_children(old, new);
                 }
             }
         }
@@ -865,12 +644,7 @@ impl<'b> DiffState<'b> {
     //     [... parent]
     //
     // the change list stack is in the same state when this function returns.
-    fn diff_non_keyed_children(
-        &mut self,
-        parent: ElementId,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-    ) {
+    fn diff_non_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         use std::cmp::Ordering;
 
         // Handled these cases in `diff_children` before calling this function.
@@ -879,14 +653,12 @@ impl<'b> DiffState<'b> {
 
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..], true),
-            Ordering::Less => {
-                self.create_and_insert_after(parent, &new[old.len()..], old.last().unwrap());
-            }
+            Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
             Ordering::Equal => {}
         }
 
         for (new, old) in new.iter().zip(old.iter()) {
-            self.diff_node(parent, old, new);
+            self.diff_node(old, new);
         }
     }
 
@@ -906,14 +678,9 @@ impl<'b> DiffState<'b> {
     // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
     //
     // The stack is empty upon entry.
-    fn diff_keyed_children(
-        &mut self,
-        parent: ElementId,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-    ) {
+    fn diff_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if cfg!(debug_assertions) {
-            let mut keys = rustc_hash::FxHashSet::default();
+            let mut keys = fxhash::FxHashSet::default();
             let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
                 keys.clear();
                 for child in children {
@@ -939,7 +706,7 @@ impl<'b> DiffState<'b> {
         //
         // `shared_prefix_count` is the count of how many nodes at the start of
         // `new` and `old` share the same keys.
-        let (left_offset, right_offset) = match self.diff_keyed_ends(parent, old, new) {
+        let (left_offset, right_offset) = match self.diff_keyed_ends(old, new) {
             Some(count) => count,
             None => return,
         };
@@ -965,18 +732,18 @@ impl<'b> DiffState<'b> {
             if left_offset == 0 {
                 // insert at the beginning of the old list
                 let foothold = &old[old.len() - right_offset];
-                self.create_and_insert_before(parent, new_middle, foothold);
+                self.create_and_insert_before(new_middle, foothold);
             } else if right_offset == 0 {
                 // insert at the end  the old list
                 let foothold = old.last().unwrap();
-                self.create_and_insert_after(parent, new_middle, foothold);
+                self.create_and_insert_after(new_middle, foothold);
             } else {
                 // inserting in the middle
                 let foothold = &old[left_offset - 1];
-                self.create_and_insert_after(parent, new_middle, foothold);
+                self.create_and_insert_after(new_middle, foothold);
             }
         } else {
-            self.diff_keyed_middle(parent, old_middle, new_middle);
+            self.diff_keyed_middle(old_middle, new_middle);
         }
     }
 
@@ -987,7 +754,6 @@ impl<'b> DiffState<'b> {
     /// If there is no offset, then this function returns None and the diffing is complete.
     fn diff_keyed_ends(
         &mut self,
-        parent: ElementId,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
     ) -> Option<(usize, usize)> {
@@ -998,14 +764,14 @@ impl<'b> DiffState<'b> {
             if old.key() != new.key() {
                 break;
             }
-            self.diff_node(parent, old, new);
+            self.diff_node(old, new);
             left_offset += 1;
         }
 
         // If that was all of the old children, then create and append the remaining
         // new children and we're finished.
         if left_offset == old.len() {
-            self.create_and_insert_after(parent, &new[left_offset..], old.last().unwrap());
+            self.create_and_insert_after(&new[left_offset..], old.last().unwrap());
             return None;
         }
 
@@ -1023,7 +789,7 @@ impl<'b> DiffState<'b> {
             if old.key() != new.key() {
                 break;
             }
-            self.diff_node(parent, old, new);
+            self.diff_node(old, new);
             right_offset += 1;
         }
 
@@ -1044,7 +810,7 @@ impl<'b> DiffState<'b> {
     //
     // Upon exit from this function, it will be restored to that same self.
     #[allow(clippy::too_many_lines)]
-    fn diff_keyed_middle(&mut self, parent: ElementId, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
+    fn diff_keyed_middle(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         /*
         1. Map the old keys into a numerical ordering based on indices.
         2. Create a map of old key to its index
@@ -1102,13 +868,12 @@ impl<'b> DiffState<'b> {
         if shared_keys.is_empty() {
             if let Some(first_old) = old.get(0) {
                 self.remove_nodes(&old[1..], true);
-                let mut nodes_created = Vec::new();
-                self.create_children(parent, new, &mut nodes_created);
+                let nodes_created = self.create_children(new);
                 self.replace_inner(first_old, nodes_created);
             } else {
                 // I think this is wrong - why are we appending?
                 // only valid of the if there are no trailing elements
-                self.create_and_append_children(parent, new);
+                self.create_and_append_children(new);
             }
             return;
         }
@@ -1146,10 +911,10 @@ impl<'b> DiffState<'b> {
         }
 
         for idx in &lis_sequence {
-            self.diff_node(parent, &old[new_index_to_old_index[*idx]], &new[*idx]);
+            self.diff_node(&old[new_index_to_old_index[*idx]], &new[*idx]);
         }
 
-        let mut nodes_created = Vec::new();
+        let mut nodes_created = 0;
 
         // add mount instruction for the first items not covered by the lis
         let last = *lis_sequence.last().unwrap();
@@ -1158,16 +923,18 @@ impl<'b> DiffState<'b> {
                 let new_idx = idx + last + 1;
                 let old_index = new_index_to_old_index[new_idx];
                 if old_index == u32::MAX as usize {
-                    self.create_node(parent, new_node, &mut nodes_created);
+                    nodes_created += self.create_node(new_node);
                 } else {
-                    self.diff_node(parent, &old[old_index], new_node);
-                    self.get_all_real_nodes(new_node, &mut nodes_created);
+                    self.diff_node(&old[old_index], new_node);
+                    nodes_created += self.push_all_real_nodes(new_node);
                 }
             }
 
-            let last = Some(self.find_last_element(&new[last]).unwrap().as_u64());
-            self.mutations.insert_after(last, nodes_created);
-            nodes_created = Vec::new();
+            self.mutations.insert_after(
+                self.find_last_element(&new[last]).unwrap(),
+                nodes_created as u32,
+            );
+            nodes_created = 0;
         }
 
         // for each spacing, generate a mount instruction
@@ -1179,17 +946,19 @@ impl<'b> DiffState<'b> {
                     let new_idx = idx + next + 1;
                     let old_index = new_index_to_old_index[new_idx];
                     if old_index == u32::MAX as usize {
-                        self.create_node(parent, new_node, &mut nodes_created);
+                        nodes_created += self.create_node(new_node);
                     } else {
-                        self.diff_node(parent, &old[old_index], new_node);
-                        self.get_all_real_nodes(new_node, &mut nodes_created);
+                        self.diff_node(&old[old_index], new_node);
+                        nodes_created += self.push_all_real_nodes(new_node);
                     }
                 }
 
-                let first = Some(self.find_first_element(&new[last]).unwrap().as_u64());
-                self.mutations.insert_before(first, nodes_created);
+                self.mutations.insert_before(
+                    self.find_first_element(&new[last]).unwrap(),
+                    nodes_created as u32,
+                );
 
-                nodes_created = Vec::new();
+                nodes_created = 0;
             }
             last = *next;
         }
@@ -1200,44 +969,43 @@ impl<'b> DiffState<'b> {
             for (idx, new_node) in new[..first_lis].iter().enumerate() {
                 let old_index = new_index_to_old_index[idx];
                 if old_index == u32::MAX as usize {
-                    self.create_node(parent, new_node, &mut nodes_created);
+                    nodes_created += self.create_node(new_node);
                 } else {
-                    self.diff_node(parent, &old[old_index], new_node);
-                    self.get_all_real_nodes(new_node, &mut nodes_created);
+                    self.diff_node(&old[old_index], new_node);
+                    nodes_created += self.push_all_real_nodes(new_node);
                 }
             }
 
-            let first = Some(self.find_first_element(&new[first_lis]).unwrap().as_u64());
-            self.mutations.insert_before(first, nodes_created);
+            self.mutations.insert_before(
+                self.find_first_element(&new[first_lis]).unwrap(),
+                nodes_created as u32,
+            );
         }
     }
 
-    pub fn replace_node(&mut self, parent: ElementId, old: &'b VNode<'b>, new: &'b VNode<'b>) {
-        let mut nodes_vec = Vec::new();
-        self.create_node(parent, new, &mut nodes_vec);
-        self.replace_inner(old, nodes_vec);
+    fn replace_node(&mut self, old: &'b VNode<'b>, new: &'b VNode<'b>) {
+        let nodes_created = self.create_node(new);
+        self.replace_inner(old, nodes_created);
     }
 
-    fn replace_inner(&mut self, old: &'b VNode<'b>, nodes_created: Vec<u64>) {
+    fn replace_inner(&mut self, old: &'b VNode<'b>, nodes_created: usize) {
         match old {
             VNode::Element(el) => {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
 
-                self.mutations
-                    .replace_with(Some(id.as_u64()), nodes_created);
+                self.mutations.replace_with(id, nodes_created as u32);
                 self.remove_nodes(el.children, false);
                 self.scopes.collect_garbage(id);
             }
 
-            VNode::Text(_) | VNode::Placeholder(_) => {
+            VNode::Text(_) => {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
 
-                self.mutations
-                    .replace_with(Some(id.as_u64()), nodes_created);
+                self.mutations.replace_with(id, nodes_created as u32);
                 self.scopes.collect_garbage(id);
             }
 
@@ -1245,50 +1013,34 @@ impl<'b> DiffState<'b> {
                 self.replace_inner(&f.children[0], nodes_created);
                 self.remove_nodes(f.children.iter().skip(1), true);
             }
-
             VNode::Component(c) => {
-                log::trace!("Replacing component {:?}", old);
                 let scope_id = c.scope.get().unwrap();
                 let node = self.scopes.fin_head(scope_id);
 
                 self.enter_scope(scope_id);
                 {
                     self.replace_inner(node, nodes_created);
-
-                    log::trace!("Replacing component x2 {:?}", old);
-
                     let scope = self.scopes.get_scope(scope_id).unwrap();
                     c.scope.set(None);
                     let props = scope.props.take().unwrap();
                     c.props.borrow_mut().replace(props);
                     self.scopes.try_remove(scope_id);
                 }
+
                 self.leave_scope();
             }
+            VNode::Template(c) => {
+                todo!()
+                // // let ids = c.root_keys.as_slice_of_cells();
 
-            VNode::TemplateRef(template_ref) => {
-                let templates = self.scopes.templates.borrow();
-                let template = templates.get(&template_ref.template_id).unwrap().borrow();
-                let mut root_iter = template.root_nodes().iter();
-                let first_real_id = template_ref.get_node_id(*root_iter.next().unwrap());
-                self.mutations
-                    .replace_with(Some(first_real_id.as_u64()), nodes_created);
-                for id in root_iter {
-                    let real_id = template_ref.get_node_id(*id);
-                    self.mutations.remove(Some(real_id.as_u64()));
-                }
+                // self.mutations
+                //     .replace_with(ids[0].get(), nodes_created as u32);
+                // self.scopes.collect_garbage(ids[0].get());
 
-                self.remove_nodes(template_ref.dynamic_context.nodes, true);
-
-                if let Some(id) = template_ref.template_ref_id.get() {
-                    self.scopes.template_refs.borrow_mut().remove(id.0);
-                }
-
-                for id in template_ref.node_ids.borrow().iter() {
-                    if let Some(id) = id.get() {
-                        self.scopes.collect_garbage(*id);
-                    }
-                }
+                // for id in ids.iter().skip(1) {
+                //     self.mutations.remove(id.get());
+                //     self.scopes.collect_garbage(id.get());
+                // }
             }
         }
     }
@@ -1303,24 +1055,24 @@ impl<'b> DiffState<'b> {
                         t.id.set(None);
 
                         if gen_muts {
-                            self.mutations.remove(Some(id.as_u64()));
+                            self.mutations.remove(id);
                         }
                     }
                 }
-                VNode::Placeholder(a) => {
-                    let id = a.id.get().unwrap();
-                    self.scopes.collect_garbage(id);
-                    a.id.set(None);
+                // VNode::Placeholder(a) => {
+                //     let id = a.id.get().unwrap();
+                //     self.scopes.collect_garbage(id);
+                //     a.id.set(None);
 
-                    if gen_muts {
-                        self.mutations.remove(Some(id.as_u64()));
-                    }
-                }
+                //     if gen_muts {
+                //         self.mutations.remove(id);
+                //     }
+                // }
                 VNode::Element(e) => {
                     let id = e.id.get().unwrap();
 
                     if gen_muts {
-                        self.mutations.remove(Some(id.as_u64()));
+                        self.mutations.remove(id);
                     }
 
                     self.scopes.collect_garbage(id);
@@ -1332,7 +1084,6 @@ impl<'b> DiffState<'b> {
                 VNode::Fragment(f) => {
                     self.remove_nodes(f.children, gen_muts);
                 }
-
                 VNode::Component(c) => {
                     self.enter_scope(c.scope.get().unwrap());
                     {
@@ -1350,77 +1101,37 @@ impl<'b> DiffState<'b> {
                     self.leave_scope();
                 }
 
-                VNode::TemplateRef(template_ref) => {
-                    let templates = self.scopes.templates.borrow();
-                    let template = templates.get(&template_ref.template_id).unwrap().borrow();
-                    if gen_muts {
-                        for id in template.root_nodes() {
-                            let real_id = template_ref.get_node_id(*id);
-                            self.mutations.remove(Some(real_id.as_u64()));
-                        }
-                    }
-
-                    self.remove_nodes(template_ref.dynamic_context.nodes, gen_muts);
-
-                    if let Some(id) = template_ref.template_ref_id.get() {
-                        self.scopes.template_refs.borrow_mut().remove(id.0);
-                    }
-
-                    for id in template_ref.node_ids.borrow().iter() {
-                        if let Some(id) = id.get() {
-                            self.scopes.collect_garbage(*id);
-                        }
-                    }
-                }
+                VNode::Template(c) => {}
             }
         }
     }
 
-    fn create_children(
-        &mut self,
-        parent: ElementId,
-        nodes: &'b [VNode<'b>],
-        nodes_vec: &mut Vec<u64>,
-    ) {
-        nodes_vec.reserve(nodes.len());
+    fn create_children(&mut self, nodes: &'b [VNode<'b>]) -> usize {
+        let mut created = 0;
         for node in nodes {
-            self.create_node(parent, node, nodes_vec);
+            created += self.create_node(node);
         }
+        created
     }
 
-    fn create_and_append_children(&mut self, parent: ElementId, nodes: &'b [VNode<'b>]) {
-        let mut nodes_vec = Vec::with_capacity(nodes.len());
-        self.create_children(parent, nodes, &mut nodes_vec);
-        self.mutations
-            .append_children(Some(parent.as_u64()), nodes_vec);
+    fn create_and_append_children(&mut self, nodes: &'b [VNode<'b>]) {
+        let created = self.create_children(nodes);
+        self.mutations.append_children(created as u32);
     }
 
-    fn create_and_insert_after(
-        &mut self,
-        parent: ElementId,
-        nodes: &'b [VNode<'b>],
-        after: &'b VNode<'b>,
-    ) {
-        let mut nodes_vec = Vec::with_capacity(nodes.len());
-        self.create_children(parent, nodes, &mut nodes_vec);
+    fn create_and_insert_after(&mut self, nodes: &'b [VNode<'b>], after: &'b VNode<'b>) {
+        let created = self.create_children(nodes);
         let last = self.find_last_element(after).unwrap();
-        self.mutations.insert_after(Some(last.as_u64()), nodes_vec);
+        self.mutations.insert_after(last, created as u32);
     }
 
-    fn create_and_insert_before(
-        &mut self,
-        parent: ElementId,
-        nodes: &'b [VNode<'b>],
-        before: &'b VNode<'b>,
-    ) {
-        let mut nodes_vec = Vec::with_capacity(nodes.len());
-        self.create_children(parent, nodes, &mut nodes_vec);
+    fn create_and_insert_before(&mut self, nodes: &'b [VNode<'b>], before: &'b VNode<'b>) {
+        let created = self.create_children(nodes);
         let first = self.find_first_element(before).unwrap();
-        self.mutations
-            .insert_before(Some(first.as_u64()), nodes_vec);
+        self.mutations.insert_before(first, created as u32);
     }
 
-    pub fn current_scope(&self) -> ScopeId {
+    fn current_scope(&self) -> ScopeId {
         self.scope_stack.last().copied().expect("no current scope")
     }
 
@@ -1432,95 +1143,66 @@ impl<'b> DiffState<'b> {
         self.scope_stack.pop();
     }
 
-    fn find_last_element(&mut self, vnode: &'b VNode<'b>) -> Option<ElementId> {
+    fn find_last_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
         loop {
             match &search_node.take().unwrap() {
                 VNode::Text(t) => break t.id.get(),
                 VNode::Element(t) => break t.id.get(),
-                VNode::Placeholder(t) => break t.id.get(),
                 VNode::Fragment(frag) => search_node = frag.children.last(),
                 VNode::Component(el) => {
                     let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
-                VNode::TemplateRef(t) => {
-                    let templates = self.scopes.templates.borrow();
-                    let template = templates.get(&t.template_id).unwrap();
-                    let template = template.borrow();
-                    break template.root_nodes().last().map(|id| t.get_node_id(*id));
+                VNode::Template(c) => {
+                    todo!()
                 }
             }
         }
     }
 
-    fn find_first_element(&mut self, vnode: &'b VNode<'b>) -> Option<ElementId> {
+    fn find_first_element(&self, vnode: &'b VNode<'b>) -> Option<ElementId> {
         let mut search_node = Some(vnode);
         loop {
             match &search_node.take().expect("search node to have an ID") {
                 VNode::Text(t) => break t.id.get(),
                 VNode::Element(t) => break t.id.get(),
-                VNode::Placeholder(t) => break t.id.get(),
                 VNode::Fragment(frag) => search_node = Some(&frag.children[0]),
                 VNode::Component(el) => {
                     let scope = el.scope.get().expect("element to have a scope assigned");
                     search_node = Some(self.scopes.root_node(scope));
                 }
-                VNode::TemplateRef(t) => {
-                    let templates = self.scopes.templates.borrow();
-                    let template = templates.get(&t.template_id).unwrap();
-                    let template = template.borrow();
-                    break template.root_nodes().first().map(|id| t.get_node_id(*id));
+                VNode::Template(t) => {
+                    todo!()
                 }
             }
         }
     }
 
     // recursively push all the nodes of a tree onto the stack and return how many are there
-    fn get_all_real_nodes(&mut self, node: &'b VNode<'b>, nodes: &mut Vec<u64>) {
+    fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
         match node {
-            VNode::Text(_) | VNode::Placeholder(_) | VNode::Element(_) => {
-                nodes.push(node.mounted_id().0 as u64);
-            }
-
-            VNode::TemplateRef(template_ref) => {
-                let templates = self.scopes.templates.borrow();
-                let template = templates.get(&template_ref.template_id).unwrap();
-                let template = template.borrow();
-                nodes.extend(
-                    template
-                        .root_nodes()
-                        .iter()
-                        .map(|id| template_ref.get_node_id(*id).as_u64()),
-                );
+            VNode::Text(_) | VNode::Element(_) => {
+                self.mutations.push_root(node.mounted_id());
+                1
             }
 
             VNode::Fragment(frag) => {
-                nodes.reserve(frag.children.len());
+                let mut added = 0;
                 for child in frag.children {
-                    self.get_all_real_nodes(child, nodes);
+                    added += self.push_all_real_nodes(child);
                 }
+                added
             }
-
             VNode::Component(c) => {
                 let scope_id = c.scope.get().unwrap();
                 let root = self.scopes.root_node(scope_id);
-                self.get_all_real_nodes(root, nodes);
+                self.push_all_real_nodes(root)
+            }
+
+            VNode::Template(c) => {
+                todo!()
             }
         }
-    }
-
-    pub(crate) fn current_scope_bump(&self) -> &'b Bump {
-        &self
-            .scopes
-            .get_scope(self.current_scope())
-            .unwrap()
-            .fin_frame()
-            .bump
-    }
-
-    pub fn register_template(&mut self, template: &Template, id: ElementId) {
-        let bump = &self.scopes.template_bump;
-        template.create(&mut self.mutations, bump, id);
     }
 }

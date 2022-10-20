@@ -6,8 +6,8 @@ use crate::diff::DiffState;
 use crate::innerlude::*;
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use futures_util::{future::poll_fn, StreamExt};
+use fxhash::FxHashSet;
 use indexmap::IndexSet;
-use rustc_hash::FxHashSet;
 use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.
@@ -103,7 +103,6 @@ use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 /// }
 /// ```
 pub struct VirtualDom {
-    root: ElementId,
     scopes: ScopeArena,
 
     pending_messages: VecDeque<SchedulerMsg>,
@@ -128,10 +127,6 @@ pub enum SchedulerMsg {
 
     /// Mark all components as dirty and update them
     DirtyAll,
-
-    #[cfg(any(feature = "hot-reload", debug_assertions))]
-    /// Mark a template as dirty, used for hot reloading
-    SetTemplate(Box<SetTemplateMsg>),
 
     /// New tasks from components that should be polled when the next poll is ready
     NewTask(ScopeId),
@@ -232,10 +227,10 @@ impl VirtualDom {
             }),
             None,
             ElementId(0),
+            0,
         );
 
         Self {
-            root: ElementId(0),
             scopes,
             channel,
             dirty_scopes: IndexSet::from_iter([ScopeId(0)]),
@@ -403,25 +398,6 @@ impl VirtualDom {
                     self.dirty_scopes.insert(*id);
                 }
             }
-            #[cfg(any(feature = "hot-reload", debug_assertions))]
-            SchedulerMsg::SetTemplate(msg) => {
-                let SetTemplateMsg(id, tmpl) = *msg;
-                if self
-                    .scopes
-                    .templates
-                    .borrow_mut()
-                    .insert(
-                        id.clone(),
-                        std::rc::Rc::new(std::cell::RefCell::new(Template::Owned(tmpl))),
-                    )
-                    .is_some()
-                {
-                    self.scopes.template_resolver.borrow_mut().mark_dirty(&id)
-                }
-
-                // mark any scopes that used the template as dirty
-                self.process_message(SchedulerMsg::DirtyAll);
-            }
         }
     }
 
@@ -470,14 +446,14 @@ impl VirtualDom {
     ///     apply_mutations(mutations);
     /// }
     /// ```
-    #[allow(unused)]
-    pub fn work_with_deadline(&mut self, mut deadline: impl FnMut() -> bool) -> Vec<Mutations> {
-        let mut committed_mutations = vec![];
-        self.scopes.template_bump.reset();
-
+    pub fn work_with_deadline<'a>(
+        &'a mut self,
+        renderer: &mut impl Renderer<'a>,
+        mut deadline: impl FnMut() -> bool,
+    ) {
         while !self.dirty_scopes.is_empty() {
             let scopes = &self.scopes;
-            let mut diff_state = DiffState::new(scopes);
+            let mut diff_state = DiffState::new(scopes, renderer);
 
             let mut ran_scopes = FxHashSet::default();
 
@@ -497,17 +473,18 @@ impl VirtualDom {
 
                     self.scopes.run_scope(scopeid);
 
-                    diff_state.diff_scope(self.root, scopeid);
+                    diff_state.diff_scope(scopeid);
 
                     let DiffState { mutations, .. } = diff_state;
 
-                    for scope in &mutations.dirty_scopes {
-                        self.dirty_scopes.remove(scope);
-                    }
+                    todo!()
+                    // for scope in &mutations.dirty_scopes {
+                    //     self.dirty_scopes.remove(scope);
+                    // }
 
-                    if !mutations.edits.is_empty() {
-                        committed_mutations.push(mutations);
-                    }
+                    // if !mutations.edits.is_empty() {
+                    //     committed_mutations.push(mutations);
+                    // }
 
                     // todo: pause the diff machine
                     // if diff_state.work(&mut deadline) {
@@ -526,8 +503,6 @@ impl VirtualDom {
                 }
             }
         }
-
-        committed_mutations
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
@@ -547,26 +522,22 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild(&mut self) -> Mutations {
+    pub fn rebuild<'a>(&'a mut self, dom: &mut impl Renderer<'a>) {
         let scope_id = ScopeId(0);
+        let mut diff_state = DiffState::new(&self.scopes, dom);
 
-        let mut diff_state = DiffState::new(&self.scopes);
         self.scopes.run_scope(scope_id);
 
+        diff_state.element_stack.push(ElementId(0));
         diff_state.scope_stack.push(scope_id);
 
         let node = self.scopes.fin_head(scope_id);
-        let mut created = Vec::new();
-        diff_state.create_node(self.root, node, &mut created);
+        let created = diff_state.create_node(node);
 
-        diff_state
-            .mutations
-            .append_children(Some(self.root.as_u64()), created);
+        diff_state.mutations.append_children(created as u32);
 
         self.dirty_scopes.clear();
         assert!(self.dirty_scopes.is_empty());
-
-        diff_state.mutations
     }
 
     /// Compute a manual diff of the VirtualDom between states.
@@ -599,8 +570,8 @@ impl VirtualDom {
     ///
     /// let edits = dom.hard_diff(ScopeId(0));
     /// ```
-    pub fn hard_diff(&mut self, scope_id: ScopeId) -> Mutations {
-        let mut diff_machine = DiffState::new(&self.scopes);
+    pub fn hard_diff<'a>(&'a mut self, scope_id: ScopeId, dom: &mut impl Renderer<'a>) {
+        let mut diff_machine = DiffState::new(&self.scopes, dom);
         self.scopes.run_scope(scope_id);
 
         let (old, new) = (
@@ -611,124 +582,108 @@ impl VirtualDom {
         diff_machine.force_diff = true;
         diff_machine.scope_stack.push(scope_id);
         let scope = diff_machine.scopes.get_scope(scope_id).unwrap();
+        diff_machine.element_stack.push(scope.container);
 
-        diff_machine.diff_node(scope.container, old, new);
-
-        diff_machine.mutations
+        diff_machine.diff_node(old, new);
     }
 
-    /// Renders an `rsx` call into the Base Scope's allocator.
-    ///
-    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
-    ///
-    /// ```rust, ignore
-    /// fn Base(cx: Scope) -> Element {
-    ///     render!(div {})
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Base);
-    /// let nodes = dom.render_nodes(rsx!("div"));
-    /// ```
-    pub fn render_vnodes<'a>(&'a self, lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
-        let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
-        let frame = scope.wip_frame();
-        let factory = NodeFactory::new(scope);
-        let node = lazy_nodes.call(factory);
-        frame.bump.alloc(node)
-    }
+    // /// Renders an `rsx` call into the Base Scope's allocator.
+    // ///
+    // /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    // ///
+    // /// ```rust, ignore
+    // /// fn Base(cx: Scope) -> Element {
+    // ///     render!(div {})
+    // /// }
+    // ///
+    // /// let dom = VirtualDom::new(Base);
+    // /// let nodes = dom.render_nodes(rsx!("div"));
+    // /// ```
+    // pub fn render_vnodes<'a>(&'a self, lazy_nodes: LazyNodes<'a, '_>) -> &'a VNode<'a> {
+    //     let scope = self.scopes.get_scope(ScopeId(0)).unwrap();
+    //     let frame = scope.wip_frame();
+    //     let factory = NodeFactory::new(scope);
+    //     let node = lazy_nodes.call(factory);
+    //     frame.bump.alloc(node)
+    // }
 
-    /// Renders an `rsx` call into the Base Scope's allocator.
-    ///
-    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
-    ///
-    /// ```rust, ignore
-    /// fn Base(cx: Scope) -> Element {
-    ///     render!(div {})
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Base);
-    /// let nodes = dom.render_nodes(rsx!("div"));
-    /// ```
-    pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
-        let mut machine = DiffState::new(&self.scopes);
-        machine.scope_stack.push(ScopeId(0));
-        machine.diff_node(self.root, old, new);
+    // /// Renders an `rsx` call into the Base Scope's allocator.
+    // ///
+    // /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    // ///
+    // /// ```rust, ignore
+    // /// fn Base(cx: Scope) -> Element {
+    // ///     render!(div {})
+    // /// }
+    // ///
+    // /// let dom = VirtualDom::new(Base);
+    // /// let nodes = dom.render_nodes(rsx!("div"));
+    // /// ```
+    // pub fn diff_vnodes<'a>(&'a self, old: &'a VNode<'a>, new: &'a VNode<'a>) -> Mutations<'a> {
+    //     let mut machine = DiffState::new(&self.scopes);
+    //     machine.element_stack.push(ElementId(0));
+    //     machine.scope_stack.push(ScopeId(0));
+    //     machine.diff_node(old, new);
 
-        machine.mutations
-    }
+    //     machine.mutations
+    // }
 
-    /// Renders an `rsx` call into the Base Scope's allocator.
-    ///
-    /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
-    ///
-    ///
-    /// ```rust, ignore
-    /// fn Base(cx: Scope) -> Element {
-    ///     render!(div {})
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Base);
-    /// let nodes = dom.render_nodes(rsx!("div"));
-    /// ```
-    pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
-        let mut machine = DiffState::new(&self.scopes);
-        machine.scope_stack.push(ScopeId(0));
-        let node = self.render_vnodes(nodes);
-        let mut created = Vec::new();
-        machine.create_node(self.root, node, &mut created);
-        machine
-            .mutations
-            .append_children(Some(self.root.as_u64()), created);
-        machine.mutations
-    }
+    // /// Renders an `rsx` call into the Base Scope's allocator.
+    // ///
+    // /// Useful when needing to render nodes from outside the VirtualDom, such as in a test.
+    // ///
+    // ///
+    // /// ```rust, ignore
+    // /// fn Base(cx: Scope) -> Element {
+    // ///     render!(div {})
+    // /// }
+    // ///
+    // /// let dom = VirtualDom::new(Base);
+    // /// let nodes = dom.render_nodes(rsx!("div"));
+    // /// ```
+    // pub fn create_vnodes<'a>(&'a self, nodes: LazyNodes<'a, '_>) -> Mutations<'a> {
+    //     let mut machine = DiffState::new(&self.scopes);
+    //     machine.scope_stack.push(ScopeId(0));
+    //     machine.element_stack.push(ElementId(0));
+    //     let node = self.render_vnodes(nodes);
+    //     let created = machine.create_node(node);
+    //     machine.mutations.append_children(created as u32);
+    //     machine.mutations
+    // }
 
-    /// Renders an `rsx` call into the Base Scopes's arena.
-    ///
-    /// Useful when needing to diff two rsx! calls from outside the VirtualDom, such as in a test.
-    ///
-    ///
-    /// ```rust, ignore
-    /// fn Base(cx: Scope) -> Element {
-    ///     render!(div {})
-    /// }
-    ///
-    /// let dom = VirtualDom::new(Base);
-    /// let nodes = dom.render_nodes(rsx!("div"));
-    /// ```
-    pub fn diff_lazynodes<'a>(
-        &'a self,
-        left: LazyNodes<'a, '_>,
-        right: LazyNodes<'a, '_>,
-    ) -> (Mutations<'a>, Mutations<'a>) {
-        let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
+    // /// Renders an `rsx` call into the Base Scopes's arena.
+    // ///
+    // /// Useful when needing to diff two rsx! calls from outside the VirtualDom, such as in a test.
+    // ///
+    // ///
+    // /// ```rust, ignore
+    // /// fn Base(cx: Scope) -> Element {
+    // ///     render!(div {})
+    // /// }
+    // ///
+    // /// let dom = VirtualDom::new(Base);
+    // /// let nodes = dom.render_nodes(rsx!("div"));
+    // /// ```
+    // pub fn diff_lazynodes<'a>(
+    //     &'a self,
+    //     left: LazyNodes<'a, '_>,
+    //     right: LazyNodes<'a, '_>,
+    // ) -> (Mutations<'a>, Mutations<'a>) {
+    //     let (old, new) = (self.render_vnodes(left), self.render_vnodes(right));
 
-        let mut create = DiffState::new(&self.scopes);
-        create.scope_stack.push(ScopeId(0));
-        let mut created = Vec::new();
-        create.create_node(self.root, old, &mut created);
-        create
-            .mutations
-            .append_children(Some(self.root.as_u64()), created);
+    //     let mut create = DiffState::new(&self.scopes);
+    //     create.scope_stack.push(ScopeId(0));
+    //     create.element_stack.push(ElementId(0));
+    //     let created = create.create_node(old);
+    //     create.mutations.append_children(created as u32);
 
-        let mut edit = DiffState::new(&self.scopes);
-        edit.scope_stack.push(ScopeId(0));
-        edit.diff_node(self.root, old, new);
+    //     let mut edit = DiffState::new(&self.scopes);
+    //     edit.scope_stack.push(ScopeId(0));
+    //     edit.element_stack.push(ElementId(0));
+    //     edit.diff_node(old, new);
 
-        (create.mutations, edit.mutations)
-    }
-
-    /// Runs a function with the template associated with a given id.
-    pub fn with_template<R>(&self, id: &TemplateId, mut f: impl FnMut(&Template) -> R) -> R {
-        self.scopes
-            .templates
-            .borrow()
-            .get(id)
-            .map(|inner| {
-                let borrow = inner;
-                f(&borrow.borrow())
-            })
-            .unwrap()
-    }
+    //     (create.mutations, edit.mutations)
+    // }
 }
 
 /*
@@ -762,8 +717,10 @@ impl Drop for VirtualDom {
 
         // todo: move the remove nodes method onto scopearena
         // this will clear *all* scopes *except* the root scope
-        let mut machine = DiffState::new(&self.scopes);
-        machine.remove_nodes([scope.root_node()], false);
+        // let mut machine = DiffState::new(&self.scopes);
+        // machine.remove_nodes([scope.root_node()], false);
+
+        todo!("drop the root scope without leaking anything");
 
         // Now, clean up the root scope
         // safety: there are no more references to the root scope

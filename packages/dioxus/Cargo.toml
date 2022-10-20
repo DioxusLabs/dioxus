@@ -23,9 +23,7 @@ default = ["macro", "hooks", "html"]
 macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
-hot-reload = [
-    "dioxus-core/hot-reload",
-]
+
 
 [dev-dependencies]
 futures-util = "0.3.21"
@@ -34,6 +32,7 @@ rand = { version = "0.8.4", features = ["small_rng"] }
 criterion = "0.3.5"
 thiserror = "1.0.30"
 env_logger = "0.9.0"
+dioxus-edit-stream = { path = "../edit-stream" }
 
 [[bench]]
 name = "create"

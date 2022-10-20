@@ -251,72 +251,72 @@ fn round_to_words(len: usize) -> usize {
     (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::innerlude::{Element, Scope, VirtualDom};
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use crate::innerlude::{Element, Scope, VirtualDom};
 
-    #[test]
-    fn it_works() {
-        fn app(cx: Scope<()>) -> Element {
-            cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
-        }
+//     #[test]
+//     fn it_works() {
+//         fn app(cx: Scope<()>) -> Element {
+//             cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
+//         }
 
-        let mut dom = VirtualDom::new(app);
-        dom.rebuild();
+//         let mut dom = VirtualDom::new(app);
+//         dom.rebuild();
 
-        let g = dom.base_scope().root_node();
-        dbg!(g);
-    }
+//         let g = dom.base_scope().root_node();
+//         dbg!(g);
+//     }
 
-    #[test]
-    fn it_drops() {
-        use std::rc::Rc;
+//     #[test]
+//     fn it_drops() {
+//         use std::rc::Rc;
 
-        struct AppProps {
-            inner: Rc<i32>,
-        }
+//         struct AppProps {
+//             inner: Rc<i32>,
+//         }
 
-        fn app(cx: Scope<AppProps>) -> Element {
-            struct DropInner {
-                id: i32,
-            }
-            impl Drop for DropInner {
-                fn drop(&mut self) {
-                    eprintln!("dropping inner");
-                }
-            }
+//         fn app(cx: Scope<AppProps>) -> Element {
+//             struct DropInner {
+//                 id: i32,
+//             }
+//             impl Drop for DropInner {
+//                 fn drop(&mut self) {
+//                     eprintln!("dropping inner");
+//                 }
+//             }
 
-            let caller = {
-                let it = (0..10).map(|i| {
-                    let val = cx.props.inner.clone();
-                    LazyNodes::new(move |f| {
-                        eprintln!("hell closure");
-                        let inner = DropInner { id: i };
-                        f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
-                    })
-                });
+//             let caller = {
+//                 let it = (0..10).map(|i| {
+//                     let val = cx.props.inner.clone();
+//                     LazyNodes::new(move |f| {
+//                         eprintln!("hell closure");
+//                         let inner = DropInner { id: i };
+//                         f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
+//                     })
+//                 });
 
-                LazyNodes::new(|f| {
-                    eprintln!("main closure");
-                    f.fragment_from_iter(it)
-                })
-            };
+//                 LazyNodes::new(|f| {
+//                     eprintln!("main closure");
+//                     f.fragment_from_iter(it)
+//                 })
+//             };
 
-            cx.render(caller)
-        }
+//             cx.render(caller)
+//         }
 
-        let inner = Rc::new(0);
-        let mut dom = VirtualDom::new_with_props(
-            app,
-            AppProps {
-                inner: inner.clone(),
-            },
-        );
-        dom.rebuild();
+//         let inner = Rc::new(0);
+//         let mut dom = VirtualDom::new_with_props(
+//             app,
+//             AppProps {
+//                 inner: inner.clone(),
+//             },
+//         );
+//         dom.rebuild();
 
-        drop(dom);
+//         drop(dom);
 
-        assert_eq!(Rc::strong_count(&inner), 1);
-    }
-}
+//         assert_eq!(Rc::strong_count(&inner), 1);
+//     }
+// }

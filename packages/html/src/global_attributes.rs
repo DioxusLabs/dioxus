@@ -1,4 +1,6 @@
-use dioxus_core::*;
+#![allow(non_upper_case_globals)]
+
+use crate::AttributeDiscription;
 
 macro_rules! no_namespace_trait_methods {
     (
@@ -8,12 +10,11 @@ macro_rules! no_namespace_trait_methods {
         )*
     ) => {
         $(
-            #[allow(non_upper_case_globals)]
-            const $name: AttributeDiscription = AttributeDiscription{
-                name: stringify!($name),
-                namespace: None,
-                volatile: false
-            };
+            const $name: AttributeDiscription = (
+                stringify!($name),
+                None,
+                false
+            );
         )*
     };
 }
@@ -25,12 +26,11 @@ macro_rules! style_trait_methods {
         )*
     ) => {
         $(
-            #[allow(non_upper_case_globals)]
-            const $name: AttributeDiscription = AttributeDiscription{
-                name: $lit,
-                namespace: Some("style"),
-                volatile: false
-            };
+            const $name: AttributeDiscription = (
+                $lit,
+                Some("style"),
+                false
+            );
         )*
     };
 }
@@ -42,12 +42,11 @@ macro_rules! aria_trait_methods {
         )*
     ) => {
         $(
-            #[allow(non_upper_case_globals)]
-            const $name: AttributeDiscription = AttributeDiscription{
-                name: $lit,
-                namespace: None,
-                volatile: false
-            };
+            const $name: AttributeDiscription = (
+                $lit,
+                None,
+                false
+            );
         )*
     };
 }
@@ -57,12 +56,8 @@ pub trait GlobalAttributes {
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
-    #[allow(non_upper_case_globals)]
-    const prevent_default: AttributeDiscription = AttributeDiscription {
-        name: "dioxus-prevent-default",
-        namespace: None,
-        volatile: false,
-    };
+
+    const prevent_default: AttributeDiscription = ("dioxus-prevent-default", None, false);
 
     no_namespace_trait_methods! {
         accesskey;
@@ -604,12 +599,8 @@ pub trait SvgAttributes {
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
-    #[allow(non_upper_case_globals)]
-    const prevent_default: AttributeDiscription = AttributeDiscription {
-        name: "dioxus-prevent-default",
-        namespace: None,
-        volatile: false,
-    };
+    const prevent_default: AttributeDiscription = ("dioxus-prevent-default", None, false);
+
     aria_trait_methods! {
         accent_height: "accent-height",
         accumulate: "accumulate",

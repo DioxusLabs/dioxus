@@ -34,7 +34,6 @@ impl SsrRenderer {
                 cfg: self.cfg.clone(),
                 root: &root,
                 vdom: Some(&self.vdom),
-                bump: bumpalo::Bump::new(),
             }
         )
     }
@@ -65,7 +64,6 @@ pub fn render_lazy<'a>(f: LazyNodes<'a, '_>) -> String {
         cfg: SsrConfig::default(),
         root: &root,
         vdom,
-        bump: bumpalo::Bump::new(),
     };
     let r = ssr_renderer.to_string();
     drop(ssr_renderer);
@@ -97,7 +95,6 @@ pub fn render_vdom_scope(vdom: &VirtualDom, scope: ScopeId) -> Option<String> {
             cfg: SsrConfig::default(),
             root: vdom.get_scope(scope).unwrap().root_node(),
             vdom: Some(vdom),
-            bump: bumpalo::Bump::new()
         }
     ))
 }
@@ -124,7 +121,6 @@ pub struct TextRenderer<'a, 'b, 'c> {
     vdom: Option<&'c VirtualDom>,
     root: &'b VNode<'a>,
     cfg: SsrConfig,
-    bump: bumpalo::Bump,
 }
 
 impl<'a: 'c, 'c> Display for TextRenderer<'a, '_, 'c> {
@@ -140,7 +136,6 @@ impl<'a> TextRenderer<'a, '_, 'a> {
             cfg,
             root: vdom.base_scope().root_node(),
             vdom: Some(vdom),
-            bump: bumpalo::Bump::new(),
         }
     }
 }
@@ -168,16 +163,6 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                 *last_node_was_text = true;
 
                 write!(f, "{}", text.text)?
-            }
-            VNode::Placeholder(_anchor) => {
-                *last_node_was_text = false;
-
-                if self.cfg.indent {
-                    for _ in 0..il {
-                        write!(f, "    ")?;
-                    }
-                }
-                write!(f, "<!--placeholder-->")?;
             }
             VNode::Element(el) => {
                 *last_node_was_text = false;
@@ -220,11 +205,22 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                     writeln!(f)?;
                 }
             }
-            VNode::Fragment(frag) => {
-                for child in frag.children {
-                    self.html_render(child, f, il + 1, last_node_was_text)?;
+            VNode::Fragment(frag) => match frag.children.len() {
+                0 => {
+                    *last_node_was_text = false;
+                    if self.cfg.indent {
+                        for _ in 0..il {
+                            write!(f, "    ")?;
+                        }
+                    }
+                    write!(f, "<!--placeholder-->")?;
                 }
-            }
+                _ => {
+                    for child in frag.children {
+                        self.html_render(child, f, il + 1, last_node_was_text)?;
+                    }
+                }
+            },
             VNode::Component(vcomp) => {
                 let idx = vcomp.scope.get().unwrap();
 
@@ -234,39 +230,9 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                 } else {
                 }
             }
-            VNode::TemplateRef(tmpl) => {
+            VNode::Template(t) => {
                 if let Some(vdom) = self.vdom {
-                    let template_id = &tmpl.template_id;
-                    let dynamic_context = &tmpl.dynamic_context;
-                    vdom.with_template(template_id, move |tmpl| {
-                        match tmpl {
-                            Template::Static(s) => {
-                                for r in s.root_nodes {
-                                    self.render_template_node(
-                                        &s.nodes,
-                                        &s.nodes[r.0],
-                                        dynamic_context,
-                                        f,
-                                        last_node_was_text,
-                                        il,
-                                    )?;
-                                }
-                            }
-                            Template::Owned(o) => {
-                                for r in &o.root_nodes {
-                                    self.render_template_node(
-                                        &o.nodes,
-                                        &o.nodes[r.0],
-                                        dynamic_context,
-                                        f,
-                                        last_node_was_text,
-                                        il,
-                                    )?;
-                                }
-                            }
-                        };
-                        Ok(())
-                    })?
+                    todo!()
                 } else {
                     panic!("Cannot render template without vdom");
                 }
@@ -275,197 +241,182 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
         Ok(())
     }
 
-    fn render_template_node<TemplateNodes, Attributes, V, Children, Listeners, TextSegments, Text>(
-        &self,
-        template_nodes: &TemplateNodes,
-        node: &TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>,
-        dynamic_context: &TemplateContext,
-        f: &mut impl Write,
-        last_node_was_text: &mut bool,
-        il: u16,
-    ) -> std::fmt::Result
-    where
-        TemplateNodes:
-            AsRef<[TemplateNode<Attributes, V, Children, Listeners, TextSegments, Text>]>,
-        Attributes: AsRef<[TemplateAttribute<V>]>,
-        Children: AsRef<[TemplateNodeId]>,
-        Listeners: AsRef<[usize]>,
-        Text: AsRef<str>,
-        TextSegments: AsRef<[TextTemplateSegment<Text>]>,
-        V: TemplateValue,
-    {
-        match &node.node_type {
-            TemplateNodeType::Element(el) => {
-                *last_node_was_text = false;
+    // fn render_template_node(
+    //     &self,
+    //     node: &VTemplate,
+    //     f: &mut impl Write,
+    //     last_node_was_text: &mut bool,
+    //     il: u16,
+    // ) -> std::fmt::Result {
+    //     match &node.node_type {
+    //         TemplateNodeType::Element(el) => {
+    //             *last_node_was_text = false;
 
-                if self.cfg.indent {
-                    for _ in 0..il {
-                        write!(f, "    ")?;
-                    }
-                }
+    //             if self.cfg.indent {
+    //                 for _ in 0..il {
+    //                     write!(f, "    ")?;
+    //                 }
+    //             }
 
-                write!(f, "<{}", el.tag)?;
+    //             write!(f, "<{}", el.tag)?;
 
-                let mut inner_html = None;
+    //             let mut inner_html = None;
 
-                let mut attr_iter = el.attributes.as_ref().iter().peekable();
+    //             let mut attr_iter = el.attributes.as_ref().iter().peekable();
 
-                while let Some(attr) = attr_iter.next() {
-                    match attr.attribute.namespace {
-                        None => {
-                            if attr.attribute.name == "dangerous_inner_html" {
-                                inner_html = {
-                                    let text = match &attr.value {
-                                        TemplateAttributeValue::Static(val) => {
-                                            val.allocate(&self.bump).as_text().unwrap()
-                                        }
-                                        TemplateAttributeValue::Dynamic(idx) => dynamic_context
-                                            .resolve_attribute(*idx)
-                                            .as_text()
-                                            .unwrap(),
-                                    };
-                                    Some(text)
-                                }
-                            } else if is_boolean_attribute(attr.attribute.name) {
-                                match &attr.value {
-                                    TemplateAttributeValue::Static(val) => {
-                                        let val = val.allocate(&self.bump);
-                                        if val.is_truthy() {
-                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
-                                        }
-                                    }
-                                    TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        if val.is_truthy() {
-                                            write!(f, " {}=\"{}\"", attr.attribute.name, val)?
-                                        }
-                                    }
-                                }
-                            } else {
-                                match &attr.value {
-                                    TemplateAttributeValue::Static(val) => {
-                                        let val = val.allocate(&self.bump);
-                                        write!(f, " {}=\"{}\"", attr.attribute.name, val)?
-                                    }
-                                    TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        write!(f, " {}=\"{}\"", attr.attribute.name, val)?
-                                    }
-                                }
-                            }
-                        }
+    //             while let Some(attr) = attr_iter.next() {
+    //                 match attr.attribute.namespace {
+    //                     None => {
+    //                         if attr.attribute.name == "dangerous_inner_html" {
+    //                             inner_html = {
+    //                                 let text = match &attr.value {
+    //                                     TemplateAttributeValue::Static(val) => {
+    //                                         val.allocate(&self.bump).as_text().unwrap()
+    //                                     }
+    //                                     TemplateAttributeValue::Dynamic(idx) => dynamic_context
+    //                                         .resolve_attribute(*idx)
+    //                                         .as_text()
+    //                                         .unwrap(),
+    //                                 };
+    //                                 Some(text)
+    //                             }
+    //                         } else if is_boolean_attribute(attr.attribute.name) {
+    //                             match &attr.value {
+    //                                 TemplateAttributeValue::Static(val) => {
+    //                                     let val = val.allocate(&self.bump);
+    //                                     if val.is_truthy() {
+    //                                         write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+    //                                     }
+    //                                 }
+    //                                 TemplateAttributeValue::Dynamic(idx) => {
+    //                                     let val = dynamic_context.resolve_attribute(*idx);
+    //                                     if val.is_truthy() {
+    //                                         write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+    //                                     }
+    //                                 }
+    //                             }
+    //                         } else {
+    //                             match &attr.value {
+    //                                 TemplateAttributeValue::Static(val) => {
+    //                                     let val = val.allocate(&self.bump);
+    //                                     write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+    //                                 }
+    //                                 TemplateAttributeValue::Dynamic(idx) => {
+    //                                     let val = dynamic_context.resolve_attribute(*idx);
+    //                                     write!(f, " {}=\"{}\"", attr.attribute.name, val)?
+    //                                 }
+    //                             }
+    //                         }
+    //                     }
 
-                        Some(ns) => {
-                            // write the opening tag
-                            write!(f, " {}=\"", ns)?;
-                            let mut cur_ns_el = attr;
-                            loop {
-                                match &attr.value {
-                                    TemplateAttributeValue::Static(val) => {
-                                        let val = val.allocate(&self.bump);
-                                        write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
-                                    }
-                                    TemplateAttributeValue::Dynamic(idx) => {
-                                        let val = dynamic_context.resolve_attribute(*idx);
-                                        write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
-                                    }
-                                }
-                                match attr_iter.peek() {
-                                    Some(next_attr)
-                                        if next_attr.attribute.namespace == Some(ns) =>
-                                    {
-                                        cur_ns_el = attr_iter.next().unwrap();
-                                    }
-                                    _ => break,
-                                }
-                            }
-                            // write the closing tag
-                            write!(f, "\"")?;
-                        }
-                    }
-                }
+    //                     Some(ns) => {
+    //                         // write the opening tag
+    //                         write!(f, " {}=\"", ns)?;
+    //                         let mut cur_ns_el = attr;
+    //                         loop {
+    //                             match &attr.value {
+    //                                 TemplateAttributeValue::Static(val) => {
+    //                                     let val = val.allocate(&self.bump);
+    //                                     write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+    //                                 }
+    //                                 TemplateAttributeValue::Dynamic(idx) => {
+    //                                     let val = dynamic_context.resolve_attribute(*idx);
+    //                                     write!(f, "{}:{};", cur_ns_el.attribute.name, val)?;
+    //                                 }
+    //                             }
+    //                             match attr_iter.peek() {
+    //                                 Some(next_attr)
+    //                                     if next_attr.attribute.namespace == Some(ns) =>
+    //                                 {
+    //                                     cur_ns_el = attr_iter.next().unwrap();
+    //                                 }
+    //                                 _ => break,
+    //                             }
+    //                         }
+    //                         // write the closing tag
+    //                         write!(f, "\"")?;
+    //                     }
+    //                 }
+    //             }
 
-                match self.cfg.newline {
-                    true => writeln!(f, ">")?,
-                    false => write!(f, ">")?,
-                }
+    //             match self.cfg.newline {
+    //                 true => writeln!(f, ">")?,
+    //                 false => write!(f, ">")?,
+    //             }
 
-                if let Some(inner_html) = inner_html {
-                    write!(f, "{}", inner_html)?;
-                } else {
-                    let mut last_node_was_text = false;
-                    for child in el.children.as_ref() {
-                        self.render_template_node(
-                            template_nodes,
-                            &template_nodes.as_ref()[child.0],
-                            dynamic_context,
-                            f,
-                            &mut last_node_was_text,
-                            il + 1,
-                        )?;
-                    }
-                }
+    //             if let Some(inner_html) = inner_html {
+    //                 write!(f, "{}", inner_html)?;
+    //             } else {
+    //                 let mut last_node_was_text = false;
+    //                 for child in el.children.as_ref() {
+    //                     self.render_template_node(
+    //                         template_nodes,
+    //                         &template_nodes.as_ref()[child.0],
+    //                         dynamic_context,
+    //                         f,
+    //                         &mut last_node_was_text,
+    //                         il + 1,
+    //                     )?;
+    //                 }
+    //             }
 
-                if self.cfg.newline {
-                    writeln!(f)?;
-                }
-                if self.cfg.indent {
-                    for _ in 0..il {
-                        write!(f, "    ")?;
-                    }
-                }
+    //             if self.cfg.newline {
+    //                 writeln!(f)?;
+    //             }
+    //             if self.cfg.indent {
+    //                 for _ in 0..il {
+    //                     write!(f, "    ")?;
+    //                 }
+    //             }
 
-                write!(f, "</{}>", el.tag)?;
-                if self.cfg.newline {
-                    writeln!(f)?;
-                }
-            }
-            TemplateNodeType::Text(txt) => {
-                if *last_node_was_text {
-                    write!(f, "<!--spacer-->")?;
-                }
+    //             write!(f, "</{}>", el.tag)?;
+    //             if self.cfg.newline {
+    //                 writeln!(f)?;
+    //             }
+    //         }
+    //         TemplateNodeType::Text(txt) => {
+    //             if *last_node_was_text {
+    //                 write!(f, "<!--spacer-->")?;
+    //             }
 
-                if self.cfg.indent {
-                    for _ in 0..il {
-                        write!(f, "    ")?;
-                    }
-                }
+    //             if self.cfg.indent {
+    //                 for _ in 0..il {
+    //                     write!(f, "    ")?;
+    //                 }
+    //             }
 
-                *last_node_was_text = true;
+    //             *last_node_was_text = true;
 
-                let text = dynamic_context.resolve_text(txt);
+    //             let text = dynamic_context.resolve_text(txt);
 
-                write!(f, "{}", text)?
-            }
-            TemplateNodeType::DynamicNode(idx) => {
-                let node = dynamic_context.resolve_node(*idx);
-                self.html_render(node, f, il, last_node_was_text)?;
-            }
-        }
-        Ok(())
-    }
+    //             write!(f, "{}", text)?
+    //         }
+    //         TemplateNodeType::DynamicNode(idx) => {
+    //             let node = dynamic_context.resolve_node(*idx);
+    //             self.html_render(node, f, il, last_node_was_text)?;
+    //         }
+    //     }
+    //     Ok(())
+    // }
 }
 
-fn render_attributes<'a, 'b: 'a, I>(
-    attrs: I,
+fn render_attributes<'a, 'b: 'a>(
+    attrs: impl Iterator<Item = &'a Attribute<'b>>,
     f: &mut impl Write,
-) -> Result<Option<&'b str>, std::fmt::Error>
-where
-    I: Iterator<Item = &'a Attribute<'b>>,
-{
+) -> Result<Option<&'b str>, std::fmt::Error> {
     let mut inner_html = None;
     let mut attr_iter = attrs.peekable();
 
     while let Some(attr) = attr_iter.next() {
-        match attr.attribute.namespace {
+        match attr.namespace {
             None => {
-                if attr.attribute.name == "dangerous_inner_html" {
+                if attr.name == "dangerous_inner_html" {
                     inner_html = Some(attr.value.as_text().unwrap())
                 } else {
-                    if is_boolean_attribute(attr.attribute.name) && !attr.value.is_truthy() {
+                    if is_boolean_attribute(attr.name) && !attr.value.is_truthy() {
                         continue;
                     }
-                    write!(f, " {}=\"{}\"", attr.attribute.name, attr.value)?
+                    write!(f, " {}=\"{}\"", attr.name, attr.value)?
                 }
             }
             Some(ns) => {
@@ -473,9 +424,9 @@ where
                 write!(f, " {}=\"", ns)?;
                 let mut cur_ns_el = attr;
                 loop {
-                    write!(f, "{}:{};", cur_ns_el.attribute.name, cur_ns_el.value)?;
+                    write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
                     match attr_iter.peek() {
-                        Some(next_attr) if next_attr.attribute.namespace == Some(ns) => {
+                        Some(next_attr) if next_attr.namespace == Some(ns) => {
                             cur_ns_el = attr_iter.next().unwrap();
                         }
                         _ => break,

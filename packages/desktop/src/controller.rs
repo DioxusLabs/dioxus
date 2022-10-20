@@ -50,34 +50,36 @@ impl DesktopController {
 
                 dom.base_scope().provide_context(window_context);
 
-                // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
-                #[cfg(any(feature = "hot-reload", debug_assertions))]
-                crate::hot_reload::init(&dom);
+                todo!()
 
-                let edits = dom.rebuild();
+                // // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
+                // #[cfg(any(feature = "hot-reload", debug_assertions))]
+                // crate::hot_reload::init(&dom);
 
-                edit_queue
-                    .lock()
-                    .unwrap()
-                    .push(serde_json::to_string(&edits.edits).unwrap());
+                // let edits = dom.rebuild();
 
-                // Make sure the window is ready for any new updates
-                proxy.send_event(UserWindowEvent::Update).unwrap();
+                // edit_queue
+                //     .lock()
+                //     .unwrap()
+                //     .push(serde_json::to_string(&edits.edits).unwrap());
 
-                loop {
-                    dom.wait_for_work().await;
+                // // Make sure the window is ready for any new updates
+                // proxy.send_event(UserWindowEvent::Update).unwrap();
 
-                    let muts = dom.work_with_deadline(|| false);
+                // loop {
+                //     dom.wait_for_work().await;
 
-                    for edit in muts {
-                        edit_queue
-                            .lock()
-                            .unwrap()
-                            .push(serde_json::to_string(&edit.edits).unwrap());
-                    }
+                //     let muts = dom.work_with_deadline(|| false);
 
-                    let _ = proxy.send_event(UserWindowEvent::Update);
-                }
+                //     for edit in muts {
+                //         edit_queue
+                //             .lock()
+                //             .unwrap()
+                //             .push(serde_json::to_string(&edit.edits).unwrap());
+                //     }
+
+                //     let _ = proxy.send_event(UserWindowEvent::Update);
+                // }
             })
         });
 

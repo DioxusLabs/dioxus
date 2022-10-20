@@ -13,14 +13,14 @@
 
 #[macro_use]
 mod errors;
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-mod attributes;
+// #[cfg(any(feature = "hot-reload", debug_assertions))]
+// mod attributes;
 mod component;
 mod element;
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-mod elements;
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-mod error;
+// #[cfg(any(feature = "hot-reload", debug_assertions))]
+// mod elements;
+// #[cfg(any(feature = "hot-reload", debug_assertions))]
+// mod error;
 mod ifmt;
 mod node;
 mod template;
@@ -30,8 +30,6 @@ pub use component::*;
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-pub use template::{try_parse_template, DynamicTemplateContextBuilder};
 
 // imports
 use proc_macro2::TokenStream as TokenStream2;
@@ -40,8 +38,9 @@ use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
-use template::TemplateBuilder;
 
+/// Fundametnally, every CallBody is a template
+#[derive(Default)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
 }
@@ -67,13 +66,107 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let mut inner = TokenStream2::new();
-        self.to_tokens_without_lazynodes(&mut inner);
+        // As we print out the dynamic nodes, we want to keep track of them in a linear fashion
+        // We'll use the size of the vecs to determine the index of the dynamic node in the final output
+        struct DynamicContext<'a> {
+            dynamic_nodes: Vec<&'a BodyNode>,
+            dynamic_attributes: Vec<&'a ElementAttrNamed>,
+            dynamic_listeners: Vec<&'a ElementAttrNamed>,
+        }
+
+        let mut context = DynamicContext {
+            dynamic_nodes: vec![],
+            dynamic_attributes: vec![],
+            dynamic_listeners: vec![],
+        };
+
+        fn render_static_node<'a>(root: &'a BodyNode, cx: &mut DynamicContext<'a>) -> TokenStream2 {
+            match root {
+                BodyNode::Element(el) => {
+                    let name = &el.name;
+
+                    let children = {
+                        let children = el.children.iter().map(|root| render_static_node(root, cx));
+                        quote! { #(#children),* }
+                    };
+
+                    let attrs = el.attributes.iter().map(|attr| {
+                        //
+                        match &attr.attr {
+                            ElementAttr::AttrText { name, value } if value.is_static() => {
+                                let value = value.source.as_ref().unwrap();
+                                quote! { ::dioxus::core::TemplateAttribute::Static { name: stringify!(#name), value: #value } }
+                            }
+
+                            ElementAttr::CustomAttrText { name, value } if value.is_static() => {
+                                quote! { ::dioxus::core::TemplateAttribute::Static { name: #name, value: #value } }
+                            },
+
+                            ElementAttr::AttrExpression { .. }
+                            | ElementAttr::AttrText { .. }
+                            | ElementAttr::CustomAttrText { .. }
+                            | ElementAttr::CustomAttrExpression { .. } => {
+                                let ct = cx.dynamic_attributes.len();
+                                cx.dynamic_attributes.push(attr);
+                                quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
+                            }
+
+                            ElementAttr::EventTokens { .. } => {
+                                let ct = cx.dynamic_listeners.len();
+                                cx.dynamic_listeners.push(attr);
+                                quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
+                            }
+                        }
+                    });
+
+                    quote! {
+                        ::dioxus::core::TemplateNode::Element {
+                            tag: dioxus_elements::#name::TAG_NAME,
+                            attrs: &[ #(#attrs),* ],
+                            children: &[ #children ],
+                        }
+                    }
+                }
+
+                BodyNode::Text(text) if text.is_static() => {
+                    let text = text.source.as_ref().unwrap();
+                    quote! { ::dioxus::core::TemplateNode::Text(#text) }
+                }
+
+                BodyNode::RawExpr(_) | BodyNode::Component(_) | BodyNode::Text(_) => {
+                    let ct = cx.dynamic_nodes.len();
+                    cx.dynamic_nodes.push(root);
+                    quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+                }
+            }
+        }
+
+        let root_printer = self
+            .roots
+            .iter()
+            .map(|root| render_static_node(root, &mut context));
+
+        // Render and release the mutable borrow on context
+        let roots = quote! { #( #root_printer ),* };
+
+        let dyn_printer = &context.dynamic_nodes;
+        let attr_printer = context.dynamic_attributes.iter();
+        let listener_printer = context.dynamic_listeners.iter();
 
         out_tokens.append_all(quote! {
-            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                #inner
+            LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
+                    id: ::dioxus::core::get_line_num!(),
+                    roots: &[ #roots ]
+                };
+
+                __cx.template_ref(
+                    TEMPLATE,
+                    &[ #( #dyn_printer ),* ],
+                    &[ #( #attr_printer ),* ],
+                    &[ #( #listener_printer ),* ],
+                    None
+                )
             })
         })
     }
@@ -81,35 +174,46 @@ impl ToTokens for CallBody {
 
 impl CallBody {
     pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
-        let children = &self.roots;
-        let inner = if children.len() == 1 {
-            let inner = &self.roots[0];
-            quote! { #inner }
-        } else {
-            quote! { __cx.fragment_root([ #(#children),* ]) }
-        };
 
-        out_tokens.append_all(quote! {
-            LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-                use dioxus_elements::{GlobalAttributes, SvgAttributes};
-                #inner
-            })
-        })
+        // let children = &self.roots;
+        // let inner = if children.len() == 1 {
+        //     let inner = &self.roots[0];
+        //     quote! { #inner }
+        // } else {
+        //     quote! { __cx.fragment_root([ #(#children),* ]) }
+        // };
+
+        // out_tokens.append_all(quote! {
+        //     LazyNodes::new(move |__cx: NodeFactory| -> VNode {
+        //         use dioxus_elements::{GlobalAttributes, SvgAttributes};
+        //         #inner
+        //     })
+        // })
     }
 
     pub fn to_tokens_without_lazynodes(&self, out_tokens: &mut TokenStream2) {
-        let template = TemplateBuilder::from_roots(self.roots.clone());
-        let inner = if let Some(template) = template {
-            quote! { #template }
-        } else {
-            let children = &self.roots;
-            if children.len() == 1 {
-                let inner = &self.roots[0];
-                quote! { #inner }
-            } else {
-                quote! { __cx.fragment_root([ #(#children),* ]) }
-            }
-        };
-        out_tokens.append_all(inner);
+        out_tokens.append_all(quote! {
+            static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
+                id: ::dioxus::core::get_line_num!(),
+                roots: &[]
+            };
+
+            LazyNodes::new(TEMPLATE, move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                todo!()
+            })
+        })
+        // let template = TemplateBuilder::from_roots(self.roots.clone());
+        // let inner = if let Some(template) = template {
+        //     quote! { #template }
+        // } else {
+        //     let children = &self.roots;
+        //     if children.len() == 1 {
+        //         let inner = &self.roots[0];
+        //         quote! { #inner }
+        //     } else {
+        //         quote! { __cx.fragment_root([ #(#children),* ]) }
+        //     }
+        // };
+        // out_tokens.append_all(inner);
     }
 }

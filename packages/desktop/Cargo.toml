@@ -43,7 +43,6 @@ tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot-reload = ["dioxus-core/hot-reload"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }

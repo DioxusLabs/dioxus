@@ -1,31 +1,23 @@
 #![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
-pub(crate) mod arbitrary_value;
 pub(crate) mod diff;
-pub(crate) mod dynamic_template_context;
 pub(crate) mod events;
 pub(crate) mod lazynodes;
 pub(crate) mod mutations;
 pub(crate) mod nodes;
 pub(crate) mod properties;
 pub(crate) mod scopes;
-pub(crate) mod template;
-pub(crate) mod util;
 pub(crate) mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub use crate::arbitrary_value::*;
-    pub use crate::dynamic_template_context::*;
     pub use crate::events::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scopes::*;
-    pub use crate::template::*;
-    pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
@@ -67,38 +59,19 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeDiscription, AttributeValue,
-    CodeLocation, Component, DioxusElement, DomEdit, DynamicNodeMapping, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, IntoAttributeValue, IntoVNode, LazyNodes,
-    Listener, Mutations, NodeFactory, OwnedAttributeValue, PathSeg, Properties, RendererTemplateId,
-    SchedulerMsg, Scope, ScopeId, ScopeState, StaticCodeLocation, StaticDynamicNodeMapping,
-    StaticPathSeg, StaticTemplateNode, StaticTemplateNodes, StaticTraverse, TaskId, Template,
-    TemplateAttribute, TemplateAttributeValue, TemplateContext, TemplateElement, TemplateId,
-    TemplateNode, TemplateNodeId, TemplateNodeType, TemplateValue, TextTemplate,
-    TextTemplateSegment, UiEvent, UpdateOp, UserEvent, VComponent, VElement, VFragment, VNode,
-    VPlaceholder, VText, VirtualDom,
-};
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-pub use crate::innerlude::{
-    OwnedCodeLocation, OwnedDynamicNodeMapping, OwnedPathSeg, OwnedTemplateNode,
-    OwnedTemplateNodes, OwnedTraverse, SetTemplateMsg,
+    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeValue, Component, Element, ElementId,
+    EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, NodeFactory, Properties, Renderer,
+    SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
+    UiEvent, UserEvent, VComponent, VElement, VNode, VTemplate, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
 ///
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
-    pub use crate::get_line_num;
-    #[cfg(any(feature = "hot-reload", debug_assertions))]
-    pub use crate::innerlude::OwnedTemplate;
     pub use crate::innerlude::{
-        fc_to_builder, AttributeDiscription, AttributeValue, Attributes, CodeLocation, Component,
-        DioxusElement, Element, EventHandler, Fragment, IntoAttributeValue, LazyNodes,
-        LazyStaticVec, NodeFactory, Properties, Scope, ScopeId, ScopeState, StaticAttributeValue,
-        StaticCodeLocation, StaticDynamicNodeMapping, StaticPathSeg, StaticTemplate,
-        StaticTemplateNodes, StaticTraverse, Template, TemplateAttribute, TemplateAttributeValue,
-        TemplateContext, TemplateElement, TemplateId, TemplateNode, TemplateNodeId,
-        TemplateNodeType, TextTemplate, TextTemplateSegment, UpdateOp, VNode, VirtualDom,
+        fc_to_builder, Attributes, Component, Element, EventHandler, LazyNodes, NodeFactory,
+        Properties, Scope, ScopeId, ScopeState, Template, VNode, VirtualDom,
     };
 }
 
@@ -107,7 +80,6 @@ pub mod exports {
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
     pub use futures_channel;
-    pub use once_cell;
 }
 
 /// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite
@@ -136,8 +108,24 @@ pub(crate) mod unsafe_utils {
 /// }
 /// ```
 macro_rules! to_owned {
-    ($($es:ident),+$(,)?) => {$(
+    ($($es:ident),+) => {$(
         #[allow(unused_mut)]
         let mut $es = $es.to_owned();
     )*}
+}
+
+/// get the code location of the code that called this function
+#[macro_export]
+macro_rules! get_line_num {
+    () => {
+        concat!(
+            file!(),
+            ":",
+            line!(),
+            ":",
+            column!(),
+            ":",
+            env!("CARGO_MANIFEST_DIR")
+        )
+    };
 }
