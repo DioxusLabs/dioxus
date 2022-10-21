@@ -87,4 +87,4 @@ dioxus = { path = "../dioxus" }
 wasm-bindgen-test = "0.3.29"
 dioxus-ssr = { path = "../ssr" }
 wasm-logger = "0.2.0"
-dioxus-web = { path = ".", features = ["dev"] }
+dioxus-web = { path = "." }
