@@ -754,8 +754,6 @@ impl VirtualDom {
                 height.cmp(&new_height).then(new_id.0.cmp(&id))
             }) {
                 self.dirty_scopes.insert(index, scope_id);
-                #[cfg(feature = "dev")]
-                #[cfg(feature = "dev")]
                 log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
             }
         }
@@ -767,7 +765,7 @@ Scopes and ScopeArenas are never dropped internally.
 An app will always occupy as much memory as its biggest form.
 
 This means we need to handle all specifics of drop *here*. It's easier
-to reason about centralizing all the drop#[cfg(feature = "dev")]
+to reason about centralizing all the drop
 logic in one spot rather than scattered in each module.
 
 Broadly speaking, we want to use the remove_nodes method to clean up *everything*

@@ -286,7 +286,6 @@ impl<'b> DiffState<'b> {
         // Actually initialize the caller's slot with the right address
         vcomponent.scope.set(Some(new_idx));
 
-        #[cfg(feature = "dev")]
         log::trace!(
             "created component \"{}\", id: {:?} parent {:?}",
             vcomponent.fn_name,
@@ -1248,7 +1247,6 @@ impl<'b> DiffState<'b> {
             }
 
             VNode::Component(c) => {
-                #[cfg(feature = "dev")]
                 log::trace!("Replacing component {:?}", old);
                 let scope_id = c.scope.get().unwrap();
                 let node = self.scopes.fin_head(scope_id);
@@ -1257,7 +1255,6 @@ impl<'b> DiffState<'b> {
                 {
                     self.replace_inner(node, nodes_created);
 
-                    #[cfg(feature = "dev")]
                     log::trace!("Replacing component x2 {:?}", old);
 
                     let scope = self.scopes.get_scope(scope_id).unwrap();

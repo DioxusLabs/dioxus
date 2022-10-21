@@ -80,7 +80,6 @@ impl WebsysDom {
                         if name == synthetic_event.name
                             || name.trim_start_matches("on") == synthetic_event.name
                         {
-                            #[cfg(feature = "dev")]
                             log::trace!("Preventing default");
                             event.prevent_default();
                         }

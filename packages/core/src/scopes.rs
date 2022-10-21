@@ -331,7 +331,6 @@ impl ScopeArena {
         // todo: we *know* that this is aliased by the contents of the scope itself
         let scope = unsafe { &mut *self.get_scope_raw(id).expect("could not find scope") };
 
-        #[cfg(feature = "dev")]
         log::trace!("running scope {:?} symbol: {:?}", id, scope.fnptr);
 
         // Safety:
@@ -398,13 +397,11 @@ impl ScopeArena {
                 match ptr {
                     NodePtr::VNode(ptr) => {
                         let real_el = unsafe { &**ptr };
-                        #[cfg(feature = "dev")]
                         log::trace!("looking for listener on {:?}", real_el);
 
                         if let VNode::Element(real_el) = real_el {
                             for listener in real_el.listeners.iter() {
                                 if listener.event == event.name {
-                                    #[cfg(feature = "dev")]
                                     log::trace!("calling listener {:?}", listener.event);
 
                                     let mut cb = listener.callback.borrow_mut();
@@ -432,7 +429,6 @@ impl ScopeArena {
                         let template_refs = self.template_refs.borrow();
                         let template_ptr = template_refs.get(template_ref.0).unwrap();
                         let template_ref = unsafe { &**template_ptr };
-                        #[cfg(feature = "dev")]
                         log::trace!("looking for listener in node {:?}", node_id);
                         let templates = self.templates.borrow();
                         let template = templates.get(&template_ref.template_id).unwrap();
@@ -478,7 +474,6 @@ impl ScopeArena {
                     for listener_idx in listeners.as_ref() {
                         let listener = dynamic_context.resolve_listener(*listener_idx);
                         if listener.event == event.name {
-                            #[cfg(feature = "dev")]
                             log::trace!("calling listener {:?}", listener.event);
 
                             let mut cb = listener.callback.borrow_mut();
@@ -819,7 +814,6 @@ impl ScopeState {
                     .insert(TypeId::of::<T>(), Box::new(value.clone()));
 
                 if exists.is_some() {
-                    #[cfg(feature = "dev")]
                     log::warn!("Context already provided to parent scope - replacing it");
                 }
                 return value;

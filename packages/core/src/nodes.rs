@@ -466,12 +466,10 @@ impl<'a, T> Default for EventHandler<'a, T> {
 impl<T> EventHandler<'_, T> {
     /// Call this event handler with the appropriate event type
     pub fn call(&self, event: T) {
-        #[cfg(feature = "dev")]
         log::trace!("calling event handler");
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
         }
-        #[cfg(feature = "dev")]
         log::trace!("done");
     }
 
@@ -930,7 +928,6 @@ where
                 && children.last().unwrap().key().is_none()
             {
                 // todo: make the backtrace prettier or remove it altogether
-                #[cfg(feature = "dev")]
                 log::error!(
                     r#"
                 Warning: Each child in an array or iterator should have a unique "key" prop.
