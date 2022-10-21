@@ -25,7 +25,7 @@ We use `toml` to define some info for `dioxus` project.
    asset_dir = "public"
    ```
 
-### Application.Tool
+### Application.Tools
 
 You can combine different tools with `dioxus`.
 
