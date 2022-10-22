@@ -50,7 +50,13 @@ pub trait Renderer<'a> {
     /// Set the text content of a node
     fn set_text(&mut self, text: &'a str, root: ElementId);
     /// Set an attribute on an element
-    fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: ElementId);
+    fn set_attribute(
+        &mut self,
+        name: &'static str,
+        value: AttributeValue<'a>,
+        namespace: Option<&'a str>,
+        root: ElementId,
+    );
 
     /// Save the current n nodes to the ID to be loaded later
     fn save(&mut self, id: &str, num: u32);

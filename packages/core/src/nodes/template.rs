@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use crate::{Attribute, ElementId, Listener, VNode};
+use crate::{Attribute, Listener, VNode};
 
 /// A reference to a template along with any context needed to hydrate it
 pub struct VTemplate<'a> {
@@ -43,18 +43,15 @@ impl<'a> Hash for Template<'a> {
 pub enum TemplateNode<'a> {
     Element {
         tag: &'static str,
-        attrs: &'a [TemplateAttribute],
+        attrs: &'a [TemplateAttribute<'a>],
         children: &'a [TemplateNode<'a>],
     },
     Text(&'static str),
     Dynamic(usize),
 }
 
-pub enum TemplateAttribute {
+pub enum TemplateAttribute<'a> {
     // todo: more values
-    Static {
-        name: &'static str,
-        value: &'static str,
-    },
+    Static { name: &'static str, value: &'a str },
     Dynamic(usize),
 }

@@ -35,7 +35,6 @@ impl<'a> NodeFactory<'a> {
         VNode::Text(self.bump.alloc(VText {
             id: Default::default(),
             text,
-            is_static: true,
         }))
     }
 
@@ -57,11 +56,10 @@ impl<'a> NodeFactory<'a> {
     /// Create some text that's allocated along with the other vnodes
     ///
     pub fn text(&self, args: Arguments) -> VNode<'a> {
-        let (text, is_static) = self.raw_text(args);
+        let (text, _is_static) = self.raw_text(args);
 
         VNode::Text(self.bump.alloc(VText {
             text,
-            is_static,
             id: Default::default(),
         }))
     }
@@ -110,6 +108,7 @@ impl<'a> NodeFactory<'a> {
             name,
             namespace,
             volatile: is_volatile,
+            mounted_node: Default::default(),
             value: val.into_value(self.bump),
         }
     }
@@ -126,6 +125,7 @@ impl<'a> NodeFactory<'a> {
             name,
             namespace,
             volatile: is_volatile,
+            mounted_node: Default::default(),
             value,
         }
     }
@@ -234,7 +234,7 @@ impl<'a> NodeFactory<'a> {
     /// Create a refrence to a template
     pub fn template_ref(
         &self,
-        template: Template,
+        template: fn() -> Template<'static>,
         nodes: &'a [VNode<'a>],
         attributes: &'a [Attribute<'a>],
         listeners: &'a [Listener<'a>],

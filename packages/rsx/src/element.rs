@@ -244,22 +244,42 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
                 quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
                 quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
-                    __cx.attr( #name, #value, None, false )
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
-                    __cx.attr( #name, #value, None, false )
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::EventTokens { name, tokens } => {
@@ -270,3 +290,11 @@ impl ToTokens for ElementAttrNamed {
         });
     }
 }
+
+// ::dioxus::core::Attribute {
+//     name: stringify!(#name),
+//     namespace: None,
+//     volatile: false,
+//     mounted_node: Default::default(),
+//     value: ::dioxus::core::AttributeValue::Text(#value),
+// }

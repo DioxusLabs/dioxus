@@ -70,6 +70,10 @@ pub struct Attribute<'a> {
     /// Used in controlled components to ensure changes are propagated.
     pub volatile: bool,
 
+    /// A reverse lookup for tracking down attributes for templates
+    /// Not used for anything else
+    pub mounted_node: Cell<Option<ElementId>>,
+
     /// The value of the attribute.
     pub value: AttributeValue<'a>,
 }

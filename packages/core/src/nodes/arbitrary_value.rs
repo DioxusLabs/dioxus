@@ -4,19 +4,28 @@ use std::{
 };
 
 use bumpalo::Bump;
-use serde::{Deserialize, Serialize};
 
 /// Possible values for an attribute
-// trying to keep values at 3 bytes
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
-#[derive(Clone, PartialEq)]
-#[allow(missing_docs)]
+#[derive(Clone, Copy)]
 pub enum AttributeValue<'a> {
     Text(&'a str),
     Float32(f32),
     Bool(bool),
-    Any(ArbitraryAttributeValue<'a>),
+    Any(&'a dyn AnyAttributeValue),
+}
+
+// #[cfg(feature = "serialize")]
+
+impl<'a> PartialEq for AttributeValue<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
+            (Self::Float32(l0), Self::Float32(r0)) => l0 == r0,
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            // (Self::Any(l0), Self::Any(r0)) => l0.cmp(r0),
+            _ => false,
+        }
+    }
 }
 
 impl<'a> Display for AttributeValue<'a> {
@@ -112,61 +121,25 @@ impl<'a> AttributeValue<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-#[allow(missing_docs)]
-pub struct ArbitraryAttributeValue<'a> {
-    pub value: &'a dyn Any,
-    // pub value: &'a dyn AnyClone,
-    // pub cmp: fn(&dyn AnyClone, &dyn AnyClone) -> bool,
-}
-
-#[cfg(feature = "serialize")]
-impl<'a> Serialize for ArbitraryAttributeValue<'a> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        todo!()
-    }
-}
-#[cfg(feature = "serialize")]
-impl<'a, 'de> Deserialize<'de> for ArbitraryAttributeValue<'a> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        todo!()
+/// A trait that allows for comparing two values of the same type through the Any trait
+///
+/// Defaults to false if the types are not the same
+///
+/// This is an implicit trait, so any value that is 'static and PartialEq can be used directly
+///
+/// If you want to override the default behavior, you should implement PartialEq through a wrapper type
+pub trait AnyAttributeValue: Any {
+    /// Perform a comparison between two values
+    fn cmp_any(&self, _other: &dyn Any) -> bool {
+        false
     }
 }
 
-impl PartialEq for ArbitraryAttributeValue<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        todo!()
-        // (self.cmp)(self.value, other.value)
-    }
-}
-
-// todo
-#[allow(missing_docs)]
-impl<'a> AttributeValue<'a> {
-    pub fn as_text(&self) -> Option<&'a str> {
-        match self {
-            AttributeValue::Text(s) => Some(s),
-            _ => None,
-        }
-    }
-
-    pub fn as_float32(&self) -> Option<f32> {
-        match self {
-            AttributeValue::Float32(f) => Some(*f),
-            _ => None,
-        }
-    }
-
-    pub fn as_any(&self) -> Option<&'a ArbitraryAttributeValue> {
-        match self {
-            AttributeValue::Any(a) => Some(a),
-            _ => None,
+impl<T: Any + PartialEq> AnyAttributeValue for T {
+    fn cmp_any(&self, other: &dyn Any) -> bool {
+        match other.downcast_ref::<T>() {
+            Some(t) => self == t,
+            None => false,
         }
     }
 }

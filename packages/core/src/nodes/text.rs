@@ -18,8 +18,4 @@ pub struct VText<'src> {
 
     /// The text of the VText.
     pub text: &'src str,
-
-    /// An indiciation if this VText can be ignored during diffing
-    /// Is usually only when there are no strings to be formatted (so the text is &'static str)
-    pub is_static: bool,
 }

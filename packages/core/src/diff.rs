@@ -77,9 +77,12 @@
 //! More info on how to improve this diffing algorithm:
 //!  - <https://hacks.mozilla.org/2019/03/fast-bump-allocated-virtual-doms-with-rust-and-wasm/>
 
-use crate::innerlude::{
-    AnyProps, ElementId, Renderer, ScopeArena, ScopeId, TemplateNode, VComponent, VElement,
-    VFragment, VNode, VTemplate, VText,
+use crate::{
+    innerlude::{
+        AnyProps, ElementId, Renderer, ScopeArena, ScopeId, TemplateNode, VComponent, VElement,
+        VFragment, VNode, VTemplate, VText,
+    },
+    AttributeValue,
 };
 use fxhash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
@@ -119,7 +122,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
     }
 
     pub fn diff_node(&mut self, old_node: &'b VNode<'b>, new_node: &'b VNode<'b>) {
-        use VNode::{Component, Element, Fragment, Template, Text};
+        use VNode::{Component, Element, Fragment, Placeholder, Template, Text};
         match (old_node, new_node) {
             (Text(old), Text(new)) => {
                 self.diff_text_nodes(old, new, old_node, new_node);
@@ -141,9 +144,13 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.diff_templates(old, new, old_node, new_node);
             }
 
+            (Placeholder(_), Placeholder(_)) => {
+                self.diff_placeholder_nodes(old_node, new_node);
+            }
+
             (
-                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_),
-                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_),
+                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_) | Placeholder(_),
+                Component(_) | Text(_) | Element(_) | Template(_) | Fragment(_) | Placeholder(_),
             ) => self.replace_node(old_node, new_node),
         }
     }
@@ -155,6 +162,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
             VNode::Fragment(frag) => self.create_fragment_node(*frag),
             VNode::Component(component) => self.create_component_node(*component),
             VNode::Template(template) => self.create_template_node(template, node),
+            VNode::Placeholder(placeholder) => todo!(),
         }
     }
 
@@ -195,7 +203,8 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
             }
 
             for attr in attributes.iter() {
-                self.mutations.set_attribute(attr, real_id);
+                self.mutations
+                    .set_attribute(attr.name, attr.value, attr.namespace, real_id);
             }
 
             if !children.is_empty() {
@@ -303,23 +312,90 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
             for (left, right) in old.dynamic_nodes.iter().zip(new.dynamic_nodes.iter()) {
                 self.diff_node(left, right);
             }
+
+            // todo: need a way to load up the element bound to these attributes
+            for (left, right) in old.dynamic_attrs.iter().zip(new.dynamic_attrs.iter()) {
+                //
+            }
+
+            // hmm, what we do here?
+            for (left, right) in old.listeners.iter().zip(new.listeners.iter()) {
+                //
+            }
         } else {
             // else, diff them manually, taking the slow path
             self.replace_node(old_node, new_node);
         }
     }
 
+    fn create_static_template_nodes(&mut self, node: &'b TemplateNode) {
+        let id = ElementId(999999);
+        match node {
+            TemplateNode::Element {
+                tag,
+                attrs,
+                children,
+            } => {
+                self.mutations.create_element(tag, None, id);
+
+                for attr in *attrs {
+                    match attr {
+                        crate::TemplateAttribute::Dynamic(_) => todo!(),
+                        crate::TemplateAttribute::Static { name, value } => {
+                            self.mutations.set_attribute(
+                                name,
+                                AttributeValue::Text(value),
+                                None,
+                                id,
+                            );
+                        }
+                    }
+                }
+
+                for child in children.iter() {
+                    self.create_static_template_nodes(child);
+                }
+                self.mutations.append_children(children.len() as u32);
+            }
+            TemplateNode::Text(ref text) => self.mutations.create_text_node(text, id),
+            TemplateNode::Dynamic(_) => self.mutations.create_placeholder(id),
+        }
+    }
+
     /// Create the template from scratch using instructions, cache it, and then use the instructions to build it
-    fn create_template_node(
-        &mut self,
-        template: &'b VTemplate<'b>,
-        temp_node: &'b VNode<'b>,
-    ) -> usize {
-        /*
-        - Use a document fragment for holding nodes
-        - Assign IDs to any root nodes so we can find them later for shuffling around
-        - Build dynamic nodes in reverse order so indexing is preserved
-        */
+    fn create_template_node(&mut self, template: &'b VTemplate<'b>, node: &'b VNode<'b>) -> usize {
+        let template_id = template.template.id;
+        let templates = self.scopes.template_cache.borrow_mut();
+
+        // create and insert the template if it doesn't exist within the VirtualDom (it won't exist on the renderer either)
+        if !templates.contains(&template.template) {
+            template
+                .template
+                .roots
+                .into_iter()
+                .for_each(|node| self.create_static_template_nodes(node));
+
+            self.mutations
+                .save(template_id, template.template.roots.len() as u32);
+        }
+
+        self.mutations.load(template_id);
+
+        let mut created = 0;
+
+        // create the dynamic nodes
+        for node in template.dynamic_nodes.iter() {
+            created += self.create_node(node);
+        }
+
+        // set any dynamic attributes
+        for attr in template.dynamic_attrs.iter() {
+            // assign an ID to the element
+            let id = self.scopes.reserve_node(node);
+
+            self.mutations
+                .set_attribute(attr.name, attr.value, attr.namespace, id);
+        }
 
         todo!()
 
@@ -357,7 +433,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
         // nodes_created
     }
 
-    fn create_template_static_node(&mut self, nodes: &'static [TemplateNode]) -> usize {
+    fn create_template_static_node(&mut self, nodes: &'static [VNode<'static>]) -> usize {
         todo!()
         // let mut created = 0;
         // for node in nodes {
@@ -442,7 +518,12 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
         if old.attributes.len() == new.attributes.len() {
             for (old_attr, new_attr) in old.attributes.iter().zip(new.attributes.iter()) {
                 if old_attr.value != new_attr.value || new_attr.volatile {
-                    self.mutations.set_attribute(new_attr, root);
+                    self.mutations.set_attribute(
+                        new_attr.name,
+                        new_attr.value,
+                        new_attr.namespace,
+                        root,
+                    );
                 }
             }
         } else {
@@ -450,7 +531,12 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.mutations.remove_attribute(attribute, root);
             }
             for attribute in new.attributes {
-                self.mutations.set_attribute(attribute, root);
+                self.mutations.set_attribute(
+                    attribute.name,
+                    attribute.value,
+                    attribute.namespace,
+                    root,
+                );
             }
         }
 
@@ -1000,7 +1086,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.scopes.collect_garbage(id);
             }
 
-            VNode::Text(_) => {
+            VNode::Text(_) | VNode::Placeholder(_) => {
                 let id = old
                     .try_mounted_id()
                     .unwrap_or_else(|| panic!("broke on {:?}", old));
@@ -1059,15 +1145,15 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                         }
                     }
                 }
-                // VNode::Placeholder(a) => {
-                //     let id = a.id.get().unwrap();
-                //     self.scopes.collect_garbage(id);
-                //     a.id.set(None);
+                VNode::Placeholder(a) => {
+                    let id = a.id.get().unwrap();
+                    self.scopes.collect_garbage(id);
+                    a.id.set(None);
 
-                //     if gen_muts {
-                //         self.mutations.remove(id);
-                //     }
-                // }
+                    if gen_muts {
+                        self.mutations.remove(id);
+                    }
+                }
                 VNode::Element(e) => {
                     let id = e.id.get().unwrap();
 
@@ -1157,6 +1243,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 VNode::Template(c) => {
                     todo!()
                 }
+                VNode::Placeholder(_) => todo!(),
             }
         }
     }
@@ -1175,6 +1262,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 VNode::Template(t) => {
                     todo!()
                 }
+                VNode::Placeholder(_) => todo!(),
             }
         }
     }
@@ -1182,7 +1270,7 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
     // recursively push all the nodes of a tree onto the stack and return how many are there
     fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
         match node {
-            VNode::Text(_) | VNode::Element(_) => {
+            VNode::Text(_) | VNode::Element(_) | VNode::Placeholder(_) => {
                 self.mutations.push_root(node.mounted_id());
                 1
             }
@@ -1204,5 +1292,9 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 todo!()
             }
         }
+    }
+
+    pub(crate) fn diff_placeholder_nodes(&self, old_node: &VNode, new_node: &VNode) {
+        todo!()
     }
 }

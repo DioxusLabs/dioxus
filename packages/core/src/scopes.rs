@@ -306,7 +306,6 @@ impl ScopeArena {
             let node = frame.bump.alloc(VNode::Text(frame.bump.alloc(VText {
                 id: Cell::default(),
                 text: "asd",
-                is_static: false,
             })));
             frame.node.set(unsafe { extend_vnode(node) });
         }
@@ -943,7 +942,6 @@ impl BumpFrame {
         let node = bump.alloc(VText {
             text: "placeholdertext",
             id: Cell::default(),
-            is_static: false,
         });
         let node = bump.alloc(VNode::Text(unsafe {
             &*(node as *mut VText as *const VText)
@@ -957,7 +955,6 @@ impl BumpFrame {
         let node = self.bump.alloc(VText {
             text: "placeholdertext",
             id: Cell::default(),
-            is_static: false,
         });
         let node = self.bump.alloc(VNode::Text(unsafe {
             &*(node as *mut VText as *const VText)

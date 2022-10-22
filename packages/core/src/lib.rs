@@ -59,7 +59,7 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    AnyEvent, ArbitraryAttributeValue, Attribute, AttributeValue, Component, Element, ElementId,
+    AnyAttributeValue, AnyEvent, Attribute, AttributeValue, Component, Element, ElementId,
     EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, NodeFactory, Properties, Renderer,
     SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
     UiEvent, UserEvent, VComponent, VElement, VNode, VTemplate, VText, VirtualDom,

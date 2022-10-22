@@ -237,6 +237,9 @@ impl<'a: 'c, 'c> TextRenderer<'a, '_, 'c> {
                     panic!("Cannot render template without vdom");
                 }
             }
+            VNode::Placeholder(_) => {
+                todo!()
+            }
         }
         Ok(())
     }

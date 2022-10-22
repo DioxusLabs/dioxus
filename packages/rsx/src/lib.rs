@@ -67,7 +67,7 @@ impl Parse for CallBody {
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         // As we print out the dynamic nodes, we want to keep track of them in a linear fashion
-        // We'll use the size of the vecs to determine the index of the dynamic node in the final output
+        // We'll use the size of the vecs to determine the index of the dynamic node in the final
         struct DynamicContext<'a> {
             dynamic_nodes: Vec<&'a BodyNode>,
             dynamic_attributes: Vec<&'a ElementAttrNamed>,
@@ -95,11 +95,28 @@ impl ToTokens for CallBody {
                         match &attr.attr {
                             ElementAttr::AttrText { name, value } if value.is_static() => {
                                 let value = value.source.as_ref().unwrap();
-                                quote! { ::dioxus::core::TemplateAttribute::Static { name: stringify!(#name), value: #value } }
+                                quote! {
+                                    ::dioxus::core::TemplateAttribute::Static(::dioxus::core::Attribute {
+                                        name: stringify!(#name),
+                                        namespace: None,
+                                        volatile: false,
+                                        mounted_node: Default::default(),
+                                        value: ::dioxus::core::AttributeValue::Text(#value),
+                                    })
+                                }
                             }
 
                             ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                                quote! { ::dioxus::core::TemplateAttribute::Static { name: #name, value: #value } }
+                                let value = value.source.as_ref().unwrap();
+                                quote! {
+                                    ::dioxus::core::TemplateAttribute::Static(::dioxus::core::Attribute {
+                                        name: stringify!(#name),
+                                        namespace: None,
+                                        volatile: false,
+                                        mounted_node: Default::default(),
+                                        value: ::dioxus::core::AttributeValue::Text(#value),
+                                    })
+                                }
                             },
 
                             ElementAttr::AttrExpression { .. }
@@ -155,16 +172,20 @@ impl ToTokens for CallBody {
 
         out_tokens.append_all(quote! {
             LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-                static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                    id: ::dioxus::core::get_line_num!(),
-                    roots: &[ #roots ]
-                };
-
                 __cx.template_ref(
-                    TEMPLATE,
-                    &[ #( #dyn_printer ),* ],
-                    &[ #( #attr_printer ),* ],
-                    &[ #( #listener_printer ),* ],
+                    || ::dioxus::core::Template {
+                        id: ::dioxus::core::get_line_num!(),
+                        roots: &[ #roots ]
+                    },
+                    __cx.bump().alloc([
+                       #( #dyn_printer ),*
+                    ]),
+                    __cx.bump().alloc([
+                       #( #attr_printer ),*
+                    ]),
+                    __cx.bump().alloc([
+                       #( #listener_printer ),*
+                    ]),
                     None
                 )
             })
