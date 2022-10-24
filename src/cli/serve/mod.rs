@@ -49,7 +49,7 @@ impl Serve {
                     if cfg!(windows) {
                         file.set_extension("exe");
                     }
-                    Command::new(crate_config.out_dir.join(file).to_str().unwrap())
+                    Command::new(file.to_str().unwrap())
                         .stdout(Stdio::inherit())
                         .output()?;
                 }
