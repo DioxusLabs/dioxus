@@ -20,6 +20,7 @@ pub trait Renderer<'a> {
     fn pop_root(&mut self);
     /// Replace the given element with the next m elements on the stack
     fn replace_with(&mut self, root: ElementId, m: u32);
+
     /// Insert the next m elements on the stack after the given element
     fn insert_after(&mut self, root: ElementId, n: u32);
     /// Insert the next m elements on the stack before the given element
@@ -41,6 +42,8 @@ pub trait Renderer<'a> {
     fn remove(&mut self, root: ElementId);
     /// Remove an attribute from an existing element
     fn remove_attribute(&mut self, attribute: &Attribute, root: ElementId);
+    /// Remove all the children of the given element
+    fn remove_children(&mut self, root: ElementId);
 
     /// Attach a new listener to the dom
     fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId);
@@ -58,13 +61,38 @@ pub trait Renderer<'a> {
         root: ElementId,
     );
 
-    /// Save the current n nodes to the ID to be loaded later
-    fn save(&mut self, id: &str, num: u32);
-    /// Loads a set of saved nodes from the ID
-    fn load(&mut self, id: &str);
-
-    // General statistics for doing things that extend outside of the renderer
-
-    ///
+    /// General statistics for doing things that extend outside of the renderer
     fn mark_dirty_scope(&mut self, scope: ScopeId);
+
+    /// Save the current n nodes to the ID to be loaded later
+    fn save(&mut self, id: &'static str, num: u32);
+    /// Loads a set of saved nodes from the ID into a scratch space
+    fn load(&mut self, id: &'static str, index: u32);
+    /// Assign the element on the stack's descendent the given ID
+    fn assign_id(&mut self, descendent: &'static [u8], id: ElementId);
+    /// Replace the given element of the topmost element with the next m elements on the stack
+    /// Is essentially a combination of assign_id and replace_with
+    fn replace_descendant(&mut self, descendent: &'static [u8], m: u32);
 }
+
+/*
+div {
+    div {
+        div {
+            div {}
+        }
+    }
+}
+
+push_child(0)
+push_child(1)
+push_child(3)
+push_child(4)
+pop
+pop
+
+clone_node(0)
+set_node(el, [1,2,3,4])
+set_attribute("class", "foo")
+append_child(1)
+*/

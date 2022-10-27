@@ -34,16 +34,10 @@ slab = "0.4"
 
 futures-channel = "0.3.21"
 
-# used for noderefs
-once_cell = "1.8"
-
 indexmap = "1.7"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
-
-# todo: I want to get rid of this
-backtrace = "0.3"
 
 [features]
 default = []

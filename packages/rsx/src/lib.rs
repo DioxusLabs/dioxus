@@ -83,41 +83,39 @@ impl ToTokens for CallBody {
         fn render_static_node<'a>(root: &'a BodyNode, cx: &mut DynamicContext<'a>) -> TokenStream2 {
             match root {
                 BodyNode::Element(el) => {
-                    let name = &el.name;
+                    let el_name = &el.name;
 
                     let children = {
                         let children = el.children.iter().map(|root| render_static_node(root, cx));
                         quote! { #(#children),* }
                     };
 
-                    let attrs = el.attributes.iter().map(|attr| {
+                    let attrs = el.attributes.iter().filter_map(|attr| {
                         //
                         match &attr.attr {
                             ElementAttr::AttrText { name, value } if value.is_static() => {
                                 let value = value.source.as_ref().unwrap();
-                                quote! {
-                                    ::dioxus::core::TemplateAttribute::Static(::dioxus::core::Attribute {
-                                        name: stringify!(#name),
-                                        namespace: None,
-                                        volatile: false,
-                                        mounted_node: Default::default(),
-                                        value: ::dioxus::core::AttributeValue::Text(#value),
-                                    })
-                                }
+                                Some(quote! {
+                                    ::dioxus::core::TemplateAttribute {
+                                        name: dioxus_elements::#el_name::#name.0,
+                                        namespace: dioxus_elements::#el_name::#name.1,
+                                        volatile: dioxus_elements::#el_name::#name.2,
+                                        value: #value,
+                                    }
+                                })
                             }
 
                             ElementAttr::CustomAttrText { name, value } if value.is_static() => {
                                 let value = value.source.as_ref().unwrap();
-                                quote! {
-                                    ::dioxus::core::TemplateAttribute::Static(::dioxus::core::Attribute {
-                                        name: stringify!(#name),
-                                        namespace: None,
-                                        volatile: false,
-                                        mounted_node: Default::default(),
-                                        value: ::dioxus::core::AttributeValue::Text(#value),
-                                    })
-                                }
-                            },
+                                Some(quote! {
+                                    ::dioxus::core::TemplateAttribute {
+                                        name: dioxus_elements::#el_name::#name.0,
+                                        namespace: dioxus_elements::#el_name::#name.1,
+                                        volatile: dioxus_elements::#el_name::#name.2,
+                                        value: #value,
+                                    }
+                                })
+                            }
 
                             ElementAttr::AttrExpression { .. }
                             | ElementAttr::AttrText { .. }
@@ -125,20 +123,24 @@ impl ToTokens for CallBody {
                             | ElementAttr::CustomAttrExpression { .. } => {
                                 let ct = cx.dynamic_attributes.len();
                                 cx.dynamic_attributes.push(attr);
-                                quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
+                                // quote! {}
+                                None
+                                // quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
                             }
 
                             ElementAttr::EventTokens { .. } => {
                                 let ct = cx.dynamic_listeners.len();
                                 cx.dynamic_listeners.push(attr);
-                                quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
+                                // quote! {}
+                                None
                             }
                         }
                     });
 
                     quote! {
                         ::dioxus::core::TemplateNode::Element {
-                            tag: dioxus_elements::#name::TAG_NAME,
+                            tag: dioxus_elements::#el_name::TAG_NAME,
+                            namespace: dioxus_elements::#el_name::NAME_SPACE,
                             attrs: &[ #(#attrs),* ],
                             children: &[ #children ],
                         }
@@ -166,19 +168,19 @@ impl ToTokens for CallBody {
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
 
-        let dyn_printer = &context.dynamic_nodes;
+        let node_printer = &context.dynamic_nodes;
         let attr_printer = context.dynamic_attributes.iter();
         let listener_printer = context.dynamic_listeners.iter();
 
         out_tokens.append_all(quote! {
             LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
                 __cx.template_ref(
-                    || ::dioxus::core::Template {
+                    ::dioxus::core::Template {
                         id: ::dioxus::core::get_line_num!(),
                         roots: &[ #roots ]
                     },
                     __cx.bump().alloc([
-                       #( #dyn_printer ),*
+                       #( #node_printer ),*
                     ]),
                     __cx.bump().alloc([
                        #( #attr_printer ),*

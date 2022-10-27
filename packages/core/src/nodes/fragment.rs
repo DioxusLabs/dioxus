@@ -6,7 +6,7 @@ pub struct VFragment<'src> {
     /// The key of the fragment to be used during keyed diffing.
     pub key: Option<&'src str>,
 
-    /// The [`ElementId`] of the placeholder.
+    /// The [`ElementId`] of the placeholder if it exists
     pub placeholder: Cell<Option<ElementId>>,
 
     /// Fragments can never have zero children. Enforced by NodeFactory.

@@ -70,10 +70,6 @@ pub struct Attribute<'a> {
     /// Used in controlled components to ensure changes are propagated.
     pub volatile: bool,
 
-    /// A reverse lookup for tracking down attributes for templates
-    /// Not used for anything else
-    pub mounted_node: Cell<Option<ElementId>>,
-
     /// The value of the attribute.
     pub value: AttributeValue<'a>,
 }
@@ -83,7 +79,7 @@ pub struct Attribute<'a> {
 pub struct Listener<'bump> {
     /// The ID of the node that this listener is mounted to
     /// Used to generate the event listener's ID on the DOM
-    pub mounted_node: Cell<Option<ElementId>>,
+    pub mounted_node: Cell<ElementId>,
 
     /// The type of event to listen for.
     ///

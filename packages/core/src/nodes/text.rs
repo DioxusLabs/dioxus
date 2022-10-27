@@ -1,15 +1,5 @@
-use crate::{
-    innerlude::{
-        AttributeValue, ComponentPtr, Element, IntoAttributeValue, Properties, Scope, ScopeId,
-        ScopeState, Template,
-    },
-    AnyEvent, Component, ElementId,
-};
-use bumpalo::{boxed::Box as BumpBox, Bump};
-use std::{
-    cell::{Cell, RefCell},
-    fmt::{Arguments, Debug, Formatter},
-};
+use crate::ElementId;
+use std::cell::Cell;
 
 /// A bump-allocated string slice and metadata.
 pub struct VText<'src> {

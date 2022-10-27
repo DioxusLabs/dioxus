@@ -10,6 +10,7 @@ macro_rules! no_namespace_trait_methods {
         )*
     ) => {
         $(
+            $(#[$attr])*
             const $name: AttributeDiscription = (
                 stringify!($name),
                 None,
@@ -26,6 +27,7 @@ macro_rules! style_trait_methods {
         )*
     ) => {
         $(
+            $(#[$attr])*
             const $name: AttributeDiscription = (
                 $lit,
                 Some("style"),
@@ -42,6 +44,7 @@ macro_rules! aria_trait_methods {
         )*
     ) => {
         $(
+            $(#[$attr])*
             const $name: AttributeDiscription = (
                 $lit,
                 None,

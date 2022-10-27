@@ -410,36 +410,36 @@ fn render_attributes<'a, 'b: 'a>(
     let mut inner_html = None;
     let mut attr_iter = attrs.peekable();
 
-    while let Some(attr) = attr_iter.next() {
-        match attr.namespace {
-            None => {
-                if attr.name == "dangerous_inner_html" {
-                    inner_html = Some(attr.value.as_text().unwrap())
-                } else {
-                    if is_boolean_attribute(attr.name) && !attr.value.is_truthy() {
-                        continue;
-                    }
-                    write!(f, " {}=\"{}\"", attr.name, attr.value)?
-                }
-            }
-            Some(ns) => {
-                // write the opening tag
-                write!(f, " {}=\"", ns)?;
-                let mut cur_ns_el = attr;
-                loop {
-                    write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
-                    match attr_iter.peek() {
-                        Some(next_attr) if next_attr.namespace == Some(ns) => {
-                            cur_ns_el = attr_iter.next().unwrap();
-                        }
-                        _ => break,
-                    }
-                }
-                // write the closing tag
-                write!(f, "\"")?;
-            }
-        }
-    }
+    // while let Some(attr) = attr_iter.next() {
+    //     match attr.namespace {
+    //         None => {
+    //             if attr.name == "dangerous_inner_html" {
+    //                 inner_html = Some(attr.value.as_text().unwrap())
+    //             } else {
+    //                 if is_boolean_attribute(attr.name) && !attr.value.is_truthy() {
+    //                     continue;
+    //                 }
+    //                 write!(f, " {}=\"{}\"", attr.name, attr.value)?
+    //             }
+    //         }
+    //         Some(ns) => {
+    //             // write the opening tag
+    //             write!(f, " {}=\"", ns)?;
+    //             let mut cur_ns_el = attr;
+    //             loop {
+    //                 write!(f, "{}:{};", cur_ns_el.name, cur_ns_el.value)?;
+    //                 match attr_iter.peek() {
+    //                     Some(next_attr) if next_attr.namespace == Some(ns) => {
+    //                         cur_ns_el = attr_iter.next().unwrap();
+    //                     }
+    //                     _ => break,
+    //                 }
+    //             }
+    //             // write the closing tag
+    //             write!(f, "\"")?;
+    //         }
+    //     }
+    // }
     Ok(inner_html)
 }
 

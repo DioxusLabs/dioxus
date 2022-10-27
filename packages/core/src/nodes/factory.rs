@@ -108,7 +108,6 @@ impl<'a> NodeFactory<'a> {
             name,
             namespace,
             volatile: is_volatile,
-            mounted_node: Default::default(),
             value: val.into_value(self.bump),
         }
     }
@@ -125,7 +124,6 @@ impl<'a> NodeFactory<'a> {
             name,
             namespace,
             volatile: is_volatile,
-            mounted_node: Default::default(),
             value,
         }
     }
@@ -172,7 +170,7 @@ impl<'a> NodeFactory<'a> {
     pub fn listener(self, event: &'static str, callback: InternalHandler<'a>) -> Listener<'a> {
         Listener {
             event,
-            mounted_node: Cell::new(None),
+            mounted_node: Cell::new(ElementId(0)),
             callback,
         }
     }
@@ -234,27 +232,20 @@ impl<'a> NodeFactory<'a> {
     /// Create a refrence to a template
     pub fn template_ref(
         &self,
-        template: fn() -> Template<'static>,
+        template: Template<'static>,
         nodes: &'a [VNode<'a>],
         attributes: &'a [Attribute<'a>],
         listeners: &'a [Listener<'a>],
         key: Option<Arguments>,
     ) -> VNode<'a> {
-        // let borrow_ref = self.scope.templates.borrow();
-        // // We only create the template if it doesn't already exist to allow for hot reloading
-        // if !borrow_ref.contains_key(&id) {
-        //     drop(borrow_ref);
-        //     let mut borrow_mut = self.scope.templates.borrow_mut();
-        //     borrow_mut.insert(id.clone(), Rc::new(RefCell::new(template)));
-        // }
-        todo!()
-        // VNode::TemplateRef(self.bump.alloc(VTemplate {
-        //     dynamic_context,
-        //     template_id: id,
-        //     node_ids: RefCell::new(Vec::new()),
-        //     parent: Cell::new(None),
-        //     template_ref_id: Cell::new(None),
-        // }))
+        VNode::Template(self.bump.alloc(VTemplate {
+            key: None,
+            node_id: Cell::new(ElementId(0)),
+            template,
+            dynamic_nodes: self.bump.alloc([]),
+            dynamic_attrs: self.bump.alloc([]),
+            listeners,
+        }))
     }
 }
 

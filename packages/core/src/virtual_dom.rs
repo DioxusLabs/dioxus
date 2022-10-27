@@ -12,7 +12,6 @@ use std::{collections::VecDeque, iter::FromIterator, task::Poll};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
-///
 /// ## Guide
 ///
 /// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
@@ -503,6 +502,13 @@ impl VirtualDom {
                 }
             }
         }
+    }
+
+    /// Run the virtualdom, waiting for all async components to finish rendering
+    ///
+    /// As they finish rendering, the virtualdom will apply the mutations to the renderer.
+    pub async fn render(&mut self, renderer: &mut impl Renderer<'_>) {
+        //
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.

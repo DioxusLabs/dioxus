@@ -5,7 +5,6 @@
 
 use std::fmt::{Debug, Formatter};
 
-mod Placeholder;
 mod arbitrary_value;
 mod component;
 mod element;
@@ -25,7 +24,7 @@ pub use suspense::*;
 pub use template::*;
 pub use text::*;
 
-use self::Placeholder::VPlaceholder;
+use self::placeholder::VPlaceholder;
 
 /// A composable "VirtualNode" to declare a User Interface in the Dioxus VirtualDOM.
 ///
@@ -117,9 +116,6 @@ pub enum VNode<'src> {
     ///
     ///
     Template(&'src VTemplate<'src>),
-
-    ///
-    Placeholder(&'src VPlaceholder),
 }
 
 /// An Element's unique identifier.
@@ -140,7 +136,6 @@ impl<'src> VNode<'src> {
             VNode::Fragment(f) => f.key,
             VNode::Template(t) => t.key,
             VNode::Text(_t) => None,
-            VNode::Placeholder(_p) => None,
         }
     }
 
@@ -161,7 +156,6 @@ impl<'src> VNode<'src> {
             VNode::Fragment(_) => None,
             VNode::Component(_) => None,
             VNode::Template(_) => None,
-            VNode::Placeholder(el) => el.id.get(),
         }
     }
 
@@ -173,7 +167,6 @@ impl<'src> VNode<'src> {
             VNode::Component(c) => VNode::Component(c),
             VNode::Fragment(f) => VNode::Fragment(f),
             VNode::Template(t) => VNode::Template(t),
-            VNode::Placeholder(p) => VNode::Placeholder(p),
         }
     }
 }
@@ -208,10 +201,6 @@ impl Debug for VNode<'_> {
             VNode::Template(temp) => s
                 .debug_struct("VNode::Templates")
                 .field("template_id", &temp.template.id)
-                .finish(),
-            VNode::Placeholder(place) => s
-                .debug_struct("VNode::Placeholder")
-                .field("id", &place.id)
                 .finish(),
         }
     }
