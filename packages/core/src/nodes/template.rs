@@ -9,10 +9,9 @@ pub struct VTemplate<'a> {
     // The ID assigned for all nodes in this template
     pub node_id: Cell<ElementId>,
 
-    // Position this template for fragments and stuff
-    pub head_id: Cell<ElementId>,
-
-    pub tail_id: Cell<ElementId>,
+    // All the IDs for the roots of this template
+    // Non-assigned IDs are set to 0
+    pub root_ids: &'a [Cell<ElementId>],
 
     pub template: Template<'static>,
 

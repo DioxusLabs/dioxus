@@ -238,14 +238,19 @@ impl<'a> NodeFactory<'a> {
         listeners: &'a [Listener<'a>],
         key: Option<Arguments>,
     ) -> VNode<'a> {
-        VNode::Template(self.bump.alloc(VTemplate {
-            key: None,
-            node_id: Cell::new(ElementId(0)),
-            template,
-            dynamic_nodes: self.bump.alloc([]),
-            dynamic_attrs: self.bump.alloc([]),
-            listeners,
-        }))
+        VNode::Template(
+            self.bump.alloc(VTemplate {
+                key: None,
+                node_id: Cell::new(ElementId(0)),
+                template,
+                dynamic_nodes: self.bump.alloc([]),
+                dynamic_attrs: self.bump.alloc([]),
+                listeners,
+                root_ids:
+                    bumpalo::vec![in self.bump; Cell::new(ElementId(0)); template.roots.len()]
+                        .into_bump_slice(),
+            }),
+        )
     }
 }
 

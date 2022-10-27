@@ -1013,8 +1013,6 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.remove_nodes(el.children, false);
                 self.scopes.collect_garbage(id);
             }
-
-            // | VNode::Placeholder(_)
             VNode::Text(_) => {
                 let id = old
                     .try_mounted_id()
@@ -1023,7 +1021,6 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.mutations.replace_with(id, nodes_created as u32);
                 self.scopes.collect_garbage(id);
             }
-
             VNode::Fragment(f) => {
                 self.replace_inner(&f.children[0], nodes_created);
                 self.remove_nodes(f.children.iter().skip(1), true);
@@ -1169,9 +1166,14 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                     let scope_id = el.scope.get().unwrap();
                     search_node = Some(self.scopes.root_node(scope_id));
                 }
-                VNode::Template(c) => {
-                    todo!()
-                } // VNode::Placeholder(_) => todo!(),
+                VNode::Template(template) => match &template.template.roots[0] {
+                    TemplateNode::Text(_) | TemplateNode::Element { .. } => {
+                        break Some(template.root_ids.last().unwrap().get());
+                    }
+                    TemplateNode::Dynamic(el) => {
+                        search_node = Some(&template.dynamic_nodes[*el].node)
+                    }
+                },
             }
         }
     }
@@ -1187,9 +1189,14 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                     let scope = el.scope.get().expect("element to have a scope assigned");
                     search_node = Some(self.scopes.root_node(scope));
                 }
-                VNode::Template(t) => {
-                    todo!()
-                } // VNode::Placeholder(_) => todo!(),
+                VNode::Template(template) => match &template.template.roots[0] {
+                    TemplateNode::Text(_) | TemplateNode::Element { .. } => {
+                        break Some(template.root_ids[0].get());
+                    }
+                    TemplateNode::Dynamic(el) => {
+                        search_node = Some(&template.dynamic_nodes[*el].node)
+                    }
+                },
             }
         }
     }
@@ -1215,8 +1222,20 @@ impl<'a, 'b, R: Renderer<'b>> DiffState<'a, 'b, R> {
                 self.push_all_real_nodes(root)
             }
 
-            VNode::Template(c) => {
-                todo!()
+            VNode::Template(template) => {
+                let mut added = 0;
+                for (idx, root) in template.template.roots.iter().enumerate() {
+                    match root {
+                        TemplateNode::Text(_) | TemplateNode::Element { .. } => {
+                            self.mutations.push_root(template.root_ids[idx].get());
+                            added += 1;
+                        }
+                        TemplateNode::Dynamic(did) => {
+                            added += self.push_all_real_nodes(&template.dynamic_nodes[*did].node);
+                        }
+                    }
+                }
+                added
             }
         }
     }
