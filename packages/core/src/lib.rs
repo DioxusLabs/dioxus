@@ -1,131 +1,75 @@
-#![allow(non_snake_case)]
-#![doc = include_str!("../README.md")]
-#![warn(missing_docs)]
+use std::collections::HashMap;
 
-pub(crate) mod diff;
-pub(crate) mod events;
-pub(crate) mod lazynodes;
-pub(crate) mod mutations;
-pub(crate) mod nodes;
-pub(crate) mod properties;
-pub(crate) mod scopes;
-pub(crate) mod virtual_dom;
-
-pub(crate) mod innerlude {
-    pub use crate::events::*;
-    pub use crate::lazynodes::*;
-    pub use crate::mutations::*;
-    pub use crate::nodes::*;
-    pub use crate::properties::*;
-    pub use crate::scopes::*;
-    pub use crate::virtual_dom::*;
-
-    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
-    ///
-    /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
-    pub type Element<'a> = Option<VNode<'a>>;
-
-    /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
-    ///
-    /// Components can be used in other components with two syntax options:
-    /// - lowercase as a function call with named arguments (rust style)
-    /// - uppercase as an element (react style)
-    ///
-    /// ## Rust-Style
-    ///
-    /// ```rust, ignore
-    /// fn example(cx: Scope<Props>) -> Element {
-    ///     // ...
-    /// }
-    ///
-    /// rsx!(
-    ///     example()
-    /// )
-    /// ```
-    /// ## React-Style
-    /// ```rust, ignore
-    /// fn Example(cx: Scope<Props>) -> Element {
-    ///     // ...
-    /// }
-    ///
-    /// rsx!(
-    ///     Example {}
-    /// )
-    /// ```
-    pub type Component<P = ()> = fn(Scope<P>) -> Element;
-
-    /// A list of attributes
-    pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
-}
-
-pub use crate::innerlude::{
-    AnyAttributeValue, AnyEvent, Attribute, AttributeValue, Component, Element, ElementId,
-    EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, NodeFactory, Properties, Renderer,
-    SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
-    UiEvent, UserEvent, VComponent, VElement, VNode, VTemplate, VText, VirtualDom,
+use crate::{
+    any_props::AnyProps,
+    arena::ElementId,
+    bump_frame::BumpFrame,
+    nodes::VTemplate,
+    scopes::{ComponentPtr, ScopeId, ScopeState},
 };
+use any_props::VComponentProps;
+use arena::ElementArena;
+use component::Component;
+use mutations::Mutation;
+use nodes::{DynamicNode, Template, TemplateId};
+use scopes::Scope;
+use slab::Slab;
 
-/// The purpose of this module is to alleviate imports of many common types
-///
-/// This includes types like [`Scope`], [`Element`], and [`Component`].
-pub mod prelude {
-    pub use crate::innerlude::{
-        fc_to_builder, Attributes, Component, Element, EventHandler, LazyNodes, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, Template, VNode, VirtualDom,
-    };
+mod any_props;
+mod arena;
+mod bump_frame;
+mod component;
+mod create;
+mod diff;
+mod element;
+mod mutations;
+mod nodes;
+mod scope_arena;
+mod scopes;
+
+pub struct VirtualDom {
+    templates: HashMap<TemplateId, Template>,
+    elements: ElementArena,
+    scopes: Slab<ScopeState>,
+    scope_stack: Vec<ScopeId>,
 }
 
-pub mod exports {
-    //! Important dependencies that are used by the rest of the library
-    //! Feel free to just add the dependencies in your own Crates.toml
-    pub use bumpalo;
-    pub use futures_channel;
-}
+impl VirtualDom {
+    pub fn new(app: Component) -> Self {
+        let mut res = Self {
+            templates: Default::default(),
+            scopes: Slab::default(),
+            elements: ElementArena::default(),
+            scope_stack: Vec::new(),
+        };
 
-/// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite
-pub(crate) mod unsafe_utils {
-    use crate::VNode;
+        res.new_scope(
+            app as _,
+            None,
+            ElementId(0),
+            Box::new(VComponentProps::new_empty(app)),
+        );
 
-    pub(crate) unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
-        std::mem::transmute(node)
+        res
     }
-}
 
-#[macro_export]
-/// A helper macro for using hooks in async environements.
-///
-/// # Usage
-///
-///
-/// ```ignore
-/// let (data) = use_ref(&cx, || {});
-///
-/// let handle_thing = move |_| {
-///     to_owned![data]
-///     cx.spawn(async move {
-///         // do stuff
-///     });
-/// }
-/// ```
-macro_rules! to_owned {
-    ($($es:ident),+) => {$(
-        #[allow(unused_mut)]
-        let mut $es = $es.to_owned();
-    )*}
-}
+    fn root_scope(&self) -> &ScopeState {
+        todo!()
+    }
 
-/// get the code location of the code that called this function
-#[macro_export]
-macro_rules! get_line_num {
-    () => {
-        concat!(
-            file!(),
-            ":",
-            line!(),
-            ":",
-            column!(),
-            ":",
-            env!("CARGO_MANIFEST_DIR")
-        )
-    };
+    /// Render the virtualdom, waiting for all suspended nodes to complete before moving on
+    ///
+    /// Forces a full render of the virtualdom from scratch.
+    ///
+    /// Use other methods to update the virtualdom incrementally.
+    pub fn render_all<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>) {
+        let root = self.root_scope();
+
+        let root_template = root.current_arena();
+
+        let root_node: &'a VTemplate = unsafe { &*root_template.node.get() };
+        let root_node: &'a VTemplate<'a> = unsafe { std::mem::transmute(root_node) };
+
+        self.create(mutations, root_node);
+    }
 }
