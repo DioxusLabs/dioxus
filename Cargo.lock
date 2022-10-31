@@ -554,6 +554,8 @@ dependencies = [
  "clap",
  "colored 2.0.0",
  "convert_case",
+ "dioxus-core",
+ "dioxus-rsx",
  "dirs 4.0.0",
  "fern",
  "flate2",
@@ -580,6 +582,38 @@ dependencies = [
  "walkdir",
  "wasm-bindgen-cli-support",
  "zip 0.6.2",
+]
+
+[[package]]
+name = "dioxus-core"
+version = "0.2.1"
+source = "git+https://github.com/dioxuslabs/dioxus/#f89cd204557f09febebf1afc48f418ad6ebc5254"
+dependencies = [
+ "backtrace",
+ "bumpalo",
+ "dyn-clone",
+ "futures-channel",
+ "futures-util",
+ "indexmap",
+ "log",
+ "longest-increasing-subsequence",
+ "once_cell",
+ "rustc-hash",
+ "serde",
+ "slab",
+ "smallvec",
+]
+
+[[package]]
+name = "dioxus-rsx"
+version = "0.0.0"
+source = "git+https://github.com/dioxuslabs/dioxus/#f89cd204557f09febebf1afc48f418ad6ebc5254"
+dependencies = [
+ "dioxus-core",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
 ]
 
 [[package]]
@@ -612,6 +646,12 @@ dependencies = [
  "redox_users 0.4.3",
  "winapi",
 ]
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f94fa09c2aeea5b8839e414b7b841bf429fd25b9c522116ac97ee87856d88b2"
 
 [[package]]
 name = "encode_unicode"
@@ -1287,6 +1327,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "longest-increasing-subsequence"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b3bd0dd2cd90571056fdb71f6275fada10131182f84899f4b2a916e565d81d86"
+
+[[package]]
 name = "lru-cache"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1876,6 +1922,12 @@ name = "rustc-demangle"
 version = "0.1.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
+
+[[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustls"
