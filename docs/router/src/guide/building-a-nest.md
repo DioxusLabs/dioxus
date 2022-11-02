@@ -162,15 +162,15 @@ fn blog_post(cx: Scope) -> Element {
 }
 ```
 Dioxus Router provides built in methods to extract information from a route. We could utilize the ``segments``, ``nth_segment``, or ``last_segment`` method for our case but we'll use the ``segment`` method which extracts a specific URL parameter.
-The ``segment`` method also parses the parameter into any type for us. We'll use a match expression that handles a parsing error and on success, uses our helper function to grab the blog post.
+The ``segment`` method takes a &str and returns an Option<&str>. We'll use a match expression that handles the returned option and when the value exists, we pass it to our helper function to grab the blog post.
 ```rs
 fn blog_post(cx: Scope) -> Element {
     let route = use_route(&cx);
 
     // NEW
-    let blog_text = match route.segment::<String>("post").unwrap() {
-        Ok(val) => get_blog_post(&val),
-        Err(_) => "An unknown error occured".to_string(),
+    let blog_text = match route.segment("post") {
+        Some(val) => get_blog_post(val),
+        None => "An unknown error occured".to_string(),
     };
 
     cx.render(rsx! {
