@@ -424,7 +424,6 @@ impl<P> Clone for Scope<'_, P> {
 }
 
 impl<'a, P> std::ops::Deref for Scope<'a, P> {
-    // rust will auto deref again to the original 'a lifetime at the call site
     type Target = &'a ScopeState;
     fn deref(&self) -> &Self::Target {
         &self.scope
@@ -621,9 +620,6 @@ impl ScopeState {
         Arc::new(move |id| drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
     }
 
-    /// Get the [`ScopeId`] of a mounted component.
-    ///
-    /// `ScopeId` is not unique for the lifetime of the [`VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
     pub fn needs_update(&self) {
         self.needs_update_any(self.scope_id());
     }

@@ -2,11 +2,11 @@ use std::cell::Cell;
 
 use bumpalo::Bump;
 
-use crate::nodes::VTemplate;
+use crate::nodes::VNode;
 
 pub struct BumpFrame {
     pub bump: Bump,
-    pub node: Cell<*const VTemplate<'static>>,
+    pub node: Cell<*const VNode<'static>>,
 }
 impl BumpFrame {
     pub fn new(capacity: usize) -> Self {

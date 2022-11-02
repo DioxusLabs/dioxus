@@ -17,6 +17,11 @@ pub enum Mutation<'a> {
         index: usize,
     },
 
+    SaveTemplate {
+        name: &'static str,
+        m: usize,
+    },
+
     HydrateText {
         path: &'static [u8],
         value: &'a str,
@@ -30,7 +35,7 @@ pub enum Mutation<'a> {
 
     ReplacePlaceholder {
         path: &'static [u8],
-        id: ElementId,
+        m: usize,
     },
 
     AssignId {
@@ -41,5 +46,21 @@ pub enum Mutation<'a> {
     // Take the current element and replace it with the element with the given id.
     Replace {
         id: ElementId,
+    },
+
+    CreateElement {
+        name: &'a str,
+        namespace: Option<&'a str>,
+        id: ElementId,
+    },
+
+    CreateText {
+        value: &'a str,
+    },
+
+    CreatePlaceholder,
+
+    AppendChildren {
+        m: usize,
     },
 }

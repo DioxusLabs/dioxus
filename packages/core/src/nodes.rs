@@ -1,4 +1,4 @@
-use crate::{any_props::AnyProps, arena::ElementId, scopes::ComponentPtr};
+use crate::{any_props::AnyProps, arena::ElementId};
 use std::{
     any::{Any, TypeId},
     cell::Cell,
@@ -8,11 +8,14 @@ use std::{
 pub type TemplateId = &'static str;
 
 /// A reference to a template along with any context needed to hydrate it
-pub struct VTemplate<'a> {
+pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
 
-    pub template: &'static Template,
+    // When rendered, this template will be linked to its parent
+    pub parent: Option<(*mut VNode<'static>, usize)>,
+
+    pub template: Template,
 
     pub root_ids: &'a [Cell<ElementId>],
 
@@ -25,7 +28,6 @@ pub struct VTemplate<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct Template {
     pub id: &'static str,
-
     pub roots: &'static [TemplateNode<'static>],
 }
 
@@ -54,8 +56,7 @@ pub enum DynamicNodeKind<'a> {
     // IE in caps or with underscores
     Component {
         name: &'static str,
-        fn_ptr: ComponentPtr,
-        props: Box<dyn AnyProps>,
+        props: *mut dyn AnyProps,
     },
 
     // Comes in with string interpolation or from format_args, include_str, etc
@@ -66,7 +67,7 @@ pub enum DynamicNodeKind<'a> {
 
     // Anything that's coming in as an iterator
     Fragment {
-        children: &'a [VTemplate<'a>],
+        children: &'a [VNode<'a>],
     },
 }
 
@@ -80,8 +81,8 @@ pub struct TemplateAttribute<'a> {
 
 pub struct AttributeLocation<'a> {
     pub mounted_element: Cell<ElementId>,
-    pub attrs: &'a [Attribute<'a>],
-    pub listeners: &'a [Listener<'a>],
+    pub attrs: &'a mut [Attribute<'a>],
+    pub listeners: &'a mut [Listener<'a>],
     pub path: &'static [u8],
 }
 
@@ -118,12 +119,12 @@ where
 
 pub struct Listener<'a> {
     pub name: &'static str,
-    pub callback: &'a dyn Fn(),
+    pub callback: &'a mut dyn FnMut(&dyn Any),
 }
 
 #[test]
 fn what_are_the_sizes() {
-    dbg!(std::mem::size_of::<VTemplate>());
+    dbg!(std::mem::size_of::<VNode>());
     dbg!(std::mem::size_of::<Template>());
     dbg!(std::mem::size_of::<TemplateNode>());
 }

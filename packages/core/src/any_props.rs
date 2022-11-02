@@ -1,7 +1,9 @@
 use std::cell::Cell;
 
+use futures_util::Future;
+
 use crate::{
-    component::Component,
+    component::{Component, ComponentFn, Dummy, IntoComponent},
     element::Element,
     scopes::{Scope, ScopeState},
 };
@@ -12,21 +14,18 @@ pub trait AnyProps {
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VComponentProps<P> {
-    pub render_fn: Component<P>,
+pub(crate) struct VComponentProps<P, F: Future<Output = ()> = Dummy> {
+    pub render_fn: ComponentFn<P, F>,
     pub memo: unsafe fn(&P, &P) -> bool,
-    pub props: Scope<P>,
+    pub props: *const P,
 }
 
 impl VComponentProps<()> {
     pub fn new_empty(render_fn: Component<()>) -> Self {
         Self {
-            render_fn,
+            render_fn: render_fn.into_component(),
             memo: <() as PartialEq>::eq,
-            props: Scope {
-                props: (),
-                state: Cell::new(std::ptr::null_mut()),
-            },
+            props: std::ptr::null_mut(),
         }
     }
 }
@@ -35,10 +34,10 @@ impl<P> VComponentProps<P> {
     pub(crate) fn new(
         render_fn: Component<P>,
         memo: unsafe fn(&P, &P) -> bool,
-        props: Scope<P>,
+        props: *const P,
     ) -> Self {
         Self {
-            render_fn,
+            render_fn: render_fn.into_component(),
             memo,
             props,
         }
@@ -62,10 +61,18 @@ impl<P> AnyProps for VComponentProps<P> {
 
     fn render<'a>(&'a self, scope: &'a ScopeState) -> Element<'a> {
         // Make sure the scope ptr is not null
-        self.props.state.set(scope);
+        // self.props.state.set(scope);
+
+        let scope = Scope {
+            props: unsafe { &*self.props },
+            scope,
+        };
 
         // Call the render function directly
         // todo: implement async
-        (self.render_fn)(unsafe { std::mem::transmute(&self.props) })
+        match self.render_fn {
+            ComponentFn::Sync(f) => f(scope),
+            ComponentFn::Async(_) => todo!(),
+        }
     }
 }

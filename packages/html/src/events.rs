@@ -40,28 +40,29 @@ pub mod on {
                         // mut callback: impl FnMut(UiEvent<$data>) + 'a,
                     ) -> Listener<'a>
                     {
-                        let bump = &factory.bump();
+                        // let bump = &factory.bump();
 
 
-                        use dioxus_core::{AnyEvent};
-                        // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
-                        // safety: this is essentially the same as calling Box::new() but manually
-                        // The box is attached to the lifetime of the bumpalo allocator
-                        let cb: &mut dyn FnMut(AnyEvent) = bump.alloc(move |evt: AnyEvent| {
-                            let event = evt.downcast::<$data>().unwrap();
-                            callback(event)
-                        });
+                        // // we can't allocate unsized in bumpalo's box, so we need to craft the box manually
+                        // // safety: this is essentially the same as calling Box::new() but manually
+                        // // The box is attached to the lifetime of the bumpalo allocator
+                        // let cb: &mut dyn FnMut(AnyEvent) = bump.alloc(move |evt: AnyEvent| {
+                        //     let event = evt.downcast::<$data>().unwrap();
+                        //     callback(event)
+                        // });
 
-                        let callback: BumpBox<dyn FnMut(AnyEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
+                        // let callback: BumpBox<dyn FnMut(AnyEvent) + 'a> = unsafe { BumpBox::from_raw(cb) };
 
-                        // ie oncopy
-                        let event_name = stringify!($name);
+                        // // ie oncopy
+                        // let event_name = stringify!($name);
 
-                        // ie copy
-                        let shortname: &'static str = &event_name[2..];
+                        // // ie copy
+                        // let shortname: &'static str = &event_name[2..];
 
-                        let handler = bump.alloc(std::cell::RefCell::new(Some(callback)));
-                        factory.listener(shortname, handler)
+                        // let handler = bump.alloc(std::cell::RefCell::new(Some(callback)));
+                        // factory.listener(shortname, handler)
+
+                        todo!()
                     }
                 )*
             )*
@@ -1423,7 +1424,7 @@ impl KeyCode {
     }
 }
 
-pub(crate) fn _event_meta(event: &UserEvent) -> (bool, EventPriority) {
+pub(crate) fn _event_meta<T>(event: &UiEvent<T>) -> (bool, EventPriority) {
     use EventPriority::*;
 
     match event.name {

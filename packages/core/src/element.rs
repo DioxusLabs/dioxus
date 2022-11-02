@@ -1,3 +1,3 @@
-use crate::nodes::{Template, VTemplate};
+use crate::nodes::{Template, VNode};
 
-pub type Element<'a> = Option<VTemplate<'a>>;
+pub type Element<'a> = Option<VNode<'a>>;

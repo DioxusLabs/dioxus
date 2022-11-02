@@ -1,30 +1,32 @@
 use std::num::NonZeroUsize;
 
+use crate::{
+    nodes::{Template, VNode},
+    virtualdom::VirtualDom,
+};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 
-// pub struct ElementId(pub NonZeroUsize);
-
-// impl Default for ElementId {
-//     fn default() -> Self {
-//         Self(NonZeroUsize::new(1).unwrap())
-//     }
-// }
-
-pub struct ElementArena {
-    counter: usize,
+pub struct ElementPath {
+    pub template: *mut VNode<'static>,
+    pub element: usize,
 }
 
-impl Default for ElementArena {
-    fn default() -> Self {
-        Self { counter: 1 }
-    }
-}
+impl VirtualDom {
+    pub fn next_element(&mut self, template: &VNode) -> ElementId {
+        let entry = self.elements.vacant_entry();
+        let id = entry.key();
 
-impl ElementArena {
-    pub fn next(&mut self) -> ElementId {
-        let id = self.counter;
-        self.counter += 1;
+        entry.insert(ElementPath {
+            template: template as *const _ as *mut _,
+            element: id,
+        });
+
         ElementId(id)
+    }
+
+    pub fn cleanup_element(&mut self, id: ElementId) {
+        self.elements.remove(id.0);
     }
 }

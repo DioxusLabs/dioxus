@@ -17,10 +17,6 @@ mod errors;
 // mod attributes;
 mod component;
 mod element;
-// #[cfg(any(feature = "hot-reload", debug_assertions))]
-// mod elements;
-// #[cfg(any(feature = "hot-reload", debug_assertions))]
-// mod error;
 mod ifmt;
 mod node;
 mod template;
@@ -173,23 +169,40 @@ impl ToTokens for CallBody {
         let listener_printer = context.dynamic_listeners.iter();
 
         out_tokens.append_all(quote! {
-            LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-                __cx.template_ref(
-                    ::dioxus::core::Template {
-                        id: ::dioxus::core::get_line_num!(),
-                        roots: &[ #roots ]
-                    },
-                    __cx.bump().alloc([
-                       #( #node_printer ),*
-                    ]),
-                    __cx.bump().alloc([
-                       #( #attr_printer ),*
-                    ]),
-                    __cx.bump().alloc([
-                       #( #listener_printer ),*
-                    ]),
-                    None
-                )
+            // LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+            //     __cx.template_ref(
+            //         ::dioxus::core::Template {
+            //             id: ::dioxus::core::get_line_num!(),
+            //             roots: &[ #roots ]
+            //         },
+            //         __cx.bump().alloc([
+            //            #( #node_printer ),*
+            //         ]),
+            //         __cx.bump().alloc([
+            //            #( #attr_printer ),*
+            //         ]),
+            //         __cx.bump().alloc([
+            //            #( #listener_printer ),*
+            //         ]),
+            //         None
+            //     )
+            // })
+
+
+            ::dioxus::core::LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
+                    id: ::dioxus::core::get_line_num!(),
+                    roots: &[ #roots ]
+                };
+
+                ::dioxus::core::VNode {
+                    node_id: Default::default(),
+                    parent: None,
+                    template: TEMPLATE,
+                    root_ids: __cx.bump().alloc([]),
+                    dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
+                    dynamic_attrs: __cx.bump().alloc([]),
+                }
             })
         })
     }
@@ -221,22 +234,16 @@ impl CallBody {
                 roots: &[]
             };
 
-            LazyNodes::new(TEMPLATE, move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-                todo!()
+            LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                ::dioxus::core::VNode {
+                    node_id: Default::default(),
+                    parent: None,
+                    template: &TEMPLATE,
+                    root_ids: __cx.bump().alloc([]),
+                    dynamic_nodes: __cx.bump().alloc([]),
+                    dynamic_attrs: __cx.bump().alloc([]),
+                }
             })
         })
-        // let template = TemplateBuilder::from_roots(self.roots.clone());
-        // let inner = if let Some(template) = template {
-        //     quote! { #template }
-        // } else {
-        //     let children = &self.roots;
-        //     if children.len() == 1 {
-        //         let inner = &self.roots[0];
-        //         quote! { #inner }
-        //     } else {
-        //         quote! { __cx.fragment_root([ #(#children),* ]) }
-        //     }
-        // };
-        // out_tokens.append_all(inner);
     }
 }
