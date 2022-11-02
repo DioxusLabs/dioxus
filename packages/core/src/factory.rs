@@ -1,19 +1,36 @@
-use std::fmt::Arguments;
+use std::{cell::Cell, fmt::Arguments};
 
-use crate::{innerlude::DynamicNode, LazyNodes, ScopeState, VNode};
+use crate::{
+    arena::ElementId,
+    innerlude::{DynamicNode, DynamicNodeKind},
+    LazyNodes, ScopeState, VNode,
+};
 
 impl ScopeState {
     /// Create some text that's allocated along with the other vnodes
     ///
-    pub fn text(&self, args: Arguments) -> DynamicNode {
-        // let (text, _is_static) = self.raw_text(args);
+    pub fn text<'a>(&'a self, args: Arguments) -> DynamicNode<'a> {
+        let (text, _) = self.raw_text(args);
 
-        // VNode::Text(self.bump.alloc(VText {
-        //     text,
-        //     id: Default::default(),
-        // }))
+        DynamicNode {
+            kind: DynamicNodeKind::Text {
+                id: Cell::new(ElementId(0)),
+                value: text,
+            },
+            path: &[0],
+        }
+    }
 
-        todo!()
+    pub fn raw_text<'a>(&'a self, args: Arguments) -> (&'a str, bool) {
+        match args.as_str() {
+            Some(static_str) => (static_str, true),
+            None => {
+                use bumpalo::core_alloc::fmt::Write;
+                let mut str_buf = bumpalo::collections::String::new_in(self.bump());
+                str_buf.write_fmt(args).unwrap();
+                (str_buf.into_bump_str(), false)
+            }
+        }
     }
 
     pub fn fragment_from_iter<'a, I, F: IntoVnode<'a, I>>(

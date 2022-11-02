@@ -1,9 +1,5 @@
 use crate::{any_props::AnyProps, arena::ElementId};
-use std::{
-    any::{Any, TypeId},
-    cell::Cell,
-    num::NonZeroUsize,
-};
+use std::{any::Any, cell::Cell, hash::Hasher};
 
 pub type TemplateId = &'static str;
 
@@ -15,7 +11,7 @@ pub struct VNode<'a> {
     // When rendered, this template will be linked to its parent
     pub parent: Option<(*mut VNode<'static>, usize)>,
 
-    pub template: Template,
+    pub template: Template<'static>,
 
     pub root_ids: &'a [Cell<ElementId>],
 
@@ -26,15 +22,38 @@ pub struct VNode<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Template {
-    pub id: &'static str,
-    pub roots: &'static [TemplateNode<'static>],
+pub struct Template<'a> {
+    pub id: &'a str,
+    pub roots: &'a [TemplateNode<'a>],
+}
+
+impl<'a> std::hash::Hash for Template<'a> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
+}
+
+impl PartialEq for Template<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Template<'_> {}
+impl PartialOrd for Template<'_> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.id.partial_cmp(other.id)
+    }
+}
+impl Ord for Template<'_> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id.cmp(other.id)
+    }
 }
 
 /// A weird-ish variant of VNodes with way more limited types
 #[derive(Debug, Clone, Copy)]
 pub enum TemplateNode<'a> {
-    /// A simple element
     Element {
         tag: &'a str,
         namespace: Option<&'a str>,
@@ -62,7 +81,7 @@ pub enum DynamicNodeKind<'a> {
     // Comes in with string interpolation or from format_args, include_str, etc
     Text {
         id: Cell<ElementId>,
-        value: &'static str,
+        value: &'a str,
     },
 
     // Anything that's coming in as an iterator
@@ -72,11 +91,17 @@ pub enum DynamicNodeKind<'a> {
 }
 
 #[derive(Debug)]
-pub struct TemplateAttribute<'a> {
-    pub name: &'static str,
-    pub value: &'a str,
-    pub namespace: Option<&'static str>,
-    pub volatile: bool,
+pub enum TemplateAttribute<'a> {
+    Static {
+        name: &'static str,
+        value: &'a str,
+        namespace: Option<&'static str>,
+        volatile: bool,
+    },
+    Dynamic {
+        name: &'static str,
+        index: usize,
+    },
 }
 
 pub struct AttributeLocation<'a> {

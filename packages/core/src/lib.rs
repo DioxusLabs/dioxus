@@ -69,6 +69,8 @@ pub use crate::innerlude::{
     // AnyAttributeValue, AnyEvent, Attribute, AttributeValue, Component, Element, ElementId,
     Attribute,
     AttributeValue,
+    DynamicNode,
+    DynamicNodeKind,
     Element,
     EventPriority,
     LazyNodes,
@@ -94,8 +96,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        Attribute, Element, EventPriority, LazyNodes, Listener, NodeFactory, Scope, ScopeId,
-        ScopeState, TaskId, Template, TemplateAttribute, TemplateNode, UiEvent, VNode, VirtualDom,
+        Attribute, DynamicNode, DynamicNodeKind, Element, EventPriority, LazyNodes, Listener,
+        NodeFactory, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
+        UiEvent, VNode, VirtualDom,
     };
 }
 

@@ -34,8 +34,8 @@ pub enum Mutation<'a> {
     },
 
     ReplacePlaceholder {
-        path: &'static [u8],
         m: usize,
+        path: &'static [u8],
     },
 
     AssignId {

@@ -32,6 +32,9 @@ fn basic_template(cx: Scope) -> Element {
         div {
             (0..2).map(|i| rsx! {
                 div { "asd" }
+            }),
+            (0..2).map(|i| rsx! {
+                div { "asd" }
             })
         }
     })
@@ -42,7 +45,10 @@ fn basic_prints() {
     let mut dom = VirtualDom::new(basic_template);
 
     let mut edits = Vec::new();
+    dom.rebuild(&mut edits);
+    dbg!(edits);
 
+    let mut edits = Vec::new();
     dom.rebuild(&mut edits);
 
     dbg!(edits);

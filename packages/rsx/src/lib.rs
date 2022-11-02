@@ -21,6 +21,8 @@ mod ifmt;
 mod node;
 mod template;
 
+use std::collections::HashMap;
+
 // Re-export the namespaces into each other
 pub use component::*;
 pub use element::*;
@@ -39,6 +41,9 @@ use syn::{
 #[derive(Default)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
+
+    // set this after
+    pub inline_cx: bool,
 }
 
 impl Parse for CallBody {
@@ -55,7 +60,10 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self { roots })
+        Ok(Self {
+            roots,
+            inline_cx: false,
+        })
     }
 }
 
@@ -66,14 +74,20 @@ impl ToTokens for CallBody {
         // We'll use the size of the vecs to determine the index of the dynamic node in the final
         struct DynamicContext<'a> {
             dynamic_nodes: Vec<&'a BodyNode>,
-            dynamic_attributes: Vec<&'a ElementAttrNamed>,
-            dynamic_listeners: Vec<&'a ElementAttrNamed>,
+            dynamic_attributes: HashMap<Vec<u8>, AttrLocation<'a>>,
+            current_path: Vec<u8>,
+        }
+
+        #[derive(Default)]
+        struct AttrLocation<'a> {
+            attrs: Vec<&'a ElementAttrNamed>,
+            listeners: Vec<&'a ElementAttrNamed>,
         }
 
         let mut context = DynamicContext {
             dynamic_nodes: vec![],
-            dynamic_attributes: vec![],
-            dynamic_listeners: vec![],
+            dynamic_attributes: HashMap::new(),
+            current_path: vec![],
         };
 
         fn render_static_node<'a>(root: &'a BodyNode, cx: &mut DynamicContext<'a>) -> TokenStream2 {
@@ -81,10 +95,14 @@ impl ToTokens for CallBody {
                 BodyNode::Element(el) => {
                     let el_name = &el.name;
 
-                    let children = {
-                        let children = el.children.iter().map(|root| render_static_node(root, cx));
-                        quote! { #(#children),* }
-                    };
+                    let children = el.children.iter().enumerate().map(|(idx, root)| {
+                        cx.current_path.push(idx as u8);
+                        let out = render_static_node(root, cx);
+                        cx.current_path.pop();
+                        out
+                    });
+
+                    let children = quote! { #(#children),* };
 
                     let attrs = el.attributes.iter().filter_map(|attr| {
                         //
@@ -92,7 +110,7 @@ impl ToTokens for CallBody {
                             ElementAttr::AttrText { name, value } if value.is_static() => {
                                 let value = value.source.as_ref().unwrap();
                                 Some(quote! {
-                                    ::dioxus::core::TemplateAttribute {
+                                    ::dioxus::core::TemplateAttribute::Static {
                                         name: dioxus_elements::#el_name::#name.0,
                                         namespace: dioxus_elements::#el_name::#name.1,
                                         volatile: dioxus_elements::#el_name::#name.2,
@@ -104,7 +122,7 @@ impl ToTokens for CallBody {
                             ElementAttr::CustomAttrText { name, value } if value.is_static() => {
                                 let value = value.source.as_ref().unwrap();
                                 Some(quote! {
-                                    ::dioxus::core::TemplateAttribute {
+                                    ::dioxus::core::TemplateAttribute::Static {
                                         name: dioxus_elements::#el_name::#name.0,
                                         namespace: dioxus_elements::#el_name::#name.1,
                                         volatile: dioxus_elements::#el_name::#name.2,
@@ -117,16 +135,21 @@ impl ToTokens for CallBody {
                             | ElementAttr::AttrText { .. }
                             | ElementAttr::CustomAttrText { .. }
                             | ElementAttr::CustomAttrExpression { .. } => {
+                                // todo!();
                                 let ct = cx.dynamic_attributes.len();
-                                cx.dynamic_attributes.push(attr);
+                                // cx.dynamic_attributes.push(attr);
                                 // quote! {}
-                                None
-                                // quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) }
+                                // None
+                                Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
+                                    name: "asd",
+                                    index: #ct
+                                } })
                             }
 
                             ElementAttr::EventTokens { .. } => {
-                                let ct = cx.dynamic_listeners.len();
-                                cx.dynamic_listeners.push(attr);
+                                // todo!();
+                                // let ct = cx.dynamic_listeners.len();
+                                // cx.dynamic_listeners.push(attr);
                                 // quote! {}
                                 None
                             }
@@ -156,55 +179,46 @@ impl ToTokens for CallBody {
             }
         }
 
-        let root_printer = self
-            .roots
-            .iter()
-            .map(|root| render_static_node(root, &mut context));
+        let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
+            context.current_path.push(idx as u8);
+            let out = render_static_node(root, &mut context);
+            context.current_path.pop();
+            out
+        });
 
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
-
         let node_printer = &context.dynamic_nodes;
-        let attr_printer = context.dynamic_attributes.iter();
-        let listener_printer = context.dynamic_listeners.iter();
 
-        out_tokens.append_all(quote! {
-            // LazyNodes::new(move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-            //     __cx.template_ref(
-            //         ::dioxus::core::Template {
-            //             id: ::dioxus::core::get_line_num!(),
-            //             roots: &[ #roots ]
-            //         },
-            //         __cx.bump().alloc([
-            //            #( #node_printer ),*
-            //         ]),
-            //         __cx.bump().alloc([
-            //            #( #attr_printer ),*
-            //         ]),
-            //         __cx.bump().alloc([
-            //            #( #listener_printer ),*
-            //         ]),
-            //         None
-            //     )
-            // })
+        let body = quote! {
+            static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
+                id: ::dioxus::core::get_line_num!(),
+                roots: &[ #roots ]
+            };
+            ::dioxus::core::VNode {
+                node_id: Default::default(),
+                parent: None,
+                template: TEMPLATE,
+                root_ids: __cx.bump().alloc([]),
+                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
+                dynamic_attrs: __cx.bump().alloc([]),
+            }
+        };
 
-
-            ::dioxus::core::LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-                static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                    id: ::dioxus::core::get_line_num!(),
-                    roots: &[ #roots ]
-                };
-
-                ::dioxus::core::VNode {
-                    node_id: Default::default(),
-                    parent: None,
-                    template: TEMPLATE,
-                    root_ids: __cx.bump().alloc([]),
-                    dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
-                    dynamic_attrs: __cx.bump().alloc([]),
+        if self.inline_cx {
+            out_tokens.append_all(quote! {
+                {
+                    let __cx = cx;
+                    #body
                 }
             })
-        })
+        } else {
+            out_tokens.append_all(quote! {
+                ::dioxus::core::LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                    #body
+                })
+            })
+        }
     }
 }
 

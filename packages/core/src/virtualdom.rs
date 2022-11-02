@@ -15,7 +15,7 @@ use slab::Slab;
 use std::collections::{BTreeSet, HashMap};
 
 pub struct VirtualDom {
-    pub(crate) templates: HashMap<TemplateId, Template>,
+    pub(crate) templates: HashMap<TemplateId, Template<'static>>,
     pub(crate) elements: Slab<ElementPath>,
     pub(crate) scopes: Slab<ScopeState>,
     pub(crate) scope_stack: Vec<ScopeId>,
@@ -82,6 +82,14 @@ impl VirtualDom {
     ///
     /// This is cancel safe, so if the future is dropped, you can push events into the virtualdom
     pub async fn wait_for_work(&mut self) {}
+
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
+        self.scopes.get(id.0)
+    }
+
+    pub fn base_scope(&self) -> &ScopeState {
+        self.scopes.get(0).unwrap()
+    }
 }
 
 impl Drop for VirtualDom {

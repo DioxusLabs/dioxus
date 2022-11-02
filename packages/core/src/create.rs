@@ -3,6 +3,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, DynamicNodeKind, TemplateNode};
 use crate::virtualdom::VirtualDom;
+use crate::TemplateAttribute;
 
 impl VirtualDom {
     /// Create this template and write its mutations
@@ -112,10 +113,11 @@ impl VirtualDom {
                     id,
                 });
 
-                mutations.extend(attrs.into_iter().map(|attr| SetAttribute {
-                    name: attr.name,
-                    value: attr.value,
-                    id,
+                mutations.extend(attrs.into_iter().filter_map(|attr| match attr {
+                    TemplateAttribute::Static { name, value, .. } => {
+                        Some(SetAttribute { name, value, id })
+                    }
+                    _ => None,
                 }));
 
                 children
