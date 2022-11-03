@@ -572,7 +572,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored 2.0.0",
- "convert_case",
+ "convert_case", 
  "ctrlc",
  "dioxus-core",
  "dioxus-rsx",
@@ -609,7 +609,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.2.1"
-source = "git+https://github.com/dioxuslabs/dioxus/#928b5358b2b56b8431be9b8f4aba8130fd45cb08"
+source = "git+https://github.com/dioxuslabs/dioxus/#f89cd204557f09febebf1afc48f418ad6ebc5254"
 dependencies = [
  "backtrace",
  "bumpalo",
@@ -621,6 +621,7 @@ dependencies = [
  "log",
  "longest-increasing-subsequence",
  "once_cell",
+ "rustc-hash",
  "serde",
  "slab",
  "smallvec",
@@ -629,7 +630,7 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/dioxus/#928b5358b2b56b8431be9b8f4aba8130fd45cb08"
+source = "git+https://github.com/dioxuslabs/dioxus/#f89cd204557f09febebf1afc48f418ad6ebc5254"
 dependencies = [
  "dioxus-core",
  "proc-macro2",
