@@ -24,4 +24,12 @@ impl VirtualDom {
     fn diff_scope<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
     }
+
+    fn diff_template<'a>(
+        &'a mut self,
+        mutations: &mut Vec<Mutation<'a>>,
+        left: &VNode,
+        right: &VNode,
+    ) {
+    }
 }

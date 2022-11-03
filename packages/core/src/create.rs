@@ -170,7 +170,7 @@ impl VirtualDom {
             }
 
             DynamicNode::Component { props, .. } => {
-                let id = self.new_scope(*props);
+                let id = self.new_scope(unsafe { std::mem::transmute(*props) });
 
                 let template = self.run_scope(id);
 

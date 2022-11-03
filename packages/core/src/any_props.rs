@@ -6,19 +6,19 @@ use crate::{
     Element,
 };
 
-pub trait AnyProps {
+pub trait AnyProps<'a> {
     fn as_ptr(&self) -> *const ();
-    fn render<'a>(&'a self, bump: &'a ScopeState) -> Element<'a>;
+    fn render(&'a self, bump: &'a ScopeState) -> Element<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VComponentProps<P, F: Future<Output = ()> = Dummy> {
-    pub render_fn: ComponentFn<P, F>,
+pub(crate) struct VComponentProps<'a, P, F: Future<Output = Element<'a>> = Dummy<'a>> {
+    pub render_fn: ComponentFn<'a, P, F>,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: *const P,
 }
 
-impl VComponentProps<()> {
+impl VComponentProps<'_, ()> {
     pub fn new_empty(render_fn: Component<()>) -> Self {
         Self {
             render_fn: render_fn.into_component(),
@@ -28,7 +28,7 @@ impl VComponentProps<()> {
     }
 }
 
-impl<P> VComponentProps<P> {
+impl<P> VComponentProps<'_, P> {
     pub(crate) fn new(
         render_fn: Component<P>,
         memo: unsafe fn(&P, &P) -> bool,
@@ -42,7 +42,7 @@ impl<P> VComponentProps<P> {
     }
 }
 
-impl<P> AnyProps for VComponentProps<P> {
+impl<'a, P> AnyProps<'a> for VComponentProps<'a, P> {
     fn as_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }
@@ -57,7 +57,7 @@ impl<P> AnyProps for VComponentProps<P> {
         (self.memo)(real_us, real_other)
     }
 
-    fn render<'a>(&'a self, scope: &'a ScopeState) -> Element<'a> {
+    fn render<'b>(&'b self, scope: &'b ScopeState) -> Element<'b> {
         // Make sure the scope ptr is not null
         // self.props.state.set(scope);
 
@@ -68,9 +68,14 @@ impl<P> AnyProps for VComponentProps<P> {
 
         // Call the render function directly
         // todo: implement async
-        match self.render_fn {
-            ComponentFn::Sync(f) => f(scope),
-            ComponentFn::Async(_) => todo!(),
-        }
+        // let res = match self.render_fn {
+        //     ComponentFn::Sync(f) => {
+        //         let f = unsafe { std::mem::transmute(f) };
+        //         f(scope)
+        //     }
+        //     ComponentFn::Async(_) => todo!(),
+        // };
+
+        todo!()
     }
 }

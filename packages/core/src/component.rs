@@ -2,39 +2,41 @@
 //     fn into_component_type(self) -> ComponentType;
 // }
 
+use std::marker::PhantomData;
+
 use futures_util::Future;
 
 use crate::{scopes::Scope, Element};
 
 pub type Component<T = ()> = fn(Scope<T>) -> Element;
 
-pub enum ComponentFn<T, F: Future<Output = ()> = Dummy> {
-    Sync(fn(Scope<T>) -> Element),
-    Async(fn(Scope<T>) -> F),
+pub enum ComponentFn<'a, T, F: Future<Output = Element<'a>> = Dummy<'a>> {
+    Sync(fn(Scope<'a, T>) -> Element),
+    Async(fn(Scope<'a, T>) -> F),
 }
 
-pub trait IntoComponent<T, A = ()> {
-    fn into_component(self) -> ComponentFn<T>;
+pub trait IntoComponent<'a, T, F: Future<Output = Element<'a>> = Dummy<'a>, A = ()> {
+    fn into_component(self) -> ComponentFn<'a, T, F>;
 }
 
-impl<T> IntoComponent<T> for fn(Scope<T>) -> Element {
-    fn into_component(self) -> ComponentFn<T> {
+impl<'a, T> IntoComponent<'a, T, Dummy<'a>> for fn(Scope<T>) -> Element {
+    fn into_component(self) -> ComponentFn<'a, T> {
         ComponentFn::Sync(self)
     }
 }
 
 pub struct AsyncMarker;
-impl<'a, T, F: Future<Output = Element<'a>>> IntoComponent<T, AsyncMarker>
-    for fn(&'a Scope<T>) -> F
+impl<'a, T, F: Future<Output = Element<'a>>> IntoComponent<'a, T, F, AsyncMarker>
+    for fn(Scope<'a, T>) -> F
 {
-    fn into_component(self) -> ComponentFn<T> {
-        todo!()
+    fn into_component(self) -> ComponentFn<'a, T, F> {
+        ComponentFn::Async(self)
     }
 }
 
-pub struct Dummy;
-impl Future for Dummy {
-    type Output = ();
+pub struct Dummy<'a>(PhantomData<&'a ()>);
+impl<'a> Future for Dummy<'a> {
+    type Output = Element<'a>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,

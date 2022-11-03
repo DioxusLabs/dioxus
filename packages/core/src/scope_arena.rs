@@ -8,7 +8,7 @@ use crate::{
 };
 
 impl VirtualDom {
-    pub fn new_scope(&mut self, props: *mut dyn AnyProps) -> ScopeId {
+    pub fn new_scope(&mut self, props: *mut dyn AnyProps<'static>) -> ScopeId {
         let parent = self.acquire_current_scope_raw();
         let container = self.acquire_current_container();
         let entry = self.scopes.vacant_entry();
@@ -48,14 +48,17 @@ impl VirtualDom {
             .and_then(|id| self.scopes.get_mut(id.0).map(|f| f as *mut ScopeState))
     }
 
-    pub fn run_scope<'a>(&'a mut self, id: ScopeId) -> &'a VNode<'a> {
+    pub fn run_scope(&mut self, id: ScopeId) -> &VNode {
         let scope = &mut self.scopes[id.0];
         scope.hook_idx.set(0);
 
-        let props = unsafe { &mut *scope.props };
-
-        let res = props.render(scope).unwrap();
-        let res: VNode<'static> = unsafe { std::mem::transmute(res) };
+        let res = {
+            let props = unsafe { &mut *scope.props };
+            let props: &mut dyn AnyProps = unsafe { std::mem::transmute(props) };
+            let res: VNode = props.render(scope).unwrap();
+            let res: VNode<'static> = unsafe { std::mem::transmute(res) };
+            res
+        };
 
         let frame = match scope.render_cnt % 2 {
             0 => &mut scope.node_arena_1,

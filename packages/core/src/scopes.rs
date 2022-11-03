@@ -66,7 +66,7 @@ pub struct ScopeState {
 
     pub tasks: FutureQueue,
 
-    pub props: *mut dyn AnyProps,
+    pub props: *mut dyn AnyProps<'static>,
 }
 
 impl ScopeState {

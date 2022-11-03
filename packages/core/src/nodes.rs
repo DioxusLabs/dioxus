@@ -78,7 +78,7 @@ pub enum DynamicNode<'a> {
     Component {
         name: &'static str,
         can_memoize: bool,
-        props: *mut dyn AnyProps,
+        props: *mut dyn AnyProps<'a>,
     },
 
     // Comes in with string interpolation or from format_args, include_str, etc
