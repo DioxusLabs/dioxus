@@ -1,6 +1,6 @@
 use std::{any::Any, cell::Cell};
 
-use crate::{arena::ElementId, nodes::Listener, scopes::ScopeId, virtualdom::VirtualDom};
+use crate::{arena::ElementId, scopes::ScopeId, virtualdom::VirtualDom, Attribute, AttributeValue};
 
 /// User Events are events that are shuttled from the renderer into the [`VirtualDom`] through the scheduler channel.
 ///
@@ -106,12 +106,12 @@ impl VirtualDom {
 
         let location = unsafe { &mut *path.template }
             .dynamic_attrs
-            .iter_mut()
+            .iter()
             .position(|attr| attr.mounted_element.get() == event.element)?;
 
         let mut index = Some((path.template, location));
 
-        let mut listeners = Vec::<&mut Listener>::new();
+        let mut listeners = Vec::<&Attribute>::new();
 
         while let Some((raw_parent, dyn_index)) = index {
             let parent = unsafe { &mut *raw_parent };
@@ -120,17 +120,18 @@ impl VirtualDom {
             listeners.extend(
                 parent
                     .dynamic_attrs
-                    .iter_mut()
+                    .iter()
                     .filter(|attr| is_path_ascendant(attr.path, path))
-                    .map(|f| f.listeners.iter_mut().filter(|f| f.name == event.name))
-                    .flatten(),
+                    .filter(|attr| attr.name == event.name),
             );
 
             index = parent.parent;
         }
 
         for listener in listeners {
-            (listener.callback)(&event.event);
+            if let AttributeValue::Listener(listener) = &listener.value {
+                (listener.borrow_mut())(&event.event)
+            }
         }
 
         Some(())

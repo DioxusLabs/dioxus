@@ -39,19 +39,6 @@ pub fn rsx(s: TokenStream) -> TokenStream {
     }
 }
 
-/// A version of the rsx! macro that does not use templates. Used for testing diffing
-#[proc_macro]
-pub fn rsx_without_templates(s: TokenStream) -> TokenStream {
-    match syn::parse::<rsx::CallBody>(s) {
-        Err(err) => err.to_compile_error().into(),
-        Ok(body) => {
-            let mut tokens = proc_macro2::TokenStream::new();
-            body.to_tokens_without_template(&mut tokens);
-            tokens.into()
-        }
-    }
-}
-
 /// The render! macro makes it easy for developers to write jsx-style markup in their components.
 ///
 /// The render macro automatically renders rsx - making it unhygenic.
@@ -64,18 +51,10 @@ pub fn rsx_without_templates(s: TokenStream) -> TokenStream {
 pub fn render(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
-        Ok(body) => {
-            let mut inner = proc_macro2::TokenStream::new();
-            body.to_tokens_without_lazynodes(&mut inner);
-            quote::quote! {
-                {
-                    let __cx = NodeFactory::new(&cx.scope);
-                    Some(#inner)
-                }
-            }
+        Ok(mut body) => {
+            body.inline_cx = true;
+            body.into_token_stream().into()
         }
-        .into_token_stream()
-        .into(),
     }
 }
 

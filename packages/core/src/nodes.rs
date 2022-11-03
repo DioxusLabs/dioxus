@@ -1,5 +1,9 @@
 use crate::{any_props::AnyProps, arena::ElementId};
-use std::{any::Any, cell::Cell, hash::Hasher};
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    hash::Hasher,
+};
 
 pub type TemplateId = &'static str;
 
@@ -8,17 +12,16 @@ pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
 
-    // When rendered, this template will be linked to its parent
+    // When rendered, this template will be linked to its parent manually
     pub parent: Option<(*mut VNode<'static>, usize)>,
 
     pub template: Template<'static>,
 
     pub root_ids: &'a [Cell<ElementId>],
 
-    /// All the dynamic nodes for a template
-    pub dynamic_nodes: &'a mut [DynamicNode<'a>],
+    pub dynamic_nodes: &'a [DynamicNode<'a>],
 
-    pub dynamic_attrs: &'a mut [AttributeLocation<'a>],
+    pub dynamic_attrs: &'a [Attribute<'a>],
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -75,6 +78,7 @@ pub enum DynamicNodeKind<'a> {
     // IE in caps or with underscores
     Component {
         name: &'static str,
+        can_memoize: bool,
         props: *mut dyn AnyProps,
     },
 
@@ -104,18 +108,12 @@ pub enum TemplateAttribute<'a> {
     },
 }
 
-pub struct AttributeLocation<'a> {
-    pub mounted_element: Cell<ElementId>,
-    pub attrs: &'a mut [Attribute<'a>],
-    pub listeners: &'a mut [Listener<'a>],
-    pub path: &'static [u8],
-}
-
-#[derive(Debug)]
 pub struct Attribute<'a> {
-    pub name: &'static str,
-    pub value: &'a str,
+    pub name: &'a str,
+    pub value: AttributeValue<'a>,
     pub namespace: Option<&'static str>,
+    pub mounted_element: Cell<ElementId>,
+    pub path: &'static [u8],
 }
 
 pub enum AttributeValue<'a> {
@@ -123,7 +121,15 @@ pub enum AttributeValue<'a> {
     Float(f32),
     Int(i32),
     Bool(bool),
+    Listener(RefCell<&'a mut dyn FnMut(&dyn Any)>),
     Any(&'a dyn AnyValue),
+    None,
+}
+
+impl<'a> AttributeValue<'a> {
+    fn is_listener(&self) -> bool {
+        matches!(self, AttributeValue::Listener(_))
+    }
 }
 
 pub trait AnyValue {
@@ -140,11 +146,6 @@ where
 
         self == unsafe { &*(other as *const _ as *const T) }
     }
-}
-
-pub struct Listener<'a> {
-    pub name: &'static str,
-    pub callback: &'a mut dyn FnMut(&dyn Any),
 }
 
 #[test]

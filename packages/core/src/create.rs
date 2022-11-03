@@ -3,7 +3,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, DynamicNodeKind, TemplateNode};
 use crate::virtualdom::VirtualDom;
-use crate::TemplateAttribute;
+use crate::{AttributeValue, TemplateAttribute};
 
 impl VirtualDom {
     /// Create this template and write its mutations
@@ -52,25 +52,41 @@ impl VirtualDom {
                 TemplateNode::DynamicText { .. } => 1,
             };
 
+            let mut cur_route = None;
+
             // we're on top of a node that has a dynamic attribute for a descendant
             // Set that attribute now before the stack gets in a weird state
-            while let Some(loc) = dynamic_attrs.next_if(|a| a.path[0] == root_idx as u8) {
+            while let Some(attr) = dynamic_attrs.next_if(|a| a.path[0] == root_idx as u8) {
+                if cur_route.is_none() {
+                    cur_route = Some((self.next_element(template), &attr.path[1..]));
+                }
+
                 // Attach all the elementIDs to the nodes with dynamic content
-                let id = self.next_element(template);
+                let (id, path) = cur_route.unwrap();
 
-                mutations.push(AssignId {
-                    path: &loc.path[1..],
-                    id,
-                });
+                mutations.push(AssignId { path, id });
+                attr.mounted_element.set(id);
 
-                loc.mounted_element.set(id);
+                match attr.value {
+                    AttributeValue::Text(value) => {
+                        mutations.push(SetAttribute {
+                            name: attr.name,
+                            value,
+                            id,
+                        });
+                    }
 
-                for attr in loc.attrs.iter() {
-                    mutations.push(SetAttribute {
-                        name: attr.name,
-                        value: attr.value,
-                        id,
-                    });
+                    AttributeValue::Listener(_) => {
+                        //
+                    }
+
+                    AttributeValue::Float(_) => todo!(),
+                    AttributeValue::Int(_) => todo!(),
+                    AttributeValue::Bool(_) => todo!(),
+                    AttributeValue::Any(_) => todo!(),
+
+                    // Optional attributes
+                    AttributeValue::None => todo!(),
                 }
             }
 
@@ -94,6 +110,7 @@ impl VirtualDom {
         node: &'a TemplateNode<'static>,
     ) {
         match *node {
+            // Todo: create the children's template
             TemplateNode::Dynamic(_) => mutations.push(CreatePlaceholder),
             TemplateNode::Text(value) => mutations.push(CreateText { value }),
             TemplateNode::DynamicText { .. } => mutations.push(CreateText {

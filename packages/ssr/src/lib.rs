@@ -1,7 +1,7 @@
 #![doc = include_str!("../README.md")]
 
 use std::fmt::{Display, Formatter, Write};
-mod template;
+pub mod template;
 
 use dioxus_core::exports::bumpalo;
 

@@ -12,6 +12,7 @@ mod garbage;
 mod lazynodes;
 mod mutations;
 mod nodes;
+mod properties;
 mod scope_arena;
 mod scopes;
 mod virtualdom;
@@ -20,10 +21,10 @@ pub(crate) mod innerlude {
     pub use crate::element::Element;
     pub use crate::events::*;
     pub use crate::future_container::*;
+    pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
-    // pub use crate::properties::*;
-    pub use crate::lazynodes::*;
+    pub use crate::properties::*;
     pub use crate::scopes::*;
     pub use crate::virtualdom::*;
 
@@ -66,6 +67,7 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
+    fc_to_builder,
     // AnyAttributeValue, AnyEvent, Attribute, AttributeValue, Component, Element, ElementId,
     Attribute,
     AttributeValue,
@@ -74,8 +76,8 @@ pub use crate::innerlude::{
     Element,
     EventPriority,
     LazyNodes,
-    Listener,
     NodeFactory,
+    Properties,
     Scope,
     ScopeId,
     ScopeState,
@@ -96,9 +98,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        Attribute, DynamicNode, DynamicNodeKind, Element, EventPriority, LazyNodes, Listener,
-        NodeFactory, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
-        UiEvent, VNode, VirtualDom,
+        fc_to_builder, Attribute, DynamicNode, DynamicNodeKind, Element, EventPriority, LazyNodes,
+        NodeFactory, Properties, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute,
+        TemplateNode, UiEvent, VNode, VirtualDom,
     };
 }
 

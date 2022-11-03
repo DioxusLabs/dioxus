@@ -16,10 +16,7 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
                 p { "you're great!" }
                 div { background_color: "red",
                     h1 { "var" }
-                    div {
-                        b { "asd" }
-                        "not great"
-                    }
+                    div { b { "asd" } "not great" }
                 }
                 p { "you're great!" }
             }
@@ -30,14 +27,15 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
 fn basic_template(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
-            (0..2).map(|i| rsx! {
-                div { "asd" }
-            }),
-            (0..2).map(|i| rsx! {
-                div { "asd" }
-            })
+            (0..2).map(|i| rsx! { div { "asd {i}" } })
+            basic_child { }
         }
     })
+}
+
+/// A beautiful component
+fn basic_child(cx: Scope) -> Element {
+    todo!()
 }
 
 #[test]

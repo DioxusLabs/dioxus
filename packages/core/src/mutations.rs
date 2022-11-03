@@ -7,7 +7,7 @@ pub struct Renderer<'a> {
 #[derive(Debug)]
 pub enum Mutation<'a> {
     SetAttribute {
-        name: &'static str,
+        name: &'a str,
         value: &'a str,
         id: ElementId,
     },

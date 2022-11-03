@@ -51,17 +51,18 @@ impl Parse for BodyNode {
             // - one ident
             // - followed by `{`
             // - 1st char is lowercase
+            // - no underscores (reserved for components)
             //
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
+                let el_name = ident.to_string();
+
+                let first_char = el_name.chars().next().unwrap();
+
                 if body_stream.peek(token::Brace)
-                    && ident
-                        .to_string()
-                        .chars()
-                        .next()
-                        .unwrap()
-                        .is_ascii_lowercase()
+                    && first_char.is_ascii_lowercase()
+                    && !el_name.contains('_')
                 {
                     return Ok(BodyNode::Element(stream.parse::<Element>()?));
                 }

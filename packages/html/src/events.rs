@@ -38,7 +38,7 @@ pub mod on {
                         factory: NodeFactory<'a>,
                         mut callback: impl FnMut($wrapper) + 'a,
                         // mut callback: impl FnMut(UiEvent<$data>) + 'a,
-                    ) -> Listener<'a>
+                    ) -> Attribute<'a>
                     {
                         // let bump = &factory.bump();
 

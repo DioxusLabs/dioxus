@@ -1,6 +1,6 @@
-use dioxus_core::prelude::*;
+use dioxus_core::{prelude::*, AttributeValue};
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::rc::Rc;
 
@@ -22,7 +22,7 @@ struct StringChain {
 #[derive(Debug, Clone)]
 enum Segment {
     Attr(usize),
-    Dyn(usize),
+    Node(usize),
     PreRendered(String),
 }
 
@@ -89,8 +89,9 @@ impl StringCache {
                 cur_path.pop();
             }
             TemplateNode::Text(text) => write!(chain, "{}", text)?,
-            TemplateNode::Dynamic(idx) => chain.segments.push(Segment::Dyn(*idx)),
-            TemplateNode::DynamicText(idx) => chain.segments.push(Segment::Dyn(*idx)),
+            TemplateNode::Dynamic(idx) | TemplateNode::DynamicText(idx) => {
+                chain.segments.push(Segment::Node(*idx))
+            }
         }
 
         Ok(())
@@ -98,7 +99,7 @@ impl StringCache {
 }
 
 impl SsrRender {
-    fn render_vdom(&mut self, dom: &VirtualDom) -> String {
+    pub fn render_vdom(&mut self, dom: &VirtualDom) -> String {
         let scope = dom.base_scope();
         let root = scope.root_node();
 
@@ -119,14 +120,17 @@ impl SsrRender {
         for segment in entry.segments.iter() {
             match segment {
                 Segment::Attr(idx) => {
-                    todo!("properly implement attrs in the macro");
-                    // let loc = &template.dynamic_attrs[*idx];
-                    // for attr in loc.attrs.iter() {
-                    //     write!(buf, " {}=\"{}\"", attr.name, attr.value)?;
-                    // }
+                    let attr = &template.dynamic_attrs[*idx];
+                    match attr.value {
+                        AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
+                        _ => {}
+                    };
                 }
-                Segment::Dyn(idx) => match &template.dynamic_nodes[*idx].kind {
-                    DynamicNodeKind::Text { value, .. } => write!(buf, "{}", value)?,
+                Segment::Node(idx) => match &template.dynamic_nodes[*idx].kind {
+                    DynamicNodeKind::Text { value, .. } => {
+                        // todo: escape the text
+                        write!(buf, "{}", value)?
+                    }
                     DynamicNodeKind::Fragment { children } => {
                         for child in *children {
                             self.render_template(buf, child)?;
@@ -152,20 +156,21 @@ fn to_string_works() {
 
     fn app(cx: Scope) -> Element {
         let dynamic = 123;
+        let dyn2 = "</diiiiiiiiv>"; // todo: escape this
 
-        cx.render(rsx! {
-            div { class: "asdasdasd", class: "asdasdasd",
+        render! {
+            div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
                 "Hello world 1 -->"
                 "{dynamic}"
                 "<-- Hello world 2"
                 div { "nest 1" }
                 div {}
                 div { "nest 2" }
-                (0..5).map(|i| rsx! {
-                    div { "finalize {i}" }
-                })
+                "{dyn2}"
+
+                (0..5).map(|i| rsx! { div { "finalize {i}" } })
             }
-        })
+        }
     }
     let mut dom = VirtualDom::new(app);
 
@@ -173,10 +178,52 @@ fn to_string_works() {
     dom.rebuild(&mut mutations);
 
     let cache = StringCache::from_template(&dom.base_scope().root_node()).unwrap();
-
     dbg!(cache.segments);
 
     let mut renderer = SsrRender::default();
-
     dbg!(renderer.render_vdom(&dom));
+}
+
+#[test]
+fn children_processes_properly() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        render! {
+            div {
+                "yo!"
+                "yo!"
+                "yo!"
+                "yo!"
+                "yo!"
+                Child {}
+                Child {}
+                Child {}
+                Child {}
+                ChildWithChildren {
+                    "hii"
+                }
+                (0..10).map(|f| rsx! {
+                    "div {f}"
+                })
+            }
+        }
+    }
+
+    /// Yo its the child component!
+    fn Child(cx: Scope) -> Element {
+        render! ( div { "child" } )
+    }
+
+    #[inline_props]
+    fn ChildWithChildren<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+        render! {
+            div {
+                "div"
+                children
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
 }

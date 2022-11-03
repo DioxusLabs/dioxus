@@ -70,147 +70,14 @@ impl Parse for CallBody {
 /// Serialize the same way, regardless of flavor
 impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        // As we print out the dynamic nodes, we want to keep track of them in a linear fashion
-        // We'll use the size of the vecs to determine the index of the dynamic node in the final
-        struct DynamicContext<'a> {
-            dynamic_nodes: Vec<&'a BodyNode>,
-            dynamic_attributes: HashMap<Vec<u8>, AttrLocation<'a>>,
-            current_path: Vec<u8>,
-        }
-
-        #[derive(Default)]
-        struct AttrLocation<'a> {
-            attrs: Vec<&'a ElementAttrNamed>,
-            listeners: Vec<&'a ElementAttrNamed>,
-        }
-
-        let mut context = DynamicContext {
-            dynamic_nodes: vec![],
-            dynamic_attributes: HashMap::new(),
-            current_path: vec![],
-        };
-
-        fn render_static_node<'a>(root: &'a BodyNode, cx: &mut DynamicContext<'a>) -> TokenStream2 {
-            match root {
-                BodyNode::Element(el) => {
-                    let el_name = &el.name;
-
-                    let children = el.children.iter().enumerate().map(|(idx, root)| {
-                        cx.current_path.push(idx as u8);
-                        let out = render_static_node(root, cx);
-                        cx.current_path.pop();
-                        out
-                    });
-
-                    let children = quote! { #(#children),* };
-
-                    let attrs = el.attributes.iter().filter_map(|attr| {
-                        //
-                        match &attr.attr {
-                            ElementAttr::AttrText { name, value } if value.is_static() => {
-                                let value = value.source.as_ref().unwrap();
-                                Some(quote! {
-                                    ::dioxus::core::TemplateAttribute::Static {
-                                        name: dioxus_elements::#el_name::#name.0,
-                                        namespace: dioxus_elements::#el_name::#name.1,
-                                        volatile: dioxus_elements::#el_name::#name.2,
-                                        value: #value,
-                                    }
-                                })
-                            }
-
-                            ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                                let value = value.source.as_ref().unwrap();
-                                Some(quote! {
-                                    ::dioxus::core::TemplateAttribute::Static {
-                                        name: dioxus_elements::#el_name::#name.0,
-                                        namespace: dioxus_elements::#el_name::#name.1,
-                                        volatile: dioxus_elements::#el_name::#name.2,
-                                        value: #value,
-                                    }
-                                })
-                            }
-
-                            ElementAttr::AttrExpression { .. }
-                            | ElementAttr::AttrText { .. }
-                            | ElementAttr::CustomAttrText { .. }
-                            | ElementAttr::CustomAttrExpression { .. } => {
-                                // todo!();
-                                let ct = cx.dynamic_attributes.len();
-                                // cx.dynamic_attributes.push(attr);
-                                // quote! {}
-                                // None
-                                Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
-                                    name: "asd",
-                                    index: #ct
-                                } })
-                            }
-
-                            ElementAttr::EventTokens { .. } => {
-                                // todo!();
-                                // let ct = cx.dynamic_listeners.len();
-                                // cx.dynamic_listeners.push(attr);
-                                // quote! {}
-                                None
-                            }
-                        }
-                    });
-
-                    quote! {
-                        ::dioxus::core::TemplateNode::Element {
-                            tag: dioxus_elements::#el_name::TAG_NAME,
-                            namespace: dioxus_elements::#el_name::NAME_SPACE,
-                            attrs: &[ #(#attrs),* ],
-                            children: &[ #children ],
-                        }
-                    }
-                }
-
-                BodyNode::Text(text) if text.is_static() => {
-                    let text = text.source.as_ref().unwrap();
-                    quote! { ::dioxus::core::TemplateNode::Text(#text) }
-                }
-
-                BodyNode::RawExpr(_) | BodyNode::Component(_) | BodyNode::Text(_) => {
-                    let ct = cx.dynamic_nodes.len();
-                    cx.dynamic_nodes.push(root);
-                    quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
-                }
-            }
-        }
-
-        let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
-            context.current_path.push(idx as u8);
-            let out = render_static_node(root, &mut context);
-            context.current_path.pop();
-            out
-        });
-
-        // Render and release the mutable borrow on context
-        let roots = quote! { #( #root_printer ),* };
-        let node_printer = &context.dynamic_nodes;
-
-        let body = quote! {
-            static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                id: ::dioxus::core::get_line_num!(),
-                roots: &[ #roots ]
-            };
-            ::dioxus::core::VNode {
-                node_id: Default::default(),
-                parent: None,
-                template: TEMPLATE,
-                root_ids: __cx.bump().alloc([]),
-                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
-                dynamic_attrs: __cx.bump().alloc([]),
-            }
-        };
+        let body = TemplateRenderer { roots: &self.roots };
 
         if self.inline_cx {
             out_tokens.append_all(quote! {
-                {
+                Some({
                     let __cx = cx;
                     #body
-                }
+                })
             })
         } else {
             out_tokens.append_all(quote! {
@@ -222,42 +89,147 @@ impl ToTokens for CallBody {
     }
 }
 
-impl CallBody {
-    pub fn to_tokens_without_template(&self, out_tokens: &mut TokenStream2) {
+pub struct TemplateRenderer<'a> {
+    pub roots: &'a [BodyNode],
+}
 
-        // let children = &self.roots;
-        // let inner = if children.len() == 1 {
-        //     let inner = &self.roots[0];
-        //     quote! { #inner }
-        // } else {
-        //     quote! { __cx.fragment_root([ #(#children),* ]) }
-        // };
+impl<'a> ToTokens for TemplateRenderer<'a> {
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        let mut context = DynamicContext {
+            dynamic_nodes: vec![],
+            dynamic_attributes: vec![],
+            current_path: vec![],
+        };
 
-        // out_tokens.append_all(quote! {
-        //     LazyNodes::new(move |__cx: NodeFactory| -> VNode {
-        //         use dioxus_elements::{GlobalAttributes, SvgAttributes};
-        //         #inner
-        //     })
-        // })
-    }
+        let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
+            context.current_path.push(idx as u8);
+            let out = context.render_static_node(root);
+            context.current_path.pop();
+            out
+        });
 
-    pub fn to_tokens_without_lazynodes(&self, out_tokens: &mut TokenStream2) {
+        // Render and release the mutable borrow on context
+        let roots = quote! { #( #root_printer ),* };
+        let node_printer = &context.dynamic_nodes;
+        let dyn_attr_printer = &context.dynamic_attributes;
+
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
                 id: ::dioxus::core::get_line_num!(),
-                roots: &[]
+                roots: &[ #roots ]
             };
+            ::dioxus::core::VNode {
+                node_id: Default::default(),
+                parent: None,
+                template: TEMPLATE,
+                root_ids: __cx.bump().alloc([]),
+                dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
+                dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
+            }
+        });
+    }
+}
+// As we print out the dynamic nodes, we want to keep track of them in a linear fashion
+// We'll use the size of the vecs to determine the index of the dynamic node in the final
+pub struct DynamicContext<'a> {
+    dynamic_nodes: Vec<&'a BodyNode>,
+    dynamic_attributes: Vec<&'a ElementAttrNamed>,
+    current_path: Vec<u8>,
+}
 
-            LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
-                ::dioxus::core::VNode {
-                    node_id: Default::default(),
-                    parent: None,
-                    template: &TEMPLATE,
-                    root_ids: __cx.bump().alloc([]),
-                    dynamic_nodes: __cx.bump().alloc([]),
-                    dynamic_attrs: __cx.bump().alloc([]),
+impl<'a> DynamicContext<'a> {
+    fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
+        match root {
+            BodyNode::Element(el) => {
+                let el_name = &el.name;
+
+                // dynamic attributes
+                // [0]
+                // [0, 1]
+                // [0, 1]
+                // [0, 1]
+                // [0, 1, 2]
+                // [0, 2]
+                // [0, 2, 1]
+
+                let static_attrs = el.attributes.iter().filter_map(|attr| match &attr.attr {
+                    ElementAttr::AttrText { name, value } if value.is_static() => {
+                        let value = value.source.as_ref().unwrap();
+                        Some(quote! {
+                            ::dioxus::core::TemplateAttribute::Static {
+                                name: dioxus_elements::#el_name::#name.0,
+                                namespace: dioxus_elements::#el_name::#name.1,
+                                volatile: dioxus_elements::#el_name::#name.2,
+                                value: #value,
+                            }
+                        })
+                    }
+
+                    ElementAttr::CustomAttrText { name, value } if value.is_static() => {
+                        let value = value.source.as_ref().unwrap();
+                        Some(quote! {
+                            ::dioxus::core::TemplateAttribute::Static {
+                                name: dioxus_elements::#el_name::#name.0,
+                                namespace: dioxus_elements::#el_name::#name.1,
+                                volatile: dioxus_elements::#el_name::#name.2,
+                                value: #value,
+                            }
+                        })
+                    }
+
+                    ElementAttr::AttrExpression { .. }
+                    | ElementAttr::AttrText { .. }
+                    | ElementAttr::CustomAttrText { .. }
+                    | ElementAttr::CustomAttrExpression { .. } => {
+                        let ct = self.dynamic_attributes.len();
+                        self.dynamic_attributes.push(attr);
+                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
+                            name: "asd",
+                            index: #ct
+                        } })
+                    }
+
+                    ElementAttr::EventTokens { .. } => {
+                        let ct = self.dynamic_attributes.len();
+                        self.dynamic_attributes.push(attr);
+                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
+                            name: "asd",
+                            index: #ct
+                        } })
+                    }
+                });
+
+                let attrs = quote! { #(#static_attrs),*};
+
+                let children = el.children.iter().enumerate().map(|(idx, root)| {
+                    self.current_path.push(idx as u8);
+                    let out = self.render_static_node(root);
+                    self.current_path.pop();
+                    out
+                });
+
+                let children = quote! { #(#children),* };
+
+                quote! {
+                    ::dioxus::core::TemplateNode::Element {
+                        tag: dioxus_elements::#el_name::TAG_NAME,
+                        namespace: dioxus_elements::#el_name::NAME_SPACE,
+                        attrs: &[ #attrs ],
+                        children: &[ #children ],
+                    }
                 }
-            })
-        })
+            }
+
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.source.as_ref().unwrap();
+                quote! { ::dioxus::core::TemplateNode::Text(#text) }
+            }
+
+            BodyNode::RawExpr(_) | BodyNode::Text(_) | BodyNode::Component(_) => {
+                let ct = self.dynamic_nodes.len();
+                self.dynamic_nodes.push(root);
+                quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+            }
+        }
     }
 }
