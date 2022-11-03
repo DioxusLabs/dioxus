@@ -25,17 +25,27 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
 
 fn basic_template(cx: Scope) -> Element {
     let val = 123;
-    cx.render(rsx! {
-        div { class: "{val}", class: "{val}", class: "{val}", class: "{val}",
-            (0..2).map(|i| rsx! { div { "asd {i}" } })
-            basic_child { }
-        }
-    })
+
+    cx.component(basic_child, (), "fn_name");
+
+    todo!()
+    // cx.render(rsx! {
+    // div { class: "{val}", class: "{val}", class: "{val}", class: "{val}",
+    // (0..2).map(|i| rsx! { div { "asd {i}" } })
+    // basic_child { }
+    // }
+    // })
 }
 
 /// A beautiful component
 fn basic_child(cx: Scope) -> Element {
     todo!()
+}
+
+async fn async_component(cx: Scope<'_>) -> Element {
+    cx.render(rsx! {
+        div { class: "asd" }
+    })
 }
 
 #[test]

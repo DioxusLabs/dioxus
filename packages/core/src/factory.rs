@@ -1,10 +1,12 @@
 use std::{cell::Cell, fmt::Arguments};
 
 use bumpalo::Bump;
+use futures_util::Future;
 
 use crate::{
     any_props::{AnyProps, VComponentProps},
     arena::ElementId,
+    component::IntoComponent,
     innerlude::DynamicNode,
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
@@ -68,9 +70,9 @@ impl ScopeState {
     }
 
     /// Create a new [`VNode::Component`]
-    pub fn component<'a, P>(
+    pub fn component<'a, P, F: Future<Output = Element<'a>>>(
         &'a self,
-        component: fn(Scope<'a, P>) -> Element,
+        component: impl IntoComponent<'a, P, F>,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'a>
@@ -78,8 +80,8 @@ impl ScopeState {
         P: Properties + 'a,
     {
         let props = self.bump().alloc(props);
-        let detached = unsafe { std::mem::transmute(component) };
-        let vcomp = VComponentProps::new(detached, P::memoize, props);
+        let as_component = component.into_component();
+        let vcomp = VComponentProps::new(as_component, P::memoize, props);
         let as_dyn = self.bump().alloc(vcomp) as &mut dyn AnyProps;
         let detached_dyn: *mut dyn AnyProps = unsafe { std::mem::transmute(as_dyn) };
 

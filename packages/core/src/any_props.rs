@@ -18,8 +18,8 @@ pub(crate) struct VComponentProps<'a, P, F: Future<Output = Element<'a>> = Dummy
     pub props: *const P,
 }
 
-impl VComponentProps<'_, ()> {
-    pub fn new_empty(render_fn: Component<()>) -> Self {
+impl<'a> VComponentProps<'a, ()> {
+    pub fn new_empty(render_fn: Component<'a, ()>) -> Self {
         Self {
             render_fn: render_fn.into_component(),
             memo: <() as PartialEq>::eq,
@@ -28,21 +28,21 @@ impl VComponentProps<'_, ()> {
     }
 }
 
-impl<P> VComponentProps<'_, P> {
+impl<'a, P, F: Future<Output = Element<'a>>> VComponentProps<'a, P, F> {
     pub(crate) fn new(
-        render_fn: Component<P>,
+        render_fn: ComponentFn<'a, P, F>,
         memo: unsafe fn(&P, &P) -> bool,
         props: *const P,
     ) -> Self {
         Self {
-            render_fn: render_fn.into_component(),
+            render_fn,
             memo,
             props,
         }
     }
 }
 
-impl<'a, P> AnyProps<'a> for VComponentProps<'a, P> {
+impl<'a, P, F: Future<Output = Element<'a>>> AnyProps<'a> for VComponentProps<'a, P, F> {
     fn as_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }
