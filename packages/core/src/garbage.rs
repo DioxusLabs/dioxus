@@ -1,8 +1,4 @@
-use crate::{
-    nodes::{DynamicNodeKind, VNode},
-    scopes::ScopeId,
-    virtualdom::VirtualDom,
-};
+use crate::{nodes::VNode, scopes::ScopeId, virtualdom::VirtualDom, DynamicNode};
 
 impl VirtualDom {
     pub fn drop_scope(&mut self, id: ScopeId) {
@@ -16,14 +12,14 @@ impl VirtualDom {
 
     pub fn drop_template<'a>(&'a mut self, template: &'a VNode<'a>) {
         for node in template.dynamic_nodes.iter() {
-            match &node.kind {
-                DynamicNodeKind::Text { id, .. } => {}
+            match node {
+                DynamicNode::Text { id, .. } => {}
 
-                DynamicNodeKind::Component { .. } => {
+                DynamicNode::Component { .. } => {
                     todo!()
                 }
 
-                DynamicNodeKind::Fragment { children } => {}
+                DynamicNode::Fragment { children } => {}
             }
         }
     }

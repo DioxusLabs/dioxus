@@ -12,6 +12,8 @@ pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
 
+    pub key: Option<&'a str>,
+
     // When rendered, this template will be linked to its parent manually
     pub parent: Option<(*mut VNode<'static>, usize)>,
 
@@ -28,6 +30,8 @@ pub struct VNode<'a> {
 pub struct Template<'a> {
     pub id: &'a str,
     pub roots: &'a [TemplateNode<'a>],
+    pub node_paths: &'a [&'a [u8]],
+    pub attr_paths: &'a [&'a [u8]],
 }
 
 impl<'a> std::hash::Hash for Template<'a> {
@@ -68,12 +72,7 @@ pub enum TemplateNode<'a> {
     DynamicText(usize),
 }
 
-pub struct DynamicNode<'a> {
-    pub path: &'static [u8],
-    pub kind: DynamicNodeKind<'a>,
-}
-
-pub enum DynamicNodeKind<'a> {
+pub enum DynamicNode<'a> {
     // Anything declared in component form
     // IE in caps or with underscores
     Component {
@@ -102,10 +101,7 @@ pub enum TemplateAttribute<'a> {
         namespace: Option<&'static str>,
         volatile: bool,
     },
-    Dynamic {
-        name: &'static str,
-        index: usize,
-    },
+    Dynamic(usize),
 }
 
 pub struct Attribute<'a> {
@@ -113,7 +109,7 @@ pub struct Attribute<'a> {
     pub value: AttributeValue<'a>,
     pub namespace: Option<&'static str>,
     pub mounted_element: Cell<ElementId>,
-    pub path: &'static [u8],
+    pub volatile: bool,
 }
 
 pub enum AttributeValue<'a> {

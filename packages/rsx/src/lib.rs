@@ -99,6 +99,18 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             dynamic_nodes: vec![],
             dynamic_attributes: vec![],
             current_path: vec![],
+            attr_paths: vec![],
+            node_paths: vec![],
+        };
+
+        let key = match self.roots.get(0) {
+            Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
+            Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
+            _ => None,
+        };
+        let key_tokens = match key {
+            Some(tok) => quote! { Some( __cx.raw_text_inline(#tok) ) },
+            None => quote! { None },
         };
 
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
@@ -112,15 +124,27 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;
+        let node_paths = context
+            .node_paths
+            .iter()
+            .map(|items| quote!(&[#(#items),*]));
+
+        let attr_paths = context
+            .attr_paths
+            .iter()
+            .map(|items| quote!(&[#(#items),*]));
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
                 id: ::dioxus::core::get_line_num!(),
-                roots: &[ #roots ]
+                roots: &[ #roots ],
+                node_paths: &[ #(#node_paths),* ],
+                attr_paths: &[ #(#attr_paths),* ],
             };
             ::dioxus::core::VNode {
                 node_id: Default::default(),
                 parent: None,
+                key: #key_tokens,
                 template: TEMPLATE,
                 root_ids: __cx.bump().alloc([]),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
@@ -135,6 +159,9 @@ pub struct DynamicContext<'a> {
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a ElementAttrNamed>,
     current_path: Vec<u8>,
+
+    node_paths: Vec<Vec<u8>>,
+    attr_paths: Vec<Vec<u8>>,
 }
 
 impl<'a> DynamicContext<'a> {
@@ -180,22 +207,12 @@ impl<'a> DynamicContext<'a> {
                     ElementAttr::AttrExpression { .. }
                     | ElementAttr::AttrText { .. }
                     | ElementAttr::CustomAttrText { .. }
-                    | ElementAttr::CustomAttrExpression { .. } => {
+                    | ElementAttr::CustomAttrExpression { .. }
+                    | ElementAttr::EventTokens { .. } => {
                         let ct = self.dynamic_attributes.len();
                         self.dynamic_attributes.push(attr);
-                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
-                            name: "asd",
-                            index: #ct
-                        } })
-                    }
-
-                    ElementAttr::EventTokens { .. } => {
-                        let ct = self.dynamic_attributes.len();
-                        self.dynamic_attributes.push(attr);
-                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic {
-                            name: "asd",
-                            index: #ct
-                        } })
+                        self.attr_paths.push(self.current_path.clone());
+                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) })
                     }
                 });
 
@@ -228,6 +245,7 @@ impl<'a> DynamicContext<'a> {
             BodyNode::RawExpr(_) | BodyNode::Text(_) | BodyNode::Component(_) => {
                 let ct = self.dynamic_nodes.len();
                 self.dynamic_nodes.push(root);
+                self.node_paths.push(self.current_path.clone());
                 quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
             }
         }

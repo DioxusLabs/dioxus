@@ -115,14 +115,16 @@ impl VirtualDom {
 
         while let Some((raw_parent, dyn_index)) = index {
             let parent = unsafe { &mut *raw_parent };
-            let path = parent.dynamic_nodes[dyn_index].path;
+            let path = parent.template.node_paths[dyn_index];
 
             listeners.extend(
                 parent
                     .dynamic_attrs
                     .iter()
-                    .filter(|attr| is_path_ascendant(attr.path, path))
-                    .filter(|attr| attr.name == event.name),
+                    .enumerate()
+                    .filter(|(idx, attr)| is_path_ascendant(parent.template.node_paths[*idx], path))
+                    .filter(|(idx, attr)| attr.name == event.name)
+                    .map(|(_, attr)| attr),
             );
 
             index = parent.parent;

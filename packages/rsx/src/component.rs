@@ -55,6 +55,18 @@ impl Component {
 
         Ok(())
     }
+
+    pub fn key(&self) -> Option<&IfmtInput> {
+        match self
+            .fields
+            .iter()
+            .find(|f| f.name.to_string() == "key")
+            .map(|f| &f.content)
+        {
+            Some(ContentField::Formatted(fmt)) => Some(fmt),
+            _ => None,
+        }
+    }
 }
 
 impl Parse for Component {

@@ -1,7 +1,7 @@
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
-use crate::nodes::{DynamicNode, DynamicNodeKind, TemplateNode};
+use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtualdom::VirtualDom;
 use crate::{AttributeValue, TemplateAttribute};
 
@@ -30,8 +30,8 @@ impl VirtualDom {
 
         // Walk the roots backwards, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut dynamic_attrs = template.dynamic_attrs.iter().peekable();
-        let mut dynamic_nodes = template.dynamic_nodes.iter().peekable();
+        let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
+        let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
 
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
@@ -46,7 +46,7 @@ impl VirtualDom {
                 }
 
                 TemplateNode::Dynamic(id) => {
-                    self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id])
+                    self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
                 }
 
                 TemplateNode::DynamicText { .. } => 1,
@@ -56,9 +56,11 @@ impl VirtualDom {
 
             // we're on top of a node that has a dynamic attribute for a descendant
             // Set that attribute now before the stack gets in a weird state
-            while let Some(attr) = dynamic_attrs.next_if(|a| a.path[0] == root_idx as u8) {
+            while let Some((idx, path)) = dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8) {
+                let attr = &template.dynamic_attrs[idx];
+
                 if cur_route.is_none() {
-                    cur_route = Some((self.next_element(template), &attr.path[1..]));
+                    cur_route = Some((self.next_element(template), &path[1..]));
                 }
 
                 // Attach all the elementIDs to the nodes with dynamic content
@@ -91,11 +93,12 @@ impl VirtualDom {
             }
 
             // We're on top of a node that has a dynamic child for a descendant
-            while let Some(node) = dynamic_nodes.next_if(|f| f.path[0] == root_idx as u8) {
-                let m = self.create_dynamic_node(mutations, template, node);
+            while let Some((idx, path)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
+                let node = &template.dynamic_nodes[idx];
+                let m = self.create_dynamic_node(mutations, template, node, idx);
                 mutations.push(ReplacePlaceholder {
                     m,
-                    path: &node.path[1..],
+                    path: &path[1..],
                 });
             }
         }
@@ -151,21 +154,22 @@ impl VirtualDom {
         mutations: &mut Vec<Mutation<'a>>,
         template: &'a VNode<'a>,
         node: &'a DynamicNode<'a>,
+        idx: usize,
     ) -> usize {
-        match &node.kind {
-            DynamicNodeKind::Text { id, value } => {
+        match &node {
+            DynamicNode::Text { id, value } => {
                 let new_id = self.next_element(template);
                 id.set(new_id);
                 mutations.push(HydrateText {
                     id: new_id,
-                    path: &node.path[1..],
+                    path: &template.template.node_paths[idx][1..],
                     value,
                 });
 
                 1
             }
 
-            DynamicNodeKind::Component { props, .. } => {
+            DynamicNode::Component { props, .. } => {
                 let id = self.new_scope(*props);
 
                 let template = self.run_scope(id);
@@ -180,7 +184,7 @@ impl VirtualDom {
                 created
             }
 
-            DynamicNodeKind::Fragment { children } => {
+            DynamicNode::Fragment { children } => {
                 //
                 children
                     .iter()

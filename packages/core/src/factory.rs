@@ -5,23 +5,22 @@ use bumpalo::Bump;
 use crate::{
     any_props::{AnyProps, VComponentProps},
     arena::ElementId,
-    innerlude::{DynamicNode, DynamicNodeKind},
+    innerlude::DynamicNode,
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
 
 impl ScopeState {
     /// Create some text that's allocated along with the other vnodes
-    ///
     pub fn text<'a>(&'a self, args: Arguments) -> DynamicNode<'a> {
         let (text, _) = self.raw_text(args);
-
-        DynamicNode {
-            kind: DynamicNodeKind::Text {
-                id: Cell::new(ElementId(0)),
-                value: text,
-            },
-            path: &[0],
+        DynamicNode::Text {
+            id: Cell::new(ElementId(0)),
+            value: text,
         }
+    }
+
+    pub fn raw_text_inline<'a>(&'a self, args: Arguments) -> &'a str {
+        self.raw_text(args).0
     }
 
     pub fn raw_text<'a>(&'a self, args: Arguments) -> (&'a str, bool) {
@@ -46,11 +45,8 @@ impl ScopeState {
             bump_vec.push(item.into_dynamic_node(self));
         }
 
-        DynamicNode {
-            path: &[0, 0],
-            kind: crate::innerlude::DynamicNodeKind::Fragment {
-                children: bump_vec.into_bump_slice(),
-            },
+        DynamicNode::Fragment {
+            children: bump_vec.into_bump_slice(),
         }
     }
 
@@ -60,14 +56,14 @@ impl ScopeState {
         name: &'static str,
         val: impl IntoAttributeValue<'a>,
         namespace: Option<&'static str>,
-        is_volatile: bool,
+        volatile: bool,
     ) -> Attribute<'a> {
         Attribute {
             name,
             namespace,
-            mounted_element: Cell::new(ElementId(0)),
-            path: &[0],
+            volatile,
             value: val.into_value(self.bump()),
+            mounted_element: Cell::new(ElementId(0)),
         }
     }
 
@@ -94,13 +90,10 @@ impl ScopeState {
         //     self.scope.items.borrow_mut().borrowed_props.push(vcomp);
         // }
 
-        DynamicNode {
-            path: &[0],
-            kind: DynamicNodeKind::Component {
-                name: fn_name,
-                can_memoize: P::IS_STATIC,
-                props: detached_dyn,
-            },
+        DynamicNode::Component {
+            name: fn_name,
+            can_memoize: P::IS_STATIC,
+            props: detached_dyn,
         }
     }
 }
@@ -116,17 +109,19 @@ impl<'a, 'b> IntoVnode<'a> for LazyNodes<'a, 'b> {
 }
 
 impl<'a, 'b> IntoVnode<'a> for VNode<'a> {
-    fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a> {
+    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
         self
     }
 }
+
 impl<'a, 'b> IntoVnode<'a> for &'a VNode<'a> {
-    fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a> {
+    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
         VNode {
             node_id: self.node_id.clone(),
             parent: self.parent,
             template: self.template,
             root_ids: self.root_ids,
+            key: self.key,
             dynamic_nodes: self.dynamic_nodes,
             dynamic_attrs: self.dynamic_attrs,
         }

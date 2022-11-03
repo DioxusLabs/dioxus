@@ -5,11 +5,10 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
     let var = 123;
 
     cx.render(rsx! {
-        div {
+        div { key: "12345",
             class: "asd",
             class: "{asd}",
             onclick: move |_| {},
-
             div { "{var}" }
             div {
                 h1 { "var" }
@@ -25,8 +24,9 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
 }
 
 fn basic_template(cx: Scope) -> Element {
+    let val = 123;
     cx.render(rsx! {
-        div {
+        div { class: "{val}", class: "{val}", class: "{val}", class: "{val}",
             (0..2).map(|i| rsx! { div { "asd {i}" } })
             basic_child { }
         }

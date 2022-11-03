@@ -72,7 +72,7 @@ impl StringCache {
                         TemplateAttribute::Static { name, value, .. } => {
                             write!(chain, " {}=\"{}\"", name, value)?;
                         }
-                        TemplateAttribute::Dynamic { index, .. } => {
+                        TemplateAttribute::Dynamic(index) => {
                             chain.segments.push(Segment::Attr(*index))
                         }
                     }
@@ -126,18 +126,18 @@ impl SsrRender {
                         _ => {}
                     };
                 }
-                Segment::Node(idx) => match &template.dynamic_nodes[*idx].kind {
-                    DynamicNodeKind::Text { value, .. } => {
+                Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
+                    DynamicNode::Text { value, .. } => {
                         // todo: escape the text
                         write!(buf, "{}", value)?
                     }
-                    DynamicNodeKind::Fragment { children } => {
+                    DynamicNode::Fragment { children } => {
                         for child in *children {
                             self.render_template(buf, child)?;
                         }
                         //
                     }
-                    DynamicNodeKind::Component { .. } => {
+                    DynamicNode::Component { .. } => {
                         //
                     }
                 },
@@ -194,10 +194,7 @@ fn children_processes_properly() {
         render! {
             div {
                 ChildWithChildren {
-                    p {
-                        "{d}"
-                        "hii"
-                    }
+                    p { "{d}" "hii" }
                 }
             }
         }
