@@ -1,5 +1,6 @@
 use super::*;
 use std::{
+    fs::create_dir_all,
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
@@ -49,7 +50,7 @@ impl Serve {
                     if cfg!(windows) {
                         file.set_extension("exe");
                     }
-                    Command::new(crate_config.out_dir.join(file).to_str().unwrap())
+                    Command::new(file.to_str().unwrap())
                         .stdout(Stdio::inherit())
                         .output()?;
                 }
@@ -71,19 +72,19 @@ impl Serve {
     pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
-        let mut file = std::fs::File::create(
+        let dist_path = crate_config.crate_dir.join(
             crate_config
-                .crate_dir
-                .join(
-                    crate_config
-                        .dioxus_config
-                        .application
-                        .out_dir
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("dist")),
-                )
-                .join("index.html"),
-        )?;
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("dist")),
+        );
+        if !dist_path.is_dir() {
+            create_dir_all(&dist_path)?;
+        }
+        let index_path = dist_path.join("index.html");
+        let mut file = std::fs::File::create(index_path)?;
         file.write_all(serve_html.as_bytes())?;
 
         Ok(())
