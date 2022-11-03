@@ -95,7 +95,7 @@ impl ScopeState {
         // }
 
         DynamicNode {
-            path: &[],
+            path: &[0],
             kind: DynamicNodeKind::Component {
                 name: fn_name,
                 can_memoize: P::IS_STATIC,

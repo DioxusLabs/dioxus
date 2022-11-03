@@ -189,41 +189,34 @@ fn children_processes_properly() {
     use dioxus::prelude::*;
 
     fn app(cx: Scope) -> Element {
+        let d = 123;
+
         render! {
             div {
-                "yo!"
-                "yo!"
-                "yo!"
-                "yo!"
-                "yo!"
-                Child {}
-                Child {}
-                Child {}
-                Child {}
                 ChildWithChildren {
-                    "hii"
+                    p {
+                        "{d}"
+                        "hii"
+                    }
                 }
-                (0..10).map(|f| rsx! {
-                    "div {f}"
-                })
             }
         }
-    }
-
-    /// Yo its the child component!
-    fn Child(cx: Scope) -> Element {
-        render! ( div { "child" } )
     }
 
     #[inline_props]
     fn ChildWithChildren<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
         render! {
-            div {
-                "div"
-                children
-            }
+             h1 { children }
         }
     }
 
     let mut dom = VirtualDom::new(app);
+
+    let mut mutations = vec![];
+    dom.rebuild(&mut mutations);
+    dbg!(mutations);
+
+    let mut mutations = vec![];
+    dom.rebuild(&mut mutations);
+    dbg!(mutations);
 }
