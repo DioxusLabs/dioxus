@@ -1,11 +1,9 @@
-use std::cell::Cell;
-
 use futures_util::Future;
 
 use crate::{
     component::{Component, ComponentFn, Dummy, IntoComponent},
-    element::Element,
     scopes::{Scope, ScopeState},
+    Element,
 };
 
 pub trait AnyProps {

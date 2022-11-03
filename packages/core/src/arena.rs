@@ -1,9 +1,4 @@
-use std::num::NonZeroUsize;
-
-use crate::{
-    nodes::{Template, VNode},
-    virtualdom::VirtualDom,
-};
+use crate::{nodes::VNode, virtualdom::VirtualDom};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);

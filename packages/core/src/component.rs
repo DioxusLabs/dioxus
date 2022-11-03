@@ -4,7 +4,7 @@
 
 use futures_util::Future;
 
-use crate::{element::Element, scopes::Scope};
+use crate::{scopes::Scope, Element};
 
 pub type Component<T = ()> = fn(Scope<T>) -> Element;
 
@@ -38,7 +38,7 @@ impl Future for Dummy {
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
         unreachable!()
     }

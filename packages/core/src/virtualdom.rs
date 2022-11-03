@@ -1,6 +1,6 @@
 use crate::any_props::VComponentProps;
 use crate::arena::ElementPath;
-use crate::component::{Component, IntoComponent};
+use crate::component::Component;
 use crate::diff::DirtyScope;
 use crate::future_container::FutureQueue;
 use crate::innerlude::SchedulerMsg;

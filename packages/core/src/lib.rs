@@ -4,7 +4,6 @@ mod bump_frame;
 mod component;
 mod create;
 mod diff;
-mod element;
 mod events;
 mod factory;
 mod future_container;
@@ -18,7 +17,7 @@ mod scopes;
 mod virtualdom;
 
 pub(crate) mod innerlude {
-    pub use crate::element::Element;
+    pub use crate::arena::*;
     pub use crate::events::*;
     pub use crate::future_container::*;
     pub use crate::lazynodes::*;
@@ -28,10 +27,10 @@ pub(crate) mod innerlude {
     pub use crate::scopes::*;
     pub use crate::virtualdom::*;
 
-    // /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
-    // ///
-    // /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
-    // pub type Element<'a> = Option<VNodea<'a>>;
+    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    ///
+    /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
+    pub type Element<'a> = Option<VNode<'a>>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///
@@ -67,12 +66,16 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
+    // AnyAttributeValue, AnyEvent,
     fc_to_builder,
-    // AnyAttributeValue, AnyEvent, Attribute, AttributeValue, Component, Element, ElementId,
     Attribute,
     AttributeValue,
+    Attributes,
+    Component,
     DynamicNode,
     Element,
+    ElementId,
+    ElementPath,
     EventPriority,
     LazyNodes,
     NodeFactory,
@@ -88,9 +91,6 @@ pub use crate::innerlude::{
     VNode,
     VirtualDom,
 };
-// EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, NodeFactory, Properties, Renderer,
-// SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
-// UiEvent, UserEvent, VComponent, VElement, VNode, VTemplate, VText, VirtualDom,
 
 /// The purpose of this module is to alleviate imports of many common types
 ///

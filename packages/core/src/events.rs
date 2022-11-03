@@ -1,6 +1,5 @@
-use std::{any::Any, cell::Cell};
-
-use crate::{arena::ElementId, scopes::ScopeId, virtualdom::VirtualDom, Attribute, AttributeValue};
+use crate::{arena::ElementId, virtualdom::VirtualDom, Attribute, AttributeValue};
+use std::cell::Cell;
 
 /// User Events are events that are shuttled from the renderer into the [`VirtualDom`] through the scheduler channel.
 ///
@@ -122,9 +121,12 @@ impl VirtualDom {
                     .dynamic_attrs
                     .iter()
                     .enumerate()
-                    .filter(|(idx, attr)| is_path_ascendant(parent.template.node_paths[*idx], path))
-                    .filter(|(idx, attr)| attr.name == event.name)
-                    .map(|(_, attr)| attr),
+                    .filter_map(|(idx, attr)| {
+                        match is_path_ascendant(parent.template.node_paths[idx], path) {
+                            true if attr.name == event.name => Some(attr),
+                            _ => None,
+                        }
+                    }),
             );
 
             index = parent.parent;

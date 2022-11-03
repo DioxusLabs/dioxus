@@ -13,15 +13,11 @@
 
 #[macro_use]
 mod errors;
-// #[cfg(any(feature = "hot-reload", debug_assertions))]
-// mod attributes;
 mod component;
 mod element;
 mod ifmt;
 mod node;
 mod template;
-
-use std::collections::HashMap;
 
 // Re-export the namespaces into each other
 pub use component::*;
@@ -108,6 +104,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             Some(BodyNode::Component(comp)) if self.roots.len() == 1 => comp.key().cloned(),
             _ => None,
         };
+
         let key_tokens = match key {
             Some(tok) => quote! { Some( __cx.raw_text_inline(#tok) ) },
             None => quote! { None },
@@ -124,15 +121,8 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;
-        let node_paths = context
-            .node_paths
-            .iter()
-            .map(|items| quote!(&[#(#items),*]));
-
-        let attr_paths = context
-            .attr_paths
-            .iter()
-            .map(|items| quote!(&[#(#items),*]));
+        let node_paths = context.node_paths.iter().map(|it| quote!(&[#(#it),*]));
+        let attr_paths = context.attr_paths.iter().map(|it| quote!(&[#(#it),*]));
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
