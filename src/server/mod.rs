@@ -109,7 +109,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let watcher_config = config.clone();
     let mut watcher = RecommendedWatcher::new(
         move |evt: notify::Result<notify::Event>| {
             let config = watcher_config.clone();

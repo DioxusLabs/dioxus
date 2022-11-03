@@ -6,7 +6,13 @@ use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
     pub web: WebConfig,
+
+    #[serde(default = "default_plugin")]
     pub plugin: toml::Value,
+}
+
+fn default_plugin() -> toml::Value {
+    toml::Value::Boolean(true)
 }
 
 impl DioxusConfig {
@@ -23,7 +29,7 @@ impl DioxusConfig {
         dioxus_conf_file.read_to_string(&mut meta_str)?;
 
         toml::from_str::<DioxusConfig>(&meta_str)
-            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+        .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
     }
 }
 
@@ -59,7 +65,7 @@ impl Default for DioxusConfig {
                     script: Some(vec![]),
                 },
             },
-            plugin: toml::Value::Table(toml::map::Map::new())
+            plugin: toml::Value::Table(toml::map::Map::new()),
         }
     }
 }
