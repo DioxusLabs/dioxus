@@ -3,7 +3,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtualdom::VirtualDom;
-use crate::{AttributeValue, TemplateAttribute};
+use crate::{AttributeValue, ElementId, TemplateAttribute};
 
 impl VirtualDom {
     /// Create this template and write its mutations
@@ -106,7 +106,7 @@ impl VirtualDom {
         on_stack
     }
 
-    fn create_static_node<'a>(
+    pub fn create_static_node<'a>(
         &mut self,
         mutations: &mut Vec<Mutation<'a>>,
         template: &'a VNode<'a>,
@@ -114,7 +114,7 @@ impl VirtualDom {
     ) {
         match *node {
             // Todo: create the children's template
-            TemplateNode::Dynamic(_) => mutations.push(CreatePlaceholder),
+            TemplateNode::Dynamic(_) => mutations.push(CreatePlaceholder { id: ElementId(0) }),
             TemplateNode::Text(value) => mutations.push(CreateText { value }),
             TemplateNode::DynamicText { .. } => mutations.push(CreateText {
                 value: "placeholder",
@@ -149,7 +149,7 @@ impl VirtualDom {
         }
     }
 
-    fn create_dynamic_node<'a>(
+    pub fn create_dynamic_node<'a>(
         &mut self,
         mutations: &mut Vec<Mutation<'a>>,
         template: &'a VNode<'a>,
@@ -170,7 +170,7 @@ impl VirtualDom {
             }
 
             DynamicNode::Component { props, .. } => {
-                let id = self.new_scope(unsafe { std::mem::transmute(*props) });
+                let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
 
                 let template = self.run_scope(id);
 
@@ -184,11 +184,14 @@ impl VirtualDom {
                 created
             }
 
-            DynamicNode::Fragment { children } => {
-                //
-                children
-                    .iter()
-                    .fold(0, |acc, child| acc + self.create(mutations, child))
+            DynamicNode::Fragment(children) => children
+                .iter()
+                .fold(0, |acc, child| acc + self.create(mutations, child)),
+
+            DynamicNode::Placeholder(_) => {
+                let id = self.next_element(template);
+                mutations.push(CreatePlaceholder { id });
+                1
             }
         }
     }

@@ -46,6 +46,7 @@ pub enum Mutation<'a> {
     // Take the current element and replace it with the element with the given id.
     Replace {
         id: ElementId,
+        m: usize,
     },
 
     CreateElement {
@@ -58,7 +59,9 @@ pub enum Mutation<'a> {
         value: &'a str,
     },
 
-    CreatePlaceholder,
+    CreatePlaceholder {
+        id: ElementId,
+    },
 
     AppendChildren {
         m: usize,

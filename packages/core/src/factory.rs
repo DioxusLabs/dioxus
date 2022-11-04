@@ -6,7 +6,6 @@ use futures_util::Future;
 use crate::{
     any_props::{AnyProps, VComponentProps},
     arena::ElementId,
-    component::IntoComponent,
     innerlude::DynamicNode,
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
@@ -47,8 +46,9 @@ impl ScopeState {
             bump_vec.push(item.into_dynamic_node(self));
         }
 
-        DynamicNode::Fragment {
-            children: bump_vec.into_bump_slice(),
+        match bump_vec.len() {
+            0 => DynamicNode::Placeholder(Cell::new(ElementId(0))),
+            _ => DynamicNode::Fragment(bump_vec.into_bump_slice()),
         }
     }
 
@@ -70,9 +70,9 @@ impl ScopeState {
     }
 
     /// Create a new [`VNode::Component`]
-    pub fn component<'a, P, F: Future<Output = Element<'a>>>(
+    pub fn component<'a, P, A, F: ReturnType<'a, A>>(
         &'a self,
-        component: impl IntoComponent<'a, P, F>,
+        component: fn(Scope<'a, P>) -> F,
         props: P,
         fn_name: &'static str,
     ) -> DynamicNode<'a>
@@ -80,7 +80,7 @@ impl ScopeState {
         P: Properties + 'a,
     {
         let props = self.bump().alloc(props);
-        let as_component = component.into_component();
+        let as_component = component;
         let vcomp = VComponentProps::new(as_component, P::memoize, props);
         let as_dyn = self.bump().alloc(vcomp) as &mut dyn AnyProps;
         let detached_dyn: *mut dyn AnyProps = unsafe { std::mem::transmute(as_dyn) };
@@ -94,10 +94,28 @@ impl ScopeState {
 
         DynamicNode::Component {
             name: fn_name,
-            can_memoize: P::IS_STATIC,
-            props: detached_dyn,
+            is_static: P::IS_STATIC,
+            props: Cell::new(detached_dyn),
         }
     }
+}
+
+pub trait ReturnType<'a, A = ()> {}
+impl<'a> ReturnType<'a> for Element<'a> {}
+
+pub struct AsyncMarker;
+impl<'a, F> ReturnType<'a, AsyncMarker> for F where F: Future<Output = Element<'a>> + 'a {}
+
+#[test]
+fn takes_it() {
+    fn demo(cx: Scope) -> Element {
+        todo!()
+    }
+}
+
+enum RenderReturn<'a> {
+    Sync(Element<'a>),
+    Async(*mut dyn Future<Output = Element<'a>>),
 }
 
 pub trait IntoVnode<'a, A = ()> {

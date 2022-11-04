@@ -10,6 +10,7 @@ use crate::{
     arena::ElementId,
     scopes::{ScopeId, ScopeState},
 };
+use crate::{Element, Scope};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use slab::Slab;
 use std::collections::{BTreeSet, HashMap};
@@ -27,7 +28,7 @@ pub struct VirtualDom {
 }
 
 impl VirtualDom {
-    pub fn new<'a>(app: Component<'a, ()>) -> Self {
+    pub fn new(app: fn(Scope) -> Element) -> Self {
         let (sender, receiver) = futures_channel::mpsc::unbounded();
 
         let mut res = Self {
@@ -43,7 +44,7 @@ impl VirtualDom {
         };
 
         let props = Box::into_raw(Box::new(VComponentProps::new_empty(app)));
-        let props: *mut VComponentProps<()> = unsafe { std::mem::transmute(props) };
+        let props: *mut VComponentProps<(), ()> = unsafe { std::mem::transmute(props) };
 
         let root = res.new_scope(props);
 

@@ -1,7 +1,9 @@
+use std::marker::PhantomData;
+
 use futures_util::Future;
 
 use crate::{
-    component::{Component, ComponentFn, Dummy, IntoComponent},
+    factory::ReturnType,
     scopes::{Scope, ScopeState},
     Element,
 };
@@ -12,25 +14,30 @@ pub trait AnyProps<'a> {
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VComponentProps<'a, P, F: Future<Output = Element<'a>> = Dummy<'a>> {
-    pub render_fn: ComponentFn<'a, P, F>,
+pub(crate) struct VComponentProps<'a, P, A, F = Element<'a>>
+where
+    F: ReturnType<'a, A>,
+{
+    pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: *const P,
+    pub _marker: PhantomData<A>,
 }
 
-impl<'a> VComponentProps<'a, ()> {
-    pub fn new_empty(render_fn: Component<'a, ()>) -> Self {
+impl<'a> VComponentProps<'a, (), ()> {
+    pub fn new_empty(render_fn: fn(Scope) -> Element) -> Self {
         Self {
-            render_fn: render_fn.into_component(),
+            render_fn,
             memo: <() as PartialEq>::eq,
             props: std::ptr::null_mut(),
+            _marker: PhantomData,
         }
     }
 }
 
-impl<'a, P, F: Future<Output = Element<'a>>> VComponentProps<'a, P, F> {
+impl<'a, P, A, F: ReturnType<'a, A>> VComponentProps<'a, P, A, F> {
     pub(crate) fn new(
-        render_fn: ComponentFn<'a, P, F>,
+        render_fn: fn(Scope<'a, P>) -> F,
         memo: unsafe fn(&P, &P) -> bool,
         props: *const P,
     ) -> Self {
@@ -38,11 +45,12 @@ impl<'a, P, F: Future<Output = Element<'a>>> VComponentProps<'a, P, F> {
             render_fn,
             memo,
             props,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<'a, P, F: Future<Output = Element<'a>>> AnyProps<'a> for VComponentProps<'a, P, F> {
+impl<'a, P, A, F: ReturnType<'a, A>> AnyProps<'a> for VComponentProps<'a, P, A, F> {
     fn as_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }

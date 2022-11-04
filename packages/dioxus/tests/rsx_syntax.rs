@@ -24,28 +24,20 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
 }
 
 fn basic_template(cx: Scope) -> Element {
-    let val = 123;
-
-    cx.component(basic_child, (), "fn_name");
-
-    todo!()
-    // cx.render(rsx! {
-    // div { class: "{val}", class: "{val}", class: "{val}", class: "{val}",
-    // (0..2).map(|i| rsx! { div { "asd {i}" } })
-    // basic_child { }
-    // }
-    // })
+    cx.render(rsx! {
+        div {
+            basic_child { }
+            async_child { }
+        }
+    })
 }
 
-/// A beautiful component
 fn basic_child(cx: Scope) -> Element {
     todo!()
 }
 
-async fn async_component(cx: Scope<'_>) -> Element {
-    cx.render(rsx! {
-        div { class: "asd" }
-    })
+async fn async_child(cx: Scope<'_>) -> Element {
+    todo!()
 }
 
 #[test]
@@ -63,4 +55,9 @@ fn basic_prints() {
     // let renderer = dioxus_edit_stream::Mutations::default();
     //
     // dbg!(renderer.edits);
+
+    // takes_it(basic_child);
 }
+
+// fn takes_it(f: fn(Scope) -> Element) {}
+// fn takes_it(f: fn(Scope) -> Element) {}

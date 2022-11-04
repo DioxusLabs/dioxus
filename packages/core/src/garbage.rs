@@ -19,7 +19,8 @@ impl VirtualDom {
                     todo!()
                 }
 
-                DynamicNode::Fragment { children } => {}
+                DynamicNode::Fragment(children) => {}
+                DynamicNode::Placeholder(_) => todo!(),
             }
         }
     }

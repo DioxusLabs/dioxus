@@ -1,6 +1,6 @@
 use crate::{any_props::AnyProps, arena::ElementId};
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::{Cell, RefCell},
     hash::Hasher,
 };
@@ -77,8 +77,8 @@ pub enum DynamicNode<'a> {
     // IE in caps or with underscores
     Component {
         name: &'static str,
-        can_memoize: bool,
-        props: *mut dyn AnyProps<'a>,
+        is_static: bool,
+        props: Cell<*mut dyn AnyProps<'a>>,
     },
 
     // Comes in with string interpolation or from format_args, include_str, etc
@@ -88,9 +88,9 @@ pub enum DynamicNode<'a> {
     },
 
     // Anything that's coming in as an iterator
-    Fragment {
-        children: &'a [VNode<'a>],
-    },
+    Fragment(&'a [VNode<'a>]),
+
+    Placeholder(Cell<ElementId>),
 }
 
 #[derive(Debug)]
@@ -122,25 +122,70 @@ pub enum AttributeValue<'a> {
     None,
 }
 
+impl<'a> std::fmt::Debug for AttributeValue<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
+            Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
+            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+            Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
+            Self::Listener(arg0) => f.debug_tuple("Listener").finish(),
+            Self::Any(arg0) => f.debug_tuple("Any").finish(),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
+impl<'a> PartialEq for AttributeValue<'a> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::Listener(l0), Self::Listener(r0)) => true,
+            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(*r0),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
 impl<'a> AttributeValue<'a> {
+    pub fn matches_type(&self, other: &'a AttributeValue<'a>) -> bool {
+        match (self, other) {
+            (Self::Text(_), Self::Text(_)) => true,
+            (Self::Float(_), Self::Float(_)) => true,
+            (Self::Int(_), Self::Int(_)) => true,
+            (Self::Bool(_), Self::Bool(_)) => true,
+            (Self::Listener(_), Self::Listener(_)) => true,
+            (Self::Any(_), Self::Any(_)) => true,
+            _ => return false,
+        }
+    }
+
     fn is_listener(&self) -> bool {
         matches!(self, AttributeValue::Listener(_))
     }
 }
 
 pub trait AnyValue {
-    fn any_cmp(&self, other: &dyn Any) -> bool;
+    fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+    fn our_typeid(&self) -> TypeId;
 }
 impl<T> AnyValue for T
 where
     T: PartialEq + Any,
 {
-    fn any_cmp(&self, other: &dyn Any) -> bool {
-        if self.type_id() != other.type_id() {
+    fn any_cmp(&self, other: &dyn AnyValue) -> bool {
+        if self.type_id() != other.our_typeid() {
             return false;
         }
 
         self == unsafe { &*(other as *const _ as *const T) }
+    }
+
+    fn our_typeid(&self) -> TypeId {
+        self.type_id()
     }
 }
 
