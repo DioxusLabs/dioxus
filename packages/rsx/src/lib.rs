@@ -110,6 +110,9 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
             None => quote! { None },
         };
 
+        let spndbg = format!("{:?}", self.roots[0].span());
+        let root_col = spndbg[9..].split("..").next().unwrap();
+
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);
@@ -126,7 +129,15 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                id: ::dioxus::core::get_line_num!(),
+                id: concat!(
+                    file!(),
+                    ":",
+                    line!(),
+                    ":",
+                    column!(),
+                    ":",
+                    #root_col
+                ),
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],
                 attr_paths: &[ #(#attr_paths),* ],

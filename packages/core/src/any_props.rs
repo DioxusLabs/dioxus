@@ -3,20 +3,20 @@ use std::marker::PhantomData;
 use futures_util::Future;
 
 use crate::{
-    factory::ReturnType,
+    factory::{ComponentReturn, RenderReturn},
     scopes::{Scope, ScopeState},
     Element,
 };
 
 pub trait AnyProps<'a> {
     fn as_ptr(&self) -> *const ();
-    fn render(&'a self, bump: &'a ScopeState) -> Element<'a>;
+    fn render(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
 pub(crate) struct VComponentProps<'a, P, A, F = Element<'a>>
 where
-    F: ReturnType<'a, A>,
+    F: ComponentReturn<'a, A>,
 {
     pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
@@ -35,7 +35,7 @@ impl<'a> VComponentProps<'a, (), ()> {
     }
 }
 
-impl<'a, P, A, F: ReturnType<'a, A>> VComponentProps<'a, P, A, F> {
+impl<'a, P, A, F: ComponentReturn<'a, A>> VComponentProps<'a, P, A, F> {
     pub(crate) fn new(
         render_fn: fn(Scope<'a, P>) -> F,
         memo: unsafe fn(&P, &P) -> bool,
@@ -50,7 +50,7 @@ impl<'a, P, A, F: ReturnType<'a, A>> VComponentProps<'a, P, A, F> {
     }
 }
 
-impl<'a, P, A, F: ReturnType<'a, A>> AnyProps<'a> for VComponentProps<'a, P, A, F> {
+impl<'a, P, A, F: ComponentReturn<'a, A>> AnyProps<'a> for VComponentProps<'a, P, A, F> {
     fn as_ptr(&self) -> *const () {
         &self.props as *const _ as *const ()
     }
@@ -65,25 +65,16 @@ impl<'a, P, A, F: ReturnType<'a, A>> AnyProps<'a> for VComponentProps<'a, P, A, 
         (self.memo)(real_us, real_other)
     }
 
-    fn render<'b>(&'b self, scope: &'b ScopeState) -> Element<'b> {
+    fn render(&self, cx: &'a ScopeState) -> RenderReturn<'a> {
         // Make sure the scope ptr is not null
         // self.props.state.set(scope);
 
         let scope = Scope {
             props: unsafe { &*self.props },
-            scope,
+            scope: cx,
         };
 
         // Call the render function directly
-        // todo: implement async
-        // let res = match self.render_fn {
-        //     ComponentFn::Sync(f) => {
-        //         let f = unsafe { std::mem::transmute(f) };
-        //         f(scope)
-        //     }
-        //     ComponentFn::Async(_) => todo!(),
-        // };
-
-        todo!()
+        (self.render_fn)(scope).as_return(cx)
     }
 }

@@ -2,6 +2,7 @@ use crate::{
     any_props::AnyProps,
     arena::ElementId,
     bump_frame::BumpFrame,
+    factory::RenderReturn,
     nodes::VNode,
     scopes::{ScopeId, ScopeState},
     virtualdom::VirtualDom,
@@ -48,15 +49,15 @@ impl VirtualDom {
             .and_then(|id| self.scopes.get_mut(id.0).map(|f| f as *mut ScopeState))
     }
 
-    pub fn run_scope(&mut self, id: ScopeId) -> &VNode {
+    pub fn run_scope(&mut self, id: ScopeId) -> &mut RenderReturn {
         let scope = &mut self.scopes[id.0];
         scope.hook_idx.set(0);
 
         let res = {
             let props = unsafe { &mut *scope.props };
             let props: &mut dyn AnyProps = unsafe { std::mem::transmute(props) };
-            let res: VNode = props.render(scope).unwrap();
-            let res: VNode<'static> = unsafe { std::mem::transmute(res) };
+            let res: RenderReturn = props.render(scope);
+            let res: RenderReturn<'static> = unsafe { std::mem::transmute(res) };
             res
         };
 

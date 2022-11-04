@@ -132,19 +132,3 @@ macro_rules! to_owned {
         let mut $es = $es.to_owned();
     )*}
 }
-
-/// get the code location of the code that called this function
-#[macro_export]
-macro_rules! get_line_num {
-    () => {
-        concat!(
-            file!(),
-            ":",
-            line!(),
-            ":",
-            column!(),
-            ":",
-            env!("CARGO_MANIFEST_DIR")
-        )
-    };
-}

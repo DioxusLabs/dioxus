@@ -1,9 +1,15 @@
+use std::task::Context;
+
+use futures_util::task::noop_waker_ref;
+use futures_util::{pin_mut, Future};
+
+use crate::factory::RenderReturn;
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtualdom::VirtualDom;
-use crate::{AttributeValue, ElementId, TemplateAttribute};
+use crate::{AttributeValue, Element, ElementId, TemplateAttribute};
 
 impl VirtualDom {
     /// Create this template and write its mutations
@@ -96,10 +102,12 @@ impl VirtualDom {
             while let Some((idx, path)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
                 let node = &template.dynamic_nodes[idx];
                 let m = self.create_dynamic_node(mutations, template, node, idx);
-                mutations.push(ReplacePlaceholder {
-                    m,
-                    path: &path[1..],
-                });
+                if m > 0 {
+                    mutations.push(ReplacePlaceholder {
+                        m,
+                        path: &path[1..],
+                    });
+                }
             }
         }
 
@@ -172,16 +180,53 @@ impl VirtualDom {
             DynamicNode::Component { props, .. } => {
                 let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
 
-                let template = self.run_scope(id);
+                let render_ret = self.run_scope(id);
 
                 // shut up about lifetimes please, I know what I'm doing
-                let template: &VNode = unsafe { std::mem::transmute(template) };
+                let render_ret: &mut RenderReturn = unsafe { std::mem::transmute(render_ret) };
 
-                self.scope_stack.push(id);
-                let created = self.create(mutations, template);
-                self.scope_stack.pop();
+                match render_ret {
+                    RenderReturn::Sync(Some(template)) => {
+                        self.scope_stack.push(id);
+                        let created = self.create(mutations, template);
+                        self.scope_stack.pop();
+                        created
+                    }
+                    RenderReturn::Sync(None) => todo!("nodes that return nothing"),
+                    RenderReturn::Async(fut) => {
+                        use futures_util::FutureExt;
 
-                created
+                        // Poll the suspense node once to see if we can get any nodes from it
+                        let mut cx = Context::from_waker(&noop_waker_ref());
+                        let res = fut.poll_unpin(&mut cx);
+
+                        match res {
+                            std::task::Poll::Ready(Some(val)) => {
+                                let scope = self.get_scope(id).unwrap();
+                                let ready = &*scope.bump().alloc(val);
+                                let ready = unsafe { std::mem::transmute(ready) };
+
+                                self.scope_stack.push(id);
+                                let created = self.create(mutations, ready);
+                                self.scope_stack.pop();
+                                created
+                            }
+                            std::task::Poll::Ready(None) => {
+                                todo!("Pending suspense")
+                            }
+                            std::task::Poll::Pending => {
+                                let new_id = self.next_element(template);
+                                // id.set(new_id);
+                                mutations.push(AssignId {
+                                    id: new_id,
+                                    path: &template.template.node_paths[idx][1..],
+                                });
+
+                                0
+                            }
+                        }
+                    }
+                }
             }
 
             DynamicNode::Fragment(children) => children

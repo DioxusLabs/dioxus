@@ -2,6 +2,7 @@ use crate::any_props::VComponentProps;
 use crate::arena::ElementPath;
 use crate::component::Component;
 use crate::diff::DirtyScope;
+use crate::factory::RenderReturn;
 use crate::future_container::FutureQueue;
 use crate::innerlude::SchedulerMsg;
 use crate::mutations::Mutation;
@@ -57,13 +58,17 @@ impl VirtualDom {
     pub fn rebuild<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>) {
         // let root = self.scopes.get(0).unwrap();
 
-        let root_node = unsafe { std::mem::transmute(self.run_scope(ScopeId(0))) };
-
-        // let root_node = unsafe { std::mem::transmute(root.root_node()) };
-
-        self.scope_stack.push(ScopeId(0));
-        self.create(mutations, root_node);
-        self.scope_stack.pop();
+        let root_node: &RenderReturn = self.run_scope(ScopeId(0));
+        let root_node: &RenderReturn = unsafe { std::mem::transmute(root_node) };
+        match root_node {
+            RenderReturn::Sync(Some(node)) => {
+                self.scope_stack.push(ScopeId(0));
+                self.create(mutations, node);
+                self.scope_stack.pop();
+            }
+            RenderReturn::Sync(None) => todo!("Handle empty root node"),
+            RenderReturn::Async(_) => unreachable!(),
+        }
     }
 
     /// Render what you can given the timeline and then move on

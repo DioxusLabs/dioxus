@@ -131,13 +131,16 @@ impl SsrRender {
                         // todo: escape the text
                         write!(buf, "{}", value)?
                     }
-                    DynamicNode::Fragment { children } => {
+                    DynamicNode::Fragment(children) => {
                         for child in *children {
                             self.render_template(buf, child)?;
                         }
                         //
                     }
                     DynamicNode::Component { .. } => {
+                        //
+                    }
+                    DynamicNode::Placeholder(el) => {
                         //
                     }
                 },
@@ -212,6 +215,32 @@ fn children_processes_properly() {
     let mut mutations = vec![];
     dom.rebuild(&mut mutations);
     dbg!(mutations);
+
+    let mut mutations = vec![];
+    dom.rebuild(&mut mutations);
+    dbg!(mutations);
+}
+
+#[test]
+fn async_children() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        let d = 123;
+
+        render! {
+            div {
+                async_child {}
+            }
+        }
+    }
+
+    async fn async_child(cx: Scope<'_>) -> Element {
+        let d = 123;
+        render! { p { "{d}" "hii" } }
+    }
+
+    let mut dom = VirtualDom::new(app);
 
     let mut mutations = vec![];
     dom.rebuild(&mut mutations);

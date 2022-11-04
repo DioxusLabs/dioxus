@@ -1,5 +1,6 @@
-use std::{cell::Cell, fmt::Arguments};
+use std::{cell::Cell, fmt::Arguments, pin::Pin};
 
+use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
 use futures_util::Future;
 
@@ -70,7 +71,7 @@ impl ScopeState {
     }
 
     /// Create a new [`VNode::Component`]
-    pub fn component<'a, P, A, F: ReturnType<'a, A>>(
+    pub fn component<'a, P, A, F: ComponentReturn<'a, A>>(
         &'a self,
         component: fn(Scope<'a, P>) -> F,
         props: P,
@@ -100,11 +101,27 @@ impl ScopeState {
     }
 }
 
-pub trait ReturnType<'a, A = ()> {}
-impl<'a> ReturnType<'a> for Element<'a> {}
+pub trait ComponentReturn<'a, A = ()> {
+    fn as_return(self, cx: &'a ScopeState) -> RenderReturn<'a>;
+}
+impl<'a> ComponentReturn<'a> for Element<'a> {
+    fn as_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
+        RenderReturn::Sync(self)
+    }
+}
 
 pub struct AsyncMarker;
-impl<'a, F> ReturnType<'a, AsyncMarker> for F where F: Future<Output = Element<'a>> + 'a {}
+impl<'a, F> ComponentReturn<'a, AsyncMarker> for F
+where
+    F: Future<Output = Element<'a>> + 'a,
+{
+    fn as_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
+        let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
+        let boxed = unsafe { BumpBox::from_raw(f) };
+        let pined: Pin<BumpBox<_>> = boxed.into();
+        RenderReturn::Async(pined)
+    }
+}
 
 #[test]
 fn takes_it() {
@@ -113,9 +130,9 @@ fn takes_it() {
     }
 }
 
-enum RenderReturn<'a> {
+pub enum RenderReturn<'a> {
     Sync(Element<'a>),
-    Async(*mut dyn Future<Output = Element<'a>>),
+    Async(Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>),
 }
 
 pub trait IntoVnode<'a, A = ()> {
