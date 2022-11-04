@@ -1,6 +1,8 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 
 use dioxus_core::*;
+#[cfg(target_os = "ios")]
+use objc::runtime::Object;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -18,6 +20,8 @@ pub(super) struct DesktopController {
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
+    #[cfg(target_os = "ios")]
+    pub(super) views: Vec<*mut Object>,
 }
 
 impl DesktopController {
@@ -87,6 +91,8 @@ impl DesktopController {
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,
+            #[cfg(target_os = "ios")]
+            views: vec![],
         }
     }
 
