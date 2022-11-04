@@ -1,15 +1,15 @@
-use std::task::Context;
+use std::pin::Pin;
 
-use futures_util::task::noop_waker_ref;
-use futures_util::{pin_mut, Future};
-
-use crate::factory::RenderReturn;
+use crate::factory::{FiberLeaf, RenderReturn};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
+use crate::suspense::LeafLocation;
 use crate::virtualdom::VirtualDom;
 use crate::{AttributeValue, Element, ElementId, TemplateAttribute};
+use bumpalo::boxed::Box as BumpBox;
+use futures_util::Future;
 
 impl VirtualDom {
     /// Create this template and write its mutations
@@ -177,7 +177,9 @@ impl VirtualDom {
                 1
             }
 
-            DynamicNode::Component { props, .. } => {
+            DynamicNode::Component {
+                props, placeholder, ..
+            } => {
                 let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
 
                 let render_ret = self.run_scope(id);
@@ -192,39 +194,52 @@ impl VirtualDom {
                         self.scope_stack.pop();
                         created
                     }
-                    RenderReturn::Sync(None) => todo!("nodes that return nothing"),
+
+                    // whenever the future is polled later, we'll revisit it
+                    // For now, just set the placeholder
+                    RenderReturn::Sync(None) => {
+                        let new_id = self.next_element(template);
+                        placeholder.set(Some(new_id));
+                        mutations.push(AssignId {
+                            id: new_id,
+                            path: &template.template.node_paths[idx][1..],
+                        });
+                        0
+                    }
                     RenderReturn::Async(fut) => {
-                        use futures_util::FutureExt;
+                        let new_id = self.next_element(template);
 
-                        // Poll the suspense node once to see if we can get any nodes from it
-                        let mut cx = Context::from_waker(&noop_waker_ref());
-                        let res = fut.poll_unpin(&mut cx);
+                        // move up the tree looking for the first suspense boundary
+                        // our current component can not be a suspense boundary, so we skip it
+                        for scope_id in self.scope_stack.iter().rev().skip(1) {
+                            let scope = &mut self.scopes[scope_id.0];
+                            if let Some(fiber) = &mut scope.suspense_boundary {
+                                // save the fiber leaf onto the fiber itself
+                                let detached: &mut FiberLeaf<'static> =
+                                    unsafe { std::mem::transmute(fut) };
 
-                        match res {
-                            std::task::Poll::Ready(Some(val)) => {
-                                let scope = self.get_scope(id).unwrap();
-                                let ready = &*scope.bump().alloc(val);
-                                let ready = unsafe { std::mem::transmute(ready) };
+                                // And save the fiber leaf using the placeholder node
+                                // this way, when we resume the fiber, we just need to "pick up placeholder"
+                                fiber.futures.insert(
+                                    LeafLocation {
+                                        element: new_id,
+                                        scope: *scope_id,
+                                    },
+                                    detached,
+                                );
 
-                                self.scope_stack.push(id);
-                                let created = self.create(mutations, ready);
-                                self.scope_stack.pop();
-                                created
-                            }
-                            std::task::Poll::Ready(None) => {
-                                todo!("Pending suspense")
-                            }
-                            std::task::Poll::Pending => {
-                                let new_id = self.next_element(template);
-                                // id.set(new_id);
-                                mutations.push(AssignId {
-                                    id: new_id,
-                                    path: &template.template.node_paths[idx][1..],
-                                });
-
-                                0
+                                self.suspended_scopes.insert(*scope_id);
+                                break;
                             }
                         }
+
+                        placeholder.set(Some(new_id));
+                        mutations.push(AssignId {
+                            id: new_id,
+                            path: &template.template.node_paths[idx][1..],
+                        });
+
+                        0
                     }
                 }
             }

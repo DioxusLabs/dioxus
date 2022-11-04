@@ -79,6 +79,7 @@ pub enum DynamicNode<'a> {
         name: &'static str,
         is_static: bool,
         props: Cell<*mut dyn AnyProps<'a>>,
+        placeholder: Cell<Option<ElementId>>,
     },
 
     // Comes in with string interpolation or from format_args, include_str, etc

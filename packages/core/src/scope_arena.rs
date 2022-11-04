@@ -1,3 +1,7 @@
+use std::task::Context;
+
+use futures_util::task::noop_waker_ref;
+
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
@@ -23,6 +27,7 @@ impl VirtualDom {
             height,
             props,
             tasks: self.pending_futures.clone(),
+            suspense_boundary: None,
             node_arena_1: BumpFrame::new(50),
             node_arena_2: BumpFrame::new(50),
             render_cnt: Default::default(),
@@ -53,12 +58,26 @@ impl VirtualDom {
         let scope = &mut self.scopes[id.0];
         scope.hook_idx.set(0);
 
-        let res = {
+        let mut new_nodes = {
             let props = unsafe { &mut *scope.props };
             let props: &mut dyn AnyProps = unsafe { std::mem::transmute(props) };
             let res: RenderReturn = props.render(scope);
             let res: RenderReturn<'static> = unsafe { std::mem::transmute(res) };
             res
+        };
+
+        // immediately resolve futures that can be resolved immediatelys
+        let res = match &mut new_nodes {
+            RenderReturn::Sync(_) => new_nodes,
+            RenderReturn::Async(fut) => {
+                use futures_util::FutureExt;
+                let mut cx = Context::from_waker(&noop_waker_ref());
+
+                match fut.poll_unpin(&mut cx) {
+                    std::task::Poll::Ready(nodes) => RenderReturn::Sync(nodes),
+                    std::task::Poll::Pending => new_nodes,
+                }
+            }
         };
 
         let frame = match scope.render_cnt % 2 {

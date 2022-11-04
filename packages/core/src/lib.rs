@@ -14,6 +14,8 @@ mod nodes;
 mod properties;
 mod scope_arena;
 mod scopes;
+// mod subtree;
+mod suspense;
 mod virtualdom;
 
 pub(crate) mod innerlude {

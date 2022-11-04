@@ -97,6 +97,7 @@ impl ScopeState {
             name: fn_name,
             is_static: P::IS_STATIC,
             props: Cell::new(detached_dyn),
+            placeholder: Cell::new(None),
         }
     }
 }
@@ -134,6 +135,8 @@ pub enum RenderReturn<'a> {
     Sync(Element<'a>),
     Async(Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>),
 }
+
+pub type FiberLeaf<'a> = Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>;
 
 pub trait IntoVnode<'a, A = ()> {
     fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a>;

@@ -7,6 +7,7 @@ use crate::future_container::FutureQueue;
 use crate::innerlude::SchedulerMsg;
 use crate::mutations::Mutation;
 use crate::nodes::{Template, TemplateId};
+use crate::suspense::Fiber;
 use crate::{
     arena::ElementId,
     scopes::{ScopeId, ScopeState},
@@ -26,6 +27,7 @@ pub struct VirtualDom {
     pub(crate) pending_futures: FutureQueue,
     pub(crate) sender: UnboundedSender<SchedulerMsg>,
     pub(crate) receiver: UnboundedReceiver<SchedulerMsg>,
+    pub(crate) suspended_scopes: BTreeSet<ScopeId>,
 }
 
 impl VirtualDom {
@@ -40,6 +42,7 @@ impl VirtualDom {
             element_stack: vec![ElementId(0)],
             dirty_scopes: BTreeSet::new(),
             pending_futures: FutureQueue::new(sender.clone()),
+            suspended_scopes: BTreeSet::new(),
             receiver,
             sender,
         };
@@ -49,6 +52,9 @@ impl VirtualDom {
 
         let root = res.new_scope(props);
 
+        // the root component is always a suspense boundary for any async children
+        res.scopes[root.0].suspense_boundary = Some(Fiber::default());
+
         assert_eq!(root, ScopeId(0));
 
         res
@@ -56,8 +62,6 @@ impl VirtualDom {
 
     /// Render the virtualdom, without processing any suspense.
     pub fn rebuild<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>) {
-        // let root = self.scopes.get(0).unwrap();
-
         let root_node: &RenderReturn = self.run_scope(ScopeId(0));
         let root_node: &RenderReturn = unsafe { std::mem::transmute(root_node) };
         match root_node {
@@ -104,3 +108,18 @@ impl Drop for VirtualDom {
         // self.drop_scope(ScopeId(0));
     }
 }
+
+/*
+div {
+    Window {}
+    Window {}
+}
+
+edits -> Vec<Mutation>
+
+Subtree {
+    id: 0,
+    namespace: "react-three-fiber",
+    edits: []
+}
+*/

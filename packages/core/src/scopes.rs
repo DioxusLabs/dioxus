@@ -11,7 +11,7 @@ use futures_util::Future;
 
 use crate::{
     any_props::AnyProps, arena::ElementId, bump_frame::BumpFrame, future_container::FutureQueue,
-    innerlude::SchedulerMsg, lazynodes::LazyNodes, nodes::VNode, TaskId,
+    innerlude::SchedulerMsg, lazynodes::LazyNodes, nodes::VNode, suspense::Fiber, TaskId,
 };
 
 pub struct Scope<'a, T = ()> {
@@ -65,6 +65,8 @@ pub struct ScopeState {
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 
     pub tasks: FutureQueue,
+
+    pub suspense_boundary: Option<Fiber<'static>>,
 
     pub props: *mut dyn AnyProps<'static>,
 }
