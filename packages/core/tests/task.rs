@@ -17,14 +17,14 @@ async fn it_works() {
 fn app(cx: Scope) -> Element {
     cx.spawn(async {
         for x in 0..10 {
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            tokio::time::sleep(Duration::from_millis(500)).await;
             println!("Hello, world! {x}");
         }
     });
 
     cx.spawn(async {
         for x in 0..10 {
-            tokio::time::sleep(Duration::from_millis(500)).await;
+            tokio::time::sleep(Duration::from_millis(250)).await;
             println!("Hello, world does! {x}");
         }
     });

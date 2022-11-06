@@ -1,4 +1,4 @@
-use crate::{any_props::AnyProps, arena::ElementId};
+use crate::{any_props::AnyProps, arena::ElementId, ScopeState};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -24,6 +24,29 @@ pub struct VNode<'a> {
     pub dynamic_nodes: &'a [DynamicNode<'a>],
 
     pub dynamic_attrs: &'a [Attribute<'a>],
+}
+
+impl<'a> VNode<'a> {
+    pub fn single_component(
+        cx: &'a ScopeState,
+        node: DynamicNode<'a>,
+        id: &'static str,
+    ) -> Option<Self> {
+        Some(VNode {
+            node_id: Cell::new(ElementId(0)),
+            key: None,
+            parent: None,
+            root_ids: &[],
+            dynamic_nodes: cx.bump().alloc([node]),
+            dynamic_attrs: &[],
+            template: Template {
+                id,
+                roots: &[TemplateNode::Dynamic(0)],
+                node_paths: &[&[0]],
+                attr_paths: &[],
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -77,7 +100,7 @@ pub enum DynamicNode<'a> {
     // IE in caps or with underscores
     Component {
         name: &'static str,
-        is_static: bool,
+        static_props: bool,
         props: Cell<*mut dyn AnyProps<'a>>,
         placeholder: Cell<Option<ElementId>>,
     },

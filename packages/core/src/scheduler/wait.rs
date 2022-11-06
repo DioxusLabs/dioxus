@@ -1,7 +1,5 @@
-use std::{ops::DerefMut, pin::Pin};
-
 use futures_task::Context;
-use futures_util::StreamExt;
+use futures_util::{FutureExt, StreamExt};
 
 use crate::{innerlude::make_task_waker, VirtualDom};
 
@@ -13,38 +11,28 @@ impl VirtualDom {
     /// This is cancel safe, so if the future is dropped, you can push events into the virtualdom
     pub async fn wait_for_work(&mut self) {
         loop {
-            let msg = self.scheduler.rx.next().await.unwrap();
-
-            println!("msg received: {:?}", msg);
-
-            match msg {
+            match self.scheduler.rx.next().await.unwrap() {
                 SchedulerMsg::Event => todo!(),
                 SchedulerMsg::Immediate(_) => todo!(),
                 SchedulerMsg::DirtyAll => todo!(),
+
                 SchedulerMsg::TaskNotified(id) => {
                     let mut tasks = self.scheduler.handle.tasks.borrow_mut();
                     let local_task = &tasks[id.0];
 
-                    // // attach the waker to itself
-                    let waker = make_task_waker(local_task);
+                    // attach the waker to itself
+                    // todo: don't make a new waker every time, make it once and then just clone it
+                    let waker = make_task_waker(local_task.clone());
                     let mut cx = Context::from_waker(&waker);
-                    let mut fut = unsafe { &mut *local_task.task };
 
-                    let pinned = unsafe { Pin::new_unchecked(fut.deref_mut()) };
+                    // safety: the waker owns its task and everythig is single threaded
+                    let fut = unsafe { &mut *local_task.task.get() };
 
-                    match pinned.poll(&mut cx) {
-                        futures_task::Poll::Ready(_) => {
-                            // remove the task
-                            tasks.remove(id.0);
-                        }
-                        futures_task::Poll::Pending => {}
-                    }
-
-                    if tasks.is_empty() {
-                        return;
+                    if let futures_task::Poll::Ready(_) = fut.poll_unpin(&mut cx) {
+                        tasks.remove(id.0);
                     }
                 }
-                // SchedulerMsg::TaskNotified(id) => {},
+
                 SchedulerMsg::SuspenseNotified(_) => todo!(),
             }
         }

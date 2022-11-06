@@ -95,7 +95,7 @@ impl ScopeState {
 
         DynamicNode::Component {
             name: fn_name,
-            is_static: P::IS_STATIC,
+            static_props: P::IS_STATIC,
             props: Cell::new(detached_dyn),
             placeholder: Cell::new(None),
         }

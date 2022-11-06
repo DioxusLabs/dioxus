@@ -8,7 +8,7 @@ use crate::{
     bump_frame::BumpFrame,
     factory::RenderReturn,
     scopes::{ScopeId, ScopeState},
-    virtualdom::VirtualDom,
+    virtualdom::VirtualDom, innerlude::SuspenseLeaf,
 };
 
 impl VirtualDom {
@@ -68,11 +68,25 @@ impl VirtualDom {
         let res = match &mut new_nodes {
             RenderReturn::Sync(_) => new_nodes,
             RenderReturn::Async(fut) => {
-                use futures_util::FutureExt;
-                let mut cx = Context::from_waker(&noop_waker_ref());
+                // use futures_util::FutureExt;
+
+                let leaves = self.scheduler.handle.leaves.borrow_mut();
+
+                leaves.insert(Rc::new(SuspenseLeaf {
+                    id: todo!(),
+                    scope: todo!(),
+                    boundary: todo!(),
+                    tx: todo!(),
+                    task: todo!(),
+                }));
+
+                let waker = crate::scheduler::make_suspense_waker(task);
 
                 match fut.poll_unpin(&mut cx) {
-                    std::task::Poll::Ready(nodes) => RenderReturn::Sync(nodes),
+                    std::task::Poll::Ready(nodes) => {
+                        leaves.remove(key;)
+                        RenderReturn::Sync(nodes)
+                    },
                     std::task::Poll::Pending => new_nodes,
                 }
             }

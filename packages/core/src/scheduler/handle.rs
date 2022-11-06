@@ -16,8 +16,12 @@ impl std::ops::Deref for SchedulerHandle {
 
 pub struct HandleInner {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub tasks: RefCell<Slab<LocalTask>>,
-    pub leaves: RefCell<Slab<SuspenseLeaf>>,
+
+    /// Tasks created with cx.spawn
+    pub tasks: RefCell<Slab<Rc<LocalTask>>>,
+
+    /// Async components
+    pub leaves: RefCell<Slab<Rc<SuspenseLeaf>>>,
 }
 
 impl SchedulerHandle {

@@ -6,6 +6,7 @@ mod handle;
 mod suspense;
 mod task;
 mod wait;
+mod waker;
 
 pub use handle::*;
 use slab::Slab;

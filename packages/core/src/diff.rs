@@ -72,7 +72,7 @@ impl<'b> VirtualDom {
         {
             #[rustfmt::skip]
             match (left_node, right_node) {
-                (DynamicNode::Component { props: lprops, .. }, DynamicNode::Component {  is_static , props: rprops, .. }) => {
+                (DynamicNode::Component { props: lprops, .. }, DynamicNode::Component {  static_props: is_static , props: rprops, .. }) => {
                     let left_props = unsafe { &mut *lprops.get()};
                     let right_props = unsafe { &mut *rprops.get()};
 

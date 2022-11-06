@@ -99,7 +99,10 @@ impl VirtualDom {
             }
 
             // We're on top of a node that has a dynamic child for a descendant
-            while let Some((idx, path)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
+            // Skip any node that's a root
+            while let Some((idx, path)) =
+                dynamic_nodes.next_if(|(_, p)| p.len() > 1 && p[0] == root_idx as u8)
+            {
                 let node = &template.dynamic_nodes[idx];
                 let m = self.create_dynamic_node(mutations, template, node, idx);
                 if m > 0 {
@@ -180,6 +183,7 @@ impl VirtualDom {
             DynamicNode::Component {
                 props, placeholder, ..
             } => {
+                println!("creaitng component");
                 let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
 
                 let render_ret = self.run_scope(id);
@@ -211,6 +215,7 @@ impl VirtualDom {
 
                         let scope = self.scope_stack.last().unwrap();
                         let scope = &self.scopes[scope.0];
+
                         let boundary = scope.consume_context::<SuspenseContext>().unwrap();
 
                         // try to poll the future once - many times it will be ready immediately or require little to no work
