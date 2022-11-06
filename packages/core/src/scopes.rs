@@ -10,8 +10,13 @@ use futures_channel::mpsc::UnboundedSender;
 use futures_util::Future;
 
 use crate::{
-    any_props::AnyProps, arena::ElementId, bump_frame::BumpFrame, future_container::FutureQueue,
-    innerlude::SchedulerMsg, lazynodes::LazyNodes, nodes::VNode, suspense::Fiber, TaskId,
+    any_props::AnyProps,
+    arena::ElementId,
+    bump_frame::BumpFrame,
+    innerlude::{SchedulerHandle, SchedulerMsg},
+    lazynodes::LazyNodes,
+    nodes::VNode,
+    TaskId,
 };
 
 pub struct Scope<'a, T = ()> {
@@ -64,9 +69,7 @@ pub struct ScopeState {
 
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 
-    pub tasks: FutureQueue,
-
-    pub suspense_boundary: Option<Fiber<'static>>,
+    pub tasks: SchedulerHandle,
 
     pub props: *mut dyn AnyProps<'static>,
 }
@@ -296,12 +299,6 @@ impl ScopeState {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        // wake up the scheduler if it is sleeping
-        self.tasks
-            .sender
-            .unbounded_send(SchedulerMsg::NewTask(self.id))
-            .expect("Scheduler should exist");
-
         self.tasks.spawn(self.id, fut)
     }
 
@@ -314,14 +311,16 @@ impl ScopeState {
     ///
     /// This is good for tasks that need to be run after the component has been dropped.
     pub fn spawn_forever(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        // The root scope will never be unmounted so we can just add the task at the top of the app
+        let id = self.tasks.spawn(ScopeId(0), fut);
+
         // wake up the scheduler if it is sleeping
         self.tasks
             .sender
-            .unbounded_send(SchedulerMsg::NewTask(self.id))
+            .unbounded_send(SchedulerMsg::TaskNotified(id))
             .expect("Scheduler should exist");
 
-        // The root scope will never be unmounted so we can just add the task at the top of the app
-        self.tasks.spawn(ScopeId(0), fut)
+        id
     }
 
     /// Informs the scheduler that this task is no longer needed and should be removed

@@ -7,7 +7,6 @@ use crate::{
     arena::ElementId,
     bump_frame::BumpFrame,
     factory::RenderReturn,
-    nodes::VNode,
     scopes::{ScopeId, ScopeState},
     virtualdom::VirtualDom,
 };
@@ -26,8 +25,6 @@ impl VirtualDom {
             id,
             height,
             props,
-            tasks: self.pending_futures.clone(),
-            suspense_boundary: None,
             node_arena_1: BumpFrame::new(50),
             node_arena_2: BumpFrame::new(50),
             render_cnt: Default::default(),
@@ -35,6 +32,7 @@ impl VirtualDom {
             hook_vals: Default::default(),
             hook_idx: Default::default(),
             shared_contexts: Default::default(),
+            tasks: self.scheduler.handle.clone(),
         });
 
         id

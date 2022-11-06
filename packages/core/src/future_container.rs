@@ -1,6 +1,7 @@
 use futures_channel::mpsc::UnboundedSender;
 use futures_util::Future;
-use std::{cell::RefCell, rc::Rc};
+use slab::Slab;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use crate::innerlude::ScopeId;
 /// The type of message that can be sent to the scheduler.
@@ -25,7 +26,7 @@ pub enum SchedulerMsg {
 #[derive(Clone)]
 pub struct FutureQueue {
     pub sender: UnboundedSender<SchedulerMsg>,
-    pub queue: Rc<RefCell<Vec<Box<dyn Future<Output = ()>>>>>,
+    pub queue: RefCell<Slab<Arc<dyn Future<Output = ()>>>>,
 }
 
 impl FutureQueue {
@@ -36,13 +37,10 @@ impl FutureQueue {
         }
     }
 
-    pub fn spawn(&self, id: ScopeId, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        self.sender
-            .unbounded_send(SchedulerMsg::NewTask(id))
-            .unwrap();
-        self.queue.borrow_mut().push(Box::new(fut));
+    pub fn spawn(&self, scope: ScopeId, fut: impl Future<Output = ()> + 'static) -> TaskId {
+        let id = self.queue.borrow_mut().insert(Arc::new(fut));
 
-        todo!()
+        TaskId { id, scope }
     }
 
     pub fn remove(&self, id: TaskId) {

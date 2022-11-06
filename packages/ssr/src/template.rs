@@ -230,13 +230,16 @@ fn async_children() {
 
         render! {
             div {
-                async_child {}
+                "Hello world"
             }
         }
     }
 
     async fn async_child(cx: Scope<'_>) -> Element {
         let d = 123;
+
+        let user_name = use_fetch("https://jsonplaceholder.typicode.com/users/1").await;
+
         render! { p { "{d}" "hii" } }
     }
 

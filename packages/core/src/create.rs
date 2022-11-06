@@ -1,11 +1,11 @@
 use std::pin::Pin;
 
 use crate::factory::{FiberLeaf, RenderReturn};
+use crate::innerlude::SuspenseContext;
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
-use crate::suspense::LeafLocation;
 use crate::virtualdom::VirtualDom;
 use crate::{AttributeValue, Element, ElementId, TemplateAttribute};
 use bumpalo::boxed::Box as BumpBox;
@@ -209,29 +209,36 @@ impl VirtualDom {
                     RenderReturn::Async(fut) => {
                         let new_id = self.next_element(template);
 
-                        // move up the tree looking for the first suspense boundary
-                        // our current component can not be a suspense boundary, so we skip it
-                        for scope_id in self.scope_stack.iter().rev().skip(1) {
-                            let scope = &mut self.scopes[scope_id.0];
-                            if let Some(fiber) = &mut scope.suspense_boundary {
-                                // save the fiber leaf onto the fiber itself
-                                let detached: &mut FiberLeaf<'static> =
-                                    unsafe { std::mem::transmute(fut) };
+                        let scope = self.scope_stack.last().unwrap();
+                        let scope = &self.scopes[scope.0];
+                        let boundary = scope.consume_context::<SuspenseContext>().unwrap();
 
-                                // And save the fiber leaf using the placeholder node
-                                // this way, when we resume the fiber, we just need to "pick up placeholder"
-                                fiber.futures.insert(
-                                    LeafLocation {
-                                        element: new_id,
-                                        scope: *scope_id,
-                                    },
-                                    detached,
-                                );
+                        // try to poll the future once - many times it will be ready immediately or require little to no work
 
-                                self.suspended_scopes.insert(*scope_id);
-                                break;
-                            }
-                        }
+                        todo!();
+
+                        // // move up the tree looking for the first suspense boundary
+                        // // our current component can not be a suspense boundary, so we skip it
+                        // for scope_id in self.scope_stack.iter().rev().skip(1) {
+                        //     if let Some(fiber) = &mut scope.suspense_boundary {
+                        //         // save the fiber leaf onto the fiber itself
+                        //         let detached: &mut FiberLeaf<'static> =
+                        //             unsafe { std::mem::transmute(fut) };
+
+                        //         // And save the fiber leaf using the placeholder node
+                        //         // this way, when we resume the fiber, we just need to "pick up placeholder"
+                        //         fiber.futures.insert(
+                        //             LeafLocation {
+                        //                 element: new_id,
+                        //                 scope: *scope_id,
+                        //             },
+                        //             detached,
+                        //         );
+
+                        //         self.suspended_scopes.insert(*scope_id);
+                        //         break;
+
+                        // }
 
                         placeholder.set(Some(new_id));
                         mutations.push(AssignId {

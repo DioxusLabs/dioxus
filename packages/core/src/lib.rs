@@ -6,26 +6,24 @@ mod create;
 mod diff;
 mod events;
 mod factory;
-mod future_container;
 mod garbage;
 mod lazynodes;
 mod mutations;
 mod nodes;
 mod properties;
+mod scheduler;
 mod scope_arena;
 mod scopes;
-// mod subtree;
-mod suspense;
 mod virtualdom;
 
 pub(crate) mod innerlude {
     pub use crate::arena::*;
     pub use crate::events::*;
-    pub use crate::future_container::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::scheduler::*;
     pub use crate::scopes::*;
     pub use crate::virtualdom::*;
 

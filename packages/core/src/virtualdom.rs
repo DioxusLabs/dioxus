@@ -3,17 +3,17 @@ use crate::arena::ElementPath;
 use crate::component::Component;
 use crate::diff::DirtyScope;
 use crate::factory::RenderReturn;
-use crate::future_container::FutureQueue;
-use crate::innerlude::SchedulerMsg;
+use crate::innerlude::{Scheduler, SchedulerMsg};
 use crate::mutations::Mutation;
 use crate::nodes::{Template, TemplateId};
-use crate::suspense::Fiber;
+
 use crate::{
     arena::ElementId,
     scopes::{ScopeId, ScopeState},
 };
-use crate::{Element, Scope};
+use crate::{scheduler, Element, Scope};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
+use scheduler::SuspenseContext;
 use slab::Slab;
 use std::collections::{BTreeSet, HashMap};
 
@@ -24,15 +24,12 @@ pub struct VirtualDom {
     pub(crate) scope_stack: Vec<ScopeId>,
     pub(crate) element_stack: Vec<ElementId>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) pending_futures: FutureQueue,
-    pub(crate) sender: UnboundedSender<SchedulerMsg>,
-    pub(crate) receiver: UnboundedReceiver<SchedulerMsg>,
-    pub(crate) suspended_scopes: BTreeSet<ScopeId>,
+    pub(crate) scheduler: Scheduler,
 }
 
 impl VirtualDom {
     pub fn new(app: fn(Scope) -> Element) -> Self {
-        let (sender, receiver) = futures_channel::mpsc::unbounded();
+        let scheduler = Scheduler::new();
 
         let mut res = Self {
             templates: Default::default(),
@@ -41,10 +38,7 @@ impl VirtualDom {
             scope_stack: Vec::new(),
             element_stack: vec![ElementId(0)],
             dirty_scopes: BTreeSet::new(),
-            pending_futures: FutureQueue::new(sender.clone()),
-            suspended_scopes: BTreeSet::new(),
-            receiver,
-            sender,
+            scheduler,
         };
 
         let props = Box::into_raw(Box::new(VComponentProps::new_empty(app)));
@@ -53,7 +47,7 @@ impl VirtualDom {
         let root = res.new_scope(props);
 
         // the root component is always a suspense boundary for any async children
-        res.scopes[root.0].suspense_boundary = Some(Fiber::default());
+        // res.scopes[root.0].provide_context(SuspenseContext::new(root));
 
         assert_eq!(root, ScopeId(0));
 
@@ -70,7 +64,9 @@ impl VirtualDom {
                 self.create(mutations, node);
                 self.scope_stack.pop();
             }
-            RenderReturn::Sync(None) => todo!("Handle empty root node"),
+            RenderReturn::Sync(None) => {
+                //
+            }
             RenderReturn::Async(_) => unreachable!(),
         }
     }
@@ -89,11 +85,6 @@ impl VirtualDom {
         //
     }
 
-    /// Wait for futures internal to the virtualdom
-    ///
-    /// This is cancel safe, so if the future is dropped, you can push events into the virtualdom
-    pub async fn wait_for_work(&mut self) {}
-
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         self.scopes.get(id.0)
     }
@@ -108,18 +99,3 @@ impl Drop for VirtualDom {
         // self.drop_scope(ScopeId(0));
     }
 }
-
-/*
-div {
-    Window {}
-    Window {}
-}
-
-edits -> Vec<Mutation>
-
-Subtree {
-    id: 0,
-    namespace: "react-three-fiber",
-    edits: []
-}
-*/
