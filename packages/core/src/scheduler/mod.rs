@@ -1,7 +1,9 @@
+use slab::Slab;
 use std::sync::Arc;
 
 use crate::ScopeId;
 
+mod bumpslab;
 mod handle;
 mod suspense;
 mod task;
@@ -9,9 +11,9 @@ mod wait;
 mod waker;
 
 pub use handle::*;
-use slab::Slab;
 pub use suspense::*;
 pub use task::*;
+pub use waker::RcWake;
 
 /// The type of message that can be sent to the scheduler.
 ///

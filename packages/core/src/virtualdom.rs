@@ -13,9 +13,11 @@ use crate::{
 };
 use crate::{scheduler, Element, Scope};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use scheduler::SuspenseContext;
+use scheduler::{SuspenseBoundary, SuspenseContext};
 use slab::Slab;
+use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
+use std::rc::Rc;
 
 pub struct VirtualDom {
     pub(crate) templates: HashMap<TemplateId, Template<'static>>,
@@ -47,7 +49,7 @@ impl VirtualDom {
         let root = res.new_scope(props);
 
         // the root component is always a suspense boundary for any async children
-        // res.scopes[root.0].provide_context(SuspenseContext::new(root));
+        res.scopes[root.0].provide_context(Rc::new(RefCell::new(SuspenseBoundary::new(root))));
 
         assert_eq!(root, ScopeId(0));
 

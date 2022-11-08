@@ -47,6 +47,27 @@ impl<'a> VNode<'a> {
             },
         })
     }
+
+    pub fn single_text(
+        cx: &'a ScopeState,
+        text: &'static [TemplateNode<'static>],
+        id: &'static str,
+    ) -> Option<Self> {
+        Some(VNode {
+            node_id: Cell::new(ElementId(0)),
+            key: None,
+            parent: None,
+            root_ids: &[],
+            dynamic_nodes: &[],
+            dynamic_attrs: &[],
+            template: Template {
+                id,
+                roots: text,
+                node_paths: &[&[0]],
+                attr_paths: &[],
+            },
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -62,22 +83,10 @@ impl<'a> std::hash::Hash for Template<'a> {
         self.id.hash(state);
     }
 }
-
+impl Eq for Template<'_> {}
 impl PartialEq for Template<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id
-    }
-}
-
-impl Eq for Template<'_> {}
-impl PartialOrd for Template<'_> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.id.partial_cmp(other.id)
-    }
-}
-impl Ord for Template<'_> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.id.cmp(other.id)
     }
 }
 
@@ -96,24 +105,17 @@ pub enum TemplateNode<'a> {
 }
 
 pub enum DynamicNode<'a> {
-    // Anything declared in component form
-    // IE in caps or with underscores
     Component {
         name: &'static str,
         static_props: bool,
         props: Cell<*mut dyn AnyProps<'a>>,
         placeholder: Cell<Option<ElementId>>,
     },
-
-    // Comes in with string interpolation or from format_args, include_str, etc
     Text {
         id: Cell<ElementId>,
         value: &'a str,
     },
-
-    // Anything that's coming in as an iterator
     Fragment(&'a [VNode<'a>]),
-
     Placeholder(Cell<ElementId>),
 }
 
@@ -153,8 +155,8 @@ impl<'a> std::fmt::Debug for AttributeValue<'a> {
             Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
-            Self::Listener(arg0) => f.debug_tuple("Listener").finish(),
-            Self::Any(arg0) => f.debug_tuple("Any").finish(),
+            Self::Listener(_) => f.debug_tuple("Listener").finish(),
+            Self::Any(_) => f.debug_tuple("Any").finish(),
             Self::None => write!(f, "None"),
         }
     }
@@ -167,7 +169,7 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Float(l0), Self::Float(r0)) => l0 == r0,
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
-            (Self::Listener(l0), Self::Listener(r0)) => true,
+            (Self::Listener(_), Self::Listener(_)) => true,
             (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(*r0),
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
@@ -186,20 +188,14 @@ impl<'a> AttributeValue<'a> {
             _ => return false,
         }
     }
-
-    fn is_listener(&self) -> bool {
-        matches!(self, AttributeValue::Listener(_))
-    }
 }
 
 pub trait AnyValue {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
     fn our_typeid(&self) -> TypeId;
 }
-impl<T> AnyValue for T
-where
-    T: PartialEq + Any,
-{
+
+impl<T: PartialEq + Any> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
         if self.type_id() != other.our_typeid() {
             return false;

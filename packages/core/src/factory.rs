@@ -119,7 +119,7 @@ where
     fn as_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
         let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
         let boxed = unsafe { BumpBox::from_raw(f) };
-        let pined: Pin<BumpBox<_>> = boxed.into();
+        let pined: BumpBox<_> = boxed.into();
         RenderReturn::Async(pined)
     }
 }
@@ -133,7 +133,7 @@ fn takes_it() {
 
 pub enum RenderReturn<'a> {
     Sync(Element<'a>),
-    Async(Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>),
+    Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
 }
 
 pub type FiberLeaf<'a> = Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>;

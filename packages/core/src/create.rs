@@ -188,7 +188,6 @@ impl VirtualDom {
 
                 let render_ret = self.run_scope(id);
 
-                // shut up about lifetimes please, I know what I'm doing
                 let render_ret: &mut RenderReturn = unsafe { std::mem::transmute(render_ret) };
 
                 match render_ret {
@@ -204,53 +203,22 @@ impl VirtualDom {
                     RenderReturn::Sync(None) => {
                         let new_id = self.next_element(template);
                         placeholder.set(Some(new_id));
+                        self.scopes[id.0].placeholder.set(Some(new_id));
                         mutations.push(AssignId {
                             id: new_id,
                             path: &template.template.node_paths[idx][1..],
                         });
                         0
                     }
+
                     RenderReturn::Async(fut) => {
                         let new_id = self.next_element(template);
-
-                        let scope = self.scope_stack.last().unwrap();
-                        let scope = &self.scopes[scope.0];
-
-                        let boundary = scope.consume_context::<SuspenseContext>().unwrap();
-
-                        // try to poll the future once - many times it will be ready immediately or require little to no work
-
-                        todo!();
-
-                        // // move up the tree looking for the first suspense boundary
-                        // // our current component can not be a suspense boundary, so we skip it
-                        // for scope_id in self.scope_stack.iter().rev().skip(1) {
-                        //     if let Some(fiber) = &mut scope.suspense_boundary {
-                        //         // save the fiber leaf onto the fiber itself
-                        //         let detached: &mut FiberLeaf<'static> =
-                        //             unsafe { std::mem::transmute(fut) };
-
-                        //         // And save the fiber leaf using the placeholder node
-                        //         // this way, when we resume the fiber, we just need to "pick up placeholder"
-                        //         fiber.futures.insert(
-                        //             LeafLocation {
-                        //                 element: new_id,
-                        //                 scope: *scope_id,
-                        //             },
-                        //             detached,
-                        //         );
-
-                        //         self.suspended_scopes.insert(*scope_id);
-                        //         break;
-
-                        // }
-
                         placeholder.set(Some(new_id));
+                        self.scopes[id.0].placeholder.set(Some(new_id));
                         mutations.push(AssignId {
                             id: new_id,
                             path: &template.template.node_paths[idx][1..],
                         });
-
                         0
                     }
                 }

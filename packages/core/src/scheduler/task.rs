@@ -61,11 +61,6 @@ impl HandleInner {
     }
 }
 
-pub fn make_task_waker(task: Rc<LocalTask>) -> Waker {
-    let ptr = Rc::into_raw(task).cast::<()>();
-    super::waker::make_rc_waker(task)
-}
-
 impl RcWake for LocalTask {
     fn wake_by_ref(arc_self: &Rc<Self>) {
         _ = arc_self

@@ -72,6 +72,7 @@ pub struct ScopeState {
     pub tasks: SchedulerHandle,
 
     pub props: *mut dyn AnyProps<'static>,
+    pub placeholder: Cell<Option<ElementId>>,
 }
 
 impl ScopeState {

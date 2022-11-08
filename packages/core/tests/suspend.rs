@@ -32,7 +32,10 @@ async fn async_child(cx: Scope<'_>) -> Element {
 
     fut.await;
 
-    println!("Future awaited");
+    println!("Future awaited and complete");
 
-    None
+    let dy = cx.component(async_child, (), "async_child");
+    VNode::single_component(&cx, dy, "app")
+
+    // VNode::single_text(&cx, &[TemplateNode::Text("it works!")], "beauty")
 }
