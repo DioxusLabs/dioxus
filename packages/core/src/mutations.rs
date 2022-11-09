@@ -3,9 +3,8 @@ use crate::arena::ElementId;
 #[derive(Debug)]
 pub struct Renderer<'a> {
     pub subtree: usize,
-    pub mutations: Vec<Mutation<'a>>,
     pub template_mutations: Vec<Mutation<'a>>,
-    // mutations: Vec<Mutations<'a>>,
+    pub mutations: Vec<Mutation<'a>>,
 }
 
 impl<'a> Renderer<'a> {

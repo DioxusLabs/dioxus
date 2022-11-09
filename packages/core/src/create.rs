@@ -55,43 +55,42 @@ impl VirtualDom {
                 TemplateNode::DynamicText { .. } => 1,
             };
 
-            let mut cur_route = None;
-
             // we're on top of a node that has a dynamic attribute for a descendant
             // Set that attribute now before the stack gets in a weird state
-            while let Some((idx, path)) = dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8) {
-                let attr = &template.dynamic_attrs[idx];
 
-                if cur_route.is_none() {
-                    cur_route = Some((self.next_element(template), &path[1..]));
-                }
+            while let Some((mut attr_id, path)) =
+                dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
+            {
+                let id = self.next_element(template);
+                mutations.push(AssignId {
+                    path: &path[1..],
+                    id,
+                });
 
-                // Attach all the elementIDs to the nodes with dynamic content
-                let (id, path) = cur_route.unwrap();
+                // set any future attrs with the same path (ie same element)
+                loop {
+                    let attr = &template.dynamic_attrs[attr_id];
+                    attr.mounted_element.set(id);
 
-                mutations.push(AssignId { path, id });
-                attr.mounted_element.set(id);
-
-                match attr.value {
-                    AttributeValue::Text(value) => {
-                        mutations.push(SetAttribute {
+                    match attr.value {
+                        AttributeValue::Text(value) => mutations.push(SetAttribute {
                             name: attr.name,
                             value,
                             id,
-                        });
+                        }),
+                        AttributeValue::Listener(_) => {}
+                        AttributeValue::Float(_) => todo!(),
+                        AttributeValue::Int(_) => todo!(),
+                        AttributeValue::Bool(_) => todo!(),
+                        AttributeValue::Any(_) => todo!(),
+                        AttributeValue::None => todo!(),
                     }
 
-                    AttributeValue::Listener(_) => {
-                        //
+                    if let Some((next_attr_id, _)) = dynamic_attrs.next_if(|(_, p)| *p == path) {
+                        attr_id = next_attr_id
+                    } else {
+                        break;
                     }
-
-                    AttributeValue::Float(_) => todo!(),
-                    AttributeValue::Int(_) => todo!(),
-                    AttributeValue::Bool(_) => todo!(),
-                    AttributeValue::Any(_) => todo!(),
-
-                    // Optional attributes
-                    AttributeValue::None => todo!(),
                 }
             }
 

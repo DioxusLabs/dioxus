@@ -15,6 +15,7 @@ pub mod on {
     };
     use euclid::UnknownUnit;
     use keyboard_types::{Code, Key, Location, Modifiers};
+    use std::cell::Cell;
     use std::collections::HashMap;
     use std::convert::TryInto;
     use std::fmt::{Debug, Formatter};
@@ -62,7 +63,20 @@ pub mod on {
                         // let handler = bump.alloc(std::cell::RefCell::new(Some(callback)));
                         // factory.listener(shortname, handler)
 
-                        todo!()
+                        // pub struct Attribute<'a> {
+                        //     pub name: &'a str,
+                        //     pub value: AttributeValue<'a>,
+                        //     pub namespace: Option<&'static str>,
+                        //     pub mounted_element: Cell<ElementId>,
+                        //     pub volatile: bool,
+                        // }
+                        Attribute {
+                            name: stringify!($name),
+                            value: AttributeValue::Text("asd"),
+                            namespace: None,
+                            mounted_element: Cell::new(ElementId(0)),
+                            volatile: false,
+                        }
                     }
                 )*
             )*

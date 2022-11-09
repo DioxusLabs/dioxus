@@ -76,7 +76,7 @@ impl VirtualDom {
             RenderReturn::Sync(None) => {
                 //
             }
-            RenderReturn::Async(_) => unreachable!(),
+            RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         mutations.push(Mutation::AppendChildren { m: created });
