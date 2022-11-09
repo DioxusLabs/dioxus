@@ -33,17 +33,7 @@ pub enum SchedulerMsg {
 
 use std::{cell::RefCell, rc::Rc};
 
-#[derive(Clone)]
-pub(crate) struct Scheduler(Rc<HandleInner>);
-
-impl std::ops::Deref for Scheduler {
-    type Target = HandleInner;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-pub struct HandleInner {
+pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     /// Tasks created with cx.spawn
@@ -54,11 +44,11 @@ pub struct HandleInner {
 }
 
 impl Scheduler {
-    pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Self {
-        Self(Rc::new(HandleInner {
+    pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
+        Rc::new(Scheduler {
             sender,
             tasks: RefCell::new(Slab::new()),
             leaves: RefCell::new(Slab::new()),
-        }))
+        })
     }
 }

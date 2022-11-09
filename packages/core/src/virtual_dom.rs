@@ -11,10 +11,11 @@ use crate::{
 };
 use crate::{scheduler, Element, Scope};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use futures_util::Future;
 use scheduler::{SuspenseBoundary, SuspenseId};
 use slab::Slab;
 use std::collections::{BTreeSet, HashMap};
+use std::future::Future;
+use std::rc::Rc;
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -113,7 +114,7 @@ pub struct VirtualDom {
     pub(crate) scopes: Slab<ScopeState>,
     pub(crate) element_stack: Vec<ElementId>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
-    pub(crate) scheduler: Scheduler,
+    pub(crate) scheduler: Rc<Scheduler>,
 
     // While diffing we need some sort of way of breaking off a stream of suspended mutations.
     pub(crate) scope_stack: Vec<ScopeId>,

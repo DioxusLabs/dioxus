@@ -1,16 +1,11 @@
+use super::{waker::RcWake, SchedulerMsg};
+use crate::{innerlude::Mutations, Element, ScopeId};
+use std::future::Future;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
     rc::Rc,
 };
-
-use super::{waker::RcWake, SchedulerMsg};
-use crate::{
-    innerlude::{Mutation, Mutations},
-    Element, ScopeId,
-};
-
-use futures_util::Future;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SuspenseId(pub usize);

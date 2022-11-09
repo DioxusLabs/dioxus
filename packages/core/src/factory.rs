@@ -2,7 +2,7 @@ use std::{cell::Cell, fmt::Arguments, pin::Pin};
 
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
-use futures_util::Future;
+use std::future::Future;
 
 use crate::{
     any_props::{AnyProps, VComponentProps},

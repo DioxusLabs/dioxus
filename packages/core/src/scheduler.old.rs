@@ -1,8 +1,8 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use futures_task::ArcWake;
-use futures_util::Future;
 use slab::Slab;
+use std::future::Future;
 
 use crate::{innerlude::Mutation, ScopeId};
 

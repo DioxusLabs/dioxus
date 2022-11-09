@@ -1,6 +1,6 @@
 use futures_channel::mpsc::UnboundedSender;
-use futures_util::Future;
 use slab::Slab;
+use std::future::Future;
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use crate::innerlude::ScopeId;

@@ -2,12 +2,13 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::Arc,
 };
 
 use bumpalo::Bump;
 use futures_channel::mpsc::UnboundedSender;
-use futures_util::Future;
+use std::future::Future;
 
 use crate::{
     any_props::AnyProps,
@@ -60,7 +61,7 @@ pub struct ScopeState {
 
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 
-    pub(crate) tasks: Scheduler,
+    pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
 
     pub(crate) props: *mut dyn AnyProps<'static>,

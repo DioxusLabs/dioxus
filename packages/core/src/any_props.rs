@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use futures_util::Future;
+use std::future::Future;
 
 use crate::{
     factory::{ComponentReturn, RenderReturn},
