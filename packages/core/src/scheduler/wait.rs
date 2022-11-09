@@ -1,9 +1,10 @@
-use futures_task::Context;
 use futures_util::{FutureExt, StreamExt};
+use std::task::{Context, Poll};
 
 use crate::{
+    diff::DirtyScope,
     factory::RenderReturn,
-    innerlude::{Mutation, Renderer, SuspenseContext},
+    innerlude::{Mutation, Mutations, SuspenseContext},
     VNode, VirtualDom,
 };
 
@@ -14,25 +15,29 @@ impl VirtualDom {
     ///
     /// This is cancel safe, so if the future is dropped, you can push events into the virtualdom
     pub async fn wait_for_work(&mut self) {
+        // todo: make sure the scheduler queue is completely drained
         loop {
-            match self.scheduler.rx.next().await.unwrap() {
-                SchedulerMsg::Event => todo!(),
-                SchedulerMsg::Immediate(_) => todo!(),
+            match self.rx.next().await.unwrap() {
+                SchedulerMsg::Event => break,
+
+                SchedulerMsg::Immediate(id) => {
+                    let height = self.scopes[id.0].height;
+                    self.dirty_scopes.insert(DirtyScope { height, id });
+                    break;
+                }
+
                 SchedulerMsg::DirtyAll => todo!(),
 
                 SchedulerMsg::TaskNotified(id) => {
-                    let mut tasks = self.scheduler.handle.tasks.borrow_mut();
-                    let local_task = &tasks[id.0];
+                    let mut tasks = self.scheduler.tasks.borrow_mut();
+                    let task = &tasks[id.0];
 
-                    // attach the waker to itself
-                    // todo: don't make a new waker every time, make it once and then just clone it
-                    let waker = local_task.waker();
-                    let mut cx = Context::from_waker(&waker);
+                    // If the task completes...
+                    if task.progress() {
+                        // Remove it from the scope so we dont try to double drop it when the scope dropes
+                        self.scopes[task.scope.0].spawned_tasks.remove(&id);
 
-                    // safety: the waker owns its task and everythig is single threaded
-                    let fut = unsafe { &mut *local_task.task.get() };
-
-                    if let futures_task::Poll::Ready(_) = fut.poll_unpin(&mut cx) {
+                        // Remove it from the scheduler
                         tasks.remove(id.0);
                     }
                 }
@@ -42,7 +47,6 @@ impl VirtualDom {
 
                     let leaf = self
                         .scheduler
-                        .handle
                         .leaves
                         .borrow_mut()
                         .get(id.0)
@@ -55,16 +59,14 @@ impl VirtualDom {
                     let waker = leaf.waker();
                     let mut cx = Context::from_waker(&waker);
 
-                    let fut = unsafe { &mut *leaf.task };
-
-                    let mut pinned = unsafe { std::pin::Pin::new_unchecked(fut) };
+                    // Safety: the future is always pinned to the bump arena
+                    let mut pinned = unsafe { std::pin::Pin::new_unchecked(&mut *leaf.task) };
                     let as_pinned_mut = &mut pinned;
 
                     // the component finished rendering and gave us nodes
                     // we should attach them to that component and then render its children
                     // continue rendering the tree until we hit yet another suspended component
-                    if let futures_task::Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx)
-                    {
+                    if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
                         let boundary = &self.scopes[leaf.scope_id.0]
                             .consume_context::<SuspenseContext>()
                             .unwrap();
@@ -87,7 +89,7 @@ impl VirtualDom {
                         if let RenderReturn::Sync(Some(template)) = ret {
                             let mutations = &mut fiber.mutations;
                             let template: &VNode = unsafe { std::mem::transmute(template) };
-                            let mutations: &mut Renderer =
+                            let mutations: &mut Mutations =
                                 unsafe { std::mem::transmute(mutations) };
 
                             self.scope_stack.push(scope_id);
@@ -103,8 +105,6 @@ impl VirtualDom {
                     }
                 }
             }
-
-            // now proces any events. If we end up running a component and it generates mutations, then we should run those mutations
         }
     }
 }

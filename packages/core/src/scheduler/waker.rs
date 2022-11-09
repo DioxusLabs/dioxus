@@ -1,4 +1,4 @@
-use futures_task::{RawWaker, RawWakerVTable, Waker};
+use std::task::{RawWaker, RawWakerVTable, Waker};
 use std::{mem, rc::Rc};
 
 pub trait RcWake: Sized {

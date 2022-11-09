@@ -49,7 +49,7 @@ impl<'a> VNode<'a> {
     }
 
     pub fn single_text(
-        cx: &'a ScopeState,
+        _cx: &'a ScopeState,
         text: &'static [TemplateNode<'static>],
         id: &'static str,
     ) -> Option<Self> {

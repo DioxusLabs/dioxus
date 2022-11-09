@@ -1,6 +1,6 @@
 use std::any::Any;
 
-use crate::innerlude::Renderer;
+use crate::innerlude::Mutations;
 use crate::virtual_dom::VirtualDom;
 use crate::{Attribute, AttributeValue, TemplateNode};
 
@@ -20,19 +20,32 @@ use crate::{
 use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DirtyScope {
-    height: usize,
-    id: ScopeId,
+    pub height: u32,
+    pub id: ScopeId,
+}
+
+impl PartialOrd for DirtyScope {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.height.cmp(&other.height))
+    }
+}
+
+impl Ord for DirtyScope {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.height.cmp(&other.height)
+    }
 }
 
 impl<'b> VirtualDom {
-    pub fn diff_scope(&mut self, mutations: &mut Renderer<'b>, scope: ScopeId) {
+    pub fn diff_scope(&mut self, mutations: &mut Mutations<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
     }
 
     pub fn diff_node(
         &mut self,
-        muts: &mut Renderer<'b>,
+        muts: &mut Mutations<'b>,
         left_template: &'b VNode<'b>,
         right_template: &'b VNode<'b>,
     ) {
@@ -177,7 +190,7 @@ impl<'b> VirtualDom {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(
         &mut self,
-        muts: &mut Renderer<'b>,
+        muts: &mut Mutations<'b>,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
     ) {
@@ -217,7 +230,7 @@ impl<'b> VirtualDom {
     // The stack is empty upon entry.
     fn diff_keyed_children(
         &mut self,
-        muts: &mut Renderer<'b>,
+        muts: &mut Mutations<'b>,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
     ) {
@@ -533,7 +546,7 @@ impl<'b> VirtualDom {
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, muts: &mut Renderer<'b>, nodes: &'b [VNode<'b>]) {
+    fn remove_nodes(&mut self, muts: &mut Mutations<'b>, nodes: &'b [VNode<'b>]) {
         //
     }
 }

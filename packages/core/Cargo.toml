@@ -23,12 +23,7 @@ fxhash = "0.2"
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-# internall used
-log = { version = "0.4" }
-
 futures-util = { version = "0.3", default-features = false }
-
-smallvec = "1.6"
 
 slab = "0.4"
 
@@ -38,7 +33,6 @@ indexmap = "1.7"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
-futures-task = "0.3.25"
 
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }

@@ -1,20 +1,32 @@
-use std::pin::Pin;
-
-use crate::factory::{FiberLeaf, RenderReturn};
-use crate::innerlude::{Renderer, SuspenseContext};
+use crate::factory::RenderReturn;
+use crate::innerlude::{Mutations, SuspenseContext};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, Element, ElementId, TemplateAttribute};
-use bumpalo::boxed::Box as BumpBox;
-use futures_util::Future;
+use crate::{AttributeValue, ElementId, ScopeId, TemplateAttribute};
 
 impl VirtualDom {
+    pub(crate) fn create_scope<'a>(
+        &mut self,
+        scope: ScopeId,
+        mutations: &mut Mutations<'a>,
+        template: &'a VNode<'a>,
+    ) -> usize {
+        self.scope_stack.push(scope);
+        let out = self.create(mutations, template);
+        self.scope_stack.pop();
+        out
+    }
+
     /// Create this template and write its mutations
-    pub fn create<'a>(&mut self, mutations: &mut Renderer<'a>, template: &'a VNode<'a>) -> usize {
-        // The best renderers will have templates prehydrated
+    pub(crate) fn create<'a>(
+        &mut self,
+        mutations: &mut Mutations<'a>,
+        template: &'a VNode<'a>,
+    ) -> usize {
+        // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
         if !self.templates.contains_key(&template.template.id) {
             for node in template.template.roots {
@@ -31,7 +43,7 @@ impl VirtualDom {
                 .insert(template.template.id, template.template.clone());
         }
 
-        // Walk the roots backwards, creating nodes and assigning IDs
+        // Walk the roots, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
         let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
         let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
@@ -39,25 +51,23 @@ impl VirtualDom {
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
             on_stack += match root {
-                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                TemplateNode::Element { .. }
+                | TemplateNode::Text(_)
+                | TemplateNode::DynamicText { .. } => {
                     mutations.push(LoadTemplate {
                         name: template.template.id,
                         index: root_idx,
                     });
-
                     1
                 }
 
                 TemplateNode::Dynamic(id) => {
                     self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
                 }
-
-                TemplateNode::DynamicText { .. } => 1,
             };
 
             // we're on top of a node that has a dynamic attribute for a descendant
             // Set that attribute now before the stack gets in a weird state
-
             while let Some((mut attr_id, path)) =
                 dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
             {
@@ -67,18 +77,17 @@ impl VirtualDom {
                     id,
                 });
 
-                // set any future attrs with the same path (ie same element)
                 loop {
-                    let attr = &template.dynamic_attrs[attr_id];
-                    attr.mounted_element.set(id);
+                    let attribute = &template.dynamic_attrs[attr_id];
+                    attribute.mounted_element.set(id);
 
-                    match attr.value {
+                    match attribute.value {
                         AttributeValue::Text(value) => mutations.push(SetAttribute {
-                            name: attr.name,
+                            name: attribute.name,
                             value,
                             id,
                         }),
-                        AttributeValue::Listener(_) => {}
+                        AttributeValue::Listener(_) => todo!("create listener attributes"),
                         AttributeValue::Float(_) => todo!(),
                         AttributeValue::Int(_) => todo!(),
                         AttributeValue::Bool(_) => todo!(),
@@ -86,10 +95,10 @@ impl VirtualDom {
                         AttributeValue::None => todo!(),
                     }
 
-                    if let Some((next_attr_id, _)) = dynamic_attrs.next_if(|(_, p)| *p == path) {
-                        attr_id = next_attr_id
-                    } else {
-                        break;
+                    // Only push the dynamic attributes forward if they match the current path (same element)
+                    match dynamic_attrs.next_if(|(_, p)| *p == path) {
+                        Some((next_attr_id, _)) => attr_id = next_attr_id,
+                        None => break,
                     }
                 }
             }
@@ -113,7 +122,7 @@ impl VirtualDom {
         on_stack
     }
 
-    pub fn create_static_node<'a>(
+    pub(crate) fn create_static_node<'a>(
         &mut self,
         mutations: &mut Vec<Mutation<'a>>,
         template: &'a VNode<'a>,
@@ -156,9 +165,9 @@ impl VirtualDom {
         }
     }
 
-    pub fn create_dynamic_node<'a>(
+    pub(crate) fn create_dynamic_node<'a>(
         &mut self,
-        mutations: &mut Renderer<'a>,
+        mutations: &mut Mutations<'a>,
         template: &'a VNode<'a>,
         node: &'a DynamicNode<'a>,
         idx: usize,
@@ -172,24 +181,22 @@ impl VirtualDom {
                     path: &template.template.node_paths[idx][1..],
                     value,
                 });
-
                 1
             }
 
             DynamicNode::Component {
                 props, placeholder, ..
             } => {
-                let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
-                let render_ret = self.run_scope(id);
-                let render_ret: &mut RenderReturn = unsafe { std::mem::transmute(render_ret) };
+                let scope = self
+                    .new_scope(unsafe { std::mem::transmute(props.get()) })
+                    .id;
+                let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
 
-                // if boundary or subtree, start working on a new stack of mutations
-
-                match render_ret {
+                match return_nodes {
                     RenderReturn::Sync(None) | RenderReturn::Async(_) => {
                         let new_id = self.next_element(template);
                         placeholder.set(Some(new_id));
-                        self.scopes[id.0].placeholder.set(Some(new_id));
+                        self.scopes[scope.0].placeholder.set(Some(new_id));
                         mutations.push(AssignId {
                             id: new_id,
                             path: &template.template.node_paths[idx][1..],
@@ -200,28 +207,28 @@ impl VirtualDom {
                     RenderReturn::Sync(Some(template)) => {
                         let mutations_to_this_point = mutations.len();
 
-                        self.scope_stack.push(id);
+                        self.scope_stack.push(scope);
                         let mut created = self.create(mutations, template);
                         self.scope_stack.pop();
 
-                        if !self.waiting_on.is_empty() {
+                        if !self.collected_leaves.is_empty() {
                             if let Some(boundary) =
-                                self.scopes[id.0].has_context::<SuspenseContext>()
+                                self.scopes[scope.0].has_context::<SuspenseContext>()
                             {
                                 let mut boundary_mut = boundary.borrow_mut();
                                 let split_off = mutations.split_off(mutations_to_this_point);
 
                                 let split_off = unsafe { std::mem::transmute(split_off) };
 
-                                println!("SPLIT OFF: {:#?}", split_off);
-
                                 boundary_mut.mutations.mutations = split_off;
-                                boundary_mut.waiting_on.extend(self.waiting_on.drain(..));
+                                boundary_mut
+                                    .waiting_on
+                                    .extend(self.collected_leaves.drain(..));
 
                                 // Since this is a boundary, use it as a placeholder
                                 let new_id = self.next_element(template);
                                 placeholder.set(Some(new_id));
-                                self.scopes[id.0].placeholder.set(Some(new_id));
+                                self.scopes[scope.0].placeholder.set(Some(new_id));
                                 mutations.push(AssignId {
                                     id: new_id,
                                     path: &template.template.node_paths[idx][1..],

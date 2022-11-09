@@ -1,16 +1,15 @@
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
-    pin::Pin,
     rc::Rc,
 };
 
 use super::{waker::RcWake, SchedulerMsg};
 use crate::{
-    innerlude::{Mutation, Renderer},
+    innerlude::{Mutation, Mutations},
     Element, ScopeId,
 };
-use futures_task::Waker;
+
 use futures_util::Future;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -22,7 +21,7 @@ pub type SuspenseContext = Rc<RefCell<SuspenseBoundary>>;
 pub struct SuspenseBoundary {
     pub id: ScopeId,
     pub waiting_on: HashSet<SuspenseId>,
-    pub mutations: Renderer<'static>,
+    pub mutations: Mutations<'static>,
 }
 
 impl SuspenseBoundary {
@@ -30,7 +29,7 @@ impl SuspenseBoundary {
         Rc::new(RefCell::new(Self {
             id,
             waiting_on: Default::default(),
-            mutations: Renderer::new(0),
+            mutations: Mutations::new(0),
         }))
     }
 }
@@ -46,10 +45,7 @@ pub struct SuspenseLeaf {
 
 impl RcWake for SuspenseLeaf {
     fn wake_by_ref(arc_self: &Rc<Self>) {
-        // if arc_self.notified.get() {
-        //     return;
-        // }
-        // arc_self.notified.set(true);
+        arc_self.notified.set(true);
         _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::SuspenseNotified(arc_self.id));

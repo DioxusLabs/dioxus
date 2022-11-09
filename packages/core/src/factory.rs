@@ -80,7 +80,6 @@ impl ScopeState {
     where
         P: Properties + 'a,
     {
-        let props = self.bump().alloc(props);
         let as_component = component;
         let vcomp = VComponentProps::new(as_component, P::memoize, props);
         let as_dyn = self.bump().alloc(vcomp) as &mut dyn AnyProps;
@@ -134,6 +133,15 @@ fn takes_it() {
 pub enum RenderReturn<'a> {
     Sync(Element<'a>),
     Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
+}
+
+impl<'a> RenderReturn<'a> {
+    pub(crate) unsafe fn extend_lifetime_ref<'c>(&self) -> &'c RenderReturn<'c> {
+        unsafe { std::mem::transmute(self) }
+    }
+    pub(crate) unsafe fn extend_lifetime<'c>(self) -> RenderReturn<'c> {
+        unsafe { std::mem::transmute(self) }
+    }
 }
 
 pub type FiberLeaf<'a> = Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>;

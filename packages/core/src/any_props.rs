@@ -21,7 +21,7 @@ where
 {
     pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
-    pub props: *const P,
+    pub props: P,
     pub _marker: PhantomData<A>,
 }
 
@@ -30,7 +30,7 @@ impl<'a> VComponentProps<'a, (), ()> {
         Self {
             render_fn,
             memo: <() as PartialEq>::eq,
-            props: std::ptr::null_mut(),
+            props: (),
             _marker: PhantomData,
         }
     }
@@ -40,7 +40,7 @@ impl<'a, P, A, F: ComponentReturn<'a, A>> VComponentProps<'a, P, A, F> {
     pub(crate) fn new(
         render_fn: fn(Scope<'a, P>) -> F,
         memo: unsafe fn(&P, &P) -> bool,
-        props: *const P,
+        props: P,
     ) -> Self {
         Self {
             render_fn,
@@ -66,12 +66,9 @@ impl<'a, P, A, F: ComponentReturn<'a, A>> AnyProps<'a> for VComponentProps<'a, P
         (self.memo)(real_us, real_other)
     }
 
-    fn render(&self, cx: &'a ScopeState) -> RenderReturn<'a> {
-        // Make sure the scope ptr is not null
-        // self.props.state.set(scope);
-
+    fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
         let scope = cx.bump().alloc(Scoped {
-            props: unsafe { &*self.props },
+            props: &self.props,
             scope: cx,
         });
 

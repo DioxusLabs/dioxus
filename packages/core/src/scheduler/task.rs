@@ -7,15 +7,16 @@ use std::{
     process::Output,
     rc::Rc,
     sync::Arc,
+    task::Poll,
 };
 
-use futures_task::{waker, ArcWake, Context, RawWaker, RawWakerVTable, Waker};
 use futures_util::{pin_mut, Future, FutureExt};
 use slab::Slab;
+use std::task::{Context, RawWaker, RawWakerVTable, Waker};
 
 use crate::{Element, ScopeId};
 
-use super::{waker::RcWake, HandleInner, SchedulerHandle, SchedulerMsg};
+use super::{waker::RcWake, HandleInner, Scheduler, SchedulerMsg};
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -24,10 +25,27 @@ pub struct TaskId(pub usize);
 /// the task itself is the waker
 
 pub struct LocalTask {
-    id: TaskId,
-    scope: ScopeId,
-    tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub id: TaskId,
+    pub scope: ScopeId,
+    pub tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+
+    // todo: use rc and weak, or the bump slab instead of unsafecell
     pub task: UnsafeCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
+}
+
+impl LocalTask {
+    pub fn progress(self: &Rc<Self>) -> bool {
+        let waker = self.waker();
+        let mut cx = Context::from_waker(&waker);
+
+        // safety: the waker owns its task and everythig is single threaded
+        let fut = unsafe { &mut *self.task.get() };
+
+        match fut.poll_unpin(&mut cx) {
+            Poll::Ready(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl HandleInner {

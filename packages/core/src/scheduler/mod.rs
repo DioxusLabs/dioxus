@@ -1,16 +1,11 @@
-use slab::Slab;
-use std::sync::Arc;
-
 use crate::ScopeId;
+use slab::Slab;
 
-mod bumpslab;
-mod handle;
 mod suspense;
 mod task;
 mod wait;
 mod waker;
 
-pub use handle::*;
 pub use suspense::*;
 pub use task::*;
 pub use waker::RcWake;
@@ -36,26 +31,34 @@ pub enum SchedulerMsg {
     SuspenseNotified(SuspenseId),
 }
 
-pub struct Scheduler {
-    rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
-    ready_suspense: Vec<ScopeId>,
-    pub handle: SchedulerHandle,
+use std::{cell::RefCell, rc::Rc};
+
+#[derive(Clone)]
+pub(crate) struct Scheduler(Rc<HandleInner>);
+
+impl std::ops::Deref for Scheduler {
+    type Target = HandleInner;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub struct HandleInner {
+    pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+
+    /// Tasks created with cx.spawn
+    pub tasks: RefCell<Slab<Rc<LocalTask>>>,
+
+    /// Async components
+    pub leaves: RefCell<Slab<Rc<SuspenseLeaf>>>,
 }
 
 impl Scheduler {
-    pub fn new() -> Self {
-        let (tx, rx) = futures_channel::mpsc::unbounded();
-        Self {
-            rx,
-            handle: SchedulerHandle::new(tx),
-            ready_suspense: Default::default(),
-        }
-    }
-
-    /// Waits for a future to complete that marks the virtualdom as dirty
-    ///
-    /// Not all messages will mark a virtualdom as dirty, so this waits for a message that has side-effects that do
-    pub fn wait_for_work(&mut self) {
-        //
+    pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Self {
+        Self(Rc::new(HandleInner {
+            sender,
+            tasks: RefCell::new(Slab::new()),
+            leaves: RefCell::new(Slab::new()),
+        }))
     }
 }

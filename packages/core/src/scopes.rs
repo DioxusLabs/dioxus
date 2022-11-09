@@ -1,7 +1,7 @@
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     sync::Arc,
 };
 
@@ -13,7 +13,7 @@ use crate::{
     any_props::AnyProps,
     arena::ElementId,
     bump_frame::BumpFrame,
-    innerlude::{SchedulerHandle, SchedulerMsg},
+    innerlude::{Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::VNode,
     TaskId,
@@ -43,27 +43,28 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 pub struct ScopeId(pub usize);
 
 pub struct ScopeState {
-    pub render_cnt: usize,
+    pub(crate) render_cnt: usize,
 
-    pub node_arena_1: BumpFrame,
-    pub node_arena_2: BumpFrame,
+    pub(crate) node_arena_1: BumpFrame,
+    pub(crate) node_arena_2: BumpFrame,
 
-    pub parent: Option<*mut ScopeState>,
-    pub container: ElementId,
-    pub id: ScopeId,
+    pub(crate) parent: Option<*mut ScopeState>,
+    pub(crate) container: ElementId,
+    pub(crate) id: ScopeId,
 
-    pub height: u32,
+    pub(crate) height: u32,
 
-    pub hook_arena: Bump,
-    pub hook_vals: RefCell<Vec<*mut dyn Any>>,
-    pub hook_idx: Cell<usize>,
+    pub(crate) hook_arena: Bump,
+    pub(crate) hook_vals: RefCell<Vec<*mut dyn Any>>,
+    pub(crate) hook_idx: Cell<usize>,
 
     pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 
-    pub tasks: SchedulerHandle,
+    pub(crate) tasks: Scheduler,
+    pub(crate) spawned_tasks: HashSet<TaskId>,
 
-    pub props: *mut dyn AnyProps<'static>,
-    pub placeholder: Cell<Option<ElementId>>,
+    pub(crate) props: *mut dyn AnyProps<'static>,
+    pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
 impl ScopeState {
@@ -243,14 +244,11 @@ impl ScopeState {
             let parent = unsafe { &*parent };
 
             if parent.scope_id() == ScopeId(0) {
-                let exists = parent
+                let _ = parent
                     .shared_contexts
                     .borrow_mut()
                     .insert(TypeId::of::<T>(), Box::new(value.clone()));
 
-                if exists.is_some() {
-                    log::warn!("Context already provided to parent scope - replacing it");
-                }
                 return value;
             }
 

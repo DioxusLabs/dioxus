@@ -1,13 +1,13 @@
 use crate::arena::ElementId;
 
 #[derive(Debug)]
-pub struct Renderer<'a> {
+pub struct Mutations<'a> {
     pub subtree: usize,
     pub template_mutations: Vec<Mutation<'a>>,
     pub mutations: Vec<Mutation<'a>>,
 }
 
-impl<'a> Renderer<'a> {
+impl<'a> Mutations<'a> {
     pub fn new(subtree: usize) -> Self {
         Self {
             subtree,
@@ -17,7 +17,7 @@ impl<'a> Renderer<'a> {
     }
 }
 
-impl<'a> std::ops::Deref for Renderer<'a> {
+impl<'a> std::ops::Deref for Mutations<'a> {
     type Target = Vec<Mutation<'a>>;
 
     fn deref(&self) -> &Self::Target {
@@ -25,51 +25,11 @@ impl<'a> std::ops::Deref for Renderer<'a> {
     }
 }
 
-impl std::ops::DerefMut for Renderer<'_> {
+impl std::ops::DerefMut for Mutations<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.mutations
     }
 }
-
-// impl<'a> Renderer<'a> {
-//     pub fn new(subtree: usize) -> Self {
-//         Self {
-//             mutations: vec![Mutations {
-//                 subtree,
-//                 mutations: Vec::new(),
-//             }],
-//         }
-//     }
-// }
-// impl<'a> Renderer<'a> {
-//     pub fn push(&mut self, mutation: Mutation<'a>) {
-//         self.mutations.last_mut().unwrap().mutations.push(mutation)
-//     }
-
-//     pub fn extend(&mut self, mutations: impl IntoIterator<Item = Mutation<'a>>) {
-//         self.mutations
-//             .last_mut()
-//             .unwrap()
-//             .mutations
-//             .extend(mutations)
-//     }
-
-//     pub fn len(&self) -> usize {
-//         self.mutations.last().unwrap().mutations.len()
-//     }
-
-//     pub fn split_off(&mut self, idx: usize) -> Renderer<'a> {
-//         let mut mutations = self.mutations.split_off(idx);
-//         let subtree = mutations.pop().unwrap().subtree;
-//         Renderer { mutations }
-//     }
-// }
-
-// #[derive(Debug)]
-// pub struct Mutations<'a> {
-//     subtree: usize,
-//     mutations: Vec<Mutation<'a>>,
-// }
 
 /*
 each subtree has its own numbering scheme
