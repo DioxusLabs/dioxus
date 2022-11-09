@@ -6,8 +6,7 @@ use dioxus_core::*;
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
+    let mutations = dom.rebuild();
 
     println!("mutations: {:?}", mutations);
 

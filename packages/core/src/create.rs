@@ -1,31 +1,28 @@
 use std::pin::Pin;
 
 use crate::factory::{FiberLeaf, RenderReturn};
-use crate::innerlude::SuspenseContext;
+use crate::innerlude::{Renderer, SuspenseContext};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
-use crate::virtualdom::VirtualDom;
+use crate::virtual_dom::VirtualDom;
 use crate::{AttributeValue, Element, ElementId, TemplateAttribute};
 use bumpalo::boxed::Box as BumpBox;
 use futures_util::Future;
 
 impl VirtualDom {
     /// Create this template and write its mutations
-    pub fn create<'a>(
-        &mut self,
-        mutations: &mut Vec<Mutation<'a>>,
-        template: &'a VNode<'a>,
-    ) -> usize {
+    pub fn create<'a>(&mut self, mutations: &mut Renderer<'a>, template: &'a VNode<'a>) -> usize {
         // The best renderers will have templates prehydrated
         // Just in case, let's create the template using instructions anyways
         if !self.templates.contains_key(&template.template.id) {
             for node in template.template.roots {
+                let mutations = &mut mutations.template_mutations;
                 self.create_static_node(mutations, template, node);
             }
 
-            mutations.push(SaveTemplate {
+            mutations.template_mutations.push(SaveTemplate {
                 name: template.template.id,
                 m: template.template.roots.len(),
             });
@@ -162,7 +159,7 @@ impl VirtualDom {
 
     pub fn create_dynamic_node<'a>(
         &mut self,
-        mutations: &mut Vec<Mutation<'a>>,
+        mutations: &mut Renderer<'a>,
         template: &'a VNode<'a>,
         node: &'a DynamicNode<'a>,
         idx: usize,
@@ -183,43 +180,60 @@ impl VirtualDom {
             DynamicNode::Component {
                 props, placeholder, ..
             } => {
-                println!("creaitng component");
                 let id = self.new_scope(unsafe { std::mem::transmute(props.get()) });
-
                 let render_ret = self.run_scope(id);
-
                 let render_ret: &mut RenderReturn = unsafe { std::mem::transmute(render_ret) };
 
+                // if boundary or subtree, start working on a new stack of mutations
+
                 match render_ret {
+                    RenderReturn::Sync(None) | RenderReturn::Async(_) => {
+                        let new_id = self.next_element(template);
+                        placeholder.set(Some(new_id));
+                        self.scopes[id.0].placeholder.set(Some(new_id));
+                        mutations.push(AssignId {
+                            id: new_id,
+                            path: &template.template.node_paths[idx][1..],
+                        });
+                        0
+                    }
+
                     RenderReturn::Sync(Some(template)) => {
+                        let mutations_to_this_point = mutations.len();
+
                         self.scope_stack.push(id);
-                        let created = self.create(mutations, template);
+                        let mut created = self.create(mutations, template);
                         self.scope_stack.pop();
+
+                        if !self.waiting_on.is_empty() {
+                            if let Some(boundary) =
+                                self.scopes[id.0].has_context::<SuspenseContext>()
+                            {
+                                let mut boundary_mut = boundary.borrow_mut();
+                                let split_off = mutations.split_off(mutations_to_this_point);
+
+                                let split_off = unsafe { std::mem::transmute(split_off) };
+
+                                println!("SPLIT OFF: {:#?}", split_off);
+
+                                boundary_mut.mutations.mutations = split_off;
+                                boundary_mut.waiting_on.extend(self.waiting_on.drain(..));
+
+                                // Since this is a boundary, use it as a placeholder
+                                let new_id = self.next_element(template);
+                                placeholder.set(Some(new_id));
+                                self.scopes[id.0].placeholder.set(Some(new_id));
+                                mutations.push(AssignId {
+                                    id: new_id,
+                                    path: &template.template.node_paths[idx][1..],
+                                });
+                                created = 0;
+                            }
+                        }
+
+                        // handle any waiting on futures accumulated by async calls down the tree
+                        // if this is a boundary, we split off the tree
                         created
-                    }
-
-                    // whenever the future is polled later, we'll revisit it
-                    // For now, just set the placeholder
-                    RenderReturn::Sync(None) => {
-                        let new_id = self.next_element(template);
-                        placeholder.set(Some(new_id));
-                        self.scopes[id.0].placeholder.set(Some(new_id));
-                        mutations.push(AssignId {
-                            id: new_id,
-                            path: &template.template.node_paths[idx][1..],
-                        });
-                        0
-                    }
-
-                    RenderReturn::Async(fut) => {
-                        let new_id = self.next_element(template);
-                        placeholder.set(Some(new_id));
-                        self.scopes[id.0].placeholder.set(Some(new_id));
-                        mutations.push(AssignId {
-                            id: new_id,
-                            path: &template.template.node_paths[idx][1..],
-                        });
-                        0
                     }
                 }
             }

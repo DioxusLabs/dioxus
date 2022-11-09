@@ -14,7 +14,7 @@ use crate::{
     factory::RenderReturn,
     innerlude::{SuspenseId, SuspenseLeaf},
     scopes::{ScopeId, ScopeState},
-    virtualdom::VirtualDom,
+    virtual_dom::VirtualDom,
 };
 
 impl VirtualDom {
@@ -77,13 +77,13 @@ impl VirtualDom {
             let mut leaves = self.scheduler.handle.leaves.borrow_mut();
             let entry = leaves.vacant_entry();
             let key = entry.key();
+            let suspense_id = SuspenseId(key);
 
             let leaf = Rc::new(SuspenseLeaf {
                 scope_id,
                 task: task.as_mut(),
-                id: SuspenseId(key),
+                id: suspense_id,
                 tx: self.scheduler.handle.sender.clone(),
-                boundary: ScopeId(0),
                 notified: false.into(),
             });
 
@@ -112,6 +112,7 @@ impl VirtualDom {
                     // Insert the future into fiber leaves and break
                     _ => {
                         entry.insert(leaf);
+                        self.waiting_on.push(suspense_id);
                         break;
                     }
                 };

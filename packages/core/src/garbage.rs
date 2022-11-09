@@ -1,4 +1,4 @@
-use crate::{nodes::VNode, scopes::ScopeId, virtualdom::VirtualDom, DynamicNode};
+use crate::{nodes::VNode, scopes::ScopeId, virtual_dom::VirtualDom, DynamicNode};
 
 impl VirtualDom {
     pub fn drop_scope(&mut self, id: ScopeId) {

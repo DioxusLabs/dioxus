@@ -472,6 +472,8 @@ fn api_makes_sense() {
             }
         });
 
-        cx.render(LazyNodes::new(|f| f.static_text("asd")))
+        // cx.render(LazyNodes::new(|f| f.static_text("asd")))
+
+        todo!()
     }
 }

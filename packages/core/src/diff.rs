@@ -1,6 +1,7 @@
 use std::any::Any;
 
-use crate::virtualdom::VirtualDom;
+use crate::innerlude::Renderer;
+use crate::virtual_dom::VirtualDom;
 use crate::{Attribute, AttributeValue, TemplateNode};
 
 use crate::any_props::VComponentProps;
@@ -25,13 +26,13 @@ pub struct DirtyScope {
 }
 
 impl<'b> VirtualDom {
-    pub fn diff_scope(&mut self, mutations: &mut Vec<Mutation<'b>>, scope: ScopeId) {
+    pub fn diff_scope(&mut self, mutations: &mut Renderer<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
     }
 
     pub fn diff_node(
         &mut self,
-        muts: &mut Vec<Mutation<'b>>,
+        muts: &mut Renderer<'b>,
         left_template: &'b VNode<'b>,
         right_template: &'b VNode<'b>,
     ) {
@@ -176,7 +177,7 @@ impl<'b> VirtualDom {
     // the change list stack is in the same state when this function returns.
     fn diff_non_keyed_children(
         &mut self,
-        muts: &mut Vec<Mutation<'b>>,
+        muts: &mut Renderer<'b>,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
     ) {
@@ -216,7 +217,7 @@ impl<'b> VirtualDom {
     // The stack is empty upon entry.
     fn diff_keyed_children(
         &mut self,
-        muts: &mut Vec<Mutation<'b>>,
+        muts: &mut Renderer<'b>,
         old: &'b [VNode<'b>],
         new: &'b [VNode<'b>],
     ) {
@@ -295,7 +296,7 @@ impl<'b> VirtualDom {
     // /// If there is no offset, then this function returns None and the diffing is complete.
     // fn diff_keyed_ends(
     //     &mut self,
-    //     muts: &mut Vec<Mutation<'b>>,
+    //     muts: &mut Renderer<'b>,
     //     old: &'b [VNode<'b>],
     //     new: &'b [VNode<'b>],
     // ) -> Option<(usize, usize)> {
@@ -354,7 +355,7 @@ impl<'b> VirtualDom {
     // #[allow(clippy::too_many_lines)]
     // fn diff_keyed_middle(
     //     &mut self,
-    //     muts: &mut Vec<Mutation<'b>>,
+    //     muts: &mut Renderer<'b>,
     //     old: &'b [VNode<'b>],
     //     new: &'b [VNode<'b>],
     // ) {
@@ -532,7 +533,7 @@ impl<'b> VirtualDom {
 
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
-    fn remove_nodes(&mut self, muts: &mut Vec<Mutation<'b>>, nodes: &'b [VNode<'b>]) {
+    fn remove_nodes(&mut self, muts: &mut Renderer<'b>, nodes: &'b [VNode<'b>]) {
         //
     }
 }

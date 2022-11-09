@@ -14,7 +14,7 @@ mod properties;
 mod scheduler;
 mod scope_arena;
 mod scopes;
-mod virtualdom;
+mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::arena::*;
@@ -25,7 +25,7 @@ pub(crate) mod innerlude {
     pub use crate::properties::*;
     pub use crate::scheduler::*;
     pub use crate::scopes::*;
-    pub use crate::virtualdom::*;
+    pub use crate::virtual_dom::*;
 
     /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
@@ -83,6 +83,9 @@ pub use crate::innerlude::{
     Scope,
     ScopeId,
     ScopeState,
+    Scoped,
+    SuspenseBoundary,
+    SuspenseContext,
     TaskId,
     Template,
     TemplateAttribute,
@@ -98,8 +101,8 @@ pub use crate::innerlude::{
 pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, Attribute, DynamicNode, Element, EventPriority, LazyNodes, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, TaskId, Template, TemplateAttribute, TemplateNode,
-        UiEvent, VNode, VirtualDom,
+        Properties, Scope, ScopeId, ScopeState, Scoped, SuspenseBoundary, SuspenseContext, TaskId,
+        Template, TemplateAttribute, TemplateNode, UiEvent, VNode, VirtualDom,
     };
 }
 
@@ -131,4 +134,25 @@ macro_rules! to_owned {
         #[allow(unused_mut)]
         let mut $es = $es.to_owned();
     )*}
+}
+
+/// A helper macro for values into callbacks for async environements.
+///
+///
+macro_rules! callback {
+    () => {};
+}
+
+/// Convert a hook into a hook with an implicit dependency list by analyzing the closure.
+///
+/// ```
+/// // Convert hooks with annoying dependencies into...
+///
+/// let val = use_effect(cx, (val,) |(val,)| println!("thing {val}"))
+///
+/// // a simple closure
+/// let val = use_effect!(cx, |val| async { println!("thing {val}")) });
+/// ```
+macro_rules! make_dep_fn {
+    () => {};
 }

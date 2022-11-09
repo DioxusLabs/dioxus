@@ -1,13 +1,11 @@
-use std::{cell::Cell, ptr::null_mut, time::Duration};
-
 use dioxus_core::*;
+use std::{cell::RefCell, rc::Rc, time::Duration};
 
 #[tokio::test]
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
+    let mutations = dom.rebuild();
 
     println!("mutations: {:?}", mutations);
 
@@ -15,8 +13,23 @@ async fn it_works() {
 }
 
 fn app(cx: Scope) -> Element {
-    let dy = cx.component(async_child, (), "async_child");
-    VNode::single_component(&cx, dy, "app")
+    println!("running root app");
+
+    VNode::single_component(
+        cx,
+        cx.component(suspense_boundary, (), "suspense_boundary"),
+        "app",
+    )
+}
+
+fn suspense_boundary(cx: Scope) -> Element {
+    println!("running boundary");
+
+    let _ = cx.use_hook(|| {
+        cx.provide_context(Rc::new(RefCell::new(SuspenseBoundary::new(cx.scope_id()))))
+    });
+
+    VNode::single_component(cx, cx.component(async_child, (), "async_child"), "app")
 }
 
 async fn async_child(cx: Scope<'_>) -> Element {
@@ -34,8 +47,9 @@ async fn async_child(cx: Scope<'_>) -> Element {
 
     println!("Future awaited and complete");
 
-    let dy = cx.component(async_child, (), "async_child");
-    VNode::single_component(&cx, dy, "app")
+    VNode::single_component(cx, cx.component(async_text, (), "async_text"), "app")
+}
 
-    // VNode::single_text(&cx, &[TemplateNode::Text("it works!")], "beauty")
+async fn async_text(cx: Scope<'_>) -> Element {
+    VNode::single_text(&cx, &[TemplateNode::Text("it works!")], "beauty")
 }

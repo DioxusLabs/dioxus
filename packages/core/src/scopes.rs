@@ -19,23 +19,14 @@ use crate::{
     TaskId,
 };
 
-pub struct Scope<'a, T = ()> {
+pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
+
+pub struct Scoped<'a, T = ()> {
     pub scope: &'a ScopeState,
     pub props: &'a T,
 }
 
-impl<T> Copy for Scope<'_, T> {}
-
-impl<T> Clone for Scope<'_, T> {
-    fn clone(&self) -> Self {
-        Self {
-            props: self.props,
-            scope: self.scope,
-        }
-    }
-}
-
-impl<'a, T> std::ops::Deref for Scope<'a, T> {
+impl<'a, T> std::ops::Deref for Scoped<'a, T> {
     type Target = &'a ScopeState;
 
     fn deref(&self) -> &Self::Target {
@@ -295,6 +286,19 @@ impl ScopeState {
                 search_parent = parent.parent;
             }
             None
+        }
+    }
+
+    /// Return any context of type T if it exists on this scope
+    pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
+        match self.shared_contexts.borrow().get(&TypeId::of::<T>()) {
+            Some(shared) => Some(
+                (*shared
+                    .downcast_ref::<T>()
+                    .expect("Context of type T should exist"))
+                .clone(),
+            ),
+            None => None,
         }
     }
 

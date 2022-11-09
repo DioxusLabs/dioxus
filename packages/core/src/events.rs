@@ -1,4 +1,4 @@
-use crate::{arena::ElementId, virtualdom::VirtualDom, Attribute, AttributeValue};
+use crate::{arena::ElementId, virtual_dom::VirtualDom, Attribute, AttributeValue};
 use std::cell::Cell;
 
 /// User Events are events that are shuttled from the renderer into the [`VirtualDom`] through the scheduler channel.

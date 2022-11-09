@@ -1,4 +1,4 @@
-use crate::{nodes::VNode, virtualdom::VirtualDom};
+use crate::{nodes::VNode, virtual_dom::VirtualDom};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);

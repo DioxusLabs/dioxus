@@ -21,6 +21,5 @@ async fn ChildAsync(cx: Scope<'_>) -> Element {
 fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
+    let mut mutations = dom.rebuild();
 }

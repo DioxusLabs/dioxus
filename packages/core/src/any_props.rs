@@ -4,6 +4,7 @@ use futures_util::Future;
 
 use crate::{
     factory::{ComponentReturn, RenderReturn},
+    innerlude::Scoped,
     scopes::{Scope, ScopeState},
     Element,
 };
@@ -69,10 +70,10 @@ impl<'a, P, A, F: ComponentReturn<'a, A>> AnyProps<'a> for VComponentProps<'a, P
         // Make sure the scope ptr is not null
         // self.props.state.set(scope);
 
-        let scope = Scope {
+        let scope = cx.bump().alloc(Scoped {
             props: unsafe { &*self.props },
             scope: cx,
-        };
+        });
 
         // Call the render function directly
         (self.render_fn)(scope).as_return(cx)

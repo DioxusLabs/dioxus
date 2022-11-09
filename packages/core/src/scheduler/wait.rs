@@ -3,7 +3,7 @@ use futures_util::{FutureExt, StreamExt};
 
 use crate::{
     factory::RenderReturn,
-    innerlude::{Mutation, SuspenseContext},
+    innerlude::{Mutation, Renderer, SuspenseContext},
     VNode, VirtualDom,
 };
 
@@ -38,6 +38,8 @@ impl VirtualDom {
                 }
 
                 SchedulerMsg::SuspenseNotified(id) => {
+                    println!("suspense notified");
+
                     let leaf = self
                         .scheduler
                         .handle
@@ -63,11 +65,19 @@ impl VirtualDom {
                     // continue rendering the tree until we hit yet another suspended component
                     if let futures_task::Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx)
                     {
-                        let boundary = &self.scopes[leaf.boundary.0]
+                        let boundary = &self.scopes[leaf.scope_id.0]
                             .consume_context::<SuspenseContext>()
                             .unwrap();
 
+                        println!("ready pool");
+
                         let mut fiber = boundary.borrow_mut();
+
+                        println!(
+                            "Existing mutations {:?}, scope {:?}",
+                            fiber.mutations, fiber.id
+                        );
+
                         let scope = &mut self.scopes[scope_id.0];
                         let arena = scope.current_arena();
 
@@ -77,18 +87,24 @@ impl VirtualDom {
                         if let RenderReturn::Sync(Some(template)) = ret {
                             let mutations = &mut fiber.mutations;
                             let template: &VNode = unsafe { std::mem::transmute(template) };
-                            let mutations: &mut Vec<Mutation> =
+                            let mutations: &mut Renderer =
                                 unsafe { std::mem::transmute(mutations) };
 
                             self.scope_stack.push(scope_id);
                             self.create(mutations, template);
                             self.scope_stack.pop();
 
-                            println!("{:?}", mutations);
+                            println!("{:#?}", mutations);
+                        } else {
+                            println!("nodes arent right");
                         }
+                    } else {
+                        println!("not ready");
                     }
                 }
             }
+
+            // now proces any events. If we end up running a component and it generates mutations, then we should run those mutations
         }
     }
 }

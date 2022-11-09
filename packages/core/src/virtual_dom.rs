@@ -3,7 +3,7 @@ use crate::arena::ElementPath;
 use crate::component::Component;
 use crate::diff::DirtyScope;
 use crate::factory::RenderReturn;
-use crate::innerlude::{Scheduler, SchedulerMsg};
+use crate::innerlude::{Renderer, Scheduler, SchedulerMsg};
 use crate::mutations::Mutation;
 use crate::nodes::{Template, TemplateId};
 
@@ -13,20 +13,22 @@ use crate::{
 };
 use crate::{scheduler, Element, Scope};
 use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use scheduler::{SuspenseBoundary, SuspenseContext};
+use futures_util::Future;
+use scheduler::{SuspenseBoundary, SuspenseContext, SuspenseId};
 use slab::Slab;
-use std::cell::RefCell;
 use std::collections::{BTreeSet, HashMap};
-use std::rc::Rc;
 
 pub struct VirtualDom {
     pub(crate) templates: HashMap<TemplateId, Template<'static>>,
     pub(crate) elements: Slab<ElementPath>,
     pub(crate) scopes: Slab<ScopeState>,
-    pub(crate) scope_stack: Vec<ScopeId>,
     pub(crate) element_stack: Vec<ElementId>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Scheduler,
+
+    // While diffing we need some sort of way of breaking off a stream of suspended mutations.
+    pub(crate) scope_stack: Vec<ScopeId>,
+    pub(crate) waiting_on: Vec<SuspenseId>,
 }
 
 impl VirtualDom {
@@ -40,6 +42,7 @@ impl VirtualDom {
             scope_stack: Vec::new(),
             element_stack: vec![ElementId(0)],
             dirty_scopes: BTreeSet::new(),
+            waiting_on: Vec::new(),
             scheduler,
         };
 
@@ -49,21 +52,25 @@ impl VirtualDom {
         let root = res.new_scope(props);
 
         // the root component is always a suspense boundary for any async children
-        res.scopes[root.0].provide_context(Rc::new(RefCell::new(SuspenseBoundary::new(root))));
-
+        res.scopes[root.0].provide_context(SuspenseBoundary::new(root));
         assert_eq!(root, ScopeId(0));
 
         res
     }
 
     /// Render the virtualdom, without processing any suspense.
-    pub fn rebuild<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>) {
+    ///
+    /// This does register futures with wakers, but does not process any of them.
+    pub fn rebuild<'a>(&'a mut self) -> Renderer<'a> {
+        let mut mutations = Renderer::new(0);
         let root_node: &RenderReturn = self.run_scope(ScopeId(0));
         let root_node: &RenderReturn = unsafe { std::mem::transmute(root_node) };
+
+        let mut created = 0;
         match root_node {
             RenderReturn::Sync(Some(node)) => {
                 self.scope_stack.push(ScopeId(0));
-                self.create(mutations, node);
+                created = self.create(&mut mutations, node);
                 self.scope_stack.pop();
             }
             RenderReturn::Sync(None) => {
@@ -71,20 +78,20 @@ impl VirtualDom {
             }
             RenderReturn::Async(_) => unreachable!(),
         }
+
+        mutations.push(Mutation::AppendChildren { m: created });
+
+        mutations
     }
 
     /// Render what you can given the timeline and then move on
-    pub async fn render_with_deadline<'a>(
-        &'a mut self,
-        future: impl std::future::Future<Output = ()>,
-        mutations: &mut Vec<Mutation<'a>>,
-    ) {
+    ///
+    /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
+    pub async fn render_with_deadline(
+        &mut self,
+        deadline: impl Future<Output = ()>,
+    ) -> Vec<Mutation> {
         todo!()
-    }
-
-    // Whenever the future is canceled, the VirtualDom will be
-    pub async fn render<'a>(&'a mut self, mutations: &mut Vec<Mutation<'a>>) {
-        //
     }
 
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
