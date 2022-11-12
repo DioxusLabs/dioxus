@@ -1,17 +1,17 @@
-use crate::any_props::VComponentProps;
-use crate::arena::ElementPath;
-use crate::diff::DirtyScope;
-use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, Scheduler, SchedulerMsg};
-use crate::mutations::Mutation;
-use crate::nodes::{Template, TemplateId};
 use crate::{
+    any_props::VComponentProps,
     arena::ElementId,
+    arena::ElementPath,
+    diff::DirtyScope,
+    factory::RenderReturn,
+    innerlude::{is_path_ascendant, Mutations, Scheduler, SchedulerMsg},
+    mutations::Mutation,
+    nodes::{Template, TemplateId},
+    scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
+    Attribute, AttributeValue, Element, Scope, SuspenseContext, UiEvent,
 };
-use crate::{scheduler, Element, Scope};
-use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
-use scheduler::{SuspenseBoundary, SuspenseId};
+use futures_util::{pin_mut, FutureExt, StreamExt};
 use slab::Slab;
 use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
@@ -56,56 +56,88 @@ use std::rc::Rc;
 /// let edits = vdom.rebuild();
 /// ```
 ///
-/// To inject UserEvents into the VirtualDom, call [`VirtualDom::get_scheduler_channel`] to get access to the scheduler.
+/// To call listeners inside the VirtualDom, call [`VirtualDom::handle_event`] with the appropriate event data.
 ///
 /// ```rust, ignore
-/// let channel = vdom.get_scheduler_channel();
-/// channel.send_unbounded(SchedulerMsg::UserEvent(UserEvent {
-///     // ...
-/// }))
+/// vdom.handle_event(event);
 /// ```
 ///
-/// While waiting for UserEvents to occur, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
+/// While no events are ready, call [`VirtualDom::wait_for_work`] to poll any futures inside the VirtualDom.
 ///
 /// ```rust, ignore
 /// vdom.wait_for_work().await;
 /// ```
 ///
-/// Once work is ready, call [`VirtualDom::work_with_deadline`] to compute the differences between the previous and
+/// Once work is ready, call [`VirtualDom::render_with_deadline`] to compute the differences between the previous and
 /// current UI trees. This will return a [`Mutations`] object that contains Edits, Effects, and NodeRefs that need to be
 /// handled by the renderer.
 ///
 /// ```rust, ignore
-/// let mutations = vdom.work_with_deadline(|| false);
-/// for edit in mutations {
-///     apply(edit);
+/// let mutations = vdom.work_with_deadline(tokio::time::sleep(Duration::from_millis(100)));
+///
+/// for edit in mutations.edits {
+///     real_dom.apply(edit);
 /// }
 /// ```
+///
+/// To not wait for suspense while diffing the VirtualDom, call [`VirtualDom::render_immediate`] or pass an immediately
+/// ready future to [`VirtualDom::render_with_deadline`].
+///
 ///
 /// ## Building an event loop around Dioxus:
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
-///
-/// ```rust, ignore
-/// fn App(cx: Scope) -> Element {
+/// ```rust
+/// fn app(cx: Scope) -> Element {
 ///     cx.render(rsx!{
 ///         div { "Hello World" }
 ///     })
 /// }
 ///
-/// async fn main() {
-///     let mut dom = VirtualDom::new(App);
+/// let dom = VirtualDom::new(app);
 ///
-///     let mut inital_edits = dom.rebuild();
-///     apply_edits(inital_edits);
+/// real_dom.apply(dom.rebuild());
 ///
-///     loop {
-///         dom.wait_for_work().await;
-///         let frame_timeout = TimeoutFuture::new(Duration::from_millis(16));
-///         let deadline = || (&mut frame_timeout).now_or_never();
-///         let edits = dom.run_with_deadline(deadline).await;
-///         apply_edits(edits);
+/// loop {
+///     select! {
+///         _ = dom.wait_for_work() => {}
+///         evt = real_dom.wait_for_event() => dom.handle_event(evt),
 ///     }
+///
+///     real_dom.apply(dom.render_immediate());
+/// }
+/// ```
+///
+/// ## Waiting for suspense
+///
+/// Because Dioxus supports suspense, you can use it for server-side rendering, static site generation, and other usecases
+/// where waiting on portions of the UI to finish rendering is important. To wait for suspense, use the
+/// [`VirtualDom::render_with_deadline`] method:
+///
+/// ```rust
+/// let dom = VirtualDom::new(app);
+///
+/// let deadline = tokio::time::sleep(Duration::from_millis(100));
+/// let edits = dom.render_with_deadline(deadline).await;
+/// ```
+///
+/// ## Use with streaming
+///
+/// If not all rendering is done by the deadline, it might be worthwhile to stream the rest later. To do this, we
+/// suggest rendering with a deadline, and then looping between [`VirtualDom::wait_for_work`] and render_immediate until
+/// no suspended work is left.
+///
+/// ```
+/// let dom = VirtualDom::new(app);
+///
+/// let deadline = tokio::time::sleep(Duration::from_millis(20));
+/// let edits = dom.render_with_deadline(deadline).await;
+///
+/// real_dom.apply(edits);
+///
+/// while dom.has_suspended_work() {
+///    dom.wait_for_work().await;
+///    real_dom.apply(dom.render_immediate());
 /// }
 /// ```
 pub struct VirtualDom {
@@ -186,27 +218,7 @@ impl VirtualDom {
     where
         P: 'static,
     {
-        let channel = futures_channel::mpsc::unbounded();
-        Self::new_with_props_and_scheduler(root, root_props, channel)
-    }
-
-    /// Launch the VirtualDom, but provide your own channel for receiving and sending messages into the scheduler
-    ///
-    /// This is useful when the VirtualDom must be driven from outside a thread and it doesn't make sense to wait for the
-    /// VirtualDom to be created just to retrieve its channel receiver.
-    ///
-    /// ```rust, ignore
-    /// let channel = futures_channel::mpsc::unbounded();
-    /// let dom = VirtualDom::new_with_scheduler(Example, (), channel);
-    /// ```
-    pub fn new_with_props_and_scheduler<P: 'static>(
-        root: fn(Scope<P>) -> Element,
-        root_props: P,
-        (tx, rx): (
-            UnboundedSender<SchedulerMsg>,
-            UnboundedReceiver<SchedulerMsg>,
-        ),
-    ) -> Self {
+        let (tx, rx) = futures_channel::mpsc::unbounded();
         let mut dom = Self {
             rx,
             scheduler: Scheduler::new(tx),
@@ -220,16 +232,136 @@ impl VirtualDom {
             finished_fibers: Vec::new(),
         };
 
-        dom.new_scope(Box::into_raw(Box::new(VComponentProps::new(
+        let root = dom.new_scope(Box::into_raw(Box::new(VComponentProps::new(
             root,
             |_, _| unreachable!(),
             root_props,
-        ))))
+        ))));
+
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior
-        .provide_context(SuspenseBoundary::new(ScopeId(0)));
+        root.provide_context(SuspenseBoundary::new(ScopeId(0)));
+
+        // the root element is always given element 0
+        dom.elements.insert(ElementPath::null());
 
         dom
+    }
+
+    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
+        self.scopes.get(id.0)
+    }
+
+    pub fn base_scope(&self) -> &ScopeState {
+        self.scopes.get(0).unwrap()
+    }
+
+    fn mark_dirty_scope(&mut self, id: ScopeId) {
+        let height = self.scopes[id.0].height;
+        self.dirty_scopes.insert(DirtyScope { height, id });
+    }
+
+    fn is_scope_suspended(&self, id: ScopeId) -> bool {
+        !self.scopes[id.0]
+            .consume_context::<SuspenseContext>()
+            .unwrap()
+            .borrow()
+            .waiting_on
+            .is_empty()
+    }
+
+    /// Returns true if there is any suspended work left to be done.
+    pub fn has_suspended_work(&self) -> bool {
+        !self.scheduler.leaves.borrow().is_empty()
+    }
+
+    /// Returns None if no element could be found
+    pub fn handle_event<T: 'static>(&mut self, event: &UiEvent<T>) -> Option<()> {
+        let path = self.elements.get(event.element.0)?;
+
+        let location = unsafe { &mut *path.template }
+            .dynamic_attrs
+            .iter()
+            .position(|attr| attr.mounted_element.get() == event.element)?;
+
+        let mut index = Some((path.template, location));
+
+        let mut listeners = Vec::<&Attribute>::new();
+
+        while let Some((raw_parent, dyn_index)) = index {
+            let parent = unsafe { &mut *raw_parent };
+            let path = parent.template.node_paths[dyn_index];
+
+            listeners.extend(
+                parent
+                    .dynamic_attrs
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(idx, attr)| {
+                        match is_path_ascendant(parent.template.node_paths[idx], path) {
+                            true if attr.name == event.name => Some(attr),
+                            _ => None,
+                        }
+                    }),
+            );
+
+            index = parent.parent;
+        }
+
+        for listener in listeners {
+            if let AttributeValue::Listener(listener) = &listener.value {
+                (listener.borrow_mut())(&event.event)
+            }
+        }
+
+        Some(())
+    }
+
+    /// Wait for the scheduler to have any work.
+    ///
+    /// This method polls the internal future queue, waiting for suspense nodes, tasks, or other work. This completes when
+    /// any work is ready. If multiple scopes are marked dirty from a task or a suspense tree is finished, this method
+    /// will exit.
+    ///
+    /// This method is cancel-safe, so you're fine to discard the future in a select block.
+    ///
+    /// This lets us poll async tasks during idle periods without blocking the main thread.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// let dom = VirtualDom::new(App);
+    /// let sender = dom.get_scheduler_channel();
+    /// ```
+    pub async fn wait_for_work(&mut self) {
+        let mut some_msg = None;
+
+        loop {
+            match some_msg.take() {
+                // If a bunch of messages are ready in a sequence, try to pop them off synchronously
+                Some(msg) => match msg {
+                    SchedulerMsg::Immediate(id) => self.mark_dirty_scope(id),
+                    SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
+                    SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
+                },
+
+                // If they're not ready, then we should wait for them to be ready
+                None => {
+                    match self.rx.try_next() {
+                        Ok(Some(val)) => some_msg = Some(val),
+                        Ok(None) => return,
+                        Err(_) => {
+                            // If we have any dirty scopes, or finished fiber trees then we should exit
+                            if !self.dirty_scopes.is_empty() || !self.finished_fibers.is_empty() {
+                                return;
+                            }
+
+                            some_msg = self.rx.next().await
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
@@ -268,22 +400,71 @@ impl VirtualDom {
         mutations
     }
 
+    /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
+    /// suspended subtrees.
+    pub fn render_immediate(&mut self) -> Mutations {
+        // Build a waker that won't wake up since our deadline is already expired when it's polled
+        let waker = futures_util::task::noop_waker();
+        let mut cx = std::task::Context::from_waker(&waker);
+
+        // Now run render with deadline but dont even try to poll any async tasks
+        let fut = self.render_with_deadline(std::future::ready(()));
+        pin_mut!(fut);
+        match fut.poll_unpin(&mut cx) {
+            std::task::Poll::Ready(mutations) => mutations,
+            std::task::Poll::Pending => panic!("render_immediate should never return pending"),
+        }
+    }
+
     /// Render what you can given the timeline and then move on
     ///
     /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
-    pub async fn render_with_deadline(
-        &mut self,
+    ///
+    /// If no suspense trees are present
+    pub async fn render_with_deadline<'a>(
+        &'a mut self,
         deadline: impl Future<Output = ()>,
-    ) -> Vec<Mutation> {
-        todo!()
-    }
+    ) -> Mutations<'a> {
+        use futures_util::future::{select, Either};
 
-    pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
-    }
+        let mut mutations = Mutations::new(0);
+        pin_mut!(deadline);
 
-    pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(0).unwrap()
+        loop {
+            // first, unload any complete suspense trees
+            for finished_fiber in self.finished_fibers.drain(..) {
+                let scope = &mut self.scopes[finished_fiber.0];
+                let context = scope.has_context::<SuspenseContext>().unwrap();
+                let mut context = context.borrow_mut();
+                mutations.extend(context.mutations.drain(..));
+            }
+
+            // Next, diff any dirty scopes
+            // We choose not to poll the deadline since we complete pretty quickly anyways
+            if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
+                self.dirty_scopes.remove(&dirty);
+
+                // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
+                if !self.is_scope_suspended(dirty.id) {
+                    self.run_scope(dirty.id);
+                    self.diff_scope(&mut mutations, dirty.id);
+                }
+            }
+
+            // Wait for suspense, or a deadline
+            if self.dirty_scopes.is_empty() {
+                if self.scheduler.leaves.borrow().is_empty() {
+                    return mutations;
+                }
+
+                let (work, deadline) = (self.wait_for_work(), &mut deadline);
+                pin_mut!(work);
+
+                if let Either::Left((_, _)) = select(deadline, work).await {
+                    return mutations;
+                }
+            }
+        }
     }
 }
 

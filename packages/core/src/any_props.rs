@@ -1,7 +1,5 @@
 use std::marker::PhantomData;
 
-use std::future::Future;
-
 use crate::{
     factory::{ComponentReturn, RenderReturn},
     innerlude::Scoped,
@@ -23,17 +21,6 @@ where
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,
     pub _marker: PhantomData<A>,
-}
-
-impl<'a> VComponentProps<'a, (), ()> {
-    pub fn new_empty(render_fn: fn(Scope) -> Element) -> Self {
-        Self {
-            render_fn,
-            memo: <() as PartialEq>::eq,
-            props: (),
-            _marker: PhantomData,
-        }
-    }
 }
 
 impl<'a, P, A, F: ComponentReturn<'a, A>> VComponentProps<'a, P, A, F> {

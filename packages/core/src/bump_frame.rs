@@ -21,4 +21,8 @@ impl BumpFrame {
         self.bump.reset();
         self.node.set(std::ptr::null_mut());
     }
+
+    pub unsafe fn load_node<'b>(&self) -> &'b RenderReturn<'b> {
+        unsafe { std::mem::transmute(&*self.node.get()) }
+    }
 }

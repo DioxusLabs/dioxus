@@ -57,11 +57,6 @@ impl Scheduler {
     pub fn remove(&self, id: TaskId) {
         //
     }
-
-    // Aborts the future
-    pub fn abort(&self, id: TaskId) {
-        //
-    }
 }
 
 impl RcWake for LocalTask {

@@ -29,12 +29,11 @@ impl SuspenseBoundary {
     }
 }
 
-pub struct SuspenseLeaf {
+pub(crate) struct SuspenseLeaf {
     pub id: SuspenseId,
     pub scope_id: ScopeId,
     pub tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub notified: Cell<bool>,
-
     pub task: *mut dyn Future<Output = Element<'static>>,
 }
 

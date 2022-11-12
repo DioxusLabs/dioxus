@@ -14,15 +14,9 @@ pub use waker::RcWake;
 ///
 /// These messages control how the scheduler will process updates to the UI.
 #[derive(Debug)]
-pub enum SchedulerMsg {
-    /// Events from the Renderer
-    Event,
-
+pub(crate) enum SchedulerMsg {
     /// Immediate updates from Components that mark them as dirty
     Immediate(ScopeId),
-
-    /// Mark all components as dirty and update them
-    DirtyAll,
 
     /// A task has woken and needs to be progressed
     TaskNotified(TaskId),

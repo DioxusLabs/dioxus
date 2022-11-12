@@ -1,12 +1,12 @@
 use std::any::Any;
 
+use crate::factory::RenderReturn;
 use crate::innerlude::Mutations;
 use crate::virtual_dom::VirtualDom;
 use crate::{Attribute, AttributeValue, TemplateNode};
 
 use crate::any_props::VComponentProps;
 
-use crate::component::Component;
 use crate::mutations::Mutation;
 use crate::nodes::{DynamicNode, Template, TemplateId};
 use crate::scopes::Scope;
@@ -41,6 +41,62 @@ impl Ord for DirtyScope {
 impl<'b> VirtualDom {
     pub fn diff_scope(&mut self, mutations: &mut Mutations<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
+
+        let cur_arena = scope_state.current_frame();
+        let prev_arena = scope_state.previous_frame();
+
+        // relax the borrow checker
+        let cur_arena: &BumpFrame = unsafe { std::mem::transmute(cur_arena) };
+        let prev_arena: &BumpFrame = unsafe { std::mem::transmute(prev_arena) };
+
+        // Make sure the nodes arent null (they've been set properly)
+        assert_ne!(
+            cur_arena.node.get(),
+            std::ptr::null_mut(),
+            "Call rebuild before diffing"
+        );
+        assert_ne!(
+            prev_arena.node.get(),
+            std::ptr::null_mut(),
+            "Call rebuild before diffing"
+        );
+
+        self.scope_stack.push(scope);
+        let left = unsafe { prev_arena.load_node() };
+        let right = unsafe { cur_arena.load_node() };
+        self.diff_maybe_node(mutations, left, right);
+        self.scope_stack.pop();
+    }
+
+    fn diff_maybe_node(
+        &mut self,
+        m: &mut Mutations<'b>,
+        left: &'b RenderReturn<'b>,
+        right: &'b RenderReturn<'b>,
+    ) {
+        use RenderReturn::{Async, Sync};
+        match (left, right) {
+            // diff
+            (Sync(Some(l)), Sync(Some(r))) => self.diff_node(m, l, r),
+
+            // remove old with placeholder
+            (Sync(Some(l)), Sync(None)) | (Sync(Some(l)), Async(_)) => {
+                //
+                let id = self.next_element(l); // todo!
+                m.push(Mutation::CreatePlaceholder { id });
+                self.drop_template(m, l, true);
+            }
+
+            // remove placeholder with nodes
+            (Sync(None), Sync(Some(_))) => {}
+            (Async(_), Sync(Some(v))) => {}
+
+            // nothing...
+            (Async(_), Async(_))
+            | (Sync(None), Sync(None))
+            | (Sync(None), Async(_))
+            | (Async(_), Sync(None)) => {}
+        }
     }
 
     pub fn diff_node(

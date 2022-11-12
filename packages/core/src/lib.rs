@@ -1,7 +1,6 @@
 mod any_props;
 mod arena;
 mod bump_frame;
-mod component;
 mod create;
 mod diff;
 mod events;
@@ -77,7 +76,10 @@ pub use crate::innerlude::{
     ElementId,
     ElementPath,
     EventPriority,
+    Fragment,
     LazyNodes,
+    Mutation,
+    Mutations,
     NodeFactory,
     Properties,
     Scope,
@@ -100,9 +102,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Attribute, DynamicNode, Element, EventPriority, LazyNodes, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, Scoped, SuspenseBoundary, SuspenseContext, TaskId,
-        Template, TemplateAttribute, TemplateNode, UiEvent, VNode, VirtualDom,
+        fc_to_builder, Element, EventPriority, Fragment, LazyNodes, NodeFactory, Properties, Scope,
+        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, UiEvent,
+        VNode, VirtualDom,
     };
 }
 
@@ -134,25 +136,4 @@ macro_rules! to_owned {
         #[allow(unused_mut)]
         let mut $es = $es.to_owned();
     )*}
-}
-
-/// A helper macro for values into callbacks for async environements.
-///
-///
-macro_rules! callback {
-    () => {};
-}
-
-/// Convert a hook into a hook with an implicit dependency list by analyzing the closure.
-///
-/// ```
-/// // Convert hooks with annoying dependencies into...
-///
-/// let val = use_effect(cx, (val,) |(val,)| println!("thing {val}"))
-///
-/// // a simple closure
-/// let val = use_effect!(cx, |val| async { println!("thing {val}")) });
-/// ```
-macro_rules! make_dep_fn {
-    () => {};
 }

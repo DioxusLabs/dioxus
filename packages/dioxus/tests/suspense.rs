@@ -1,6 +1,7 @@
 use std::future::IntoFuture;
 
 use dioxus::prelude::*;
+use dioxus_core::SuspenseBoundary;
 
 #[inline_props]
 fn suspense_boundary<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {

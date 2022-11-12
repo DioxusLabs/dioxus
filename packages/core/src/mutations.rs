@@ -4,14 +4,14 @@ use crate::arena::ElementId;
 pub struct Mutations<'a> {
     pub subtree: usize,
     pub template_mutations: Vec<Mutation<'a>>,
-    pub mutations: Vec<Mutation<'a>>,
+    pub edits: Vec<Mutation<'a>>,
 }
 
 impl<'a> Mutations<'a> {
     pub fn new(subtree: usize) -> Self {
         Self {
             subtree,
-            mutations: Vec::new(),
+            edits: Vec::new(),
             template_mutations: Vec::new(),
         }
     }
@@ -21,13 +21,13 @@ impl<'a> std::ops::Deref for Mutations<'a> {
     type Target = Vec<Mutation<'a>>;
 
     fn deref(&self) -> &Self::Target {
-        &self.mutations
+        &self.edits
     }
 }
 
 impl std::ops::DerefMut for Mutations<'_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.mutations
+        &mut self.edits
     }
 }
 
@@ -35,7 +35,7 @@ impl std::ops::DerefMut for Mutations<'_> {
 each subtree has its own numbering scheme
 */
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Mutation<'a> {
     SetAttribute {
         name: &'a str,

@@ -6,26 +6,29 @@ use dioxus_core::*;
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mutations = dom.rebuild();
+    let _ = dom.rebuild();
 
-    println!("mutations: {:?}", mutations);
-
-    dom.wait_for_work().await;
+    tokio::select! {
+        _ = dom.wait_for_work() => {}
+        _ = tokio::time::sleep(Duration::from_millis(1000)) => {}
+    };
 }
 
 fn app(cx: Scope) -> Element {
-    cx.spawn(async {
-        for x in 0..10 {
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            println!("Hello, world! {x}");
-        }
-    });
+    cx.use_hook(|| {
+        cx.spawn(async {
+            for x in 0..10 {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                println!("Hello, world! {x}");
+            }
+        });
 
-    cx.spawn(async {
-        for x in 0..10 {
-            tokio::time::sleep(Duration::from_millis(250)).await;
-            println!("Hello, world does! {x}");
-        }
+        cx.spawn(async {
+            for x in 0..10 {
+                tokio::time::sleep(Duration::from_millis(25)).await;
+                println!("Hello, world from second thread! {x}");
+            }
+        });
     });
 
     None

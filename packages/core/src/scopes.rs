@@ -7,7 +7,6 @@ use std::{
 };
 
 use bumpalo::Bump;
-use futures_channel::mpsc::UnboundedSender;
 use std::future::Future;
 
 use crate::{
@@ -69,20 +68,27 @@ pub struct ScopeState {
 }
 
 impl ScopeState {
-    pub fn current_arena(&self) -> &BumpFrame {
+    pub fn current_frame(&self) -> &BumpFrame {
         match self.render_cnt % 2 {
             0 => &self.node_arena_1,
             1 => &self.node_arena_2,
             _ => unreachable!(),
         }
     }
+    pub fn previous_frame(&self) -> &BumpFrame {
+        match self.render_cnt % 2 {
+            1 => &self.node_arena_1,
+            0 => &self.node_arena_2,
+            _ => unreachable!(),
+        }
+    }
 
     pub fn bump(&self) -> &Bump {
-        &self.current_arena().bump
+        &self.current_frame().bump
     }
 
     pub fn root_node<'a>(&'a self) -> &'a VNode<'a> {
-        let r = unsafe { &*self.current_arena().node.get() };
+        let r = unsafe { &*self.current_frame().node.get() };
         unsafe { std::mem::transmute(r) }
     }
 
@@ -140,11 +146,6 @@ impl ScopeState {
     /// ```
     pub fn scope_id(&self) -> ScopeId {
         self.id
-    }
-
-    /// Get a handle to the raw update scheduler channel
-    pub fn scheduler_channel(&self) -> UnboundedSender<SchedulerMsg> {
-        self.tasks.sender.clone()
     }
 
     /// Create a subscription that schedules a future render for the reference component

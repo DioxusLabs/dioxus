@@ -1,4 +1,4 @@
-use std::{cell::Cell, fmt::Arguments, pin::Pin};
+use std::{cell::Cell, fmt::Arguments};
 
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
@@ -123,13 +123,6 @@ where
     }
 }
 
-#[test]
-fn takes_it() {
-    fn demo(cx: Scope) -> Element {
-        todo!()
-    }
-}
-
 pub enum RenderReturn<'a> {
     Sync(Element<'a>),
     Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
@@ -144,8 +137,6 @@ impl<'a> RenderReturn<'a> {
     }
 }
 
-pub type FiberLeaf<'a> = Pin<BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>>;
-
 pub trait IntoVnode<'a, A = ()> {
     fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a>;
 }
@@ -159,6 +150,12 @@ impl<'a, 'b> IntoVnode<'a> for LazyNodes<'a, 'b> {
 impl<'a, 'b> IntoVnode<'a> for VNode<'a> {
     fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
         self
+    }
+}
+
+impl<'a, 'b> IntoVnode<'a> for Option<VNode<'a>> {
+    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
+        self.expect("please allow optional nodes in")
     }
 }
 

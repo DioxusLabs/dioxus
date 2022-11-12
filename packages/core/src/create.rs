@@ -130,7 +130,10 @@ impl VirtualDom {
     ) {
         match *node {
             // Todo: create the children's template
-            TemplateNode::Dynamic(_) => mutations.push(CreatePlaceholder { id: ElementId(0) }),
+            TemplateNode::Dynamic(_) => {
+                let id = self.next_element(template);
+                mutations.push(CreatePlaceholder { id })
+            }
             TemplateNode::Text(value) => mutations.push(CreateText { value }),
             TemplateNode::DynamicText { .. } => mutations.push(CreateText {
                 value: "placeholder",
@@ -220,7 +223,7 @@ impl VirtualDom {
 
                                 let split_off = unsafe { std::mem::transmute(split_off) };
 
-                                boundary_mut.mutations.mutations = split_off;
+                                boundary_mut.mutations.edits = split_off;
                                 boundary_mut
                                     .waiting_on
                                     .extend(self.collected_leaves.drain(..));

@@ -8,6 +8,15 @@ pub struct ElementPath {
     pub element: usize,
 }
 
+impl ElementPath {
+    pub fn null() -> Self {
+        Self {
+            template: std::ptr::null_mut(),
+            element: 0,
+        }
+    }
+}
+
 impl VirtualDom {
     pub fn next_element(&mut self, template: &VNode) -> ElementId {
         let entry = self.elements.vacant_entry();

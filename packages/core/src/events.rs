@@ -98,53 +98,9 @@ pub enum EventPriority {
     Low = 0,
 }
 
-impl VirtualDom {
-    /// Returns None if no element could be found
-    pub fn handle_event<T: 'static>(&mut self, event: &UiEvent<T>) -> Option<()> {
-        let path = self.elements.get(event.element.0)?;
-
-        let location = unsafe { &mut *path.template }
-            .dynamic_attrs
-            .iter()
-            .position(|attr| attr.mounted_element.get() == event.element)?;
-
-        let mut index = Some((path.template, location));
-
-        let mut listeners = Vec::<&Attribute>::new();
-
-        while let Some((raw_parent, dyn_index)) = index {
-            let parent = unsafe { &mut *raw_parent };
-            let path = parent.template.node_paths[dyn_index];
-
-            listeners.extend(
-                parent
-                    .dynamic_attrs
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, attr)| {
-                        match is_path_ascendant(parent.template.node_paths[idx], path) {
-                            true if attr.name == event.name => Some(attr),
-                            _ => None,
-                        }
-                    }),
-            );
-
-            index = parent.parent;
-        }
-
-        for listener in listeners {
-            if let AttributeValue::Listener(listener) = &listener.value {
-                (listener.borrow_mut())(&event.event)
-            }
-        }
-
-        Some(())
-    }
-}
-
 // ensures a strict descendant relationship
 // returns false if the paths are equal
-fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
+pub fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
     if small.len() >= big.len() {
         return false;
     }
