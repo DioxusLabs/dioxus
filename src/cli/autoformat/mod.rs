@@ -13,6 +13,7 @@ pub struct Autoformat {
 }
 
 impl Autoformat {
+    // Todo: autoformat the entire crate
     pub fn autoformat(self) -> Result<()> {
         if let Some(raw) = self.raw {
             if let Some(inner) = dioxus_autofmt::fmt_block(&raw, 0) {
@@ -59,3 +60,17 @@ rsx! {
 
     dbg!(out);
 }
+
+/*
+parse the whole doc
+find all the comment blocks
+
+
+
+
+
+
+
+
+
+*/

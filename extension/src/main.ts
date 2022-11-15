@@ -14,7 +14,7 @@ export async function activate(context: vscode.ExtensionContext) {
 	}
 
 	context.subscriptions.push(
-		vscode.commands.registerTextEditorCommand('editor.action.clipboardPasteAction', onPasteHandler),
+		// vscode.commands.registerTextEditorCommand('editor.action.clipboardPasteAction', onPasteHandler),
 		vscode.commands.registerCommand('extension.htmlToDioxusRsx', translateBlock),
 		vscode.commands.registerCommand('extension.htmlToDioxusComponent', translateComponent),
 		vscode.commands.registerCommand('extension.formatRsx', fmtSelection),
