@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
 use wry::application::event_loop::ControlFlow;
@@ -13,6 +15,13 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String)> {
+    let desktop = use_window(cx).clone();
+
+    &*cx.use_hook(|| Rc::new(move |script| desktop.eval(script)) as Rc<dyn Fn(String)>)
 }
 
 /// An imperative interface to the current window.
@@ -176,6 +185,8 @@ pub(super) fn handler(
     let webview = desktop.webviews.values().next().unwrap();
     let window = webview.window();
 
+    println!("user_event: {:?}", user_event);
+
     match user_event {
         Update => desktop.try_load_ready_webviews(),
         CloseWindow => *control_flow = ControlFlow::Exit,
@@ -226,11 +237,4 @@ pub(super) fn handler(
             }
         }
     }
-}
-
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
-    let desktop = use_window(cx).clone();
-
-    cx.use_hook(|| move |script| desktop.eval(script))
 }

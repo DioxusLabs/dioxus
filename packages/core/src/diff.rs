@@ -189,7 +189,7 @@ impl<'b> VirtualDom {
 
                 (DynamicNode::Text { id: lid, .. }, right) => {
                     let m = self.create_dynamic_node(muts, right_template, right, idx);
-                    muts.push(Mutation::Replace { id: lid.get(), m });
+                    muts.push(Mutation::ReplaceWith { id: lid.get(), m });
                 }
 
                 (DynamicNode::Placeholder(_), DynamicNode::Placeholder(_)) => todo!(),

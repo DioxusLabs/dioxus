@@ -47,6 +47,7 @@ impl VirtualDom {
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
         let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
         let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
+        let cur_scope = self.scope_stack.last().copied().unwrap();
 
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
@@ -78,21 +79,25 @@ impl VirtualDom {
                 });
 
                 loop {
-                    let attribute = &template.dynamic_attrs[attr_id];
+                    let attribute = template.dynamic_attrs.get(attr_id).unwrap();
                     attribute.mounted_element.set(id);
 
-                    match attribute.value {
+                    match &attribute.value {
                         AttributeValue::Text(value) => mutations.push(SetAttribute {
                             name: attribute.name,
-                            value,
+                            value: *value,
                             id,
                         }),
                         AttributeValue::Bool(value) => mutations.push(SetBoolAttribute {
                             name: attribute.name,
-                            value,
+                            value: *value,
                             id,
                         }),
-                        AttributeValue::Listener(_) => todo!("create listener attributes"),
+                        AttributeValue::Listener(_) => mutations.push(NewEventListener {
+                            event_name: attribute.name,
+                            scope: cur_scope,
+                            id,
+                        }),
                         AttributeValue::Float(_) => todo!(),
                         AttributeValue::Int(_) => todo!(),
                         AttributeValue::Any(_) => todo!(),
@@ -138,8 +143,8 @@ impl VirtualDom {
                 let id = self.next_element(template);
                 mutations.push(CreatePlaceholder { id })
             }
-            TemplateNode::Text(value) => mutations.push(CreateText { value }),
-            TemplateNode::DynamicText { .. } => mutations.push(CreateText {
+            TemplateNode::Text(value) => mutations.push(CreateTextNode { value }),
+            TemplateNode::DynamicText { .. } => mutations.push(CreateTextNode {
                 value: "placeholder",
             }),
 

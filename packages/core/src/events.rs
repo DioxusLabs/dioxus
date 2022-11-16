@@ -6,11 +6,18 @@ use std::{
     rc::Rc,
 };
 
-pub struct UiEvent<T> {
-    bubble_state: Cell<bool>,
-    data: Rc<T>,
+pub struct UiEvent<T: 'static> {
+    pub(crate) bubble_state: Cell<bool>,
+    pub(crate) data: Rc<T>,
 }
-
+impl<T> Clone for UiEvent<T> {
+    fn clone(&self) -> Self {
+        Self {
+            bubble_state: self.bubble_state.clone(),
+            data: self.data.clone(),
+        }
+    }
+}
 impl<T> UiEvent<T> {
     pub fn cancel_bubble(&self) {
         self.bubble_state.set(false);

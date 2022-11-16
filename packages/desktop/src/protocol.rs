@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use wry::{
-    http::{status::StatusCode, Request, Response, ResponseBuilder},
+    http::{status::StatusCode, Request, Response},
     Result,
 };
 
@@ -13,14 +13,14 @@ const MODULE_LOADER: &str = r#"
 "#;
 
 pub(super) fn desktop_handler(
-    request: &Request,
+    request: &Request<Vec<u8>>,
     asset_root: Option<PathBuf>,
     custom_head: Option<String>,
     custom_index: Option<String>,
-) -> Result<Response> {
+) -> Result<Response<Vec<u8>>> {
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
-    let path = request.uri().replace("dioxus://", "");
+    let path = request.uri().to_string().replace("dioxus://", "");
 
     // all assets should be called from index.html
     let trimmed = path.trim_start_matches("index.html/");
@@ -32,7 +32,10 @@ pub(super) fn desktop_handler(
             let rendered = custom_index
                 .replace("</body>", &format!("{}</body>", MODULE_LOADER))
                 .into_bytes();
-            ResponseBuilder::new().mimetype("text/html").body(rendered)
+            Response::builder()
+                .header("Content-Type", "text/html")
+                .body(rendered)
+                .map_err(From::from)
         } else {
             // Otherwise, we'll serve the default index.html and apply a custom head if that's specified.
             let mut template = include_str!("./index.html").to_string();
@@ -41,14 +44,16 @@ pub(super) fn desktop_handler(
             }
             template = template.replace("<!-- MODULE LOADER -->", MODULE_LOADER);
 
-            ResponseBuilder::new()
-                .mimetype("text/html")
+            Response::builder()
+                .header("Content-Type", "text/html")
                 .body(template.into_bytes())
+                .map_err(From::from)
         }
     } else if trimmed == "index.js" {
-        ResponseBuilder::new()
-            .mimetype("text/javascript")
+        Response::builder()
+            .header("Content-Type", "text/javascript")
             .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
+            .map_err(From::from)
     } else {
         let asset_root = asset_root
             .unwrap_or_else(|| get_asset_root().unwrap_or_else(|| Path::new(".").to_path_buf()))
@@ -57,20 +62,23 @@ pub(super) fn desktop_handler(
         let asset = asset_root.join(trimmed).canonicalize()?;
 
         if !asset.starts_with(asset_root) {
-            return ResponseBuilder::new()
+            return Response::builder()
                 .status(StatusCode::FORBIDDEN)
-                .body(String::from("Forbidden").into_bytes());
+                .body(String::from("Forbidden").into_bytes())
+                .map_err(From::from);
         }
 
         if !asset.exists() {
-            return ResponseBuilder::new()
+            return Response::builder()
                 .status(StatusCode::NOT_FOUND)
-                .body(String::from("Not Found").into_bytes());
+                .body(String::from("Not Found").into_bytes())
+                .map_err(From::from);
         }
 
-        ResponseBuilder::new()
-            .mimetype(get_mime_from_path(trimmed)?)
+        Response::builder()
+            .header("Content-Type", get_mime_from_path(trimmed)?)
             .body(std::fs::read(asset)?)
+            .map_err(From::from)
     }
 }
 

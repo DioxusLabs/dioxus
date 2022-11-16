@@ -105,19 +105,20 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
 
     // We assume that if the icon is None, then the user just didnt set it
     if cfg.window.window.window_icon.is_none() {
-        cfg.window.window.window_icon = Some(
+        cfg.window = cfg.window.with_window_icon(Some(
             tao::window::Icon::from_rgba(
                 include_bytes!("./assets/default_icon.bin").to_vec(),
                 460,
                 460,
             )
             .expect("image parse failed"),
-        );
+        ));
     }
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
+        // println!("window event: {:?}", window_event);
         match window_event {
             Event::NewEvents(StartCause::Init) => {
                 let builder = cfg.window.clone();
@@ -151,6 +152,7 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                                    println!("initializing...");
                                     let _ = proxy.send_event(UserWindowEvent::Update);
                                 }
                                 "browser_open" => {
@@ -178,6 +180,12 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                             custom_head.clone(),
                             index_file.clone(),
                         )
+                    })
+                    // passing edits via the custom protocol is faster than using eval, maybe?
+                    .with_custom_protocol(String::from("edits"), move |r| {
+                        //
+                        // Ok(Response::body())
+                        todo!()
                     })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler

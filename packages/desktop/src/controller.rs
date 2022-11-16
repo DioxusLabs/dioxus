@@ -40,24 +40,23 @@ impl DesktopController {
                 .unwrap();
 
             runtime.block_on(async move {
+                println!("starting vdom");
+
                 let mut dom = VirtualDom::new_with_props(root, props);
 
                 let window_context = DesktopContext::new(desktop_context_proxy);
 
                 dom.base_scope().provide_context(window_context);
 
-                // // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
-                // #[cfg(any(feature = "hot-reload", debug_assertions))]
-                // crate::hot_reload::init(&dom);
-
                 let edits = dom.rebuild();
-                let mut queue = edit_queue.lock().unwrap();
 
-                queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
-                queue.push(serde_json::to_string(&edits.edits).unwrap());
-
-                // Make sure the window is ready for any new updates
-                proxy.send_event(UserWindowEvent::Update).unwrap();
+                {
+                    let mut queue = edit_queue.lock().unwrap();
+                    queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
+                    queue.push(serde_json::to_string(&edits.edits).unwrap());
+                    proxy.send_event(UserWindowEvent::Update).unwrap();
+                    drop(queue);
+                }
 
                 loop {
                     // todo: add the channel of the event loop in
@@ -71,14 +70,18 @@ impl DesktopController {
                         ))
                         .await;
 
-                    let mut queue = edit_queue.lock().unwrap();
+                    {
+                        let mut queue = edit_queue.lock().unwrap();
 
-                    for edit in muts.template_mutations {
-                        queue.push(serde_json::to_string(&edit).unwrap());
-                    }
+                        for edit in muts.template_mutations {
+                            queue.push(serde_json::to_string(&edit).unwrap());
+                        }
 
-                    for edit in muts.edits {
-                        queue.push(serde_json::to_string(&edit).unwrap());
+                        for edit in muts.edits {
+                            queue.push(serde_json::to_string(&edit).unwrap());
+                        }
+
+                        drop(queue);
                     }
 
                     let _ = proxy.send_event(UserWindowEvent::Update);
@@ -104,10 +107,16 @@ impl DesktopController {
 
     pub(super) fn try_load_ready_webviews(&mut self) {
         if self.is_ready.load(std::sync::atomic::Ordering::Relaxed) {
-            let mut queue = self.pending_edits.lock().unwrap();
+            let mut new_queue = Vec::new();
+
+            {
+                let mut queue = self.pending_edits.lock().unwrap();
+                std::mem::swap(&mut new_queue, &mut *queue);
+            }
+
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            for edit in queue.drain(..) {
+            for edit in new_queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }

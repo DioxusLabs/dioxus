@@ -1,8 +1,9 @@
-use crate::{any_props::AnyProps, arena::ElementId, ScopeId, ScopeState};
+use crate::{any_props::AnyProps, arena::ElementId, ScopeId, ScopeState, UiEvent};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     hash::Hasher,
+    rc::Rc,
 };
 
 pub type TemplateId = &'static str;
@@ -152,6 +153,27 @@ pub enum AttributeValue<'a> {
     Listener(RefCell<&'a mut dyn FnMut(&dyn Any)>),
     Any(&'a dyn AnyValue),
     None,
+}
+
+impl<'a> AttributeValue<'a> {
+    pub fn new_listener<T: 'static>(
+        cx: &'a ScopeState,
+        mut f: impl FnMut(UiEvent<T>) + 'a,
+    ) -> AttributeValue<'a> {
+        let f = cx.bump().alloc(move |a: &dyn Any| {
+            a.downcast_ref::<UiEvent<T>>()
+                .map(|a| f(a.clone()))
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Expected UiEvent<{}>, got {:?}",
+                        std::any::type_name::<T>(),
+                        a
+                    )
+                })
+        }) as &mut dyn FnMut(&dyn Any);
+
+        AttributeValue::Listener(RefCell::new(f))
+    }
 }
 
 impl<'a> std::fmt::Debug for AttributeValue<'a> {

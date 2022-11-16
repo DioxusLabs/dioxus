@@ -9,7 +9,7 @@ use crate::{
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
-    Attribute, AttributeValue, Element, EventPriority, Scope, SuspenseContext,
+    Attribute, AttributeValue, Element, EventPriority, Scope, SuspenseContext, UiEvent,
 };
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use slab::Slab;
@@ -288,10 +288,10 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn handle_event(
+    pub fn handle_event<T: 'static>(
         &mut self,
         name: &str,
-        event: &dyn Any,
+        data: Rc<T>,
         element: ElementId,
         bubbles: bool,
         priority: EventPriority,
@@ -303,6 +303,11 @@ impl VirtualDom {
         - break out of wait loop
         - send event to virtualdom
         */
+
+        let event = UiEvent {
+            bubble_state: std::cell::Cell::new(true),
+            data,
+        };
 
         let path = &self.elements[element.0];
         let template = unsafe { &*path.template };
@@ -339,7 +344,7 @@ impl VirtualDom {
 
         for listener in listeners {
             if let AttributeValue::Listener(listener) = &listener.value {
-                (listener.borrow_mut())(event)
+                (listener.borrow_mut())(&event.clone())
             }
         }
 
