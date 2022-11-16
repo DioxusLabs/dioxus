@@ -45,14 +45,27 @@ impl VirtualDom {
 
         // Walk the roots, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
-        let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
+        let mut dynamic_attrs = template
+            .template
+            .attr_paths
+            .iter()
+            .enumerate()
+            .rev()
+            .peekable();
+        let mut dynamic_nodes = template
+            .template
+            .node_paths
+            .iter()
+            .enumerate()
+            .rev()
+            .peekable();
+
         let cur_scope = self.scope_stack.last().copied().unwrap();
 
         println!("creating template: {:#?}", template);
 
         let mut on_stack = 0;
-        for (root_idx, root) in template.template.roots.iter().enumerate() {
+        for (root_idx, root) in template.template.roots.iter().enumerate().rev() {
             mutations.push(LoadTemplate {
                 name: template.template.id,
                 index: root_idx,
@@ -85,6 +98,7 @@ impl VirtualDom {
                         AttributeValue::Text(value) => mutations.push(SetAttribute {
                             name: attribute.name,
                             value: *value,
+                            ns: attribute.namespace,
                             id,
                         }),
                         AttributeValue::Bool(value) => mutations.push(SetBoolAttribute {
@@ -163,9 +177,17 @@ impl VirtualDom {
                 });
 
                 mutations.extend(attrs.into_iter().filter_map(|attr| match attr {
-                    TemplateAttribute::Static { name, value, .. } => {
-                        Some(SetAttribute { name, value, id })
-                    }
+                    TemplateAttribute::Static {
+                        name,
+                        value,
+                        namespace,
+                        ..
+                    } => Some(SetAttribute {
+                        name,
+                        value,
+                        id,
+                        ns: *namespace,
+                    }),
                     _ => None,
                 }));
 

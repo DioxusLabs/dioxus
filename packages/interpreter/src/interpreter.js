@@ -258,7 +258,11 @@ export class Interpreter {
         this.AssignId(edit.path, edit.id);
         break;
       case "CreateElement":
-        this.CreateElement(edit.name, edit.id);
+        if (edit.ns !== null) {
+          this.CreateElement(edit.name, edit.id, edit.ns);
+        } else {
+          this.CreateElement(edit.name, edit.id);
+        }
         break;
       case "CreatePlaceholder":
         this.CreatePlaceholder(edit.id);

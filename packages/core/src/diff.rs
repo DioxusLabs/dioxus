@@ -130,6 +130,7 @@ impl<'b> VirtualDom {
                     id: left_attr.mounted_element.get(),
                     name: left_attr.name,
                     value,
+                    ns: right_attr.namespace,
                 });
             }
         }

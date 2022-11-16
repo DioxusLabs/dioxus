@@ -94,6 +94,11 @@ pub enum Mutation<'a> {
         name: &'a str,
         value: &'a str,
         id: ElementId,
+
+        // value: &'bump str,
+        /// The (optional) namespace of the attribute.
+        /// For instance, "style" is in the "style" namespace.
+        ns: Option<&'a str>,
     },
 
     SetBoolAttribute {
