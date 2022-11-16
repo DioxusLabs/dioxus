@@ -135,6 +135,7 @@ export class Interpreter {
     this.stack.push(el);
   }
   CreateElementNs(tag, root, ns) {
+    console.log("creating element", tag, root, ns);
     let el = document.createElementNS(ns, tag);
     this.stack.push(el);
     this.nodes[root] = el;
@@ -258,8 +259,8 @@ export class Interpreter {
         this.AssignId(edit.path, edit.id);
         break;
       case "CreateElement":
-        if (edit.ns !== null) {
-          this.CreateElement(edit.name, edit.id, edit.ns);
+        if (edit.namespace !== null || edit.namespace !== undefined) {
+          this.CreateElementNs(edit.name, edit.id, edit.namespace);
         } else {
           this.CreateElement(edit.name, edit.id);
         }
@@ -298,7 +299,7 @@ export class Interpreter {
         this.SaveTemplate(edit.name, edit.m);
         break;
       case "CreateElementNs":
-        this.CreateElementNs(edit.tag, edit.id, edit.ns);
+        this.CreateElementNs(edit.name, edit.id, edit.ns);
         break;
       case "SetText":
         this.SetText(edit.id, edit.text);
