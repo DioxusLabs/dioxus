@@ -53,13 +53,11 @@ impl VirtualDom {
         // we should attach them to that component and then render its children
         // continue rendering the tree until we hit yet another suspended component
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
-            let boundary = &self.scopes[leaf.scope_id.0]
+            let fiber = &self.scopes[leaf.scope_id.0]
                 .consume_context::<SuspenseContext>()
                 .unwrap();
 
             println!("ready pool");
-
-            let mut fiber = boundary.borrow_mut();
 
             println!(
                 "Existing mutations {:?}, scope {:?}",
@@ -72,16 +70,33 @@ impl VirtualDom {
             let ret = arena.bump.alloc(RenderReturn::Sync(new_nodes));
             arena.node.set(ret);
 
+            fiber.waiting_on.borrow_mut().remove(&id);
+
             if let RenderReturn::Sync(Some(template)) = ret {
-                let mutations = &mut fiber.mutations;
+                let mutations_ref = &mut fiber.mutations.borrow_mut();
+                let mutations = &mut **mutations_ref;
                 let template: &VNode = unsafe { std::mem::transmute(template) };
                 let mutations: &mut Mutations = unsafe { std::mem::transmute(mutations) };
 
+                let place_holder_id = scope.placeholder.get().unwrap();
                 self.scope_stack.push(scope_id);
-                self.create(mutations, template);
+                let created = self.create(mutations, template);
                 self.scope_stack.pop();
+                mutations.push(Mutation::ReplaceWith {
+                    id: place_holder_id,
+                    m: created,
+                });
 
-                println!("{:#?}", mutations);
+                // for leaf in self.collected_leaves.drain(..) {
+                //     fiber.waiting_on.borrow_mut().insert(leaf);
+                // }
+
+                if fiber.waiting_on.borrow().is_empty() {
+                    println!("fiber is finished!");
+                    self.finished_fibers.push(fiber.id);
+                } else {
+                    println!("fiber is not finished {:?}", fiber.waiting_on);
+                }
             } else {
                 println!("nodes arent right");
             }

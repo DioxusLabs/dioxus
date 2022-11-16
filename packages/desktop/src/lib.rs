@@ -181,12 +181,6 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                             index_file.clone(),
                         )
                     })
-                    // passing edits via the custom protocol is faster than using eval, maybe?
-                    .with_custom_protocol(String::from("edits"), move |r| {
-                        //
-                        // Ok(Response::body())
-                        todo!()
-                    })
                     .with_file_drop_handler(move |window, evet| {
                         file_handler
                             .as_ref()

@@ -167,7 +167,10 @@ export class Interpreter {
     const name = field;
     const node = this.nodes[root];
     if (ns === "style") {
-      // @ts-ignore
+      // ????? why do we need to do this
+      if (node.style === undefined) {
+        node.style = {};
+      }
       node.style[name] = value;
     } else if (ns != null || ns != undefined) {
       node.setAttributeNS(ns, name, value);

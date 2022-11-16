@@ -1,4 +1,5 @@
 use super::{waker::RcWake, SchedulerMsg};
+use crate::ElementId;
 use crate::{innerlude::Mutations, Element, ScopeId};
 use std::future::Future;
 use std::{
@@ -10,22 +11,24 @@ use std::{
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct SuspenseId(pub usize);
 
-pub type SuspenseContext = Rc<RefCell<SuspenseBoundary>>;
+pub type SuspenseContext = Rc<SuspenseBoundary>;
 
 /// Essentially a fiber in React
 pub struct SuspenseBoundary {
     pub id: ScopeId,
-    pub waiting_on: HashSet<SuspenseId>,
-    pub mutations: Mutations<'static>,
+    pub waiting_on: RefCell<HashSet<SuspenseId>>,
+    pub mutations: RefCell<Mutations<'static>>,
+    pub placeholder: Cell<Option<ElementId>>,
 }
 
 impl SuspenseBoundary {
-    pub fn new(id: ScopeId) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    pub fn new(id: ScopeId) -> Rc<Self> {
+        Rc::new(Self {
             id,
             waiting_on: Default::default(),
-            mutations: Mutations::new(0),
-        }))
+            mutations: RefCell::new(Mutations::new(0)),
+            placeholder: Cell::new(None),
+        })
     }
 }
 

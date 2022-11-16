@@ -134,8 +134,11 @@ impl<T> UseFuture<T> {
     ///
     /// If the future has never completed, the returned value will be `None`.
     pub fn value(&self) -> Option<&T> {
-        // self.value.as_ref()
-        todo!()
+        self.values
+            .borrow_mut()
+            .last()
+            .cloned()
+            .map(|x| unsafe { &*x })
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -181,7 +184,6 @@ impl<'a, T> Future for UseFutureAwait<'a, T> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        println!("polling future");
         match self.hook.values.borrow_mut().last().cloned() {
             Some(value) => std::task::Poll::Ready(unsafe { &*value }),
             None => {

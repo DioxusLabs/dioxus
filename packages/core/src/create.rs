@@ -1,11 +1,13 @@
+use std::ops::Bound;
+
 use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, SuspenseContext};
+use crate::innerlude::{Mutations, SuspenseContext, SuspenseId};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, TemplateAttribute};
+use crate::{AttributeValue, ScopeId, TemplateAttribute};
 
 impl VirtualDom {
     pub(crate) fn create_scope<'a>(
@@ -50,8 +52,6 @@ impl VirtualDom {
 
         let cur_scope = self.scope_stack.last().copied().unwrap();
 
-        println!("creating template: {:#?}", template);
-
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
             on_stack += match root {
@@ -64,9 +64,7 @@ impl VirtualDom {
                 }
 
                 TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                    let dynamic_node = &template.dynamic_nodes[*id];
-
-                    match dynamic_node {
+                    match &template.dynamic_nodes[*id] {
                         DynamicNode::Fragment { .. } | DynamicNode::Component { .. } => self
                             .create_dynamic_node(
                                 mutations,
@@ -79,19 +77,16 @@ impl VirtualDom {
                         } => {
                             let id = self.next_element(template);
                             slot.set(id);
-                            mutations.push(CreateTextNode {
-                                value: value.clone(),
-                                id,
-                            });
+                            mutations.push(CreateTextNode { value, id });
                             1
                         }
-                        DynamicNode::Placeholder(id) => {
+                        DynamicNode::Placeholder(slot) => {
                             let id = self.next_element(template);
+                            slot.set(id);
                             mutations.push(CreatePlaceholder { id });
                             1
                         }
                     }
-                    // self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
                 }
             };
 
@@ -141,31 +136,34 @@ impl VirtualDom {
                 }
             }
 
-            // todo:
-            //
-            //  we walk the roots front to back when creating nodes, bur want to fill in the dynamic nodes
-            // back to front. This is because the indices would shift around because the paths become invalid
-            //
-            // We could easily implement this without the vec by walking the indicies forward
-            let mut queued_changes = vec![];
-
             // We're on top of a node that has a dynamic child for a descendant
             // Skip any node that's a root
-            while let Some((idx, path)) =
-                dynamic_nodes.next_if(|(_, p)| p.len() > 1 && p[0] == root_idx as u8)
-            {
-                let node = &template.dynamic_nodes[idx];
-                let m = self.create_dynamic_node(mutations, template, node, idx);
-                if m > 0 {
-                    queued_changes.push(ReplacePlaceholder {
-                        m,
-                        path: &path[1..],
-                    });
+            let mut start = None;
+            let mut end = None;
+
+            while let Some((idx, p)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
+                if p.len() == 1 {
+                    continue;
                 }
+
+                if start.is_none() {
+                    start = Some(idx);
+                }
+
+                end = Some(idx);
             }
 
-            for change in queued_changes.into_iter().rev() {
-                mutations.push(change);
+            if let (Some(start), Some(end)) = (start, end) {
+                for idx in start..=end {
+                    let node = &template.dynamic_nodes[idx];
+                    let m = self.create_dynamic_node(mutations, template, node, idx);
+                    if m > 0 {
+                        mutations.push(ReplacePlaceholder {
+                            m,
+                            path: &template.template.node_paths[idx][1..],
+                        });
+                    }
+                }
             }
         }
 
@@ -240,7 +238,7 @@ impl VirtualDom {
         idx: usize,
     ) -> usize {
         match &node {
-            DynamicNode::Text { id, value, inner } => {
+            DynamicNode::Text { id, value, .. } => {
                 let new_id = self.next_element(template);
                 id.set(new_id);
                 mutations.push(HydrateText {
@@ -266,14 +264,32 @@ impl VirtualDom {
                 let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
 
                 match return_nodes {
-                    RenderReturn::Sync(None) | RenderReturn::Async(_) => {
+                    RenderReturn::Sync(None) => {
+                        todo!()
+                    }
+
+                    RenderReturn::Async(_) => {
                         let new_id = self.next_element(template);
                         placeholder.set(Some(new_id));
                         self.scopes[scope.0].placeholder.set(Some(new_id));
+
                         mutations.push(AssignId {
                             id: new_id,
                             path: &template.template.node_paths[idx][1..],
                         });
+
+                        let boudary = self.scopes[scope.0]
+                            .consume_context::<SuspenseContext>()
+                            .unwrap();
+
+                        if boudary.placeholder.get().is_none() {
+                            boudary.placeholder.set(Some(new_id));
+                        }
+                        boudary
+                            .waiting_on
+                            .borrow_mut()
+                            .extend(self.collected_leaves.drain(..));
+
                         0
                     }
 
@@ -288,16 +304,6 @@ impl VirtualDom {
                             if let Some(boundary) =
                                 self.scopes[scope.0].has_context::<SuspenseContext>()
                             {
-                                let mut boundary_mut = boundary.borrow_mut();
-                                let split_off = mutations.split_off(mutations_to_this_point);
-
-                                let split_off = unsafe { std::mem::transmute(split_off) };
-
-                                boundary_mut.mutations.edits = split_off;
-                                boundary_mut
-                                    .waiting_on
-                                    .extend(self.collected_leaves.drain(..));
-
                                 // Since this is a boundary, use it as a placeholder
                                 let new_id = self.next_element(template);
                                 placeholder.set(Some(new_id));
@@ -306,6 +312,25 @@ impl VirtualDom {
                                     id: new_id,
                                     path: &template.template.node_paths[idx][1..],
                                 });
+
+                                // Now connect everything to the boundary
+                                let boundary_mut = boundary;
+                                let split_off = mutations.split_off(mutations_to_this_point);
+                                let split_off: Vec<Mutation> =
+                                    unsafe { std::mem::transmute(split_off) };
+
+                                if boundary_mut.placeholder.get().is_none() {
+                                    boundary_mut.placeholder.set(Some(new_id));
+                                }
+
+                                // In the generated edits, we want to pick off from where we left off.
+                                boundary_mut.mutations.borrow_mut().edits.extend(split_off);
+
+                                boundary_mut
+                                    .waiting_on
+                                    .borrow_mut()
+                                    .extend(self.collected_leaves.drain(..));
+
                                 created = 0;
                             }
                         }

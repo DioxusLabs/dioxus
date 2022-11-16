@@ -50,7 +50,7 @@ impl DesktopController {
 
                 let edits = dom.rebuild();
 
-                println!("got muts: {:#?}", edits);
+                // println!("got muts: {:#?}", edits);
 
                 {
                     let mut queue = edit_queue.lock().unwrap();
@@ -68,20 +68,15 @@ impl DesktopController {
 
                     let muts = dom
                         .render_with_deadline(tokio::time::sleep(
-                            tokio::time::Duration::from_millis(100),
+                            tokio::time::Duration::from_millis(16),
                         ))
                         .await;
 
                     {
                         let mut queue = edit_queue.lock().unwrap();
 
-                        for edit in muts.template_mutations {
-                            queue.push(serde_json::to_string(&edit).unwrap());
-                        }
-
-                        for edit in muts.edits {
-                            queue.push(serde_json::to_string(&edit).unwrap());
-                        }
+                        queue.push(serde_json::to_string(&muts.template_mutations).unwrap());
+                        queue.push(serde_json::to_string(&muts.edits).unwrap());
 
                         drop(queue);
                     }
@@ -117,6 +112,8 @@ impl DesktopController {
             }
 
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
+
+            println!("sending edits {:#?}", new_queue);
 
             for edit in new_queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))

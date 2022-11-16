@@ -268,8 +268,8 @@ impl VirtualDom {
         !self.scopes[id.0]
             .consume_context::<SuspenseContext>()
             .unwrap()
-            .borrow()
             .waiting_on
+            .borrow()
             .is_empty()
     }
 
@@ -469,8 +469,15 @@ impl VirtualDom {
             for finished_fiber in self.finished_fibers.drain(..) {
                 let scope = &mut self.scopes[finished_fiber.0];
                 let context = scope.has_context::<SuspenseContext>().unwrap();
-                let mut context = context.borrow_mut();
-                mutations.extend(context.mutations.drain(..));
+                println!("unloading suspense tree {:?}", context.mutations);
+
+                mutations.extend(context.mutations.borrow_mut().template_mutations.drain(..));
+                mutations.extend(context.mutations.borrow_mut().drain(..));
+
+                mutations.push(Mutation::ReplaceWith {
+                    id: context.placeholder.get().unwrap(),
+                    m: 1,
+                })
             }
 
             // Next, diff any dirty scopes
