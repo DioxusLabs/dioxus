@@ -2,7 +2,7 @@ use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenP
 use crate::input_data::{
     decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
 };
-use dioxus_core::{Attribute, ScopeState, UiEvent};
+use dioxus_core::UiEvent;
 use keyboard_types::Modifiers;
 use std::fmt::{Debug, Formatter};
 
@@ -86,6 +86,91 @@ pub struct MouseData {
     /// True if the shift key was down when the mouse event was fired.
     #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
     pub shift_key: bool,
+}
+
+impl_event! {
+    MouseData;
+
+    /// Execute a callback when a button is clicked.
+    ///
+    /// ## Description
+    ///
+    /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
+    /// is both pressed and released while the pointer is located inside the element.
+    ///
+    /// - Bubbles: Yes
+    /// - Cancelable: Yes
+    /// - Interface(InteData): [`MouseEvent`]
+    ///
+    /// If the button is pressed on one element and the pointer is moved outside the element before the button
+    /// is released, the event is fired on the most specific ancestor element that contained both elements.
+    /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
+    ///
+    /// ## Example
+    /// ```rust, ignore
+    /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
+    /// ```
+    ///
+    /// ## Reference
+    /// - <https://www.w3schools.com/tags/ev_onclick.asp>
+    /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
+    onclick
+
+    /// oncontextmenu
+    oncontextmenu
+
+    /// ondoubleclick
+    ondoubleclick
+
+    /// ondoubleclick
+    ondblclick
+
+    /// ondrag
+    ondrag
+
+    /// ondragend
+    ondragend
+
+    /// ondragenter
+    ondragenter
+
+    /// ondragexit
+    ondragexit
+
+    /// ondragleave
+    ondragleave
+
+    /// ondragover
+    ondragover
+
+    /// ondragstart
+    ondragstart
+
+    /// ondrop
+    ondrop
+
+    /// onmousedown
+    onmousedown
+
+    /// onmouseenter
+    onmouseenter
+
+    /// onmouseleave
+    onmouseleave
+
+    /// onmousemove
+    onmousemove
+
+    /// onmouseout
+    onmouseout
+
+    /// onmouseover
+    ///
+    /// Triggered when the users's mouse hovers over an element.
+    onmouseover
+
+    /// onmouseup
+    onmouseup
 }
 
 impl MouseData {
@@ -216,89 +301,4 @@ impl Debug for MouseData {
             .field("trigger_button", &self.trigger_button())
             .finish()
     }
-}
-
-impl_event! {
-    MouseData;
-
-    /// Execute a callback when a button is clicked.
-    ///
-    /// ## Description
-    ///
-    /// An element receives a click event when a pointing device button (such as a mouse's primary mouse button)
-    /// is both pressed and released while the pointer is located inside the element.
-    ///
-    /// - Bubbles: Yes
-    /// - Cancelable: Yes
-    /// - Interface(InteData): [`MouseEvent`]
-    ///
-    /// If the button is pressed on one element and the pointer is moved outside the element before the button
-    /// is released, the event is fired on the most specific ancestor element that contained both elements.
-    /// `click` fires after both the `mousedown` and `mouseup` events have fired, in that order.
-    ///
-    /// ## Example
-    /// ```rust, ignore
-    /// rsx!( button { "click me", onclick: move |_| log::info!("Clicked!`") } )
-    /// ```
-    ///
-    /// ## Reference
-    /// - <https://www.w3schools.com/tags/ev_onclick.asp>
-    /// - <https://developer.mozilla.org/en-US/docs/Web/API/Element/click_event>
-    onclick
-
-    /// oncontextmenu
-    oncontextmenu
-
-    /// ondoubleclick
-    ondoubleclick
-
-    /// ondoubleclick
-    ondblclick
-
-    /// ondrag
-    ondrag
-
-    /// ondragend
-    ondragend
-
-    /// ondragenter
-    ondragenter
-
-    /// ondragexit
-    ondragexit
-
-    /// ondragleave
-    ondragleave
-
-    /// ondragover
-    ondragover
-
-    /// ondragstart
-    ondragstart
-
-    /// ondrop
-    ondrop
-
-    /// onmousedown
-    onmousedown
-
-    /// onmouseenter
-    onmouseenter
-
-    /// onmouseleave
-    onmouseleave
-
-    /// onmousemove
-    onmousemove
-
-    /// onmouseout
-    onmouseout
-
-    /// onmouseover
-    ///
-    /// Triggered when the users's mouse hovers over an element.
-    onmouseover
-
-    /// onmouseup
-    onmouseup
 }

@@ -1,6 +1,6 @@
 // Thanks to @japsu and their project https://github.com/japsu/jatsi for the example!
 
-use dioxus::{events::MouseData, html::MouseEvent, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -9,7 +9,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let val = use_state(&cx, || 5);
 
-    render! {
+    cx.render(rsx! {
         div {
             user_select: "none",
             webkit_user_select: "none",
@@ -31,7 +31,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
         }
-    }
+    })
 }
 
 #[derive(Props)]
@@ -78,7 +78,7 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
             })
         });
 
-    render! {
+    cx.render(rsx! {
       svg {
         onclick: move |e| cx.props.onclick.call(e),
         prevent_default: "onclick",
@@ -96,5 +96,5 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
 
         dots
       }
-    }
+    })
 }

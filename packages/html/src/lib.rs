@@ -24,3 +24,7 @@ pub mod input_data;
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;
+
+pub mod prelude {
+    pub use crate::events::*;
+}
