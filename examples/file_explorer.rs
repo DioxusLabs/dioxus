@@ -21,7 +21,7 @@ fn main() {
 fn app(cx: Scope) -> Element {
     let files = use_ref(&cx, Files::new);
 
-    render! {
+    cx.render(rsx! {
         div {
             link { href:"https://fonts.googleapis.com/icon?family=Material+Icons", rel:"stylesheet", }
             style { include_str!("./assets/fileexplorer.css") }
@@ -62,7 +62,7 @@ fn app(cx: Scope) -> Element {
                 })
             }
         }
-    }
+    })
 }
 
 struct Files {

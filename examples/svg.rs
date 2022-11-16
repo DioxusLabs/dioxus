@@ -70,12 +70,15 @@ pub fn Die<'a>(cx: Scope<'a, DieProps<'a>>) -> Element {
         .map(|((x, y), _)| {
             let dcx = x * OFFSET;
             let dcy = y * OFFSET;
-            rsx!(circle {
-                cx: "{dcx}",
-                cy: "{dcy}",
-                r: "{DOT_RADIUS}",
-                fill: "#333"
-            })
+
+            rsx! {
+                circle {
+                    cx: "{dcx}",
+                    cy: "{dcy}",
+                    r: "{DOT_RADIUS}",
+                    fill: "#333"
+                }
+            }
         });
 
     cx.render(rsx! {

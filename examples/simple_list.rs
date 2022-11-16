@@ -17,12 +17,6 @@ fn app(cx: Scope) -> Element {
                 .collect::<Vec<_>>()
                 .into_iter(),
 
-            ["x", "y", "z"]
-                .into_iter()
-                .map(|f| rsx! { "{f}" })
-                .collect::<Vec<_>>()
-                .into_iter(),
-
             // Use optionals
             Some(rsx! { "Some" }),
         }

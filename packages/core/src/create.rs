@@ -220,7 +220,7 @@ impl VirtualDom {
                     path: &template.template.node_paths[idx][1..],
                     value,
                 });
-                1
+                0
             }
 
             DynamicNode::Component {
@@ -296,10 +296,15 @@ impl VirtualDom {
                     .fold(0, |acc, child| acc + self.create(mutations, child))
             }
 
-            DynamicNode::Placeholder(_) => {
+            DynamicNode::Placeholder(slot) => {
                 let id = self.next_element(template);
-                mutations.push(CreatePlaceholder { id });
-                1
+                slot.set(id);
+                mutations.push(AssignId {
+                    path: &template.template.node_paths[idx][1..],
+                    id,
+                });
+
+                0
             }
         }
     }
