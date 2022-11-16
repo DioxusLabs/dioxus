@@ -87,10 +87,14 @@ impl VirtualDom {
                             value,
                             id,
                         }),
+                        AttributeValue::Bool(value) => mutations.push(SetBoolAttribute {
+                            name: attribute.name,
+                            value,
+                            id,
+                        }),
                         AttributeValue::Listener(_) => todo!("create listener attributes"),
                         AttributeValue::Float(_) => todo!(),
                         AttributeValue::Int(_) => todo!(),
-                        AttributeValue::Bool(_) => todo!(),
                         AttributeValue::Any(_) => todo!(),
                         AttributeValue::None => todo!(),
                     }
@@ -138,11 +142,13 @@ impl VirtualDom {
             TemplateNode::DynamicText { .. } => mutations.push(CreateText {
                 value: "placeholder",
             }),
+
             TemplateNode::Element {
                 attrs,
                 children,
                 namespace,
                 tag,
+                inner_opt,
             } => {
                 let id = self.next_element(template);
 
@@ -158,6 +164,10 @@ impl VirtualDom {
                     }
                     _ => None,
                 }));
+
+                if children.is_empty() && inner_opt {
+                    return;
+                }
 
                 children
                     .into_iter()
@@ -176,7 +186,7 @@ impl VirtualDom {
         idx: usize,
     ) -> usize {
         match &node {
-            DynamicNode::Text { id, value } => {
+            DynamicNode::Text { id, value, inner } => {
                 let new_id = self.next_element(template);
                 id.set(new_id);
                 mutations.push(HydrateText {
@@ -188,11 +198,17 @@ impl VirtualDom {
             }
 
             DynamicNode::Component {
-                props, placeholder, ..
+                props,
+                placeholder,
+                scope: scope_slot,
+                ..
             } => {
                 let scope = self
                     .new_scope(unsafe { std::mem::transmute(props.get()) })
                     .id;
+
+                scope_slot.set(Some(scope));
+
                 let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
 
                 match return_nodes {
@@ -247,7 +263,7 @@ impl VirtualDom {
                 }
             }
 
-            DynamicNode::Fragment(children) => children
+            DynamicNode::Fragment { nodes, .. } => nodes
                 .iter()
                 .fold(0, |acc, child| acc + self.create(mutations, child)),
 

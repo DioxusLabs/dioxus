@@ -2,7 +2,8 @@
 //!
 //! There is some conversion happening when input types are checkbox/radio/select/textarea etc.
 
-use dioxus::{events::FormEvent, prelude::*};
+use dioxus::events::FormEvent;
+use dioxus::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);

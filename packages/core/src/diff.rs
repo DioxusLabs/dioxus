@@ -177,7 +177,7 @@ impl<'b> VirtualDom {
                     todo!()
                 },
 
-                (DynamicNode::Text { id: lid, value: lvalue }, DynamicNode::Text { id: rid, value: rvalue }) => {
+                (DynamicNode::Text { id: lid, value: lvalue, .. }, DynamicNode::Text { id: rid, value: rvalue, .. }) => {
                     rid.set(lid.get());
                     if lvalue != rvalue {
                         muts.push(Mutation::SetText {
@@ -196,7 +196,7 @@ impl<'b> VirtualDom {
                 (DynamicNode::Placeholder(_), _) => todo!(),
 
 
-                (DynamicNode::Fragment (l), DynamicNode::Fragment (r)) => {
+                (DynamicNode::Fragment { nodes: lnodes, ..}, DynamicNode::Fragment { nodes: rnodes, ..}) => {
 
 
                     // match (old, new) {

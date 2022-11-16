@@ -17,7 +17,7 @@ use std::{
 };
 
 impl VirtualDom {
-    pub fn new_scope(&mut self, props: *mut dyn AnyProps<'static>) -> &mut ScopeState {
+    pub(super) fn new_scope(&mut self, props: *mut dyn AnyProps<'static>) -> &mut ScopeState {
         let parent = self.acquire_current_scope_raw();
         let container = self.acquire_current_container();
         let entry = self.scopes.vacant_entry();

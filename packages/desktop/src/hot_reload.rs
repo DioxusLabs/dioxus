@@ -1,4 +1,4 @@
-use dioxus_core::{SchedulerMsg, VirtualDom};
+use dioxus_core::VirtualDom;
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
@@ -23,8 +23,6 @@ pub(crate) fn init(dom: &VirtualDom) {
             }
         }
     });
-
-    let mut channel = dom.get_scheduler_channel();
 
     std::thread::spawn(move || {
         loop {

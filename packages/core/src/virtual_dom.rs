@@ -4,18 +4,21 @@ use crate::{
     arena::ElementPath,
     diff::DirtyScope,
     factory::RenderReturn,
-    innerlude::{is_path_ascendant, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
-    Attribute, AttributeValue, Element, Scope, SuspenseContext, UiEvent,
+    Attribute, AttributeValue, Element, EventPriority, Scope, SuspenseContext,
 };
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use slab::Slab;
-use std::collections::{BTreeSet, HashMap};
 use std::future::Future;
 use std::rc::Rc;
+use std::{
+    any::Any,
+    collections::{BTreeSet, HashMap},
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -275,42 +278,68 @@ impl VirtualDom {
         !self.scheduler.leaves.borrow().is_empty()
     }
 
-    /// Returns None if no element could be found
-    pub fn handle_event<T: 'static>(&mut self, event: &UiEvent<T>) -> Option<()> {
-        let path = self.elements.get(event.element.0)?;
+    /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
+    ///
+    /// This method will identify the appropriate element
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    ///
+    pub fn handle_event(
+        &mut self,
+        name: &str,
+        event: &dyn Any,
+        element: ElementId,
+        bubbles: bool,
+        priority: EventPriority,
+    ) -> Option<()> {
+        /*
+        - click registers
+        - walk upwards until first element with onclick listener
+        - get template from ElementID
+        - break out of wait loop
+        - send event to virtualdom
+        */
 
-        let location = unsafe { &mut *path.template }
+        let path = &self.elements[element.0];
+        let template = unsafe { &*path.template };
+        let dynamic = &template.dynamic_nodes[path.element];
+
+        let location = template
             .dynamic_attrs
             .iter()
-            .position(|attr| attr.mounted_element.get() == event.element)?;
+            .position(|attr| attr.mounted_element.get() == element)?;
 
-        let mut index = Some((path.template, location));
+        // let mut index = Some((path.template, location));
 
         let mut listeners = Vec::<&Attribute>::new();
 
-        while let Some((raw_parent, dyn_index)) = index {
-            let parent = unsafe { &mut *raw_parent };
-            let path = parent.template.node_paths[dyn_index];
+        // while let Some((raw_parent, dyn_index)) = index {
+        //     let parent = unsafe { &mut *raw_parent };
+        //     let path = parent.template.node_paths[dyn_index];
 
-            listeners.extend(
-                parent
-                    .dynamic_attrs
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(idx, attr)| {
-                        match is_path_ascendant(parent.template.node_paths[idx], path) {
-                            true if attr.name == event.name => Some(attr),
-                            _ => None,
-                        }
-                    }),
-            );
+        //     listeners.extend(
+        //         parent
+        //             .dynamic_attrs
+        //             .iter()
+        //             .enumerate()
+        //             .filter_map(|(idx, attr)| {
+        //                 match is_path_ascendant(parent.template.node_paths[idx], path) {
+        //                     true if attr.name == event.name => Some(attr),
+        //                     _ => None,
+        //                 }
+        //             }),
+        //     );
 
-            index = parent.parent;
-        }
+        //     index = parent.parent;
+        // }
 
         for listener in listeners {
             if let AttributeValue::Listener(listener) = &listener.value {
-                (listener.borrow_mut())(&event.event)
+                (listener.borrow_mut())(event)
             }
         }
 

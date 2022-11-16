@@ -1,101 +1,15 @@
-use dioxus_core::{prelude::*, AttributeValue};
-use std::cell::RefCell;
+use super::cache::Segment;
+use dioxus_core::{prelude::*, AttributeValue, DynamicNode};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::rc::Rc;
 
+use crate::cache::StringCache;
+
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
 pub struct SsrRender {
-    template_cache: RefCell<HashMap<Template<'static>, Rc<StringCache>>>,
-}
-
-struct StringCache {
-    segments: Vec<Segment>,
-}
-
-#[derive(Default)]
-struct StringChain {
-    segments: Vec<Segment>,
-}
-
-#[derive(Debug, Clone)]
-enum Segment {
-    Attr(usize),
-    Node(usize),
-    PreRendered(String),
-}
-
-impl std::fmt::Write for StringChain {
-    fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        match self.segments.last_mut() {
-            Some(Segment::PreRendered(s2)) => s2.push_str(s),
-            _ => self.segments.push(Segment::PreRendered(s.to_string())),
-        }
-
-        Ok(())
-    }
-}
-
-impl StringCache {
-    fn from_template(template: &VNode) -> Result<Self, std::fmt::Error> {
-        let mut chain = StringChain::default();
-
-        let mut cur_path = vec![];
-
-        for (root_idx, root) in template.template.roots.iter().enumerate() {
-            Self::recurse(root, &mut cur_path, root_idx, &mut chain)?;
-        }
-
-        Ok(Self {
-            segments: chain.segments,
-        })
-    }
-
-    fn recurse(
-        root: &TemplateNode,
-        cur_path: &mut Vec<usize>,
-        root_idx: usize,
-        chain: &mut StringChain,
-    ) -> Result<(), std::fmt::Error> {
-        match root {
-            TemplateNode::Element {
-                tag,
-                attrs,
-                children,
-                ..
-            } => {
-                cur_path.push(root_idx);
-                write!(chain, "<{}", tag)?;
-                for attr in *attrs {
-                    match attr {
-                        TemplateAttribute::Static { name, value, .. } => {
-                            write!(chain, " {}=\"{}\"", name, value)?;
-                        }
-                        TemplateAttribute::Dynamic(index) => {
-                            chain.segments.push(Segment::Attr(*index))
-                        }
-                    }
-                }
-                if children.len() == 0 {
-                    write!(chain, "/>")?;
-                } else {
-                    write!(chain, ">")?;
-                    for child in *children {
-                        Self::recurse(child, cur_path, root_idx, chain)?;
-                    }
-                    write!(chain, "</{}>", tag)?;
-                }
-                cur_path.pop();
-            }
-            TemplateNode::Text(text) => write!(chain, "{}", text)?,
-            TemplateNode::Dynamic(idx) | TemplateNode::DynamicText(idx) => {
-                chain.segments.push(Segment::Node(*idx))
-            }
-        }
-
-        Ok(())
-    }
+    template_cache: HashMap<Template<'static>, Rc<StringCache>>,
 }
 
 impl SsrRender {
@@ -104,15 +18,19 @@ impl SsrRender {
         let root = scope.root_node();
 
         let mut out = String::new();
-        self.render_template(&mut out, root).unwrap();
+        self.render_template(&mut out, dom, root).unwrap();
 
         out
     }
 
-    fn render_template(&self, buf: &mut String, template: &VNode) -> std::fmt::Result {
+    fn render_template(
+        &mut self,
+        buf: &mut String,
+        dom: &VirtualDom,
+        template: &VNode,
+    ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .borrow_mut()
             .entry(template.template)
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
@@ -123,29 +41,40 @@ impl SsrRender {
                     let attr = &template.dynamic_attrs[*idx];
                     match attr.value {
                         AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
+                        AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
                         _ => {}
                     };
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
-                    DynamicNode::Text { value, .. } => {
-                        // todo: escape the text
-                        write!(buf, "{}", value)?
-                    }
-                    DynamicNode::Fragment(children) => {
-                        for child in *children {
-                            self.render_template(buf, child)?;
+                    DynamicNode::Text { value, inner, .. } => {
+                        // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
+                        if !*inner {
+                            write!(buf, "<!--#-->")?;
                         }
-                        //
+
+                        // todo: escape the text
+                        write!(buf, "{}", value)?;
+
+                        if !*inner {
+                            write!(buf, "<!--/#-->")?;
+                        }
                     }
-                    DynamicNode::Component { .. } => {
-                        //
+                    DynamicNode::Fragment { nodes, .. } => {
+                        for child in *nodes {
+                            self.render_template(buf, dom, child)?;
+                        }
                     }
-                    DynamicNode::Placeholder(el) => {
-                        //
+                    DynamicNode::Component { scope, .. } => {
+                        let id = scope.get().unwrap();
+                        let scope = dom.get_scope(id).unwrap();
+                        self.render_template(buf, dom, scope.root_node())?;
+                    }
+                    DynamicNode::Placeholder(_el) => {
+                        write!(buf, "<!--placeholder-->")?;
                     }
                 },
 
-                Segment::PreRendered(text) => buf.push_str(&text),
+                Segment::PreRendered(contents) => buf.push_str(contents),
             }
         }
 
@@ -163,89 +92,39 @@ fn to_string_works() {
 
         render! {
             div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
-                "Hello world 1 -->"
-                "{dynamic}"
-                "<-- Hello world 2"
+                "Hello world 1 -->" "{dynamic}" "<-- Hello world 2"
                 div { "nest 1" }
                 div {}
                 div { "nest 2" }
                 "{dyn2}"
-
                 (0..5).map(|i| rsx! { div { "finalize {i}" } })
             }
         }
     }
-    let mut dom = VirtualDom::new(app);
-
-    let mut mutations = Vec::new();
-    dom.rebuild(&mut mutations);
-
-    let cache = StringCache::from_template(&dom.base_scope().root_node()).unwrap();
-    dbg!(cache.segments);
-
-    let mut renderer = SsrRender::default();
-    dbg!(renderer.render_vdom(&dom));
-}
-
-#[test]
-fn children_processes_properly() {
-    use dioxus::prelude::*;
-
-    fn app(cx: Scope) -> Element {
-        let d = 123;
-
-        render! {
-            div {
-                ChildWithChildren {
-                    p { "{d}" "hii" }
-                }
-            }
-        }
-    }
-
-    #[inline_props]
-    fn ChildWithChildren<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
-        render! {
-             h1 { children }
-        }
-    }
 
     let mut dom = VirtualDom::new(app);
+    dom.rebuild();
 
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
-    dbg!(mutations);
+    use Segment::*;
 
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
-    dbg!(mutations);
-}
+    assert_eq!(
+        StringCache::from_template(&dom.base_scope().root_node())
+            .unwrap()
+            .segments,
+        vec![
+            PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
+            Attr(0,),
+            PreRendered(">Hello world 1 -->".into(),),
+            Node(0,),
+            PreRendered("<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),),
+            Node(1,),
+            Node(2,),
+            PreRendered("</div>".into(),),
+        ]
+    );
 
-#[test]
-fn async_children() {
-    use dioxus::prelude::*;
-
-    fn app(cx: Scope) -> Element {
-        let d = 123;
-
-        render! {
-            div {
-                "Hello world"
-            }
-        }
-    }
-
-    async fn async_child(cx: Scope<'_>) -> Element {
-        let d = 123;
-
-        let user_name = use_fetch("https://jsonplaceholder.typicode.com/users/1").await;
-
-        render! { p { "{d}" "hii" } }
-    }
-
-    let mut dom = VirtualDom::new(app);
-
-    let mut mutations = vec![];
-    dom.rebuild(&mut mutations);
-    dbg!(mutations);
+    assert_eq!(
+        SsrRender::default().render_vdom(&dom),
+        "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --><!--#-->123<!--/#--><-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div><!--#--></diiiiiiiiv><!--/#--><div><!--#-->finalize 0<!--/#--></div><div><!--#-->finalize 1<!--/#--></div><div><!--#-->finalize 2<!--/#--></div><div><!--#-->finalize 3<!--/#--></div><div><!--#-->finalize 4<!--/#--></div></div>"
+    );
 }

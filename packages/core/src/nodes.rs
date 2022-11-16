@@ -1,4 +1,4 @@
-use crate::{any_props::AnyProps, arena::ElementId, ScopeState};
+use crate::{any_props::AnyProps, arena::ElementId, ScopeId, ScopeState};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -15,7 +15,7 @@ pub struct VNode<'a> {
     pub key: Option<&'a str>,
 
     // When rendered, this template will be linked to its parent manually
-    pub parent: Option<(*mut VNode<'static>, usize)>,
+    pub parent: Option<*const DynamicNode<'a>>,
 
     pub template: Template<'static>,
 
@@ -98,6 +98,7 @@ pub enum TemplateNode<'a> {
         namespace: Option<&'a str>,
         attrs: &'a [TemplateAttribute<'a>],
         children: &'a [TemplateNode<'a>],
+        inner_opt: bool,
     },
     Text(&'a str),
     Dynamic(usize),
@@ -110,12 +111,17 @@ pub enum DynamicNode<'a> {
         static_props: bool,
         props: Cell<*mut dyn AnyProps<'a>>,
         placeholder: Cell<Option<ElementId>>,
+        scope: Cell<Option<ScopeId>>,
     },
     Text {
         id: Cell<ElementId>,
         value: &'a str,
+        inner: bool,
     },
-    Fragment(&'a [VNode<'a>]),
+    Fragment {
+        nodes: &'a [VNode<'a>],
+        inner: bool,
+    },
     Placeholder(Cell<ElementId>),
 }
 
@@ -215,3 +221,54 @@ fn what_are_the_sizes() {
     dbg!(std::mem::size_of::<Template>());
     dbg!(std::mem::size_of::<TemplateNode>());
 }
+
+/*
+
+
+SSR includes data-id which allows O(1) hydration
+
+
+we read the edit stream dn then we can just rehydare
+
+
+
+ideas:
+- IDs for lookup
+- use edit stream to hydrate
+- write comments to dom that specify size of children
+
+IDs for lookups
+- adds noise to generated html
+- doesnt work for text nodes
+- suspense could cause ordering to be weird
+
+Names for lookups:
+- label each root or something with the template name
+- label each dynamic node with a path
+- noisy too
+- allows reverse lookups
+
+Ideal:
+- no noise in the dom
+- fast, ideally O(1)
+- able to pick apart text nodes that get merged during SSR
+
+
+--> render vdom
+--> traverse vdom and real dom simultaneously
+
+IE
+
+div {
+    div {
+        div {
+            "thing"
+        }
+    }
+}
+
+
+
+
+
+*/

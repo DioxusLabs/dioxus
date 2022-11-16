@@ -14,7 +14,6 @@ use wry::{
 
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
-    pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
@@ -29,10 +28,8 @@ impl DesktopController {
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
-        let (sender, receiver) = futures_channel::mpsc::unbounded::<SchedulerMsg>();
 
         let pending_edits = edit_queue.clone();
-        let return_sender = sender.clone();
         let desktop_context_proxy = proxy.clone();
 
         std::thread::spawn(move || {
@@ -43,49 +40,54 @@ impl DesktopController {
                 .unwrap();
 
             runtime.block_on(async move {
-                let mut dom =
-                    VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
+                let mut dom = VirtualDom::new_with_props(root, props);
 
                 let window_context = DesktopContext::new(desktop_context_proxy);
 
                 dom.base_scope().provide_context(window_context);
 
-                todo!()
-
                 // // allow other proccesses to send the new rsx text to the @dioxusin ipc channel and recieve erros on the @dioxusout channel
                 // #[cfg(any(feature = "hot-reload", debug_assertions))]
                 // crate::hot_reload::init(&dom);
 
-                // let edits = dom.rebuild();
+                let edits = dom.rebuild();
+                let mut queue = edit_queue.lock().unwrap();
 
-                // edit_queue
-                //     .lock()
-                //     .unwrap()
-                //     .push(serde_json::to_string(&edits.edits).unwrap());
+                queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
+                queue.push(serde_json::to_string(&edits.edits).unwrap());
 
-                // // Make sure the window is ready for any new updates
-                // proxy.send_event(UserWindowEvent::Update).unwrap();
+                // Make sure the window is ready for any new updates
+                proxy.send_event(UserWindowEvent::Update).unwrap();
 
-                // loop {
-                //     dom.wait_for_work().await;
+                loop {
+                    // todo: add the channel of the event loop in
+                    tokio::select! {
+                        _ = dom.wait_for_work() => {}
+                    }
 
-                //     let muts = dom.work_with_deadline(|| false);
+                    let muts = dom
+                        .render_with_deadline(tokio::time::sleep(
+                            tokio::time::Duration::from_millis(100),
+                        ))
+                        .await;
 
-                //     for edit in muts {
-                //         edit_queue
-                //             .lock()
-                //             .unwrap()
-                //             .push(serde_json::to_string(&edit.edits).unwrap());
-                //     }
+                    let mut queue = edit_queue.lock().unwrap();
 
-                //     let _ = proxy.send_event(UserWindowEvent::Update);
-                // }
+                    for edit in muts.template_mutations {
+                        queue.push(serde_json::to_string(&edit).unwrap());
+                    }
+
+                    for edit in muts.edits {
+                        queue.push(serde_json::to_string(&edit).unwrap());
+                    }
+
+                    let _ = proxy.send_event(UserWindowEvent::Update);
+                }
             })
         });
 
         Self {
             pending_edits,
-            sender: return_sender,
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,

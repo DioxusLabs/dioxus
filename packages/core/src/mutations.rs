@@ -35,11 +35,18 @@ impl std::ops::DerefMut for Mutations<'_> {
 each subtree has its own numbering scheme
 */
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mutation<'a> {
     SetAttribute {
         name: &'a str,
         value: &'a str,
+        id: ElementId,
+    },
+
+    SetBoolAttribute {
+        name: &'a str,
+        value: bool,
         id: ElementId,
     },
 
@@ -84,6 +91,10 @@ pub enum Mutation<'a> {
         name: &'a str,
         namespace: Option<&'a str>,
         id: ElementId,
+    },
+
+    SetInnerText {
+        value: &'a str,
     },
 
     CreateText {

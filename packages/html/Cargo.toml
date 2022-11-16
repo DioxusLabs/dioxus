@@ -18,6 +18,7 @@ wasm-bindgen = { version = "0.2.79", optional = true }
 euclid = "0.22.7"
 enumset = "1.0.11"
 keyboard-types = "0.6.2"
+async-trait = "0.1.58"
 
 [dependencies.web-sys]
 optional = true

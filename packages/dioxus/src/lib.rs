@@ -7,7 +7,7 @@ pub use dioxus_hooks as hooks;
 
 pub mod events {
     #[cfg(feature = "html")]
-    pub use dioxus_html::{on::*, KeyCode};
+    pub use dioxus_html::{AnimationEvent, FormEvent, KeyCode, MouseEvent};
 }
 
 #[cfg(feature = "html")]

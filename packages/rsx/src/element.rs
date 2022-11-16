@@ -284,7 +284,7 @@ impl ToTokens for ElementAttrNamed {
             }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
-                    dioxus_elements::on::#name(__cx, #tokens)
+                    dioxus_elements::events::#name(__cx, #tokens)
                 }
             }
         });

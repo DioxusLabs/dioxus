@@ -226,6 +226,7 @@ impl<'a> DynamicContext<'a> {
                     out
                 });
 
+                let opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };
 
                 quote! {
@@ -234,6 +235,7 @@ impl<'a> DynamicContext<'a> {
                         namespace: dioxus_elements::#el_name::NAME_SPACE,
                         attrs: &[ #attrs ],
                         children: &[ #children ],
+                        inner_opt: #opt,
                     }
                 }
             }

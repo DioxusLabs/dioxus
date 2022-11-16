@@ -1,5 +1,6 @@
 use crate::{nodes::VNode, virtual_dom::VirtualDom};
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 

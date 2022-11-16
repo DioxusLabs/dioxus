@@ -18,6 +18,7 @@ impl ScopeState {
         DynamicNode::Text {
             id: Cell::new(ElementId(0)),
             value: text,
+            inner: false,
         }
     }
 
@@ -37,27 +38,32 @@ impl ScopeState {
         }
     }
 
-    pub fn fragment_from_iter<'a, I, F: IntoVnode<'a, I>>(
+    pub fn fragment_from_iter<'a, 'c, I, J>(
         &'a self,
-        it: impl IntoIterator<Item = F>,
+        node_iter: impl IntoVNode<'a, I, J> + 'c,
     ) -> DynamicNode {
-        let mut bump_vec = bumpalo::vec![in self.bump();];
+        node_iter.into_vnode(self)
 
-        for item in it {
-            bump_vec.push(item.into_dynamic_node(self));
-        }
+        // let mut bump_vec = bumpalo::vec![in self.bump();];
 
-        match bump_vec.len() {
-            0 => DynamicNode::Placeholder(Cell::new(ElementId(0))),
-            _ => DynamicNode::Fragment(bump_vec.into_bump_slice()),
-        }
+        // for item in it {
+        //     bump_vec.push(item.into_vnode(self));
+        // }
+
+        // match bump_vec.len() {
+        //     0 => DynamicNode::Placeholder(Cell::new(ElementId(0))),
+        //     _ => DynamicNode::Fragment {
+        //         inner: false,
+        //         nodes: bump_vec.into_bump_slice(),
+        //     },
+        // }
     }
 
     /// Create a new [`Attribute`]
     pub fn attr<'a>(
         &'a self,
         name: &'static str,
-        val: impl IntoAttributeValue<'a>,
+        value: impl IntoAttributeValue<'a>,
         namespace: Option<&'static str>,
         volatile: bool,
     ) -> Attribute<'a> {
@@ -65,7 +71,7 @@ impl ScopeState {
             name,
             namespace,
             volatile,
-            value: val.into_value(self.bump()),
+            value: value.into_value(self.bump()),
             mounted_element: Cell::new(ElementId(0)),
         }
     }
@@ -97,6 +103,7 @@ impl ScopeState {
             static_props: P::IS_STATIC,
             props: Cell::new(detached_dyn),
             placeholder: Cell::new(None),
+            scope: Cell::new(None),
         }
     }
 }
@@ -137,39 +144,100 @@ impl<'a> RenderReturn<'a> {
     }
 }
 
-pub trait IntoVnode<'a, A = ()> {
-    fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a>;
+pub trait IntoVNode<'a, A = (), J = ()> {
+    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a>;
 }
 
-impl<'a, 'b> IntoVnode<'a> for LazyNodes<'a, 'b> {
-    fn into_dynamic_node(self, cx: &'a ScopeState) -> VNode<'a> {
-        self.call(cx)
+impl<'a, 'b> IntoVNode<'a> for VNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+        todo!()
+        // self
     }
 }
 
-impl<'a, 'b> IntoVnode<'a> for VNode<'a> {
-    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
-        self
+impl<'a, 'b> IntoVNode<'a> for LazyNodes<'a, 'b> {
+    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+        todo!()
+        // self.call(cx)
     }
 }
 
-impl<'a, 'b> IntoVnode<'a> for Option<VNode<'a>> {
-    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
-        self.expect("please allow optional nodes in")
+impl<'b> IntoVNode<'_> for &'b str {
+    fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
+        // cx.text(format_args!("{}", self))
+        todo!()
     }
 }
 
-impl<'a, 'b> IntoVnode<'a> for &'a VNode<'a> {
-    fn into_dynamic_node(self, _cx: &'a ScopeState) -> VNode<'a> {
-        VNode {
-            node_id: self.node_id.clone(),
-            parent: self.parent,
-            template: self.template,
-            root_ids: self.root_ids,
-            key: self.key,
-            dynamic_nodes: self.dynamic_nodes,
-            dynamic_attrs: self.dynamic_attrs,
+impl IntoVNode<'_> for String {
+    fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
+        // cx.text(format_args!("{}", self))
+        todo!()
+    }
+}
+
+impl<'b> IntoVNode<'b> for Arguments<'_> {
+    fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
+        // cx.text(self)
+        todo!()
+    }
+}
+
+impl<'a, 'b> IntoVNode<'a> for &VNode<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+        todo!()
+        // VNode {
+        //     node_id: self.node_id.clone(),
+        //     parent: self.parent,
+        //     template: self.template,
+        //     root_ids: self.root_ids,
+        //     key: self.key,
+        //     dynamic_nodes: self.dynamic_nodes,
+        //     dynamic_attrs: self.dynamic_attrs,
+        // }
+    }
+}
+
+// Note that we're using the E as a generic but this is never crafted anyways.
+pub struct FromNodeIterator;
+impl<'a, T, I, E> IntoVNode<'a, FromNodeIterator, E> for T
+where
+    T: IntoIterator<Item = I>,
+    I: IntoVNode<'a, E>,
+{
+    fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
+        let mut nodes = bumpalo::collections::Vec::new_in(cx.bump());
+
+        for node in self {
+            nodes.push(node.into_vnode(cx));
         }
+
+        let children = nodes.into_bump_slice();
+
+        // if cfg!(debug_assertions) && children.len() > 1 && children.last().unwrap().key().is_none()
+        // {
+        // let bt = backtrace::Backtrace::new();
+        // let bt = "no backtrace available";
+
+        // // todo: make the backtrace prettier or remove it altogether
+        // log::error!(
+        //     r#"
+        //     Warning: Each child in an array or iterator should have a unique "key" prop.
+        //     Not providing a key will lead to poor performance with lists.
+        //     See docs.rs/dioxus for more information.
+        //     -------------
+        //     {:?}
+        //     "#,
+        //     bt
+        // );
+        // }
+
+        todo!()
+        // VNode::Fragment(cx.bump.alloc(VFragment {
+        //     children,
+        //     placeholder: Default::default(),
+        //     key: None,
+        // }))
     }
 }
 

@@ -17,7 +17,6 @@ pub use desktop_context::{use_eval, use_window, DesktopContext};
 pub use wry;
 pub use wry::application as tao;
 
-use crate::events::trigger_from_serialized;
 pub use cfg::Config;
 use controller::DesktopController;
 use dioxus_core::*;
@@ -126,7 +125,8 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                 let window = builder.build(event_loop).unwrap();
                 let window_id = window.id();
 
-                let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
+                let (is_ready, _) = (desktop.is_ready.clone(), ());
+                // let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
 
                 let proxy = proxy.clone();
 
@@ -144,9 +144,10 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                         parse_ipc_message(&payload)
                             .map(|message| match message.method() {
                                 "user_event" => {
-                                    let event = trigger_from_serialized(message.params());
-                                    log::trace!("User event: {:?}", event);
-                                    sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                                    println!("user event!");
+                                    // let event = trigger_from_serialized(message.params());
+                                    // log::trace!("User event: {:?}", event);
+                                    // sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
