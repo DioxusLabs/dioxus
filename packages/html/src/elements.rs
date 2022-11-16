@@ -27,7 +27,7 @@ macro_rules! builder_constructors {
                 pub const NAME_SPACE: Option<&'static str> = None;
 
                 $(
-                    pub const $fil: (&'static str, &'static str) = (stringify!($fil), stringify!($vil));
+                    pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
                 )*
             }
 

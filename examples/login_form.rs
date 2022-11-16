@@ -1,7 +1,6 @@
 //! This example demonstrates the following:
 //! Futures in a callback, Router, and Forms
 
-use dioxus::events::*;
 use dioxus::prelude::*;
 
 fn main() {
@@ -37,11 +36,10 @@ fn app(cx: Scope) -> Element {
         form {
             onsubmit: onsubmit,
             prevent_default: "onsubmit", // Prevent the default behavior of <form> to post
-
-            input { "type": "text", id: "username", name: "username" }
+            input { r#type: "text", id: "username", name: "username" }
             label { "Username" }
             br {}
-            input { "type": "password", id: "password", name: "password" }
+            input { r#type: "password", id: "password", name: "password" }
             label { "Password" }
             br {}
             button { "Login" }

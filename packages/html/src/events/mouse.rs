@@ -2,9 +2,11 @@ use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenP
 use crate::input_data::{
     decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
 };
-use dioxus_core::{Attribute, ScopeState};
+use dioxus_core::{Attribute, ScopeState, UiEvent};
 use keyboard_types::Modifiers;
 use std::fmt::{Debug, Formatter};
+
+pub type MouseEvent = UiEvent<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
@@ -12,7 +14,7 @@ use std::fmt::{Debug, Formatter};
 /// Data associated with a mouse event
 ///
 /// Do not use the deprecated fields; they may change or become private in the future.
-pub struct MouseEvent {
+pub struct MouseData {
     /// True if the alt key was down when the mouse event was fired.
     #[deprecated(since = "0.3.0", note = "use modifiers() instead")]
     pub alt_key: bool,
@@ -86,7 +88,7 @@ pub struct MouseEvent {
     pub shift_key: bool,
 }
 
-impl MouseEvent {
+impl MouseData {
     /// Construct MouseData with the specified properties
     ///
     /// Note: the current implementation truncates coordinates. In the future, when we change the internal representation, it may also support a fractional part.
@@ -205,7 +207,7 @@ impl MouseEvent {
     }
 }
 
-impl Debug for MouseEvent {
+impl Debug for MouseData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MouseData")
             .field("coordinates", &self.coordinates())
@@ -217,7 +219,7 @@ impl Debug for MouseEvent {
 }
 
 impl_event! {
-    MouseEvent;
+    MouseData;
 
     /// Execute a callback when a button is clicked.
     ///

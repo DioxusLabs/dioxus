@@ -1,4 +1,7 @@
-use std::{cell::Cell, fmt::Arguments};
+use std::{
+    cell::{Cell, RefCell},
+    fmt::Arguments,
+};
 
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
@@ -7,7 +10,7 @@ use std::future::Future;
 use crate::{
     any_props::{AnyProps, VComponentProps},
     arena::ElementId,
-    innerlude::DynamicNode,
+    innerlude::{DynamicNode, EventHandler},
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
 
@@ -105,6 +108,14 @@ impl ScopeState {
             placeholder: Cell::new(None),
             scope: Cell::new(None),
         }
+    }
+
+    /// Create a new [`EventHandler`] from an [`FnMut`]
+    pub fn event_handler<'a, T>(&'a self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
+        let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
+        let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
+        let callback = RefCell::new(Some(caller));
+        EventHandler { callback }
     }
 }
 

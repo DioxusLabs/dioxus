@@ -1,15 +1,28 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
+
+use dioxus_core::UiEvent;
+
+pub type FormEvent = UiEvent<FormData>;
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone)]
-pub struct FormEvent {
+pub struct FormData {
     pub value: String,
 
     pub values: HashMap<String, String>,
 
     #[cfg_attr(feature = "serialize", serde(skip))]
     pub files: Option<Arc<dyn FileEngine>>,
+}
+
+impl Debug for FormData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FormEvent")
+            .field("value", &self.value)
+            .field("values", &self.values)
+            .finish()
+    }
 }
 
 #[async_trait::async_trait(?Send)]
@@ -25,7 +38,7 @@ pub trait FileEngine {
 }
 
 impl_event! {
-    FormEvent;
+    FormData;
 
     /// onchange
     onchange

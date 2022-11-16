@@ -92,6 +92,7 @@ pub use crate::innerlude::{
     Template,
     TemplateAttribute,
     TemplateNode,
+    UiEvent,
     VNode,
     VirtualDom,
 };
@@ -103,7 +104,7 @@ pub mod prelude {
     pub use crate::innerlude::{
         fc_to_builder, Element, EventHandler, EventPriority, Fragment, LazyNodes, NodeFactory,
         Properties, Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute,
-        TemplateNode, VNode, VirtualDom,
+        TemplateNode, UiEvent, VNode, VirtualDom,
     };
 }
 

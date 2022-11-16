@@ -1,5 +1,38 @@
 use bumpalo::boxed::Box as BumpBox;
-use std::{any::Any, cell::RefCell};
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    fmt::Debug,
+    rc::Rc,
+};
+
+pub struct UiEvent<T> {
+    bubble_state: Cell<bool>,
+    data: Rc<T>,
+}
+
+impl<T> UiEvent<T> {
+    pub fn cancel_bubble(&self) {
+        self.bubble_state.set(false);
+    }
+}
+
+impl<T> std::ops::Deref for UiEvent<T> {
+    type Target = Rc<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl<T: Debug> std::fmt::Debug for UiEvent<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UiEvent")
+            .field("bubble_state", &self.bubble_state)
+            .field("data", &self.data)
+            .finish()
+    }
+}
 
 /// Priority of Event Triggers.
 ///
