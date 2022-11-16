@@ -49,20 +49,19 @@ impl VirtualDom {
         let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
         let cur_scope = self.scope_stack.last().copied().unwrap();
 
+        println!("creating template: {:#?}", template);
+
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
-            on_stack += match root {
-                TemplateNode::Element { .. }
-                | TemplateNode::Text(_)
-                | TemplateNode::DynamicText { .. } => {
-                    mutations.push(LoadTemplate {
-                        name: template.template.id,
-                        index: root_idx,
-                    });
-                    1
-                }
+            mutations.push(LoadTemplate {
+                name: template.template.id,
+                index: root_idx,
+            });
 
-                TemplateNode::Dynamic(id) => {
+            on_stack += match root {
+                TemplateNode::Element { .. } | TemplateNode::Text(_) => 1,
+
+                TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
                     self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
                 }
             };
@@ -268,9 +267,12 @@ impl VirtualDom {
                 }
             }
 
-            DynamicNode::Fragment { nodes, .. } => nodes
-                .iter()
-                .fold(0, |acc, child| acc + self.create(mutations, child)),
+            DynamicNode::Fragment { nodes, .. } => {
+                //
+                nodes
+                    .iter()
+                    .fold(0, |acc, child| acc + self.create(mutations, child))
+            }
 
             DynamicNode::Placeholder(_) => {
                 let id = self.next_element(template);

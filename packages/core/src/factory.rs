@@ -160,8 +160,10 @@ impl<'a, 'b> IntoDynNode<'a> for VNode<'a> {
 
 impl<'a, 'b, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        // DynamicNode::Fragment { nodes: cx., inner: () }
-        todo!()
+        match self {
+            Some(val) => val.into_vnode(_cx),
+            None => DynamicNode::Placeholder(Default::default()),
+        }
     }
 }
 

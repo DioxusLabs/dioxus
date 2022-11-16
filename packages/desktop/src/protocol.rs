@@ -7,7 +7,7 @@ use wry::{
 const MODULE_LOADER: &str = r#"
 <script>
     import("./index.js").then(function (module) {
-    module.main();
+        module.main();
     });
 </script>
 "#;

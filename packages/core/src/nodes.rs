@@ -9,6 +9,7 @@ use std::{
 pub type TemplateId = &'static str;
 
 /// A reference to a template along with any context needed to hydrate it
+#[derive(Debug)]
 pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
@@ -106,6 +107,7 @@ pub enum TemplateNode<'a> {
     DynamicText(usize),
 }
 
+#[derive(Debug)]
 pub enum DynamicNode<'a> {
     Component {
         name: &'static str,
@@ -137,6 +139,7 @@ pub enum TemplateAttribute<'a> {
     Dynamic(usize),
 }
 
+#[derive(Debug)]
 pub struct Attribute<'a> {
     pub name: &'a str,
     pub value: AttributeValue<'a>,

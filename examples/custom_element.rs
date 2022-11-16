@@ -16,15 +16,17 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let nf = NodeFactory::new(&cx);
+    // let nf = NodeFactory::new(&cx);
 
-    let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
+    // let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
 
-    attrs.push(nf.attr("client-id", format_args!("abc123"), None, false));
+    // attrs.push(nf.attr("client-id", format_args!("abc123"), None, false));
 
-    attrs.push(nf.attr("name", format_args!("bob"), None, false));
+    // attrs.push(nf.attr("name", format_args!("bob"), None, false));
 
-    attrs.push(nf.attr("age", format_args!("47"), None, false));
+    // attrs.push(nf.attr("age", format_args!("47"), None, false));
 
-    Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
+    // Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
+
+    todo!()
 }

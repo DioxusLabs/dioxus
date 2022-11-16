@@ -50,6 +50,8 @@ impl DesktopController {
 
                 let edits = dom.rebuild();
 
+                println!("got muts: {:#?}", edits);
+
                 {
                     let mut queue = edit_queue.lock().unwrap();
                     queue.push(serde_json::to_string(&edits.template_mutations).unwrap());

@@ -1,7 +1,9 @@
 export function main() {
   let root = window.document.getElementById("main");
+  console.log("loading!");
   if (root != null) {
     window.interpreter = new Interpreter(root);
+    console.log("properly loaded!");
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
@@ -62,13 +64,15 @@ class ListenerMap {
 
 export class Interpreter {
   constructor(root) {
+    console.log("interpreter created", root);
     this.root = root;
-    this.stack = [root];
     this.listeners = new ListenerMap(root);
+    this.nodes = [root];
+    this.stack = [root];
     this.handlers = {};
     this.lastNodeWasText = false;
-    this.nodes = [root];
     this.templates = {};
+    console.log(this);
   }
   top() {
     return this.stack[this.stack.length - 1];
@@ -208,14 +212,11 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    console.log("handling edits", edits);
+    console.log("handling edits", edits, this.stack.length);
 
     for (let edit of edits) {
       this.handleEdit(edit);
-      console.log(this.stack);
     }
-
-    console.log(this.stack);
   }
   AssignId(path, id) {
     this.nodes[id] = this.LoadChild(path);
@@ -235,16 +236,20 @@ export class Interpreter {
     node.textContent = value;
     this.nodes[id] = node;
   }
+  ReplacePlaceholder(path, m) {
+    let els = this.stack.splice(this.stack.length - m);
+    let node = this.LoadChild(path);
+    node.replaceWith(...els);
+  }
   LoadTemplate(name, index) {
     console.log("loading template", name, index);
     let node = this.templates[name][index].cloneNode(true);
     this.stack.push(node);
   }
   SaveTemplate(name, m) {
-    this.templates[name] = this.stack.splice(-m);
+    this.templates[name] = this.stack.splice(this.stack.length - m);
   }
   handleEdit(edit) {
-    console.log("handling edit", edit);
     switch (edit.type) {
       case "AppendChildren":
         this.AppendChildren(edit.m);
@@ -270,6 +275,9 @@ export class Interpreter {
       case "ReplaceWith":
         this.ReplaceWith(edit.id, edit.m);
         break;
+      case "ReplacePlaceholder":
+        this.ReplacePlaceholder(edit.path, edit.m);
+        break;
       case "InsertAfter":
         this.InsertAfter(edit.id, edit.n);
         break;
@@ -287,6 +295,15 @@ export class Interpreter {
         break;
       case "CreateElementNs":
         this.CreateElementNs(edit.tag, edit.id, edit.ns);
+        break;
+      case "SetText":
+        this.SetText(edit.id, edit.text);
+        break;
+      case "SetAttribute":
+        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
+        break;
+      case "RemoveAttribute":
+        this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
       case "RemoveEventListener":
         this.RemoveEventListener(edit.id, edit.event_name);
@@ -385,15 +402,6 @@ export class Interpreter {
         };
         this.NewEventListener(edit.event_name, edit.id, handler, event_bubbles(edit.event_name));
 
-        break;
-      case "SetText":
-        this.SetText(edit.id, edit.text);
-        break;
-      case "SetAttribute":
-        this.SetAttribute(edit.id, edit.field, edit.value, edit.ns);
-        break;
-      case "RemoveAttribute":
-        this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
     }
   }

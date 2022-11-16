@@ -245,11 +245,16 @@ impl<'a> DynamicContext<'a> {
                 quote! { ::dioxus::core::TemplateNode::Text(#text) }
             }
 
-            BodyNode::RawExpr(_) | BodyNode::Text(_) | BodyNode::Component(_) => {
+            BodyNode::Text(_) | BodyNode::RawExpr(_) | BodyNode::Component(_) => {
                 let ct = self.dynamic_nodes.len();
                 self.dynamic_nodes.push(root);
                 self.node_paths.push(self.current_path.clone());
-                quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+
+                if let BodyNode::Text(_) = root {
+                    quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) }
+                } else {
+                    quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+                }
             }
         }
     }
