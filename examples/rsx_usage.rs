@@ -183,7 +183,7 @@ fn app(cx: Scope) -> Element {
 
             // Components can be generic too
             // This component takes i32 type to give you typed input
-            TypedInput::<TypedInputProps<i32>> {}
+            TypedInput::<i32> {}
 
             // Type inference can be used too
             TypedInput { initial: 10.0 }

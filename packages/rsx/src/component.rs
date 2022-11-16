@@ -154,7 +154,7 @@ impl ToTokens for Component {
             }
             None => {
                 let mut toks = match prop_gen_args {
-                    Some(gen_args) => quote! { fc_to_builder #gen_args(#name) },
+                    Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
                     None => quote! { fc_to_builder(#name) },
                 };
                 for field in &self.fields {
@@ -187,9 +187,14 @@ impl ToTokens for Component {
 
         let fn_name = self.name.segments.last().unwrap().ident.to_string();
 
+        let gen_name = match &self.prop_gen_args {
+            Some(gen) => quote! { #name #gen },
+            None => quote! { #name },
+        };
+
         tokens.append_all(quote! {
             __cx.component(
-                #name,
+                #gen_name,
                 #builder,
                 #fn_name
             )
