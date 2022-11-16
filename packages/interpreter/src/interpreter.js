@@ -124,6 +124,10 @@ export class Interpreter {
       node.remove();
     }
   }
+  CreateRawText(text) {
+    const node = document.createTextNode(text);
+    this.stack.push(node);
+  }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
@@ -269,6 +273,9 @@ export class Interpreter {
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateTextNode":
+        this.CreateTextNode(edit.value);
+        break;
+      case "CreateStaticText":
         this.CreateTextNode(edit.value);
         break;
       case "HydrateText":

@@ -60,9 +60,12 @@ pub enum Mutation<'a> {
     CreatePlaceholder {
         id: ElementId,
     },
-
+    CreateStaticText {
+        value: &'a str,
+    },
     CreateTextNode {
         value: &'a str,
+        id: ElementId,
     },
     HydrateText {
         path: &'static [u8],

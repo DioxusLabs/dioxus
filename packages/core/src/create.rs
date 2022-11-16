@@ -45,37 +45,53 @@ impl VirtualDom {
 
         // Walk the roots, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut dynamic_attrs = template
-            .template
-            .attr_paths
-            .iter()
-            .enumerate()
-            .rev()
-            .peekable();
-        let mut dynamic_nodes = template
-            .template
-            .node_paths
-            .iter()
-            .enumerate()
-            .rev()
-            .peekable();
+        let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
+        let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
 
         let cur_scope = self.scope_stack.last().copied().unwrap();
 
         println!("creating template: {:#?}", template);
 
         let mut on_stack = 0;
-        for (root_idx, root) in template.template.roots.iter().enumerate().rev() {
-            mutations.push(LoadTemplate {
-                name: template.template.id,
-                index: root_idx,
-            });
-
+        for (root_idx, root) in template.template.roots.iter().enumerate() {
             on_stack += match root {
-                TemplateNode::Element { .. } | TemplateNode::Text(_) => 1,
+                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                    mutations.push(LoadTemplate {
+                        name: template.template.id,
+                        index: root_idx,
+                    });
+                    1
+                }
 
                 TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                    self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
+                    let dynamic_node = &template.dynamic_nodes[*id];
+
+                    match dynamic_node {
+                        DynamicNode::Fragment { .. } | DynamicNode::Component { .. } => self
+                            .create_dynamic_node(
+                                mutations,
+                                template,
+                                &template.dynamic_nodes[*id],
+                                *id,
+                            ),
+                        DynamicNode::Text {
+                            id: slot, value, ..
+                        } => {
+                            let id = self.next_element(template);
+                            slot.set(id);
+                            mutations.push(CreateTextNode {
+                                value: value.clone(),
+                                id,
+                            });
+                            1
+                        }
+                        DynamicNode::Placeholder(id) => {
+                            let id = self.next_element(template);
+                            mutations.push(CreatePlaceholder { id });
+                            1
+                        }
+                    }
+                    // self.create_dynamic_node(mutations, template, &template.dynamic_nodes[*id], *id)
                 }
             };
 
@@ -125,6 +141,14 @@ impl VirtualDom {
                 }
             }
 
+            // todo:
+            //
+            //  we walk the roots front to back when creating nodes, bur want to fill in the dynamic nodes
+            // back to front. This is because the indices would shift around because the paths become invalid
+            //
+            // We could easily implement this without the vec by walking the indicies forward
+            let mut queued_changes = vec![];
+
             // We're on top of a node that has a dynamic child for a descendant
             // Skip any node that's a root
             while let Some((idx, path)) =
@@ -133,11 +157,15 @@ impl VirtualDom {
                 let node = &template.dynamic_nodes[idx];
                 let m = self.create_dynamic_node(mutations, template, node, idx);
                 if m > 0 {
-                    mutations.push(ReplacePlaceholder {
+                    queued_changes.push(ReplacePlaceholder {
                         m,
                         path: &path[1..],
                     });
                 }
+            }
+
+            for change in queued_changes.into_iter().rev() {
+                mutations.push(change);
             }
         }
 
@@ -156,8 +184,8 @@ impl VirtualDom {
                 let id = self.next_element(template);
                 mutations.push(CreatePlaceholder { id })
             }
-            TemplateNode::Text(value) => mutations.push(CreateTextNode { value }),
-            TemplateNode::DynamicText { .. } => mutations.push(CreateTextNode {
+            TemplateNode::Text(value) => mutations.push(CreateStaticText { value }),
+            TemplateNode::DynamicText { .. } => mutations.push(CreateStaticText {
                 value: "placeholder",
             }),
 
