@@ -20,6 +20,7 @@ fn app(cx: Scope) -> Element {
             // Use optionals
             Some(rsx! { "Some" }),
 
+            // use a for loop or unterminated conditional
             div {
                 for name in 0..10 {
                     rsx! { "{name}" }
