@@ -6,7 +6,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx!(
-        div { id: "123123123",
+        div {
             // Use Map directly to lazily pull elements
             (0..10).map(|f| rsx! { "{f}" }),
 
@@ -20,15 +20,14 @@ fn app(cx: Scope) -> Element {
             // Use optionals
             Some(rsx! { "Some" }),
 
-            // use a for loop or unterminated conditional
-            div {
-                for name in 0..10 {
-                    rsx! { "{name}" }
-                }
+            // use a for loop
+            for name in 0..10 {
+                rsx! { "{name}" }
+            }
 
-                if true {
-                    rsx!{ "hello world!" }
-                }
+            // Or even use an unterminated conditional
+            if true {
+                rsx!{ "hello world!" }
             }
         }
     ))
