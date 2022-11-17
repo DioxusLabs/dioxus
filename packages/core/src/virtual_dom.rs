@@ -507,6 +507,23 @@ impl VirtualDom {
             }
         }
     }
+
+    fn mark_dirty_scope(&mut self, scope_id: ScopeId) {
+        let scopes = &self.scopes;
+        if let Some(scope) = scopes.get_scope(scope_id) {
+            let height = scope.height;
+            let id = scope_id.0;
+            if let Err(index) = self.dirty_scopes.binary_search_by(|new| {
+                let scope = scopes.get_scope(*new).unwrap();
+                let new_height = scope.height;
+                let new_id = &scope.scope_id();
+                height.cmp(&new_height).then(new_id.0.cmp(&id))
+            }) {
+                self.dirty_scopes.insert(index, scope_id);
+                log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
+            }
+        }
+    }
 }
 
 impl Drop for VirtualDom {
