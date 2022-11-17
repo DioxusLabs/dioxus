@@ -20,7 +20,6 @@ struct ListBreeds {
 
 async fn app_root(cx: Scope<'_>) -> Element {
     let breed = use_state(&cx, || "deerhound".to_string());
-
     let breeds = use_future(&cx, (), |_| async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
@@ -35,14 +34,16 @@ async fn app_root(cx: Scope<'_>) -> Element {
                 h1 { "Select a dog breed!" }
                 div { display: "flex",
                     ul { flex: "50%",
-                        breeds.message.keys().take(5).map(|cur_breed| rsx!(
-                            li {
-                                button {
-                                    onclick: move |_| breed.set(cur_breed.clone()),
-                                    "{cur_breed}"
+                        for cur_breed in breeds.message.keys().take(10) {
+                            rsx! {
+                                li { key: "{cur_breed}",
+                                    button {
+                                        onclick: move |_| breed.set(cur_breed.clone()),
+                                        "{cur_breed}"
+                                    }
                                 }
                             }
-                        ))
+                        }
                     }
                     div { flex: "50%", Breed { breed: breed.to_string() } }
                 }
