@@ -245,7 +245,11 @@ impl<'a> DynamicContext<'a> {
                 quote! { ::dioxus::core::TemplateNode::Text(#text) }
             }
 
-            BodyNode::Text(_) | BodyNode::RawExpr(_) | BodyNode::Component(_) => {
+            BodyNode::RawExpr(_)
+            | BodyNode::Text(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::Component(_) => {
                 let ct = self.dynamic_nodes.len();
                 self.dynamic_nodes.push(root);
                 self.node_paths.push(self.current_path.clone());

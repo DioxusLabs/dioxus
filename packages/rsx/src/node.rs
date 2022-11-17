@@ -5,7 +5,7 @@ use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Expr, LitStr, Result,
+    token, Block, Expr, ExprIf, LitStr, Pat, Result,
 };
 
 /*
@@ -20,6 +20,8 @@ Parse
 pub enum BodyNode {
     Element(Element),
     Component(Component),
+    ForLoop(ForLoop),
+    IfChain(ExprIf),
     Text(IfmtInput),
     RawExpr(Expr),
 }
@@ -35,6 +37,8 @@ impl BodyNode {
             BodyNode::Component(component) => component.name.span(),
             BodyNode::Text(text) => text.source.span(),
             BodyNode::RawExpr(exp) => exp.span(),
+            BodyNode::ForLoop(fl) => fl.for_token.span(),
+            BodyNode::IfChain(f) => f.if_token.span(),
         }
     }
 }
@@ -89,6 +93,28 @@ impl Parse for BodyNode {
             }
         }
 
+        // Transform for loops into into_iter calls
+        if stream.peek(Token![for]) {
+            let _f = stream.parse::<Token![for]>()?;
+            let pat = stream.parse::<Pat>()?;
+            let _i = stream.parse::<Token![in]>()?;
+            let expr = stream.parse::<Box<Expr>>()?;
+            let body = stream.parse::<Block>()?;
+
+            return Ok(BodyNode::ForLoop(ForLoop {
+                for_token: _f,
+                pat,
+                in_token: _i,
+                expr,
+                body,
+            }));
+        }
+
+        // Transform unterminated if statements into terminated optional if statements
+        if stream.peek(Token![if]) {
+            return Ok(BodyNode::IfChain(stream.parse()?));
+        }
+
         Ok(BodyNode::RawExpr(stream.parse::<Expr>()?))
     }
 }
@@ -104,6 +130,104 @@ impl ToTokens for BodyNode {
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
                  __cx.fragment_from_iter(#exp)
             }),
+            BodyNode::ForLoop(exp) => {
+                let ForLoop {
+                    pat, expr, body, ..
+                } = exp;
+
+                tokens.append_all(quote! {
+                     __cx.fragment_from_iter(
+                        (#expr).into_iter().map(|#pat| {
+                            #body
+                        })
+                     )
+                })
+            }
+            BodyNode::IfChain(chain) => {
+                if is_if_chain_terminated(chain) {
+                    tokens.append_all(quote! {
+                         __cx.fragment_from_iter(#chain)
+                    });
+                } else {
+                    let ExprIf {
+                        cond,
+                        then_branch,
+                        else_branch,
+                        ..
+                    } = chain;
+
+                    let mut body = TokenStream2::new();
+
+                    body.append_all(quote! {
+                        if #cond {
+                            Some(#then_branch)
+                        }
+                    });
+
+                    let mut elif = else_branch;
+
+                    while let Some((_, ref branch)) = elif {
+                        match branch.as_ref() {
+                            Expr::If(ref eelif) => {
+                                let ExprIf {
+                                    cond,
+                                    then_branch,
+                                    else_branch,
+                                    ..
+                                } = eelif;
+
+                                body.append_all(quote! {
+                                    else if #cond {
+                                        Some(#then_branch)
+                                    }
+                                });
+
+                                elif = else_branch;
+                            }
+                            _ => {
+                                body.append_all(quote! {
+                                    else {
+                                        #branch
+                                    }
+                                });
+                                break;
+                            }
+                        }
+                    }
+
+                    body.append_all(quote! {
+                        else { None }
+                    });
+
+                    tokens.append_all(quote! {
+                        __cx.fragment_from_iter(#body)
+                    });
+                }
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+pub struct ForLoop {
+    pub for_token: Token![for],
+    pub pat: Pat,
+    pub in_token: Token![in],
+    pub expr: Box<Expr>,
+    pub body: Block,
+}
+
+fn is_if_chain_terminated(chain: &ExprIf) -> bool {
+    let mut current = chain;
+    loop {
+        if let Some((_, else_block)) = &current.else_branch {
+            if let Expr::If(else_if) = else_block.as_ref() {
+                current = else_if;
+            } else {
+                return true;
+            }
+        } else {
+            return false;
         }
     }
 }

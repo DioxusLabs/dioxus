@@ -172,7 +172,7 @@ export class Interpreter {
         node.style = {};
       }
       node.style[name] = value;
-    } else if (ns != null || ns != undefined) {
+    } else if (ns != null && ns != undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
@@ -266,7 +266,7 @@ export class Interpreter {
         this.AssignId(edit.path, edit.id);
         break;
       case "CreateElement":
-        if (edit.namespace !== null || edit.namespace !== undefined) {
+        if (edit.namespace !== null && edit.namespace !== undefined) {
           this.CreateElementNs(edit.name, edit.id, edit.namespace);
         } else {
           this.CreateElement(edit.name, edit.id);
