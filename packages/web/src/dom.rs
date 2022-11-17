@@ -12,7 +12,7 @@ use dioxus_html::event_bubbles;
 use dioxus_interpreter_js::Interpreter;
 use js_sys::Function;
 use std::{any::Any, rc::Rc, sync::Arc};
-use wasm_bindgen::{closure::Closure, JsCast};
+use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{Document, Element, Event, HtmlElement};
 
 use crate::Config;
@@ -148,11 +148,11 @@ impl WebsysDom {
                 }
 
                 DomEdit::CreateTextNode { text, root } => {
-                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    let text = JsValue::from_str(text);
                     self.interpreter.CreateTextNode(text, root)
                 }
                 DomEdit::SetText { root, text } => {
-                    let text = serde_wasm_bindgen::to_value(text).unwrap();
+                    let text = JsValue::from_str(text);
                     self.interpreter.SetText(root, text)
                 }
                 DomEdit::SetAttribute {
@@ -161,7 +161,7 @@ impl WebsysDom {
                     value,
                     ns,
                 } => {
-                    let value = serde_wasm_bindgen::to_value(&value).unwrap();
+                    let value = JsValue::from_str(&value.to_string());
                     self.interpreter.SetAttribute(root, field, value, ns)
                 }
                 DomEdit::CloneNode { id, new_id } => self.interpreter.CloneNode(id, new_id),
