@@ -19,6 +19,16 @@ fn app(cx: Scope) -> Element {
 
             // Use optionals
             Some(rsx! { "Some" }),
+
+            div {
+                for name in 0..10 {
+                    rsx! { "{name}" }
+                }
+
+                if true {
+                    rsx!{ "hello world!" }
+                }
+            }
         }
     ))
 }

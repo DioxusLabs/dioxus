@@ -18,8 +18,6 @@ pub(super) fn desktop_handler(
     custom_head: Option<String>,
     custom_index: Option<String>,
 ) -> Result<Response<Vec<u8>>> {
-    println!("loading request: {:?}", request.uri());
-
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
     let path = request.uri().to_string().replace("dioxus://", "");

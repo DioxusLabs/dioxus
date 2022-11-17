@@ -182,7 +182,13 @@ pub(super) fn handler(
 ) {
     // currently dioxus-desktop supports a single window only,
     // so we can grab the only webview from the map;
-    let webview = desktop.webviews.values().next().unwrap();
+    // on wayland it is possible that a user event is emitted
+    // before the webview is initialized. ignore the event.
+    let webview = if let Some(webview) = desktop.webviews.values().next() {
+        webview
+    } else {
+        return;
+    };
     let window = webview.window();
 
     println!("user_event: {:?}", user_event);
