@@ -557,6 +557,22 @@ impl TemplateBuilder {
                     fully_static: false,
                 });
             }
+            BodyNode::ForLoop(expr) => {
+                self.nodes.push(TemplateNodeBuilder {
+                    id,
+                    node_type: TemplateNodeTypeBuilder::DynamicNode(
+                        self.dynamic_context.add_node(BodyNode::ForLoop(expr)),
+                    ),
+                });
+            }
+            BodyNode::IfChain(expr) => {
+                self.nodes.push(TemplateNodeBuilder {
+                    id,
+                    node_type: TemplateNodeTypeBuilder::DynamicNode(
+                        self.dynamic_context.add_node(BodyNode::IfChain(expr)),
+                    ),
+                });
+            }
         }
         id
     }
