@@ -4,6 +4,7 @@ use std::collections::HashMap;
 fn main() {
     dioxus_desktop::launch(|cx| {
         cx.render(rsx! {
+            h1 {"Loading...."}
             app_root {}
         })
     });
@@ -16,6 +17,7 @@ struct ListBreeds {
 
 async fn app_root(cx: Scope<'_>) -> Element {
     let breed = use_state(cx, || "deerhound".to_string());
+
     let breeds = use_future!(cx, || async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
@@ -31,19 +33,15 @@ async fn app_root(cx: Scope<'_>) -> Element {
                 div { display: "flex",
                     ul { flex: "50%",
                         for cur_breed in breeds.message.keys().take(10) {
-                            rsx! {
-                                li { key: "{cur_breed}",
-                                    button {
-                                        onclick: move |_| breed.set(cur_breed.clone()),
-                                        "{cur_breed}"
-                                    }
+                            li { key: "{cur_breed}",
+                                button {
+                                    onclick: move |_| breed.set(cur_breed.clone()),
+                                    "{cur_breed}"
                                 }
                             }
                         }
                     }
-                    div { flex: "50%",
-                        breed_pic { breed: breed.to_string() }
-                    }
+                    div { flex: "50%", breed_pic { breed: breed.to_string() } }
                 }
             }
         }),

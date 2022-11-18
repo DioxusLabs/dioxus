@@ -3,9 +3,10 @@ use super::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
+    braced,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Block, Expr, ExprIf, LitStr, Pat, Result,
+    token, Expr, ExprIf, LitStr, Pat, Result,
 };
 
 /*
@@ -98,14 +99,20 @@ impl Parse for BodyNode {
             let pat = stream.parse::<Pat>()?;
             let _i = stream.parse::<Token![in]>()?;
             let expr = stream.parse::<Box<Expr>>()?;
-            let body = stream.parse::<Block>()?;
+
+            let body;
+            braced!(body in stream);
+            let mut children = vec![];
+            while !body.is_empty() {
+                children.push(body.parse()?);
+            }
 
             return Ok(BodyNode::ForLoop(ForLoop {
                 for_token: _f,
                 pat,
                 in_token: _i,
                 expr,
-                body,
+                body: children,
             }));
         }
 
@@ -134,11 +141,11 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
+                let renderer = TemplateRenderer { roots: &body };
+
                 tokens.append_all(quote! {
                      __cx.fragment_from_iter(
-                        (#expr).into_iter().map(|#pat| {
-                            #body
-                        })
+                        (#expr).into_iter().map(|#pat| { #renderer })
                      )
                 })
             }
@@ -213,7 +220,7 @@ pub struct ForLoop {
     pub pat: Pat,
     pub in_token: Token![in],
     pub expr: Box<Expr>,
-    pub body: Block,
+    pub body: Vec<BodyNode>,
 }
 
 fn is_if_chain_terminated(chain: &ExprIf) -> bool {

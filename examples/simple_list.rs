@@ -20,9 +20,9 @@ fn app(cx: Scope) -> Element {
             // Use optionals
             Some(rsx! { "Some" }),
 
-            // use a for loop
+            // use a for loop where the body itself is RSX
             for name in 0..10 {
-                rsx! { "{name}" }
+                div {"{name}"}
             }
 
             // Or even use an unterminated conditional

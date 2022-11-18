@@ -44,18 +44,17 @@ impl DesktopController {
                 .build()
                 .unwrap();
 
-            let mut dom = VirtualDom::new_with_props(root, props)
-                .with_root_context(DesktopContext::new(desktop_context_proxy));
-
-            {
-                let edits = dom.rebuild();
-                let mut queue = edit_queue.lock().unwrap();
-                queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
-                queue.push(serde_json::to_string(&edits.edits).unwrap());
-                proxy.send_event(UserWindowEvent::Update).unwrap();
-            }
-
             runtime.block_on(async move {
+                let mut dom = VirtualDom::new_with_props(root, props)
+                    .with_root_context(DesktopContext::new(desktop_context_proxy));
+                {
+                    let edits = dom.rebuild();
+                    let mut queue = edit_queue.lock().unwrap();
+                    queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
+                    queue.push(serde_json::to_string(&edits.edits).unwrap());
+                    proxy.send_event(UserWindowEvent::Update).unwrap();
+                }
+
                 loop {
                     tokio::select! {
                         _ = dom.wait_for_work() => {}
