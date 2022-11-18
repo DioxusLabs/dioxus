@@ -19,6 +19,19 @@ pub struct SuspenseBoundary {
     pub waiting_on: RefCell<HashSet<SuspenseId>>,
     pub mutations: RefCell<Mutations<'static>>,
     pub placeholder: Cell<Option<ElementId>>,
+
+    // whenever the suspense resolves, we call this onresolve function
+    // this lets us do things like putting up a loading spinner
+    //
+    // todo: we need a way of controlling whether or not a component hides itself but still processes changes
+    // If we run into suspense, we perform a diff, so its important that the old elements are still around.
+    //
+    // When the timer expires, I imagine a container could hide the elements and show the spinner. This, however,
+    // can not be
+    pub onresolve: Option<Box<dyn FnOnce()>>,
+
+    /// Called when
+    pub onstart: Option<Box<dyn FnOnce()>>,
 }
 
 impl SuspenseBoundary {
@@ -28,6 +41,8 @@ impl SuspenseBoundary {
             waiting_on: Default::default(),
             mutations: RefCell::new(Mutations::new(0)),
             placeholder: Cell::new(None),
+            onresolve: None,
+            onstart: None,
         })
     }
 }

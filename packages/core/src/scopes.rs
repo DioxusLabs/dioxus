@@ -43,7 +43,7 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 pub struct ScopeId(pub usize);
 
 pub struct ScopeState {
-    pub(crate) render_cnt: usize,
+    pub(crate) render_cnt: Cell<usize>,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
@@ -69,14 +69,14 @@ pub struct ScopeState {
 
 impl ScopeState {
     pub fn current_frame(&self) -> &BumpFrame {
-        match self.render_cnt % 2 {
+        match self.render_cnt.get() % 2 {
             0 => &self.node_arena_1,
             1 => &self.node_arena_2,
             _ => unreachable!(),
         }
     }
     pub fn previous_frame(&self) -> &BumpFrame {
-        match self.render_cnt % 2 {
+        match self.render_cnt.get() % 2 {
             1 => &self.node_arena_1,
             0 => &self.node_arena_2,
             _ => unreachable!(),

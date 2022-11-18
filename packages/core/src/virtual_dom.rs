@@ -9,9 +9,9 @@ use crate::{
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
-    Attribute, AttributeValue, Element, EventPriority, Scope, SuspenseContext, UiEvent,
+    AttributeValue, Element, EventPriority, Scope, SuspenseContext, UiEvent,
 };
-use futures_util::{pin_mut, FutureExt, StreamExt};
+use futures_util::{pin_mut, StreamExt};
 use slab::Slab;
 use std::rc::Rc;
 use std::{
@@ -244,7 +244,7 @@ impl VirtualDom {
         ))));
 
         // The root component is always a suspense boundary for any async children
-        // This could be unexpected, so we might rethink this behavior
+        // This could be unexpected, so we might rethink this behavior later
         root.provide_context(SuspenseBoundary::new(ScopeId(0)));
 
         // the root element is always given element 0
@@ -253,26 +253,36 @@ impl VirtualDom {
         dom
     }
 
+    /// Get the state for any scope given its ID
+    ///
+    /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
         self.scopes.get(id.0)
     }
 
+    /// Get the single scope at the top of the VirtualDom tree that will always be around
+    ///
+    /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
         self.scopes.get(0).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
+    ///
+    /// This is useful for what is essentially dependency injection, when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
         self.base_scope().provide_context(context);
         self
     }
 
-    fn mark_dirty_scope(&mut self, id: ScopeId) {
+    /// Manually mark a scope as requiring a re-render
+    pub fn mark_dirty_scope(&mut self, id: ScopeId) {
         let height = self.scopes[id.0].height;
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
 
-    fn is_scope_suspended(&self, id: ScopeId) -> bool {
+    /// Determine whether or not a scope is currently in a suspended state
+    pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
         !self.scopes[id.0]
             .consume_context::<SuspenseContext>()
             .unwrap()
@@ -281,35 +291,29 @@ impl VirtualDom {
             .is_empty()
     }
 
-    /// Returns true if there is any suspended work left to be done.
+    /// Determine is the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
+    /// ready to be rendered.
     pub fn has_suspended_work(&self) -> bool {
         !self.scheduler.leaves.borrow().is_empty()
     }
 
     /// Call a listener inside the VirtualDom with data from outside the VirtualDom.
     ///
-    /// This method will identify the appropriate element
+    /// This method will identify the appropriate element. The data must match up with the listener delcared. Note that
+    /// this method does not give any indication as to the success of the listener call. If the listener is not found,
+    /// nothing will happen.
     ///
+    /// It is up to the listeners themselves to mark nodes as dirty.
     ///
-    ///
-    ///
-    ///
-    ///
-    ///
+    /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     pub fn handle_event(
         &mut self,
         name: &str,
         data: Rc<dyn Any>,
         element: ElementId,
         bubbles: bool,
-        // todo: priority is helpful when scheduling work around suspense, but we don't currently use it
         _priority: EventPriority,
     ) {
-        let uievent = UiEvent {
-            bubbles: Rc::new(Cell::new(bubbles)),
-            data,
-        };
-
         /*
         ------------------------
         The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
@@ -321,37 +325,35 @@ impl VirtualDom {
         If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
         ----------------------
         |           <-- yes (is ascendant)
-        | | |       <-- no  (is not ascendant)
+        | | |       <-- no  (is not direct ascendant)
         | |         <-- yes (is ascendant)
-        | | | | |   <--- target element, break early
+        | | | | |   <--- target element, break early, don't check other listeners
         | | |       <-- no, broke early
         |           <-- no, broke early
         */
         let mut parent_path = self.elements.get(element.0);
         let mut listeners = vec![];
 
+        // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
+        let uievent = UiEvent {
+            bubbles: Rc::new(Cell::new(bubbles)),
+            data,
+        };
+
+        // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
+            // safety: we maintain references of all vnodes in the element slab
             let template = unsafe { &*el_ref.template };
             let target_path = el_ref.path;
 
-            let mut attrs = template.dynamic_attrs.iter().enumerate();
-
-            while let Some((idx, attr)) = attrs.next() {
-                pub fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
+            for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
                     small.len() >= big.len() && small == &big[..small.len()]
                 }
 
                 let this_path = template.template.attr_paths[idx];
 
-                println!(
-                    "is {:?} ascendant of {:?} ? {}",
-                    this_path,
-                    target_path,
-                    is_path_ascendant(this_path, target_path)
-                );
-
-                println!("{ } - {name}, - {}", attr.name, &attr.name[2..]);
-
+                // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
                 if &attr.name[2..] == name && is_path_ascendant(&target_path, &this_path) {
                     listeners.push(&attr.value);
 
@@ -367,11 +369,11 @@ impl VirtualDom {
                 }
             }
 
+            // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
+            // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
                 if let AttributeValue::Listener(listener) = listener {
                     listener.borrow_mut()(uievent.clone());
-
-                    // Break if the event doesn't bubble
                     if !uievent.bubbles.get() {
                         return;
                     }
@@ -452,13 +454,17 @@ impl VirtualDom {
     pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
         let mut mutations = Mutations::new(0);
 
-        let root_node = unsafe { self.run_scope_extend(ScopeId(0)) };
-        match root_node {
+        match unsafe { self.run_scope_extend(ScopeId(0)) } {
+            // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Some(node)) => {
                 let m = self.create_scope(ScopeId(0), &mut mutations, node);
                 mutations.push(Mutation::AppendChildren { m });
             }
-            RenderReturn::Sync(None) => {}
+            // If nothing was rendered, then insert a placeholder element instead
+            RenderReturn::Sync(None) => {
+                mutations.push(Mutation::CreatePlaceholder { id: ElementId(1) });
+                mutations.push(Mutation::AppendChildren { m: 1 });
+            }
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 
@@ -475,7 +481,9 @@ impl VirtualDom {
         // Now run render with deadline but dont even try to poll any async tasks
         let fut = self.render_with_deadline(std::future::ready(()));
         pin_mut!(fut);
-        match fut.poll_unpin(&mut cx) {
+
+        // The root component is not allowed to be async
+        match fut.poll(&mut cx) {
             std::task::Poll::Ready(mutations) => mutations,
             std::task::Poll::Pending => panic!("render_immediate should never return pending"),
         }
@@ -491,20 +499,20 @@ impl VirtualDom {
         deadline: impl Future<Output = ()>,
     ) -> Mutations<'a> {
         use futures_util::future::{select, Either};
+        pin_mut!(deadline);
 
         let mut mutations = Mutations::new(0);
-        pin_mut!(deadline);
 
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
                 let scope = &mut self.scopes[finished_fiber.0];
                 let context = scope.has_context::<SuspenseContext>().unwrap();
-                println!("unloading suspense tree {:?}", context.mutations);
 
                 mutations.extend(context.mutations.borrow_mut().template_mutations.drain(..));
                 mutations.extend(context.mutations.borrow_mut().drain(..));
 
+                // TODO: count how many nodes are on the stack?
                 mutations.push(Mutation::ReplaceWith {
                     id: context.placeholder.get().unwrap(),
                     m: 1,
@@ -525,36 +533,22 @@ impl VirtualDom {
 
             // Wait for suspense, or a deadline
             if self.dirty_scopes.is_empty() {
+                // If there's no suspense, then we have no reason to wait
                 if self.scheduler.leaves.borrow().is_empty() {
                     return mutations;
                 }
 
-                let (work, deadline) = (self.wait_for_work(), &mut deadline);
+                // Poll the suspense leaves in the meantime
+                let work = self.wait_for_work();
                 pin_mut!(work);
 
-                if let Either::Left((_, _)) = select(deadline, work).await {
+                // If the deadline is exceded (left) then we should return the mutations we have
+                if let Either::Left((_, _)) = select(&mut deadline, work).await {
                     return mutations;
                 }
             }
         }
     }
-
-    // fn mark_dirty_scope(&mut self, scope_id: ScopeId) {
-    //     let scopes = &self.scopes;
-    //     if let Some(scope) = scopes.get_scope(scope_id) {
-    //         let height = scope.height;
-    //         let id = scope_id.0;
-    //         if let Err(index) = self.dirty_scopes.binary_search_by(|new| {
-    //             let scope = scopes.get_scope(*new).unwrap();
-    //             let new_height = scope.height;
-    //             let new_id = &scope.scope_id();
-    //             height.cmp(&new_height).then(new_id.0.cmp(&id))
-    //         }) {
-    //             self.dirty_scopes.insert(index, scope_id);
-    //             log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
-    //         }
-    //     }
-    // }
 }
 
 impl Drop for VirtualDom {

@@ -33,17 +33,61 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-struct ImEvent {
-    event: String,
-    mounted_dom_id: ElementId,
-    contents: serde_json::Value,
+macro_rules! match_data {
+    (
+        $m:ident;
+        $name:ident;
+        $(
+            $tip:ty => $($mname:literal)|* ;
+        )*
+    ) => {
+        match $name {
+            $( $($mname)|* => {
+                println!("casting to type {:?}", std::any::TypeId::of::<$tip>());
+                let val: $tip = from_value::<$tip>($m).ok()?;
+                Rc::new(val) as Rc<dyn Any>
+            })*
+            _ => return None,
+        }
+    };
 }
 
-// pub fn make_synthetic_event(name: &str, val: serde_json::Value) -> Option<Rc<dyn Any>> {
-//     // right now we don't support the datatransfer in Drag
-//     type DragData = MouseData;
-//     type ProgressData = MediaData;
+#[derive(Deserialize)]
+pub struct EventMessage {
+    pub contents: serde_json::Value,
+    pub event: String,
+    pub mounted_dom_id: usize,
+}
 
-//     Some(res)
-// }
+pub fn decode_event(value: EventMessage) -> Option<Rc<dyn Any>> {
+    let val = value.contents;
+    let name = value.event.as_str();
+    type DragData = MouseData;
+
+    let evt = match_data! { val; name;
+        MouseData => "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup";
+        ClipboardData => "copy" | "cut" | "paste";
+        CompositionData => "compositionend" | "compositionstart" | "compositionupdate";
+        KeyboardData => "keydown" | "keypress" | "keyup";
+        FocusData => "blur" | "focus" | "focusin" | "focusout";
+        FormData => "change" | "input" | "invalid" | "reset" | "submit";
+        DragData => "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop";
+        PointerData => "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup" | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture" | "lostpointercapture";
+        SelectionData => "selectstart" | "selectionchange" | "select";
+        TouchData => "touchcancel" | "touchend" | "touchmove" | "touchstart";
+        ScrollData => "scroll";
+        WheelData => "wheel";
+        MediaData => "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied"
+            | "encrypted" | "ended" | "interruptbegin" | "interruptend" | "loadeddata"
+            | "loadedmetadata" | "loadstart" | "pause" | "play" | "playing" | "progress"
+            | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend" | "timeupdate"
+            | "volumechange" | "waiting" | "error" | "load" | "loadend" | "timeout";
+        AnimationData => "animationstart" | "animationend" | "animationiteration";
+        TransitionData => "transitionend";
+        ToggleData => "toggle";
+        // ImageData => "load" | "error";
+        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
+    };
+
+    Some(evt)
+}

@@ -42,8 +42,10 @@ impl<'b> VirtualDom {
     pub fn diff_scope(&mut self, mutations: &mut Mutations<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
 
-        let cur_arena = scope_state.current_frame();
-        let prev_arena = scope_state.previous_frame();
+        let cur_arena = scope_state.previous_frame();
+        let prev_arena = scope_state.current_frame();
+        // let cur_arena = scope_state.current_frame();
+        // let prev_arena = scope_state.previous_frame();
 
         // relax the borrow checker
         let cur_arena: &BumpFrame = unsafe { std::mem::transmute(cur_arena) };
@@ -62,8 +64,10 @@ impl<'b> VirtualDom {
         );
 
         self.scope_stack.push(scope);
+
         let left = unsafe { prev_arena.load_node() };
         let right = unsafe { cur_arena.load_node() };
+
         self.diff_maybe_node(mutations, left, right);
         self.scope_stack.pop();
     }
@@ -105,6 +109,8 @@ impl<'b> VirtualDom {
         left_template: &'b VNode<'b>,
         right_template: &'b VNode<'b>,
     ) {
+        println!("diffing {:?} and {:?}", left_template, right_template);
+
         if left_template.template.id != right_template.template.id {
             // do a light diff of the roots nodes.
             return;
@@ -125,6 +131,7 @@ impl<'b> VirtualDom {
                 .set(left_attr.mounted_element.get());
 
             if left_attr.value != right_attr.value {
+                println!("DIFF ATTR: {:?} -> {:?}", left_attr, right_attr);
                 let value = "todo!()";
                 muts.push(Mutation::SetAttribute {
                     id: left_attr.mounted_element.get(),

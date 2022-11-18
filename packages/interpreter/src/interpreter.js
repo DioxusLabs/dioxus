@@ -311,7 +311,7 @@ export class Interpreter {
         this.CreateElementNs(edit.name, edit.id, edit.ns);
         break;
       case "SetText":
-        this.SetText(edit.id, edit.text);
+        this.SetText(edit.id, edit.value);
         break;
       case "SetAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);

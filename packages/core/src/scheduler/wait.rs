@@ -4,10 +4,10 @@ use std::task::{Context, Poll};
 use crate::{
     factory::RenderReturn,
     innerlude::{Mutation, Mutations, SuspenseContext},
-    ScopeId, TaskId, VNode, VirtualDom,
+    TaskId, VNode, VirtualDom,
 };
 
-use super::{waker::RcWake, SuspenseId, SuspenseLeaf};
+use super::{waker::RcWake, SuspenseId};
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler

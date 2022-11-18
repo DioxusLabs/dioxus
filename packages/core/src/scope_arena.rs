@@ -65,8 +65,11 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+        println!("run_scope: {:?}", scope_id);
+
         let mut new_nodes = unsafe {
             let scope = &mut self.scopes[scope_id.0];
+            println!("run_scope: scope: {:?}", scope.render_cnt.get());
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
@@ -123,16 +126,21 @@ impl VirtualDom {
             }
         };
 
+        /*
+        todo: use proper mutability here
+
+        right now we're aliasing the scope, which is not allowed
+        */
+
         let scope = &mut self.scopes[scope_id.0];
-        let frame = match scope.render_cnt % 2 {
-            0 => &mut scope.node_arena_1,
-            1 => &mut scope.node_arena_2,
-            _ => unreachable!(),
-        };
+        let frame = scope.current_frame();
 
         // set the head of the bump frame
         let alloced = frame.bump.alloc(new_nodes);
         frame.node.set(alloced);
+
+        // And move the render generation forward by one
+        scope.render_cnt.set(scope.render_cnt.get() + 1);
 
         // rebind the lifetime now that its stored internally
         unsafe { mem::transmute(alloced) }

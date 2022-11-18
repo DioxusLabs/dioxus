@@ -1,12 +1,8 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
+use crate::events::{decode_event, EventMessage};
 use dioxus_core::*;
-use dioxus_html::events::*;
 use futures_channel::mpsc::UnboundedReceiver;
 use futures_util::StreamExt;
-use serde::Deserialize;
-use serde_json::from_value;
-use std::any::Any;
-use std::rc::Rc;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -18,25 +14,6 @@ use wry::{
     application::{event_loop::ControlFlow, event_loop::EventLoopProxy, window::WindowId},
     webview::WebView,
 };
-
-macro_rules! match_data {
-    (
-        $m:ident;
-        $name:ident;
-        $(
-            $tip:ty => $($mname:literal)|* ;
-        )*
-    ) => {
-        match $name {
-            $( $($mname)|* => {
-                println!("casting to type {:?}", std::any::TypeId::of::<$tip>());
-                let val: $tip = from_value::<$tip>($m).ok()?;
-                Rc::new(val) as Rc<dyn Any>
-            })*
-            _ => return None,
-        }
-    };
-}
 
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
@@ -86,9 +63,7 @@ impl DesktopController {
                             if let Ok(value) = serde_json::from_value::<EventMessage>(json_value) {
                                 let name = value.event.clone();
                                 let el_id = ElementId(value.mounted_dom_id);
-                                let evt = decode_event(value);
-
-                                if let Some(evt) = evt {
+                                if let Some(evt) = decode_event(value) {
                                     dom.handle_event(&name,  evt, el_id, true, EventPriority::Medium);
                                 }
                             }
@@ -142,45 +117,4 @@ impl DesktopController {
             }
         }
     }
-}
-
-#[derive(Deserialize)]
-struct EventMessage {
-    contents: serde_json::Value,
-    event: String,
-    mounted_dom_id: usize,
-}
-
-fn decode_event(value: EventMessage) -> Option<Rc<dyn Any>> {
-    let val = value.contents;
-    let name = value.event.as_str();
-    let el_id = ElementId(value.mounted_dom_id);
-    type DragData = MouseData;
-
-    let evt = match_data! { val; name;
-        MouseData => "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup";
-        ClipboardData => "copy" | "cut" | "paste";
-        CompositionData => "compositionend" | "compositionstart" | "compositionupdate";
-        KeyboardData => "keydown" | "keypress" | "keyup";
-        FocusData => "blur" | "focus" | "focusin" | "focusout";
-        FormData => "change" | "input" | "invalid" | "reset" | "submit";
-        DragData => "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop";
-        PointerData => "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup" | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture" | "lostpointercapture";
-        SelectionData => "selectstart" | "selectionchange" | "select";
-        TouchData => "touchcancel" | "touchend" | "touchmove" | "touchstart";
-        ScrollData => "scroll";
-        WheelData => "wheel";
-        MediaData => "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied"
-            | "encrypted" | "ended" | "interruptbegin" | "interruptend" | "loadeddata"
-            | "loadedmetadata" | "loadstart" | "pause" | "play" | "playing" | "progress"
-            | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend" | "timeupdate"
-            | "volumechange" | "waiting" | "error" | "load" | "loadend" | "timeout";
-        AnimationData => "animationstart" | "animationend" | "animationiteration";
-        TransitionData => "transitionend";
-        ToggleData => "toggle";
-        // ImageData => "load" | "error";
-        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
-    };
-
-    Some(evt)
 }
