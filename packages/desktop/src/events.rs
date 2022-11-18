@@ -1,12 +1,11 @@
 //! Convert a serialized event to an event trigger
 
-use std::any::Any;
-use std::sync::Arc;
-
 use dioxus_core::ElementId;
-use dioxus_core::EventPriority;
 use dioxus_html::events::*;
 use serde::{Deserialize, Serialize};
+use serde_json::from_value;
+use std::any::Any;
+use std::rc::Rc;
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct IpcMessage {
@@ -40,3 +39,11 @@ struct ImEvent {
     mounted_dom_id: ElementId,
     contents: serde_json::Value,
 }
+
+// pub fn make_synthetic_event(name: &str, val: serde_json::Value) -> Option<Rc<dyn Any>> {
+//     // right now we don't support the datatransfer in Drag
+//     type DragData = MouseData;
+//     type ProgressData = MediaData;
+
+//     Some(res)
+// }

@@ -1,7 +1,3 @@
-#![allow(non_snake_case)]
-
-//! Render a bunch of doggos!
-
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -19,8 +15,8 @@ struct ListBreeds {
 }
 
 async fn app_root(cx: Scope<'_>) -> Element {
-    let breed = use_state(&cx, || "deerhound".to_string());
-    let breeds = use_future(&cx, (), |_| async move {
+    let breed = use_state(cx, || "deerhound".to_string());
+    let breeds = use_future!(cx, || async move {
         reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -45,7 +41,9 @@ async fn app_root(cx: Scope<'_>) -> Element {
                             }
                         }
                     }
-                    div { flex: "50%", Breed { breed: breed.to_string() } }
+                    div { flex: "50%",
+                        breed_pic { breed: breed.to_string() }
+                    }
                 }
             }
         }),
@@ -59,10 +57,8 @@ struct DogApi {
 }
 
 #[inline_props]
-async fn Breed(cx: Scope, breed: String) -> Element {
-    println!("Rendering Breed: {}", breed);
-
-    let fut = use_future(&cx, (breed,), |(breed,)| async move {
+async fn breed_pic(cx: Scope, breed: String) -> Element {
+    let fut = use_future!(cx, |breed| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
             .await
             .unwrap()
@@ -70,11 +66,7 @@ async fn Breed(cx: Scope, breed: String) -> Element {
             .await
     });
 
-    let resp = fut.await;
-
-    println!("achieved results!");
-
-    match resp {
+    match fut.await {
         Ok(resp) => cx.render(rsx! {
             div {
                 button {
@@ -88,6 +80,6 @@ async fn Breed(cx: Scope, breed: String) -> Element {
                 }
             }
         }),
-        Err(e) => cx.render(rsx! { div { "loading dogs failed" } }),
+        Err(_) => cx.render(rsx! { div { "loading dogs failed" } }),
     }
 }

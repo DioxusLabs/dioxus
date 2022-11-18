@@ -1,15 +1,6 @@
-use crate::geometry::{
-    ClientPoint, Coordinates, ElementPoint, LinesVector, PagePoint, PagesVector, PixelsVector,
-    ScreenPoint, WheelDelta,
-};
-use crate::input_data::{
-    decode_key_location, decode_mouse_button_set, encode_key_location, encode_mouse_button_set,
-    MouseButton, MouseButtonSet,
-};
-use dioxus_core::{NodeFactory, UiEvent};
-use euclid::UnknownUnit;
+use crate::input_data::{decode_key_location, encode_key_location};
+use dioxus_core::UiEvent;
 use keyboard_types::{Code, Key, Location, Modifiers};
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;

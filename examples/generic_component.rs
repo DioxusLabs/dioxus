@@ -1,5 +1,3 @@
-use std::fmt::Display;
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -7,13 +5,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        generic_child::<i32>{}
-    })
+    cx.render(rsx! { generic_child::<i32>{} })
 }
 
 fn generic_child<T>(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div {}
-    })
+    cx.render(rsx! { div {} })
 }

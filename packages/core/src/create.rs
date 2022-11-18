@@ -1,7 +1,5 @@
-use std::ops::Bound;
-
 use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, SuspenseContext, SuspenseId};
+use crate::innerlude::{Mutations, SuspenseContext};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -75,13 +73,13 @@ impl VirtualDom {
                         DynamicNode::Text {
                             id: slot, value, ..
                         } => {
-                            let id = self.next_element(template);
+                            let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             mutations.push(CreateTextNode { value, id });
                             1
                         }
                         DynamicNode::Placeholder(slot) => {
-                            let id = self.next_element(template);
+                            let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             mutations.push(CreatePlaceholder { id });
                             1
@@ -95,7 +93,7 @@ impl VirtualDom {
             while let Some((mut attr_id, path)) =
                 dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
             {
-                let id = self.next_element(template);
+                let id = self.next_element(template, template.template.attr_paths[attr_id]);
                 mutations.push(AssignId {
                     path: &path[1..],
                     id,
@@ -118,7 +116,8 @@ impl VirtualDom {
                             id,
                         }),
                         AttributeValue::Listener(_) => mutations.push(NewEventListener {
-                            event_name: attribute.name,
+                            // all listeners start with "on"
+                            event_name: &attribute.name[2..],
                             scope: cur_scope,
                             id,
                         }),
@@ -178,8 +177,8 @@ impl VirtualDom {
     ) {
         match *node {
             // Todo: create the children's template
-            TemplateNode::Dynamic(_) => {
-                let id = self.next_element(template);
+            TemplateNode::Dynamic(idx) => {
+                let id = self.next_element(template, template.template.node_paths[idx]);
                 mutations.push(CreatePlaceholder { id })
             }
             TemplateNode::Text(value) => mutations.push(CreateStaticText { value }),
@@ -194,7 +193,7 @@ impl VirtualDom {
                 tag,
                 inner_opt,
             } => {
-                let id = self.next_element(template);
+                let id = self.next_element(template, &[]); // never gets referenced, empty path is fine, I think?
 
                 mutations.push(CreateElement {
                     name: tag,
@@ -239,7 +238,7 @@ impl VirtualDom {
     ) -> usize {
         match &node {
             DynamicNode::Text { id, value, .. } => {
-                let new_id = self.next_element(template);
+                let new_id = self.next_element(template, template.template.node_paths[idx]);
                 id.set(new_id);
                 mutations.push(HydrateText {
                     id: new_id,
@@ -269,7 +268,7 @@ impl VirtualDom {
                     }
 
                     RenderReturn::Async(_) => {
-                        let new_id = self.next_element(template);
+                        let new_id = self.next_element(template, template.template.node_paths[idx]);
                         placeholder.set(Some(new_id));
                         self.scopes[scope.0].placeholder.set(Some(new_id));
 
@@ -305,7 +304,8 @@ impl VirtualDom {
                                 self.scopes[scope.0].has_context::<SuspenseContext>()
                             {
                                 // Since this is a boundary, use it as a placeholder
-                                let new_id = self.next_element(template);
+                                let new_id =
+                                    self.next_element(template, template.template.node_paths[idx]);
                                 placeholder.set(Some(new_id));
                                 self.scopes[scope.0].placeholder.set(Some(new_id));
                                 mutations.push(AssignId {
@@ -350,7 +350,7 @@ impl VirtualDom {
             }
 
             DynamicNode::Placeholder(slot) => {
-                let id = self.next_element(template);
+                let id = self.next_element(template, template.template.node_paths[idx]);
                 slot.set(id);
                 mutations.push(AssignId {
                     path: &template.template.node_paths[idx][1..],

@@ -287,6 +287,7 @@ impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g, H = h,);
 
+/// A helper macro that merges uses the closure syntax to elaborate the dependency array
 #[macro_export]
 macro_rules! use_future {
     ($cx:ident, || $($rest:tt)*) => { use_future( $cx, (), |_| $($rest)* ) };

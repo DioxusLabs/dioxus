@@ -74,7 +74,7 @@ pub use crate::innerlude::{
     DynamicNode,
     Element,
     ElementId,
-    ElementPath,
+    ElementRef,
     EventPriority,
     Fragment,
     LazyNodes,

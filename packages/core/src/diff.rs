@@ -82,7 +82,7 @@ impl<'b> VirtualDom {
             // remove old with placeholder
             (Sync(Some(l)), Sync(None)) | (Sync(Some(l)), Async(_)) => {
                 //
-                let id = self.next_element(l); // todo!
+                let id = self.next_element(l, &[]); // todo!
                 m.push(Mutation::CreatePlaceholder { id });
                 self.drop_template(m, l, true);
             }

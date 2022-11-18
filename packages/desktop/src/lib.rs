@@ -14,6 +14,7 @@ mod protocol;
 
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_eval, use_window, DesktopContext};
+use futures_channel::mpsc::unbounded;
 pub use wry;
 pub use wry::application as tao;
 
@@ -100,7 +101,9 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::with_user_event();
 
-    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+    let (event_tx, event_rx) = unbounded();
+    let mut desktop =
+        DesktopController::new_on_tokio(root, props, event_loop.create_proxy(), event_rx);
     let proxy = event_loop.create_proxy();
 
     // We assume that if the icon is None, then the user just didnt set it
@@ -135,6 +138,7 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                 let custom_head = cfg.custom_head.clone();
                 let resource_dir = cfg.resource_dir.clone();
                 let index_file = cfg.custom_index.clone();
+                let event_tx = event_tx.clone();
 
                 let mut webview = WebViewBuilder::new(window)
                     .unwrap()
@@ -145,10 +149,7 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                         parse_ipc_message(&payload)
                             .map(|message| match message.method() {
                                 "user_event" => {
-                                    println!("user event!");
-                                    // let event = trigger_from_serialized(message.params());
-                                    // log::trace!("User event: {:?}", event);
-                                    // sender.unbounded_send(SchedulerMsg::Event(event)).unwrap();
+                                    _ = event_tx.unbounded_send(message.params());
                                 }
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);

@@ -68,3 +68,9 @@ pub use transition::*;
 
 mod wheel;
 pub use wheel::*;
+
+mod clipboard;
+pub use clipboard::*;
+
+mod scroll;
+pub use scroll::*;

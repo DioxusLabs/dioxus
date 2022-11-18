@@ -17,7 +17,7 @@ pub struct VNode<'a> {
     pub key: Option<&'a str>,
 
     // When rendered, this template will be linked to its parent manually
-    pub parent: Option<*const DynamicNode<'a>>,
+    pub parent: Option<ElementId>,
 
     pub template: Template<'static>,
 
@@ -153,7 +153,7 @@ pub enum AttributeValue<'a> {
     Float(f32),
     Int(i32),
     Bool(bool),
-    Listener(RefCell<&'a mut dyn FnMut(&dyn Any)>),
+    Listener(RefCell<&'a mut dyn FnMut(UiEvent<dyn Any>)>),
     Any(&'a dyn AnyValue),
     None,
 }
@@ -163,17 +163,30 @@ impl<'a> AttributeValue<'a> {
         cx: &'a ScopeState,
         mut f: impl FnMut(UiEvent<T>) + 'a,
     ) -> AttributeValue<'a> {
-        let f = cx.bump().alloc(move |a: &dyn Any| {
-            a.downcast_ref::<UiEvent<T>>()
-                .map(|a| f(a.clone()))
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Expected UiEvent<{}>, got {:?}",
-                        std::any::type_name::<T>(),
-                        a
-                    )
-                })
-        }) as &mut dyn FnMut(&dyn Any);
+        println!("creating listener with type od id {:?}", TypeId::of::<T>());
+
+        let f = cx.bump().alloc(move |a: UiEvent<dyn Any>| {
+            println!(
+                "incoming: {:?}, desired {:?}",
+                a.data.type_id(),
+                std::any::TypeId::of::<T>()
+            );
+
+            let data = a.data.downcast::<T>().unwrap();
+
+            // println!("casting to type {:?}", TypeId::of::<T>());
+
+            f(UiEvent {
+                bubbles: a.bubbles,
+                data,
+            })
+
+            // println!("listener called");
+            // if let Some(event) = a.downcast::<T>() {
+            //     println!("downcast success");
+            //     f(event)
+            // }
+        }) as &mut dyn FnMut(UiEvent<dyn Any>);
 
         AttributeValue::Listener(RefCell::new(f))
     }

@@ -1,7 +1,7 @@
 use crate::{
     any_props::VComponentProps,
     arena::ElementId,
-    arena::ElementPath,
+    arena::ElementRef,
     diff::DirtyScope,
     factory::RenderReturn,
     innerlude::{Mutations, Scheduler, SchedulerMsg},
@@ -13,12 +13,12 @@ use crate::{
 };
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use slab::Slab;
-use std::future::Future;
 use std::rc::Rc;
 use std::{
     any::Any,
     collections::{BTreeSet, HashMap},
 };
+use std::{cell::Cell, future::Future};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -145,11 +145,13 @@ use std::{
 /// ```
 pub struct VirtualDom {
     pub(crate) templates: HashMap<TemplateId, Template<'static>>,
-    pub(crate) elements: Slab<ElementPath>,
     pub(crate) scopes: Slab<ScopeState>,
     pub(crate) element_stack: Vec<ElementId>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
+
+    // Every element is actually a dual reference - one to the template and the other to the dynamic node in that template
+    pub(crate) elements: Slab<ElementRef>,
 
     // While diffing we need some sort of way of breaking off a stream of suspended mutations.
     pub(crate) scope_stack: Vec<ScopeId>,
@@ -246,7 +248,7 @@ impl VirtualDom {
         root.provide_context(SuspenseBoundary::new(ScopeId(0)));
 
         // the root element is always given element 0
-        dom.elements.insert(ElementPath::null());
+        dom.elements.insert(ElementRef::null());
 
         dom
     }
@@ -257,6 +259,12 @@ impl VirtualDom {
 
     pub fn base_scope(&self) -> &ScopeState {
         self.scopes.get(0).unwrap()
+    }
+
+    /// Build the virtualdom with a global context inserted into the base scope
+    pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
+        self.base_scope().provide_context(context);
+        self
     }
 
     fn mark_dirty_scope(&mut self, id: ScopeId) {
@@ -288,67 +296,90 @@ impl VirtualDom {
     ///
     ///
     ///
-    pub fn handle_event<T: 'static>(
+    pub fn handle_event(
         &mut self,
         name: &str,
-        data: Rc<T>,
+        data: Rc<dyn Any>,
         element: ElementId,
         bubbles: bool,
-        priority: EventPriority,
-    ) -> Option<()> {
-        /*
-        - click registers
-        - walk upwards until first element with onclick listener
-        - get template from ElementID
-        - break out of wait loop
-        - send event to virtualdom
-        */
-
-        let event = UiEvent {
-            bubble_state: std::cell::Cell::new(true),
+        // todo: priority is helpful when scheduling work around suspense, but we don't currently use it
+        _priority: EventPriority,
+    ) {
+        let uievent = UiEvent {
+            bubbles: Rc::new(Cell::new(bubbles)),
             data,
         };
 
-        let path = &self.elements[element.0];
-        let template = unsafe { &*path.template };
-        let dynamic = &template.dynamic_nodes[path.element];
+        /*
+        ------------------------
+        The algorithm works by walking through the list of dynamic attributes, checking their paths, and breaking when
+        we find the target path.
 
-        let location = template
-            .dynamic_attrs
-            .iter()
-            .position(|attr| attr.mounted_element.get() == element)?;
+        With the target path, we try and move up to the parent until there is no parent.
+        Due to how bubbling works, we call the listeners before walking to the parent.
 
-        // let mut index = Some((path.template, location));
+        If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
+        ----------------------
+        |           <-- yes (is ascendant)
+        | | |       <-- no  (is not ascendant)
+        | |         <-- yes (is ascendant)
+        | | | | |   <--- target element, break early
+        | | |       <-- no, broke early
+        |           <-- no, broke early
+        */
+        let mut parent_path = self.elements.get(element.0);
+        let mut listeners = vec![];
 
-        let mut listeners = Vec::<&Attribute>::new();
+        while let Some(el_ref) = parent_path {
+            let template = unsafe { &*el_ref.template };
+            let target_path = el_ref.path;
 
-        // while let Some((raw_parent, dyn_index)) = index {
-        //     let parent = unsafe { &mut *raw_parent };
-        //     let path = parent.template.node_paths[dyn_index];
+            let mut attrs = template.dynamic_attrs.iter().enumerate();
 
-        //     listeners.extend(
-        //         parent
-        //             .dynamic_attrs
-        //             .iter()
-        //             .enumerate()
-        //             .filter_map(|(idx, attr)| {
-        //                 match is_path_ascendant(parent.template.node_paths[idx], path) {
-        //                     true if attr.name == event.name => Some(attr),
-        //                     _ => None,
-        //                 }
-        //             }),
-        //     );
+            while let Some((idx, attr)) = attrs.next() {
+                pub fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
+                    small.len() >= big.len() && small == &big[..small.len()]
+                }
 
-        //     index = parent.parent;
-        // }
+                let this_path = template.template.attr_paths[idx];
 
-        for listener in listeners {
-            if let AttributeValue::Listener(listener) = &listener.value {
-                (listener.borrow_mut())(&event.clone())
+                println!(
+                    "is {:?} ascendant of {:?} ? {}",
+                    this_path,
+                    target_path,
+                    is_path_ascendant(this_path, target_path)
+                );
+
+                println!("{ } - {name}, - {}", attr.name, &attr.name[2..]);
+
+                if &attr.name[2..] == name && is_path_ascendant(&target_path, &this_path) {
+                    listeners.push(&attr.value);
+
+                    // Break if the event doesn't bubble anyways
+                    if !bubbles {
+                        break;
+                    }
+
+                    // Break if this is the exact target element
+                    if this_path == target_path {
+                        break;
+                    }
+                }
             }
-        }
 
-        Some(())
+            for listener in listeners.drain(..).rev() {
+                if let AttributeValue::Listener(listener) = listener {
+                    listener.borrow_mut()(uievent.clone());
+
+                    // Break if the event doesn't bubble
+                    if !uievent.bubbles.get() {
+                        return;
+                    }
+                }
+            }
+
+            parent_path = template.parent.and_then(|id| self.elements.get(id.0));
+        }
     }
 
     /// Wait for the scheduler to have any work.
@@ -508,22 +539,22 @@ impl VirtualDom {
         }
     }
 
-    fn mark_dirty_scope(&mut self, scope_id: ScopeId) {
-        let scopes = &self.scopes;
-        if let Some(scope) = scopes.get_scope(scope_id) {
-            let height = scope.height;
-            let id = scope_id.0;
-            if let Err(index) = self.dirty_scopes.binary_search_by(|new| {
-                let scope = scopes.get_scope(*new).unwrap();
-                let new_height = scope.height;
-                let new_id = &scope.scope_id();
-                height.cmp(&new_height).then(new_id.0.cmp(&id))
-            }) {
-                self.dirty_scopes.insert(index, scope_id);
-                log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
-            }
-        }
-    }
+    // fn mark_dirty_scope(&mut self, scope_id: ScopeId) {
+    //     let scopes = &self.scopes;
+    //     if let Some(scope) = scopes.get_scope(scope_id) {
+    //         let height = scope.height;
+    //         let id = scope_id.0;
+    //         if let Err(index) = self.dirty_scopes.binary_search_by(|new| {
+    //             let scope = scopes.get_scope(*new).unwrap();
+    //             let new_height = scope.height;
+    //             let new_id = &scope.scope_id();
+    //             height.cmp(&new_height).then(new_id.0.cmp(&id))
+    //         }) {
+    //             self.dirty_scopes.insert(index, scope_id);
+    //             log::info!("mark_dirty_scope: {:?}", self.dirty_scopes);
+    //         }
+    //     }
+    // }
 }
 
 impl Drop for VirtualDom {

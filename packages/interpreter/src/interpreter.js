@@ -18,6 +18,7 @@ class ListenerMap {
   }
 
   create(event_name, element, handler, bubbles) {
+    console.log("creating listener for", event_name, element, handler, bubbles);
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = {};
@@ -64,15 +65,13 @@ class ListenerMap {
 
 export class Interpreter {
   constructor(root) {
-    console.log("interpreter created", root);
     this.root = root;
     this.listeners = new ListenerMap(root);
     this.nodes = [root];
     this.stack = [root];
     this.handlers = {};
-    this.lastNodeWasText = false;
     this.templates = {};
-    console.log(this);
+    this.lastNodeWasText = false;
   }
   top() {
     return this.stack[this.stack.length - 1];
@@ -328,6 +327,8 @@ export class Interpreter {
         // method is not used by the web implementation
         let handler = (event) => {
 
+          console.log("event", event);
+
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -415,6 +416,8 @@ export class Interpreter {
             );
           }
         };
+
+        console.log("adding event listener", edit);
         this.NewEventListener(edit.event_name, edit.id, handler, event_bubbles(edit.event_name));
 
         break;
@@ -729,6 +732,8 @@ function is_element_node(node) {
 }
 
 function event_bubbles(event) {
+  console.log("event_bubbles", event);
+
   switch (event) {
     case "copy":
       return true;
@@ -895,4 +900,6 @@ function event_bubbles(event) {
     case "toggle":
       return true;
   }
+
+  return true;
 }
