@@ -572,7 +572,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored 2.0.0",
- "convert_case", 
+ "convert_case",
  "ctrlc",
  "dioxus-core",
  "dioxus-rsx",
@@ -616,7 +616,6 @@ dependencies = [
  "dyn-clone",
  "futures-channel",
  "futures-util",
- "fxhash",
  "indexmap",
  "log",
  "longest-increasing-subsequence",
@@ -905,15 +904,6 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
-]
-
-[[package]]
-name = "fxhash"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
-dependencies = [
- "byteorder",
 ]
 
 [[package]]
