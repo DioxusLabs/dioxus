@@ -46,7 +46,7 @@ walkdir = "2"
 
 # tools download
 dirs = "4.0.0"
-reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns"] }
+reqwest = { version = "0.11", features = ["rustls-tls", "stream", "trust-dns", "blocking"] }
 flate2 = "1.0.22"
 tar = "0.4.38"
 zip = "0.6.2"
@@ -62,7 +62,11 @@ dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus/", features = [
 ] }
 
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
+lazy_static = "1.4.0"
 
+# plugin packages
+mlua = { version = "0.8.1", features = ["lua54", "vendored", "async", "send", "macros"] }
+ctrlc = "3.2.3"
 
 [[bin]]
 path = "src/main.rs"

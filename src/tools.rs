@@ -18,9 +18,9 @@ pub enum Tool {
     Tailwind,
 }
 
-pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen", "sass", "tailwindcss"]
-}
+// pub fn tool_list() -> Vec<&'static str> {
+//     vec!["binaryen", "sass", "tailwindcss"]
+// }
 
 pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
@@ -38,6 +38,16 @@ pub fn temp_path() -> PathBuf {
         create_dir_all(&temp_path).unwrap();
     }
     temp_path
+}
+
+pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
+    let target_dir = dir.parent().unwrap();
+    let dir_name = dir.file_name().unwrap();
+
+    let mut cmd = Command::new("git");
+    let cmd = cmd.current_dir(target_dir);
+    let _res = cmd.arg("clone").arg(url).arg(dir_name).output()?;
+    Ok(())
 }
 
 pub fn tools_path() -> PathBuf {
@@ -303,7 +313,7 @@ impl Tool {
     }
 }
 
-fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
     let zip_file = std::fs::File::open(&file)?;
     let mut zip = zip::ZipArchive::new(zip_file)?;
 

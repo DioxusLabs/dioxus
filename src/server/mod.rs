@@ -17,7 +17,7 @@ use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
 
-use crate::{builder, serve::Serve, BuildResult, CrateConfig, Result};
+use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConfig, Result};
 use tokio::sync::broadcast;
 
 mod hot_reload;
@@ -54,6 +54,13 @@ struct WsReloadState {
 }
 
 pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
+    // ctrl-c shutdown checker
+    let crate_config = config.clone();
+    let _ = ctrlc::set_handler(move || {
+        let _ = PluginManager::on_serve_shutdown(&crate_config);
+        std::process::exit(0);
+    });
+
     if config.hot_reload {
         startup_hot_reload(port, config).await?
     } else {
@@ -62,10 +69,13 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
+#[allow(unused_assignments)]
 pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
 
     log::info!("🚀 Starting development server...");
+
+    PluginManager::on_serve_start(&config)?;
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
@@ -227,6 +237,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
             .unwrap();
     }
 
+
     // start serve dev-server at 0.0.0.0:8080
     print_console_info(
         port,
@@ -328,31 +339,32 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
-    let mut watcher = RecommendedWatcher::new(
-        move |info: notify::Result<notify::Event>| {
-            let config = watcher_config.clone();
-            if info.is_ok() {
-                if chrono::Local::now().timestamp() > last_update_time {
-                    match build_manager.rebuild() {
-                        Ok(res) => {
-                            last_update_time = chrono::Local::now().timestamp();
-                            print_console_info(
-                                port,
-                                &config,
-                                PrettierOptions {
-                                    changed: info.unwrap().paths,
-                                    warnings: res.warnings,
-                                    elapsed_time: res.elapsed_time,
-                                },
-                            );
-                        }
-                        Err(e) => log::error!("{}", e),
+    let mut watcher = notify::recommended_watcher(move |info: notify::Result<notify::Event>| {
+        let config = watcher_config.clone();
+        if let Ok(e) = info {
+            if chrono::Local::now().timestamp() > last_update_time {
+                match build_manager.rebuild() {
+                    Ok(res) => {
+                        last_update_time = chrono::Local::now().timestamp();
+                        print_console_info(
+                            port,
+                            &config,
+                            PrettierOptions {
+                                changed: e.paths.clone(),
+                                warnings: res.warnings,
+                                elapsed_time: res.elapsed_time,
+                            },
+                        );
+                        let _ = PluginManager::on_serve_rebuild(
+                            chrono::Local::now().timestamp(),
+                            e.paths,
+                        );
                     }
+                    Err(e) => log::error!("{}", e),
                 }
             }
-        },
-        notify::Config::default(),
-    )
+        }
+    })
     .unwrap();
 
     for sub_path in allow_watch_path {
@@ -374,6 +386,8 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
             elapsed_time: first_build_result.elapsed_time,
         },
     );
+
+    PluginManager::on_serve_start(&config)?;
 
     let file_service_config = config.clone();
     let file_service = ServiceBuilder::new()

@@ -22,3 +22,4 @@ pub mod logging;
 pub use logging::*;
 
 pub mod hot_reload;
+pub mod plugin;

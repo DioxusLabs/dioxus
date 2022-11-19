@@ -1,11 +1,20 @@
 use clap::Parser;
-use dioxus_cli::*;
+use dioxus_cli::{plugin::PluginManager, *};
 use std::process::exit;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
+
+    let dioxus_config = DioxusConfig::load()?;
+
+    let plugin_state = PluginManager::init(dioxus_config.plugin);
+
+    if let Err(e) = plugin_state {
+        log::error!("🚫 Plugin system initialization failed: {e}");
+        exit(1);
+    }
 
     match args.action {
         Commands::Translate(opts) => {
@@ -50,10 +59,9 @@ async fn main() -> Result<()> {
             }
         }
 
-        Commands::Tool(opts) => {
-            if let Err(e) = opts.tool().await {
+        Commands::Plugin(opts) => {
+            if let Err(e) = opts.plugin().await {
                 log::error!("tool error: {}", e);
-                exit(1);
             }
         }
     }

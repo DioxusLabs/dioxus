@@ -1,3 +1,5 @@
+use crate::plugin::PluginManager;
+
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
@@ -32,6 +34,8 @@ impl Build {
                 .clone()
         });
 
+        let _ = PluginManager::on_build_start(&crate_config, &platform);
+
         match platform.as_str() {
             "web" => {
                 crate::builder::build(&crate_config, false)?;
@@ -60,6 +64,8 @@ impl Build {
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;
+
+        let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }

@@ -6,6 +6,13 @@ use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
     pub web: WebConfig,
+
+    #[serde(default = "default_plugin")]
+    pub plugin: toml::Value,
+}
+
+fn default_plugin() -> toml::Value {
+    toml::Value::Boolean(true)
 }
 
 impl DioxusConfig {
@@ -22,7 +29,7 @@ impl DioxusConfig {
         dioxus_conf_file.read_to_string(&mut meta_str)?;
 
         toml::from_str::<DioxusConfig>(&meta_str)
-            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+        .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
     }
 }
 
@@ -34,7 +41,9 @@ impl Default for DioxusConfig {
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
+
                 tools: None,
+
                 sub_package: None,
             },
             web: WebConfig {
@@ -56,6 +65,7 @@ impl Default for DioxusConfig {
                     script: Some(vec![]),
                 },
             },
+            plugin: toml::Value::Table(toml::map::Map::new()),
         }
     }
 }
@@ -66,7 +76,9 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
+
     pub tools: Option<HashMap<String, toml::Value>>,
+
     pub sub_package: Option<String>,
 }
 
@@ -217,20 +229,4 @@ impl CrateConfig {
         self.features = Some(features);
         self
     }
-
-    // pub fn with_build_options(&mut self, options: &BuildOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = options.outdir.clone().into();
-    // }
-
-    // pub fn with_develop_options(&mut self, options: &DevelopOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
-    // }
 }
