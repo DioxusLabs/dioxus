@@ -19,5 +19,5 @@ pub use usefuture::*;
 mod useeffect;
 pub use useeffect::*;
 
-// mod usesuspense;
-// pub use usesuspense::*;
+mod usecallback;
+pub use usecallback::*;

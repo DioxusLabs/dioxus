@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, marker::PhantomData};
 
 fn main() {
     dioxus_desktop::launch(|cx| {
@@ -65,7 +65,7 @@ async fn breed_pic(cx: Scope, breed: String) -> Element {
     });
 
     match fut.await {
-        Ok(resp) => cx.render(rsx! {
+        Ok(resp) => render! {
             div {
                 button {
                     onclick: move |_| fut.restart(),
@@ -77,7 +77,7 @@ async fn breed_pic(cx: Scope, breed: String) -> Element {
                     max_height: "500px",
                 }
             }
-        }),
-        Err(_) => cx.render(rsx! { div { "loading dogs failed" } }),
+        },
+        Err(_) => render! { div { "loading dogs failed" } },
     }
 }
