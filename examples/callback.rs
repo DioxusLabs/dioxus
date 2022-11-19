@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use dioxus::prelude::*;
 
 fn main() {
@@ -7,14 +5,18 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let login = use_callback!(cx, || |evt| async {
-        //
+    let login = use_callback!(cx, || move |evt: MouseEvent| async move {
+        let res = reqwest::get("https://dog.ceo/api/breeds/list/all")
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap();
+
+        println!("{}, ", res);
     });
 
     cx.render(rsx! {
-        button {
-            onclick: login,
-            "Click me!"
-        }
+        button { onclick: login, "Click me!" }
     })
 }

@@ -5,11 +5,18 @@ use std::future::Future;
 
 #[macro_export]
 macro_rules! use_callback {
-    ($cx:ident, || || $($rest:tt)*) => { use_callback( $cx, (), |_| $($rest)* ) };
-    ($cx:ident, || |$myarg:ident| $($rest:tt)*) => {
+    // ($cx:ident, || || $($rest:tt)*) => { use_callback( $cx, (), |_| $($rest)* ) };
+    // ($cx:ident, || || $($rest:tt)*) => { use_callback( $cx, (), |_| $($rest)* ) };
+    ($cx:ident, || $($rest:tt)*) => {
         use_callback(
             $cx,
-            || |$myarg| async {}
+            move || $($rest)*
+        )
+    };
+    ($cx:ident, |$($args:tt),* | $($rest:tt)*) => {
+        use_callback(
+            $cx,
+            move || $($rest)*
         )
     };
 }

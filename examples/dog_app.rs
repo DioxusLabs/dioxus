@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use std::{collections::HashMap, marker::PhantomData};
+use std::collections::HashMap;
 
 fn main() {
     dioxus_desktop::launch(|cx| {
