@@ -1,6 +1,7 @@
-use std::time::Duration;
+//! Verify that tasks get polled by the virtualdom properly, and that we escape wait_for_work safely
 
 use dioxus_core::*;
+use std::time::Duration;
 
 #[tokio::test]
 async fn it_works() {

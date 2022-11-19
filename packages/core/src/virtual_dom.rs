@@ -1,3 +1,7 @@
+//! # Virtual DOM Implementation for Rust
+//!
+//! This module provides the primary mechanics to create a hook-based, concurrent VDOM for Rust.
+
 use crate::{
     any_props::VComponentProps,
     arena::ElementId,
@@ -13,12 +17,13 @@ use crate::{
 };
 use futures_util::{pin_mut, StreamExt};
 use slab::Slab;
-use std::rc::Rc;
 use std::{
     any::Any,
+    cell::Cell,
     collections::{BTreeSet, HashMap},
+    future::Future,
+    rc::Rc,
 };
-use std::{cell::Cell, future::Future};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -245,9 +250,11 @@ impl VirtualDom {
 
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior later
+        //
+        // We *could* just panic if the suspense boundary is not found
         root.provide_context(SuspenseBoundary::new(ScopeId(0)));
 
-        // the root element is always given element 0
+        // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::null());
 
         dom
@@ -269,19 +276,24 @@ impl VirtualDom {
 
     /// Build the virtualdom with a global context inserted into the base scope
     ///
-    /// This is useful for what is essentially dependency injection, when building the app
+    /// This is useful for what is essentially dependency injection when building the app
     pub fn with_root_context<T: Clone + 'static>(self, context: T) -> Self {
         self.base_scope().provide_context(context);
         self
     }
 
     /// Manually mark a scope as requiring a re-render
+    ///
+    /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty_scope(&mut self, id: ScopeId) {
         let height = self.scopes[id.0].height;
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
 
     /// Determine whether or not a scope is currently in a suspended state
+    ///
+    /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
+    /// currently suspended.
     pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
         !self.scopes[id.0]
             .consume_context::<SuspenseContext>()
@@ -291,7 +303,7 @@ impl VirtualDom {
             .is_empty()
     }
 
-    /// Determine is the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
+    /// Determine if the tree is at all suspended. Used by SSR and other outside mechanisms to determine if the tree is
     /// ready to be rendered.
     pub fn has_suspended_work(&self) -> bool {
         !self.scheduler.leaves.borrow().is_empty()
@@ -324,6 +336,10 @@ impl VirtualDom {
 
         If we wanted to do capturing, then we would accumulate all the listeners and call them in reverse order.
         ----------------------
+
+        For a visual demonstration, here we present a tree on the left and whether or not a listener is collected on the
+        right.
+
         |           <-- yes (is ascendant)
         | | |       <-- no  (is not direct ascendant)
         | |         <-- yes (is ascendant)
@@ -354,6 +370,7 @@ impl VirtualDom {
                 let this_path = template.template.attr_paths[idx];
 
                 // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
+                // we should fix this so that we look for "onclick" instead of "click"
                 if &attr.name[2..] == name && is_path_ascendant(&target_path, &this_path) {
                     listeners.push(&attr.value);
 
@@ -362,7 +379,9 @@ impl VirtualDom {
                         break;
                     }
 
-                    // Break if this is the exact target element
+                    // Break if this is the exact target element.
+                    // This means we won't call two listeners with the same name on the same element. This should be
+                    // documented, or be rejected from the rsx! macro outright
                     if this_path == target_path {
                         break;
                     }
@@ -392,7 +411,7 @@ impl VirtualDom {
     ///
     /// This method is cancel-safe, so you're fine to discard the future in a select block.
     ///
-    /// This lets us poll async tasks during idle periods without blocking the main thread.
+    /// This lets us poll async tasks and suspended trees during idle periods without blocking the main thread.
     ///
     /// # Example
     ///
@@ -433,7 +452,7 @@ impl VirtualDom {
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
-    /// The diff machine expects the RealDom's stack to be the root of the application.
+    /// The mutations item expects the RealDom's stack to be the root of the application.
     ///
     /// Tasks will not be polled with this method, nor will any events be processed from the event queue. Instead, the
     /// root component will be ran once and then diffed. All updates will flow out as mutations.
@@ -498,7 +517,6 @@ impl VirtualDom {
         &'a mut self,
         deadline: impl Future<Output = ()>,
     ) -> Mutations<'a> {
-        use futures_util::future::{select, Either};
         pin_mut!(deadline);
 
         let mut mutations = Mutations::new(0);
@@ -533,7 +551,7 @@ impl VirtualDom {
 
             // Wait for suspense, or a deadline
             if self.dirty_scopes.is_empty() {
-                // If there's no suspense, then we have no reason to wait
+                // If there's no pending suspense, then we have no reason to wait
                 if self.scheduler.leaves.borrow().is_empty() {
                     return mutations;
                 }
@@ -543,6 +561,7 @@ impl VirtualDom {
                 pin_mut!(work);
 
                 // If the deadline is exceded (left) then we should return the mutations we have
+                use futures_util::future::{select, Either};
                 if let Either::Left((_, _)) = select(&mut deadline, work).await {
                     return mutations;
                 }

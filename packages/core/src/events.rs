@@ -158,14 +158,3 @@ impl<T> EventHandler<'_, T> {
         self.callback.replace(None);
     }
 }
-
-#[test]
-fn matches_slice() {
-    let left = &[1, 2, 3];
-    let right = &[1, 2, 3, 4, 5];
-    assert!(is_path_ascendant(left, right));
-    assert!(!is_path_ascendant(right, left));
-    assert!(!is_path_ascendant(left, left));
-
-    assert!(is_path_ascendant(&[1, 2], &[1, 2, 3, 4, 5]));
-}
