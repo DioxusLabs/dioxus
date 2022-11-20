@@ -70,11 +70,7 @@ impl VirtualDom {
                                 &template.dynamic_nodes[*id],
                                 *id,
                             ),
-                        DynamicNode::Text(VText {
-                            id: slot,
-                            value,
-                            inner,
-                        }) => {
+                        DynamicNode::Text(VText { id: slot, value }) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             mutations.push(CreateTextNode { value, id });
@@ -239,7 +235,7 @@ impl VirtualDom {
         idx: usize,
     ) -> usize {
         match &node {
-            DynamicNode::Text(VText { id, value, inner }) => {
+            DynamicNode::Text(VText { id, value }) => {
                 let new_id = self.next_element(template, template.template.node_paths[idx]);
                 id.set(new_id);
                 mutations.push(HydrateText {
@@ -251,9 +247,10 @@ impl VirtualDom {
             }
 
             DynamicNode::Component(component) => {
-                let scope = self
-                    .new_scope(unsafe { std::mem::transmute(component.props.get()) })
-                    .id;
+                let props = component.props.replace(None).unwrap();
+                let prop_ptr = unsafe { std::mem::transmute(props.as_ref()) };
+                let scope = self.new_scope(prop_ptr).id;
+                component.props.replace(Some(props));
 
                 component.scope.set(Some(scope));
 

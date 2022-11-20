@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     cell::{Cell, RefCell},
     fmt::Arguments,
 };
@@ -8,7 +9,7 @@ use bumpalo::Bump;
 use std::future::Future;
 
 use crate::{
-    any_props::{AnyProps, VComponentProps},
+    any_props::{AnyProps, VProps},
     arena::ElementId,
     innerlude::{DynamicNode, EventHandler, VComponent, VFragment, VText},
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
@@ -21,7 +22,6 @@ impl ScopeState {
         DynamicNode::Text(VText {
             id: Cell::new(ElementId(0)),
             value: text,
-            inner: false,
         })
     }
 
@@ -76,10 +76,11 @@ impl ScopeState {
         P: Properties + 'a,
     {
         let as_component = component;
-        let vcomp = VComponentProps::new(as_component, P::memoize, props);
-        let as_dyn = self.bump().alloc(vcomp) as &mut dyn AnyProps;
-        let detached_dyn: *mut dyn AnyProps = unsafe { std::mem::transmute(as_dyn) };
+        let vcomp = VProps::new(as_component, P::memoize, props);
+        let as_dyn: Box<dyn AnyProps<'a>> = Box::new(vcomp);
+        let extended: Box<dyn AnyProps> = unsafe { std::mem::transmute(as_dyn) };
 
+        // let as_dyn: &dyn AnyProps = self.bump().alloc(vcomp);
         // todo: clean up borrowed props
         // if !P::IS_STATIC {
         //     let vcomp = &*vcomp;
@@ -89,8 +90,9 @@ impl ScopeState {
 
         DynamicNode::Component(VComponent {
             name: fn_name,
+            render_fn: component as *const (),
             static_props: P::IS_STATIC,
-            props: Cell::new(detached_dyn),
+            props: Cell::new(Some(extended)),
             placeholder: Cell::new(None),
             scope: Cell::new(None),
         })
@@ -178,7 +180,6 @@ impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(VFragment {
             nodes: cx.bump().alloc([self.call(cx)]),
-            inner: false,
         })
     }
 }
@@ -248,10 +249,7 @@ where
 
         match children.len() {
             0 => DynamicNode::Placeholder(Cell::new(ElementId(0))),
-            _ => DynamicNode::Fragment(VFragment {
-                inner: false,
-                nodes: children,
-            }),
+            _ => DynamicNode::Fragment(VFragment { nodes: children }),
         }
     }
 }

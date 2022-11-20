@@ -1,6 +1,7 @@
 use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
+    diff::DirtyScope,
     factory::RenderReturn,
     innerlude::{SuspenseId, SuspenseLeaf},
     scheduler::RcWake,
@@ -16,7 +17,7 @@ use std::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: *mut dyn AnyProps<'static>) -> &mut ScopeState {
+    pub(super) fn new_scope(&mut self, props: *const dyn AnyProps<'static>) -> &mut ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height).unwrap_or(0) + 1 };
@@ -124,6 +125,12 @@ impl VirtualDom {
 
         // And move the render generation forward by one
         scope.render_cnt.set(scope.render_cnt.get() + 1);
+
+        // remove this scope from dirty scopes
+        self.dirty_scopes.remove(&DirtyScope {
+            height: scope.height,
+            id: scope.id,
+        });
 
         // rebind the lifetime now that its stored internally
         unsafe { mem::transmute(alloced) }

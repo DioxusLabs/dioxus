@@ -5,7 +5,8 @@ use crate::innerlude::{Mutations, VComponent, VFragment, VText};
 use crate::virtual_dom::VirtualDom;
 use crate::{Attribute, AttributeValue, TemplateNode};
 
-use crate::any_props::VComponentProps;
+use crate::any_props::VProps;
+use DynamicNode::*;
 
 use crate::mutations::Mutation;
 use crate::nodes::{DynamicNode, Template, TemplateId};
@@ -77,7 +78,7 @@ impl<'b> VirtualDom {
         use RenderReturn::{Async, Sync};
         match (left, right) {
             // diff
-            (Sync(Some(l)), Sync(Some(r))) => self.diff_node(m, l, r),
+            (Sync(Some(l)), Sync(Some(r))) => self.diff_vnode(m, l, r),
 
             // remove old with placeholder
             (Sync(Some(l)), Sync(None)) | (Sync(Some(l)), Async(_)) => {
@@ -91,7 +92,7 @@ impl<'b> VirtualDom {
             (Sync(None), Sync(Some(_))) => {}
             (Async(_), Sync(Some(v))) => {}
 
-            // nothing...
+            // nothing... just transfer the placeholders over
             (Async(_), Async(_))
             | (Sync(None), Sync(None))
             | (Sync(None), Async(_))
@@ -99,23 +100,20 @@ impl<'b> VirtualDom {
         }
     }
 
-    pub fn diff_node(
+    pub fn diff_vnode(
         &mut self,
         muts: &mut Mutations<'b>,
         left_template: &'b VNode<'b>,
         right_template: &'b VNode<'b>,
     ) {
         if left_template.template.id != right_template.template.id {
-            // do a light diff of the roots nodes.
-            todo!("lightly diff roots and replace");
-            return;
+            return self.light_diff_templates(muts, left_template, right_template);
         }
 
-        for (_idx, (left_attr, right_attr)) in left_template
+        for (left_attr, right_attr) in left_template
             .dynamic_attrs
             .iter()
             .zip(right_template.dynamic_attrs.iter())
-            .enumerate()
         {
             // Move over the ID from the old to the new
             right_attr
@@ -135,39 +133,29 @@ impl<'b> VirtualDom {
             }
         }
 
-        for (idx, (left_node, right_node)) in left_template
+        for (left_node, right_node) in left_template
             .dynamic_nodes
             .iter()
             .zip(right_template.dynamic_nodes.iter())
-            .enumerate()
         {
-            use DynamicNode::*;
-
             match (left_node, right_node) {
                 (Component(left), Component(right)) => self.diff_vcomponent(muts, left, right),
                 (Text(left), Text(right)) => self.diff_vtext(muts, left, right),
                 (Fragment(left), Fragment(right)) => self.diff_vfragment(muts, left, right),
-
-                (Placeholder(_), Placeholder(_)) => todo!(),
-
-                // Make sure to drop all the fragment children properly
-                (DynamicNode::Fragment { .. }, right) => todo!(),
-
-                (Text(left), right) => {
-                    todo!()
-                    // let m = self.create_dynamic_node(muts, right_template, right, idx);
-                    // muts.push(Mutation::ReplaceWith { id: lid.get(), m });
-                }
-                (Placeholder(_), _) => todo!(),
-                // Make sure to drop the component properly
-                (Component { .. }, right) => {
-                    // remove all the component roots except for the first
-                    // replace the first with the new node
-                    let m = self.create_dynamic_node(muts, right_template, right, idx);
-                    todo!()
-                }
+                (Placeholder(left), Placeholder(right)) => right.set(left.get()),
+                _ => self.replace(muts, left_template, right_template, left_node, right_node),
             };
         }
+    }
+
+    fn replace(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        left_template: &'b VNode<'b>,
+        right_template: &'b VNode<'b>,
+        left: &'b DynamicNode<'b>,
+        right: &'b DynamicNode<'b>,
+    ) {
     }
 
     fn diff_vcomponent(
@@ -176,26 +164,45 @@ impl<'b> VirtualDom {
         left: &'b VComponent<'b>,
         right: &'b VComponent<'b>,
     ) {
-        let left_props = unsafe { &mut *left.props.get() };
-        let right_props = unsafe { &mut *right.props.get() };
+        // Due to how templates work, we should never get two different components. The only way we could enter
+        // this codepath is through "light_diff", but we check there that the pointers are the same
+        assert_eq!(left.render_fn, right.render_fn);
 
-        // Ensure these two props are of the same component type
-        match left_props.as_ptr() == right_props.as_ptr() {
-            true => {
-                //
-                if left.static_props {
-                    let props_are_same = unsafe { left_props.memoize(right_props) };
+        /*
 
-                    if props_are_same {
-                        //
-                    } else {
-                        //
-                    }
-                } else {
-                }
-            }
-            false => todo!(),
+
+
+        let left = rsx!{ Component {} }
+        let right = rsx!{ Component {} }
+
+
+
+        */
+
+        // Make sure the new vcomponent has the right scopeid associated to it
+        let scope_id = left.scope.get().unwrap();
+        right.scope.set(Some(scope_id));
+
+        // copy out the box for both
+        let old = left.props.replace(None).unwrap();
+        let new = right.props.replace(None).unwrap();
+
+        // If the props are static, then we try to memoize by setting the new with the old
+        // The target scopestate still has the reference to the old props, so there's no need to update anything
+        // This also implicitly drops the new props since they're not used
+        if left.static_props && unsafe { old.memoize(new.as_ref()) } {
+            return right.props.set(Some(old));
         }
+
+        // If the props are dynamic *or* the memoization failed, then we need to diff the props
+
+        // First, move over the props from the old to the new, dropping old props in the process
+        self.scopes[scope_id.0].props = unsafe { std::mem::transmute(new.as_ref()) };
+        right.props.set(Some(new));
+
+        // Now run the component and diff it
+        self.run_scope(scope_id);
+        self.diff_scope(muts, scope_id);
     }
 
     /// Lightly diff the two templates, checking only their roots.
@@ -236,44 +243,23 @@ impl<'b> VirtualDom {
     ///     Component { ..props }
     /// }
     /// ```
-    fn light_diff_tempaltes(
+    fn light_diff_templates(
         &mut self,
         muts: &mut Mutations<'b>,
         left: &'b VNode<'b>,
         right: &'b VNode<'b>,
-    ) -> bool {
-        if left.template.roots.len() != right.template.roots.len() {
-            return false;
+    ) {
+        if let Some(components) = matching_components(left, right) {
+            components
+                .into_iter()
+                .for_each(|(l, r)| self.diff_vcomponent(muts, l, r))
         }
-
-        let mut components = vec![];
-
-        // run through the components, ensuring they're the same
-        for (l, r) in left.template.roots.iter().zip(right.template.roots.iter()) {
-            match (l, r) {
-                (TemplateNode::Dynamic(l), TemplateNode::Dynamic(r)) => {
-                    components.push(match (&left.dynamic_nodes[*l], &right.dynamic_nodes[*r]) {
-                        (DynamicNode::Component(l), DynamicNode::Component(r)) => {
-                            let l_props = unsafe { &*l.props.get() };
-                            let r_props = unsafe { &*r.props.get() };
-
-                            (l, r)
-                        }
-                        _ => return false,
-                    })
-                }
-                _ => return false,
-            }
-        }
-
-        // run through the components, diffing them
-        for (l, r) in components {
-            self.diff_vcomponent(muts, l, r);
-        }
-
-        true
     }
 
+    /// Diff the two text nodes
+    ///
+    /// This just moves the ID of the old node over to the new node, and then sets the text of the new node if it's
+    /// different.
     fn diff_vtext(&mut self, muts: &mut Mutations<'b>, left: &'b VText<'b>, right: &'b VText<'b>) {
         right.id.set(left.id.get());
         if left.value != right.value {
@@ -297,6 +283,7 @@ impl<'b> VirtualDom {
         //         todo!()
         //     }
         //     (_, []) => {
+        //         // if this fragment is the only child of its parent, then we can use the "RemoveAllChildren" mutation
         //         todo!()
         //     }
         //     _ => {
@@ -319,8 +306,6 @@ impl<'b> VirtualDom {
         //         }
         //     }
         // }
-
-        todo!()
     }
 
     // Diff children that are not keyed.
@@ -351,7 +336,7 @@ impl<'b> VirtualDom {
         }
 
         for (new, old) in new.iter().zip(old.iter()) {
-            self.diff_node(muts, old, new);
+            self.diff_vnode(muts, old, new);
         }
     }
 
@@ -691,5 +676,60 @@ impl<'b> VirtualDom {
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, muts: &mut Mutations<'b>, nodes: &'b [VNode<'b>]) {
         //
+    }
+}
+
+fn matching_components<'a>(
+    left: &'a VNode<'a>,
+    right: &'a VNode<'a>,
+) -> Option<Vec<(&'a VComponent<'a>, &'a VComponent<'a>)>> {
+    if left.template.roots.len() != right.template.roots.len() {
+        return None;
+    }
+
+    // run through the components, ensuring they're the same
+    left.template
+        .roots
+        .iter()
+        .zip(right.template.roots.iter())
+        .map(|(l, r)| {
+            let (l, r) = match (l, r) {
+                (TemplateNode::Dynamic(l), TemplateNode::Dynamic(r)) => (l, r),
+                _ => return None,
+            };
+
+            let (l, r) = match (&left.dynamic_nodes[*l], &right.dynamic_nodes[*r]) {
+                (Component(l), Component(r)) => (l, r),
+                _ => return None,
+            };
+
+            (l.render_fn == r.render_fn).then(|| (l, r))
+        })
+        .collect()
+}
+
+/// We can apply various optimizations to dynamic nodes that are the single child of their parent.
+///
+/// IE
+///  - for text - we can use SetTextContent
+///  - for clearning children we can use RemoveChildren
+///  - for appending children we can use AppendChildren
+fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
+    let path = node.template.node_paths[idx];
+
+    // use a loop to index every static node's children until the path has run out
+    // only break if the last path index is a dynamic node
+    let mut static_node = &node.template.roots[path[0] as usize];
+
+    for i in 1..path.len() - 1 {
+        match static_node {
+            TemplateNode::Element { children, .. } => static_node = &children[path[i] as usize],
+            _ => return false,
+        }
+    }
+
+    match static_node {
+        TemplateNode::Element { children, .. } => children.len() == 1,
+        _ => false,
     }
 }

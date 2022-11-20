@@ -131,26 +131,35 @@ impl<'a> DynamicNode<'a> {
     }
 }
 
-#[derive(Debug)]
 pub struct VComponent<'a> {
     pub name: &'static str,
     pub static_props: bool,
-    pub props: Cell<*mut dyn AnyProps<'a>>,
     pub placeholder: Cell<Option<ElementId>>,
     pub scope: Cell<Option<ScopeId>>,
+    pub props: Cell<Option<Box<dyn AnyProps<'a> + 'a>>>,
+    pub render_fn: *const (),
+}
+
+impl<'a> std::fmt::Debug for VComponent<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VComponent")
+            .field("name", &self.name)
+            .field("static_props", &self.static_props)
+            .field("placeholder", &self.placeholder)
+            .field("scope", &self.scope)
+            .finish()
+    }
 }
 
 #[derive(Debug)]
 pub struct VText<'a> {
     pub id: Cell<ElementId>,
     pub value: &'a str,
-    pub inner: bool,
 }
 
 #[derive(Debug)]
 pub struct VFragment<'a> {
     pub nodes: &'a [VNode<'a>],
-    pub inner: bool,
 }
 
 #[derive(Debug)]
@@ -268,54 +277,3 @@ fn what_are_the_sizes() {
     dbg!(std::mem::size_of::<Template>());
     dbg!(std::mem::size_of::<TemplateNode>());
 }
-
-/*
-
-
-SSR includes data-id which allows O(1) hydration
-
-
-we read the edit stream dn then we can just rehydare
-
-
-
-ideas:
-- IDs for lookup
-- use edit stream to hydrate
-- write comments to dom that specify size of children
-
-IDs for lookups
-- adds noise to generated html
-- doesnt work for text nodes
-- suspense could cause ordering to be weird
-
-Names for lookups:
-- label each root or something with the template name
-- label each dynamic node with a path
-- noisy too
-- allows reverse lookups
-
-Ideal:
-- no noise in the dom
-- fast, ideally O(1)
-- able to pick apart text nodes that get merged during SSR
-
-
---> render vdom
---> traverse vdom and real dom simultaneously
-
-IE
-
-div {
-    div {
-        div {
-            "thing"
-        }
-    }
-}
-
-
-
-
-
-*/
