@@ -151,7 +151,6 @@ use std::{
 pub struct VirtualDom {
     pub(crate) templates: HashMap<TemplateId, Template<'static>>,
     pub(crate) scopes: Slab<ScopeState>,
-    pub(crate) element_stack: Vec<ElementId>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -236,7 +235,6 @@ impl VirtualDom {
             scopes: Slab::default(),
             elements: Default::default(),
             scope_stack: Vec::new(),
-            element_stack: vec![ElementId(0)],
             dirty_scopes: BTreeSet::new(),
             collected_leaves: Vec::new(),
             finished_fibers: Vec::new(),

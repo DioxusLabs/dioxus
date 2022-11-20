@@ -13,10 +13,7 @@ pub trait AnyProps<'a> {
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
 }
 
-pub(crate) struct VComponentProps<'a, P, A, F = Element<'a>>
-where
-    F: ComponentReturn<'a, A>,
-{
+pub(crate) struct VComponentProps<'a, P, A, F: ComponentReturn<'a, A> = Element<'a>> {
     pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,

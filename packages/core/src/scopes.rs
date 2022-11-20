@@ -27,6 +27,11 @@ use std::{
 /// component render.
 pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
 
+// This ScopedType exists because we want to limit the amount of monomorphization that occurs when making inner
+// state type generic over props. When the state is generic, it causes every method to be monomorphized for every
+// instance of Scope<T> in the codebase.
+//
+//
 /// A wrapper around a component's [`ScopeState`] and properties. The [`ScopeState`] provides the majority of methods
 /// for the VirtualDom and component state.
 pub struct Scoped<'a, T = ()> {
@@ -64,7 +69,6 @@ pub struct ScopeState {
     pub(crate) node_arena_2: BumpFrame,
 
     pub(crate) parent: Option<*mut ScopeState>,
-    pub(crate) container: ElementId,
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
@@ -78,7 +82,7 @@ pub struct ScopeState {
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
 
-    pub(crate) props: *mut dyn AnyProps<'static>,
+    pub(crate) props: *const dyn AnyProps<'static>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 

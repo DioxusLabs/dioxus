@@ -5,6 +5,7 @@ mod create;
 mod diff;
 mod events;
 mod factory;
+mod fragment;
 mod garbage;
 mod lazynodes;
 mod mutations;
@@ -18,6 +19,7 @@ mod virtual_dom;
 pub(crate) mod innerlude {
     pub use crate::arena::*;
     pub use crate::events::*;
+    pub use crate::fragment::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
     pub use crate::nodes::*;

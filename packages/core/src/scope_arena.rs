@@ -1,6 +1,5 @@
 use crate::{
     any_props::AnyProps,
-    arena::ElementId,
     bump_frame::BumpFrame,
     factory::RenderReturn,
     innerlude::{SuspenseId, SuspenseLeaf},
@@ -19,18 +18,16 @@ use std::{
 impl VirtualDom {
     pub(super) fn new_scope(&mut self, props: *mut dyn AnyProps<'static>) -> &mut ScopeState {
         let parent = self.acquire_current_scope_raw();
-        let container = self.acquire_current_container();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height).unwrap_or(0) + 1 };
         let id = ScopeId(entry.key());
 
         entry.insert(ScopeState {
             parent,
-            container,
             id,
             height,
             props,
-            placeholder: None.into(),
+            placeholder: Default::default(),
             node_arena_1: BumpFrame::new(50),
             node_arena_2: BumpFrame::new(50),
             spawned_tasks: Default::default(),
@@ -41,13 +38,6 @@ impl VirtualDom {
             shared_contexts: Default::default(),
             tasks: self.scheduler.clone(),
         })
-    }
-
-    fn acquire_current_container(&self) -> ElementId {
-        self.element_stack
-            .last()
-            .copied()
-            .expect("Always have a container")
     }
 
     fn acquire_current_scope_raw(&mut self) -> Option<*mut ScopeState> {
@@ -65,15 +55,12 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
-        println!("run_scope: {:?}", scope_id);
-
         let mut new_nodes = unsafe {
             let scope = &mut self.scopes[scope_id.0];
-            println!("run_scope: scope: {:?}", scope.render_cnt.get());
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
-            let props: &mut dyn AnyProps = mem::transmute(&mut *scope.props);
+            let props: &dyn AnyProps = mem::transmute(&*scope.props);
             props.render(scope).extend_lifetime()
         };
 
@@ -126,16 +113,12 @@ impl VirtualDom {
             }
         };
 
-        /*
-        todo: use proper mutability here
+        let scope = &self.scopes[scope_id.0];
 
-        right now we're aliasing the scope, which is not allowed
-        */
+        // We write on top of the previous frame and then make it the current by pushing the generation forward
+        let frame = scope.previous_frame();
 
-        let scope = &mut self.scopes[scope_id.0];
-        let frame = scope.current_frame();
-
-        // set the head of the bump frame
+        // set the new head of the bump frame
         let alloced = frame.bump.alloc(new_nodes);
         frame.node.set(alloced);
 

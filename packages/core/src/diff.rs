@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use crate::factory::RenderReturn;
-use crate::innerlude::Mutations;
+use crate::innerlude::{Mutations, VComponent, VFragment, VText};
 use crate::virtual_dom::VirtualDom;
 use crate::{Attribute, AttributeValue, TemplateNode};
 
@@ -42,16 +42,12 @@ impl<'b> VirtualDom {
     pub fn diff_scope(&mut self, mutations: &mut Mutations<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
 
-        let cur_arena = scope_state.previous_frame();
-        let prev_arena = scope_state.current_frame();
-        // let cur_arena = scope_state.current_frame();
-        // let prev_arena = scope_state.previous_frame();
-
-        // relax the borrow checker
-        let cur_arena: &BumpFrame = unsafe { std::mem::transmute(cur_arena) };
-        let prev_arena: &BumpFrame = unsafe { std::mem::transmute(prev_arena) };
+        // Load the old and new bump arenas
+        let cur_arena = scope_state.current_frame();
+        let prev_arena = scope_state.previous_frame();
 
         // Make sure the nodes arent null (they've been set properly)
+        // This is a rough check to make sure we're not entering any UB
         assert_ne!(
             cur_arena.node.get(),
             std::ptr::null_mut(),
@@ -64,11 +60,11 @@ impl<'b> VirtualDom {
         );
 
         self.scope_stack.push(scope);
-
-        let left = unsafe { prev_arena.load_node() };
-        let right = unsafe { cur_arena.load_node() };
-
-        self.diff_maybe_node(mutations, left, right);
+        unsafe {
+            let cur_arena = cur_arena.load_node();
+            let prev_arena = prev_arena.load_node();
+            self.diff_maybe_node(mutations, prev_arena, cur_arena);
+        }
         self.scope_stack.pop();
     }
 
@@ -109,10 +105,9 @@ impl<'b> VirtualDom {
         left_template: &'b VNode<'b>,
         right_template: &'b VNode<'b>,
     ) {
-        println!("diffing {:?} and {:?}", left_template, right_template);
-
         if left_template.template.id != right_template.template.id {
             // do a light diff of the roots nodes.
+            todo!("lightly diff roots and replace");
             return;
         }
 
@@ -122,23 +117,21 @@ impl<'b> VirtualDom {
             .zip(right_template.dynamic_attrs.iter())
             .enumerate()
         {
-            debug_assert!(left_attr.name == right_attr.name);
-            debug_assert!(left_attr.value == right_attr.value);
-
             // Move over the ID from the old to the new
             right_attr
                 .mounted_element
                 .set(left_attr.mounted_element.get());
 
             if left_attr.value != right_attr.value {
-                println!("DIFF ATTR: {:?} -> {:?}", left_attr, right_attr);
-                let value = "todo!()";
-                muts.push(Mutation::SetAttribute {
-                    id: left_attr.mounted_element.get(),
-                    name: left_attr.name,
-                    value,
-                    ns: right_attr.namespace,
-                });
+                // todo: add more types of attribute values
+                if let AttributeValue::Text(text) = right_attr.value {
+                    muts.push(Mutation::SetAttribute {
+                        id: left_attr.mounted_element.get(),
+                        name: left_attr.name,
+                        value: text,
+                        ns: right_attr.namespace,
+                    });
+                }
             }
         }
 
@@ -148,100 +141,186 @@ impl<'b> VirtualDom {
             .zip(right_template.dynamic_nodes.iter())
             .enumerate()
         {
-            #[rustfmt::skip]
+            use DynamicNode::*;
+
             match (left_node, right_node) {
-                (DynamicNode::Component { props: lprops, .. }, DynamicNode::Component {  static_props: is_static , props: rprops, .. }) => {
-                    let left_props = unsafe { &mut *lprops.get()};
-                    let right_props = unsafe { &mut *rprops.get()};
+                (Component(left), Component(right)) => self.diff_vcomponent(muts, left, right),
+                (Text(left), Text(right)) => self.diff_vtext(muts, left, right),
+                (Fragment(left), Fragment(right)) => self.diff_vfragment(muts, left, right),
 
-                    // Ensure these two props are of the same component type
-                    match left_props.as_ptr() == right_props.as_ptr()  {
-                        true => {
-                            //
+                (Placeholder(_), Placeholder(_)) => todo!(),
 
-                            if *is_static {
-                                let props_are_same = unsafe { left_props.memoize(right_props)  };
+                // Make sure to drop all the fragment children properly
+                (DynamicNode::Fragment { .. }, right) => todo!(),
 
-                                if props_are_same{
-                                    //
-                                } else {
-                                    //
-                                }
-                            } else {
-
-                            }
-
-                        },
-                        false => todo!(),
-                    }
-                    //
-                },
-
+                (Text(left), right) => {
+                    todo!()
+                    // let m = self.create_dynamic_node(muts, right_template, right, idx);
+                    // muts.push(Mutation::ReplaceWith { id: lid.get(), m });
+                }
+                (Placeholder(_), _) => todo!(),
                 // Make sure to drop the component properly
-                (DynamicNode::Component { .. }, right) => {
+                (Component { .. }, right) => {
                     // remove all the component roots except for the first
                     // replace the first with the new node
                     let m = self.create_dynamic_node(muts, right_template, right, idx);
                     todo!()
-                },
-
-                (DynamicNode::Text { id: lid, value: lvalue, .. }, DynamicNode::Text { id: rid, value: rvalue, .. }) => {
-                    rid.set(lid.get());
-                    if lvalue != rvalue {
-                        muts.push(Mutation::SetText {
-                            id: lid.get(),
-                            value: rvalue,
-                        });
-                    }
-                },
-
-                (DynamicNode::Text { id: lid, .. }, right) => {
-                    let m = self.create_dynamic_node(muts, right_template, right, idx);
-                    muts.push(Mutation::ReplaceWith { id: lid.get(), m });
                 }
-
-                (DynamicNode::Placeholder(_), DynamicNode::Placeholder(_)) => todo!(),
-                (DynamicNode::Placeholder(_), _) => todo!(),
-
-
-                (DynamicNode::Fragment { nodes: lnodes, ..}, DynamicNode::Fragment { nodes: rnodes, ..}) => {
-
-
-                    // match (old, new) {
-                    //     ([], []) => rp.set(lp.get()),
-                    //     ([], _) => {
-                    //         //
-                    //         todo!()
-                    //     },
-                    //     (_, []) => {
-                    //         todo!()
-                    //     },
-                    //     _ => {
-                    //         let new_is_keyed = new[0].key.is_some();
-                    //         let old_is_keyed = old[0].key.is_some();
-
-                    //         debug_assert!(
-                    //             new.iter().all(|n| n.key.is_some() == new_is_keyed),
-                    //             "all siblings must be keyed or all siblings must be non-keyed"
-                    //         );
-                    //         debug_assert!(
-                    //             old.iter().all(|o| o.key.is_some() == old_is_keyed),
-                    //             "all siblings must be keyed or all siblings must be non-keyed"
-                    //         );
-
-                    //         if new_is_keyed && old_is_keyed {
-                    //             self.diff_keyed_children(muts, old, new);
-                    //         } else {
-                    //             self.diff_non_keyed_children(muts, old, new);
-                    //         }
-                    //     }
-                    // }
-                },
-
-                // Make sure to drop all the fragment children properly
-                (DynamicNode::Fragment { .. }, right) => todo!(),
             };
         }
+    }
+
+    fn diff_vcomponent(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        left: &'b VComponent<'b>,
+        right: &'b VComponent<'b>,
+    ) {
+        let left_props = unsafe { &mut *left.props.get() };
+        let right_props = unsafe { &mut *right.props.get() };
+
+        // Ensure these two props are of the same component type
+        match left_props.as_ptr() == right_props.as_ptr() {
+            true => {
+                //
+                if left.static_props {
+                    let props_are_same = unsafe { left_props.memoize(right_props) };
+
+                    if props_are_same {
+                        //
+                    } else {
+                        //
+                    }
+                } else {
+                }
+            }
+            false => todo!(),
+        }
+    }
+
+    /// Lightly diff the two templates, checking only their roots.
+    ///
+    /// The goal here is to preserve any existing component state that might exist. This is to preserve some React-like
+    /// behavior where the component state is preserved when the component is re-rendered.
+    ///
+    /// This is implemented by iterating each root, checking if the component is the same, if it is, then diff it.
+    ///
+    /// We then pass the new template through "create" which should be smart enough to skip roots.
+    ///
+    /// Currently, we only handle the case where the roots are the same component list. If there's any sort of deviation,
+    /// IE more nodes, less nodes, different nodes, or expressions, then we just replace the whole thing.
+    ///
+    /// This is mostly implemented to help solve the issue where the same component is rendered under two different
+    /// conditions:
+    ///
+    /// ```rust
+    /// if enabled {
+    ///     rsx!{ Component { enabled_sign: "abc" } }
+    /// } else {
+    ///     rsx!{ Component { enabled_sign: "xyz" } }
+    /// }
+    /// ```
+    ///
+    /// However, we should not that it's explicit in the docs that this is not a guarantee. If you need to preserve state,
+    /// then you should be passing in separate props instead.
+    ///
+    /// ```
+    ///
+    /// let props = if enabled {
+    ///     ComponentProps { enabled_sign: "abc" }
+    /// } else {
+    ///     ComponentProps { enabled_sign: "xyz" }
+    /// };
+    ///
+    /// rsx! {
+    ///     Component { ..props }
+    /// }
+    /// ```
+    fn light_diff_tempaltes(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        left: &'b VNode<'b>,
+        right: &'b VNode<'b>,
+    ) -> bool {
+        if left.template.roots.len() != right.template.roots.len() {
+            return false;
+        }
+
+        let mut components = vec![];
+
+        // run through the components, ensuring they're the same
+        for (l, r) in left.template.roots.iter().zip(right.template.roots.iter()) {
+            match (l, r) {
+                (TemplateNode::Dynamic(l), TemplateNode::Dynamic(r)) => {
+                    components.push(match (&left.dynamic_nodes[*l], &right.dynamic_nodes[*r]) {
+                        (DynamicNode::Component(l), DynamicNode::Component(r)) => {
+                            let l_props = unsafe { &*l.props.get() };
+                            let r_props = unsafe { &*r.props.get() };
+
+                            (l, r)
+                        }
+                        _ => return false,
+                    })
+                }
+                _ => return false,
+            }
+        }
+
+        // run through the components, diffing them
+        for (l, r) in components {
+            self.diff_vcomponent(muts, l, r);
+        }
+
+        true
+    }
+
+    fn diff_vtext(&mut self, muts: &mut Mutations<'b>, left: &'b VText<'b>, right: &'b VText<'b>) {
+        right.id.set(left.id.get());
+        if left.value != right.value {
+            muts.push(Mutation::SetText {
+                id: left.id.get(),
+                value: right.value,
+            });
+        }
+    }
+
+    fn diff_vfragment(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        left: &'b VFragment<'b>,
+        right: &'b VFragment<'b>,
+    ) {
+        // match (left.nodes, right.nodes) {
+        //     ([], []) => rp.set(lp.get()),
+        //     ([], _) => {
+        //         //
+        //         todo!()
+        //     }
+        //     (_, []) => {
+        //         todo!()
+        //     }
+        //     _ => {
+        //         let new_is_keyed = new[0].key.is_some();
+        //         let old_is_keyed = old[0].key.is_some();
+
+        //         debug_assert!(
+        //             new.iter().all(|n| n.key.is_some() == new_is_keyed),
+        //             "all siblings must be keyed or all siblings must be non-keyed"
+        //         );
+        //         debug_assert!(
+        //             old.iter().all(|o| o.key.is_some() == old_is_keyed),
+        //             "all siblings must be keyed or all siblings must be non-keyed"
+        //         );
+
+        //         if new_is_keyed && old_is_keyed {
+        //             self.diff_keyed_children(muts, old, new);
+        //         } else {
+        //             self.diff_non_keyed_children(muts, old, new);
+        //         }
+        //     }
+        // }
+
+        todo!()
     }
 
     // Diff children that are not keyed.
@@ -614,62 +693,3 @@ impl<'b> VirtualDom {
         //
     }
 }
-
-// /// Lightly diff the two templates and apply their edits to the dom
-// fn light_diff_template_roots(
-//     &'a mut self,
-//     mutations: &mut Vec<Mutation<'a>>,
-//     left: &VNode,
-//     right: &VNode,
-// ) {
-//     match right.template.roots.len().cmp(&left.template.roots.len()) {
-//         std::cmp::Ordering::Less => {
-//             // remove the old nodes at the end
-//         }
-//         std::cmp::Ordering::Greater => {
-//             // add the extra nodes.
-//         }
-//         std::cmp::Ordering::Equal => {}
-//     }
-
-//     for (left_node, right_node) in left.template.roots.iter().zip(right.template.roots.iter()) {
-//         if let (TemplateNode::Dynamic(lidx), TemplateNode::Dynamic(ridx)) =
-//             (left_node, right_node)
-//         {
-//             let left_node = &left.dynamic_nodes[*lidx];
-//             let right_node = &right.dynamic_nodes[*ridx];
-
-//             // match (left_node, right_node) {
-//             //     (
-//             //         DynamicNode::Component {
-//             //             name,
-//             //             can_memoize,
-//             //             props,
-//             //         },
-//             //         DynamicNode::Component {
-//             //             name,
-//             //             can_memoize,
-//             //             props,
-//             //         },
-//             //     ) => todo!(),
-//             //     (
-//             //         DynamicNode::Component {
-//             //             name,
-//             //             can_memoize,
-//             //             props,
-//             //         },
-//             //         DynamicNode::Fragment { children },
-//             //     ) => todo!(),
-//             //     (
-//             //         DynamicNode::Fragment { children },
-//             //         DynamicNode::Component {
-//             //             name,
-//             //             can_memoize,
-//             //             props,
-//             //         },
-//             //     ) => todo!(),
-//             //     _ => {}
-//             // }
-//         }
-//     }
-// }

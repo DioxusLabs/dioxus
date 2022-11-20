@@ -10,7 +10,7 @@ use std::future::Future;
 use crate::{
     any_props::{AnyProps, VComponentProps},
     arena::ElementId,
-    innerlude::{DynamicNode, EventHandler},
+    innerlude::{DynamicNode, EventHandler, VComponent, VFragment, VText},
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
 
@@ -18,11 +18,11 @@ impl ScopeState {
     /// Create some text that's allocated along with the other vnodes
     pub fn text<'a>(&'a self, args: Arguments) -> DynamicNode<'a> {
         let (text, _) = self.raw_text(args);
-        DynamicNode::Text {
+        DynamicNode::Text(VText {
             id: Cell::new(ElementId(0)),
             value: text,
             inner: false,
-        }
+        })
     }
 
     pub fn raw_text_inline<'a>(&'a self, args: Arguments) -> &'a str {
@@ -87,13 +87,13 @@ impl ScopeState {
         //     self.scope.items.borrow_mut().borrowed_props.push(vcomp);
         // }
 
-        DynamicNode::Component {
+        DynamicNode::Component(VComponent {
             name: fn_name,
             static_props: P::IS_STATIC,
             props: Cell::new(detached_dyn),
             placeholder: Cell::new(None),
             scope: Cell::new(None),
-        }
+        })
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
@@ -176,10 +176,10 @@ impl<'a, 'b, T: IntoDynNode<'a>> IntoDynNode<'a> for &Option<T> {
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment {
+        DynamicNode::Fragment(VFragment {
             nodes: cx.bump().alloc([self.call(cx)]),
             inner: false,
-        }
+        })
     }
 }
 
@@ -248,10 +248,10 @@ where
 
         match children.len() {
             0 => DynamicNode::Placeholder(Cell::new(ElementId(0))),
-            _ => DynamicNode::Fragment {
+            _ => DynamicNode::Fragment(VFragment {
                 inner: false,
                 nodes: children,
-            },
+            }),
         }
     }
 }

@@ -3,28 +3,38 @@ use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     hash::Hasher,
-    rc::Rc,
 };
 
 pub type TemplateId = &'static str;
 
 /// A reference to a template along with any context needed to hydrate it
+///
+/// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
+/// static parts of the template.
 #[derive(Debug)]
 pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
 
+    /// The key given to the root of this template.
+    ///
+    /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
     pub key: Option<&'a str>,
 
-    // When rendered, this template will be linked to its parent manually
+    /// When rendered, this template will be linked to its parent manually
     pub parent: Option<ElementId>,
 
+    /// The static nodes and static descriptor of the template
     pub template: Template<'static>,
 
+    /// The IDs for the roots of this template - to be used when moving the template around and removing it from
+    /// the actual Dom
     pub root_ids: &'a [Cell<ElementId>],
 
+    /// The dynamic parts of the template
     pub dynamic_nodes: &'a [DynamicNode<'a>],
 
+    /// The dynamic parts of the template
     pub dynamic_attrs: &'a [Attribute<'a>],
 }
 
@@ -109,23 +119,38 @@ pub enum TemplateNode<'a> {
 
 #[derive(Debug)]
 pub enum DynamicNode<'a> {
-    Component {
-        name: &'static str,
-        static_props: bool,
-        props: Cell<*mut dyn AnyProps<'a>>,
-        placeholder: Cell<Option<ElementId>>,
-        scope: Cell<Option<ScopeId>>,
-    },
-    Text {
-        id: Cell<ElementId>,
-        value: &'a str,
-        inner: bool,
-    },
-    Fragment {
-        nodes: &'a [VNode<'a>],
-        inner: bool,
-    },
+    Component(VComponent<'a>),
+    Text(VText<'a>),
+    Fragment(VFragment<'a>),
     Placeholder(Cell<ElementId>),
+}
+
+impl<'a> DynamicNode<'a> {
+    pub fn is_component(&self) -> bool {
+        matches!(self, DynamicNode::Component(_))
+    }
+}
+
+#[derive(Debug)]
+pub struct VComponent<'a> {
+    pub name: &'static str,
+    pub static_props: bool,
+    pub props: Cell<*mut dyn AnyProps<'a>>,
+    pub placeholder: Cell<Option<ElementId>>,
+    pub scope: Cell<Option<ScopeId>>,
+}
+
+#[derive(Debug)]
+pub struct VText<'a> {
+    pub id: Cell<ElementId>,
+    pub value: &'a str,
+    pub inner: bool,
+}
+
+#[derive(Debug)]
+pub struct VFragment<'a> {
+    pub nodes: &'a [VNode<'a>],
+    pub inner: bool,
 }
 
 #[derive(Debug)]
@@ -163,32 +188,16 @@ impl<'a> AttributeValue<'a> {
         cx: &'a ScopeState,
         mut f: impl FnMut(UiEvent<T>) + 'a,
     ) -> AttributeValue<'a> {
-        println!("creating listener with type od id {:?}", TypeId::of::<T>());
-
-        let f = cx.bump().alloc(move |a: UiEvent<dyn Any>| {
-            println!(
-                "incoming: {:?}, desired {:?}",
-                a.data.type_id(),
-                std::any::TypeId::of::<T>()
-            );
-
-            let data = a.data.downcast::<T>().unwrap();
-
-            // println!("casting to type {:?}", TypeId::of::<T>());
-
-            f(UiEvent {
-                bubbles: a.bubbles,
-                data,
-            })
-
-            // println!("listener called");
-            // if let Some(event) = a.downcast::<T>() {
-            //     println!("downcast success");
-            //     f(event)
-            // }
-        }) as &mut dyn FnMut(UiEvent<dyn Any>);
-
-        AttributeValue::Listener(RefCell::new(f))
+        AttributeValue::Listener(RefCell::new(cx.bump().alloc(
+            move |event: UiEvent<dyn Any>| {
+                if let Ok(data) = event.data.downcast::<T>() {
+                    f(UiEvent {
+                        bubbles: event.bubbles,
+                        data,
+                    })
+                }
+            },
+        )))
     }
 }
 

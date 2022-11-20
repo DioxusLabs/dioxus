@@ -17,18 +17,18 @@ impl<'b> VirtualDom {
         template: &'b VNode<'b>,
         gen_roots: bool,
     ) {
-        for node in template.dynamic_nodes.iter() {
-            match node {
-                DynamicNode::Text { id, .. } => {}
+        // for node in template.dynamic_nodes.iter() {
+        //     match node {
+        //         DynamicNode::Text { id, .. } => {}
 
-                DynamicNode::Component { .. } => {
-                    todo!()
-                }
+        //         DynamicNode::Component { .. } => {
+        //             todo!()
+        //         }
 
-                DynamicNode::Fragment { inner, nodes } => {}
-                DynamicNode::Placeholder(_) => todo!(),
-                _ => todo!(),
-            }
-        }
+        //         DynamicNode::Fragment { inner, nodes } => {}
+        //         DynamicNode::Placeholder(_) => todo!(),
+        //         _ => todo!(),
+        //     }
+        // }
     }
 }

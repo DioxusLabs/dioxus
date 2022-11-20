@@ -1,5 +1,5 @@
 use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, SuspenseContext};
+use crate::innerlude::{Mutations, SuspenseContext, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -70,9 +70,11 @@ impl VirtualDom {
                                 &template.dynamic_nodes[*id],
                                 *id,
                             ),
-                        DynamicNode::Text {
-                            id: slot, value, ..
-                        } => {
+                        DynamicNode::Text(VText {
+                            id: slot,
+                            value,
+                            inner,
+                        }) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             mutations.push(CreateTextNode { value, id });
@@ -237,7 +239,7 @@ impl VirtualDom {
         idx: usize,
     ) -> usize {
         match &node {
-            DynamicNode::Text { id, value, .. } => {
+            DynamicNode::Text(VText { id, value, inner }) => {
                 let new_id = self.next_element(template, template.template.node_paths[idx]);
                 id.set(new_id);
                 mutations.push(HydrateText {
@@ -248,17 +250,12 @@ impl VirtualDom {
                 0
             }
 
-            DynamicNode::Component {
-                props,
-                placeholder,
-                scope: scope_slot,
-                ..
-            } => {
+            DynamicNode::Component(component) => {
                 let scope = self
-                    .new_scope(unsafe { std::mem::transmute(props.get()) })
+                    .new_scope(unsafe { std::mem::transmute(component.props.get()) })
                     .id;
 
-                scope_slot.set(Some(scope));
+                component.scope.set(Some(scope));
 
                 let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
 
@@ -269,7 +266,7 @@ impl VirtualDom {
 
                     RenderReturn::Async(_) => {
                         let new_id = self.next_element(template, template.template.node_paths[idx]);
-                        placeholder.set(Some(new_id));
+                        component.placeholder.set(Some(new_id));
                         self.scopes[scope.0].placeholder.set(Some(new_id));
 
                         mutations.push(AssignId {
@@ -306,7 +303,7 @@ impl VirtualDom {
                                 // Since this is a boundary, use it as a placeholder
                                 let new_id =
                                     self.next_element(template, template.template.node_paths[idx]);
-                                placeholder.set(Some(new_id));
+                                component.placeholder.set(Some(new_id));
                                 self.scopes[scope.0].placeholder.set(Some(new_id));
                                 mutations.push(AssignId {
                                     id: new_id,
@@ -342,9 +339,9 @@ impl VirtualDom {
                 }
             }
 
-            DynamicNode::Fragment { nodes, .. } => {
-                //
-                nodes
+            DynamicNode::Fragment(frag) => {
+                // Todo: if there's no children create a placeholder instead ?
+                frag.nodes
                     .iter()
                     .fold(0, |acc, child| acc + self.create(mutations, child))
             }
