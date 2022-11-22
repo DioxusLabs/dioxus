@@ -563,6 +563,9 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::ForLoop(expr)),
                     ),
+                    parent,
+                    depth,
+                    fully_static: false,
                 });
             }
             BodyNode::IfChain(expr) => {
@@ -571,6 +574,9 @@ impl TemplateBuilder {
                     node_type: TemplateNodeTypeBuilder::DynamicNode(
                         self.dynamic_context.add_node(BodyNode::IfChain(expr)),
                     ),
+                    parent,
+                    depth,
+                    fully_static: false,
                 });
             }
         }
