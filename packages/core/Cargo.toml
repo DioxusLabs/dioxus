@@ -47,6 +47,9 @@ backtrace = { version = "0.3" }
 # allows cloing trait objects
 dyn-clone = "1.0.9"
 
+[dev-dependencies]
+dioxus = { path = "../dioxus" }
+
 [features]
 default = []
 serialize = ["serde"]
