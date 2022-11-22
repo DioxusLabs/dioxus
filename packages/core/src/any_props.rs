@@ -22,14 +22,6 @@ pub(crate) struct VProps<'a, P, A, F: ComponentReturn<'a, A> = Element<'a>> {
     _marker: PhantomData<A>,
 }
 
-enum PropsAllocation<P> {
-    /// If it's memoized, then the heap owns the props
-    Memoized(*mut P),
-
-    /// If it's borrowed, then the parent owns the props
-    Borrowed(P),
-}
-
 impl<'a, P, A, F> VProps<'a, P, A, F>
 where
     F: ComponentReturn<'a, A>,

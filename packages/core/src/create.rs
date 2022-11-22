@@ -19,17 +19,9 @@ impl VirtualDom {
         mutations: &mut Mutations<'a>,
         template: &'a VNode<'a>,
     ) -> usize {
-        let mutations_to_this_point = mutations.len();
-
         self.scope_stack.push(scope);
         let out = self.create(mutations, template);
         self.scope_stack.pop();
-
-        if !self.collected_leaves.is_empty() {
-            if let Some(boundary) = self.scopes[scope.0].has_context::<SuspenseContext>() {
-                println!("Boundary detected and pending leaves!");
-            }
-        }
 
         out
     }
@@ -338,97 +330,78 @@ impl VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Some(t)) => self.create_component(mutations, scope, t, idx, component),
+            Sync(Some(t)) => self.mount_component(mutations, scope, t, idx),
             Sync(None) | Async(_) => {
-                self.create_component_placeholder(template, idx, component, scope, mutations)
+                self.mount_component_placeholder(template, idx, scope, mutations)
             }
         }
     }
 
-    fn create_component<'a>(
+    fn mount_component<'a>(
         &mut self,
         mutations: &mut Mutations<'a>,
         scope: ScopeId,
         template: &'a VNode<'a>,
         idx: usize,
-        component: &'a VComponent<'a>,
     ) -> usize {
-        // // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
-        // // is encountered
-        // let mutations_to_this_point = mutations.len();
+        // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
+        // is encountered
+        let mutations_to_this_point = mutations.len();
 
         // Create the component's root element
         let created = self.create_scope(scope, mutations, template);
 
-        if !self.collected_leaves.is_empty() {
-            println!("collected leaves: {:?}", self.collected_leaves);
+        // If there are no suspense leaves below us, then just don't bother checking anything suspense related
+        if self.collected_leaves.is_empty() {
+            return created;
         }
 
-        created
+        // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
+        let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
+            Some(boundary) => boundary,
+            _ => return created,
+        };
 
-        // // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        // let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
-        //     Some(boundary) if !self.collected_leaves.is_empty() => boundary,
-        //     _ => return created,
-        // };
+        // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
+        let new_id = self.next_element(template, template.template.node_paths[idx]);
 
-        // // Since this is a boundary, use it as a placeholder
-        // let new_id = self.next_element(template, template.template.node_paths[idx]);
-        // component.placeholder.set(Some(new_id));
-        // self.scopes[scope.0].placeholder.set(Some(new_id));
-        // mutations.push(AssignId {
-        //     id: new_id,
-        //     path: &template.template.node_paths[idx][1..],
-        // });
+        // Now connect everything to the boundary
+        self.scopes[scope.0].placeholder.set(Some(new_id));
 
-        // // Now connect everything to the boundary
-        // let boundary_mut = boundary;
-        // let split_off = mutations.split_off(mutations_to_this_point);
-        // let split_off: Vec<Mutation> = unsafe { std::mem::transmute(split_off) };
+        // This involves breaking off the mutations to this point, and then creating a new placeholder for the boundary
+        // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
+        let split_off = unsafe {
+            std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
+                mutations.split_off(mutations_to_this_point),
+            )
+        };
+        boundary.mutations.borrow_mut().edits.extend(split_off);
+        boundary.created_on_stack.set(created);
+        boundary
+            .waiting_on
+            .borrow_mut()
+            .extend(self.collected_leaves.drain(..));
 
-        // if boundary_mut.placeholder.get().is_none() {
-        //     boundary_mut.placeholder.set(Some(new_id));
-        // }
+        // Now assign the placeholder in the DOM
+        mutations.push(AssignId {
+            id: new_id,
+            path: &template.template.node_paths[idx][1..],
+        });
 
-        // // In the generated edits, we want to pick off from where we left off.
-        // boundary_mut.mutations.borrow_mut().edits.extend(split_off);
-
-        // boundary_mut
-        //     .waiting_on
-        //     .borrow_mut()
-        //     .extend(self.collected_leaves.drain(..));
-
-        // 0
-
-        // let boudary = self.scopes[scope.0]
-        //     .consume_context::<SuspenseContext>()
-        //     .unwrap();
-
-        // boudary
-        //     .waiting_on
-        //     .borrow_mut()
-        //     .extend(self.collected_leaves.drain(..));
-
-        // if boudary.placeholder.get().is_none() {
-        //     boudary.placeholder.set(Some(new_id));
-        // }
+        0
     }
 
     /// Take the rendered nodes from a component and handle them if they were async
     ///
     /// IE simply assign an ID to the placeholder
-    fn create_component_placeholder(
+    fn mount_component_placeholder(
         &mut self,
         template: &VNode,
         idx: usize,
-        component: &VComponent,
         scope: ScopeId,
         mutations: &mut Mutations,
     ) -> usize {
         let new_id = self.next_element(template, template.template.node_paths[idx]);
-
-        // Set the placeholder of the component
-        component.placeholder.set(Some(new_id));
 
         // Set the placeholder of the scope
         self.scopes[scope.0].placeholder.set(Some(new_id));

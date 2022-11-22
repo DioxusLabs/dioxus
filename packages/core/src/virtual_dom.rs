@@ -19,6 +19,7 @@ use futures_util::{pin_mut, StreamExt};
 use slab::Slab;
 use std::{
     any::Any,
+    borrow::BorrowMut,
     cell::Cell,
     collections::{BTreeSet, HashMap},
     future::Future,
@@ -541,9 +542,35 @@ impl VirtualDom {
                 self.dirty_scopes.remove(&dirty);
 
                 // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
-                if !self.is_scope_suspended(dirty.id) {
-                    self.run_scope(dirty.id);
-                    self.diff_scope(&mut mutations, dirty.id);
+                if self.is_scope_suspended(dirty.id) {
+                    continue;
+                }
+
+                // Save the current mutations length so we can split them into boundary
+                let mutations_to_this_point = mutations.len();
+
+                self.diff_scope(&mut mutations, dirty.id);
+
+                // If suspended leaves are present, then we should find the boundary for this scope and attach things
+                // No placeholder necessary since this is a diff
+                if !self.collected_leaves.is_empty() {
+                    let mut boundary = self.scopes[dirty.id.0]
+                        .consume_context::<SuspenseContext>()
+                        .unwrap();
+
+                    let boundary_mut = boundary.borrow_mut();
+
+                    // Attach mutations
+                    boundary_mut
+                        .mutations
+                        .borrow_mut()
+                        .extend(mutations.split_off(mutations_to_this_point));
+
+                    // Attach suspended leaves
+                    boundary
+                        .waiting_on
+                        .borrow_mut()
+                        .extend(self.collected_leaves.drain(..));
                 }
             }
 

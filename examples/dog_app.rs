@@ -63,7 +63,10 @@ async fn breed_pic(cx: Scope, breed: String) -> Element {
         Ok(resp) => render! {
             div {
                 button {
-                    onclick: move |_| fut.restart(),
+                    onclick: move |_| {
+                        println!("clicked");
+                        fut.restart()
+                    },
                     "Click to fetch another doggo"
                 }
                 img {

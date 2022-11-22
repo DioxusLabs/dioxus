@@ -15,7 +15,7 @@ async fn it_works() {
 fn app(cx: Scope) -> Element {
     println!("running root app");
 
-    VNode::single_component(
+    VNode::template_from_dynamic_node(
         cx,
         cx.component(suspense_boundary, (), "suspense_boundary"),
         "app",
@@ -29,7 +29,7 @@ fn suspense_boundary(cx: Scope) -> Element {
         cx.provide_context(Rc::new(RefCell::new(SuspenseBoundary::new(cx.scope_id()))))
     });
 
-    VNode::single_component(cx, cx.component(async_child, (), "async_child"), "app")
+    VNode::template_from_dynamic_node(cx, cx.component(async_child, (), "async_child"), "app")
 }
 
 async fn async_child(cx: Scope<'_>) -> Element {
@@ -47,7 +47,7 @@ async fn async_child(cx: Scope<'_>) -> Element {
 
     println!("Future awaited and complete");
 
-    VNode::single_component(cx, cx.component(async_text, (), "async_text"), "app")
+    VNode::template_from_dynamic_node(cx, cx.component(async_text, (), "async_text"), "app")
 }
 
 async fn async_text(cx: Scope<'_>) -> Element {

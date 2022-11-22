@@ -20,6 +20,8 @@ pub struct SuspenseBoundary {
     pub mutations: RefCell<Mutations<'static>>,
     pub placeholder: Cell<Option<ElementId>>,
 
+    pub created_on_stack: Cell<usize>,
+
     // whenever the suspense resolves, we call this onresolve function
     // this lets us do things like putting up a loading spinner
     //
@@ -41,6 +43,7 @@ impl SuspenseBoundary {
             waiting_on: Default::default(),
             mutations: RefCell::new(Mutations::new(0)),
             placeholder: Cell::new(None),
+            created_on_stack: Cell::new(0),
             onresolve: None,
             onstart: None,
         })

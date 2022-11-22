@@ -92,7 +92,6 @@ impl ScopeState {
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
             props: Cell::new(Some(extended)),
-            placeholder: Cell::new(None),
             scope: Cell::new(None),
         })
     }

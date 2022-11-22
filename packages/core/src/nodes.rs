@@ -39,7 +39,16 @@ pub struct VNode<'a> {
 }
 
 impl<'a> VNode<'a> {
-    pub fn single_component(
+    pub fn placeholder_template(cx: &'a ScopeState) -> Self {
+        Self::template_from_dynamic_node(
+            cx,
+            DynamicNode::Placeholder(Cell::new(ElementId(0))),
+            "dioxus-placeholder",
+        )
+        .unwrap()
+    }
+
+    pub fn template_from_dynamic_node(
         cx: &'a ScopeState,
         node: DynamicNode<'a>,
         id: &'static str,
@@ -134,7 +143,6 @@ impl<'a> DynamicNode<'a> {
 pub struct VComponent<'a> {
     pub name: &'static str,
     pub static_props: bool,
-    pub placeholder: Cell<Option<ElementId>>,
     pub scope: Cell<Option<ScopeId>>,
     pub props: Cell<Option<Box<dyn AnyProps<'a> + 'a>>>,
     pub render_fn: *const (),
@@ -145,7 +153,6 @@ impl<'a> std::fmt::Debug for VComponent<'a> {
         f.debug_struct("VComponent")
             .field("name", &self.name)
             .field("static_props", &self.static_props)
-            .field("placeholder", &self.placeholder)
             .field("scope", &self.scope)
             .finish()
     }

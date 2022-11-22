@@ -323,6 +323,8 @@ export class Interpreter {
         this.RemoveEventListener(edit.id, edit.event_name);
         break;
       case "NewEventListener":
+        // console.log("creating listener! ", edit);
+
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
