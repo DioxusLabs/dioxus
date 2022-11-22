@@ -2,6 +2,7 @@ use crate::{
     any_props::AnyProps,
     arena::ElementId,
     bump_frame::BumpFrame,
+    factory::RenderReturn,
     innerlude::{Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::VNode,
@@ -116,7 +117,7 @@ impl ScopeState {
     /// Get a handle to the currently active head node arena for this Scope
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
-    pub fn root_node<'a>(&'a self) -> &'a VNode<'a> {
+    pub fn root_node<'a>(&'a self) -> &'a RenderReturn<'a> {
         let r = unsafe { &*self.current_frame().node.get() };
         unsafe { std::mem::transmute(r) }
     }

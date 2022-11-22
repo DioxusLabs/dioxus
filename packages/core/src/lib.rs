@@ -95,7 +95,10 @@ pub use crate::innerlude::{
     TemplateAttribute,
     TemplateNode,
     UiEvent,
+    VComponent,
+    VFragment,
     VNode,
+    VText,
     VirtualDom,
 };
 

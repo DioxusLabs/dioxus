@@ -1,22 +1,36 @@
+use std::cell::Cell;
+
 use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, SuspenseContext, VText};
+use crate::innerlude::{Mutations, VComponent, VFragment, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ScopeId, TemplateAttribute};
+use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
 
 impl VirtualDom {
+    /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
+    ///
+    /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
     pub(crate) fn create_scope<'a>(
         &mut self,
         scope: ScopeId,
         mutations: &mut Mutations<'a>,
         template: &'a VNode<'a>,
     ) -> usize {
+        let mutations_to_this_point = mutations.len();
+
         self.scope_stack.push(scope);
         let out = self.create(mutations, template);
         self.scope_stack.pop();
+
+        if !self.collected_leaves.is_empty() {
+            if let Some(boundary) = self.scopes[scope.0].has_context::<SuspenseContext>() {
+                println!("Boundary detected and pending leaves!");
+            }
+        }
+
         out
     }
 
@@ -29,18 +43,7 @@ impl VirtualDom {
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
         if !self.templates.contains_key(&template.template.id) {
-            for node in template.template.roots {
-                let mutations = &mut mutations.template_mutations;
-                self.create_static_node(mutations, template, node);
-            }
-
-            mutations.template_mutations.push(SaveTemplate {
-                name: template.template.id,
-                m: template.template.roots.len(),
-            });
-
-            self.templates
-                .insert(template.template.id, template.template.clone());
+            self.register_template(template, mutations);
         }
 
         // Walk the roots, creating nodes and assigning IDs
@@ -167,6 +170,21 @@ impl VirtualDom {
         on_stack
     }
 
+    /// Insert a new template into the VirtualDom's template registry
+    fn register_template<'a>(&mut self, template: &'a VNode<'a>, mutations: &mut Mutations<'a>) {
+        for node in template.template.roots {
+            self.create_static_node(&mut mutations.template_mutations, template, node);
+        }
+
+        mutations.template_mutations.push(SaveTemplate {
+            name: template.template.id,
+            m: template.template.roots.len(),
+        });
+
+        self.templates
+            .insert(template.template.id, template.template);
+    }
+
     pub(crate) fn create_static_node<'a>(
         &mut self,
         mutations: &mut Vec<Mutation<'a>>,
@@ -234,125 +252,193 @@ impl VirtualDom {
         node: &'a DynamicNode<'a>,
         idx: usize,
     ) -> usize {
-        match &node {
-            DynamicNode::Text(VText { id, value }) => {
-                let new_id = self.next_element(template, template.template.node_paths[idx]);
-                id.set(new_id);
-                mutations.push(HydrateText {
-                    id: new_id,
-                    path: &template.template.node_paths[idx][1..],
-                    value,
-                });
-                0
-            }
+        use DynamicNode::*;
+        match node {
+            Text(text) => self.create_dynamic_text(mutations, template, text, idx),
+            Placeholder(slot) => self.create_placeholder(template, idx, slot, mutations),
+            Fragment(frag) => self.create_fragment(frag, mutations),
+            Component(component) => self.create_component_node(mutations, template, component, idx),
+        }
+    }
 
-            DynamicNode::Component(component) => {
-                let props = component.props.replace(None).unwrap();
-                let prop_ptr = unsafe { std::mem::transmute(props.as_ref()) };
-                let scope = self.new_scope(prop_ptr).id;
-                component.props.replace(Some(props));
+    fn create_dynamic_text<'a>(
+        &mut self,
+        mutations: &mut Mutations<'a>,
+        template: &VNode<'a>,
+        text: &VText<'a>,
+        idx: usize,
+    ) -> usize {
+        // Allocate a dynamic element reference for this text node
+        let new_id = self.next_element(template, template.template.node_paths[idx]);
 
-                component.scope.set(Some(scope));
+        // Make sure the text node is assigned to the correct element
+        text.id.set(new_id);
 
-                let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
+        // Add the mutation to the list
+        mutations.push(HydrateText {
+            id: new_id,
+            path: &template.template.node_paths[idx][1..],
+            value: text.value,
+        });
 
-                match return_nodes {
-                    RenderReturn::Sync(None) => {
-                        todo!()
-                    }
+        // Since we're hydrating an existing node, we don't create any new nodes
+        0
+    }
 
-                    RenderReturn::Async(_) => {
-                        let new_id = self.next_element(template, template.template.node_paths[idx]);
-                        component.placeholder.set(Some(new_id));
-                        self.scopes[scope.0].placeholder.set(Some(new_id));
+    fn create_placeholder(
+        &mut self,
+        template: &VNode,
+        idx: usize,
+        slot: &Cell<ElementId>,
+        mutations: &mut Mutations,
+    ) -> usize {
+        // Allocate a dynamic element reference for this text node
+        let id = self.next_element(template, template.template.node_paths[idx]);
 
-                        mutations.push(AssignId {
-                            id: new_id,
-                            path: &template.template.node_paths[idx][1..],
-                        });
+        // Make sure the text node is assigned to the correct element
+        slot.set(id);
 
-                        let boudary = self.scopes[scope.0]
-                            .consume_context::<SuspenseContext>()
-                            .unwrap();
+        // Assign the ID to the existing node in the template
+        mutations.push(AssignId {
+            path: &template.template.node_paths[idx][1..],
+            id,
+        });
 
-                        if boudary.placeholder.get().is_none() {
-                            boudary.placeholder.set(Some(new_id));
-                        }
-                        boudary
-                            .waiting_on
-                            .borrow_mut()
-                            .extend(self.collected_leaves.drain(..));
+        // Since the placeholder is already in the DOM, we don't create any new nodes
+        0
+    }
 
-                        0
-                    }
+    fn create_fragment<'a>(
+        &mut self,
+        frag: &'a VFragment<'a>,
+        mutations: &mut Mutations<'a>,
+    ) -> usize {
+        frag.nodes
+            .iter()
+            .fold(0, |acc, child| acc + self.create(mutations, child))
+    }
 
-                    RenderReturn::Sync(Some(template)) => {
-                        let mutations_to_this_point = mutations.len();
+    fn create_component_node<'a>(
+        &mut self,
+        mutations: &mut Mutations<'a>,
+        template: &'a VNode<'a>,
+        component: &'a VComponent<'a>,
+        idx: usize,
+    ) -> usize {
+        let props = component.props.replace(None).unwrap();
 
-                        self.scope_stack.push(scope);
-                        let mut created = self.create(mutations, template);
-                        self.scope_stack.pop();
+        let prop_ptr = unsafe { std::mem::transmute(props.as_ref()) };
+        let scope = self.new_scope(prop_ptr).id;
 
-                        if !self.collected_leaves.is_empty() {
-                            if let Some(boundary) =
-                                self.scopes[scope.0].has_context::<SuspenseContext>()
-                            {
-                                // Since this is a boundary, use it as a placeholder
-                                let new_id =
-                                    self.next_element(template, template.template.node_paths[idx]);
-                                component.placeholder.set(Some(new_id));
-                                self.scopes[scope.0].placeholder.set(Some(new_id));
-                                mutations.push(AssignId {
-                                    id: new_id,
-                                    path: &template.template.node_paths[idx][1..],
-                                });
+        component.props.replace(Some(props));
+        component.scope.set(Some(scope));
 
-                                // Now connect everything to the boundary
-                                let boundary_mut = boundary;
-                                let split_off = mutations.split_off(mutations_to_this_point);
-                                let split_off: Vec<Mutation> =
-                                    unsafe { std::mem::transmute(split_off) };
+        let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
 
-                                if boundary_mut.placeholder.get().is_none() {
-                                    boundary_mut.placeholder.set(Some(new_id));
-                                }
+        use RenderReturn::*;
 
-                                // In the generated edits, we want to pick off from where we left off.
-                                boundary_mut.mutations.borrow_mut().edits.extend(split_off);
-
-                                boundary_mut
-                                    .waiting_on
-                                    .borrow_mut()
-                                    .extend(self.collected_leaves.drain(..));
-
-                                created = 0;
-                            }
-                        }
-
-                        // handle any waiting on futures accumulated by async calls down the tree
-                        // if this is a boundary, we split off the tree
-                        created
-                    }
-                }
-            }
-
-            DynamicNode::Fragment(frag) => {
-                // Todo: if there's no children create a placeholder instead ?
-                frag.nodes
-                    .iter()
-                    .fold(0, |acc, child| acc + self.create(mutations, child))
-            }
-
-            DynamicNode::Placeholder(slot) => {
-                let id = self.next_element(template, template.template.node_paths[idx]);
-                slot.set(id);
-                mutations.push(AssignId {
-                    path: &template.template.node_paths[idx][1..],
-                    id,
-                });
-
-                0
+        match return_nodes {
+            Sync(Some(t)) => self.create_component(mutations, scope, t, idx, component),
+            Sync(None) | Async(_) => {
+                self.create_component_placeholder(template, idx, component, scope, mutations)
             }
         }
+    }
+
+    fn create_component<'a>(
+        &mut self,
+        mutations: &mut Mutations<'a>,
+        scope: ScopeId,
+        template: &'a VNode<'a>,
+        idx: usize,
+        component: &'a VComponent<'a>,
+    ) -> usize {
+        // // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
+        // // is encountered
+        // let mutations_to_this_point = mutations.len();
+
+        // Create the component's root element
+        let created = self.create_scope(scope, mutations, template);
+
+        if !self.collected_leaves.is_empty() {
+            println!("collected leaves: {:?}", self.collected_leaves);
+        }
+
+        created
+
+        // // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
+        // let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
+        //     Some(boundary) if !self.collected_leaves.is_empty() => boundary,
+        //     _ => return created,
+        // };
+
+        // // Since this is a boundary, use it as a placeholder
+        // let new_id = self.next_element(template, template.template.node_paths[idx]);
+        // component.placeholder.set(Some(new_id));
+        // self.scopes[scope.0].placeholder.set(Some(new_id));
+        // mutations.push(AssignId {
+        //     id: new_id,
+        //     path: &template.template.node_paths[idx][1..],
+        // });
+
+        // // Now connect everything to the boundary
+        // let boundary_mut = boundary;
+        // let split_off = mutations.split_off(mutations_to_this_point);
+        // let split_off: Vec<Mutation> = unsafe { std::mem::transmute(split_off) };
+
+        // if boundary_mut.placeholder.get().is_none() {
+        //     boundary_mut.placeholder.set(Some(new_id));
+        // }
+
+        // // In the generated edits, we want to pick off from where we left off.
+        // boundary_mut.mutations.borrow_mut().edits.extend(split_off);
+
+        // boundary_mut
+        //     .waiting_on
+        //     .borrow_mut()
+        //     .extend(self.collected_leaves.drain(..));
+
+        // 0
+
+        // let boudary = self.scopes[scope.0]
+        //     .consume_context::<SuspenseContext>()
+        //     .unwrap();
+
+        // boudary
+        //     .waiting_on
+        //     .borrow_mut()
+        //     .extend(self.collected_leaves.drain(..));
+
+        // if boudary.placeholder.get().is_none() {
+        //     boudary.placeholder.set(Some(new_id));
+        // }
+    }
+
+    /// Take the rendered nodes from a component and handle them if they were async
+    ///
+    /// IE simply assign an ID to the placeholder
+    fn create_component_placeholder(
+        &mut self,
+        template: &VNode,
+        idx: usize,
+        component: &VComponent,
+        scope: ScopeId,
+        mutations: &mut Mutations,
+    ) -> usize {
+        let new_id = self.next_element(template, template.template.node_paths[idx]);
+
+        // Set the placeholder of the component
+        component.placeholder.set(Some(new_id));
+
+        // Set the placeholder of the scope
+        self.scopes[scope.0].placeholder.set(Some(new_id));
+
+        // Since the placeholder is already in the DOM, we don't create any new nodes
+        mutations.push(AssignId {
+            id: new_id,
+            path: &template.template.node_paths[idx][1..],
+        });
+
+        0
     }
 }

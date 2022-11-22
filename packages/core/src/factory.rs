@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
     fmt::Arguments,
 };
@@ -130,7 +129,10 @@ where
 }
 
 pub enum RenderReturn<'a> {
+    /// A currently-available element
     Sync(Element<'a>),
+
+    /// An ongoing future that will resolve to a [`Element`]
     Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
 }
 

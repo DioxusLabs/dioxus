@@ -1,6 +1,6 @@
-use std::cell::Cell;
 use crate::factory::RenderReturn;
 use bumpalo::Bump;
+use std::cell::Cell;
 
 pub struct BumpFrame {
     pub bump: Bump,

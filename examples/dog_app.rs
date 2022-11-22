@@ -2,12 +2,7 @@ use dioxus::prelude::*;
 use std::collections::HashMap;
 
 fn main() {
-    dioxus_desktop::launch(|cx| {
-        cx.render(rsx! {
-            h1 {"Loading...."}
-            app_root {}
-        })
-    });
+    dioxus_desktop::launch(|cx| render!(app_root {}));
 }
 
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
