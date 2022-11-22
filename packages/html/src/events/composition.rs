@@ -6,3 +6,16 @@ pub type CompositionEvent = UiEvent<CompositionData>;
 pub struct CompositionData {
     pub data: String,
 }
+
+impl_event! [
+    CompositionData;
+
+    /// oncompositionstart
+    oncompositionstart
+
+    /// oncompositionend
+    oncompositionend
+
+    /// oncompositionupdate
+    oncompositionupdate
+];

@@ -9,3 +9,16 @@ pub struct AnimationData {
     pub pseudo_element: String,
     pub elapsed_time: f32,
 }
+
+impl_event! [
+    AnimationData;
+
+    /// onanimationstart
+    onanimationstart
+
+    /// onanimationend
+    onanimationend
+
+    /// onanimationiteration
+    onanimationiteration
+];

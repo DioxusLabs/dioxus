@@ -6,3 +6,13 @@ pub type ImageEvent = UiEvent<ImageData>;
 pub struct ImageData {
     pub load_error: bool,
 }
+
+impl_event! [
+    ImageData;
+
+    /// onerror
+    onerror
+
+    /// onload
+    onload
+];

@@ -125,30 +125,6 @@ impl_event! {
     /// ondoubleclick
     ondblclick
 
-    /// ondrag
-    ondrag
-
-    /// ondragend
-    ondragend
-
-    /// ondragenter
-    ondragenter
-
-    /// ondragexit
-    ondragexit
-
-    /// ondragleave
-    ondragleave
-
-    /// ondragover
-    ondragover
-
-    /// ondragstart
-    ondragstart
-
-    /// ondrop
-    ondrop
-
     /// onmousedown
     onmousedown
 

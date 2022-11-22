@@ -24,53 +24,126 @@ macro_rules! impl_event {
     };
 }
 
-mod mouse;
-pub use mouse::*;
-
 mod animation;
-pub use animation::*;
-
+mod clipboard;
 mod composition;
-pub use composition::*;
-
 mod drag;
-pub use drag::*;
-
 mod focus;
-pub use focus::*;
-
 mod form;
-pub use form::*;
-
 mod image;
-pub use image::*;
-
 mod keyboard;
-pub use keyboard::*;
-
 mod media;
-pub use media::*;
-
+mod mouse;
 mod pointer;
-pub use pointer::*;
-
+mod scroll;
 mod selection;
-pub use selection::*;
-
 mod toggle;
-pub use toggle::*;
-
 mod touch;
-pub use touch::*;
-
 mod transition;
-pub use transition::*;
-
 mod wheel;
+
+pub use animation::*;
+pub use clipboard::*;
+pub use composition::*;
+pub use drag::*;
+pub use focus::*;
+pub use form::*;
+pub use image::*;
+pub use keyboard::*;
+pub use media::*;
+pub use mouse::*;
+pub use pointer::*;
+pub use scroll::*;
+pub use selection::*;
+pub use toggle::*;
+pub use touch::*;
+pub use transition::*;
 pub use wheel::*;
 
-mod clipboard;
-pub use clipboard::*;
-
-mod scroll;
-pub use scroll::*;
+// pub fn event_bubbles(evt: &str) -> bool {
+//     match evt {
+//         "copy" => true,
+//         "cut" => true,
+//         "paste" => true,
+//         "compositionend" => true,
+//         "compositionstart" => true,
+//         "compositionupdate" => true,
+//         "keydown" => true,
+//         "keypress" => true,
+//         "keyup" => true,
+//         "focus" => false,
+//         "focusout" => true,
+//         "focusin" => true,
+//         "blur" => false,
+//         "change" => true,
+//         "input" => true,
+//         "invalid" => true,
+//         "reset" => true,
+//         "submit" => true,
+//         "click" => true,
+//         "contextmenu" => true,
+//         "doubleclick" => true,
+//         "dblclick" => true,
+//         "drag" => true,
+//         "dragend" => true,
+//         "dragenter" => false,
+//         "dragexit" => false,
+//         "dragleave" => true,
+//         "dragover" => true,
+//         "dragstart" => true,
+//         "drop" => true,
+//         "mousedown" => true,
+//         "mouseenter" => false,
+//         "mouseleave" => false,
+//         "mousemove" => true,
+//         "mouseout" => true,
+//         "scroll" => false,
+//         "mouseover" => true,
+//         "mouseup" => true,
+//         "pointerdown" => true,
+//         "pointermove" => true,
+//         "pointerup" => true,
+//         "pointercancel" => true,
+//         "gotpointercapture" => true,
+//         "lostpointercapture" => true,
+//         "pointerenter" => false,
+//         "pointerleave" => false,
+//         "pointerover" => true,
+//         "pointerout" => true,
+//         "select" => true,
+//         "touchcancel" => true,
+//         "touchend" => true,
+//         "touchmove" => true,
+//         "touchstart" => true,
+//         "wheel" => true,
+//         "abort" => false,
+//         "canplay" => false,
+//         "canplaythrough" => false,
+//         "durationchange" => false,
+//         "emptied" => false,
+//         "encrypted" => true,
+//         "ended" => false,
+//         "error" => false,
+//         "loadeddata" => false,
+//         "loadedmetadata" => false,
+//         "loadstart" => false,
+//         "pause" => false,
+//         "play" => false,
+//         "playing" => false,
+//         "progress" => false,
+//         "ratechange" => false,
+//         "seeked" => false,
+//         "seeking" => false,
+//         "stalled" => false,
+//         "suspend" => false,
+//         "timeupdate" => false,
+//         "volumechange" => false,
+//         "waiting" => false,
+//         "animationstart" => true,
+//         "animationend" => true,
+//         "animationiteration" => true,
+//         "transitionend" => true,
+//         "toggle" => true,
+//         _ => panic!("unsupported event type {:?}", evt),
+//     }
+// }

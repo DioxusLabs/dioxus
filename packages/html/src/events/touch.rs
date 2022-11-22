@@ -13,3 +13,18 @@ pub struct TouchData {
     // targetTouches: DOMTouchList,
     // touches: DOMTouchList,
 }
+
+impl_event! {
+    TouchData;
+    /// touchstart
+    ontouchstart
+
+    /// touchmove
+    ontouchmove
+
+    /// touchend
+    ontouchend
+
+    /// touchcancel
+    ontouchcancel
+}

@@ -29,3 +29,36 @@ pub struct PointerData {
     pub is_primary: bool,
     // pub get_modifier_state: bool,
 }
+
+impl_event![
+    PointerData;
+    /// pointerdown
+    onpointerdown
+
+    /// pointermove
+    onpointermove
+
+    /// pointerup
+    onpointerup
+
+    /// pointercancel
+    onpointercancel
+
+    /// gotpointercapture
+    ongotpointercapture
+
+    /// lostpointercapture
+    onlostpointercapture
+
+    /// pointerenter
+    onpointerenter
+
+    /// pointerleave
+    onpointerleave
+
+    /// pointerover
+    onpointerover
+
+    /// pointerout
+    onpointerout
+];

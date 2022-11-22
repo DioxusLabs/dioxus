@@ -6,3 +6,16 @@ pub type ClipboardEvent = UiEvent<ClipboardData>;
 pub struct ClipboardData {
     // DOMDataTransfer clipboardData
 }
+
+impl_event![
+    ClipboardData;
+
+    /// oncopy
+    oncopy
+
+    /// oncut
+    oncut
+
+    /// onpaste
+    onpaste
+];

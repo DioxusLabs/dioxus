@@ -8,3 +8,10 @@ pub struct TransitionData {
     pub pseudo_element: String,
     pub elapsed_time: f32,
 }
+
+impl_event! {
+    TransitionData;
+
+    /// transitionend
+    ontransitionend
+}
