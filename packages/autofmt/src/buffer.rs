@@ -69,6 +69,7 @@ impl Buffer {
             BodyNode::Component(component) => self.write_component(component),
             BodyNode::Text(text) => self.write_text(text),
             BodyNode::RawExpr(exp) => self.write_raw_expr(exp),
+            _ => Ok(()),
         }
     }
 

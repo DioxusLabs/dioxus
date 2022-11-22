@@ -46,6 +46,8 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 /// Called when the current node's node properties are modified, a child's [ChildDepState] is modified or a child is removed.
 /// Called at most once per update.
 /// ```rust
+/// # use dioxus_native_core::node_ref::NodeView;
+/// # use dioxus_native_core::state::ChildDepState;
 /// #[derive(Clone, Copy, PartialEq, Default)]
 /// struct Layout {
 ///     width: u32,
@@ -69,8 +71,8 @@ pub(crate) fn union_ordered_iter<T: Ord + Debug>(
 ///             width: c1.width + c2.width,
 ///             height: c1.height.max(c2.height)
 ///         }).unwrap_or_default();
-///         let changed = new != self.combined;
-///         self = new;
+///         let changed = new != *self;
+///         *self = new;
 ///         changed
 ///     }
 /// }
@@ -120,12 +122,12 @@ pub trait ChildDepState {
 ///     ) -> bool{
 ///         let old = *self;
 ///         // If the font size was set on the parent, it is passed down to the current element
-///         if let Some(parent) = parent{
-///             *self = parent;
+///         if let Some(parent) = parent {
+///             *self = *parent;
 ///         }
 ///         // If the current node overrides the font size, use that size insead.
-///         for attr in node.attributes() {
-///             match attr.name {
+///         for attr in node.attributes().unwrap() {
+///             match attr.attribute.name.as_str() {
 ///                 "font-size" => {
 ///                     self.0 = attr.value.as_text().unwrap().parse().unwrap();
 ///                 }
@@ -177,9 +179,9 @@ pub trait ParentDepState {
 ///         siblings: (),
 ///         ctx: &(),
 ///     ) -> bool {
-///         let old = self;
-///         for attr in node.attributes() {
-///             match attr.name {
+///         let old = self.clone();
+///         for attr in node.attributes().unwrap() {
+///             match attr.attribute.name.as_str() {
 ///                 "tabindex" => {
 ///                     self.0 = attr.value.as_text().unwrap().parse().unwrap();
 ///                 }

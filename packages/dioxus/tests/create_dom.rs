@@ -75,20 +75,21 @@ fn create() {
             CreateElement { root: None, tag: "div", children: 2 },
             CreateTextNode { root: None, text: "Hello, world!" },
             CreateElement { root: None, tag: "div", children: 1 },
-            CreateElement { root: None, tag: "div", children: 1 },
-            CreatePlaceholder { root: None },
+            CreateElement { root: None, tag: "div", children: 0 },
             // clone template
             CloneNodeChildren { id: Some(1), new_ids: vec![2] },
-            CreateTextNode { root: Some(3), text: "hello" },
-            CreateTextNode { root: Some(4), text: "world" },
-            // update template
             SetLastNode { id: 2 },
             FirstChild {},
+            StoreWithId { id: 3 },
             FirstChild {},
             NextSibling {},
+            StoreWithId { id: 4 },
             FirstChild {},
-            FirstChild {},
-            ReplaceWith { root: None, nodes: vec![3, 4] },
+            StoreWithId { id: 5 },
+            CreateTextNode { root: Some(6), text: "hello" },
+            CreateTextNode { root: Some(7), text: "world" },
+            SetLastNode { id: 5 },
+            AppendChildren { root: None, children: vec![6, 7] },
             AppendChildren { root: Some(0), children: vec![2] }
         ]
     );
@@ -186,30 +187,32 @@ fn create_components() {
             // create template
             CreateElement { root: Some(1), tag: "template", children: 3 },
             CreateElement { root: None, tag: "h1", children: 0 },
-            CreateElement { root: None, tag: "div", children: 1 },
-            CreatePlaceholder { root: None },
+            CreateElement { root: None, tag: "div", children: 0 },
             CreateElement { root: None, tag: "p", children: 0 },
             // clone template
             CloneNodeChildren { id: Some(1), new_ids: vec![2, 3, 4] },
             // update template
+            SetLastNode { id: 2 },
+            NextSibling {},
             CreateTextNode { root: Some(5), text: "abc1" },
             SetLastNode { id: 3 },
-            FirstChild {},
-            ReplaceWith { root: None, nodes: vec![5] },
+            AppendChildren { root: None, children: vec![5] },
             // clone template
             CloneNodeChildren { id: Some(1), new_ids: vec![6, 7, 8] },
+            SetLastNode { id: 6 },
+            NextSibling {},
             // update template
             CreateTextNode { root: Some(9), text: "abc2" },
             SetLastNode { id: 7 },
-            FirstChild {},
-            ReplaceWith { root: None, nodes: vec![9] },
+            AppendChildren { root: None, children: vec![9] },
             // clone template
             CloneNodeChildren { id: Some(1), new_ids: vec![10, 11, 12] },
             // update template
+            SetLastNode { id: 10 },
+            NextSibling {},
             CreateTextNode { root: Some(13), text: "abc3" },
             SetLastNode { id: 11 },
-            FirstChild {},
-            ReplaceWith { root: None, nodes: vec![13] },
+            AppendChildren { root: None, children: vec![13] },
             // add to root
             AppendChildren { root: Some(0), children: vec![2, 3, 4, 6, 7, 8, 10, 11, 12] }
         ]

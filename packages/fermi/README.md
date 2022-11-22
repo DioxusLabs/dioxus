@@ -77,7 +77,7 @@ fermi = { git = "https://github.com/dioxuslabs/dioxus" }
 ## Running examples
 
 The examples here use Dioxus Desktop to showcase their functionality. To run an example, use
-```
+```sh
 $ cargo run --example fermi
 ```
 
