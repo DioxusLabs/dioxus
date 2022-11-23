@@ -7,12 +7,10 @@ use dioxus_core::ElementId;
 fn nested_passthru_creates() {
     fn app(cx: Scope) -> Element {
         cx.render(rsx! {
-            Child {
-                Child {
-                    Child {
-                        div {
-                            "hi"
-                        }
+            pass_thru {
+                pass_thru {
+                    pass_thru {
+                        div { "hi" }
                     }
                 }
             }
@@ -20,8 +18,8 @@ fn nested_passthru_creates() {
     }
 
     #[inline_props]
-    fn Child<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
-        cx.render(rsx! { children })
+    fn pass_thru<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+        cx.render(rsx!(children))
     }
 
     let mut dom = VirtualDom::new(app);
