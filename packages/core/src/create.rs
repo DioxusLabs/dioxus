@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use crate::factory::RenderReturn;
 use crate::innerlude::{Mutations, VComponent, VFragment, VText};
 use crate::mutations::Mutation;
@@ -7,7 +5,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ScopeId, SuspenseContext, TemplateAttribute};
 
 impl VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -69,12 +67,6 @@ impl VirtualDom {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             mutations.push(CreateTextNode { value, id });
-                            1
-                        }
-                        DynamicNode::Placeholder(slot) => {
-                            let id = self.next_element(template, template.template.node_paths[*id]);
-                            slot.set(id);
-                            mutations.push(CreatePlaceholder { id });
                             1
                         }
                     }
@@ -247,8 +239,7 @@ impl VirtualDom {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(mutations, template, text, idx),
-            Placeholder(slot) => self.create_placeholder(template, idx, slot, mutations),
-            Fragment(frag) => self.create_fragment(frag, mutations),
+            Fragment(frag) => self.create_fragment(frag, template, idx, mutations),
             Component(component) => self.create_component_node(mutations, template, component, idx),
         }
     }
@@ -277,37 +268,35 @@ impl VirtualDom {
         0
     }
 
-    fn create_placeholder(
-        &mut self,
-        template: &VNode,
-        idx: usize,
-        slot: &Cell<ElementId>,
-        mutations: &mut Mutations,
-    ) -> usize {
-        // Allocate a dynamic element reference for this text node
-        let id = self.next_element(template, template.template.node_paths[idx]);
-
-        // Make sure the text node is assigned to the correct element
-        slot.set(id);
-
-        // Assign the ID to the existing node in the template
-        mutations.push(AssignId {
-            path: &template.template.node_paths[idx][1..],
-            id,
-        });
-
-        // Since the placeholder is already in the DOM, we don't create any new nodes
-        0
-    }
-
-    fn create_fragment<'a>(
+    pub(crate) fn create_fragment<'a>(
         &mut self,
         frag: &'a VFragment<'a>,
+        template: &'a VNode<'a>,
+        idx: usize,
         mutations: &mut Mutations<'a>,
     ) -> usize {
-        frag.nodes
-            .iter()
-            .fold(0, |acc, child| acc + self.create(mutations, child))
+        match frag {
+            VFragment::NonEmpty(nodes) => nodes
+                .iter()
+                .fold(0, |acc, child| acc + self.create(mutations, child)),
+
+            VFragment::Empty(slot) => {
+                // Allocate a dynamic element reference for this text node
+                let id = self.next_element(template, template.template.node_paths[idx]);
+
+                // Make sure the text node is assigned to the correct element
+                slot.set(id);
+
+                // Assign the ID to the existing node in the template
+                mutations.push(AssignId {
+                    path: &template.template.node_paths[idx][1..],
+                    id,
+                });
+
+                // Since the placeholder is already in the DOM, we don't create any new nodes
+                0
+            }
+        }
     }
 
     fn create_component_node<'a>(
@@ -330,10 +319,9 @@ impl VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Some(t)) => self.mount_component(mutations, scope, t, idx),
-            Sync(None) | Async(_) => {
-                self.mount_component_placeholder(template, idx, scope, mutations)
-            }
+            Sync(Ok(t)) => self.mount_component(mutations, scope, t, idx),
+            Sync(Err(_e)) => todo!("Propogate error upwards"),
+            Async(_) => self.mount_component_placeholder(template, idx, scope, mutations),
         }
     }
 

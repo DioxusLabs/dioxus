@@ -21,24 +21,6 @@ use crate::{
 use fxhash::{FxHashMap, FxHashSet};
 use slab::Slab;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DirtyScope {
-    pub height: u32,
-    pub id: ScopeId,
-}
-
-impl PartialOrd for DirtyScope {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.height.cmp(&other.height))
-    }
-}
-
-impl Ord for DirtyScope {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.height.cmp(&other.height)
-    }
-}
-
 impl<'b> VirtualDom {
     pub fn diff_scope(&mut self, mutations: &mut Mutations<'b>, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
@@ -78,25 +60,26 @@ impl<'b> VirtualDom {
         use RenderReturn::{Async, Sync};
         match (left, right) {
             // diff
-            (Sync(Some(l)), Sync(Some(r))) => self.diff_vnode(m, l, r),
+            (Sync(Ok(l)), Sync(Ok(r))) => self.diff_vnode(m, l, r),
 
-            // remove old with placeholder
-            (Sync(Some(l)), Sync(None)) | (Sync(Some(l)), Async(_)) => {
-                //
-                let id = self.next_element(l, &[]); // todo!
-                m.push(Mutation::CreatePlaceholder { id });
-                self.drop_template(m, l, true);
-            }
+            _ => todo!("handle diffing nonstandard nodes"),
+            // // remove old with placeholder
+            // (Sync(Ok(l)), Sync(None)) | (Sync(Ok(l)), Async(_)) => {
+            //     //
+            //     let id = self.next_element(l, &[]); // todo!
+            //     m.push(Mutation::CreatePlaceholder { id });
+            //     self.drop_template(m, l, true);
+            // }
 
-            // remove placeholder with nodes
-            (Sync(None), Sync(Some(_))) => {}
-            (Async(_), Sync(Some(v))) => {}
+            // // remove placeholder with nodes
+            // (Sync(None), Sync(Ok(_))) => {}
+            // (Async(_), Sync(Ok(v))) => {}
 
-            // nothing... just transfer the placeholders over
-            (Async(_), Async(_))
-            | (Sync(None), Sync(None))
-            | (Sync(None), Async(_))
-            | (Async(_), Sync(None)) => {}
+            // // nothing... just transfer the placeholders over
+            // (Async(_), Async(_))
+            // | (Sync(None), Sync(None))
+            // | (Sync(None), Async(_))
+            // | (Async(_), Sync(None)) => {}
         }
     }
 
@@ -120,15 +103,19 @@ impl<'b> VirtualDom {
                 .mounted_element
                 .set(left_attr.mounted_element.get());
 
-            if left_attr.value != right_attr.value {
+            if left_attr.value != right_attr.value || left_attr.volatile {
                 // todo: add more types of attribute values
-                if let AttributeValue::Text(text) = right_attr.value {
-                    muts.push(Mutation::SetAttribute {
-                        id: left_attr.mounted_element.get(),
-                        name: left_attr.name,
-                        value: text,
-                        ns: right_attr.namespace,
-                    });
+                match right_attr.value {
+                    AttributeValue::Text(text) => {
+                        muts.push(Mutation::SetAttribute {
+                            id: left_attr.mounted_element.get(),
+                            name: left_attr.name,
+                            value: text,
+                            ns: right_attr.namespace,
+                        });
+                    }
+                    // todo: more types of attribute values
+                    _ => (),
                 }
             }
         }
@@ -139,10 +126,9 @@ impl<'b> VirtualDom {
             .zip(right_template.dynamic_nodes.iter())
         {
             match (left_node, right_node) {
-                (Component(left), Component(right)) => self.diff_vcomponent(muts, left, right),
                 (Text(left), Text(right)) => self.diff_vtext(muts, left, right),
                 (Fragment(left), Fragment(right)) => self.diff_vfragment(muts, left, right),
-                (Placeholder(left), Placeholder(right)) => right.set(left.get()),
+                (Component(left), Component(right)) => self.diff_vcomponent(muts, left, right),
                 _ => self.replace(muts, left_template, right_template, left_node, right_node),
             };
         }
@@ -167,17 +153,6 @@ impl<'b> VirtualDom {
         // Due to how templates work, we should never get two different components. The only way we could enter
         // this codepath is through "light_diff", but we check there that the pointers are the same
         assert_eq!(left.render_fn, right.render_fn);
-
-        /*
-
-
-
-        let left = rsx!{ Component {} }
-        let right = rsx!{ Component {} }
-
-
-
-        */
 
         // Make sure the new vcomponent has the right scopeid associated to it
         let scope_id = left.scope.get().unwrap();
@@ -276,36 +251,63 @@ impl<'b> VirtualDom {
         left: &'b VFragment<'b>,
         right: &'b VFragment<'b>,
     ) {
-        // match (left.nodes, right.nodes) {
-        //     ([], []) => rp.set(lp.get()),
-        //     ([], _) => {
-        //         //
-        //         todo!()
-        //     }
-        //     (_, []) => {
-        //         // if this fragment is the only child of its parent, then we can use the "RemoveAllChildren" mutation
-        //         todo!()
-        //     }
-        //     _ => {
-        //         let new_is_keyed = new[0].key.is_some();
-        //         let old_is_keyed = old[0].key.is_some();
+        use VFragment::*;
+        match (left, right) {
+            (Empty(l), Empty(r)) => r.set(l.get()),
+            (Empty(l), NonEmpty(r)) => self.replace_placeholder_with_nodes(muts, l, r),
+            (NonEmpty(l), Empty(r)) => self.replace_nodes_with_placeholder(muts, l, r),
+            (NonEmpty(old), NonEmpty(new)) => self.diff_non_empty_fragment(new, old, muts),
+        }
+    }
 
-        //         debug_assert!(
-        //             new.iter().all(|n| n.key.is_some() == new_is_keyed),
-        //             "all siblings must be keyed or all siblings must be non-keyed"
-        //         );
-        //         debug_assert!(
-        //             old.iter().all(|o| o.key.is_some() == old_is_keyed),
-        //             "all siblings must be keyed or all siblings must be non-keyed"
-        //         );
+    fn replace_placeholder_with_nodes(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        l: &'b std::cell::Cell<ElementId>,
+        r: &'b [VNode<'b>],
+    ) {
+        let created = r
+            .iter()
+            .fold(0, |acc, child| acc + self.create(muts, child));
+        muts.push(Mutation::ReplaceWith {
+            id: l.get(),
+            m: created,
+        })
+    }
 
-        //         if new_is_keyed && old_is_keyed {
-        //             self.diff_keyed_children(muts, old, new);
-        //         } else {
-        //             self.diff_non_keyed_children(muts, old, new);
-        //         }
-        //     }
-        // }
+    fn replace_nodes_with_placeholder(
+        &mut self,
+        muts: &mut Mutations<'b>,
+        l: &'b [VNode<'b>],
+        r: &'b std::cell::Cell<ElementId>,
+    ) {
+        //
+
+        // Remove the old nodes, except for one
+        self.remove_nodes(muts, &l[1..]);
+    }
+
+    fn diff_non_empty_fragment(
+        &mut self,
+        new: &'b [VNode<'b>],
+        old: &'b [VNode<'b>],
+        muts: &mut Mutations<'b>,
+    ) {
+        let new_is_keyed = new[0].key.is_some();
+        let old_is_keyed = old[0].key.is_some();
+        debug_assert!(
+            new.iter().all(|n| n.key.is_some() == new_is_keyed),
+            "all siblings must be keyed or all siblings must be non-keyed"
+        );
+        debug_assert!(
+            old.iter().all(|o| o.key.is_some() == old_is_keyed),
+            "all siblings must be keyed or all siblings must be non-keyed"
+        );
+        if new_is_keyed && old_is_keyed {
+            // self.diff_keyed_children(muts, old, new);
+        } else {
+            self.diff_non_keyed_children(muts, old, new);
+        }
     }
 
     // Diff children that are not keyed.
@@ -330,8 +332,9 @@ impl<'b> VirtualDom {
 
         match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(muts, &old[new.len()..]),
-            Ordering::Less => todo!(),
-            // Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
+            Ordering::Less => {
+                self.create_and_insert_after(muts, &new[old.len()..], old.last().unwrap())
+            }
             Ordering::Equal => {}
         }
 
@@ -340,95 +343,95 @@ impl<'b> VirtualDom {
         }
     }
 
-    // Diffing "keyed" children.
-    //
-    // With keyed children, we care about whether we delete, move, or create nodes
-    // versus mutate existing nodes in place. Presumably there is some sort of CSS
-    // transition animation that makes the virtual DOM diffing algorithm
-    // observable. By specifying keys for nodes, we know which virtual DOM nodes
-    // must reuse (or not reuse) the same physical DOM nodes.
-    //
-    // This is loosely based on Inferno's keyed patching implementation. However, we
-    // have to modify the algorithm since we are compiling the diff down into change
-    // list instructions that will be executed later, rather than applying the
-    // changes to the DOM directly as we compare virtual DOMs.
-    //
-    // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
-    //
-    // The stack is empty upon entry.
-    fn diff_keyed_children(
-        &mut self,
-        muts: &mut Mutations<'b>,
-        old: &'b [VNode<'b>],
-        new: &'b [VNode<'b>],
-    ) {
-        // if cfg!(debug_assertions) {
-        //     let mut keys = fxhash::FxHashSet::default();
-        //     let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
-        //         keys.clear();
-        //         for child in children {
-        //             let key = child.key;
-        //             debug_assert!(
-        //                 key.is_some(),
-        //                 "if any sibling is keyed, all siblings must be keyed"
-        //             );
-        //             keys.insert(key);
-        //         }
-        //         debug_assert_eq!(
-        //             children.len(),
-        //             keys.len(),
-        //             "keyed siblings must each have a unique key"
-        //         );
-        //     };
-        //     assert_unique_keys(old);
-        //     assert_unique_keys(new);
-        // }
+    // // Diffing "keyed" children.
+    // //
+    // // With keyed children, we care about whether we delete, move, or create nodes
+    // // versus mutate existing nodes in place. Presumably there is some sort of CSS
+    // // transition animation that makes the virtual DOM diffing algorithm
+    // // observable. By specifying keys for nodes, we know which virtual DOM nodes
+    // // must reuse (or not reuse) the same physical DOM nodes.
+    // //
+    // // This is loosely based on Inferno's keyed patching implementation. However, we
+    // // have to modify the algorithm since we are compiling the diff down into change
+    // // list instructions that will be executed later, rather than applying the
+    // // changes to the DOM directly as we compare virtual DOMs.
+    // //
+    // // https://github.com/infernojs/inferno/blob/36fd96/packages/inferno/src/DOM/patching.ts#L530-L739
+    // //
+    // // The stack is empty upon entry.
+    // fn diff_keyed_children(
+    //     &mut self,
+    //     muts: &mut Mutations<'b>,
+    //     old: &'b [VNode<'b>],
+    //     new: &'b [VNode<'b>],
+    // ) {
+    //     if cfg!(debug_assertions) {
+    //         let mut keys = fxhash::FxHashSet::default();
+    //         let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
+    //             keys.clear();
+    //             for child in children {
+    //                 let key = child.key;
+    //                 debug_assert!(
+    //                     key.is_some(),
+    //                     "if any sibling is keyed, all siblings must be keyed"
+    //                 );
+    //                 keys.insert(key);
+    //             }
+    //             debug_assert_eq!(
+    //                 children.len(),
+    //                 keys.len(),
+    //                 "keyed siblings must each have a unique key"
+    //             );
+    //         };
+    //         assert_unique_keys(old);
+    //         assert_unique_keys(new);
+    //     }
 
-        // // First up, we diff all the nodes with the same key at the beginning of the
-        // // children.
-        // //
-        // // `shared_prefix_count` is the count of how many nodes at the start of
-        // // `new` and `old` share the same keys.
-        // let (left_offset, right_offset) = match self.diff_keyed_ends(muts, old, new) {
-        //     Some(count) => count,
-        //     None => return,
-        // };
+    //     // First up, we diff all the nodes with the same key at the beginning of the
+    //     // children.
+    //     //
+    //     // `shared_prefix_count` is the count of how many nodes at the start of
+    //     // `new` and `old` share the same keys.
+    //     let (left_offset, right_offset) = match self.diff_keyed_ends(muts, old, new) {
+    //         Some(count) => count,
+    //         None => return,
+    //     };
 
-        // // Ok, we now hopefully have a smaller range of children in the middle
-        // // within which to re-order nodes with the same keys, remove old nodes with
-        // // now-unused keys, and create new nodes with fresh keys.
+    //     // Ok, we now hopefully have a smaller range of children in the middle
+    //     // within which to re-order nodes with the same keys, remove old nodes with
+    //     // now-unused keys, and create new nodes with fresh keys.
 
-        // let old_middle = &old[left_offset..(old.len() - right_offset)];
-        // let new_middle = &new[left_offset..(new.len() - right_offset)];
+    //     let old_middle = &old[left_offset..(old.len() - right_offset)];
+    //     let new_middle = &new[left_offset..(new.len() - right_offset)];
 
-        // debug_assert!(
-        //     !((old_middle.len() == new_middle.len()) && old_middle.is_empty()),
-        //     "keyed children must have the same number of children"
-        // );
+    //     debug_assert!(
+    //         !((old_middle.len() == new_middle.len()) && old_middle.is_empty()),
+    //         "keyed children must have the same number of children"
+    //     );
 
-        // if new_middle.is_empty() {
-        //     // remove the old elements
-        //     self.remove_nodes(muts, old_middle);
-        // } else if old_middle.is_empty() {
-        //     // there were no old elements, so just create the new elements
-        //     // we need to find the right "foothold" though - we shouldn't use the "append" at all
-        //     if left_offset == 0 {
-        //         // insert at the beginning of the old list
-        //         let foothold = &old[old.len() - right_offset];
-        //         self.create_and_insert_before(new_middle, foothold);
-        //     } else if right_offset == 0 {
-        //         // insert at the end  the old list
-        //         let foothold = old.last().unwrap();
-        //         self.create_and_insert_after(new_middle, foothold);
-        //     } else {
-        //         // inserting in the middle
-        //         let foothold = &old[left_offset - 1];
-        //         self.create_and_insert_after(new_middle, foothold);
-        //     }
-        // } else {
-        //     self.diff_keyed_middle(muts, old_middle, new_middle);
-        // }
-    }
+    //     if new_middle.is_empty() {
+    //         // remove the old elements
+    //         self.remove_nodes(muts, old_middle);
+    //     } else if old_middle.is_empty() {
+    //         // there were no old elements, so just create the new elements
+    //         // we need to find the right "foothold" though - we shouldn't use the "append" at all
+    //         if left_offset == 0 {
+    //             // insert at the beginning of the old list
+    //             let foothold = &old[old.len() - right_offset];
+    //             self.create_and_insert_before(muts, new_middle, foothold);
+    //         } else if right_offset == 0 {
+    //             // insert at the end  the old list
+    //             let foothold = old.last().unwrap();
+    //             self.create_and_insert_after(muts, new_middle, foothold);
+    //         } else {
+    //             // inserting in the middle
+    //             let foothold = &old[left_offset - 1];
+    //             self.create_and_insert_after(muts, new_middle, foothold);
+    //         }
+    //     } else {
+    //         self.diff_keyed_middle(muts, old_middle, new_middle);
+    //     }
+    // }
 
     // /// Diff both ends of the children that share keys.
     // ///
@@ -437,7 +440,7 @@ impl<'b> VirtualDom {
     // /// If there is no offset, then this function returns None and the diffing is complete.
     // fn diff_keyed_ends(
     //     &mut self,
-    //     muts: &mut Renderer<'b>,
+    //     muts: &mut Mutations<'b>,
     //     old: &'b [VNode<'b>],
     //     new: &'b [VNode<'b>],
     // ) -> Option<(usize, usize)> {
@@ -496,7 +499,7 @@ impl<'b> VirtualDom {
     // #[allow(clippy::too_many_lines)]
     // fn diff_keyed_middle(
     //     &mut self,
-    //     muts: &mut Renderer<'b>,
+    //     muts: &mut Mutations<'b>,
     //     old: &'b [VNode<'b>],
     //     new: &'b [VNode<'b>],
     // ) {
@@ -676,6 +679,37 @@ impl<'b> VirtualDom {
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, muts: &mut Mutations<'b>, nodes: &'b [VNode<'b>]) {
         //
+    }
+
+    /// Push all the real nodes on the stack
+    fn push_elements_onto_stack(&mut self, node: &VNode) -> usize {
+        todo!()
+    }
+
+    pub(crate) fn create_and_insert_before(
+        &self,
+        mutations: &mut Mutations<'b>,
+        new: &[VNode],
+        after: &VNode,
+    ) {
+        let id = self.get_last_real_node(after);
+    }
+    pub(crate) fn create_and_insert_after(
+        &self,
+        mutations: &mut Mutations<'b>,
+        new: &[VNode],
+        after: &VNode,
+    ) {
+        let id = self.get_last_real_node(after);
+    }
+
+    fn get_last_real_node(&self, node: &VNode) -> ElementId {
+        match node.template.roots.last().unwrap() {
+            TemplateNode::Element { .. } => todo!(),
+            TemplateNode::Text(t) => todo!(),
+            TemplateNode::Dynamic(_) => todo!(),
+            TemplateNode::DynamicText(_) => todo!(),
+        }
     }
 }
 

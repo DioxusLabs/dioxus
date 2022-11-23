@@ -72,7 +72,7 @@ impl VirtualDom {
 
             fiber.waiting_on.borrow_mut().remove(&id);
 
-            if let RenderReturn::Sync(Some(template)) = ret {
+            if let RenderReturn::Sync(Ok(template)) = ret {
                 let mutations_ref = &mut fiber.mutations.borrow_mut();
                 let mutations = &mut **mutations_ref;
                 let template: &VNode = unsafe { std::mem::transmute(template) };

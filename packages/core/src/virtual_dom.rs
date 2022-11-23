@@ -4,11 +4,9 @@
 
 use crate::{
     any_props::VProps,
-    arena::ElementId,
-    arena::ElementRef,
-    diff::DirtyScope,
+    arena::{ElementId, ElementRef},
     factory::RenderReturn,
-    innerlude::{Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
@@ -469,20 +467,17 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
+    pub fn rebuild(&mut self) -> Mutations {
         let mut mutations = Mutations::new(0);
 
-        match unsafe { self.run_scope_extend(ScopeId(0)) } {
+        match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
-            RenderReturn::Sync(Some(node)) => {
+            RenderReturn::Sync(Ok(node)) => {
                 let m = self.create_scope(ScopeId(0), &mut mutations, node);
                 mutations.push(Mutation::AppendChildren { m });
             }
-            // If nothing was rendered, then insert a placeholder element instead
-            RenderReturn::Sync(None) => {
-                mutations.push(Mutation::CreatePlaceholder { id: ElementId(1) });
-                mutations.push(Mutation::AppendChildren { m: 1 });
-            }
+            // If an error occurs, we should try to render the default error component and context where the error occured
+            RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 

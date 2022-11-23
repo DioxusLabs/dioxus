@@ -28,31 +28,3 @@ pub struct Subtree {
     root: ScopeId,
     elements: Slab<ElementPath>,
 }
-
-// fn app(cx: Scope) -> Element {
-//     // whenever a user connects, they get a new connection
-//     // this requires the virtualdom to be Send + Sync
-//     rsx! {
-//         ClientForEach(|req| rsx!{
-//             Route {}
-//             Route {}
-//             Route {}
-//             Route {}
-//             Route {}
-//             Route {}
-//         })
-
-//         // windows.map(|w| {
-//         //     WebviewWindow {}
-//         //     WebviewWindow {}
-//         //     WebviewWindow {}
-//         //     WebviewWindow {}
-//         // })
-
-//         // if show_settings {
-//         //     WebviewWindow {
-//         //         Settings {}
-//         //     }
-//         // }
-//     }
-// }

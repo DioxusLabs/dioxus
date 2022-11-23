@@ -70,7 +70,7 @@ impl ToTokens for CallBody {
 
         if self.inline_cx {
             out_tokens.append_all(quote! {
-                Some({
+                Ok({
                     let __cx = cx;
                     #body
                 })

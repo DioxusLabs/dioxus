@@ -1,6 +1,6 @@
 //! Verify that tasks get polled by the virtualdom properly, and that we escape wait_for_work safely
 
-use dioxus_core::*;
+use dioxus::prelude::*;
 use std::time::Duration;
 
 #[tokio::test]
@@ -11,7 +11,7 @@ async fn it_works() {
 
     tokio::select! {
         _ = dom.wait_for_work() => {}
-        _ = tokio::time::sleep(Duration::from_millis(1000)) => {}
+        _ = tokio::time::sleep(Duration::from_millis(600)) => {}
     };
 }
 
@@ -32,5 +32,5 @@ fn app(cx: Scope) -> Element {
         });
     });
 
-    None
+    cx.render(rsx!(()))
 }

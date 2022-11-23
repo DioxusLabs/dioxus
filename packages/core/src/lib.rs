@@ -3,6 +3,8 @@ mod arena;
 mod bump_frame;
 mod create;
 mod diff;
+mod dirty_scope;
+mod error_boundary;
 mod events;
 mod factory;
 mod fragment;
@@ -15,9 +17,9 @@ mod scheduler;
 mod scope_arena;
 mod scopes;
 mod virtual_dom;
-
 pub(crate) mod innerlude {
     pub use crate::arena::*;
+    pub use crate::dirty_scope::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
     pub use crate::lazynodes::*;
@@ -28,10 +30,10 @@ pub(crate) mod innerlude {
     pub use crate::scopes::*;
     pub use crate::virtual_dom::*;
 
-    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    /// An [`Element`] is a possibly-errored [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
-    /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
-    pub type Element<'a> = Option<VNode<'a>>;
+    /// An Errored [`Element`] will propagate the error to the nearest error boundary.
+    pub type Element<'a> = anyhow::Result<VNode<'a>>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///

@@ -5,8 +5,7 @@ use crate::{
     factory::RenderReturn,
     innerlude::{Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    nodes::VNode,
-    TaskId,
+    Element, TaskId,
 };
 use bumpalo::Bump;
 use std::future::Future;
@@ -118,7 +117,7 @@ impl ScopeState {
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     pub fn root_node<'a>(&'a self) -> &'a RenderReturn<'a> {
-        let r = unsafe { &*self.current_frame().node.get() };
+        let r: &RenderReturn = unsafe { &*self.current_frame().node.get() };
         unsafe { std::mem::transmute(r) }
     }
 
@@ -325,8 +324,8 @@ impl ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Option<VNode<'src>> {
-        Some(rsx.call(self))
+    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
+        Ok(rsx.call(self))
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

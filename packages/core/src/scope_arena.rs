@@ -1,8 +1,8 @@
 use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
-    diff::DirtyScope,
     factory::RenderReturn,
+    innerlude::DirtyScope,
     innerlude::{SuspenseId, SuspenseLeaf},
     scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
@@ -46,13 +46,6 @@ impl VirtualDom {
             .last()
             .copied()
             .and_then(|id| self.scopes.get_mut(id.0).map(|f| f as *mut ScopeState))
-    }
-
-    pub(crate) unsafe fn run_scope_extend<'a>(
-        &mut self,
-        scope_id: ScopeId,
-    ) -> &'a RenderReturn<'a> {
-        unsafe { self.run_scope(scope_id).extend_lifetime_ref() }
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {

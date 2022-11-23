@@ -33,11 +33,10 @@ indexmap = "1.7"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
+anyhow = "1.0.66"
 
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
-
-[dev-dependencies]
 dioxus = { path = "../dioxus" }
 
 [features]

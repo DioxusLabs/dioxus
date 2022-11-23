@@ -2,7 +2,6 @@ use crate::{any_props::AnyProps, arena::ElementId, ScopeId, ScopeState, UiEvent}
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    hash::Hasher,
 };
 
 pub type TemplateId = &'static str;
@@ -42,7 +41,7 @@ impl<'a> VNode<'a> {
     pub fn placeholder_template(cx: &'a ScopeState) -> Self {
         Self::template_from_dynamic_node(
             cx,
-            DynamicNode::Placeholder(Cell::new(ElementId(0))),
+            DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
             "dioxus-placeholder",
         )
         .unwrap()
@@ -52,8 +51,8 @@ impl<'a> VNode<'a> {
         cx: &'a ScopeState,
         node: DynamicNode<'a>,
         id: &'static str,
-    ) -> Option<Self> {
-        Some(VNode {
+    ) -> anyhow::Result<Self> {
+        Ok(VNode {
             node_id: Cell::new(ElementId(0)),
             key: None,
             parent: None,
@@ -73,8 +72,8 @@ impl<'a> VNode<'a> {
         _cx: &'a ScopeState,
         text: &'static [TemplateNode<'static>],
         id: &'static str,
-    ) -> Option<Self> {
-        Some(VNode {
+    ) -> anyhow::Result<Self> {
+        Ok(VNode {
             node_id: Cell::new(ElementId(0)),
             key: None,
             parent: None,
@@ -99,18 +98,6 @@ pub struct Template<'a> {
     pub attr_paths: &'a [&'a [u8]],
 }
 
-impl<'a> std::hash::Hash for Template<'a> {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-impl Eq for Template<'_> {}
-impl PartialEq for Template<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
 /// A weird-ish variant of VNodes with way more limited types
 #[derive(Debug, Clone, Copy)]
 pub enum TemplateNode<'a> {
@@ -131,7 +118,6 @@ pub enum DynamicNode<'a> {
     Component(VComponent<'a>),
     Text(VText<'a>),
     Fragment(VFragment<'a>),
-    Placeholder(Cell<ElementId>),
 }
 
 impl<'a> DynamicNode<'a> {
@@ -165,8 +151,9 @@ pub struct VText<'a> {
 }
 
 #[derive(Debug)]
-pub struct VFragment<'a> {
-    pub nodes: &'a [VNode<'a>],
+pub enum VFragment<'a> {
+    Empty(Cell<ElementId>),
+    NonEmpty(&'a [VNode<'a>]),
 }
 
 #[derive(Debug)]
