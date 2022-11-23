@@ -1,4 +1,4 @@
-use crate::{any_props::AnyProps, arena::ElementId, ScopeId, ScopeState, UiEvent};
+use crate::{any_props::AnyProps, arena::ElementId, Element, ScopeId, ScopeState, UiEvent};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -10,7 +10,7 @@ pub type TemplateId = &'static str;
 ///
 /// The dynamic parts of the template are stored separately from the static parts. This allows faster diffing by skipping
 /// static parts of the template.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VNode<'a> {
     // The ID assigned for the root of this template
     pub node_id: Cell<ElementId>,
@@ -45,6 +45,23 @@ impl<'a> VNode<'a> {
             "dioxus-placeholder",
         )
         .unwrap()
+    }
+
+    pub fn empty() -> Element<'a> {
+        Ok(VNode {
+            node_id: Cell::new(ElementId(0)),
+            key: None,
+            parent: None,
+            root_ids: &[],
+            dynamic_nodes: &[],
+            dynamic_attrs: &[],
+            template: Template {
+                id: "dioxus-empty",
+                roots: &[],
+                node_paths: &[],
+                attr_paths: &[],
+            },
+        })
     }
 
     pub fn template_from_dynamic_node(

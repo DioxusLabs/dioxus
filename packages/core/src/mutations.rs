@@ -15,6 +15,25 @@ impl<'a> Mutations<'a> {
             template_mutations: Vec::new(),
         }
     }
+
+    /// A useful tool for testing mutations
+    ///
+    /// Rewrites IDs to just be "template", so you can compare the mutations
+    pub fn santize(mut self) -> Self {
+        for edit in self
+            .template_mutations
+            .iter_mut()
+            .chain(self.edits.iter_mut())
+        {
+            match edit {
+                Mutation::LoadTemplate { name, .. } => *name = "template",
+                Mutation::SaveTemplate { name, .. } => *name = "template",
+                _ => {}
+            }
+        }
+
+        self
+    }
 }
 
 impl<'a> std::ops::Deref for Mutations<'a> {

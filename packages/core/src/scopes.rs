@@ -120,8 +120,27 @@ impl ScopeState {
     /// Get a handle to the currently active head node arena for this Scope
     ///
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
+    ///
+    /// Panics if the tree has not been built yet.
     pub fn root_node<'a>(&'a self) -> &'a RenderReturn<'a> {
-        let r: &RenderReturn = unsafe { &*self.current_frame().node.get() };
+        self.try_root_node()
+            .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
+    }
+
+    /// Try to get a handle to the currently active head node arena for this Scope
+    ///
+    /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
+    ///
+    /// Returns [`None`] if the tree has not been built yet.
+    pub fn try_root_node<'a>(&'a self) -> Option<&'a RenderReturn<'a>> {
+        let ptr = self.current_frame().node.get();
+
+        if ptr.is_null() {
+            return None;
+        }
+
+        let r: &RenderReturn = unsafe { &*ptr };
+
         unsafe { std::mem::transmute(r) }
     }
 

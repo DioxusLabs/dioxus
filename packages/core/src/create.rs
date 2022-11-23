@@ -157,6 +157,28 @@ impl<'b: 'static> VirtualDom {
 
     /// Insert a new template into the VirtualDom's template registry
     fn register_template(&mut self, template: &'b VNode<'b>) {
+        // First, make sure we mark the template as seen, regardless if we process it
+        self.templates
+            .insert(template.template.id, template.template);
+
+        // If it's all dynamic nodes, then we don't need to register it
+        // Quickly run through and see if it's all just dynamic nodes
+        let dynamic_roots = template
+            .template
+            .roots
+            .iter()
+            .filter(|root| {
+                matches!(
+                    root,
+                    TemplateNode::Dynamic(_) | TemplateNode::DynamicText(_)
+                )
+            })
+            .count();
+
+        if dynamic_roots == template.template.roots.len() {
+            return;
+        }
+
         for node in template.template.roots {
             self.create_static_node(template, node);
         }
@@ -165,9 +187,6 @@ impl<'b: 'static> VirtualDom {
             name: template.template.id,
             m: template.template.roots.len(),
         });
-
-        self.templates
-            .insert(template.template.id, template.template);
     }
 
     pub(crate) fn create_static_node(

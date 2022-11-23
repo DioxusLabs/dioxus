@@ -155,8 +155,7 @@ impl<'a, 'b> IntoDynNode<'a> for () {
 }
 impl<'a, 'b> IntoDynNode<'a> for VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        // DynamicNode::Fragment { nodes: cx., inner: () }
-        todo!()
+        DynamicNode::Fragment(VFragment::NonEmpty(_cx.bump().alloc([self])))
     }
 }
 
@@ -165,6 +164,15 @@ impl<'a, 'b, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
         match self {
             Some(val) => val.into_vnode(_cx),
             None => DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
+        }
+    }
+}
+
+impl<'a> IntoDynNode<'a> for &Element<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+        match self.as_ref() {
+            Ok(val) => val.clone().into_vnode(_cx),
+            _ => DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
         }
     }
 }

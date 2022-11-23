@@ -20,7 +20,7 @@ impl VirtualDom {
     pub(super) fn new_scope(&mut self, props: *const dyn AnyProps<'static>) -> &mut ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
-        let height = unsafe { parent.map(|f| (*f).height).unwrap_or(0) + 1 };
+        let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
         let id = ScopeId(entry.key());
 
         entry.insert(ScopeState {
