@@ -195,10 +195,11 @@ impl<'b: 'static> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        if let Some(components) = matching_components(left, right) {
-            components
+        match matching_components(left, right) {
+            None => self.replace_template(left, right),
+            Some(components) => components
                 .into_iter()
-                .for_each(|(l, r)| self.diff_vcomponent(l, r))
+                .for_each(|(l, r)| self.diff_vcomponent(l, r)),
         }
     }
 
@@ -652,6 +653,10 @@ impl<'b: 'static> VirtualDom {
             TemplateNode::Dynamic(_) => todo!(),
             TemplateNode::DynamicText(_) => todo!(),
         }
+    }
+
+    fn replace_template(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
+        todo!("replacing should work!")
     }
 
     fn replace(

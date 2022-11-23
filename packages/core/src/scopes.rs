@@ -103,6 +103,10 @@ impl ScopeState {
         }
     }
 
+    pub fn generation(&self) -> usize {
+        self.render_cnt.get()
+    }
+
     /// Get a handle to the currently active bump arena for this Scope
     ///
     /// This is a bump memory allocator. Be careful using this directly since the contents will be wiped on the next render.

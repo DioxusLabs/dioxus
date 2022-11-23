@@ -553,6 +553,8 @@ impl VirtualDom {
                 // Save the current mutations length so we can split them into boundary
                 let mutations_to_this_point = self.mutations.len();
 
+                // Run the scope and get the mutations
+                self.run_scope(dirty.id);
                 self.diff_scope(dirty.id);
 
                 // If suspended leaves are present, then we should find the boundary for this scope and attach things
