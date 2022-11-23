@@ -41,7 +41,7 @@ impl SuspenseBoundary {
         Rc::new(Self {
             id,
             waiting_on: Default::default(),
-            mutations: RefCell::new(Mutations::new(0)),
+            mutations: RefCell::new(Mutations::new()),
             placeholder: Cell::new(None),
             created_on_stack: Cell::new(0),
             onresolve: None,

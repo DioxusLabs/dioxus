@@ -165,6 +165,8 @@ pub struct VirtualDom {
     pub(crate) finished_fibers: Vec<ScopeId>,
 
     pub(crate) rx: futures_channel::mpsc::UnboundedReceiver<SchedulerMsg>,
+
+    pub(crate) mutations: Mutations<'static>,
 }
 
 impl VirtualDom {
@@ -237,6 +239,7 @@ impl VirtualDom {
             dirty_scopes: BTreeSet::new(),
             collected_leaves: Vec::new(),
             finished_fibers: Vec::new(),
+            mutations: Mutations::new(),
         };
 
         let root = dom.new_scope(Box::leak(Box::new(VProps::new(
@@ -447,6 +450,14 @@ impl VirtualDom {
         }
     }
 
+    /// Swap the current mutations with a new
+    fn finalize<'a>(&'a mut self) -> Mutations<'a> {
+        // todo: make this a routine
+        let mut out = Mutations::new();
+        std::mem::swap(&mut self.mutations, &mut out);
+        out
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
     /// The mutations item expects the RealDom's stack to be the root of the application.
@@ -467,21 +478,19 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild(&mut self) -> Mutations {
-        let mut mutations = Mutations::new(0);
-
+    pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Ok(node)) => {
-                let m = self.create_scope(ScopeId(0), &mut mutations, node);
-                mutations.push(Mutation::AppendChildren { m });
+                let m = self.create_scope(ScopeId(0), node);
+                self.mutations.push(Mutation::AppendChildren { m });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 
-        mutations
+        self.finalize()
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
@@ -513,19 +522,19 @@ impl VirtualDom {
     ) -> Mutations<'a> {
         pin_mut!(deadline);
 
-        let mut mutations = Mutations::new(0);
-
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
                 let scope = &mut self.scopes[finished_fiber.0];
                 let context = scope.has_context::<SuspenseContext>().unwrap();
 
-                mutations.extend(context.mutations.borrow_mut().template_mutations.drain(..));
-                mutations.extend(context.mutations.borrow_mut().drain(..));
+                self.mutations
+                    .extend(context.mutations.borrow_mut().template_mutations.drain(..));
+                self.mutations
+                    .extend(context.mutations.borrow_mut().drain(..));
 
                 // TODO: count how many nodes are on the stack?
-                mutations.push(Mutation::ReplaceWith {
+                self.mutations.push(Mutation::ReplaceWith {
                     id: context.placeholder.get().unwrap(),
                     m: 1,
                 })
@@ -542,9 +551,9 @@ impl VirtualDom {
                 }
 
                 // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = mutations.len();
+                let mutations_to_this_point = self.mutations.len();
 
-                self.diff_scope(&mut mutations, dirty.id);
+                self.diff_scope(dirty.id);
 
                 // If suspended leaves are present, then we should find the boundary for this scope and attach things
                 // No placeholder necessary since this is a diff
@@ -559,7 +568,7 @@ impl VirtualDom {
                     boundary_mut
                         .mutations
                         .borrow_mut()
-                        .extend(mutations.split_off(mutations_to_this_point));
+                        .extend(self.mutations.split_off(mutations_to_this_point));
 
                     // Attach suspended leaves
                     boundary
@@ -569,22 +578,28 @@ impl VirtualDom {
                 }
             }
 
-            // Wait for suspense, or a deadline
-            if self.dirty_scopes.is_empty() {
-                // If there's no pending suspense, then we have no reason to wait
-                if self.scheduler.leaves.borrow().is_empty() {
-                    return mutations;
-                }
+            // If there's more work, then just continue, plenty of work to do
+            if !self.dirty_scopes.is_empty() {
+                continue;
+            }
 
-                // Poll the suspense leaves in the meantime
-                let work = self.wait_for_work();
-                pin_mut!(work);
+            // If there's no pending suspense, then we have no reason to wait for anything
+            if self.scheduler.leaves.borrow().is_empty() {
+                return self.finalize();
+            }
 
-                // If the deadline is exceded (left) then we should return the mutations we have
-                use futures_util::future::{select, Either};
-                if let Either::Left((_, _)) = select(&mut deadline, work).await {
-                    return mutations;
-                }
+            // Poll the suspense leaves in the meantime
+            let mut work = self.wait_for_work();
+
+            // safety: this is okay since we don't touch the original future
+            let pinned = unsafe { std::pin::Pin::new_unchecked(&mut work) };
+
+            // If the deadline is exceded (left) then we should return the mutations we have
+            use futures_util::future::{select, Either};
+            if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
+                // release the borrowed
+                drop(work);
+                return self.finalize();
             }
         }
     }

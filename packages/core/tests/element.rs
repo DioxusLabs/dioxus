@@ -18,3 +18,13 @@ fn root_node_isnt_null() {
     // todo: there should also be a default error boundary
     assert!(scope.has_context::<SuspenseContext>().is_some());
 }
+
+#[test]
+fn elements() {
+    let mut dom = VirtualDom::new(|cx| {
+        //
+        cx.render(rsx!( div { "Hello world!" } ))
+    });
+
+    let muts = dom.rebuild();
+}

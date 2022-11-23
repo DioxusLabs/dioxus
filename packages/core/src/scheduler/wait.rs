@@ -78,14 +78,15 @@ impl VirtualDom {
                 let template: &VNode = unsafe { std::mem::transmute(template) };
                 let mutations: &mut Mutations = unsafe { std::mem::transmute(mutations) };
 
-                let place_holder_id = scope.placeholder.get().unwrap();
-                self.scope_stack.push(scope_id);
-                let created = self.create(mutations, template);
-                self.scope_stack.pop();
-                mutations.push(Mutation::ReplaceWith {
-                    id: place_holder_id,
-                    m: created,
-                });
+                todo!();
+                // let place_holder_id = scope.placeholder.get().unwrap();
+                // self.scope_stack.push(scope_id);
+                // let created = self.create(mutations, template);
+                // self.scope_stack.pop();
+                // mutations.push(Mutation::ReplaceWith {
+                //     id: place_holder_id,
+                //     m: created,
+                // });
 
                 // for leaf in self.collected_leaves.drain(..) {
                 //     fiber.waiting_on.borrow_mut().insert(leaf);

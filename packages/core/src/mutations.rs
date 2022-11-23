@@ -8,9 +8,9 @@ pub struct Mutations<'a> {
 }
 
 impl<'a> Mutations<'a> {
-    pub fn new(subtree: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            subtree,
+            subtree: 0,
             edits: Vec::new(),
             template_mutations: Vec::new(),
         }
@@ -86,6 +86,24 @@ pub enum Mutation<'a> {
     ReplacePlaceholder {
         m: usize,
         path: &'static [u8],
+    },
+
+    /// Insert a number of nodes after a given node.
+    InsertAfter {
+        /// The ID of the node to insert after.
+        id: ElementId,
+
+        /// The ids of the nodes to insert after the target node.
+        m: usize,
+    },
+
+    /// Insert a number of nodes before a given node.
+    InsertBefore {
+        /// The ID of the node to insert before.
+        id: ElementId,
+
+        /// The ids of the nodes to insert before the target node.
+        m: usize,
     },
 
     SaveTemplate {
