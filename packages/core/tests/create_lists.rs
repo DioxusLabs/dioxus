@@ -26,6 +26,29 @@ fn list_renders() {
     let edits = dom.rebuild().santize();
 
     assert_eq!(
+        edits.template_mutations,
+        [
+            // Create the outer div
+            CreateElement { name: "div", namespace: None, id: ElementId(1) },
+            // todo: since this is the only child, we should just use
+            // append when modify the values (IE no need for a placeholder)
+            CreatePlaceholder { id: ElementId(2) },
+            AppendChildren { m: 1 },
+            SaveTemplate { name: "template", m: 1 },
+            // Create the inner template div
+            CreateElement { name: "div", namespace: None, id: ElementId(3) },
+            CreateElement { name: "h1", namespace: None, id: ElementId(4) },
+            CreateStaticText { value: "hello world! " },
+            AppendChildren { m: 1 },
+            CreateElement { name: "p", namespace: None, id: ElementId(5) },
+            CreateStaticText { value: "d" },
+            AppendChildren { m: 1 },
+            AppendChildren { m: 2 },
+            SaveTemplate { name: "template", m: 1 }
+        ]
+    );
+
+    assert_eq!(
         edits.edits,
         [
             // Load the outer div

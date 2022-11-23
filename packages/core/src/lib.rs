@@ -34,7 +34,7 @@ pub(crate) mod innerlude {
     /// An [`Element`] is a possibly-errored [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element<'a> = anyhow::Result<VNode<'a>>;
+    pub type Element<'a> = Result<VNode<'a>, anyhow::Error>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///
