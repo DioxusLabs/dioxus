@@ -37,6 +37,9 @@ serde = { version = "1", features = ["derive"], optional = true }
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
 
+[dev-dependencies]
+dioxus = { path = "../dioxus" }
+
 [features]
 default = []
 serialize = ["serde"]

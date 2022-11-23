@@ -20,6 +20,7 @@ fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
 /// This test ensures that if a component aborts early, it is replaced with a placeholder.
 /// In debug, this should also toss a warning.
 #[test]
+#[ignore]
 fn test_memory_leak() {
     fn app(cx: Scope) -> Element {
         let val = cx.use_hook(|| 0);

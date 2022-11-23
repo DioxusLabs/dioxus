@@ -4,6 +4,8 @@ use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
+#[cfg(target_os = "ios")]
+use wry::application::platform::ios::WindowExtIOS;
 use wry::application::window::Fullscreen as WryFullscreen;
 
 use UserWindowEvent::*;
@@ -143,6 +145,18 @@ impl DesktopContext {
     pub fn eval(&self, script: impl std::string::ToString) {
         let _ = self.proxy.send_event(Eval(script.to_string()));
     }
+
+    /// Push view
+    #[cfg(target_os = "ios")]
+    pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
+        let _ = self.proxy.send_event(PushView(view));
+    }
+
+    /// Push view
+    #[cfg(target_os = "ios")]
+    pub fn pop_view(&self) {
+        let _ = self.proxy.send_event(PopView);
+    }
 }
 
 #[derive(Debug)]
@@ -173,6 +187,11 @@ pub enum UserWindowEvent {
     DevTool,
 
     Eval(String),
+
+    #[cfg(target_os = "ios")]
+    PushView(objc_id::ShareId<objc::runtime::Object>),
+    #[cfg(target_os = "ios")]
+    PopView,
 }
 
 pub(super) fn handler(
@@ -242,5 +261,41 @@ pub(super) fn handler(
                 log::warn!("Eval script error: {e}");
             }
         }
+
+        #[cfg(target_os = "ios")]
+        PushView(view) => unsafe {
+            use objc::runtime::Object;
+            use objc::*;
+            assert!(is_main_thread());
+            let ui_view = window.ui_view() as *mut Object;
+            let ui_view_frame: *mut Object = msg_send![ui_view, frame];
+            let _: () = msg_send![view, setFrame: ui_view_frame];
+            let _: () = msg_send![view, setAutoresizingMask: 31];
+
+            let ui_view_controller = window.ui_view_controller() as *mut Object;
+            let _: () = msg_send![ui_view_controller, setView: view];
+            desktop.views.push(ui_view);
+        },
+
+        #[cfg(target_os = "ios")]
+        PopView => unsafe {
+            use objc::runtime::Object;
+            use objc::*;
+            assert!(is_main_thread());
+            if let Some(view) = desktop.views.pop() {
+                let ui_view_controller = window.ui_view_controller() as *mut Object;
+                let _: () = msg_send![ui_view_controller, setView: view];
+            }
+        },
     }
+}
+
+#[cfg(target_os = "ios")]
+fn is_main_thread() -> bool {
+    use objc::runtime::{Class, BOOL, NO};
+    use objc::*;
+
+    let cls = Class::get("NSThread").unwrap();
+    let result: BOOL = unsafe { msg_send![cls, isMainThread] };
+    result != NO
 }

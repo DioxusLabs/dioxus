@@ -49,6 +49,7 @@ fn lists_work() {
 }
 
 #[test]
+#[ignore]
 fn conditional_rendering() {
     static App: Component = |cx| {
         cx.render(rsx!(
