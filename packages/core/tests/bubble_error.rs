@@ -25,10 +25,6 @@ impl<T, E: Clone> Reject<E> for &Result<T, E> {
     }
 }
 
-fn use_query_param<'a>(cx: &'a ScopeState) -> Result<&'a i32, ParseError> {
-    todo!()
-}
-
 /// Call "clone" on the underlying error so it can be propogated out
 pub trait CloneErr<T, E: ToOwned> {
     fn clone_err(&self) -> Result<&T, E::Owned>
@@ -59,7 +55,10 @@ fn app(cx: Scope) -> Element {
 
     let value = cx.use_hook(|| "123123123.123".parse::<f32>()).clone_err()?;
 
-    let t = use_query_param(cx)?;
+    let value = cx
+        .use_hook(|| "123123123.123".parse::<f32>())
+        .as_ref()
+        .map_err(Clone::clone)?;
 
     let value = cx
         .use_hook(|| "123123123.123".parse::<f32>())
