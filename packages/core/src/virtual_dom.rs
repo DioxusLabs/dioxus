@@ -252,7 +252,7 @@ impl VirtualDom {
         // This could be unexpected, so we might rethink this behavior later
         //
         // We *could* just panic if the suspense boundary is not found
-        root.provide_context(SuspenseBoundary::new(ScopeId(0)));
+        root.provide_context(Rc::new(SuspenseBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::null());

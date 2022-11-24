@@ -38,15 +38,6 @@ pub struct VNode<'a> {
 }
 
 impl<'a> VNode<'a> {
-    pub fn placeholder_template(cx: &'a ScopeState) -> Self {
-        Self::template_from_dynamic_node(
-            cx,
-            DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
-            "dioxus-placeholder",
-        )
-        .unwrap()
-    }
-
     pub fn empty() -> Element<'a> {
         Ok(VNode {
             node_id: Cell::new(ElementId(0)),
@@ -59,48 +50,6 @@ impl<'a> VNode<'a> {
                 id: "dioxus-empty",
                 roots: &[],
                 node_paths: &[],
-                attr_paths: &[],
-            },
-        })
-    }
-
-    pub fn template_from_dynamic_node(
-        cx: &'a ScopeState,
-        node: DynamicNode<'a>,
-        id: &'static str,
-    ) -> anyhow::Result<Self> {
-        Ok(VNode {
-            node_id: Cell::new(ElementId(0)),
-            key: None,
-            parent: None,
-            root_ids: &[],
-            dynamic_nodes: cx.bump().alloc([node]),
-            dynamic_attrs: &[],
-            template: Template {
-                id,
-                roots: &[TemplateNode::Dynamic(0)],
-                node_paths: &[&[0]],
-                attr_paths: &[],
-            },
-        })
-    }
-
-    pub fn single_text(
-        _cx: &'a ScopeState,
-        text: &'static [TemplateNode<'static>],
-        id: &'static str,
-    ) -> anyhow::Result<Self> {
-        Ok(VNode {
-            node_id: Cell::new(ElementId(0)),
-            key: None,
-            parent: None,
-            root_ids: &[],
-            dynamic_nodes: &[],
-            dynamic_attrs: &[],
-            template: Template {
-                id,
-                roots: text,
-                node_paths: &[&[0]],
                 attr_paths: &[],
             },
         })

@@ -1,26 +1,17 @@
-use std::any::Any;
-use std::cell::Cell;
-
-use crate::factory::RenderReturn;
-use crate::innerlude::{Mutations, VComponent, VFragment, VText};
-use crate::virtual_dom::VirtualDom;
-use crate::{Attribute, AttributeValue, TemplateNode};
-
-use crate::any_props::VProps;
-use DynamicNode::*;
-
-use crate::mutations::Mutation;
-use crate::nodes::{DynamicNode, Template, TemplateId};
-use crate::scopes::Scope;
 use crate::{
-    any_props::AnyProps,
     arena::ElementId,
-    bump_frame::BumpFrame,
-    nodes::VNode,
-    scopes::{ScopeId, ScopeState},
+    factory::RenderReturn,
+    innerlude::{DirtyScope, VComponent, VFragment, VText},
+    mutations::Mutation,
+    nodes::{DynamicNode, VNode},
+    scopes::ScopeId,
+    virtual_dom::VirtualDom,
+    AttributeValue, TemplateNode,
 };
+
 use fxhash::{FxHashMap, FxHashSet};
-use slab::Slab;
+use std::cell::Cell;
+use DynamicNode::*;
 
 impl<'b: 'static> VirtualDom {
     pub fn diff_scope(&mut self, scope: ScopeId) {
@@ -122,6 +113,15 @@ impl<'b: 'static> VirtualDom {
                 (Component(left), Component(right)) => self.diff_vcomponent(left, right),
                 _ => self.replace(left_template, right_template, left_node, right_node),
             };
+        }
+
+        // Make sure the roots get transferred over
+        for (left, right) in left_template
+            .root_ids
+            .iter()
+            .zip(right_template.root_ids.iter())
+        {
+            right.set(left.get());
         }
     }
 
@@ -228,8 +228,7 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn replace_placeholder_with_nodes(&mut self, l: &'b Cell<ElementId>, r: &'b [VNode<'b>]) {
-        let created = r.iter().fold(0, |acc, child| acc + self.create(child));
-
+        let created = self.create_children(r);
         self.mutations.push(Mutation::ReplaceWith {
             id: l.get(),
             m: created,
@@ -238,9 +237,10 @@ impl<'b: 'static> VirtualDom {
 
     fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
         //
-
         // Remove the old nodes, except for one
         self.remove_nodes(&l[1..]);
+        let id = self.next_element(&l[0], &[]);
+        // self.replace(left_template, right_template, left, right)
     }
 
     fn diff_non_empty_fragment(&mut self, new: &'b [VNode<'b>], old: &'b [VNode<'b>]) {
@@ -613,8 +613,12 @@ impl<'b: 'static> VirtualDom {
         }
     }
 
-    fn insert_after(&mut self, node: &'b VNode<'b>, nodes_created: usize) {}
-    fn insert_before(&mut self, node: &'b VNode<'b>, nodes_created: usize) {}
+    fn insert_after(&mut self, node: &'b VNode<'b>, nodes_created: usize) {
+        todo!()
+    }
+    fn insert_before(&mut self, node: &'b VNode<'b>, nodes_created: usize) {
+        todo!()
+    }
 
     fn replace_node_with_on_stack(&mut self, old: &'b VNode<'b>, m: usize) {
         todo!()
@@ -623,7 +627,39 @@ impl<'b: 'static> VirtualDom {
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
-        //
+        nodes.into_iter().for_each(|node| self.remove_node(node));
+    }
+
+    fn remove_node(&mut self, node: &'b VNode<'b>) {
+        for (idx, root) in node.template.roots.iter().enumerate() {
+            let id = match root {
+                TemplateNode::Text(_) | TemplateNode::Element { .. } => node.root_ids[idx].get(),
+                TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
+                    match &node.dynamic_nodes[*id] {
+                        Text(t) => t.id.get(),
+                        Fragment(VFragment::Empty(t)) => t.get(),
+                        Fragment(VFragment::NonEmpty(t)) => return self.remove_nodes(t),
+                        Component(comp) => return self.remove_component(comp.scope.get().unwrap()),
+                    }
+                }
+            };
+
+            self.mutations.push(Mutation::Remove { id })
+        }
+    }
+
+    fn remove_component(&mut self, scope_id: ScopeId) {
+        let height = self.scopes[scope_id.0].height;
+        self.dirty_scopes.remove(&DirtyScope {
+            height,
+            id: scope_id,
+        });
+
+        // I promise, since we're descending down the tree, this is safe
+        match unsafe { self.scopes[scope_id.0].root_node().extend_lifetime_ref() } {
+            RenderReturn::Sync(Ok(t)) => self.remove_node(t),
+            _ => todo!("cannot handle nonstandard nodes"),
+        }
     }
 
     /// Push all the real nodes on the stack
@@ -632,26 +668,60 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn create_children(&mut self, nodes: &'b [VNode<'b>]) -> usize {
-        todo!()
+        nodes.iter().fold(0, |acc, child| acc + self.create(child))
     }
 
-    pub(crate) fn create_and_insert_before(&self, new: &[VNode], after: &VNode) {
-        let id = self.find_last_element(after);
+    fn create_and_insert_before(&mut self, new: &'b [VNode<'b>], before: &'b VNode<'b>) {
+        let m = self.create_children(new);
+        let id = self.find_first_element(before);
+        self.mutations.push(Mutation::InsertBefore { id, m })
     }
-    pub(crate) fn create_and_insert_after(&self, new: &[VNode], after: &VNode) {
+
+    fn create_and_insert_after(&mut self, new: &'b [VNode<'b>], after: &'b VNode<'b>) {
+        let m = self.create_children(new);
         let id = self.find_last_element(after);
+        self.mutations.push(Mutation::InsertAfter { id, m })
     }
 
     fn find_first_element(&self, node: &VNode) -> ElementId {
-        todo!()
+        match &node.template.roots[0] {
+            TemplateNode::Element { .. } | TemplateNode::Text(_) => node.root_ids[0].get(),
+            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
+                match &node.dynamic_nodes[*id] {
+                    Text(t) => t.id.get(),
+                    Fragment(VFragment::NonEmpty(t)) => self.find_first_element(&t[0]),
+                    Fragment(VFragment::Empty(t)) => t.get(),
+                    Component(comp) => {
+                        let scope = comp.scope.get().unwrap();
+                        match self.scopes[scope.0].root_node() {
+                            RenderReturn::Sync(Ok(t)) => self.find_first_element(t),
+                            _ => todo!("cannot handle nonstandard nodes"),
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fn find_last_element(&self, node: &VNode) -> ElementId {
         match node.template.roots.last().unwrap() {
-            TemplateNode::Element { .. } => todo!(),
-            TemplateNode::Text(t) => todo!(),
-            TemplateNode::Dynamic(_) => todo!(),
-            TemplateNode::DynamicText(_) => todo!(),
+            TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                node.root_ids.last().unwrap().get()
+            }
+            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
+                match &node.dynamic_nodes[*id] {
+                    Text(t) => t.id.get(),
+                    Fragment(VFragment::NonEmpty(t)) => self.find_last_element(t.last().unwrap()),
+                    Fragment(VFragment::Empty(t)) => t.get(),
+                    Component(comp) => {
+                        let scope = comp.scope.get().unwrap();
+                        match self.scopes[scope.0].root_node() {
+                            RenderReturn::Sync(Ok(t)) => self.find_last_element(t),
+                            _ => todo!("cannot handle nonstandard nodes"),
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -666,6 +736,15 @@ impl<'b: 'static> VirtualDom {
         left: &'b DynamicNode<'b>,
         right: &'b DynamicNode<'b>,
     ) {
+        // Remove all but the first root
+        for root in &left_template.template.roots[1..] {
+            match root {
+                TemplateNode::Element { .. } => todo!(),
+                TemplateNode::Text(_) => todo!(),
+                TemplateNode::Dynamic(_) => todo!(),
+                TemplateNode::DynamicText(_) => todo!(),
+            }
+        }
     }
 }
 

@@ -37,8 +37,8 @@ pub struct SuspenseBoundary {
 }
 
 impl SuspenseBoundary {
-    pub fn new(id: ScopeId) -> Rc<Self> {
-        Rc::new(Self {
+    pub fn new(id: ScopeId) -> Self {
+        Self {
             id,
             waiting_on: Default::default(),
             mutations: RefCell::new(Mutations::new()),
@@ -46,7 +46,7 @@ impl SuspenseBoundary {
             created_on_stack: Cell::new(0),
             onresolve: None,
             onstart: None,
-        })
+        }
     }
 }
 

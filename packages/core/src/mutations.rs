@@ -94,6 +94,7 @@ pub enum Mutation<'a> {
     LoadTemplate {
         name: &'static str,
         index: usize,
+        id: ElementId,
     },
 
     // Take the current element and replace it with the element with the given id.
@@ -103,8 +104,8 @@ pub enum Mutation<'a> {
     },
 
     ReplacePlaceholder {
-        m: usize,
         path: &'static [u8],
+        m: usize,
     },
 
     /// Insert a number of nodes after a given node.
@@ -175,5 +176,8 @@ pub enum Mutation<'a> {
 
         /// The name of the event to remove.
         event: &'a str,
+    },
+    Remove {
+        id: ElementId,
     },
 }

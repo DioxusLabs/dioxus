@@ -1,55 +1,67 @@
-use dioxus_core::*;
-use std::{cell::RefCell, rc::Rc, time::Duration};
+use dioxus::core::ElementId;
+use dioxus::core::{Mutation::*, SuspenseBoundary};
+use dioxus::prelude::*;
+use dioxus_core::SuspenseContext;
+use std::{rc::Rc, time::Duration};
 
 #[tokio::test]
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mutations = dom.rebuild();
+    let mutations = dom.rebuild().santize();
 
-    println!("mutations: {:?}", mutations);
+    // We should at least get the top-level template in
+    assert_eq!(
+        mutations.template_mutations,
+        [
+            CreateElement { name: "div", namespace: None, id: ElementId(0) },
+            CreateStaticText { value: "Waiting for child..." },
+            CreatePlaceholder { id: ElementId(0) },
+            AppendChildren { m: 2 },
+            SaveTemplate { name: "template", m: 1 }
+        ]
+    );
+
+    // And we should load it in and assign the placeholder properly
+    assert_eq!(
+        mutations.edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+            // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
+            // can we even?
+            AssignId { path: &[1], id: ElementId(3) },
+            AppendChildren { m: 1 },
+        ]
+    );
+
+    // wait just a moment, not enough time for the boundary to resolve
 
     dom.wait_for_work().await;
 }
 
 fn app(cx: Scope) -> Element {
-    println!("running root app");
-
-    VNode::template_from_dynamic_node(
-        cx,
-        cx.component(suspense_boundary, (), "suspense_boundary"),
-        "app",
-    )
+    cx.render(rsx!(
+        div {
+            "Waiting for child..."
+            suspense_boundary {}
+        }
+    ))
 }
 
 fn suspense_boundary(cx: Scope) -> Element {
-    println!("running boundary");
+    cx.use_hook(|| cx.provide_context(Rc::new(SuspenseBoundary::new(cx.scope_id()))));
 
-    let _ = cx.use_hook(|| {
-        cx.provide_context(Rc::new(RefCell::new(SuspenseBoundary::new(cx.scope_id()))))
-    });
+    // Ensure the right types are found
+    cx.has_context::<SuspenseContext>().unwrap();
 
-    VNode::template_from_dynamic_node(cx, cx.component(async_child, (), "async_child"), "app")
+    cx.render(rsx!(async_child {}))
 }
 
 async fn async_child(cx: Scope<'_>) -> Element {
-    println!("rendering async child");
-
-    let fut = cx.use_hook(|| {
-        Box::pin(async {
-            println!("Starting sleep");
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            println!("Sleep ended");
-        })
-    });
-
-    fut.await;
-
-    println!("Future awaited and complete");
-
-    VNode::template_from_dynamic_node(cx, cx.component(async_text, (), "async_text"), "app")
+    use_future!(cx, || tokio::time::sleep(Duration::from_millis(10))).await;
+    cx.render(rsx!(async_text {}))
 }
 
 async fn async_text(cx: Scope<'_>) -> Element {
-    VNode::single_text(&cx, &[TemplateNode::Text("it works!")], "beauty")
+    cx.render(rsx!("async_text"))
 }

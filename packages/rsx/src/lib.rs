@@ -121,6 +121,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         });
 
         // Render and release the mutable borrow on context
+        let num_roots = self.roots.len();
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;
@@ -147,7 +148,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 parent: None,
                 key: #key_tokens,
                 template: TEMPLATE,
-                root_ids: __cx.bump().alloc([]),
+                root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([::dioxus::core::ElementId(0); #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }

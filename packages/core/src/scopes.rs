@@ -103,6 +103,9 @@ impl ScopeState {
         }
     }
 
+    /// Get the current render since the inception of this component
+    ///
+    /// This can be used as a helpful diagnostic when debugging hooks/renders, etc
     pub fn generation(&self) -> usize {
         self.render_cnt.get()
     }

@@ -5,7 +5,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
 
 impl<'b: 'static> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -36,120 +36,140 @@ impl<'b: 'static> VirtualDom {
 
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
+            // We might need to generate an ID for the root node
             on_stack += match root {
-                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
-                    self.mutations.push(LoadTemplate {
-                        name: template.template.id,
-                        index: root_idx,
-                    });
-                    1
-                }
-
                 TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
                     match &template.dynamic_nodes[*id] {
-                        DynamicNode::Fragment(frag) => match frag {
-                            VFragment::Empty(slot) => {
-                                let id =
-                                    self.next_element(template, template.template.node_paths[*id]);
-                                slot.set(id);
-                                self.mutations.push(CreatePlaceholder { id });
-                                1
-                            }
-                            VFragment::NonEmpty(_) => self.create_dynamic_node(
-                                template,
-                                &template.dynamic_nodes[*id],
-                                *id,
-                            ),
-                        },
-                        DynamicNode::Component { .. } => {
-                            self.create_dynamic_node(template, &template.dynamic_nodes[*id], *id)
-                        }
+                        // a dynamic text node doesn't replace a template node, instead we create it on the fly
                         DynamicNode::Text(VText { id: slot, value }) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             self.mutations.push(CreateTextNode { value, id });
                             1
                         }
+
+                        DynamicNode::Fragment(VFragment::Empty(slot)) => {
+                            let id = self.next_element(template, template.template.node_paths[*id]);
+                            slot.set(id);
+                            self.mutations.push(CreatePlaceholder { id });
+                            1
+                        }
+
+                        DynamicNode::Fragment(VFragment::NonEmpty(_))
+                        | DynamicNode::Component { .. } => {
+                            self.create_dynamic_node(template, &template.dynamic_nodes[*id], *id)
+                        }
                     }
+                }
+
+                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                    let this_id = self.next_element(template, &[]);
+                    template.root_ids[root_idx].set(this_id);
+                    self.mutations.push(LoadTemplate {
+                        name: template.template.id,
+                        index: root_idx,
+                        id: this_id,
+                    });
+
+                    // we're on top of a node that has a dynamic attribute for a descendant
+                    // Set that attribute now before the stack gets in a weird state
+                    while let Some((mut attr_id, path)) =
+                        dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
+                    {
+                        // if attribute is on a root node, then we've already created the element
+                        // Else, it's deep in the template and we should create a new id for it
+                        let id = match path.len() {
+                            1 => this_id,
+                            _ => self.next_element(template, template.template.attr_paths[attr_id]),
+                        };
+
+                        loop {
+                            let attribute = template.dynamic_attrs.get(attr_id).unwrap();
+                            attribute.mounted_element.set(id);
+
+                            match &attribute.value {
+                                AttributeValue::Text(value) => self.mutations.push(SetAttribute {
+                                    name: attribute.name,
+                                    value: *value,
+                                    ns: attribute.namespace,
+                                    id,
+                                }),
+                                AttributeValue::Bool(value) => {
+                                    self.mutations.push(SetBoolAttribute {
+                                        name: attribute.name,
+                                        value: *value,
+                                        id,
+                                    })
+                                }
+                                AttributeValue::Listener(_) => {
+                                    self.mutations.push(NewEventListener {
+                                        // all listeners start with "on"
+                                        event_name: &attribute.name[2..],
+                                        scope: cur_scope,
+                                        id,
+                                    })
+                                }
+                                AttributeValue::Float(_) => todo!(),
+                                AttributeValue::Int(_) => todo!(),
+                                AttributeValue::Any(_) => todo!(),
+                                AttributeValue::None => todo!(),
+                            }
+
+                            // Only push the dynamic attributes forward if they match the current path (same element)
+                            match dynamic_attrs.next_if(|(_, p)| *p == path) {
+                                Some((next_attr_id, _)) => attr_id = next_attr_id,
+                                None => break,
+                            }
+                        }
+                    }
+
+                    // We're on top of a node that has a dynamic child for a descendant
+                    // Skip any node that's a root
+                    let mut start = None;
+                    let mut end = None;
+
+                    // Collect all the dynamic nodes below this root
+                    // We assign the start and end of the range of dynamic nodes since they area ordered in terms of tree path
+                    //
+                    // [0]
+                    // [1, 1]     <---|
+                    // [1, 1, 1]  <---| these are the range of dynamic nodes below root 1
+                    // [1, 1, 2]  <---|
+                    // [2]
+                    //
+                    // We collect each range and then create them and replace the placeholder in the template
+                    while let Some((idx, p)) =
+                        dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8)
+                    {
+                        if p.len() == 1 {
+                            continue;
+                        }
+
+                        if start.is_none() {
+                            start = Some(idx);
+                        }
+
+                        end = Some(idx);
+                    }
+
+                    //
+                    if let (Some(start), Some(end)) = (start, end) {
+                        for idx in start..=end {
+                            let node = &template.dynamic_nodes[idx];
+                            let m = self.create_dynamic_node(template, node, idx);
+                            if m > 0 {
+                                self.mutations.push(ReplacePlaceholder {
+                                    m,
+                                    path: &template.template.node_paths[idx][1..],
+                                });
+                            }
+                        }
+                    }
+
+                    // elements create only one node :-)
+                    1
                 }
             };
-
-            // we're on top of a node that has a dynamic attribute for a descendant
-            // Set that attribute now before the stack gets in a weird state
-            while let Some((mut attr_id, path)) =
-                dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
-            {
-                let id = self.next_element(template, template.template.attr_paths[attr_id]);
-                self.mutations.push(AssignId {
-                    path: &path[1..],
-                    id,
-                });
-
-                loop {
-                    let attribute = template.dynamic_attrs.get(attr_id).unwrap();
-                    attribute.mounted_element.set(id);
-
-                    match &attribute.value {
-                        AttributeValue::Text(value) => self.mutations.push(SetAttribute {
-                            name: attribute.name,
-                            value: *value,
-                            ns: attribute.namespace,
-                            id,
-                        }),
-                        AttributeValue::Bool(value) => self.mutations.push(SetBoolAttribute {
-                            name: attribute.name,
-                            value: *value,
-                            id,
-                        }),
-                        AttributeValue::Listener(_) => self.mutations.push(NewEventListener {
-                            // all listeners start with "on"
-                            event_name: &attribute.name[2..],
-                            scope: cur_scope,
-                            id,
-                        }),
-                        AttributeValue::Float(_) => todo!(),
-                        AttributeValue::Int(_) => todo!(),
-                        AttributeValue::Any(_) => todo!(),
-                        AttributeValue::None => todo!(),
-                    }
-
-                    // Only push the dynamic attributes forward if they match the current path (same element)
-                    match dynamic_attrs.next_if(|(_, p)| *p == path) {
-                        Some((next_attr_id, _)) => attr_id = next_attr_id,
-                        None => break,
-                    }
-                }
-            }
-
-            // We're on top of a node that has a dynamic child for a descendant
-            // Skip any node that's a root
-            let mut start = None;
-            let mut end = None;
-
-            while let Some((idx, p)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
-                if p.len() == 1 {
-                    continue;
-                }
-
-                if start.is_none() {
-                    start = Some(idx);
-                }
-
-                end = Some(idx);
-            }
-
-            if let (Some(start), Some(end)) = (start, end) {
-                for idx in start..=end {
-                    let node = &template.dynamic_nodes[idx];
-                    let m = self.create_dynamic_node(template, node, idx);
-                    if m > 0 {
-                        self.mutations.push(ReplacePlaceholder {
-                            m,
-                            path: &template.template.node_paths[idx][1..],
-                        });
-                    }
-                }
-            }
         }
 
         on_stack
@@ -196,8 +216,8 @@ impl<'b: 'static> VirtualDom {
     ) {
         match *node {
             // Todo: create the children's template
-            TemplateNode::Dynamic(idx) => {
-                let id = self.next_element(template, template.template.node_paths[idx]);
+            TemplateNode::Dynamic(_) => {
+                let id = ElementId(0);
                 self.mutations
                     .template_mutations
                     .push(CreatePlaceholder { id })
@@ -218,7 +238,7 @@ impl<'b: 'static> VirtualDom {
                 tag,
                 inner_opt,
             } => {
-                let id = self.next_element(template, &[]); // never gets referenced, empty path is fine, I think?
+                let id = ElementId(0);
 
                 self.mutations.template_mutations.push(CreateElement {
                     name: tag,
@@ -344,19 +364,28 @@ impl<'b: 'static> VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Ok(t)) => self.mount_component(scope, t, idx),
+            Sync(Ok(t)) => {
+                self.mount_component(scope, template, t, idx)
+                // self.create(t)
+            }
             Sync(Err(_e)) => todo!("Propogate error upwards"),
             Async(_) => self.mount_component_placeholder(template, idx, scope),
         }
     }
 
-    fn mount_component(&mut self, scope: ScopeId, template: &'b VNode<'b>, idx: usize) -> usize {
+    fn mount_component(
+        &mut self,
+        scope: ScopeId,
+        parent: &'b VNode<'b>,
+        new: &'b VNode<'b>,
+        idx: usize,
+    ) -> usize {
         // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
         // is encountered
         let mutations_to_this_point = self.mutations.len();
 
         // Create the component's root element
-        let created = self.create_scope(scope, template);
+        let created = self.create_scope(scope, new);
 
         // If there are no suspense leaves below us, then just don't bother checking anything suspense related
         if self.collected_leaves.is_empty() {
@@ -370,7 +399,7 @@ impl<'b: 'static> VirtualDom {
         };
 
         // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
-        let new_id = self.next_element(template, template.template.node_paths[idx]);
+        let new_id = self.next_element(new, parent.template.node_paths[idx]);
 
         // Now connect everything to the boundary
         self.scopes[scope.0].placeholder.set(Some(new_id));
@@ -392,7 +421,7 @@ impl<'b: 'static> VirtualDom {
         // Now assign the placeholder in the DOM
         self.mutations.push(AssignId {
             id: new_id,
-            path: &template.template.node_paths[idx][1..],
+            path: &parent.template.node_paths[idx][1..],
         });
 
         0
@@ -411,6 +440,11 @@ impl<'b: 'static> VirtualDom {
 
         // Set the placeholder of the scope
         self.scopes[scope.0].placeholder.set(Some(new_id));
+
+        println!(
+            "assigning id {:?} to path {:?}, template: {:?}",
+            new_id, &template.template.node_paths, template.template
+        );
 
         // Since the placeholder is already in the DOM, we don't create any new nodes
         self.mutations.push(AssignId {
