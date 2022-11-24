@@ -216,12 +216,10 @@ impl<'b: 'static> VirtualDom {
     ) {
         match *node {
             // Todo: create the children's template
-            TemplateNode::Dynamic(_) => {
-                let id = ElementId(0);
-                self.mutations
-                    .template_mutations
-                    .push(CreatePlaceholder { id })
-            }
+            TemplateNode::Dynamic(_) => self
+                .mutations
+                .template_mutations
+                .push(CreateStaticPlaceholder {}),
             TemplateNode::Text(value) => self
                 .mutations
                 .template_mutations
@@ -236,15 +234,20 @@ impl<'b: 'static> VirtualDom {
                 children,
                 namespace,
                 tag,
-                inner_opt,
+                ..
             } => {
-                let id = ElementId(0);
-
-                self.mutations.template_mutations.push(CreateElement {
-                    name: tag,
-                    namespace,
-                    id,
-                });
+                if let Some(namespace) = namespace {
+                    self.mutations
+                        .template_mutations
+                        .push(CreateElementNamespace {
+                            name: tag,
+                            namespace,
+                        });
+                } else {
+                    self.mutations
+                        .template_mutations
+                        .push(CreateElement { name: tag });
+                }
 
                 self.mutations
                     .template_mutations
@@ -254,16 +257,15 @@ impl<'b: 'static> VirtualDom {
                             value,
                             namespace,
                             ..
-                        } => Some(SetAttribute {
+                        } => Some(SetStaticAttribute {
                             name,
                             value,
-                            id,
                             ns: *namespace,
                         }),
                         _ => None,
                     }));
 
-                if children.is_empty() && inner_opt {
+                if children.is_empty() {
                     return;
                 }
 

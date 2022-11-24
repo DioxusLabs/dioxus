@@ -17,11 +17,11 @@ pub(crate) fn init(dom: &VirtualDom) {
 
     // connect to processes for incoming data
     std::thread::spawn(move || {
-        if let Ok(listener) = LocalSocketListener::bind("@dioxusin") {
-            for conn in listener.incoming().filter_map(handle_error) {
-                *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
-            }
-        }
+        // if let Ok(listener) = LocalSocketListener::bind("@dioxusin") {
+        //     for conn in listener.incoming().filter_map(handle_error) {
+        //         *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
+        //     }
+        // }
     });
 
     std::thread::spawn(move || {

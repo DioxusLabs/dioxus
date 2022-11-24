@@ -14,7 +14,7 @@ async fn it_works() {
     assert_eq!(
         mutations.template_mutations,
         [
-            CreateElement { name: "div", namespace: None, id: ElementId(0) },
+            CreateElement { name: "div" },
             CreateStaticText { value: "Waiting for child..." },
             CreatePlaceholder { id: ElementId(0) },
             AppendChildren { m: 2 },

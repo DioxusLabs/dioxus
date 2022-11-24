@@ -96,7 +96,7 @@ impl<'a> Properties for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
     fn builder() -> Self::Builder {
-        todo!()
+        FragmentBuilder(VNode::empty())
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
         false

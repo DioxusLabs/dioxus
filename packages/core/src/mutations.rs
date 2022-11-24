@@ -72,13 +72,15 @@ pub enum Mutation<'a> {
 
     CreateElement {
         name: &'a str,
-        namespace: Option<&'a str>,
-        id: ElementId,
     },
-
+    CreateElementNamespace {
+        name: &'a str,
+        namespace: &'a str,
+    },
     CreatePlaceholder {
         id: ElementId,
     },
+    CreateStaticPlaceholder,
     CreateStaticText {
         value: &'a str,
     },
@@ -139,6 +141,12 @@ pub enum Mutation<'a> {
         // value: &'bump str,
         /// The (optional) namespace of the attribute.
         /// For instance, "style" is in the "style" namespace.
+        ns: Option<&'a str>,
+    },
+
+    SetStaticAttribute {
+        name: &'a str,
+        value: &'a str,
         ns: Option<&'a str>,
     },
 
