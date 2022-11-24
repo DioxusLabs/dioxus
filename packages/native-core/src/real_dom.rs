@@ -1,12 +1,14 @@
 use anymap::AnyMap;
-use dioxus_core::{AttributeDiscription, ElementId, Mutations, OwnedAttributeValue, VNode};
+use dioxus_core::{ElementId, Mutations, VNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 use slab::Slab;
 use std::ops::{Index, IndexMut};
 
+use crate::node::{Node, NodeType};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
 use crate::traversable::Traversable;
+use crate::tree::{NodeId, Tree, TreeLike, TreeView};
 use crate::RealNodeId;
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
@@ -14,14 +16,10 @@ use crate::RealNodeId;
 /// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
 #[derive(Debug)]
 pub struct RealDom<S: State> {
-    root: usize,
-    nodes: Vec<Option<Box<Node<S>>>>,
-    // some nodes do not have an ElementId immediately, those node are stored here
-    internal_nodes: Slab<Box<Node<S>>>,
+    tree: Tree<Node<S>>,
+    /// a map from element id to real node id
+    node_id_mapping: Vec<RealNodeId>,
     nodes_listening: FxHashMap<&'static str, FxHashSet<RealNodeId>>,
-    last: Option<RealNodeId>,
-    // any nodes that have children queued to be added in the form (parent, children remaining)
-    parents_queued: Vec<(RealNodeId, u32)>,
 }
 
 impl<S: State> Default for RealDom<S> {
@@ -39,23 +37,15 @@ impl<S: State> RealDom<S> {
             listeners: FxHashSet::default(),
             children: Vec::new(),
         });
-        root.node_data.id = Some(RealNodeId::ElementId(ElementId(0)));
+        root.node_data.element_id = Some(ElementId(0));
+        let tree = Tree::new(root);
+        let root_id = tree.root();
+        tree.get_mut(root_id).unwrap().node_data.id = root_id;
 
         RealDom {
-            root: 0,
-            nodes: vec![Some(Box::new(root))],
-            internal_nodes: Slab::new(),
+            tree,
+            node_id_mapping: Vec::new(),
             nodes_listening: FxHashMap::default(),
-            last: None,
-            parents_queued: Vec::new(),
-        }
-    }
-
-    pub fn resolve_maybe_id(&self, id: Option<u64>) -> RealNodeId {
-        if let Some(id) = id {
-            RealNodeId::ElementId(ElementId(id as usize))
-        } else {
-            self.last.unwrap()
         }
     }
 
@@ -68,7 +58,7 @@ impl<S: State> RealDom<S> {
         nodes_updated.push((RealNodeId::ElementId(ElementId(0)), NodeMask::ALL));
         for mutations in mutations_vec {
             for e in mutations.edits {
-                use dioxus_core::DomEdit::*;
+                use dioxus_core::Mutation::*;
                 match e {
                     AppendChildren { root, children } => {
                         let target = self.resolve_maybe_id(root);
@@ -751,81 +741,6 @@ impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
     }
 }
 
-/// The node is stored client side and stores only basic data about the node.
-#[derive(Debug, Clone)]
-pub struct Node<S: State> {
-    /// The transformed state of the node.
-    pub state: S,
-    /// The raw data for the node
-    pub node_data: NodeData,
-}
-
-#[derive(Debug, Clone)]
-pub struct NodeData {
-    /// The id of the node this node was created from.
-    pub id: Option<RealNodeId>,
-    /// The parent id of the node.
-    pub parent: Option<RealNodeId>,
-    /// Additional inforation specific to the node type
-    pub node_type: NodeType,
-    /// The number of parents before the root node. The root node has height 1.
-    pub height: u16,
-}
-
-/// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
-#[derive(Debug, Clone)]
-pub enum NodeType {
-    Text {
-        text: String,
-    },
-    Element {
-        tag: String,
-        namespace: Option<&'static str>,
-        attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
-        listeners: FxHashSet<String>,
-        children: Vec<RealNodeId>,
-    },
-    Placeholder,
-}
-
-impl<S: State> Node<S> {
-    fn new(node_type: NodeType) -> Self {
-        Node {
-            state: S::default(),
-            node_data: NodeData {
-                id: None,
-                parent: None,
-                node_type,
-                height: 0,
-            },
-        }
-    }
-
-    /// link a child node
-    fn add_child(&mut self, child: RealNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
-            children.push(child);
-        }
-    }
-
-    /// remove a child node
-    fn remove_child(&mut self, child: RealNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
-            children.retain(|c| c != &child);
-        }
-    }
-
-    /// link the parent node
-    fn set_parent(&mut self, parent: RealNodeId) {
-        self.node_data.parent = Some(parent);
-    }
-
-    /// get the mounted id of the node
-    pub fn mounted_id(&self) -> RealNodeId {
-        self.node_data.id.unwrap()
-    }
-}
-
 impl<T: State> Traversable for RealDom<T> {
     type Id = RealNodeId;
     type Node = Node<T>;
@@ -868,34 +783,4 @@ impl<T: State> Traversable for RealDom<T> {
     fn parent(&self, id: Self::Id) -> Option<Self::Id> {
         self.get(id).and_then(|n| n.node_data.parent)
     }
-}
-
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct OwnedAttributeDiscription {
-    pub name: String,
-    pub namespace: Option<String>,
-    pub volatile: bool,
-}
-
-impl PartialEq<AttributeDiscription> for OwnedAttributeDiscription {
-    fn eq(&self, other: &AttributeDiscription) -> bool {
-        self.name == other.name
-            && match (&self.namespace, other.namespace) {
-                (Some(a), Some(b)) => a == b,
-                (None, None) => true,
-                _ => false,
-            }
-            && self.volatile == other.volatile
-    }
-}
-
-/// An attribute on a DOM node, such as `id="my-thing"` or
-/// `href="https://example.com"`.
-#[derive(Clone, Debug)]
-pub struct OwnedAttributeView<'a> {
-    /// The discription of the attribute.
-    pub attribute: &'a OwnedAttributeDiscription,
-
-    /// The value of the attribute.
-    pub value: &'a OwnedAttributeValue,
 }

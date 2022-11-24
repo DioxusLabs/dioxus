@@ -1,8 +1,7 @@
 use std::{cmp::Ordering, fmt::Debug};
 
+use crate::node::NodeData;
 use crate::node_ref::{NodeMask, NodeView};
-use crate::real_dom::NodeData;
-use crate::traversable::Traversable;
 use crate::RealNodeId;
 use anymap::AnyMap;
 use rustc_hash::FxHashSet;
