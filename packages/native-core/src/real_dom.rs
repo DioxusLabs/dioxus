@@ -1,13 +1,25 @@
 use anymap::AnyMap;
 use dioxus_core::{ElementId, Mutations};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::ops::{Deref, DerefMut, Index, IndexMut};
+use std::ops::{Index, IndexMut};
 
 use crate::node::{Node, NodeData, NodeType, OwnedAttributeDiscription};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
 use crate::tree::{NodeId, Tree, TreeLike, TreeView};
 use crate::RealNodeId;
+
+fn mark_dirty(
+    node_id: NodeId,
+    mask: NodeMask,
+    nodes_updated: &mut FxHashMap<RealNodeId, NodeMask>,
+) {
+    if let Some(node) = nodes_updated.get_mut(&node_id) {
+        *node = node.union(&mask);
+    } else {
+        nodes_updated.insert(node_id, mask);
+    }
+}
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
@@ -79,12 +91,31 @@ impl<S: State> RealDom<S> {
         node_id
     }
 
+    fn add_child(&mut self, node_id: RealNodeId, child_id: RealNodeId) {
+        self.tree.add_child(node_id, child_id);
+        self.resolve_height(child_id);
+    }
+
+    fn resolve_height(&mut self, node_id: RealNodeId) {
+        if let Some((node, parent)) = self.tree.node_parent_mut(node_id) {
+            let height = parent.node_data.height;
+            node.node_data.height = height + 1;
+            unsafe {
+                let self_mut = self as *mut Self;
+                // Safety: No node will have itself as a child
+                for child in self.tree.children_ids(node_id).unwrap() {
+                    (*self_mut).resolve_height(*child);
+                }
+            }
+        }
+    }
+
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations<'a>(
+    pub fn apply_mutations(
         &mut self,
-        mutations_vec: Vec<Mutations<'a>>,
-    ) -> Vec<(RealNodeId, NodeMask)> {
-        let mut nodes_updated: Vec<(RealNodeId, NodeMask)> = Vec::new();
+        mutations_vec: Vec<Mutations>,
+    ) -> FxHashMap<RealNodeId, NodeMask> {
+        let mut nodes_updated: FxHashMap<RealNodeId, NodeMask> = FxHashMap::default();
         for mutations in mutations_vec {
             for e in mutations.edits {
                 use dioxus_core::Mutation::*;
@@ -93,12 +124,12 @@ impl<S: State> RealDom<S> {
                         let data = self.stack.split_off(m);
                         let (parent, children) = data.split_first().unwrap();
                         for child in children {
-                            self.tree.add_child(*parent, *child);
-                            nodes_updated.push((*parent, NodeMask::ALL));
+                            self.add_child(*parent, *child);
+                            mark_dirty(*parent, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
                     AssignId { path, id } => {
-                        self.set_element_id(self.load_child(&path), id);
+                        self.set_element_id(self.load_child(path), id);
                     }
                     CreateElement { name } => {
                         let node = Node::new(NodeType::Element {
@@ -109,7 +140,7 @@ impl<S: State> RealDom<S> {
                         });
                         let id = self.create_node(node);
                         self.stack.push(id);
-                        nodes_updated.push((id, NodeMask::ALL));
+                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                     }
                     CreateElementNamespace { name, namespace } => {
                         let node = Node::new(NodeType::Element {
@@ -120,20 +151,20 @@ impl<S: State> RealDom<S> {
                         });
                         let id = self.create_node(node);
                         self.stack.push(id);
-                        nodes_updated.push((id, NodeMask::ALL));
+                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                     }
                     CreatePlaceholder { id } => {
                         let node = Node::new(NodeType::Placeholder);
                         let node_id = self.create_node(node);
                         self.set_element_id(node_id, id);
                         self.stack.push(node_id);
-                        nodes_updated.push((node_id, NodeMask::ALL));
+                        mark_dirty(node_id, NodeMask::ALL, &mut nodes_updated);
                     }
                     CreateStaticPlaceholder => {
                         let node = Node::new(NodeType::Placeholder);
                         let id = self.create_node(node);
                         self.stack.push(id);
-                        nodes_updated.push((id, NodeMask::ALL));
+                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                     }
                     CreateStaticText { value } => {
                         let node = Node::new(NodeType::Text {
@@ -141,7 +172,7 @@ impl<S: State> RealDom<S> {
                         });
                         let id = self.create_node(node);
                         self.stack.push(id);
-                        nodes_updated.push((id, NodeMask::new().with_text()));
+                        mark_dirty(id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
                     CreateTextNode { value, id } => {
                         let node = Node::new(NodeType::Text {
@@ -151,7 +182,7 @@ impl<S: State> RealDom<S> {
                         let node = self.tree.get_mut(node_id).unwrap();
                         node.node_data.element_id = Some(id);
                         self.stack.push(node_id);
-                        nodes_updated.push((node_id, NodeMask::new().with_text()));
+                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
                     HydrateText { path, value, id } => {
                         let node_id = self.load_child(path);
@@ -160,7 +191,7 @@ impl<S: State> RealDom<S> {
                         if let NodeType::Text { text } = &mut node.node_data.node_type {
                             *text = value.to_string();
                         }
-                        nodes_updated.push((node_id, NodeMask::new().with_text()));
+                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
                     LoadTemplate { name, index, id } => {
                         let template_id = self.templates[name][index];
@@ -172,7 +203,7 @@ impl<S: State> RealDom<S> {
                         let old_node_id = self.element_to_node_id(id);
                         for new in new_nodes {
                             self.tree.insert_after(old_node_id, new);
-                            nodes_updated.push((new, NodeMask::ALL));
+                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                         }
                         self.tree.remove(old_node_id);
                     }
@@ -181,7 +212,7 @@ impl<S: State> RealDom<S> {
                         let old_node_id = self.load_child(path);
                         for new in new_nodes {
                             self.tree.insert_after(old_node_id, new);
-                            nodes_updated.push((new, NodeMask::ALL));
+                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                         }
                         self.tree.remove(old_node_id);
                     }
@@ -190,7 +221,7 @@ impl<S: State> RealDom<S> {
                         let old_node_id = self.element_to_node_id(id);
                         for new in new_nodes {
                             self.tree.insert_after(old_node_id, new);
-                            nodes_updated.push((new, NodeMask::ALL));
+                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
                     InsertBefore { id, m } => {
@@ -198,7 +229,7 @@ impl<S: State> RealDom<S> {
                         let old_node_id = self.element_to_node_id(id);
                         for new in new_nodes {
                             self.tree.insert_before(old_node_id, new);
-                            nodes_updated.push((new, NodeMask::ALL));
+                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
                     SaveTemplate { name, m } => {
@@ -223,10 +254,11 @@ impl<S: State> RealDom<S> {
                                 },
                                 crate::node::OwnedAttributeValue::Text(value.to_string()),
                             );
-                            nodes_updated.push((
+                            mark_dirty(
                                 node_id,
                                 NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            ));
+                                &mut nodes_updated,
+                            );
                         }
                     }
                     SetStaticAttribute { name, value, ns } => {
@@ -242,10 +274,11 @@ impl<S: State> RealDom<S> {
                                 },
                                 crate::node::OwnedAttributeValue::Text(value.to_string()),
                             );
-                            nodes_updated.push((
+                            mark_dirty(
                                 *node_id,
                                 NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            ));
+                                &mut nodes_updated,
+                            );
                         }
                     }
                     SetBoolAttribute { name, value, id } => {
@@ -261,10 +294,11 @@ impl<S: State> RealDom<S> {
                                 },
                                 crate::node::OwnedAttributeValue::Bool(value),
                             );
-                            nodes_updated.push((
+                            mark_dirty(
                                 node_id,
                                 NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            ));
+                                &mut nodes_updated,
+                            );
                         }
                     }
                     SetInnerText { value } => {
@@ -276,7 +310,7 @@ impl<S: State> RealDom<S> {
                                 text: value.to_string(),
                             });
                             let text_node_id = self.create_node(text_node);
-                            self.tree.add_child(node_id, text_node_id);
+                            self.add_child(node_id, text_node_id);
                         }
                     }
                     SetText { value, id } => {
@@ -285,7 +319,7 @@ impl<S: State> RealDom<S> {
                         if let NodeType::Text { text } = &mut node.node_data.node_type {
                             *text = value.to_string();
                         }
-                        nodes_updated.push((node_id, NodeMask::new().with_text()));
+                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
                     NewEventListener {
                         event_name,
@@ -321,14 +355,14 @@ impl<S: State> RealDom<S> {
                     }
                     Remove { id } => {
                         let node_id = self.element_to_node_id(id);
-                        self.remove(node_id);
+                        self.tree.remove(node_id);
                     }
                 }
             }
         }
 
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-        nodes_updated.retain(|n| self.tree.get(n.0).is_some());
+        nodes_updated.retain(|k, _| self.tree.get(*k).is_some());
 
         nodes_updated
     }
@@ -336,7 +370,7 @@ impl<S: State> RealDom<S> {
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
-        nodes_updated: Vec<(RealNodeId, NodeMask)>,
+        nodes_updated: FxHashMap<RealNodeId, NodeMask>,
         ctx: AnyMap,
     ) -> FxHashSet<RealNodeId> {
         let (mut state_tree, node_tree) = self.split();
@@ -370,8 +404,12 @@ impl<S: State> RealDom<S> {
         let raw = self as *mut Self;
         // this is safe beacuse the treeview trait does not allow mutation of the position of elements, and within elements the access is disjoint.
         (
-            unsafe { &mut *raw }.map(|n| &n.state, |n| &mut n.state),
-            unsafe { &mut *raw }.map(|n| &n.node_data, |n| &mut n.node_data),
+            unsafe { &mut *raw }
+                .tree
+                .map(|n| &n.state, |n| &mut n.state),
+            unsafe { &mut *raw }
+                .tree
+                .map(|n| &n.node_data, |n| &mut n.node_data),
         )
     }
 
@@ -385,7 +423,7 @@ impl<S: State> RealDom<S> {
                 // this is safe because no node has itself as a child
                 let self_mut = &mut *self_ptr;
                 let child_id = self_mut.clone_node(*child);
-                self_mut.tree.add_child(new_id, child_id);
+                self_mut.add_child(new_id, child_id);
             }
         }
         new_id
@@ -417,19 +455,5 @@ impl<S: State> IndexMut<ElementId> for RealDom<S> {
 impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
     fn index_mut(&mut self, idx: RealNodeId) -> &mut Self::Output {
         self.tree.get_mut(idx).unwrap()
-    }
-}
-
-impl<S: State> Deref for RealDom<S> {
-    type Target = Tree<Node<S>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.tree
-    }
-}
-
-impl<S: State> DerefMut for RealDom<S> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.tree
     }
 }

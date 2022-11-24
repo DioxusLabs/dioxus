@@ -72,14 +72,11 @@ pub trait TreeView<T>: Sized {
         unsafe { self.get_mut(id).unwrap_unchecked() }
     }
 
-    fn children<'a>(&'a self, id: NodeId) -> Option<Self::Iterator<'a>>;
+    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>>;
 
-    fn children_mut<'a>(&'a mut self, id: NodeId) -> Option<Self::IteratorMut<'a>>;
+    fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>>;
 
-    fn parent_child_mut<'a>(
-        &'a mut self,
-        id: NodeId,
-    ) -> Option<(&'a mut T, Self::IteratorMut<'a>)> {
+    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Self::IteratorMut<'_>)> {
         let mut_ptr: *mut Self = self;
         unsafe {
             // Safety: No node has itself as a child.
@@ -91,7 +88,7 @@ pub trait TreeView<T>: Sized {
         }
     }
 
-    fn children_ids<'a>(&'a self, id: NodeId) -> Option<&'a [NodeId]>;
+    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]>;
 
     fn parent(&self, id: NodeId) -> Option<&T>;
 
@@ -257,7 +254,7 @@ impl<T> TreeView<T> for Tree<T> {
         self.nodes.get_mut(id.0).map(|node| &mut node.value)
     }
 
-    fn children<'a>(&'a self, id: NodeId) -> Option<Self::Iterator<'a>> {
+    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
         self.children_ids(id).map(|children_ids| ChildNodeIterator {
             tree: self,
             children_ids,
@@ -266,7 +263,7 @@ impl<T> TreeView<T> for Tree<T> {
         })
     }
 
-    fn children_mut<'a>(&'a mut self, id: NodeId) -> Option<Self::IteratorMut<'a>> {
+    fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>> {
         let raw_ptr = self as *mut Self;
         unsafe {
             // Safety: No node will appear as a child twice
@@ -280,7 +277,7 @@ impl<T> TreeView<T> for Tree<T> {
         }
     }
 
-    fn children_ids<'a>(&'a self, id: NodeId) -> Option<&'a [NodeId]> {
+    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
         self.nodes.get(id.0).map(|node| node.children.as_slice())
     }
 
@@ -462,7 +459,7 @@ where
         self.tree.get_mut(id).map(|node| (self.map_mut)(node))
     }
 
-    fn children<'b>(&'b self, id: NodeId) -> Option<Self::Iterator<'b>> {
+    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
         self.children_ids(id).map(|children_ids| ChildNodeIterator {
             tree: self,
             children_ids,
@@ -471,7 +468,7 @@ where
         })
     }
 
-    fn children_mut<'b>(&'b mut self, id: NodeId) -> Option<Self::IteratorMut<'b>> {
+    fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>> {
         let raw_ptr = self as *mut Self;
         unsafe {
             // Safety: No node can be a child twice.
@@ -485,7 +482,7 @@ where
         }
     }
 
-    fn children_ids<'b>(&'b self, id: NodeId) -> Option<&'b [NodeId]> {
+    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
         self.tree.children_ids(id)
     }
 
@@ -609,15 +606,15 @@ impl<'a, T, Tr: TreeView<T>> TreeView<T> for SharedView<'a, T, Tr> {
         self.with_node(id, |t| t.get_mut(id))
     }
 
-    fn children<'b>(&'b self, id: NodeId) -> Option<Self::Iterator<'b>> {
+    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
         self.with_node(id, |t| t.children(id))
     }
 
-    fn children_mut<'b>(&'b mut self, id: NodeId) -> Option<Self::IteratorMut<'b>> {
+    fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>> {
         self.with_node(id, |t| t.children_mut(id))
     }
 
-    fn children_ids<'b>(&'b self, id: NodeId) -> Option<&'b [NodeId]> {
+    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
         self.with_node(id, |t| t.children_ids(id))
     }
 
