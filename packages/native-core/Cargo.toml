@@ -15,12 +15,13 @@ dioxus-core = { path = "../core", version = "^0.2.1" }
 dioxus-html = { path = "../html", version = "^0.2.1" }
 dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 
-taffy = "0.1.0"
+taffy = "0.2.0"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "0.12.1"
 slab = "0.4"
 parking_lot = "0.12.1"
+crossbeam-deque = "0.8.2"
 
 [dev-dependencies]
 rand = "0.8.5"
