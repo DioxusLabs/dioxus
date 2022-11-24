@@ -1,4 +1,4 @@
-use crate::{state::State, tree::NodeId, RealNodeId};
+use crate::{state::State, tree::NodeId};
 use dioxus_core::ElementId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -13,12 +13,15 @@ pub struct Node<S: State> {
 
 #[derive(Debug, Clone)]
 pub struct NodeData {
+    /// The id of the node
+    pub node_id: NodeId,
     /// The id of the node in the vdom.
     pub element_id: Option<ElementId>,
     /// Additional inforation specific to the node type
     pub node_type: NodeType,
     /// The number of parents before the root node. The root node has height 1.
     pub height: u16,
+    height_dirty: bool,
 }
 
 /// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
@@ -29,7 +32,7 @@ pub enum NodeType {
     },
     Element {
         tag: String,
-        namespace: Option<&'static str>,
+        namespace: Option<String>,
         attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
         listeners: FxHashSet<String>,
     },
@@ -44,27 +47,10 @@ impl<S: State> Node<S> {
                 element_id: None,
                 node_type,
                 height: 0,
+                node_id: NodeId(0),
+                height_dirty: true,
             },
         }
-    }
-
-    /// link a child node
-    fn add_child(&mut self, child: RealNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
-            children.push(child);
-        }
-    }
-
-    /// remove a child node
-    fn remove_child(&mut self, child: RealNodeId) {
-        if let NodeType::Element { children, .. } = &mut self.node_data.node_type {
-            children.retain(|c| c != &child);
-        }
-    }
-
-    /// link the parent node
-    fn set_parent(&mut self, parent: RealNodeId) {
-        self.node_data.parent = Some(parent);
     }
 
     /// get the mounted id of the node

@@ -7,7 +7,7 @@ use std::collections::VecDeque;
 use std::marker::PhantomData;
 use std::sync::Arc;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
+#[derive(Hash, PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct NodeId(pub usize);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -21,6 +21,31 @@ pub struct Node<T> {
 pub struct Tree<T> {
     nodes: Slab<Node<T>>,
     root: NodeId,
+}
+
+impl<T> Tree<T> {
+    fn try_remove(&mut self, id: NodeId) -> Option<Node<T>> {
+        self.nodes.try_remove(id.0).map(|node| {
+            if let Some(parent) = node.parent {
+                self.nodes
+                    .get_mut(parent.0)
+                    .unwrap()
+                    .children
+                    .retain(|child| child != &id);
+            }
+            for child in &node.children {
+                self.remove_recursive(*child);
+            }
+            node
+        })
+    }
+
+    fn remove_recursive(&mut self, node: NodeId) {
+        let node = self.nodes.remove(node.0);
+        for child in node.children {
+            self.remove_recursive(child);
+        }
+    }
 }
 
 pub trait TreeView<T>: Sized {
@@ -152,15 +177,19 @@ pub trait TreeView<T>: Sized {
 pub trait TreeLike<T>: TreeView<T> {
     fn new(root: T) -> Self;
 
-    fn add_child(&mut self, parent: NodeId, value: T) -> NodeId;
+    fn create_node(&mut self, value: T) -> NodeId;
+
+    fn add_child(&mut self, parent: NodeId, child: NodeId);
 
     fn remove(&mut self, id: NodeId) -> Option<T>;
 
-    fn replace(&mut self, id: NodeId, value: T);
+    fn remove_all_children(&mut self, id: NodeId) -> Vec<T>;
 
-    fn insert_before(&mut self, id: NodeId, value: T) -> NodeId;
+    fn replace(&mut self, old: NodeId, new: NodeId);
 
-    fn insert_after(&mut self, id: NodeId, value: T) -> NodeId;
+    fn insert_before(&mut self, id: NodeId, new: NodeId);
+
+    fn insert_after(&mut self, id: NodeId, new: NodeId);
 }
 
 pub struct ChildNodeIterator<'a, T, Tr: TreeView<T>> {
@@ -304,78 +333,75 @@ impl<T> TreeLike<T> for Tree<T> {
         Self { nodes, root }
     }
 
-    fn add_child(&mut self, parent: NodeId, value: T) -> NodeId {
-        let node = Node {
+    fn create_node(&mut self, value: T) -> NodeId {
+        NodeId(self.nodes.insert(Node {
             value,
-            parent: Some(parent),
+            parent: None,
             children: Vec::new(),
-        };
-        let id = self.nodes.insert(node);
-        self.nodes
-            .get_mut(parent.0)
-            .unwrap()
-            .children
-            .push(NodeId(id));
-        NodeId(id)
+        }))
+    }
+
+    fn add_child(&mut self, parent: NodeId, new: NodeId) {
+        self.nodes.get_mut(parent.0).unwrap().children.push(new);
+        self.nodes.get_mut(new.0).unwrap().parent = Some(parent);
     }
 
     fn remove(&mut self, id: NodeId) -> Option<T> {
-        self.nodes.try_remove(id.0).map(|node| {
-            if let Some(parent) = node.parent {
-                self.nodes
-                    .get_mut(parent.0)
-                    .unwrap()
-                    .children
-                    .retain(|child| child != &id);
+        self.try_remove(id).map(|node| node.value)
+    }
+
+    fn remove_all_children(&mut self, id: NodeId) -> Vec<T> {
+        let mut children = Vec::new();
+        let self_mut = self as *mut Self;
+        for child in self.children_ids(id).unwrap() {
+            unsafe {
+                // Safety: No node has itself as a child
+                children.push((*self_mut).remove(*child).unwrap());
             }
-            node.value
-        })
+        }
+        children
     }
 
-    fn replace(&mut self, id: NodeId, value: T) {
+    fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
+        // remove the old node
         let old = self
-            .nodes
-            .get_mut(id.0)
+            .try_remove(old_id)
             .expect("tried to replace a node that doesn't exist");
-        old.value = value;
+        // update the parent's link to the child
+        if let Some(parent_id) = old.parent {
+            let parent = self.nodes.get_mut(parent_id.0).unwrap();
+            for id in &mut parent.children {
+                if *id == old_id {
+                    *id = new_id;
+                }
+            }
+        }
     }
 
-    fn insert_before(&mut self, id: NodeId, value: T) -> NodeId {
+    fn insert_before(&mut self, id: NodeId, new: NodeId) {
         let node = self.nodes.get(id.0).unwrap();
         let parent_id = node.parent.expect("tried to insert before root");
-        let new = Node {
-            value,
-            parent: Some(parent_id),
-            children: Vec::new(),
-        };
-        let new_id = NodeId(self.nodes.insert(new));
+        self.nodes.get_mut(new.0).unwrap().parent = Some(parent_id);
         let parent = self.nodes.get_mut(parent_id.0).unwrap();
         let index = parent
             .children
             .iter()
             .position(|child| child == &id)
             .unwrap();
-        parent.children.insert(index, new_id);
-        new_id
+        parent.children.insert(index, new);
     }
 
-    fn insert_after(&mut self, id: NodeId, value: T) -> NodeId {
+    fn insert_after(&mut self, id: NodeId, new: NodeId) {
         let node = self.nodes.get(id.0).unwrap();
         let parent_id = node.parent.expect("tried to insert before root");
-        let new = Node {
-            value,
-            parent: Some(parent_id),
-            children: Vec::new(),
-        };
-        let new_id = NodeId(self.nodes.insert(new));
+        self.nodes.get_mut(new.0).unwrap().parent = Some(parent_id);
         let parent = self.nodes.get_mut(parent_id.0).unwrap();
         let index = parent
             .children
             .iter()
             .position(|child| child == &id)
             .unwrap();
-        parent.children.insert(index + 1, new_id);
-        new_id
+        parent.children.insert(index + 1, new);
     }
 }
 
@@ -498,7 +524,7 @@ pub struct SharedView<'a, T, Tr: TreeView<T>> {
 impl<'a, T, Tr: TreeView<T>> SharedView<'a, T, Tr> {
     /// Checks if a node is currently locked. Returns None if the node does not exist.
     pub fn check_lock(&self, id: NodeId) -> Option<bool> {
-        let mut locks = self.node_locks.read();
+        let locks = self.node_locks.read();
         locks.get(id.0).map(|lock| lock.is_locked())
     }
 }
@@ -616,7 +642,8 @@ impl<'a, T, Tr: TreeView<T>> TreeView<T> for SharedView<'a, T, Tr> {
 fn creation() {
     let mut tree = Tree::new(1);
     let parent = tree.root();
-    let child = tree.add_child(parent, 0);
+    let child = tree.create_node(0);
+    tree.add_child(parent, child);
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 2);
@@ -631,9 +658,12 @@ fn creation() {
 fn insertion() {
     let mut tree = Tree::new(0);
     let parent = tree.root();
-    let child = tree.add_child(parent, 2);
-    let before = tree.insert_before(child, 1);
-    let after = tree.insert_after(child, 3);
+    let child = tree.create_node(2);
+    tree.add_child(parent, child);
+    let before = tree.create_node(1);
+    tree.insert_before(child, before);
+    let after = tree.create_node(3);
+    tree.insert_after(child, after);
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 4);
@@ -651,9 +681,12 @@ fn insertion() {
 fn deletion() {
     let mut tree = Tree::new(0);
     let parent = tree.root();
-    let child = tree.add_child(parent, 2);
-    let before = tree.insert_before(child, 1);
-    let after = tree.insert_after(child, 3);
+    let child = tree.create_node(2);
+    tree.add_child(parent, child);
+    let before = tree.create_node(1);
+    tree.insert_before(child, before);
+    let after = tree.create_node(3);
+    tree.insert_after(child, after);
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 4);
@@ -702,7 +735,8 @@ fn shared_view() {
     use std::thread;
     let mut tree = Tree::new(1);
     let parent = tree.root();
-    let child = tree.add_child(parent, 0);
+    let child = tree.create_node(0);
+    tree.add_child(parent, child);
 
     let shared = SharedView::new(&mut tree);
 
@@ -737,7 +771,8 @@ fn map() {
     }
     let mut tree = Tree::new(Value::new(1));
     let parent = tree.root();
-    let child = tree.add_child(parent, Value::new(0));
+    let child = tree.create_node(Value::new(0));
+    tree.add_child(parent, child);
 
     let mut mapped = tree.map(|x| &x.value, |x| &mut x.value);
 
@@ -752,10 +787,14 @@ fn map() {
 fn traverse_depth_first() {
     let mut tree = Tree::new(0);
     let parent = tree.root();
-    let child1 = tree.add_child(parent, 1);
-    tree.add_child(child1, 2);
-    let child2 = tree.add_child(parent, 3);
-    tree.add_child(child2, 4);
+    let child1 = tree.create_node(1);
+    tree.add_child(parent, child1);
+    let grandchild1 = tree.create_node(2);
+    tree.add_child(child1, grandchild1);
+    let child2 = tree.create_node(3);
+    tree.add_child(parent, child2);
+    let grandchild2 = tree.create_node(4);
+    tree.add_child(child2, grandchild2);
 
     let mut node_count = 0;
     tree.traverse_depth_first(move |node| {
@@ -768,10 +807,14 @@ fn traverse_depth_first() {
 fn traverse_breadth_first() {
     let mut tree = Tree::new(0);
     let parent = tree.root();
-    let child1 = tree.add_child(parent, 1);
-    tree.add_child(child1, 3);
-    let child2 = tree.add_child(parent, 2);
-    tree.add_child(child2, 4);
+    let child1 = tree.create_node(1);
+    tree.add_child(parent, child1);
+    let grandchild1 = tree.create_node(3);
+    tree.add_child(child1, grandchild1);
+    let child2 = tree.create_node(2);
+    tree.add_child(parent, child2);
+    let grandchild2 = tree.create_node(4);
+    tree.add_child(child2, grandchild2);
 
     let mut node_count = 0;
     tree.traverse_breadth_first(move |node| {

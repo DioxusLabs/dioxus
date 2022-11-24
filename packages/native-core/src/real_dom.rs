@@ -1,13 +1,11 @@
 use anymap::AnyMap;
-use dioxus_core::{ElementId, Mutations, VNode};
+use dioxus_core::{ElementId, Mutations};
 use rustc_hash::{FxHashMap, FxHashSet};
-use slab::Slab;
-use std::ops::{Index, IndexMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::node::{Node, NodeType};
+use crate::node::{Node, NodeData, NodeType, OwnedAttributeDiscription};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::state::State;
-use crate::traversable::Traversable;
 use crate::tree::{NodeId, Tree, TreeLike, TreeView};
 use crate::RealNodeId;
 
@@ -18,8 +16,10 @@ use crate::RealNodeId;
 pub struct RealDom<S: State> {
     tree: Tree<Node<S>>,
     /// a map from element id to real node id
-    node_id_mapping: Vec<RealNodeId>,
-    nodes_listening: FxHashMap<&'static str, FxHashSet<RealNodeId>>,
+    node_id_mapping: Vec<Option<RealNodeId>>,
+    nodes_listening: FxHashMap<String, FxHashSet<RealNodeId>>,
+    stack: Vec<RealNodeId>,
+    templates: FxHashMap<String, Vec<RealNodeId>>,
 }
 
 impl<S: State> Default for RealDom<S> {
@@ -32,367 +32,305 @@ impl<S: State> RealDom<S> {
     pub fn new() -> RealDom<S> {
         let mut root = Node::new(NodeType::Element {
             tag: "Root".to_string(),
-            namespace: Some("Root"),
+            namespace: Some("Root".to_string()),
             attributes: FxHashMap::default(),
             listeners: FxHashSet::default(),
-            children: Vec::new(),
         });
         root.node_data.element_id = Some(ElementId(0));
-        let tree = Tree::new(root);
+        let mut tree = Tree::new(root);
         let root_id = tree.root();
-        tree.get_mut(root_id).unwrap().node_data.id = root_id;
+        tree.get_mut(root_id).unwrap().node_data.node_id = root_id;
 
         RealDom {
             tree,
             node_id_mapping: Vec::new(),
             nodes_listening: FxHashMap::default(),
+            stack: vec![root_id],
+            templates: FxHashMap::default(),
         }
     }
 
+    fn element_to_node_id(&self, element_id: ElementId) -> RealNodeId {
+        self.node_id_mapping.get(element_id.0).unwrap().unwrap()
+    }
+
+    fn set_element_id(&mut self, node_id: NodeId, element_id: ElementId) {
+        let node = self.tree.get_mut(node_id).unwrap();
+        let node_id = node.node_data.node_id;
+        node.node_data.element_id = Some(element_id);
+        if self.node_id_mapping.len() <= element_id.0 {
+            self.node_id_mapping.resize(element_id.0 + 1, None);
+        }
+        self.node_id_mapping[element_id.0] = Some(node_id);
+    }
+
+    fn load_child(&self, path: &[u8]) -> RealNodeId {
+        let mut current = *self.stack.last().unwrap();
+        for i in path {
+            current = self.tree.children_ids(current).unwrap()[*i as usize];
+        }
+        current
+    }
+
+    fn create_node(&mut self, node: Node<S>) -> RealNodeId {
+        let node_id = self.tree.create_node(node);
+        let node = self.tree.get_mut(node_id).unwrap();
+        node.node_data.node_id = node_id;
+        node_id
+    }
+
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations(
+    pub fn apply_mutations<'a>(
         &mut self,
-        mutations_vec: Vec<Mutations>,
+        mutations_vec: Vec<Mutations<'a>>,
     ) -> Vec<(RealNodeId, NodeMask)> {
-        let mut nodes_updated = Vec::new();
-        nodes_updated.push((RealNodeId::ElementId(ElementId(0)), NodeMask::ALL));
+        let mut nodes_updated: Vec<(RealNodeId, NodeMask)> = Vec::new();
         for mutations in mutations_vec {
             for e in mutations.edits {
                 use dioxus_core::Mutation::*;
                 match e {
-                    AppendChildren { root, children } => {
-                        let target = self.resolve_maybe_id(root);
-                        for id in children {
-                            let id = RealNodeId::ElementId(ElementId(id as usize));
-                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child(id, target).unwrap();
+                    AppendChildren { m } => {
+                        let data = self.stack.split_off(m);
+                        let (parent, children) = data.split_first().unwrap();
+                        for child in children {
+                            self.tree.add_child(*parent, *child);
+                            nodes_updated.push((*parent, NodeMask::ALL));
                         }
                     }
-                    ReplaceWith { root, nodes } => {
-                        let id_to_replace = self.resolve_maybe_id(root);
-                        let target = self[id_to_replace].node_data.parent.unwrap();
-                        for id in nodes {
-                            let id = RealNodeId::ElementId(ElementId(id as usize));
-                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child_before(id, target, id_to_replace).unwrap();
-                        }
-                        self.remove(id_to_replace).unwrap();
+                    AssignId { path, id } => {
+                        self.set_element_id(self.load_child(&path), id);
                     }
-                    InsertAfter { root, nodes } => {
-                        let root = self.resolve_maybe_id(root);
-                        let target = self.parent(root).unwrap();
-                        for id in nodes {
-                            let id = RealNodeId::ElementId(ElementId(id as usize));
-                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child_after(id, target, root).unwrap();
-                        }
-                    }
-                    InsertBefore { root, nodes } => {
-                        let root = self.resolve_maybe_id(root);
-                        let target = self.parent(root).unwrap();
-                        for id in nodes {
-                            let id = RealNodeId::ElementId(ElementId(id as usize));
-                            self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                            self.link_child_before(id, target, root).unwrap();
-                        }
-                    }
-                    Remove { root } => {
-                        let id = self.resolve_maybe_id(root);
-                        if let Some(parent) = self.parent(id) {
-                            self.mark_dirty(parent, NodeMask::NONE, &mut nodes_updated);
-                        }
-                        self.remove(id).unwrap();
-                    }
-                    CreateTextNode { root, text } => {
-                        let n = Node::new(NodeType::Text {
-                            text: text.to_string(),
-                        });
-                        let id = self.insert(n, root, &mut nodes_updated);
-                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
-                            *remaining -= 1;
-                            let parent = *parent;
-                            if *remaining == 0 {
-                                self.parents_queued.pop();
-                            }
-                            self.link_child(id, parent).unwrap();
-                        }
-                        self.last = Some(id);
-                    }
-                    CreateElement {
-                        root,
-                        tag,
-                        children,
-                    } => {
-                        let n = Node::new(NodeType::Element {
-                            tag: tag.to_string(),
+                    CreateElement { name } => {
+                        let node = Node::new(NodeType::Element {
+                            tag: name.to_string(),
                             namespace: None,
                             attributes: FxHashMap::default(),
                             listeners: FxHashSet::default(),
-                            children: Vec::new(),
                         });
-                        let id = self.insert(n, root, &mut nodes_updated);
-                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
-                            *remaining -= 1;
-                            let parent = *parent;
-                            if *remaining == 0 {
-                                self.parents_queued.pop();
-                            }
-                            self.link_child(id, parent).unwrap();
-                        }
-                        self.last = Some(id);
-                        if children > 0 {
-                            self.parents_queued.push((id, children));
-                        }
+                        let id = self.create_node(node);
+                        self.stack.push(id);
+                        nodes_updated.push((id, NodeMask::ALL));
                     }
-                    CreateElementNs {
-                        root,
-                        tag,
-                        ns,
-                        children,
-                    } => {
-                        let n = Node::new(NodeType::Element {
-                            tag: tag.to_string(),
-                            namespace: Some(ns),
+                    CreateElementNamespace { name, namespace } => {
+                        let node = Node::new(NodeType::Element {
+                            tag: name.to_string(),
+                            namespace: Some(namespace.to_string()),
                             attributes: FxHashMap::default(),
                             listeners: FxHashSet::default(),
-                            children: Vec::new(),
                         });
-                        let id = self.insert(n, root, &mut nodes_updated);
-                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
-                            *remaining -= 1;
-                            let parent = *parent;
-                            if *remaining == 0 {
-                                self.parents_queued.pop();
-                            }
-                            self.link_child(id, parent).unwrap();
+                        let id = self.create_node(node);
+                        self.stack.push(id);
+                        nodes_updated.push((id, NodeMask::ALL));
+                    }
+                    CreatePlaceholder { id } => {
+                        let node = Node::new(NodeType::Placeholder);
+                        let node_id = self.create_node(node);
+                        self.set_element_id(node_id, id);
+                        self.stack.push(node_id);
+                        nodes_updated.push((node_id, NodeMask::ALL));
+                    }
+                    CreateStaticPlaceholder => {
+                        let node = Node::new(NodeType::Placeholder);
+                        let id = self.create_node(node);
+                        self.stack.push(id);
+                        nodes_updated.push((id, NodeMask::ALL));
+                    }
+                    CreateStaticText { value } => {
+                        let node = Node::new(NodeType::Text {
+                            text: value.to_string(),
+                        });
+                        let id = self.create_node(node);
+                        self.stack.push(id);
+                        nodes_updated.push((id, NodeMask::new().with_text()));
+                    }
+                    CreateTextNode { value, id } => {
+                        let node = Node::new(NodeType::Text {
+                            text: value.to_string(),
+                        });
+                        let node_id = self.create_node(node);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        node.node_data.element_id = Some(id);
+                        self.stack.push(node_id);
+                        nodes_updated.push((node_id, NodeMask::new().with_text()));
+                    }
+                    HydrateText { path, value, id } => {
+                        let node_id = self.load_child(path);
+                        self.set_element_id(node_id, id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Text { text } = &mut node.node_data.node_type {
+                            *text = value.to_string();
                         }
-                        self.last = Some(id);
-                        if children > 0 {
-                            self.parents_queued.push((id, children));
+                        nodes_updated.push((node_id, NodeMask::new().with_text()));
+                    }
+                    LoadTemplate { name, index, id } => {
+                        let template_id = self.templates[name][index];
+                        let clone_id = self.clone_node(template_id);
+                        self.set_element_id(clone_id, id);
+                    }
+                    ReplaceWith { id, m } => {
+                        let new_nodes = self.stack.split_off(m);
+                        let old_node_id = self.element_to_node_id(id);
+                        for new in new_nodes {
+                            self.tree.insert_after(old_node_id, new);
+                            nodes_updated.push((new, NodeMask::ALL));
+                        }
+                        self.tree.remove(old_node_id);
+                    }
+                    ReplacePlaceholder { path, m } => {
+                        let new_nodes = self.stack.split_off(m);
+                        let old_node_id = self.load_child(path);
+                        for new in new_nodes {
+                            self.tree.insert_after(old_node_id, new);
+                            nodes_updated.push((new, NodeMask::ALL));
+                        }
+                        self.tree.remove(old_node_id);
+                    }
+                    InsertAfter { id, m } => {
+                        let new_nodes = self.stack.split_off(m);
+                        let old_node_id = self.element_to_node_id(id);
+                        for new in new_nodes {
+                            self.tree.insert_after(old_node_id, new);
+                            nodes_updated.push((new, NodeMask::ALL));
                         }
                     }
-                    CreatePlaceholder { root } => {
-                        let n = Node::new(NodeType::Placeholder);
-                        let id = self.insert(n, root, &mut nodes_updated);
-                        self.mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                        if let Some((parent, remaining)) = self.parents_queued.last_mut() {
-                            *remaining -= 1;
-                            let parent = *parent;
-                            if *remaining == 0 {
-                                self.parents_queued.pop();
-                            }
-                            self.link_child(id, parent).unwrap();
+                    InsertBefore { id, m } => {
+                        let new_nodes = self.stack.split_off(m);
+                        let old_node_id = self.element_to_node_id(id);
+                        for new in new_nodes {
+                            self.tree.insert_before(old_node_id, new);
+                            nodes_updated.push((new, NodeMask::ALL));
                         }
-                        self.last = Some(id);
+                    }
+                    SaveTemplate { name, m } => {
+                        let template = self.stack.split_off(m);
+                        self.templates.insert(name.to_string(), template);
+                    }
+                    SetAttribute {
+                        name,
+                        value,
+                        id,
+                        ns,
+                    } => {
+                        let node_id = self.element_to_node_id(id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
+                        {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: name.to_string(),
+                                    namespace: ns.map(|s| s.to_string()),
+                                    volatile: false,
+                                },
+                                crate::node::OwnedAttributeValue::Text(value.to_string()),
+                            );
+                            nodes_updated.push((
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                            ));
+                        }
+                    }
+                    SetStaticAttribute { name, value, ns } => {
+                        let node_id = self.stack.last().unwrap();
+                        let node = self.tree.get_mut(*node_id).unwrap();
+                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
+                        {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: name.to_string(),
+                                    namespace: ns.map(|s| s.to_string()),
+                                    volatile: false,
+                                },
+                                crate::node::OwnedAttributeValue::Text(value.to_string()),
+                            );
+                            nodes_updated.push((
+                                *node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                            ));
+                        }
+                    }
+                    SetBoolAttribute { name, value, id } => {
+                        let node_id = self.element_to_node_id(id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
+                        {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: name.to_string(),
+                                    namespace: None,
+                                    volatile: false,
+                                },
+                                crate::node::OwnedAttributeValue::Bool(value),
+                            );
+                            nodes_updated.push((
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                            ));
+                        }
+                    }
+                    SetInnerText { value } => {
+                        let node_id = *self.stack.last().unwrap();
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Element { .. } = &mut node.node_data.node_type {
+                            self.tree.remove_all_children(node_id);
+                            let text_node = Node::new(NodeType::Text {
+                                text: value.to_string(),
+                            });
+                            let text_node_id = self.create_node(text_node);
+                            self.tree.add_child(node_id, text_node_id);
+                        }
+                    }
+                    SetText { value, id } => {
+                        let node_id = self.element_to_node_id(id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Text { text } = &mut node.node_data.node_type {
+                            *text = value.to_string();
+                        }
+                        nodes_updated.push((node_id, NodeMask::new().with_text()));
                     }
                     NewEventListener {
                         event_name,
                         scope: _,
-                        root,
+                        id,
                     } => {
-                        let id = self.resolve_maybe_id(root);
-                        self.mark_dirty(id, NodeMask::new().with_listeners(), &mut nodes_updated);
-                        match &mut self[id].node_data.node_type {
-                            NodeType::Text { .. } => panic!("Text nodes cannot have listeners"),
-                            NodeType::Element { listeners, .. } => {
-                                listeners.insert(event_name.to_string());
+                        let node_id = self.element_to_node_id(id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
+                            match self.nodes_listening.get_mut(event_name) {
+                                Some(hs) => {
+                                    hs.insert(node_id);
+                                }
+                                None => {
+                                    let mut hs = FxHashSet::default();
+                                    hs.insert(node_id);
+                                    self.nodes_listening.insert(event_name.to_string(), hs);
+                                }
                             }
-                            NodeType::Placeholder => panic!("Placeholder cannot have listeners"),
-                        }
-                        if let Some(v) = self.nodes_listening.get_mut(event_name) {
-                            v.insert(id);
-                        } else {
-                            let mut hs = FxHashSet::default();
-                            hs.insert(id);
-                            self.nodes_listening.insert(event_name, hs);
+                            listeners.insert(event_name.to_string());
                         }
                     }
-                    RemoveEventListener { root, event } => {
-                        let id = self.resolve_maybe_id(root);
-                        self.mark_dirty(id, NodeMask::new().with_listeners(), &mut nodes_updated);
-                        let v = self.nodes_listening.get_mut(event).unwrap();
-                        v.remove(&id);
-                    }
-                    SetText {
-                        root,
-                        text: new_text,
-                    } => {
-                        let id = self.resolve_maybe_id(root);
-                        self.mark_dirty(id, NodeMask::new().with_text(), &mut nodes_updated);
-                        let target = &mut self[id];
-                        match &mut target.node_data.node_type {
-                            NodeType::Text { text } => {
-                                *text = new_text.to_string();
-                            }
-                            _ => unreachable!(),
+                    RemoveEventListener { id, event } => {
+                        let node_id = self.element_to_node_id(id);
+                        let node = self.tree.get_mut(node_id).unwrap();
+                        if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
+                            listeners.remove(event);
                         }
+                        self.nodes_listening
+                            .get_mut(event)
+                            .unwrap()
+                            .remove(&node_id);
                     }
-                    SetAttribute {
-                        root,
-                        field,
-                        ns,
-                        value,
-                    } => {
-                        let id = self.resolve_maybe_id(root);
-                        if let NodeType::Element { attributes, .. } =
-                            &mut self[id].node_data.node_type
-                        {
-                            attributes.insert(
-                                OwnedAttributeDiscription {
-                                    name: field.to_owned(),
-                                    namespace: ns.map(|a| a.to_owned()),
-                                    volatile: false,
-                                },
-                                value.into(),
-                            );
-                        } else {
-                            panic!("tried to call set attribute on a non element");
-                        }
-                        self.mark_dirty(
-                            id,
-                            NodeMask::new_with_attrs(AttributeMask::single(field)),
-                            &mut nodes_updated,
-                        );
-                    }
-                    RemoveAttribute {
-                        root, name: field, ..
-                    } => {
-                        let id = self.resolve_maybe_id(root);
-                        self.mark_dirty(
-                            id,
-                            NodeMask::new_with_attrs(AttributeMask::single(field)),
-                            &mut nodes_updated,
-                        );
-                    }
-                    CloneNode { id, new_id } => {
-                        let id = self.resolve_maybe_id(id);
-                        self.clone_node_into(id, &mut nodes_updated, Some(new_id));
-                    }
-                    CloneNodeChildren { id, new_ids } => {
-                        let id = self.resolve_maybe_id(id);
-                        let bounded_self: &mut Self = self;
-                        let unbounded_self: &mut Self =
-                            unsafe { std::mem::transmute(bounded_self) };
-                        if let NodeType::Element { children, .. } = &self[id].node_data.node_type {
-                            for (old_id, new_id) in children.iter().zip(new_ids) {
-                                let child_id = unbounded_self.clone_node_into(
-                                    *old_id,
-                                    &mut nodes_updated,
-                                    Some(new_id),
-                                );
-                                unbounded_self[child_id].node_data.parent = None;
-                            }
-                        }
-                    }
-                    FirstChild {} => {
-                        if let NodeType::Element { children, .. } =
-                            &self[self.last.unwrap()].node_data.node_type
-                        {
-                            self.last = Some(children[0]);
-                        } else {
-                            panic!("tried to call first child on a non element");
-                        }
-                    }
-                    NextSibling {} => {
-                        let id = self.last.unwrap();
-                        if let Some(parent) = self.parent(id) {
-                            if let NodeType::Element { children, .. } =
-                                &self[parent].node_data.node_type
-                            {
-                                let index = children.iter().position(|a| *a == id).unwrap();
-                                self.last = Some(children[index + 1]);
-                            }
-                        } else {
-                            panic!("tried to call next sibling on a non element");
-                        }
-                    }
-                    ParentNode {} => {
-                        if let Some(parent) = self.parent(self.last.unwrap()) {
-                            self.last = Some(parent);
-                        } else {
-                            panic!("tried to call parent node on a non element");
-                        }
-                    }
-                    StoreWithId { id } => {
-                        let old_id = self.last.unwrap();
-                        let node = self.internal_nodes.remove(old_id.as_unaccessable_id());
-                        let new_id = self.insert(*node, Some(id), &mut nodes_updated);
-                        self.update_id(old_id, new_id, &mut nodes_updated);
-                    }
-                    SetLastNode { id } => {
-                        self.last =
-                            Some(RealNodeId::ElementId(dioxus_core::ElementId(id as usize)));
+                    Remove { id } => {
+                        let node_id = self.element_to_node_id(id);
+                        self.remove(node_id);
                     }
                 }
             }
         }
 
         // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-        nodes_updated.retain(|n| match n.0 {
-            RealNodeId::ElementId(id) => self.nodes.get(id.0).and_then(|o| o.as_ref()).is_some(),
-            RealNodeId::UnaccessableId(id) => self.internal_nodes.get(id).is_some(),
-        });
+        nodes_updated.retain(|n| self.tree.get(n.0).is_some());
 
         nodes_updated
-    }
-
-    /// Update refrences to an old node id to a new node id
-    fn update_id(
-        &mut self,
-        old_id: RealNodeId,
-        new_id: RealNodeId,
-        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
-    ) {
-        // this is safe because a node cannot have itself as a child or parent
-        let unbouned_self = unsafe { &mut *(self as *mut Self) };
-        // update parent's link to child id
-        if let Some(parent) = self[new_id].node_data.parent {
-            if let NodeType::Element { children, .. } = &mut self[parent].node_data.node_type {
-                for c in children {
-                    if *c == old_id {
-                        *c = new_id;
-                        break;
-                    }
-                }
-            }
-        }
-        // update child's link to parent id
-        if let NodeType::Element { children, .. } = &self[new_id].node_data.node_type {
-            for child_id in children {
-                unbouned_self[*child_id].node_data.parent = Some(new_id);
-            }
-        }
-        // update dirty nodes
-        for (node, _) in nodes_updated {
-            if *node == old_id {
-                *node = new_id;
-            }
-        }
-        // update nodes listening
-        for v in self.nodes_listening.values_mut() {
-            if v.contains(&old_id) {
-                v.remove(&old_id);
-                v.insert(new_id);
-            }
-        }
-        // update last
-        if let Some(last) = self.last {
-            if last == old_id {
-                self.last = Some(new_id);
-            }
-        }
-    }
-
-    fn mark_dirty(
-        &self,
-        gid: RealNodeId,
-        mask: NodeMask,
-        dirty_nodes: &mut Vec<(RealNodeId, NodeMask)>,
-    ) {
-        dirty_nodes.push((gid, mask));
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
@@ -403,140 +341,6 @@ impl<S: State> RealDom<S> {
     ) -> FxHashSet<RealNodeId> {
         let (mut state_tree, node_tree) = self.split();
         S::update(&nodes_updated, &mut state_tree, &node_tree, &ctx)
-    }
-
-    /// Link a child and parent together
-    fn link_child(&mut self, child_id: RealNodeId, parent_id: RealNodeId) -> Option<()> {
-        let parent = &mut self[parent_id];
-        parent.add_child(child_id);
-        let parent_height = parent.node_data.height;
-        self[child_id].set_parent(parent_id);
-        self.set_height(child_id, parent_height + 1);
-
-        Some(())
-    }
-
-    /// Link a child and parent together with the child inserted before a marker
-    fn link_child_before(
-        &mut self,
-        child_id: RealNodeId,
-        parent_id: RealNodeId,
-        marker: RealNodeId,
-    ) -> Option<()> {
-        let parent = &mut self[parent_id];
-        if let NodeType::Element { children, .. } = &mut parent.node_data.node_type {
-            let index = children.iter().position(|a| *a == marker)?;
-            children.insert(index, child_id);
-        }
-        let parent_height = parent.node_data.height;
-        self[child_id].set_parent(parent_id);
-        self.set_height(child_id, parent_height + 1);
-
-        Some(())
-    }
-
-    /// Link a child and parent together with the child inserted after a marker
-    fn link_child_after(
-        &mut self,
-        child_id: RealNodeId,
-        parent_id: RealNodeId,
-        marker: RealNodeId,
-    ) -> Option<()> {
-        let parent = &mut self[parent_id];
-        if let NodeType::Element { children, .. } = &mut parent.node_data.node_type {
-            let index = children.iter().position(|a| *a == marker)?;
-            children.insert(index + 1, child_id);
-        }
-        let parent_height = parent.node_data.height;
-        self[child_id].set_parent(parent_id);
-        self.set_height(child_id, parent_height + 1);
-
-        Some(())
-    }
-
-    /// Recursively increase the height of a node and its children
-    fn set_height(&mut self, id: RealNodeId, height: u16) {
-        let node = &mut self[id];
-        node.node_data.height = height;
-        if let NodeType::Element { children, .. } = &node.node_data.node_type {
-            for c in children.clone() {
-                self.set_height(c, height + 1);
-            }
-        }
-    }
-
-    // remove a node and it's children from the dom.
-    fn remove(&mut self, id: RealNodeId) -> Option<Node<S>> {
-        // We do not need to remove the node from the parent's children list for children.
-        fn inner<S: State>(dom: &mut RealDom<S>, id: RealNodeId) -> Option<Node<S>> {
-            let mut node = match id {
-                RealNodeId::ElementId(id) => *dom.nodes[id.0].take()?,
-                RealNodeId::UnaccessableId(id) => *dom.internal_nodes.remove(id),
-            };
-            if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
-                for c in children {
-                    inner(dom, *c);
-                }
-            }
-            Some(node)
-        }
-        let mut node = match id {
-            RealNodeId::ElementId(id) => *self.nodes[id.0].take()?,
-            RealNodeId::UnaccessableId(id) => *self.internal_nodes.remove(id),
-        };
-        if let Some(parent) = node.node_data.parent {
-            let parent = &mut self[parent];
-            parent.remove_child(id);
-        }
-        if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
-            for c in children {
-                inner(self, *c)?;
-            }
-        }
-        Some(node)
-    }
-
-    fn resize_to(&mut self, id: usize) {
-        let current_len = self.nodes.len();
-        if current_len - 1 < id {
-            self.nodes.extend((0..1 + id - current_len).map(|_| None));
-        }
-    }
-
-    fn insert(
-        &mut self,
-        mut node: Node<S>,
-        id: Option<u64>,
-        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
-    ) -> RealNodeId {
-        match id {
-            Some(id) => {
-                let id = id as usize;
-                self.resize_to(id);
-                let real_id = RealNodeId::ElementId(ElementId(id));
-                node.node_data.id = Some(real_id);
-                // move the old node to a new unaccessable id
-                if let Some(mut old) = self.nodes[id].take() {
-                    let old_id = old.node_data.id.unwrap();
-                    let entry = self.internal_nodes.vacant_entry();
-                    let id = entry.key();
-                    let new_id = RealNodeId::UnaccessableId(id);
-                    old.node_data.id = Some(real_id);
-                    entry.insert(old);
-                    self.update_id(old_id, new_id, nodes_updated);
-                }
-                self.nodes[id] = Some(Box::new(node));
-                real_id
-            }
-            None => {
-                let entry = self.internal_nodes.vacant_entry();
-                let id = entry.key();
-                let real_id = RealNodeId::UnaccessableId(id);
-                node.node_data.id = Some(real_id);
-                entry.insert(Box::new(node));
-                real_id
-            }
-        }
     }
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
@@ -551,162 +355,37 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    /// Check if the dom contains a node and its children.
-    pub fn contains_node(&self, node: &VNode) -> bool {
-        match node {
-            VNode::Component(_) => {
-                todo!()
-            }
-            VNode::Element(e) => {
-                if let Some(id) = e.id.get() {
-                    let dom_node = &self[id];
-                    match &dom_node.node_data.node_type {
-                        NodeType::Element {
-                            tag,
-                            namespace,
-                            children,
-                            attributes,
-                            listeners,
-                        } => {
-                            tag == e.tag
-                                && namespace == &e.namespace
-                                && children
-                                    .iter()
-                                    .zip(
-                                        e.children
-                                            .iter()
-                                            .map(|c| RealNodeId::ElementId(c.mounted_id())),
-                                    )
-                                    .all(|(c1, c2)| *c1 == c2)
-                                && e.children.iter().all(|c| {
-                                    self.contains_node(c)
-                                        && self[RealNodeId::ElementId(c.mounted_id())]
-                                            .node_data
-                                            .parent
-                                            == e.id.get().map(RealNodeId::ElementId)
-                                })
-                                && attributes
-                                    .iter()
-                                    .zip(e.attributes.iter())
-                                    .all(|((disc, val), b)| *disc == b.attribute && *val == b.value)
-                                && listeners
-                                    .iter()
-                                    .zip(e.listeners.iter())
-                                    .all(|(a, b)| *a == b.event)
-                        }
-                        _ => false,
-                    }
-                } else {
-                    true
-                }
-            }
-            VNode::Fragment(f) => f.children.iter().all(|c| self.contains_node(c)),
-            VNode::Placeholder(_) => true,
-            VNode::Text(t) => {
-                if let Some(id) = t.id.get() {
-                    let dom_node = &self[RealNodeId::ElementId(id)];
-                    match &dom_node.node_data.node_type {
-                        NodeType::Text { text } => t.text == text,
-                        _ => false,
-                    }
-                } else {
-                    true
-                }
-            }
-            VNode::TemplateRef(_) => todo!(),
-        }
-    }
-
     /// Return the number of nodes in the dom.
     pub fn size(&self) -> usize {
         // The dom has a root node, ignore it.
-        self.nodes.iter().filter(|n| n.is_some()).count() - 1
+        self.tree.size() - 1
     }
 
     /// Returns the id of the root node.
-    pub fn root_id(&self) -> usize {
-        self.root
+    pub fn root_id(&self) -> NodeId {
+        self.tree.root()
     }
 
-    /// Call a function for each node in the dom, depth first.
-    pub fn traverse_depth_first(&self, mut f: impl FnMut(&Node<S>)) {
-        fn inner<S: State>(dom: &RealDom<S>, id: RealNodeId, f: &mut impl FnMut(&Node<S>)) {
-            let node = &dom[id];
-            f(node);
-            if let NodeType::Element { children, .. } = &node.node_data.node_type {
-                for c in children {
-                    inner(dom, *c, f);
-                }
-            }
-        }
-        if let NodeType::Element { children, .. } = &self
-            [RealNodeId::ElementId(ElementId(self.root))]
-        .node_data
-        .node_type
-        {
-            for c in children {
-                inner(self, *c, &mut f);
-            }
-        }
-    }
-
-    /// Call a function for each node in the dom, depth first.
-    pub fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(&mut Node<S>)) {
-        fn inner<S: State>(dom: &mut RealDom<S>, id: RealNodeId, f: &mut impl FnMut(&mut Node<S>)) {
-            let node = &mut dom[id];
-            f(node);
-            if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
-                for c in children.clone() {
-                    inner(dom, c, f);
-                }
-            }
-        }
-        let root = self.root;
-        if let NodeType::Element { children, .. } = &mut self
-            [RealNodeId::ElementId(ElementId(root))]
-        .node_data
-        .node_type
-        {
-            for c in children.clone() {
-                inner(self, c, &mut f);
-            }
-        }
-    }
-
-    pub fn split(
-        &mut self,
-    ) -> (
-        impl Traversable<Id = RealNodeId, Node = S> + '_,
-        impl Traversable<Id = RealNodeId, Node = NodeData> + '_,
-    ) {
+    pub fn split(&mut self) -> (impl TreeView<S> + '_, impl TreeView<NodeData> + '_) {
         let raw = self as *mut Self;
-        // this is safe beacuse the traversable trait does not allow mutation of the position of elements, and within elements the access is disjoint.
+        // this is safe beacuse the treeview trait does not allow mutation of the position of elements, and within elements the access is disjoint.
         (
             unsafe { &mut *raw }.map(|n| &n.state, |n| &mut n.state),
             unsafe { &mut *raw }.map(|n| &n.node_data, |n| &mut n.node_data),
         )
     }
 
-    /// Recurively clones a node and marks it and it's children as dirty.
-    fn clone_node_into(
-        &mut self,
-        id: RealNodeId,
-        nodes_updated: &mut Vec<(RealNodeId, NodeMask)>,
-        new_id: Option<u64>,
-    ) -> RealNodeId {
-        let new_id = self.insert(self[id].clone(), new_id, nodes_updated);
-        nodes_updated.push((new_id, NodeMask::ALL));
-        // this is safe because no node has itself as a child.
-        let unbounded_self = unsafe { &mut *(self as *mut Self) };
-        let mut node = &mut self[new_id];
-        node.node_data.height = 0;
-        if let NodeType::Element { children, .. } = &mut node.node_data.node_type {
-            for c in children {
-                let child_id = unbounded_self.clone_node_into(*c, nodes_updated, None);
-                *c = child_id;
-                let parent_height = node.node_data.height;
-                unbounded_self[child_id].set_parent(new_id);
-                unbounded_self.set_height(child_id, parent_height + 1);
+    fn clone_node(&mut self, node_id: NodeId) -> RealNodeId {
+        let node = self.tree.get(node_id).unwrap();
+        let new_node = node.clone();
+        let new_id = self.create_node(new_node);
+        let self_ptr = self as *mut Self;
+        for child in self.tree.children_ids(node_id).unwrap() {
+            unsafe {
+                // this is safe because no node has itself as a child
+                let self_mut = &mut *self_ptr;
+                let child_id = self_mut.clone_node(*child);
+                self_mut.tree.add_child(new_id, child_id);
             }
         }
         new_id
@@ -716,8 +395,8 @@ impl<S: State> RealDom<S> {
 impl<S: State> Index<ElementId> for RealDom<S> {
     type Output = Node<S>;
 
-    fn index(&self, idx: ElementId) -> &Self::Output {
-        self.get(RealNodeId::ElementId(idx)).unwrap()
+    fn index(&self, id: ElementId) -> &Self::Output {
+        self.tree.get(self.element_to_node_id(id)).unwrap()
     }
 }
 
@@ -725,62 +404,32 @@ impl<S: State> Index<RealNodeId> for RealDom<S> {
     type Output = Node<S>;
 
     fn index(&self, idx: RealNodeId) -> &Self::Output {
-        self.get(idx).unwrap()
+        self.tree.get(idx).unwrap()
     }
 }
 
 impl<S: State> IndexMut<ElementId> for RealDom<S> {
-    fn index_mut(&mut self, idx: ElementId) -> &mut Self::Output {
-        self.get_mut(RealNodeId::ElementId(idx)).unwrap()
+    fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
+        self.tree.get_mut(self.element_to_node_id(id)).unwrap()
     }
 }
 
 impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
     fn index_mut(&mut self, idx: RealNodeId) -> &mut Self::Output {
-        self.get_mut(idx).unwrap()
+        self.tree.get_mut(idx).unwrap()
     }
 }
 
-impl<T: State> Traversable for RealDom<T> {
-    type Id = RealNodeId;
-    type Node = Node<T>;
+impl<S: State> Deref for RealDom<S> {
+    type Target = Tree<Node<S>>;
 
-    fn height(&self, id: Self::Id) -> Option<u16> {
-        let node = <Self as Traversable>::get(self, id);
-        Some(node?.node_data.height)
+    fn deref(&self) -> &Self::Target {
+        &self.tree
     }
+}
 
-    fn get(&self, id: Self::Id) -> Option<&Self::Node> {
-        match id {
-            RealNodeId::ElementId(id) => {
-                self.nodes.get(id.0).and_then(|b| b.as_ref().map(|b| &**b))
-            }
-            RealNodeId::UnaccessableId(id) => self.internal_nodes.get(id).map(|b| &**b),
-        }
-    }
-
-    fn get_mut(&mut self, id: Self::Id) -> Option<&mut Self::Node> {
-        match id {
-            RealNodeId::ElementId(id) => self
-                .nodes
-                .get_mut(id.0)
-                .and_then(|b| b.as_mut().map(|b| &mut **b)),
-            RealNodeId::UnaccessableId(id) => self.internal_nodes.get_mut(id).map(|b| &mut **b),
-        }
-    }
-
-    fn children(&self, id: Self::Id) -> &[Self::Id] {
-        if let Some(node) = <Self as Traversable>::get(self, id) {
-            match &node.node_data.node_type {
-                NodeType::Element { children, .. } => children,
-                _ => &[],
-            }
-        } else {
-            &[]
-        }
-    }
-
-    fn parent(&self, id: Self::Id) -> Option<Self::Id> {
-        self.get(id).and_then(|n| n.node_data.parent)
+impl<S: State> DerefMut for RealDom<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tree
     }
 }
