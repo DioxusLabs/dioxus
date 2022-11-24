@@ -16,7 +16,7 @@ async fn it_works() {
         [
             CreateElement { name: "div" },
             CreateStaticText { value: "Waiting for child..." },
-            CreatePlaceholder { id: ElementId(0) },
+            CreateStaticPlaceholder,
             AppendChildren { m: 2 },
             SaveTemplate { name: "template", m: 1 }
         ]

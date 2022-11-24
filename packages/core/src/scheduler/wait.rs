@@ -78,19 +78,22 @@ impl VirtualDom {
                 let template: &VNode = unsafe { std::mem::transmute(template) };
                 let mutations: &mut Mutations = unsafe { std::mem::transmute(mutations) };
 
-                todo!();
-                // let place_holder_id = scope.placeholder.get().unwrap();
-                // self.scope_stack.push(scope_id);
-                // let created = self.create(mutations, template);
-                // self.scope_stack.pop();
-                // mutations.push(Mutation::ReplaceWith {
-                //     id: place_holder_id,
-                //     m: created,
-                // });
+                std::mem::swap(&mut self.mutations, mutations);
 
-                // for leaf in self.collected_leaves.drain(..) {
-                //     fiber.waiting_on.borrow_mut().insert(leaf);
-                // }
+                let place_holder_id = scope.placeholder.get().unwrap();
+                self.scope_stack.push(scope_id);
+                let created = self.create(template);
+                self.scope_stack.pop();
+                mutations.push(Mutation::ReplaceWith {
+                    id: place_holder_id,
+                    m: created,
+                });
+
+                for leaf in self.collected_leaves.drain(..) {
+                    fiber.waiting_on.borrow_mut().insert(leaf);
+                }
+
+                std::mem::swap(&mut self.mutations, mutations);
 
                 if fiber.waiting_on.borrow().is_empty() {
                     println!("fiber is finished!");

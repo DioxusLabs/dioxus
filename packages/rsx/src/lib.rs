@@ -255,10 +255,9 @@ impl<'a> DynamicContext<'a> {
                 self.dynamic_nodes.push(root);
                 self.node_paths.push(self.current_path.clone());
 
-                if let BodyNode::Text(_) = root {
-                    quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) }
-                } else {
-                    quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+                match root {
+                    BodyNode::Text(_) => quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) },
+                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) },
                 }
             }
         }

@@ -46,28 +46,27 @@ impl<'b: 'static> VirtualDom {
     fn diff_maybe_node(&mut self, left: &'b RenderReturn<'b>, right: &'b RenderReturn<'b>) {
         use RenderReturn::{Async, Sync};
         match (left, right) {
-            // diff
             (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
 
-            _ => todo!("handle diffing nonstandard nodes"),
-            // // remove old with placeholder
-            // (Sync(Ok(l)), Sync(None)) | (Sync(Ok(l)), Async(_)) => {
-            //     //
-            //     let id = self.next_element(l, &[]); // todo!
-            //     m.push(Mutation::CreatePlaceholder { id });
-            //     self.drop_template(m, l, true);
-            // }
+            // Err cases
+            (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
+            (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
+            (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
 
-            // // remove placeholder with nodes
-            // (Sync(None), Sync(Ok(_))) => {}
-            // (Async(_), Sync(Ok(v))) => {}
-
-            // // nothing... just transfer the placeholders over
-            // (Async(_), Async(_))
-            // | (Sync(None), Sync(None))
-            // | (Sync(None), Async(_))
-            // | (Async(_), Sync(None)) => {}
+            // Async
+            (Sync(Ok(_l)), Async(_)) => todo!(),
+            (Sync(Err(_e)), Async(_)) => todo!(),
+            (Async(_), Sync(Ok(_r))) => todo!(),
+            (Async(_), Sync(Err(_e))) => { /* nothing */ }
+            (Async(_), Async(_)) => { /* nothing */ }
         }
+    }
+
+    fn diff_ok_to_err(&mut self, l: &'b VNode<'b>, e: &anyhow::Error) {
+        todo!("Not yet handling error rollover")
+    }
+    fn diff_err_to_ok(&mut self, e: &anyhow::Error, l: &'b VNode<'b>) {
+        todo!("Not yet handling error rollover")
     }
 
     pub fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
@@ -97,7 +96,7 @@ impl<'b: 'static> VirtualDom {
                         });
                     }
                     // todo: more types of attribute values
-                    _ => (),
+                    _ => todo!("other attribute types"),
                 }
             }
         }
@@ -111,7 +110,7 @@ impl<'b: 'static> VirtualDom {
                 (Text(left), Text(right)) => self.diff_vtext(left, right),
                 (Fragment(left), Fragment(right)) => self.diff_vfragment(left, right),
                 (Component(left), Component(right)) => self.diff_vcomponent(left, right),
-                _ => self.replace(left_template, right_template, left_node, right_node),
+                _ => self.replace(left_template, right_template),
             };
         }
 
@@ -196,7 +195,7 @@ impl<'b: 'static> VirtualDom {
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
         match matching_components(left, right) {
-            None => self.replace_template(left, right),
+            None => self.replace(left, right),
             Some(components) => components
                 .into_iter()
                 .for_each(|(l, r)| self.diff_vcomponent(l, r)),
@@ -236,46 +235,75 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
-        //
-        // Remove the old nodes, except for one
+        // Remove the old nodes, except for onea
         self.remove_nodes(&l[1..]);
-        let first = self.find_first_element(&l[0]);
-        self.remove_all_but_first_node(&l[0]);
+        let first = self.replace_inner(&l[0]);
 
         let placeholder = self.next_element(&l[0], &[]);
         r.set(placeholder);
+
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });
         self.mutations
-            .push(Mutation::ReplaceWith { id: first, m: 1 })
+            .push(Mutation::ReplaceWith { id: first, m: 1 });
+
+        self.reclaim(first);
     }
 
-    // Remove all the top-level nodes, returning the
-    fn remove_all_but_first_node(&mut self, node: &'b VNode<'b>) {
-        match &node.template.roots[0] {
-            TemplateNode::Text(_) | TemplateNode::Element { .. } => {}
+    // Remove all the top-level nodes, returning the firstmost root ElementId
+    fn replace_inner(&mut self, node: &'b VNode<'b>) -> ElementId {
+        let id = match &node.template.roots[0] {
+            TemplateNode::Text(_) | TemplateNode::Element { .. } => node.root_ids[0].get(),
             TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
                 match &node.dynamic_nodes[*id] {
-                    Text(_) => {}
-                    Fragment(VFragment::Empty(_)) => {}
+                    Text(t) => t.id.get(),
+                    Fragment(VFragment::Empty(e)) => e.get(),
                     Fragment(VFragment::NonEmpty(nodes)) => {
-                        self.remove_all_but_first_node(&nodes[0]);
+                        let id = self.replace_inner(&nodes[0]);
                         self.remove_nodes(&nodes[1..]);
+                        id
                     }
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
                         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                            RenderReturn::Sync(Ok(t)) => self.remove_all_but_first_node(t),
+                            RenderReturn::Sync(Ok(t)) => self.replace_inner(t),
                             _ => todo!("cannot handle nonstandard nodes"),
-                        };
+                        }
                     }
-                };
+                }
             }
-        }
+        };
 
-        // Just remove the rest
+        // Just remove the rest from the dom
         for (idx, _) in node.template.roots.iter().enumerate().skip(1) {
             self.remove_root_node(node, idx);
+        }
+
+        // Garabge collect all of the nodes since this gets used in replace
+        self.clean_up_node(node);
+
+        id
+    }
+
+    /// Clean up the node, not generating mutations
+    ///
+    /// Simply walks through the dynamic nodes
+    fn clean_up_node(&mut self, node: &'b VNode<'b>) {
+        for node in node.dynamic_nodes {
+            match node {
+                Component(comp) => {
+                    let scope = comp.scope.get().unwrap();
+                    match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
+                        RenderReturn::Sync(Ok(t)) => self.clean_up_node(t),
+                        _ => todo!("cannot handle nonstandard nodes"),
+                    };
+                }
+                Text(t) => self.reclaim(t.id.get()),
+                Fragment(VFragment::Empty(t)) => self.reclaim(t.get()),
+                Fragment(VFragment::NonEmpty(nodes)) => {
+                    nodes.into_iter().for_each(|node| self.clean_up_node(node))
+                }
+            };
         }
     }
 
@@ -283,16 +311,22 @@ impl<'b: 'static> VirtualDom {
         let root = node.template.roots[idx];
         match root {
             TemplateNode::Element { .. } | TemplateNode::Text(_) => {
-                self.mutations.push(Mutation::Remove {
-                    id: node.root_ids[idx].get(),
-                })
+                let id = node.root_ids[idx].get();
+                self.mutations.push(Mutation::Remove { id });
+                self.reclaim(id);
             }
 
             TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
                 match &node.dynamic_nodes[id] {
-                    Text(i) => self.mutations.push(Mutation::Remove { id: i.id.get() }),
+                    Text(i) => {
+                        let id = i.id.get();
+                        self.mutations.push(Mutation::Remove { id });
+                        self.reclaim(id);
+                    }
                     Fragment(VFragment::Empty(e)) => {
-                        self.mutations.push(Mutation::Remove { id: e.get() })
+                        let id = e.get();
+                        self.mutations.push(Mutation::Remove { id });
+                        self.reclaim(id);
                     }
                     Fragment(VFragment::NonEmpty(nodes)) => self.remove_nodes(nodes),
                     Component(comp) => {
@@ -789,26 +823,15 @@ impl<'b: 'static> VirtualDom {
         }
     }
 
-    fn replace_template(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        todo!("replacing should work!")
-    }
-
-    fn replace(
-        &mut self,
-        left_template: &'b VNode<'b>,
-        right_template: &'b VNode<'b>,
-        left: &'b DynamicNode<'b>,
-        right: &'b DynamicNode<'b>,
-    ) {
-        // Remove all but the first root
-        for root in &left_template.template.roots[1..] {
-            match root {
-                TemplateNode::Element { .. } => todo!(),
-                TemplateNode::Text(_) => todo!(),
-                TemplateNode::Dynamic(_) => todo!(),
-                TemplateNode::DynamicText(_) => todo!(),
-            }
-        }
+    fn replace(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
+        let first = self.find_first_element(left);
+        let id = self.replace_inner(left);
+        let created = self.create(right);
+        self.mutations.push(Mutation::ReplaceWith {
+            id: first,
+            m: created,
+        });
+        self.reclaim(id);
     }
 }
 

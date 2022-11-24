@@ -1,4 +1,6 @@
-use crate::{nodes::VNode, scopes::ScopeId, virtual_dom::VirtualDom, DynamicNode, Mutations};
+use crate::{
+    nodes::VNode, scopes::ScopeId, virtual_dom::VirtualDom, DynamicNode, ElementId, Mutations,
+};
 
 impl<'b> VirtualDom {
     pub fn drop_scope(&mut self, id: ScopeId) {
@@ -9,6 +11,11 @@ impl<'b> VirtualDom {
 
         // self.drop_template(root, false);
         todo!()
+    }
+
+    pub fn reclaim(&mut self, el: ElementId) {
+        assert_ne!(el, ElementId(0));
+        self.elements.remove(el.0);
     }
 
     pub fn drop_template(

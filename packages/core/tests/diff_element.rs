@@ -47,14 +47,38 @@ fn element_swap() {
     vdom.rebuild();
 
     vdom.mark_dirty_scope(ScopeId(0));
-    dbg!(vdom.render_immediate());
+    assert_eq!(
+        vdom.render_immediate().santize().edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            ReplaceWith { id: ElementId(1,), m: 1 },
+        ]
+    );
 
     vdom.mark_dirty_scope(ScopeId(0));
-    dbg!(vdom.render_immediate());
+    assert_eq!(
+        vdom.render_immediate().santize().edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+            ReplaceWith { id: ElementId(2,), m: 1 },
+        ]
+    );
 
     vdom.mark_dirty_scope(ScopeId(0));
-    dbg!(vdom.render_immediate());
+    assert_eq!(
+        vdom.render_immediate().santize().edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
+            ReplaceWith { id: ElementId(3,), m: 1 },
+        ]
+    );
 
     vdom.mark_dirty_scope(ScopeId(0));
-    dbg!(vdom.render_immediate());
+    assert_eq!(
+        vdom.render_immediate().santize().edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+            ReplaceWith { id: ElementId(4,), m: 1 },
+        ]
+    );
 }

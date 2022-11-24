@@ -16,7 +16,7 @@ fn empty_fragment_creates_nothing() {
     assert_eq!(
         edits.edits,
         [
-            CreatePlaceholder { id: ElementId(2) },
+            CreatePlaceholder { id: ElementId(1) },
             AppendChildren { m: 1 }
         ]
     );

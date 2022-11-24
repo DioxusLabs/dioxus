@@ -34,7 +34,7 @@ fn list_renders() {
             CreateElement { name: "div" },
             // todo: since this is the only child, we should just use
             // append when modify the values (IE no need for a placeholder)
-            CreatePlaceholder { id: ElementId(0) },
+            CreateStaticPlaceholder,
             AppendChildren { m: 1 },
             SaveTemplate { name: "template", m: 1 },
             // Create the inner template div
