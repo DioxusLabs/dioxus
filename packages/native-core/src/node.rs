@@ -83,3 +83,40 @@ pub enum OwnedAttributeValue {
     Bool(bool),
     None,
 }
+
+impl OwnedAttributeValue {
+    pub fn as_text(&self) -> Option<&str> {
+        match self {
+            OwnedAttributeValue::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    pub fn as_float(&self) -> Option<f32> {
+        match self {
+            OwnedAttributeValue::Float(float) => Some(*float),
+            _ => None,
+        }
+    }
+
+    pub fn as_int(&self) -> Option<i32> {
+        match self {
+            OwnedAttributeValue::Int(int) => Some(*int),
+            _ => None,
+        }
+    }
+
+    pub fn as_bool(&self) -> Option<bool> {
+        match self {
+            OwnedAttributeValue::Bool(bool) => Some(*bool),
+            _ => None,
+        }
+    }
+
+    pub fn as_none(&self) -> Option<()> {
+        match self {
+            OwnedAttributeValue::None => Some(()),
+            _ => None,
+        }
+    }
+}
