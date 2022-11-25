@@ -227,17 +227,16 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn replace_placeholder_with_nodes(&mut self, l: &'b Cell<ElementId>, r: &'b [VNode<'b>]) {
-        let created = self.create_children(r);
-        self.mutations.push(Mutation::ReplaceWith {
-            id: l.get(),
-            m: created,
-        })
+        let m = self.create_children(r);
+        let id = l.get();
+        self.mutations.push(Mutation::ReplaceWith { id, m });
+        self.reclaim(id);
     }
 
     fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
         // Remove the old nodes, except for onea
-        self.remove_nodes(&l[1..]);
         let first = self.replace_inner(&l[0]);
+        self.remove_nodes(&l[1..]);
 
         let placeholder = self.next_element(&l[0], &[]);
         r.set(placeholder);
@@ -252,24 +251,20 @@ impl<'b: 'static> VirtualDom {
 
     // Remove all the top-level nodes, returning the firstmost root ElementId
     fn replace_inner(&mut self, node: &'b VNode<'b>) -> ElementId {
-        let id = match &node.template.roots[0] {
-            TemplateNode::Text(_) | TemplateNode::Element { .. } => node.root_ids[0].get(),
-            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                match &node.dynamic_nodes[*id] {
-                    Text(t) => t.id.get(),
-                    Fragment(VFragment::Empty(e)) => e.get(),
-                    Fragment(VFragment::NonEmpty(nodes)) => {
-                        let id = self.replace_inner(&nodes[0]);
-                        self.remove_nodes(&nodes[1..]);
-                        id
-                    }
-                    Component(comp) => {
-                        let scope = comp.scope.get().unwrap();
-                        match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                            RenderReturn::Sync(Ok(t)) => self.replace_inner(t),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        }
-                    }
+        let id = match node.dynamic_root(0) {
+            None => node.root_ids[0].get(),
+            Some(Text(t)) => t.id.get(),
+            Some(Fragment(VFragment::Empty(e))) => e.get(),
+            Some(Fragment(VFragment::NonEmpty(nodes))) => {
+                let id = self.replace_inner(&nodes[0]);
+                self.remove_nodes(&nodes[1..]);
+                id
+            }
+            Some(Component(comp)) => {
+                let scope = comp.scope.get().unwrap();
+                match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
+                    RenderReturn::Sync(Ok(t)) => self.replace_inner(t),
+                    _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
         };
@@ -305,40 +300,43 @@ impl<'b: 'static> VirtualDom {
                 }
             };
         }
+
+        // we also need to clean up dynamic attribute roots
+        // let last_node = None;
+        // for attr in node.dynamic_attrs {
+        //     match last_node {
+        //         Some(node) => todo!(),
+        //         None => todo!(),
+        //     }
+        // }
     }
 
     fn remove_root_node(&mut self, node: &'b VNode<'b>, idx: usize) {
-        let root = node.template.roots[idx];
-        match root {
-            TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+        match node.dynamic_root(idx) {
+            Some(Text(i)) => {
+                let id = i.id.get();
+                self.mutations.push(Mutation::Remove { id });
+                self.reclaim(id);
+            }
+            Some(Fragment(VFragment::Empty(e))) => {
+                let id = e.get();
+                self.mutations.push(Mutation::Remove { id });
+                self.reclaim(id);
+            }
+            Some(Fragment(VFragment::NonEmpty(nodes))) => self.remove_nodes(nodes),
+            Some(Component(comp)) => {
+                let scope = comp.scope.get().unwrap();
+                match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
+                    RenderReturn::Sync(Ok(t)) => self.remove_node(t),
+                    _ => todo!("cannot handle nonstandard nodes"),
+                };
+            }
+            None => {
                 let id = node.root_ids[idx].get();
                 self.mutations.push(Mutation::Remove { id });
                 self.reclaim(id);
             }
-
-            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                match &node.dynamic_nodes[id] {
-                    Text(i) => {
-                        let id = i.id.get();
-                        self.mutations.push(Mutation::Remove { id });
-                        self.reclaim(id);
-                    }
-                    Fragment(VFragment::Empty(e)) => {
-                        let id = e.get();
-                        self.mutations.push(Mutation::Remove { id });
-                        self.reclaim(id);
-                    }
-                    Fragment(VFragment::NonEmpty(nodes)) => self.remove_nodes(nodes),
-                    Component(comp) => {
-                        let scope = comp.scope.get().unwrap();
-                        match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                            RenderReturn::Sync(Ok(t)) => self.remove_node(t),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        };
-                    }
-                };
-            }
-        }
+        };
     }
 
     fn diff_non_empty_fragment(&mut self, new: &'b [VNode<'b>], old: &'b [VNode<'b>]) {
@@ -729,20 +727,25 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn remove_node(&mut self, node: &'b VNode<'b>) {
-        for (idx, root) in node.template.roots.iter().enumerate() {
-            let id = match root {
-                TemplateNode::Text(_) | TemplateNode::Element { .. } => node.root_ids[idx].get(),
-                TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                    match &node.dynamic_nodes[*id] {
-                        Text(t) => t.id.get(),
-                        Fragment(VFragment::Empty(t)) => t.get(),
-                        Fragment(VFragment::NonEmpty(t)) => return self.remove_nodes(t),
-                        Component(comp) => return self.remove_component(comp.scope.get().unwrap()),
-                    }
-                }
+        for (idx, _) in node.template.roots.iter().enumerate() {
+            let id = match node.dynamic_root(idx) {
+                Some(Text(t)) => t.id.get(),
+                Some(Fragment(VFragment::Empty(t))) => t.get(),
+                Some(Fragment(VFragment::NonEmpty(t))) => return self.remove_nodes(t),
+                Some(Component(comp)) => return self.remove_component(comp.scope.get().unwrap()),
+                None => node.root_ids[idx].get(),
             };
 
             self.mutations.push(Mutation::Remove { id })
+        }
+
+        self.clean_up_node(node);
+
+        for root in node.root_ids {
+            let id = root.get();
+            if id.0 != 0 {
+                self.reclaim(id);
+            }
         }
     }
 
@@ -782,42 +785,32 @@ impl<'b: 'static> VirtualDom {
     }
 
     fn find_first_element(&self, node: &VNode) -> ElementId {
-        match &node.template.roots[0] {
-            TemplateNode::Element { .. } | TemplateNode::Text(_) => node.root_ids[0].get(),
-            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                match &node.dynamic_nodes[*id] {
-                    Text(t) => t.id.get(),
-                    Fragment(VFragment::NonEmpty(t)) => self.find_first_element(&t[0]),
-                    Fragment(VFragment::Empty(t)) => t.get(),
-                    Component(comp) => {
-                        let scope = comp.scope.get().unwrap();
-                        match self.scopes[scope.0].root_node() {
-                            RenderReturn::Sync(Ok(t)) => self.find_first_element(t),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        }
-                    }
+        match node.dynamic_root(0) {
+            None => node.root_ids[0].get(),
+            Some(Text(t)) => t.id.get(),
+            Some(Fragment(VFragment::NonEmpty(t))) => self.find_first_element(&t[0]),
+            Some(Fragment(VFragment::Empty(t))) => t.get(),
+            Some(Component(comp)) => {
+                let scope = comp.scope.get().unwrap();
+                match self.scopes[scope.0].root_node() {
+                    RenderReturn::Sync(Ok(t)) => self.find_first_element(t),
+                    _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
         }
     }
 
     fn find_last_element(&self, node: &VNode) -> ElementId {
-        match node.template.roots.last().unwrap() {
-            TemplateNode::Element { .. } | TemplateNode::Text(_) => {
-                node.root_ids.last().unwrap().get()
-            }
-            TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
-                match &node.dynamic_nodes[*id] {
-                    Text(t) => t.id.get(),
-                    Fragment(VFragment::NonEmpty(t)) => self.find_last_element(t.last().unwrap()),
-                    Fragment(VFragment::Empty(t)) => t.get(),
-                    Component(comp) => {
-                        let scope = comp.scope.get().unwrap();
-                        match self.scopes[scope.0].root_node() {
-                            RenderReturn::Sync(Ok(t)) => self.find_last_element(t),
-                            _ => todo!("cannot handle nonstandard nodes"),
-                        }
-                    }
+        match node.dynamic_root(node.template.roots.len() - 1) {
+            None => node.root_ids.last().unwrap().get(),
+            Some(Text(t)) => t.id.get(),
+            Some(Fragment(VFragment::NonEmpty(t))) => self.find_last_element(t.last().unwrap()),
+            Some(Fragment(VFragment::Empty(t))) => t.get(),
+            Some(Component(comp)) => {
+                let scope = comp.scope.get().unwrap();
+                match self.scopes[scope.0].root_node() {
+                    RenderReturn::Sync(Ok(t)) => self.find_last_element(t),
+                    _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
         }

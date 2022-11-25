@@ -15,6 +15,7 @@ impl<'b> VirtualDom {
 
     pub fn reclaim(&mut self, el: ElementId) {
         assert_ne!(el, ElementId(0));
+        println!("reclaiming {}", el.0);
         self.elements.remove(el.0);
     }
 

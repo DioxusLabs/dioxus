@@ -31,6 +31,8 @@ impl VirtualDom {
             path,
         });
 
+        println!("Claiming {}", id);
+
         ElementId(id)
     }
 

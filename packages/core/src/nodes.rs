@@ -54,6 +54,15 @@ impl<'a> VNode<'a> {
             },
         })
     }
+
+    pub fn dynamic_root(&self, idx: usize) -> Option<&'a DynamicNode<'a>> {
+        match &self.template.roots[idx] {
+            TemplateNode::Element { .. } | TemplateNode::Text(_) => None,
+            TemplateNode::Dynamic(id) | TemplateNode::DynamicText(id) => {
+                Some(&self.dynamic_nodes[*id])
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
