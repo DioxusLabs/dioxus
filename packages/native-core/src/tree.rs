@@ -94,13 +94,13 @@ pub trait TreeView<T>: Sized {
 
     fn parent_mut(&mut self, id: NodeId) -> Option<&mut T>;
 
-    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, &mut T)> {
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
         let mut_ptr: *mut Self = self;
         unsafe {
             // Safety: No node has itself as a parent.
             (*mut_ptr)
                 .get_mut(id)
-                .and_then(|parent| (*mut_ptr).parent_mut(id).map(|children| (parent, children)))
+                .map(|node| (node, (*mut_ptr).parent_mut(id).map(|parent| parent)))
         }
     }
 
@@ -818,4 +818,21 @@ fn traverse_breadth_first() {
         assert_eq!(*node, node_count);
         node_count += 1;
     });
+}
+
+trait UpwardPass<T> {
+    fn upward_pass(&mut self, node: &mut T, parent: Option<&mut T>) -> bool;
+
+    fn resolve_pass(&mut self, tree: &mut impl TreeView<T>, starting_nodes: &[NodeId]) {
+        let mut stack = Vec::new();
+        for node in starting_nodes {
+            stack.push(*node);
+        }
+        while let Some(node_id) = stack.pop() {
+            let (node, parent) = tree.node_parent_mut(node_id).unwrap();
+            if self.upward_pass(node, parent) {
+                stack.push(tree.parent_id(node_id).unwrap());
+            }
+        }
+    }
 }

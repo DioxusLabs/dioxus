@@ -97,7 +97,7 @@ impl<S: State> RealDom<S> {
     }
 
     fn resolve_height(&mut self, node_id: RealNodeId) {
-        if let Some((node, parent)) = self.tree.node_parent_mut(node_id) {
+        if let Some((node, Some(parent))) = self.tree.node_parent_mut(node_id) {
             let height = parent.node_data.height;
             node.node_data.height = height + 1;
             unsafe {
