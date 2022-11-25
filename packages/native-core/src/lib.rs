@@ -3,6 +3,7 @@ use tree::NodeId;
 pub mod layout_attributes;
 pub mod node;
 pub mod node_ref;
+pub mod passes;
 pub mod real_dom;
 pub mod state;
 pub mod tree;
