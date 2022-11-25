@@ -829,23 +829,17 @@ fn traverse_breadth_first() {
     });
 }
 
-enum PassDirection {
-    Up,
-    Down,
-    Node,
-}
-
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
-struct PassId(u64);
+pub struct PassId(u64);
 
-trait UpwardPass<T> {
+pub trait UpwardPass<T> {
     fn pass_id(&self) -> PassId;
     fn dependancies(&self) -> &'static [PassId];
     fn dependants(&self) -> &'static [PassId];
     fn upward_pass(&self, node: &mut T, parent: Option<&mut T>) -> bool;
 }
 
-trait DownwardPass<T> {
+pub trait DownwardPass<T> {
     fn pass_id(&self) -> PassId;
     fn dependancies(&self) -> &'static [PassId];
     fn dependants(&self) -> &'static [PassId];
@@ -856,14 +850,14 @@ trait DownwardPass<T> {
     ) -> bool;
 }
 
-trait NodePass<T> {
+pub trait NodePass<T> {
     fn pass_id(&self) -> PassId;
     fn dependancies(&self) -> &'static [PassId];
     fn dependants(&self) -> &'static [PassId];
     fn node_pass(&self, node: &mut T) -> bool;
 }
 
-enum AnyPass<T> {
+pub enum AnyPass<T> {
     Upward(Box<dyn UpwardPass<T> + Send + Sync>),
     Downward(Box<dyn DownwardPass<T> + Send + Sync>),
     Node(Box<dyn NodePass<T> + Send + Sync>),
@@ -954,7 +948,7 @@ impl DirtyNodeStates {
     }
 }
 
-fn resolve_passes<T>(
+pub fn resolve_passes<T>(
     tree: &mut impl TreeView<T>,
     starting_nodes: FxHashMap<NodeId, FxDashSet<PassId>>,
     mut passes: Vec<AnyPass<T>>,
