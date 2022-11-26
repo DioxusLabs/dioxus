@@ -714,3 +714,120 @@ fn up_pass() {
     assert_eq!(tree.get(child2).unwrap(), &1);
     assert_eq!(tree.get(grandchild2).unwrap(), &1);
 }
+
+#[test]
+fn dependant_up_pass() {
+    use crate::tree::{Tree, TreeLike};
+    // 0
+    let mut tree = Tree::new(0);
+    let parent = tree.root();
+    // 1
+    let child1 = tree.create_node(0);
+    tree.add_child(parent, child1);
+    // 2
+    let grandchild1 = tree.create_node(1);
+    tree.add_child(child1, grandchild1);
+    // 3
+    let child2 = tree.create_node(0);
+    tree.add_child(parent, child2);
+    // 4
+    let grandchild2 = tree.create_node(1);
+    tree.add_child(child2, grandchild2);
+
+    struct AddPass;
+    impl Pass for AddPass {
+        fn pass_id(&self) -> PassId {
+            PassId(0)
+        }
+
+        fn dependancies(&self) -> &'static [PassId] {
+            &[PassId(1)]
+        }
+
+        fn dependants(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn mask(&self) -> MemberMask {
+            MemberMask(1)
+        }
+    }
+    impl UpwardPass<i32> for AddPass {
+        fn pass<'a>(
+            &self,
+            node: &mut i32,
+            children: &mut dyn Iterator<Item = &'a mut i32>,
+        ) -> PassReturn {
+            *node += children.map(|i| *i).sum::<i32>();
+            PassReturn {
+                progress: true,
+                mark_dirty: true,
+            }
+        }
+    }
+
+    struct SubtractPass;
+    impl Pass for SubtractPass {
+        fn pass_id(&self) -> PassId {
+            PassId(1)
+        }
+
+        fn dependancies(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn dependants(&self) -> &'static [PassId] {
+            &[PassId(0)]
+        }
+
+        fn mask(&self) -> MemberMask {
+            MemberMask(1)
+        }
+    }
+    impl UpwardPass<i32> for SubtractPass {
+        fn pass<'a>(
+            &self,
+            node: &mut i32,
+            children: &mut dyn Iterator<Item = &'a mut i32>,
+        ) -> PassReturn {
+            *node -= children.map(|i| *i).sum::<i32>();
+            PassReturn {
+                progress: true,
+                mark_dirty: true,
+            }
+        }
+    }
+
+    let passes = vec![
+        AnyPass::Upward(Box::new(AddPass)),
+        AnyPass::Upward(Box::new(SubtractPass)),
+    ];
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(1), grandchild1);
+    dirty_nodes.insert(PassId(1), grandchild2);
+    resolve_passes(&mut tree, dirty_nodes, passes);
+
+    // Tree before:
+    // 0=\
+    //   0=\
+    //     1
+    //   0=\
+    //     1
+    // Tree after subtract:
+    // 2=\
+    //   -1=\
+    //      1
+    //   -1=\
+    //      1
+    // Tree after add:
+    // 2=\
+    //   0=\
+    //     1
+    //   0=\
+    //     1
+    assert_eq!(tree.get(tree.root()).unwrap(), &2);
+    assert_eq!(tree.get(child1).unwrap(), &0);
+    assert_eq!(tree.get(grandchild1).unwrap(), &1);
+    assert_eq!(tree.get(child2).unwrap(), &0);
+    assert_eq!(tree.get(grandchild2).unwrap(), &1);
+}
