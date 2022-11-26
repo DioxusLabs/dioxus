@@ -73,6 +73,10 @@ pub trait TreeView<T>: Sized {
 
     fn root(&self) -> NodeId;
 
+    fn contains(&self, id: NodeId) -> bool {
+        self.get(id).is_some()
+    }
+
     fn get(&self, id: NodeId) -> Option<&T>;
 
     fn get_unchecked(&self, id: NodeId) -> &T {

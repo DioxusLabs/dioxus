@@ -1,13 +1,13 @@
-use anymap::AnyMap;
 use dioxus_core::{ElementId, Mutations};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
-use crate::node::{Node, NodeData, NodeType, OwnedAttributeDiscription};
+use crate::node::{Node, NodeType, OwnedAttributeDiscription};
 use crate::node_ref::{AttributeMask, NodeMask};
+use crate::passes::DirtyNodeStates;
 use crate::state::State;
 use crate::tree::{NodeId, Tree, TreeLike, TreeView};
-use crate::RealNodeId;
+use crate::{FxDashSet, RealNodeId, SendAnyMap};
 
 fn mark_dirty(
     node_id: NodeId,
@@ -96,10 +96,7 @@ impl<S: State> RealDom<S> {
     }
 
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations(
-        &mut self,
-        mutations_vec: Vec<Mutations>,
-    ) -> FxHashMap<RealNodeId, NodeMask> {
+    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> DirtyNodeStates {
         let mut nodes_updated: FxHashMap<RealNodeId, NodeMask> = FxHashMap::default();
         for mutations in mutations_vec {
             for e in mutations.edits {
@@ -346,20 +343,28 @@ impl<S: State> RealDom<S> {
             }
         }
 
-        // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-        nodes_updated.retain(|k, _| self.tree.get(*k).is_some());
+        let dirty_nodes = DirtyNodeStates::default();
+        for (n, mask) in nodes_updated {
+            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
+            if self.tree.contains(n) {
+                for (m, p) in S::MASKS.iter().zip(S::PASSES.iter()) {
+                    if mask.overlaps(m) {
+                        dirty_nodes.insert(p.pass_id(), n);
+                    }
+                }
+            }
+        }
 
-        nodes_updated
+        dirty_nodes
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
-        nodes_updated: FxHashMap<RealNodeId, NodeMask>,
-        ctx: AnyMap,
-    ) -> FxHashSet<RealNodeId> {
-        let (mut state_tree, node_tree) = self.split();
-        S::update(&nodes_updated, &mut state_tree, &node_tree, &ctx)
+        nodes_updated: DirtyNodeStates,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        S::update(nodes_updated, &mut self.tree, ctx)
     }
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
@@ -387,19 +392,6 @@ impl<S: State> RealDom<S> {
     /// Returns the id of the root node.
     pub fn root_id(&self) -> NodeId {
         self.tree.root()
-    }
-
-    pub fn split(&mut self) -> (impl TreeView<S> + '_, impl TreeView<NodeData> + '_) {
-        let raw = self as *mut Self;
-        // this is safe beacuse the treeview trait does not allow mutation of the position of elements, and within elements the access is disjoint.
-        (
-            unsafe { &mut *raw }
-                .tree
-                .map(|n| &n.state, |n| &mut n.state),
-            unsafe { &mut *raw }
-                .tree
-                .map(|n| &n.node_data, |n| &mut n.node_data),
-        )
     }
 
     fn clone_node(&mut self, node_id: NodeId) -> RealNodeId {

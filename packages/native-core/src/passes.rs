@@ -1,12 +1,10 @@
-use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+use crate::tree::{NodeId, TreeView};
+use crate::{FxDashMap, FxDashSet, SendAnyMap};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
-use std::hash::BuildHasherDefault;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
-
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-
-use crate::tree::{NodeId, TreeView};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct DirtyNodes {
@@ -56,8 +54,6 @@ fn dirty_nodes() {
     assert!(matches!(dirty_nodes.pop_front(), Some(NodeId(1 | 2))));
     assert_eq!(dirty_nodes.pop_front(), Some(NodeId(3)));
 }
-
-type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
 
 #[derive(Default)]
 pub struct DirtyNodeStates {
@@ -167,7 +163,12 @@ pub trait Pass {
 }
 
 pub trait UpwardPass<T>: Pass {
-    fn pass<'a>(&self, node: &mut T, children: &mut dyn Iterator<Item = &'a mut T>) -> PassReturn;
+    fn pass<'a>(
+        &self,
+        node: &mut T,
+        children: &mut dyn Iterator<Item = &'a mut T>,
+        ctx: &SendAnyMap,
+    ) -> PassReturn;
 }
 
 fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
@@ -175,12 +176,15 @@ fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
     pass: &P,
     mut dirty: DirtyNodes,
     dirty_states: &DirtyNodeStates,
+    nodes_updated: &FxDashSet<NodeId>,
+    ctx: &SendAnyMap,
 ) {
     while let Some(id) = dirty.pop_back() {
         let (node, mut children) = tree.parent_child_mut(id).unwrap();
-        let result = pass.pass(node, &mut children);
+        let result = pass.pass(node, &mut children, ctx);
         drop(children);
         if result.progress || result.mark_dirty {
+            nodes_updated.insert(id);
             if let Some(id) = tree.parent_id(id) {
                 if result.mark_dirty {
                     for dependant in pass.dependants() {
@@ -197,7 +201,7 @@ fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
 }
 
 pub trait DownwardPass<T>: Pass {
-    fn pass(&self, node: &mut T, parent: Option<&mut T>) -> PassReturn;
+    fn pass(&self, node: &mut T, parent: Option<&mut T>, ctx: &SendAnyMap) -> PassReturn;
 }
 
 fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
@@ -205,11 +209,14 @@ fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
     pass: &P,
     mut dirty: DirtyNodes,
     dirty_states: &DirtyNodeStates,
+    nodes_updated: &FxDashSet<NodeId>,
+    ctx: &SendAnyMap,
 ) {
     while let Some(id) = dirty.pop_front() {
         let (node, parent) = tree.node_parent_mut(id).unwrap();
-        let result = pass.pass(node, parent);
+        let result = pass.pass(node, parent, ctx);
         if result.mark_dirty || result.progress {
+            nodes_updated.insert(id);
             for id in tree.children_ids(id).unwrap() {
                 if result.mark_dirty {
                     for dependant in pass.dependants() {
@@ -226,7 +233,7 @@ fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
 }
 
 pub trait NodePass<T>: Pass {
-    fn pass(&self, node: &mut T) -> bool;
+    fn pass(&self, node: &mut T, ctx: &SendAnyMap) -> bool;
 }
 
 fn resolve_node_pass<T, P: NodePass<T> + ?Sized>(
@@ -234,10 +241,13 @@ fn resolve_node_pass<T, P: NodePass<T> + ?Sized>(
     pass: &P,
     mut dirty: DirtyNodes,
     dirty_states: &DirtyNodeStates,
+    nodes_updated: &FxDashSet<NodeId>,
+    ctx: &SendAnyMap,
 ) {
     while let Some(id) = dirty.pop_back() {
         let node = tree.get_mut(id).unwrap();
-        if pass.pass(node) {
+        if pass.pass(node, ctx) {
+            nodes_updated.insert(id);
             for dependant in pass.dependants() {
                 dirty_states.insert(*dependant, id);
             }
@@ -245,14 +255,14 @@ fn resolve_node_pass<T, P: NodePass<T> + ?Sized>(
     }
 }
 
-pub enum AnyPass<T> {
-    Upward(Box<dyn UpwardPass<T> + Send + Sync>),
-    Downward(Box<dyn DownwardPass<T> + Send + Sync>),
-    Node(Box<dyn NodePass<T> + Send + Sync>),
+pub enum AnyPass<T: 'static> {
+    Upward(&'static (dyn UpwardPass<T> + Send + Sync + 'static)),
+    Downward(&'static (dyn DownwardPass<T> + Send + Sync + 'static)),
+    Node(&'static (dyn NodePass<T> + Send + Sync + 'static)),
 }
 
 impl<T> AnyPass<T> {
-    fn pass_id(&self) -> PassId {
+    pub fn pass_id(&self) -> PassId {
         match self {
             Self::Upward(pass) => pass.pass_id(),
             Self::Downward(pass) => pass.pass_id(),
@@ -260,7 +270,7 @@ impl<T> AnyPass<T> {
         }
     }
 
-    fn dependancies(&self) -> &'static [PassId] {
+    pub fn dependancies(&self) -> &'static [PassId] {
         match self {
             Self::Upward(pass) => pass.dependancies(),
             Self::Downward(pass) => pass.dependancies(),
@@ -281,11 +291,19 @@ impl<T> AnyPass<T> {
         tree: &mut impl TreeView<T>,
         dirty: DirtyNodes,
         dirty_states: &DirtyNodeStates,
+        nodes_updated: &FxDashSet<NodeId>,
+        ctx: &SendAnyMap,
     ) {
         match self {
-            Self::Downward(pass) => resolve_downward_pass(tree, pass.as_ref(), dirty, dirty_states),
-            Self::Upward(pass) => resolve_upward_pass(tree, pass.as_ref(), dirty, dirty_states),
-            Self::Node(pass) => resolve_node_pass(tree, pass.as_ref(), dirty, dirty_states),
+            Self::Downward(pass) => {
+                resolve_downward_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
+            }
+            Self::Upward(pass) => {
+                resolve_upward_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
+            }
+            Self::Node(pass) => {
+                resolve_node_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
+            }
         }
     }
 }
@@ -297,11 +315,14 @@ unsafe impl<T> Sync for RawPointer<T> {}
 pub fn resolve_passes<T, Tr: TreeView<T>>(
     tree: &mut Tr,
     dirty_nodes: DirtyNodeStates,
-    mut passes: Vec<AnyPass<T>>,
-) {
+    mut passes: Vec<&AnyPass<T>>,
+    ctx: SendAnyMap,
+) -> FxDashSet<NodeId> {
     let dirty_states = Arc::new(dirty_nodes);
     let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
     let mut resolving = Vec::new();
+    let nodes_updated = Arc::new(FxDashSet::default());
+    let ctx = Arc::new(ctx);
     while !passes.is_empty() {
         let mut currently_borrowed = MemberMask::default();
         std::thread::scope(|s| {
@@ -322,13 +343,16 @@ pub fn resolve_passes<T, Tr: TreeView<T>>(
                     let tree_mut = tree as *mut _;
                     let raw_ptr = RawPointer(tree_mut);
                     let dirty_states = dirty_states.clone();
+                    let nodes_updated = nodes_updated.clone();
+                    let ctx = ctx.clone();
                     s.spawn(move || unsafe {
                         // let tree_mut: &mut Tr = &mut *raw_ptr.0;
                         let raw = raw_ptr;
+                        // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
                         let tree_mut: &mut Tr = &mut *raw.0;
                         let mut dirty = DirtyNodes::default();
                         dirty_states.all_dirty(pass_id, &mut dirty, tree_mut);
-                        pass.resolve(tree_mut, dirty, &dirty_states);
+                        pass.resolve(tree_mut, dirty, &dirty_states, &nodes_updated, &ctx);
                     });
                 } else {
                     i += 1;
@@ -339,14 +363,13 @@ pub fn resolve_passes<T, Tr: TreeView<T>>(
         resolved_passes.extend(resolving.iter().copied());
         resolving.clear()
     }
+    std::sync::Arc::try_unwrap(nodes_updated).unwrap()
 }
 
 #[test]
 fn node_pass() {
     use crate::tree::{Tree, TreeLike};
     let mut tree = Tree::new(0);
-    let parent = tree.root();
-    println!("{:#?}", tree);
 
     struct AddPass;
     impl Pass for AddPass {
@@ -368,16 +391,17 @@ fn node_pass() {
     }
 
     impl NodePass<i32> for AddPass {
-        fn pass(&self, node: &mut i32) -> bool {
+        fn pass(&self, node: &mut i32, _: &SendAnyMap) -> bool {
             *node += 1;
             true
         }
     }
 
-    let passes = vec![AnyPass::Node(Box::new(AddPass))];
+    let add_pass = AnyPass::Node(&AddPass);
+    let passes = vec![&add_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root());
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &1);
 }
@@ -407,8 +431,7 @@ fn dependant_node_pass() {
     }
 
     impl NodePass<i32> for AddPass {
-        fn pass(&self, node: &mut i32) -> bool {
-            println!("AddPass: {}", node);
+        fn pass(&self, node: &mut i32, _: &SendAnyMap) -> bool {
             *node += 1;
             true
         }
@@ -434,20 +457,18 @@ fn dependant_node_pass() {
         }
     }
     impl NodePass<i32> for SubtractPass {
-        fn pass(&self, node: &mut i32) -> bool {
-            println!("SubtractPass: {}", node);
+        fn pass(&self, node: &mut i32, _: &SendAnyMap) -> bool {
             *node -= 1;
             true
         }
     }
 
-    let passes = vec![
-        AnyPass::Node(Box::new(AddPass)),
-        AnyPass::Node(Box::new(SubtractPass)),
-    ];
+    let add_pass = AnyPass::Node(&AddPass);
+    let subtract_pass = AnyPass::Node(&SubtractPass);
+    let passes = vec![&add_pass, &subtract_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root());
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(*tree.get(tree.root()).unwrap(), 0);
 }
@@ -477,7 +498,7 @@ fn independant_node_pass() {
     }
 
     impl NodePass<(i32, i32)> for AddPass1 {
-        fn pass(&self, node: &mut (i32, i32)) -> bool {
+        fn pass(&self, node: &mut (i32, i32), _: &SendAnyMap) -> bool {
             node.0 += 1;
             true
         }
@@ -503,20 +524,19 @@ fn independant_node_pass() {
     }
 
     impl NodePass<(i32, i32)> for AddPass2 {
-        fn pass(&self, node: &mut (i32, i32)) -> bool {
+        fn pass(&self, node: &mut (i32, i32), _: &SendAnyMap) -> bool {
             node.1 += 1;
             true
         }
     }
 
-    let passes = vec![
-        AnyPass::Node(Box::new(AddPass1)),
-        AnyPass::Node(Box::new(AddPass2)),
-    ];
+    let add_pass1 = AnyPass::Node(&AddPass1);
+    let add_pass2 = AnyPass::Node(&AddPass2);
+    let passes = vec![&add_pass1, &add_pass2];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root());
     dirty_nodes.insert(PassId(1), tree.root());
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &(1, 1));
 }
@@ -555,7 +575,7 @@ fn down_pass() {
         }
     }
     impl DownwardPass<i32> for AddPass {
-        fn pass(&self, node: &mut i32, parent: Option<&mut i32>) -> PassReturn {
+        fn pass(&self, node: &mut i32, parent: Option<&mut i32>, _: &SendAnyMap) -> PassReturn {
             if let Some(parent) = parent {
                 *node += *parent;
             }
@@ -566,10 +586,11 @@ fn down_pass() {
         }
     }
 
-    let passes = vec![AnyPass::Downward(Box::new(AddPass))];
+    let add_pass = AnyPass::Downward(&AddPass);
+    let passes = vec![&add_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root());
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &1);
     assert_eq!(tree.get(child1).unwrap(), &2);
@@ -616,12 +637,10 @@ fn dependant_down_pass() {
         }
     }
     impl DownwardPass<i32> for AddPass {
-        fn pass(&self, node: &mut i32, parent: Option<&mut i32>) -> PassReturn {
+        fn pass(&self, node: &mut i32, parent: Option<&mut i32>, _: &SendAnyMap) -> PassReturn {
             if let Some(parent) = parent {
-                println!("AddPass: {} -> {}", node, *node + *parent);
                 *node += *parent;
             } else {
-                println!("AddPass: {}", node);
             }
             PassReturn {
                 progress: true,
@@ -649,12 +668,10 @@ fn dependant_down_pass() {
         }
     }
     impl DownwardPass<i32> for SubtractPass {
-        fn pass(&self, node: &mut i32, parent: Option<&mut i32>) -> PassReturn {
+        fn pass(&self, node: &mut i32, parent: Option<&mut i32>, _: &SendAnyMap) -> PassReturn {
             if let Some(parent) = parent {
-                println!("SubtractPass: {} -> {}", node, *node - *parent);
                 *node -= *parent;
             } else {
-                println!("SubtractPass: {}", node);
             }
             PassReturn {
                 progress: true,
@@ -663,13 +680,12 @@ fn dependant_down_pass() {
         }
     }
 
-    let passes = vec![
-        AnyPass::Downward(Box::new(AddPass)),
-        AnyPass::Downward(Box::new(SubtractPass)),
-    ];
+    let add_pass = AnyPass::Downward(&AddPass);
+    let subtract_pass = AnyPass::Downward(&SubtractPass);
+    let passes = vec![&add_pass, &subtract_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root());
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     // Tree before:
     // 1=\
@@ -745,6 +761,7 @@ fn up_pass() {
             &self,
             node: &mut i32,
             children: &mut dyn Iterator<Item = &'a mut i32>,
+            _: &SendAnyMap,
         ) -> PassReturn {
             *node += children.map(|i| *i).sum::<i32>();
             PassReturn {
@@ -754,11 +771,12 @@ fn up_pass() {
         }
     }
 
-    let passes = vec![AnyPass::Upward(Box::new(AddPass))];
+    let add_pass = AnyPass::Upward(&AddPass);
+    let passes = vec![&add_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), grandchild1);
     dirty_nodes.insert(PassId(0), grandchild2);
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &2);
     assert_eq!(tree.get(child1).unwrap(), &1);
@@ -809,6 +827,7 @@ fn dependant_up_pass() {
             &self,
             node: &mut i32,
             children: &mut dyn Iterator<Item = &'a mut i32>,
+            _: &SendAnyMap,
         ) -> PassReturn {
             *node += children.map(|i| *i).sum::<i32>();
             PassReturn {
@@ -841,6 +860,7 @@ fn dependant_up_pass() {
             &self,
             node: &mut i32,
             children: &mut dyn Iterator<Item = &'a mut i32>,
+            _: &SendAnyMap,
         ) -> PassReturn {
             *node -= children.map(|i| *i).sum::<i32>();
             PassReturn {
@@ -850,14 +870,13 @@ fn dependant_up_pass() {
         }
     }
 
-    let passes = vec![
-        AnyPass::Upward(Box::new(AddPass)),
-        AnyPass::Upward(Box::new(SubtractPass)),
-    ];
+    let add_pass = AnyPass::Upward(&AddPass);
+    let subtract_pass = AnyPass::Upward(&SubtractPass);
+    let passes = vec![&add_pass, &subtract_pass];
     let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), grandchild1);
     dirty_nodes.insert(PassId(1), grandchild2);
-    resolve_passes(&mut tree, dirty_nodes, passes);
+    resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     // Tree before:
     // 0=\

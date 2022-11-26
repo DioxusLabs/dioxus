@@ -1,3 +1,6 @@
+use std::hash::BuildHasherDefault;
+
+use rustc_hash::FxHasher;
 use tree::NodeId;
 
 pub mod layout_attributes;
@@ -10,7 +13,10 @@ pub mod tree;
 pub mod utils;
 
 /// A id for a node that lives in the real dom.
-type RealNodeId = NodeId;
+pub type RealNodeId = NodeId;
+pub(crate) type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
+pub(crate) type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
+pub(crate) type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
 
 /// Used in derived state macros
 #[derive(Eq, PartialEq)]

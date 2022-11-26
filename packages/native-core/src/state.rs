@@ -1,11 +1,10 @@
 use std::cmp::Ordering;
 
-use crate::node::NodeData;
+use crate::node::Node;
 use crate::node_ref::{NodeMask, NodeView};
+use crate::passes::{resolve_passes, AnyPass, DirtyNodeStates};
 use crate::tree::TreeView;
-use crate::RealNodeId;
-use anymap::AnyMap;
-use rustc_hash::{FxHashMap, FxHashSet};
+use crate::{FxDashSet, RealNodeId, SendAnyMap};
 
 /// Join two sorted iterators
 pub(crate) fn union_ordered_iter<'a>(
@@ -204,20 +203,29 @@ pub trait NodeDepState {
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        siblings: <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>,
+        node_state: <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>,
         ctx: &Self::Ctx,
     ) -> bool;
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
-pub trait State: Default + Clone {
+pub trait State: Default + Clone + 'static {
     #[doc(hidden)]
-    fn update<'a, T: TreeView<Self>, T2: TreeView<NodeData>>(
-        dirty: &FxHashMap<RealNodeId, NodeMask>,
-        state_tree: &'a mut T,
-        rdom: &'a T2,
-        ctx: &AnyMap,
-    ) -> FxHashSet<RealNodeId>;
+    const PASSES: &'static [AnyPass<Node<Self>>];
+    #[doc(hidden)]
+    const MASKS: &'static [NodeMask];
+
+    #[doc(hidden)]
+    fn update<T: TreeView<Node<Self>>>(
+        dirty: DirtyNodeStates,
+        tree: &mut T,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        let set = FxDashSet::default();
+        let passes = Self::PASSES.iter().collect();
+        resolve_passes(tree, dirty, passes, ctx);
+        set
+    }
 }
 
 impl ChildDepState for () {
