@@ -346,14 +346,6 @@ fn node_pass() {
     use crate::tree::{Tree, TreeLike};
     let mut tree = Tree::new(0);
     let parent = tree.root();
-    let child1 = tree.create_node(1);
-    tree.add_child(parent, child1);
-    let grandchild1 = tree.create_node(3);
-    tree.add_child(child1, grandchild1);
-    let child2 = tree.create_node(2);
-    tree.add_child(parent, child2);
-    let grandchild2 = tree.create_node(4);
-    tree.add_child(child2, grandchild2);
     println!("{:#?}", tree);
 
     struct AddPass;
@@ -371,7 +363,7 @@ fn node_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
 
@@ -394,15 +386,6 @@ fn node_pass() {
 fn dependant_node_pass() {
     use crate::tree::{Tree, TreeLike};
     let mut tree = Tree::new(0);
-    let parent = tree.root();
-    let child1 = tree.create_node(1);
-    tree.add_child(parent, child1);
-    let grandchild1 = tree.create_node(3);
-    tree.add_child(child1, grandchild1);
-    let child2 = tree.create_node(2);
-    tree.add_child(parent, child2);
-    let grandchild2 = tree.create_node(4);
-    tree.add_child(child2, grandchild2);
 
     struct AddPass;
     impl Pass for AddPass {
@@ -419,7 +402,7 @@ fn dependant_node_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
 
@@ -447,7 +430,7 @@ fn dependant_node_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl NodePass<i32> for SubtractPass {
@@ -467,6 +450,75 @@ fn dependant_node_pass() {
     resolve_passes(&mut tree, dirty_nodes, passes);
 
     assert_eq!(*tree.get(tree.root()).unwrap(), 0);
+}
+
+#[test]
+fn independant_node_pass() {
+    use crate::tree::{Tree, TreeLike};
+    let mut tree = Tree::new((0, 0));
+
+    struct AddPass1;
+    impl Pass for AddPass1 {
+        fn pass_id(&self) -> PassId {
+            PassId(0)
+        }
+
+        fn dependancies(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn dependants(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn mask(&self) -> MemberMask {
+            MemberMask(0)
+        }
+    }
+
+    impl NodePass<(i32, i32)> for AddPass1 {
+        fn pass(&self, node: &mut (i32, i32)) -> bool {
+            node.0 += 1;
+            true
+        }
+    }
+
+    struct AddPass2;
+    impl Pass for AddPass2 {
+        fn pass_id(&self) -> PassId {
+            PassId(1)
+        }
+
+        fn dependancies(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn dependants(&self) -> &'static [PassId] {
+            &[]
+        }
+
+        fn mask(&self) -> MemberMask {
+            MemberMask(1)
+        }
+    }
+
+    impl NodePass<(i32, i32)> for AddPass2 {
+        fn pass(&self, node: &mut (i32, i32)) -> bool {
+            node.1 += 1;
+            true
+        }
+    }
+
+    let passes = vec![
+        AnyPass::Node(Box::new(AddPass1)),
+        AnyPass::Node(Box::new(AddPass2)),
+    ];
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), tree.root());
+    dirty_nodes.insert(PassId(1), tree.root());
+    resolve_passes(&mut tree, dirty_nodes, passes);
+
+    assert_eq!(tree.get(tree.root()).unwrap(), &(1, 1));
 }
 
 #[test]
@@ -499,7 +551,7 @@ fn down_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl DownwardPass<i32> for AddPass {
@@ -560,7 +612,7 @@ fn dependant_down_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl DownwardPass<i32> for AddPass {
@@ -593,7 +645,7 @@ fn dependant_down_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl DownwardPass<i32> for SubtractPass {
@@ -685,7 +737,7 @@ fn up_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl UpwardPass<i32> for AddPass {
@@ -749,7 +801,7 @@ fn dependant_up_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl UpwardPass<i32> for AddPass {
@@ -781,7 +833,7 @@ fn dependant_up_pass() {
         }
 
         fn mask(&self) -> MemberMask {
-            MemberMask(1)
+            MemberMask(0)
         }
     }
     impl UpwardPass<i32> for SubtractPass {
