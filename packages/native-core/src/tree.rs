@@ -15,6 +15,7 @@ pub struct Node<T> {
     value: T,
     parent: Option<NodeId>,
     children: Vec<NodeId>,
+    height: u16,
 }
 
 #[derive(Debug)]
@@ -44,6 +45,18 @@ impl<T> Tree<T> {
         let node = self.nodes.remove(node.0);
         for child in node.children {
             self.remove_recursive(child);
+        }
+    }
+
+    fn set_height(&mut self, node: NodeId, height: u16) {
+        let self_mut = self as *mut Self;
+        let node = self.nodes.get_mut(node.0).unwrap();
+        node.height = height;
+        unsafe {
+            // Safety: No node has itself as a child
+            for child in &node.children {
+                (*self_mut).set_height(*child, height + 1);
+            }
         }
     }
 }
@@ -105,6 +118,8 @@ pub trait TreeView<T>: Sized {
     }
 
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
+
+    fn height(&self, id: NodeId) -> Option<u16>;
 
     fn map<T2, F: Fn(&T) -> &T2, FMut: Fn(&mut T) -> &mut T2>(
         &mut self,
@@ -306,6 +321,10 @@ impl<T> TreeView<T> for Tree<T> {
         self.nodes.get(id.0).and_then(|node| node.parent)
     }
 
+    fn height(&self, id: NodeId) -> Option<u16> {
+        self.nodes.get(id.0).map(|n| n.height)
+    }
+
     fn get_unchecked(&self, id: NodeId) -> &T {
         unsafe { &self.nodes.get_unchecked(id.0).value }
     }
@@ -326,6 +345,7 @@ impl<T> TreeLike<T> for Tree<T> {
             value: root,
             parent: None,
             children: Vec::new(),
+            height: 0,
         }));
         Self { nodes, root }
     }
@@ -335,12 +355,16 @@ impl<T> TreeLike<T> for Tree<T> {
             value,
             parent: None,
             children: Vec::new(),
+            height: 0,
         }))
     }
 
     fn add_child(&mut self, parent: NodeId, new: NodeId) {
-        self.nodes.get_mut(parent.0).unwrap().children.push(new);
         self.nodes.get_mut(new.0).unwrap().parent = Some(parent);
+        let parent = self.nodes.get_mut(parent.0).unwrap();
+        parent.children.push(new);
+        let height = parent.height + 1;
+        self.set_height(new, height);
     }
 
     fn remove(&mut self, id: NodeId) -> Option<T> {
@@ -372,6 +396,8 @@ impl<T> TreeLike<T> for Tree<T> {
                     *id = new_id;
                 }
             }
+            let height = parent.height + 1;
+            self.set_height(new_id, height);
         }
     }
 
@@ -386,6 +412,8 @@ impl<T> TreeLike<T> for Tree<T> {
             .position(|child| child == &id)
             .unwrap();
         parent.children.insert(index, new);
+        let height = parent.height + 1;
+        self.set_height(new, height);
     }
 
     fn insert_after(&mut self, id: NodeId, new: NodeId) {
@@ -399,6 +427,8 @@ impl<T> TreeLike<T> for Tree<T> {
             .position(|child| child == &id)
             .unwrap();
         parent.children.insert(index + 1, new);
+        let height = parent.height + 1;
+        self.set_height(new, height);
     }
 }
 
@@ -496,6 +526,10 @@ where
 
     fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.tree.parent_id(id)
+    }
+
+    fn height(&self, id: NodeId) -> Option<u16> {
+        self.tree.height(id)
     }
 
     fn get_unchecked(&self, id: NodeId) -> &T2 {
@@ -630,6 +664,10 @@ impl<'a, T, Tr: TreeView<T>> TreeView<T> for SharedView<'a, T, Tr> {
         self.with_node(id, |t| t.parent_id(id))
     }
 
+    fn height(&self, id: NodeId) -> Option<u16> {
+        unsafe { (*self.tree.get()).height(id) }
+    }
+
     fn size(&self) -> usize {
         unsafe { (*self.tree.get()).size() }
     }
@@ -644,6 +682,8 @@ fn creation() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 2);
+    assert_eq!(tree.height(parent), Some(0));
+    assert_eq!(tree.height(child), Some(1));
     assert_eq!(*tree.get(parent).unwrap(), 1);
     assert_eq!(*tree.get(child).unwrap(), 0);
     assert_eq!(tree.parent_id(parent), None);
@@ -664,6 +704,10 @@ fn insertion() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 4);
+    assert_eq!(tree.height(parent), Some(0));
+    assert_eq!(tree.height(child), Some(1));
+    assert_eq!(tree.height(before), Some(1));
+    assert_eq!(tree.height(after), Some(1));
     assert_eq!(*tree.get(parent).unwrap(), 0);
     assert_eq!(*tree.get(before).unwrap(), 1);
     assert_eq!(*tree.get(child).unwrap(), 2);
@@ -687,6 +731,10 @@ fn deletion() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 4);
+    assert_eq!(tree.height(parent), Some(0));
+    assert_eq!(tree.height(child), Some(1));
+    assert_eq!(tree.height(before), Some(1));
+    assert_eq!(tree.height(after), Some(1));
     assert_eq!(*tree.get(parent).unwrap(), 0);
     assert_eq!(*tree.get(before).unwrap(), 1);
     assert_eq!(*tree.get(child).unwrap(), 2);
@@ -700,6 +748,9 @@ fn deletion() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 3);
+    assert_eq!(tree.height(parent), Some(0));
+    assert_eq!(tree.height(before), Some(1));
+    assert_eq!(tree.height(after), Some(1));
     assert_eq!(*tree.get(parent).unwrap(), 0);
     assert_eq!(*tree.get(before).unwrap(), 1);
     assert_eq!(tree.get(child), None);
@@ -712,6 +763,8 @@ fn deletion() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 2);
+    assert_eq!(tree.height(parent), Some(0));
+    assert_eq!(tree.height(after), Some(1));
     assert_eq!(*tree.get(parent).unwrap(), 0);
     assert_eq!(tree.get(before), None);
     assert_eq!(*tree.get(after).unwrap(), 3);
@@ -722,6 +775,7 @@ fn deletion() {
 
     println!("Tree: {:#?}", tree);
     assert_eq!(tree.size(), 1);
+    assert_eq!(tree.height(parent), Some(0));
     assert_eq!(*tree.get(parent).unwrap(), 0);
     assert_eq!(tree.get(after), None);
     assert_eq!(tree.children_ids(parent).unwrap(), &[]);

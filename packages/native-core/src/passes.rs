@@ -96,6 +96,22 @@ impl DirtyNodeStates {
         }
     }
 
+    fn get(&self, pass_id: PassId, node_id: NodeId) -> bool {
+        let pass_id = pass_id.0;
+        let index = pass_id / 64;
+        let bit = pass_id % 64;
+        let encoded = 1 << bit;
+        if let Some(dirty) = self.dirty.get(&node_id) {
+            if let Some(atomic) = dirty.get(index as usize) {
+                atomic.load(Ordering::SeqCst) & encoded != 0
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
+
     fn all_dirty(&self, pass_id: PassId) -> impl Iterator<Item = NodeId> + '_ {
         let pass_id = pass_id.0;
         let index = pass_id / 64;
@@ -160,7 +176,23 @@ fn get_pass<T, Tr: TreeView<T>>(
                         }
                     }
                 }
-                _ => {
+                AnyPass::Downward(pass) => {
+                    let mut sorted: Vec<_> = dirty_nodes.all_dirty(pass_id).collect();
+                    sorted.sort_unstable_by_key(|id| shared_view.height(*id));
+                    println!(
+                        "Task: {:?} {:?}",
+                        pass_id,
+                        sorted
+                            .iter()
+                            .map(|id| (id, shared_view.height(*id)))
+                            .collect::<Vec<_>>()
+                    );
+                    for node in sorted.into_iter() {
+                        global.push(node);
+                    }
+                    current_pass.replace(AnyPass::Downward(pass));
+                }
+                AnyPass::Node(pass) => {
                     for node in dirty_nodes.all_dirty(pass_id) {
                         global.push(node);
                     }
@@ -169,7 +201,7 @@ fn get_pass<T, Tr: TreeView<T>>(
                         pass_id,
                         dirty_nodes.all_dirty(pass_id).collect::<Vec<_>>()
                     );
-                    current_pass.replace(pass);
+                    current_pass.replace(AnyPass::Node(pass));
                 }
             }
             return;
@@ -224,6 +256,7 @@ pub fn resolve_passes<T>(
                 loop {
                     let read = current_pass.read();
                     if let Some(current_pass) = &*read {
+                        let current_pass_id = current_pass.pass_id();
                         match current_pass {
                             AnyPass::Upward(_) => {
                                 todo!("Upward passes are single threaded")
@@ -248,7 +281,9 @@ pub fn resolve_passes<T>(
                                             for dependant in pass.dependants() {
                                                 dirty_nodes.insert(*dependant, *id);
                                             }
-                                            w.push(*id);
+                                            if !dirty_nodes.get(current_pass_id, *id) {
+                                                w.push(*id);
+                                            }
                                         }
                                     }
                                 }
@@ -333,6 +368,7 @@ fn node_pass() {
     tree.add_child(parent, child2);
     let grandchild2 = tree.create_node(4);
     tree.add_child(child2, grandchild2);
+    println!("{:#?}", tree);
 
     struct AddPass;
 
@@ -484,14 +520,19 @@ fn down_pass() {
 #[test]
 fn dependant_down_pass() {
     use crate::tree::{Tree, TreeLike};
+    // 0
     let mut tree = Tree::new(1);
     let parent = tree.root();
+    // 1
     let child1 = tree.create_node(1);
     tree.add_child(parent, child1);
+    // 2
     let grandchild1 = tree.create_node(1);
     tree.add_child(child1, grandchild1);
+    // 3
     let child2 = tree.create_node(1);
     tree.add_child(parent, child2);
+    // 4
     let grandchild2 = tree.create_node(1);
     tree.add_child(child2, grandchild2);
 
@@ -512,7 +553,10 @@ fn dependant_down_pass() {
 
         fn pass(&self, node: &mut i32, parent: Option<&mut i32>) -> bool {
             if let Some(parent) = parent {
+                println!("AddPass: {} -> {}", node, *node + *parent);
                 *node += *parent;
+            } else {
+                println!("AddPass: {}", node);
             }
             true
         }
@@ -535,7 +579,10 @@ fn dependant_down_pass() {
 
         fn pass(&self, node: &mut i32, parent: Option<&mut i32>) -> bool {
             if let Some(parent) = parent {
+                println!("SubtractPass: {} -> {}", node, *node - *parent);
                 *node -= *parent;
+            } else {
+                println!("SubtractPass: {}", node);
             }
             true
         }

@@ -19,8 +19,6 @@ pub struct NodeData {
     pub element_id: Option<ElementId>,
     /// Additional inforation specific to the node type
     pub node_type: NodeType,
-    /// The number of parents before the root node. The root node has height 1.
-    pub height: u16,
 }
 
 /// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
@@ -45,7 +43,6 @@ impl<S: State> Node<S> {
             node_data: NodeData {
                 element_id: None,
                 node_type,
-                height: 0,
                 node_id: NodeId(0),
             },
         }

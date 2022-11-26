@@ -93,21 +93,6 @@ impl<S: State> RealDom<S> {
 
     fn add_child(&mut self, node_id: RealNodeId, child_id: RealNodeId) {
         self.tree.add_child(node_id, child_id);
-        self.resolve_height(child_id);
-    }
-
-    fn resolve_height(&mut self, node_id: RealNodeId) {
-        if let Some((node, Some(parent))) = self.tree.node_parent_mut(node_id) {
-            let height = parent.node_data.height;
-            node.node_data.height = height + 1;
-            unsafe {
-                let self_mut = self as *mut Self;
-                // Safety: No node will have itself as a child
-                for child in self.tree.children_ids(node_id).unwrap() {
-                    (*self_mut).resolve_height(*child);
-                }
-            }
-        }
     }
 
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
@@ -382,7 +367,11 @@ impl<S: State> RealDom<S> {
     pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
-            listening.sort_by(|n1, n2| (n1.node_data.height).cmp(&n2.node_data.height).reverse());
+            listening.sort_by(|n1, n2| {
+                (self.tree.height(n1.node_data.node_id))
+                    .cmp(&self.tree.height(n2.node_data.node_id))
+                    .reverse()
+            });
             listening
         } else {
             Vec::new()
