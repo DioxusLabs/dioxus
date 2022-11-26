@@ -1,9 +1,8 @@
-use crossbeam_deque::{Injector, Stealer, Worker};
 use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::hash::BuildHasherDefault;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
-use std::os::raw;
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -61,12 +60,12 @@ fn dirty_nodes() {
 type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
 
 #[derive(Default)]
-struct DirtyNodeStates {
+pub struct DirtyNodeStates {
     dirty: FxDashMap<NodeId, Vec<AtomicU64>>,
 }
 
 impl DirtyNodeStates {
-    fn new(starting_nodes: FxHashMap<NodeId, FxHashSet<PassId>>) -> Self {
+    pub fn new(starting_nodes: FxHashMap<NodeId, FxHashSet<PassId>>) -> Self {
         let this = Self::default();
         for (node, nodes) in starting_nodes {
             for pass_id in nodes {
@@ -76,7 +75,7 @@ impl DirtyNodeStates {
         this
     }
 
-    fn insert(&self, pass_id: PassId, node_id: NodeId) {
+    pub fn insert(&self, pass_id: PassId, node_id: NodeId) {
         let pass_id = pass_id.0;
         let index = pass_id / 64;
         let bit = pass_id % 64;
@@ -95,22 +94,6 @@ impl DirtyNodeStates {
             v.resize_with(index as usize + 1, || AtomicU64::new(0));
             v[index as usize].fetch_or(encoded, Ordering::Relaxed);
             self.dirty.insert(node_id, v);
-        }
-    }
-
-    fn get(&self, pass_id: PassId, node_id: NodeId) -> bool {
-        let pass_id = pass_id.0;
-        let index = pass_id / 64;
-        let bit = pass_id % 64;
-        let encoded = 1 << bit;
-        if let Some(dirty) = self.dirty.get(&node_id) {
-            if let Some(atomic) = dirty.get(index as usize) {
-                atomic.load(Ordering::SeqCst) & encoded != 0
-            } else {
-                false
-            }
-        } else {
-            false
         }
     }
 
@@ -311,7 +294,7 @@ struct RawPointer<T>(*mut T);
 unsafe impl<T> Send for RawPointer<T> {}
 unsafe impl<T> Sync for RawPointer<T> {}
 
-fn resolve_passes<T, Tr: TreeView<T>>(
+pub fn resolve_passes<T, Tr: TreeView<T>>(
     tree: &mut Tr,
     dirty_nodes: DirtyNodeStates,
     mut passes: Vec<AnyPass<T>>,
@@ -400,7 +383,7 @@ fn node_pass() {
     }
 
     let passes = vec![AnyPass::Node(Box::new(AddPass))];
-    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root());
     resolve_passes(&mut tree, dirty_nodes, passes);
 
@@ -479,7 +462,7 @@ fn dependant_node_pass() {
         AnyPass::Node(Box::new(AddPass)),
         AnyPass::Node(Box::new(SubtractPass)),
     ];
-    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root());
     resolve_passes(&mut tree, dirty_nodes, passes);
 
@@ -632,7 +615,7 @@ fn dependant_down_pass() {
         AnyPass::Downward(Box::new(AddPass)),
         AnyPass::Downward(Box::new(SubtractPass)),
     ];
-    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root());
     resolve_passes(&mut tree, dirty_nodes, passes);
 
@@ -720,7 +703,7 @@ fn up_pass() {
     }
 
     let passes = vec![AnyPass::Upward(Box::new(AddPass))];
-    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), grandchild1);
     dirty_nodes.insert(PassId(0), grandchild2);
     resolve_passes(&mut tree, dirty_nodes, passes);
