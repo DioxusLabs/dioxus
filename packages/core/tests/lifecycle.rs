@@ -2,8 +2,8 @@
 #![allow(non_snake_case)]
 
 //! Tests for the lifecycle of components.
-use dioxus::{core_macro::rsx_without_templates, prelude::*};
-use dioxus_core::DomEdit::*;
+use dioxus::core::{ElementId, Mutation::*};
+use dioxus::prelude::*;
 use std::sync::{Arc, Mutex};
 
 type Shared<T> = Arc<Mutex<T>>;

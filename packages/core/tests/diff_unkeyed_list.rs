@@ -270,3 +270,110 @@ fn removes_one_by_one_multiroot() {
         ]
     );
 }
+
+#[test]
+fn two_equal_fragments_are_equal_static() {
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            (0..5).map(|_| rsx! {
+                div { "hello" }
+            })
+        })
+    });
+
+    _ = dom.rebuild();
+    assert!(dom.render_immediate().edits.is_empty());
+}
+
+#[test]
+fn two_equal_fragments_are_equal() {
+    let mut dom = VirtualDom::new(|cx| {
+        cx.render(rsx! {
+            (0..5).map(|i| rsx! {
+                div { "hello {i}" }
+            })
+        })
+    });
+
+    _ = dom.rebuild();
+    assert!(dom.render_immediate().edits.is_empty());
+}
+
+#[test]
+fn remove_many() {
+    let mut dom = VirtualDom::new(|cx| {
+        let num = match cx.generation() % 3 {
+            0 => 0,
+            1 => 1,
+            2 => 5,
+            _ => unreachable!(),
+        };
+
+        cx.render(rsx! {
+            (0..num).map(|i| rsx! { div { "hello {i}" } })
+        })
+    });
+
+    let edits = dom.rebuild().santize();
+    assert!(edits.template_mutations.is_empty());
+    assert_eq!(
+        edits.edits,
+        [
+            CreatePlaceholder { id: ElementId(1,) },
+            AppendChildren { m: 1 },
+        ]
+    );
+
+    dom.mark_dirty_scope(ScopeId(0));
+    let edits = dom.render_immediate().santize();
+    assert_eq!(
+        edits.edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            HydrateText { path: &[0,], value: "hello 0", id: ElementId(3,) },
+            ReplaceWith { id: ElementId(1,), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty_scope(ScopeId(0));
+    let edits = dom.render_immediate().santize();
+    assert_eq!(
+        edits.edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+            HydrateText { path: &[0,], value: "hello 1", id: ElementId(4,) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+            HydrateText { path: &[0,], value: "hello 2", id: ElementId(6,) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(7,) },
+            HydrateText { path: &[0,], value: "hello 3", id: ElementId(8,) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
+            HydrateText { path: &[0,], value: "hello 4", id: ElementId(10,) },
+            InsertAfter { id: ElementId(2,), m: 4 },
+        ]
+    );
+
+    dom.mark_dirty_scope(ScopeId(0));
+    let edits = dom.render_immediate().santize();
+    assert_eq!(
+        edits.edits,
+        [
+            Remove { id: ElementId(1,) },
+            Remove { id: ElementId(5,) },
+            Remove { id: ElementId(7,) },
+            Remove { id: ElementId(9,) },
+            CreatePlaceholder { id: ElementId(9,) },
+            ReplaceWith { id: ElementId(2,), m: 1 },
+        ]
+    );
+
+    dom.mark_dirty_scope(ScopeId(0));
+    let edits = dom.render_immediate().santize();
+    assert_eq!(
+        edits.edits,
+        [
+            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+            HydrateText { path: &[0,], value: "hello 0", id: ElementId(10,) },
+            ReplaceWith { id: ElementId(9,), m: 1 },
+        ]
+    )
+}

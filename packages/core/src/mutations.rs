@@ -189,4 +189,8 @@ pub enum Mutation<'a> {
     Remove {
         id: ElementId,
     },
+
+    PushRoot {
+        id: ElementId,
+    },
 }

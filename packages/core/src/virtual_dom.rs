@@ -483,6 +483,7 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
+    #[must_use]
     pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
@@ -500,6 +501,7 @@ impl VirtualDom {
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
+    #[must_use]
     pub fn render_immediate(&mut self) -> Mutations {
         // Build a waker that won't wake up since our deadline is already expired when it's polled
         let waker = futures_util::task::noop_waker();

@@ -11,11 +11,6 @@ Specifically:
 */
 
 use dioxus::prelude::*;
-use dioxus_core::SchedulerMsg;
-
-fn new_dom<P: 'static + Send>(app: Component<P>, props: P) -> VirtualDom {
-    VirtualDom::new_with_props(app, props)
-}
 
 /// This test ensures that if a component aborts early, it is replaced with a placeholder.
 /// In debug, this should also toss a warning.
@@ -28,7 +23,7 @@ fn test_memory_leak() {
         *val += 1;
 
         if *val == 2 || *val == 4 {
-            return None;
+            return cx.render(rsx!(()));
         }
 
         let name = cx.use_hook(|| String::from("asd"));
@@ -66,7 +61,7 @@ fn test_memory_leak() {
         render!(div { "goodbye world" })
     }
 
-    let mut dom = new_dom(app, ());
+    let mut dom = VirtualDom::new(app);
 
     dom.rebuild();
     dom.hard_diff(ScopeId(0));

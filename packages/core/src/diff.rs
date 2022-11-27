@@ -605,7 +605,7 @@ impl<'b: 'static> VirtualDom {
                 // only valid of the if there are no trailing elements
                 // self.create_and_append_children(new);
 
-                todo!()
+                todo!("we should never be appending - just creating N");
             }
             return;
         }
@@ -615,8 +615,7 @@ impl<'b: 'static> VirtualDom {
         for child in old {
             let key = child.key.unwrap();
             if !shared_keys.contains(&key) {
-                todo!("remove node");
-                // self.remove_nodes( [child]);
+                self.remove_node(child);
             }
         }
 
@@ -719,13 +718,6 @@ impl<'b: 'static> VirtualDom {
         }
     }
 
-    fn insert_after(&mut self, node: &'b VNode<'b>, nodes_created: usize) {
-        todo!()
-    }
-    fn insert_before(&mut self, node: &'b VNode<'b>, nodes_created: usize) {
-        todo!()
-    }
-
     fn replace_node_with_on_stack(&mut self, old: &'b VNode<'b>, m: usize) {
         todo!()
     }
@@ -775,7 +767,36 @@ impl<'b: 'static> VirtualDom {
 
     /// Push all the real nodes on the stack
     fn push_all_real_nodes(&mut self, node: &VNode) -> usize {
-        todo!()
+        let mut onstack = 0;
+
+        for (idx, _) in node.template.roots.iter().enumerate() {
+            match node.dynamic_root(idx) {
+                Some(Text(t)) => {
+                    self.mutations.push(Mutation::PushRoot { id: t.id.get() });
+                    onstack += 1;
+                }
+                Some(Fragment(VFragment::Empty(t))) => {
+                    self.mutations.push(Mutation::PushRoot { id: t.get() });
+                    onstack += 1;
+                }
+                Some(Fragment(VFragment::NonEmpty(t))) => {
+                    for node in *t {
+                        onstack += self.push_all_real_nodes(node);
+                    }
+                }
+                Some(Component(comp)) => {
+                    todo!()
+                }
+                None => {
+                    self.mutations.push(Mutation::PushRoot {
+                        id: node.root_ids[idx].get(),
+                    });
+                    onstack += 1;
+                }
+            };
+        }
+
+        onstack
     }
 
     fn create_children(&mut self, nodes: &'b [VNode<'b>]) -> usize {
