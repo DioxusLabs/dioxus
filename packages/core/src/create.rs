@@ -80,7 +80,15 @@ impl<'b: 'static> VirtualDom {
                         // Else, it's deep in the template and we should create a new id for it
                         let id = match path.len() {
                             1 => this_id,
-                            _ => self.next_element(template, template.template.attr_paths[attr_id]),
+                            _ => {
+                                let id = self
+                                    .next_element(template, template.template.attr_paths[attr_id]);
+                                self.mutations.push(Mutation::AssignId {
+                                    path: &path[1..],
+                                    id,
+                                });
+                                id
+                            }
                         };
 
                         loop {

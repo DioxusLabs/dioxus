@@ -8,7 +8,6 @@ mod error_boundary;
 mod events;
 mod factory;
 mod fragment;
-mod garbage;
 mod lazynodes;
 mod mutations;
 mod nodes;

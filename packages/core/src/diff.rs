@@ -301,14 +301,24 @@ impl<'b: 'static> VirtualDom {
             };
         }
 
-        // we also need to clean up dynamic attribute roots
-        // let last_node = None;
-        // for attr in node.dynamic_attrs {
-        //     match last_node {
-        //         Some(node) => todo!(),
-        //         None => todo!(),
-        //     }
-        // }
+        // we clean up nodes with dynamic attributes, provided the node is unique and not a root node
+        let mut id = None;
+        for (idx, attr) in node.dynamic_attrs.into_iter().enumerate() {
+            // We'll clean up the root nodes either way, so don't worry
+            if node.template.attr_paths[idx].len() == 1 {
+                continue;
+            }
+
+            let next_id = attr.mounted_element.get();
+
+            if id == Some(next_id) {
+                continue;
+            }
+
+            id = Some(next_id);
+
+            self.reclaim(next_id);
+        }
     }
 
     fn remove_root_node(&mut self, node: &'b VNode<'b>, idx: usize) {
