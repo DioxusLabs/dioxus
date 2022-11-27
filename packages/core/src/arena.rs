@@ -6,17 +6,23 @@ pub struct ElementId(pub usize);
 
 pub struct ElementRef {
     // the pathway of the real element inside the template
-    pub path: &'static [u8],
+    pub path: ElementPath,
 
     // The actual template
     pub template: *mut VNode<'static>,
+}
+
+#[derive(Clone, Copy)]
+pub enum ElementPath {
+    Deep(&'static [u8]),
+    Root(usize),
 }
 
 impl ElementRef {
     pub fn null() -> Self {
         Self {
             template: std::ptr::null_mut(),
-            path: &[],
+            path: ElementPath::Root(0),
         }
     }
 }
@@ -28,7 +34,21 @@ impl<'b> VirtualDom {
 
         entry.insert(ElementRef {
             template: template as *const _ as *mut _,
-            path,
+            path: ElementPath::Deep(path),
+        });
+
+        println!("Claiming {}", id);
+
+        ElementId(id)
+    }
+
+    pub fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
+        let entry = self.elements.vacant_entry();
+        let id = entry.key();
+
+        entry.insert(ElementRef {
+            template: template as *const _ as *mut _,
+            path: ElementPath::Root(path),
         });
 
         println!("Claiming {}", id);
@@ -74,5 +94,32 @@ impl<'b> VirtualDom {
         //         _ => todo!(),
         //     }
         // }
+    }
+}
+impl ElementPath {
+    pub(crate) fn is_ascendant(&self, big: &&[u8]) -> bool {
+        match *self {
+            ElementPath::Deep(small) => small.len() <= big.len() && small == &big[..small.len()],
+            ElementPath::Root(r) => big.len() == 1 && big[0] == r as u8,
+        }
+    }
+}
+
+#[test]
+fn path_ascendant() {
+    // assert!(&ElementPath::Deep(&[]).is_ascendant(&&[0_u8]));
+    // assert!(&ElementPath::Deep(&[1, 2]), &[1, 2, 3]);
+    // assert!(!is_path_ascendant(
+    //     &ElementPath::Deep(&[1, 2, 3, 4]),
+    //     &[1, 2, 3]
+    // ));
+}
+
+impl PartialEq<&[u8]> for ElementPath {
+    fn eq(&self, other: &&[u8]) -> bool {
+        match *self {
+            ElementPath::Deep(deep) => deep.eq(*other),
+            ElementPath::Root(r) => other.len() == 1 && other[0] == r as u8,
+        }
     }
 }

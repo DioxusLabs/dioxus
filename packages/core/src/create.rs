@@ -63,7 +63,8 @@ impl<'b: 'static> VirtualDom {
                 }
 
                 TemplateNode::Element { .. } | TemplateNode::Text(_) => {
-                    let this_id = self.next_element(template, &[]);
+                    let this_id = self.next_root(template, root_idx);
+
                     template.root_ids[root_idx].set(this_id);
                     self.mutations.push(LoadTemplate {
                         name: template.template.id,

@@ -6,7 +6,7 @@ use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
     factory::RenderReturn,
-    innerlude::{DirtyScope, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, ElementPath, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
@@ -368,15 +368,11 @@ impl VirtualDom {
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                fn is_path_ascendant(small: &[u8], big: &[u8]) -> bool {
-                    small.len() >= big.len() && small == &big[..small.len()]
-                }
-
                 let this_path = template.template.attr_paths[idx];
 
                 // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
                 // we should fix this so that we look for "onclick" instead of "click"
-                if &attr.name[2..] == name && is_path_ascendant(&target_path, &this_path) {
+                if &attr.name[2..] == name && target_path.is_ascendant(&this_path) {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
@@ -387,7 +383,7 @@ impl VirtualDom {
                     // Break if this is the exact target element.
                     // This means we won't call two listeners with the same name on the same element. This should be
                     // documented, or be rejected from the rsx! macro outright
-                    if this_path == target_path {
+                    if target_path == this_path {
                         break;
                     }
                 }
