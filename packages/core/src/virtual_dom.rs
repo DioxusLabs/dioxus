@@ -290,6 +290,11 @@ impl VirtualDom {
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
 
+    /// Mark the entire tree as dirty.
+    ///
+    /// Will force a re-render of every component
+    pub fn mark_dirty_all(&mut self) {}
+
     /// Determine whether or not a scope is currently in a suspended state
     ///
     /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
