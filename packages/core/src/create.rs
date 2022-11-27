@@ -235,7 +235,7 @@ impl<'b: 'static> VirtualDom {
             TemplateNode::DynamicText { .. } => self
                 .mutations
                 .template_mutations
-                .push(CreateStaticText { value: "d" }),
+                .push(CreateTextPlaceholder),
 
             TemplateNode::Element {
                 attrs,

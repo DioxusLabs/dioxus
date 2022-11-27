@@ -81,6 +81,7 @@ pub enum Mutation<'a> {
         id: ElementId,
     },
     CreateStaticPlaceholder,
+    CreateTextPlaceholder,
     CreateStaticText {
         value: &'a str,
     },

@@ -2,6 +2,7 @@ use dioxus::core::ElementId;
 use dioxus::core::{Mutation::*, SuspenseBoundary};
 use dioxus::prelude::*;
 use dioxus_core::SuspenseContext;
+use std::future::IntoFuture;
 use std::{rc::Rc, time::Duration};
 
 #[tokio::test]
@@ -63,5 +64,27 @@ async fn async_child(cx: Scope<'_>) -> Element {
 }
 
 async fn async_text(cx: Scope<'_>) -> Element {
-    cx.render(rsx!("async_text"))
+    let username = use_future!(cx, || async {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        "async child 1"
+    });
+
+    let age = use_future!(cx, || async {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        println!("long future completed");
+        1234
+    });
+
+    let (_user, _age) = use_future!(cx, || async {
+        tokio::join!(
+            tokio::time::sleep(std::time::Duration::from_secs(1)),
+            tokio::time::sleep(std::time::Duration::from_secs(2))
+        );
+        ("async child 1", 1234)
+    })
+    .await;
+
+    let (username, age) = tokio::join!(username.into_future(), age.into_future());
+
+    cx.render(rsx!( div { "Hello! {username}, you are {age}, {_user} {_age}" } ))
 }
