@@ -6,12 +6,12 @@ use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
     factory::RenderReturn,
-    innerlude::{DirtyScope, ElementPath, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, Mutations, Scheduler, SchedulerMsg, ErrorBoundary},
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, EventPriority, Scope, SuspenseContext, UiEvent,
+    AttributeValue, Element, Scope, SuspenseContext, UiEvent,
 };
 use futures_util::{pin_mut, StreamExt};
 use slab::Slab;
@@ -149,7 +149,7 @@ use std::{
 /// ```
 pub struct VirtualDom {
     pub(crate) templates: HashMap<TemplateId, Template<'static>>,
-    pub(crate) scopes: Slab<ScopeState>,
+    pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -224,10 +224,7 @@ impl VirtualDom {
     /// let mut dom = VirtualDom::new_with_props(Example, SomeProps { name: "jane" });
     /// let mutations = dom.rebuild();
     /// ```
-    pub fn new_with_props<P>(root: fn(Scope<P>) -> Element, root_props: P) -> Self
-    where
-        P: 'static,
-    {
+    pub fn new_with_props<P: 'static>(root: fn(Scope<P>) -> Element, root_props: P) -> Self {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let mut dom = Self {
             rx,
@@ -242,17 +239,20 @@ impl VirtualDom {
             mutations: Mutations::new(),
         };
 
-        let root = dom.new_scope(Box::leak(Box::new(VProps::new(
+        let root = dom.new_scope(Box::new(VProps::new(
             root,
             |_, _| unreachable!(),
             root_props,
-        ))));
+        )));
 
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior later
         //
         // We *could* just panic if the suspense boundary is not found
         root.provide_context(Rc::new(SuspenseBoundary::new(ScopeId(0))));
+
+        // Unlike react, we provide a default error boundary that just renders the error as a string
+        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::null());
@@ -264,7 +264,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
+        self.scopes.get(id.0).map(|f| f.as_ref())
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
@@ -285,7 +285,7 @@ impl VirtualDom {
     /// Manually mark a scope as requiring a re-render
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
-    pub fn mark_dirty_scope(&mut self, id: ScopeId) {
+    pub fn mark_dirty(&mut self, id: ScopeId) {
         let height = self.scopes[id.0].height;
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
@@ -329,7 +329,6 @@ impl VirtualDom {
         data: Rc<dyn Any>,
         element: ElementId,
         bubbles: bool,
-        _priority: EventPriority,
     ) {
         /*
         ------------------------
@@ -393,7 +392,10 @@ impl VirtualDom {
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    listener.borrow_mut()(uievent.clone());
+                    if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                        cb(uievent.clone());
+                    }
+
                     if !uievent.bubbles.get() {
                         return;
                     }
@@ -427,7 +429,7 @@ impl VirtualDom {
             match some_msg.take() {
                 // If a bunch of messages are ready in a sequence, try to pop them off synchronously
                 Some(msg) => match msg {
-                    SchedulerMsg::Immediate(id) => self.mark_dirty_scope(id),
+                    SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
                     SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
                 },
@@ -479,7 +481,6 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    #[must_use]
     pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
@@ -497,7 +498,6 @@ impl VirtualDom {
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
     /// suspended subtrees.
-    #[must_use]
     pub fn render_immediate(&mut self) -> Mutations {
         // Build a waker that won't wake up since our deadline is already expired when it's polled
         let waker = futures_util::task::noop_waker();
@@ -612,6 +612,6 @@ impl VirtualDom {
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
-        // self.drop_scope(ScopeId(0));
+        self.drop_scope(ScopeId(0));
     }
 }

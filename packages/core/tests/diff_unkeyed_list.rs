@@ -26,7 +26,7 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -37,7 +37,7 @@ fn list_creates_one_by_one() {
     );
 
     // Rendering the next item should insert after the previous
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -48,7 +48,7 @@ fn list_creates_one_by_one() {
     );
 
     // ... and again!
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -59,7 +59,7 @@ fn list_creates_one_by_one() {
     );
 
     // once more
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -106,14 +106,14 @@ fn removes_one_by_one() {
 
     // Remove div(3)
     // Rendering the first item should replace the placeholder with an element
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [Remove { id: ElementId(6) }]
     );
 
     // Remove div(2)
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [Remove { id: ElementId(4) }]
@@ -121,7 +121,7 @@ fn removes_one_by_one() {
 
     // Remove div(1) and replace with a placeholder
     // todo: this should just be a remove with no placeholder
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -132,7 +132,7 @@ fn removes_one_by_one() {
 
     // load the 3 and replace the placeholder
     // todo: this should actually be append to, but replace placeholder is fine for now
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -169,7 +169,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -181,7 +181,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -193,7 +193,7 @@ fn list_shrink_multiroot() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -248,19 +248,19 @@ fn removes_one_by_one_multiroot() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [Remove { id: ElementId(10) }, Remove { id: ElementId(12) }]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [Remove { id: ElementId(6) }, Remove { id: ElementId(8) }]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -324,7 +324,7 @@ fn remove_many() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
         edits.edits,
@@ -335,7 +335,7 @@ fn remove_many() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
         edits.edits,
@@ -352,7 +352,7 @@ fn remove_many() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
         edits.edits,
@@ -366,7 +366,7 @@ fn remove_many() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
         edits.edits,

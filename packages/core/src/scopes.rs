@@ -82,12 +82,12 @@ pub struct ScopeState {
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
 
-    pub(crate) props: *const dyn AnyProps<'static>,
+    pub(crate) props: Box<dyn AnyProps<'static>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
 impl ScopeState {
-    pub fn current_frame(&self) -> &BumpFrame {
+    pub(crate) fn current_frame(&self) -> &BumpFrame {
         match self.render_cnt.get() % 2 {
             0 => &self.node_arena_1,
             1 => &self.node_arena_2,
@@ -95,10 +95,18 @@ impl ScopeState {
         }
     }
 
-    pub fn previous_frame(&self) -> &BumpFrame {
+    pub(crate) fn previous_frame(&self) -> &BumpFrame {
         match self.render_cnt.get() % 2 {
             1 => &self.node_arena_1,
             0 => &self.node_arena_2,
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn previous_frame_mut(&mut self) -> &mut BumpFrame {
+        match self.render_cnt.get() % 2 {
+            1 => &mut self.node_arena_1,
+            0 => &mut self.node_arena_2,
             _ => unreachable!(),
         }
     }
@@ -117,7 +125,8 @@ impl ScopeState {
     ///
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
-        &self.current_frame().bump
+        // note that this is actually the previous frame since we use that as scratch space while the component is rendering
+        &self.previous_frame().bump
     }
 
     /// Get a handle to the currently active head node arena for this Scope

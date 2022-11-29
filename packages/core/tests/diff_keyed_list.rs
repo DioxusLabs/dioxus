@@ -1,5 +1,3 @@
-#![allow(unused, non_upper_case_globals)]
-
 //! Diffing Tests
 //!
 //! These tests only verify that the diffing algorithm works properly for single components.
@@ -39,7 +37,7 @@ fn keyed_diffing_out_of_order() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().edits,
         [
@@ -64,7 +62,7 @@ fn keyed_diffing_out_of_order_adds() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().edits,
         [
@@ -90,7 +88,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().edits,
         [
@@ -116,7 +114,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().edits,
         [
@@ -142,7 +140,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().edits,
         [
@@ -167,7 +165,7 @@ fn keyed_diffing_additions() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -192,7 +190,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -222,7 +220,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     _ = dom.rebuild();
 
     // LIS: 4, 5, 6
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -256,7 +254,7 @@ fn controlled_keyed_diffing_out_of_order() {
     _ = dom.rebuild();
 
     // LIS: 5, 6
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -289,7 +287,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -318,13 +316,41 @@ fn remove_list() {
 
     _ = dom.rebuild();
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
             Remove { id: ElementId(3) },
             Remove { id: ElementId(4) },
             Remove { id: ElementId(5) }
+        ]
+    );
+}
+
+#[test]
+fn no_common_keys() {
+    let mut dom = VirtualDom::new(|cx| {
+        let order: &[_] = match cx.generation() % 2 {
+            0 => &[1, 2, 3],
+            1 => &[4, 5, 6],
+            _ => unreachable!(),
+        };
+
+        cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
+    });
+
+    _ = dom.rebuild();
+
+    dom.mark_dirty(ScopeId(0));
+    assert_eq!(
+        dom.render_immediate().santize().edits,
+        [
+            Remove { id: ElementId(2) },
+            Remove { id: ElementId(3) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+            ReplaceWith { id: ElementId(1), m: 3 }
         ]
     );
 }

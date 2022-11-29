@@ -21,7 +21,7 @@ fn cycling_elements() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -31,7 +31,7 @@ fn cycling_elements() {
     );
 
     // notice that the IDs cycle back to ElementId(1), preserving a minimal memory footprint
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -40,7 +40,7 @@ fn cycling_elements() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [

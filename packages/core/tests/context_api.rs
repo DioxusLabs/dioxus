@@ -27,22 +27,22 @@ fn state_shares() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
-    dom.render_immediate();
+    dom.mark_dirty(ScopeId(0));
+    _ = dom.render_immediate();
     assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 1);
 
-    dom.mark_dirty_scope(ScopeId(0));
-    dom.render_immediate();
+    dom.mark_dirty(ScopeId(0));
+    _ = dom.render_immediate();
     assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 2);
 
-    dom.mark_dirty_scope(ScopeId(2));
+    dom.mark_dirty(ScopeId(2));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [SetText { value: "Value is 2", id: ElementId(1,) },]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
-    dom.mark_dirty_scope(ScopeId(2));
+    dom.mark_dirty(ScopeId(0));
+    dom.mark_dirty(ScopeId(2));
     let edits = dom.render_immediate();
     assert_eq!(
         edits.santize().edits,

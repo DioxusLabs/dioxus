@@ -10,21 +10,21 @@ fn text_diff() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    vdom.rebuild();
+    _ = vdom.rebuild();
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().edits,
         [SetText { value: "hello 1", id: ElementId(2) }]
     );
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().edits,
         [SetText { value: "hello 2", id: ElementId(2) }]
     );
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().edits,
         [SetText { value: "hello 3", id: ElementId(2) }]
@@ -44,9 +44,9 @@ fn element_swap() {
     }
 
     let mut vdom = VirtualDom::new(app);
-    vdom.rebuild();
+    _ = vdom.rebuild();
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().santize().edits,
         [
@@ -55,7 +55,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().santize().edits,
         [
@@ -64,7 +64,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().santize().edits,
         [
@@ -73,7 +73,7 @@ fn element_swap() {
         ]
     );
 
-    vdom.mark_dirty_scope(ScopeId(0));
+    vdom.mark_dirty(ScopeId(0));
     assert_eq!(
         vdom.render_immediate().santize().edits,
         [

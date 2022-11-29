@@ -18,7 +18,6 @@ pub(crate) struct VProps<'a, P, A, F: ComponentReturn<'a, A> = Element<'a>> {
     pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,
-    // pub props: PropsAllocation<P>,
     _marker: PhantomData<A>,
 }
 
@@ -35,7 +34,6 @@ where
             render_fn,
             memo,
             props,
-            // props: PropsAllocation::Borrowed(props),
             _marker: PhantomData,
         }
     }
@@ -60,7 +58,7 @@ where
     }
 
     fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
-        let scope = cx.bump().alloc(Scoped {
+        let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
             props: &self.props,
             scope: cx,
         });

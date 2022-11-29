@@ -1,10 +1,14 @@
-use crate::{nodes::VNode, virtual_dom::VirtualDom, Mutations, ScopeId};
+use crate::{
+    factory::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
+    ScopeId, VFragment,
+};
+use bumpalo::boxed::Box as BumpBox;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);
 
-pub struct ElementRef {
+pub(crate) struct ElementRef {
     // the pathway of the real element inside the template
     pub path: ElementPath,
 
@@ -19,7 +23,7 @@ pub enum ElementPath {
 }
 
 impl ElementRef {
-    pub fn null() -> Self {
+    pub(crate) fn null() -> Self {
         Self {
             template: std::ptr::null_mut(),
             path: ElementPath::Root(0),
@@ -28,74 +32,88 @@ impl ElementRef {
 }
 
 impl<'b> VirtualDom {
-    pub fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
+    pub(crate) fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
-
         entry.insert(ElementRef {
             template: template as *const _ as *mut _,
             path: ElementPath::Deep(path),
         });
-
-        println!("Claiming {}", id);
-
         ElementId(id)
     }
 
-    pub fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
+    pub(crate) fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
-
         entry.insert(ElementRef {
             template: template as *const _ as *mut _,
             path: ElementPath::Root(path),
         });
-
-        println!("Claiming {}", id);
-
         ElementId(id)
     }
 
-    pub fn cleanup_element(&mut self, id: ElementId) {
-        self.elements.remove(id.0);
+    pub(crate) fn reclaim(&mut self, el: ElementId) {
+        self.try_reclaim(el)
+            .unwrap_or_else(|| panic!("cannot reclaim {:?}", el));
     }
 
-    pub fn drop_scope(&mut self, id: ScopeId) {
-        // let scope = self.scopes.get(id.0).unwrap();
-
-        // let root = scope.root_node();
-        // let root = unsafe { std::mem::transmute(root) };
-
-        // self.drop_template(root, false);
-        todo!()
-    }
-
-    pub fn reclaim(&mut self, el: ElementId) {
+    pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<ElementRef> {
         assert_ne!(el, ElementId(0));
-        self.elements.remove(el.0);
+        self.elements.try_remove(el.0)
     }
 
-    pub fn drop_template(
-        &mut self,
-        mutations: &mut Mutations,
-        template: &'b VNode<'b>,
-        gen_roots: bool,
-    ) {
-        // for node in template.dynamic_nodes.iter() {
-        //     match node {
-        //         DynamicNode::Text { id, .. } => {}
+    // Drop a scope and all its children
+    pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        let scope = self.scopes.get(id.0).unwrap();
 
-        //         DynamicNode::Component { .. } => {
-        //             todo!()
-        //         }
+        if let Some(root) = scope.as_ref().try_root_node() {
+            let root = unsafe { root.extend_lifetime_ref() };
+            match root {
+                RenderReturn::Sync(Ok(node)) => self.drop_scope_inner(node),
+                _ => {}
+            }
+        }
 
-        //         DynamicNode::Fragment { inner, nodes } => {}
-        //         DynamicNode::Placeholder(_) => todo!(),
-        //         _ => todo!(),
-        //     }
-        // }
+        let scope = self.scopes.get(id.0).unwrap();
+
+        if let Some(root) = unsafe { scope.as_ref().previous_frame().try_load_node() } {
+            let root = unsafe { root.extend_lifetime_ref() };
+            match root {
+                RenderReturn::Sync(Ok(node)) => self.drop_scope_inner(node),
+                _ => {}
+            }
+        }
+
+        let scope = self.scopes.get(id.0).unwrap().as_ref();
+
+        // Drop all the hooks once the children are dropped
+        // this means we'll drop hooks bottom-up
+        for hook in scope.hook_list.borrow_mut().drain(..) {
+            drop(unsafe { BumpBox::from_raw(hook) });
+        }
+    }
+
+    fn drop_scope_inner(&mut self, node: &VNode) {
+        for attr in node.dynamic_attrs {
+            if let AttributeValue::Listener(l) = &attr.value {
+                l.borrow_mut().take();
+            }
+        }
+
+        for (idx, _) in node.template.roots.iter().enumerate() {
+            match node.dynamic_root(idx) {
+                Some(DynamicNode::Component(c)) => self.drop_scope(c.scope.get().unwrap()),
+                Some(DynamicNode::Fragment(VFragment::NonEmpty(nodes))) => {
+                    for node in *nodes {
+                        self.drop_scope_inner(node);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 }
+
 impl ElementPath {
     pub(crate) fn is_ascendant(&self, big: &&[u8]) -> bool {
         match *self {

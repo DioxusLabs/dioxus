@@ -82,9 +82,9 @@ impl ScopeState {
         // let as_dyn: &dyn AnyProps = self.bump().alloc(vcomp);
         // todo: clean up borrowed props
         // if !P::IS_STATIC {
-        //     let vcomp = &*vcomp;
-        //     let vcomp = unsafe { std::mem::transmute(vcomp) };
-        //     self.scope.items.borrow_mut().borrowed_props.push(vcomp);
+        // let vcomp = ex;
+        // let vcomp = unsafe { std::mem::transmute(vcomp) };
+        // self.items.borrow_mut().borrowed_props.push(vcomp);
         // }
 
         DynamicNode::Component(VComponent {

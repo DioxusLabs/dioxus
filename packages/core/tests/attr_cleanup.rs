@@ -30,7 +30,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -42,7 +42,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -51,7 +51,7 @@ fn attrs_cycle() {
         ]
     );
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
@@ -64,7 +64,7 @@ fn attrs_cycle() {
     );
 
     // we take the node taken by attributes since we reused it
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     assert_eq!(
         dom.render_immediate().santize().edits,
         [

@@ -1,6 +1,7 @@
 use crate::{arena::ElementId, ScopeId};
 
 #[derive(Debug)]
+#[must_use = "not handling edits can lead to visual inconsistencies in UI"]
 pub struct Mutations<'a> {
     pub subtree: usize,
     pub template_mutations: Vec<Mutation<'a>>,

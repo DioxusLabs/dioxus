@@ -13,7 +13,7 @@ async fn it_works() {
 
     tokio::select! {
         _ = dom.wait_for_work() => {}
-        _ = tokio::time::sleep(Duration::from_millis(10)) => {}
+        _ = tokio::time::sleep(Duration::from_millis(500)) => {}
     };
 
     // By the time the tasks are finished, we should've accumulated ticks from two tasks

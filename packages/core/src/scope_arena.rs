@@ -7,6 +7,7 @@ use crate::{
     scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
+    AttributeValue, DynamicNode, VFragment, VNode,
 };
 use futures_util::FutureExt;
 use std::{
@@ -17,13 +18,13 @@ use std::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: *const dyn AnyProps<'static>) -> &mut ScopeState {
+    pub(super) fn new_scope(&mut self, props: Box<dyn AnyProps<'static>>) -> &mut ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
         let id = ScopeId(entry.key());
 
-        entry.insert(ScopeState {
+        entry.insert(Box::new(ScopeState {
             parent,
             id,
             height,
@@ -38,19 +39,64 @@ impl VirtualDom {
             hook_idx: Default::default(),
             shared_contexts: Default::default(),
             tasks: self.scheduler.clone(),
-        })
+        }))
     }
 
     fn acquire_current_scope_raw(&mut self) -> Option<*mut ScopeState> {
         self.scope_stack
             .last()
             .copied()
-            .and_then(|id| self.scopes.get_mut(id.0).map(|f| f as *mut ScopeState))
+            .and_then(|id| self.scopes.get_mut(id.0).map(|f| f.as_mut() as *mut _))
+    }
+
+    pub fn ensure_drop_safety(&self, scope: ScopeId) {
+        let scope = &self.scopes[scope.0];
+        let node = unsafe { scope.previous_frame().try_load_node() };
+
+        // And now we want to make sure the previous frame has dropped anything that borrows self
+        if let Some(RenderReturn::Sync(Ok(node))) = node {
+            self.ensure_drop_safety_inner(node);
+        }
+    }
+
+    fn ensure_drop_safety_inner(&self, node: &VNode) {
+        for attr in node.dynamic_attrs {
+            if let AttributeValue::Listener(l) = &attr.value {
+                l.borrow_mut().take();
+            }
+        }
+
+        for child in node.dynamic_nodes {
+            match child {
+                DynamicNode::Component(c) => {
+                    // Only descend if the props are borrowed
+                    if !c.static_props {
+                        self.ensure_drop_safety(c.scope.get().unwrap());
+                        c.props.set(None);
+                    }
+                }
+                DynamicNode::Fragment(VFragment::NonEmpty(f)) => {
+                    for node in *f {
+                        self.ensure_drop_safety_inner(node);
+                    }
+                }
+                _ => {}
+            }
+        }
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+        // Cycle to the next frame and then reset it
+        // This breaks any latent references, invalidating every pointer referencing into it.
+        // Remove all the outdated listeners
+        self.ensure_drop_safety(scope_id);
+
         let mut new_nodes = unsafe {
-            let scope = &mut self.scopes[scope_id.0];
+            let scope = self.scopes[scope_id.0].as_mut();
+
+            scope.previous_frame_mut().bump.reset();
+
+            // Make sure to reset the hook counter so we give out hooks in the right order
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
@@ -113,7 +159,7 @@ impl VirtualDom {
         let frame = scope.previous_frame();
 
         // set the new head of the bump frame
-        let alloced = frame.bump.alloc(new_nodes);
+        let alloced = &*frame.bump.alloc(new_nodes);
         frame.node.set(alloced);
 
         // And move the render generation forward by one

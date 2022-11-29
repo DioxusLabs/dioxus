@@ -2,9 +2,9 @@ use crate::factory::RenderReturn;
 use bumpalo::Bump;
 use std::cell::Cell;
 
-pub struct BumpFrame {
+pub(crate) struct BumpFrame {
     pub bump: Bump,
-    pub node: Cell<*mut RenderReturn<'static>>,
+    pub node: Cell<*const RenderReturn<'static>>,
 }
 
 impl BumpFrame {
@@ -12,17 +12,18 @@ impl BumpFrame {
         let bump = Bump::with_capacity(capacity);
         Self {
             bump,
-            node: Cell::new(std::ptr::null_mut()),
+            node: Cell::new(std::ptr::null()),
         }
     }
 
-    pub fn reset(&mut self) {
-        self.bump.reset();
-        self.node.set(std::ptr::null_mut());
-    }
-
     /// Creates a new lifetime out of thin air
-    pub unsafe fn load_node<'b>(&self) -> &'b RenderReturn<'b> {
-        unsafe { std::mem::transmute(&*self.node.get()) }
+    pub unsafe fn try_load_node<'b>(&self) -> Option<&'b RenderReturn<'b>> {
+        let node = self.node.get();
+
+        if node.is_null() {
+            return None;
+        }
+
+        unsafe { std::mem::transmute(&*node) }
     }
 }

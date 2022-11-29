@@ -1,4 +1,5 @@
 use crate::{any_props::AnyProps, arena::ElementId, Element, ScopeId, ScopeState, UiEvent};
+use bumpalo::boxed::Box as BumpBox;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -12,9 +13,6 @@ pub type TemplateId = &'static str;
 /// static parts of the template.
 #[derive(Debug, Clone)]
 pub struct VNode<'a> {
-    // The ID assigned for the root of this template
-    pub node_id: Cell<ElementId>,
-
     /// The key given to the root of this template.
     ///
     /// In fragments, this is the key of the first child. In other cases, it is the key of the root.
@@ -40,7 +38,6 @@ pub struct VNode<'a> {
 impl<'a> VNode<'a> {
     pub fn empty() -> Element<'a> {
         Ok(VNode {
-            node_id: Cell::new(ElementId(0)),
             key: None,
             parent: None,
             root_ids: &[],
@@ -156,26 +153,28 @@ pub enum AttributeValue<'a> {
     Float(f32),
     Int(i32),
     Bool(bool),
-    Listener(RefCell<&'a mut dyn FnMut(UiEvent<dyn Any>)>),
-    Any(&'a dyn AnyValue),
+    Listener(RefCell<Option<BumpBox<'a, dyn FnMut(UiEvent<dyn Any>) + 'a>>>),
+    Any(BumpBox<'a, dyn AnyValue>),
     None,
 }
 
 impl<'a> AttributeValue<'a> {
     pub fn new_listener<T: 'static>(
         cx: &'a ScopeState,
-        mut f: impl FnMut(UiEvent<T>) + 'a,
+        mut callback: impl FnMut(UiEvent<T>) + 'a,
     ) -> AttributeValue<'a> {
-        AttributeValue::Listener(RefCell::new(cx.bump().alloc(
-            move |event: UiEvent<dyn Any>| {
+        let boxed: BumpBox<'a, dyn FnMut(_) + 'a> = unsafe {
+            BumpBox::from_raw(cx.bump().alloc(move |event: UiEvent<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
-                    f(UiEvent {
+                    callback(UiEvent {
                         bubbles: event.bubbles,
                         data,
                     })
                 }
-            },
-        )))
+            }))
+        };
+
+        AttributeValue::Listener(RefCell::new(Some(boxed)))
     }
 }
 
@@ -201,7 +200,7 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(*r0),
+            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(r0.as_ref()),
             _ => core::mem::discriminant(self) == core::mem::discriminant(other),
         }
     }

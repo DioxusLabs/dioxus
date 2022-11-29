@@ -20,6 +20,7 @@ mod virtual_dom;
 pub(crate) mod innerlude {
     pub use crate::arena::*;
     pub use crate::dirty_scope::*;
+    pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
     pub use crate::lazynodes::*;
@@ -78,8 +79,6 @@ pub use crate::innerlude::{
     DynamicNode,
     Element,
     ElementId,
-    ElementRef,
-    EventPriority,
     Fragment,
     LazyNodes,
     Mutation,
@@ -109,9 +108,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Element, EventHandler, EventPriority, Fragment, LazyNodes, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute,
-        TemplateNode, UiEvent, VNode, VirtualDom,
+        fc_to_builder, Element, EventHandler, Fragment, LazyNodes, NodeFactory, Properties, Scope,
+        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, UiEvent,
+        VNode, VirtualDom,
     };
 }
 

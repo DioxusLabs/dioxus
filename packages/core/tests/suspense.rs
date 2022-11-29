@@ -11,7 +11,7 @@ async fn it_works() {
 
     let mutations = dom.rebuild().santize();
 
-    // We should at least get the top-level template in
+    // We should at least get the top-level template in before pausing for the children
     assert_eq!(
         mutations.template_mutations,
         [

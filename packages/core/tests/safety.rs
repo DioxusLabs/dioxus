@@ -13,10 +13,6 @@ fn root_node_isnt_null() {
     // We haven't built the tree, so trying to get out the root node should fail
     assert!(scope.try_root_node().is_none());
 
-    // There should be no way to gain an invalid pointer
-    assert!(scope.current_frame().node.get().is_null());
-    assert!(scope.previous_frame().node.get().is_null());
-
     // The height should be 0
     assert_eq!(scope.height(), 0);
 

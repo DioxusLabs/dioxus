@@ -144,7 +144,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
             ::dioxus::core::VNode {
-                node_id: Default::default(),
                 parent: None,
                 key: #key_tokens,
                 template: TEMPLATE,

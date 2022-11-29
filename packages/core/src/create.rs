@@ -5,9 +5,9 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ScopeId, SuspenseContext, TemplateAttribute};
 
-impl<'b: 'static> VirtualDom {
+impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
@@ -44,7 +44,14 @@ impl<'b: 'static> VirtualDom {
                         DynamicNode::Text(VText { id: slot, value }) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
-                            self.mutations.push(CreateTextNode { value, id });
+
+                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                            let unbounded_text = unsafe { std::mem::transmute(*value) };
+                            self.mutations.push(CreateTextNode {
+                                value: unbounded_text,
+                                id,
+                            });
+
                             1
                         }
 
@@ -96,16 +103,24 @@ impl<'b: 'static> VirtualDom {
                             let attribute = template.dynamic_attrs.get(attr_id).unwrap();
                             attribute.mounted_element.set(id);
 
+                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                            let unbounded_name = unsafe { std::mem::transmute(attribute.name) };
+
                             match &attribute.value {
-                                AttributeValue::Text(value) => self.mutations.push(SetAttribute {
-                                    name: attribute.name,
-                                    value: *value,
-                                    ns: attribute.namespace,
-                                    id,
-                                }),
+                                AttributeValue::Text(value) => {
+                                    // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                                    let unbounded_value = unsafe { std::mem::transmute(*value) };
+
+                                    self.mutations.push(SetAttribute {
+                                        name: unbounded_name,
+                                        value: unbounded_value,
+                                        ns: attribute.namespace,
+                                        id,
+                                    })
+                                }
                                 AttributeValue::Bool(value) => {
                                     self.mutations.push(SetBoolAttribute {
-                                        name: attribute.name,
+                                        name: unbounded_name,
                                         value: *value,
                                         id,
                                     })
@@ -113,7 +128,7 @@ impl<'b: 'static> VirtualDom {
                                 AttributeValue::Listener(_) => {
                                     self.mutations.push(NewEventListener {
                                         // all listeners start with "on"
-                                        event_name: &attribute.name[2..],
+                                        event_name: &unbounded_name[2..],
                                         scope: cur_scope,
                                         id,
                                     })
@@ -315,11 +330,14 @@ impl<'b: 'static> VirtualDom {
         // Make sure the text node is assigned to the correct element
         text.id.set(new_id);
 
+        // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        let value = unsafe { std::mem::transmute(text.value) };
+
         // Add the mutation to the list
         self.mutations.push(HydrateText {
             id: new_id,
             path: &template.template.node_paths[idx][1..],
-            value: text.value,
+            value,
         });
 
         // Since we're hydrating an existing node, we don't create any new nodes
@@ -356,18 +374,20 @@ impl<'b: 'static> VirtualDom {
         }
     }
 
-    fn create_component_node(
+    pub(super) fn create_component_node(
         &mut self,
         template: &'b VNode<'b>,
         component: &'b VComponent<'b>,
         idx: usize,
     ) -> usize {
-        let props = component.props.replace(None).unwrap();
+        let props = component
+            .props
+            .replace(None)
+            .expect("Props to always exist when a component is being created");
 
-        let prop_ptr = unsafe { std::mem::transmute(props.as_ref()) };
-        let scope = self.new_scope(prop_ptr).id;
+        let unbounded_props = unsafe { std::mem::transmute(props) };
 
-        component.props.replace(Some(props));
+        let scope = self.new_scope(unbounded_props).id;
         component.scope.set(Some(scope));
 
         let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
@@ -375,10 +395,7 @@ impl<'b: 'static> VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Ok(t)) => {
-                self.mount_component(scope, template, t, idx)
-                // self.create(t)
-            }
+            Sync(Ok(t)) => self.mount_component(scope, template, t, idx),
             Sync(Err(_e)) => todo!("Propogate error upwards"),
             Async(_) => self.mount_component_placeholder(template, idx, scope),
         }

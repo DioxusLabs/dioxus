@@ -44,10 +44,7 @@ fn events_generate() {
 
         match *count {
             0 => cx.render(rsx! {
-                div {
-                    onclick: move |_| {
-                        *count += 1
-                    },
+                div { onclick: move |_| *count += 1,
                     div { "nested" }
                     "Click me!"
                 }
@@ -59,15 +56,9 @@ fn events_generate() {
     let mut dom = VirtualDom::new(app);
     _ = dom.rebuild();
 
-    dom.handle_event(
-        "click",
-        Rc::new(MouseData::default()),
-        ElementId(1),
-        true,
-        EventPriority::Immediate,
-    );
+    dom.handle_event("click", Rc::new(MouseData::default()), ElementId(1), true);
 
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate();
 
     assert_eq!(
@@ -174,96 +165,4 @@ fn events_generate() {
 //             Remove { root: Some(3) },
 //         ]
 //     );
-// }
-
-// #[test]
-// fn component_swap() {
-//     fn app(cx: Scope) -> Element {
-//         let render_phase = cx.use_hook(|| 0);
-//         *render_phase += 1;
-
-//         cx.render(match *render_phase {
-//             0 => rsx_without_templates!(
-//                 div {
-//                     NavBar {}
-//                     Dashboard {}
-//                 }
-//             ),
-//             1 => rsx_without_templates!(
-//                 div {
-//                     NavBar {}
-//                     Results {}
-//                 }
-//             ),
-//             2 => rsx_without_templates!(
-//                 div {
-//                     NavBar {}
-//                     Dashboard {}
-//                 }
-//             ),
-//             3 => rsx_without_templates!(
-//                 div {
-//                     NavBar {}
-//                     Results {}
-//                 }
-//             ),
-//             4 => rsx_without_templates!(
-//                 div {
-//                     NavBar {}
-//                     Dashboard {}
-//                 }
-//             ),
-//             _ => rsx_without_templates!("blah"),
-//         })
-//     };
-
-//     static NavBar: Component = |cx| {
-//         println!("running navbar");
-//         cx.render(rsx_without_templates! {
-//             h1 {
-//                 "NavBar"
-//                 {(0..3).map(|f| rsx_without_templates!(NavLink {}))}
-//             }
-//         })
-//     };
-
-//     static NavLink: Component = |cx| {
-//         println!("running navlink");
-//         cx.render(rsx_without_templates! {
-//             h1 {
-//                 "NavLink"
-//             }
-//         })
-//     };
-
-//     static Dashboard: Component = |cx| {
-//         println!("running dashboard");
-//         cx.render(rsx_without_templates! {
-//             div {
-//                 "dashboard"
-//             }
-//         })
-//     };
-
-//     static Results: Component = |cx| {
-//         println!("running results");
-//         cx.render(rsx_without_templates! {
-//             div {
-//                 "results"
-//             }
-//         })
-//     };
-
-//     let mut dom = VirtualDom::new(app);
-//     let edits = dom.rebuild();
-//     dbg!(&edits);
-
-//     let edits = dom.work_with_deadline(|| false);
-//     dbg!(&edits);
-//     let edits = dom.work_with_deadline(|| false);
-//     dbg!(&edits);
-//     let edits = dom.work_with_deadline(|| false);
-//     dbg!(&edits);
-//     let edits = dom.work_with_deadline(|| false);
-//     dbg!(&edits);
 // }

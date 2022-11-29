@@ -22,9 +22,7 @@ fn it_goes() {
 
     let edits = dom.rebuild().santize();
 
-    dbg!(edits);
-
-    dom.mark_dirty_scope(ScopeId(0));
+    dom.mark_dirty(ScopeId(0));
 
     dom.render_immediate();
 }

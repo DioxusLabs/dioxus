@@ -43,7 +43,7 @@ fn list_renders() {
             CreateStaticText { value: "hello world! " },
             AppendChildren { m: 1 },
             CreateElement { name: "p" },
-            CreateStaticText { value: "d" },
+            CreateTextPlaceholder,
             AppendChildren { m: 1 },
             AppendChildren { m: 2 },
             SaveTemplate { name: "template", m: 1 }
