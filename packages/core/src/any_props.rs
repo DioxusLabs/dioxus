@@ -8,7 +8,11 @@ use crate::{
 };
 
 /// A trait that essentially allows VComponentProps to be used generically
-pub unsafe trait AnyProps<'a> {
+///
+/// # Safety
+///
+/// This should not be implemented outside this module
+pub(crate) unsafe trait AnyProps<'a> {
     fn props_ptr(&self) -> *const ();
     fn render(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
@@ -64,6 +68,6 @@ where
         });
 
         // Call the render function directly
-        (self.render_fn)(scope).as_return(cx)
+        (self.render_fn)(scope).into_return(cx)
     }
 }

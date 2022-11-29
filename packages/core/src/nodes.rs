@@ -102,8 +102,8 @@ pub struct VComponent<'a> {
     pub name: &'static str,
     pub static_props: bool,
     pub scope: Cell<Option<ScopeId>>,
-    pub props: Cell<Option<Box<dyn AnyProps<'a> + 'a>>>,
     pub render_fn: *const (),
+    pub(crate) props: Cell<Option<Box<dyn AnyProps<'a> + 'a>>>,
 }
 
 impl<'a> std::fmt::Debug for VComponent<'a> {
@@ -153,10 +153,12 @@ pub enum AttributeValue<'a> {
     Float(f32),
     Int(i32),
     Bool(bool),
-    Listener(RefCell<Option<BumpBox<'a, dyn FnMut(UiEvent<dyn Any>) + 'a>>>),
+    Listener(RefCell<Option<ListenerCb<'a>>>),
     Any(BumpBox<'a, dyn AnyValue>),
     None,
 }
+
+type ListenerCb<'a> = BumpBox<'a, dyn FnMut(UiEvent<dyn Any>) + 'a>;
 
 impl<'a> AttributeValue<'a> {
     pub fn new_listener<T: 'static>(
@@ -208,15 +210,15 @@ impl<'a> PartialEq for AttributeValue<'a> {
 
 impl<'a> AttributeValue<'a> {
     pub fn matches_type(&self, other: &'a AttributeValue<'a>) -> bool {
-        match (self, other) {
-            (Self::Text(_), Self::Text(_)) => true,
-            (Self::Float(_), Self::Float(_)) => true,
-            (Self::Int(_), Self::Int(_)) => true,
-            (Self::Bool(_), Self::Bool(_)) => true,
-            (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(_), Self::Any(_)) => true,
-            _ => return false,
-        }
+        matches!(
+            (self, other),
+            (Self::Text(_), Self::Text(_))
+                | (Self::Float(_), Self::Float(_))
+                | (Self::Int(_), Self::Int(_))
+                | (Self::Bool(_), Self::Bool(_))
+                | (Self::Listener(_), Self::Listener(_))
+                | (Self::Any(_), Self::Any(_))
+        )
     }
 }
 

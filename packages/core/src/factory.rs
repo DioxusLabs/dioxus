@@ -106,10 +106,10 @@ impl ScopeState {
 }
 
 pub trait ComponentReturn<'a, A = ()> {
-    fn as_return(self, cx: &'a ScopeState) -> RenderReturn<'a>;
+    fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a>;
 }
 impl<'a> ComponentReturn<'a> for Element<'a> {
-    fn as_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
+    fn into_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
         RenderReturn::Sync(self)
     }
 }
@@ -119,11 +119,9 @@ impl<'a, F> ComponentReturn<'a, AsyncMarker> for F
 where
     F: Future<Output = Element<'a>> + 'a,
 {
-    fn as_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
+    fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
         let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
-        let boxed = unsafe { BumpBox::from_raw(f) };
-        let pined: BumpBox<_> = boxed.into();
-        RenderReturn::Async(pined)
+        RenderReturn::Async(unsafe { BumpBox::from_raw(f) })
     }
 }
 
@@ -148,18 +146,18 @@ pub trait IntoDynNode<'a, A = ()> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a>;
 }
 
-impl<'a, 'b> IntoDynNode<'a> for () {
+impl<'a> IntoDynNode<'a> for () {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0))))
     }
 }
-impl<'a, 'b> IntoDynNode<'a> for VNode<'a> {
+impl<'a> IntoDynNode<'a> for VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(VFragment::NonEmpty(_cx.bump().alloc([self])))
     }
 }
 
-impl<'a, 'b, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
+impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {
             Some(val) => val.into_vnode(_cx),
@@ -183,7 +181,7 @@ impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     }
 }
 
-impl<'b> IntoDynNode<'_> for &'b str {
+impl<'a> IntoDynNode<'_> for &'a str {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
         cx.text(format_args!("{}", self))
     }
@@ -201,25 +199,23 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
     }
 }
 
-impl<'a, 'b> IntoDynNode<'a> for &VNode<'a> {
+impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        todo!()
-        // VNode {
-        //     node_id: self.node_id.clone(),
-        //     parent: self.parent,
-        //     template: self.template,
-        //     root_ids: self.root_ids,
-        //     key: self.key,
-        //     dynamic_nodes: self.dynamic_nodes,
-        //     dynamic_attrs: self.dynamic_attrs,
-        // }
+        DynamicNode::Fragment(VFragment::NonEmpty(_cx.bump().alloc([VNode {
+            parent: self.parent,
+            template: self.template,
+            root_ids: self.root_ids,
+            key: self.key,
+            dynamic_nodes: self.dynamic_nodes,
+            dynamic_attrs: self.dynamic_attrs,
+        }])))
     }
 }
 
 pub trait IntoTemplate<'a> {
     fn into_template(self, _cx: &'a ScopeState) -> VNode<'a>;
 }
-impl<'a, 'b> IntoTemplate<'a> for VNode<'a> {
+impl<'a> IntoTemplate<'a> for VNode<'a> {
     fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
         self
     }

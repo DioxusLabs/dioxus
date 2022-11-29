@@ -224,7 +224,7 @@ impl<'b> VirtualDom {
         }
 
         for node in template.template.roots {
-            self.create_static_node(template, node);
+            self.create_static_node(node);
         }
 
         self.mutations.template_mutations.push(SaveTemplate {
@@ -233,11 +233,7 @@ impl<'b> VirtualDom {
         });
     }
 
-    pub(crate) fn create_static_node(
-        &mut self,
-        template: &'b VNode<'b>,
-        node: &'b TemplateNode<'static>,
-    ) {
+    pub(crate) fn create_static_node(&mut self, node: &'b TemplateNode<'static>) {
         match *node {
             // Todo: create the children's template
             TemplateNode::Dynamic(_) => self
@@ -275,7 +271,7 @@ impl<'b> VirtualDom {
 
                 self.mutations
                     .template_mutations
-                    .extend(attrs.into_iter().filter_map(|attr| match attr {
+                    .extend(attrs.iter().filter_map(|attr| match attr {
                         TemplateAttribute::Static {
                             name,
                             value,
@@ -294,8 +290,8 @@ impl<'b> VirtualDom {
                 }
 
                 children
-                    .into_iter()
-                    .for_each(|child| self.create_static_node(template, child));
+                    .iter()
+                    .for_each(|child| self.create_static_node(child));
 
                 self.mutations
                     .template_mutations

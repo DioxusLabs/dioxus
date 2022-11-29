@@ -134,7 +134,7 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Panics if the tree has not been built yet.
-    pub fn root_node<'a>(&'a self) -> &'a RenderReturn<'a> {
+    pub fn root_node(&self) -> &RenderReturn {
         self.try_root_node()
             .expect("The tree has not been built yet. Make sure to call rebuild on the tree before accessing its nodes.")
     }
@@ -144,7 +144,7 @@ impl ScopeState {
     /// This is useful for traversing the tree outside of the VirtualDom, such as in a custom renderer or in SSR.
     ///
     /// Returns [`None`] if the tree has not been built yet.
-    pub fn try_root_node<'a>(&'a self) -> Option<&'a RenderReturn<'a>> {
+    pub fn try_root_node(&self) -> Option<&RenderReturn> {
         let ptr = self.current_frame().node.get();
 
         if ptr.is_null() {

@@ -31,7 +31,7 @@ impl ElementRef {
     }
 }
 
-impl<'b> VirtualDom {
+impl VirtualDom {
     pub(crate) fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
@@ -68,9 +68,8 @@ impl<'b> VirtualDom {
 
         if let Some(root) = scope.as_ref().try_root_node() {
             let root = unsafe { root.extend_lifetime_ref() };
-            match root {
-                RenderReturn::Sync(Ok(node)) => self.drop_scope_inner(node),
-                _ => {}
+            if let RenderReturn::Sync(Ok(node)) = root {
+                self.drop_scope_inner(node)
             }
         }
 
@@ -78,9 +77,8 @@ impl<'b> VirtualDom {
 
         if let Some(root) = unsafe { scope.as_ref().previous_frame().try_load_node() } {
             let root = unsafe { root.extend_lifetime_ref() };
-            match root {
-                RenderReturn::Sync(Ok(node)) => self.drop_scope_inner(node),
-                _ => {}
+            if let RenderReturn::Sync(Ok(node)) = root {
+                self.drop_scope_inner(node)
             }
         }
 
@@ -121,16 +119,6 @@ impl ElementPath {
             ElementPath::Root(r) => big.len() == 1 && big[0] == r as u8,
         }
     }
-}
-
-#[test]
-fn path_ascendant() {
-    // assert!(&ElementPath::Deep(&[]).is_ascendant(&&[0_u8]));
-    // assert!(&ElementPath::Deep(&[1, 2]), &[1, 2, 3]);
-    // assert!(!is_path_ascendant(
-    //     &ElementPath::Deep(&[1, 2, 3, 4]),
-    //     &[1, 2, 3]
-    // ));
 }
 
 impl PartialEq<&[u8]> for ElementPath {

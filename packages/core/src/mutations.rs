@@ -1,6 +1,6 @@
 use crate::{arena::ElementId, ScopeId};
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[must_use = "not handling edits can lead to visual inconsistencies in UI"]
 pub struct Mutations<'a> {
     pub subtree: usize,
@@ -9,14 +9,6 @@ pub struct Mutations<'a> {
 }
 
 impl<'a> Mutations<'a> {
-    pub fn new() -> Self {
-        Self {
-            subtree: 0,
-            edits: Vec::new(),
-            template_mutations: Vec::new(),
-        }
-    }
-
     /// A useful tool for testing mutations
     ///
     /// Rewrites IDs to just be "template", so you can compare the mutations

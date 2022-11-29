@@ -320,14 +320,14 @@ impl<'b> VirtualDom {
                 Text(t) => self.reclaim(t.id.get()),
                 Fragment(VFragment::Empty(t)) => self.reclaim(t.get()),
                 Fragment(VFragment::NonEmpty(nodes)) => {
-                    nodes.into_iter().for_each(|node| self.clean_up_node(node))
+                    nodes.iter().for_each(|node| self.clean_up_node(node))
                 }
             };
         }
 
         // we clean up nodes with dynamic attributes, provided the node is unique and not a root node
         let mut id = None;
-        for (idx, attr) in node.dynamic_attrs.into_iter().enumerate() {
+        for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry
             if node.template.attr_paths[idx].len() == 1 {
                 continue;
@@ -620,7 +620,7 @@ impl<'b> VirtualDom {
         // If none of the old keys are reused by the new children, then we remove all the remaining old children and
         // create the new children afresh.
         if shared_keys.is_empty() {
-            if let Some(_) = old.get(0) {
+            if old.get(0).is_some() {
                 self.remove_nodes(&old[1..]);
                 self.replace_many(&old[0], new);
             } else {
@@ -744,7 +744,7 @@ impl<'b> VirtualDom {
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
-        nodes.into_iter().for_each(|node| self.remove_node(node));
+        nodes.iter().for_each(|node| self.remove_node(node));
     }
 
     fn remove_node(&mut self, node: &'b VNode<'b>) {

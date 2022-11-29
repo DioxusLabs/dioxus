@@ -6,7 +6,7 @@ use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
     factory::RenderReturn,
-    innerlude::{DirtyScope, Mutations, Scheduler, SchedulerMsg, ErrorBoundary},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
@@ -236,7 +236,7 @@ impl VirtualDom {
             dirty_scopes: BTreeSet::new(),
             collected_leaves: Vec::new(),
             finished_fibers: Vec::new(),
-            mutations: Mutations::new(),
+            mutations: Mutations::default(),
         };
 
         let root = dom.new_scope(Box::new(VProps::new(
@@ -454,9 +454,9 @@ impl VirtualDom {
     }
 
     /// Swap the current mutations with a new
-    fn finalize<'a>(&'a mut self) -> Mutations<'a> {
+    fn finalize(&mut self) -> Mutations {
         // todo: make this a routine
-        let mut out = Mutations::new();
+        let mut out = Mutations::default();
         std::mem::swap(&mut self.mutations, &mut out);
         out
     }
@@ -481,7 +481,7 @@ impl VirtualDom {
     ///
     /// apply_edits(edits);
     /// ```
-    pub fn rebuild<'a>(&'a mut self) -> Mutations<'a> {
+    pub fn rebuild(&mut self) -> Mutations {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Ok(node)) => {
@@ -519,10 +519,7 @@ impl VirtualDom {
     /// It's generally a good idea to put some sort of limit on the suspense process in case a future is having issues.
     ///
     /// If no suspense trees are present
-    pub async fn render_with_deadline<'a>(
-        &'a mut self,
-        deadline: impl Future<Output = ()>,
-    ) -> Mutations<'a> {
+    pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
         pin_mut!(deadline);
 
         loop {

@@ -2,8 +2,7 @@ use super::{waker::RcWake, Scheduler, SchedulerMsg};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
-use std::task::Context;
-use std::{pin::Pin, rc::Rc, task::Poll};
+use std::{pin::Pin, rc::Rc};
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -12,22 +11,9 @@ pub struct TaskId(pub usize);
 /// the task itself is the waker
 pub(crate) struct LocalTask {
     pub scope: ScopeId,
+    pub(super) task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
     id: TaskId,
     tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    task: RefCell<Pin<Box<dyn Future<Output = ()> + 'static>>>,
-}
-
-impl LocalTask {
-    /// Poll this task and return whether or not it is complete
-    pub(super) fn progress(self: &Rc<Self>) -> bool {
-        let waker = self.waker();
-        let mut cx = Context::from_waker(&waker);
-
-        match self.task.borrow_mut().as_mut().poll(&mut cx) {
-            Poll::Ready(_) => true,
-            _ => false,
-        }
-    }
 }
 
 impl Scheduler {

@@ -18,8 +18,11 @@ impl VirtualDom {
         let mut tasks = self.scheduler.tasks.borrow_mut();
         let task = &tasks[id.0];
 
+        let waker = task.waker();
+        let mut cx = Context::from_waker(&waker);
+
         // If the task completes...
-        if task.progress() {
+        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
             self.scopes[task.scope.0].spawned_tasks.remove(&id);
 
