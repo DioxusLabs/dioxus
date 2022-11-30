@@ -1,9 +1,6 @@
-<div align="center">
-  <h1>🌗🚀 Dioxus</h1>
-  <p>
-    <strong>Frontend that scales.</strong>
-  </p>
-</div>
+<p align="center">
+  <img src="../header.svg">
+</p>
 
 <div align="center">
   <!-- Crates version -->
@@ -26,9 +23,7 @@
     <img src="https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg"
       alt="CI status" />
   </a>
-</div>
 
-<div align="center">
   <!--Awesome -->
   <a href="https://github.com/dioxuslabs/awesome-dioxus">
     <img src="https://cdn.rawgit.com/sindresorhus/awesome/d7305f38d29fed78fa85652e3a63e154dd8e8829/media/badge.svg" alt="Awesome Page" />
@@ -39,29 +34,23 @@
   </a>
 </div>
 
-
 <div align="center">
   <h3>
-    <a href="https://dioxuslabs.com"> 官网 </a>
+    <a href="https://dioxuslabs.com"> 官方网站 </a>
     <span> | </span>
-    <a href="https://dioxus.mrxzx.info/"> 手册 </a>
+    <a href="https://github.com/DioxusLabs/example-projects"> 代码示例 </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/example-projects"> 示例 </a>
-  </h3>
-</div>
-
-<div align="center">
-  <h4>
+    <a href="https://dioxuslabs.com/guide"> 开发指南 </a>
+    <span> | </span>
     <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> English </a>
     <span> | </span>
-    <a href="https://github.com/DioxusLabs/dioxus/blob/master/README.md"> 中文 </a>
+    <a href="https://github.com/DioxusLabs/dioxus/blob/master/translations/pt-br/README.md"> PT-BR </a>
   </h3>
 </div>
-
 
 <br/>
 
-Dioxus 是一个可移植、高性能的框架，用于在 Rust 中构建跨平台的用户界面。
+Dioxus 是一个可移植的、高性能的、符合人体工程学的框架，使用 Rust 语言构建跨平台的用户界面。
 
 ```rust
 fn app(cx: Scope) -> Element {
@@ -75,103 +64,112 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-Dioxus 可用于制作 网页程序、桌面应用、静态站点、移动端应用。
+Dioxus 可用于生成 网页前端、桌面应用、静态网站、移动端应用、TUI程序、等多类平台应用。
 
-Dioxus 为不同的平台都提供了很好的开发文档。
+如果你能够熟悉使用 React 框架，那 Dioxus 对你来说将非常简单。
 
-如果你会使用 React ，那 Dioxus 对你来说会很简单。 
+## 独特的特性:
+- 桌面程序完全基于本地环境运行（并非 Electron 的封装）
+- 符合人体工程学的设计以及拥有强大的状态管理
+- 全面的内联文档 - 包含所有 HTML 元素、监听器 和 事件 指南。
+- 极快的运行效率和极高的内存效率
+- 智能项目热更新和高效的项目迭代
+- 一流的异步支持🔥
+- 更多内容请查看 [版本发布信息](https://dioxuslabs.com/blog/introducing-dioxus/).
 
-### 项目特点:
-- 对桌面应用的原生支持。
-- 强大的状态管理工具。
-- 支持所有 HTML 标签，监听器和事件。
-- 超高的内存使用率，稳定的组件分配器。
-- 多通道异步调度器，超强的异步支持。
-- 更多信息请查阅： [版本发布文档](https://dioxuslabs.com/blog/introducing-dioxus/).
-
-### 示例
-
-本项目中的所有例子都是 `桌面应用` 程序，请使用 `cargo run --example XYZ` 运行这些例子。
-
-```
-cargo run --example EXAMPLE
-```
-
-## 进入学习
-
-<table style="width:100%" align="center">
-    <tr >
-        <th><a href="https://dioxuslabs.com/guide/">教程</a></th>
-        <th><a href="https://dioxuslabs.com/reference/web">网页端</a></th>
-        <th><a href="https://dioxuslabs.com/reference/desktop/">桌面端</a></th>
-        <th><a href="https://dioxuslabs.com/reference/ssr/">SSR</a></th>
-        <th><a href="https://dioxuslabs.com/reference/mobile/">移动端</a></th>
-        <th><a href="https://dioxuslabs.com/guide/concepts/managing_state.html">状态管理</a></th>
+## 已支持的平台
+<div align="center">
+  <table style="width:100%">
     <tr>
-</table>
+      <td><em>网站项目</em></td>
+      <td>
+        <ul>
+          <li>使用 WebAssembly 直接对 DOM 进行渲染</li>
+          <li>为 SSR 提供预渲染或作为客户端使用</li>
+          <li>简单的 "Hello World" 仅仅 65kb, 媲美 React 框架</li>
+          <li>CLI 提供热更新支持，方便项目快速迭代</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>桌面应用</em></td>
+      <td>
+        <ul>
+          <li>使用 Webview 进行渲染 或 使用 WGPU 和 Skia（试验性的）</li>
+          <li>无多余配置，使用 `cargo build` 即可快速构建</li>
+          <li>对原生系统的全面支持</li>
+          <li>支持 Macos、Linux、Windows 等系统，极小的二进制文件</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>移动端应用</em></td>
+      <td>
+        <ul>
+          <li>使用 Webview 进行渲染 或 使用 WGPU 和 Skia（试验性的）</li>
+          <li>支持 IOS 和 安卓系统</li>
+          <li><em>显著的</em> 性能强于 React Native 框架 </li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>Liveview</em></td>
+      <td>
+        <ul>
+          <li>使用服务器渲染组件与应用程序</li>
+          <li>与受欢迎的后端框架进行融合（Axum、Wrap）</li>
+          <li>及低的延迟</li>
+        </ul>
+      </td>
+    </tr>
+    <tr>
+      <td><em>终端程序</em></td>
+      <td>
+        <ul>
+          <li>在终端程序中渲染，类似于： <a href="https://github.com/vadimdemedes/ink"> ink.js</a></li>
+          <li>支持 CSS 相关模型（类似于浏览器内的）</li>
+          <li>Built-in widgets like text input, buttons, and focus system</li>
+        </ul>
+      </td>
+    </tr>
+  </table>
+</div>
+
+## Why Dioxus?
+
+目前有非常多的应用开发选择，为什么偏偏要选择 Dioxus 呢？
+
+首先，Dioxus将开发者的经验放在首位。这反映在 Dioxus 特有的各种功能上。
+
+- 自动格式化 RSX 格式代码，并拥有 VSCode 插件作为支持。
+- 热加载基于 RSX 代码解析器，同时支持桌面程序和网页程序。
+- 强调文档的重要性，我们对所有 HTML 元素都提供文档支持。
+
+Dioxus 也是一个可扩展化的平台。
+
+- 通过实现一个非常简单的优化堆栈机，轻松构建新的渲染器。
+- 构建并分享开发者自定义的组件代码。
+
+Dioxus 那么优秀，但什么时候它不适合我呢？
+- 它还没有完全成熟。api仍在变化，可能会出现故障（尽管我们试图避免）
+- 您需要运行在 no-std 的环境之中。
+- 你不喜欢使用 React-like 的方式构建 UI 项目。
 
 
-## Dioxus 项目
-
-| 文件浏览器 (桌面应用)                                                                                                                                                           | WiFi 扫描器 (桌面应用)                                                                                                                                                                 | Todo管理 (所有平台)                                                                                                                                                     | 商城系统 (SSR/liveview)                                                                                                                                                               |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [![File Explorer](https://github.com/DioxusLabs/example-projects/raw/master/file-explorer/image.png)](https://github.com/DioxusLabs/example-projects/blob/master/file-explorer) | [![Wifi Scanner Demo](https://github.com/DioxusLabs/example-projects/raw/master/wifi-scanner/demo_small.png)](https://github.com/DioxusLabs/example-projects/blob/master/wifi-scanner) | [![TodoMVC example](https://github.com/DioxusLabs/example-projects/raw/master/todomvc/example.png)](https://github.com/DioxusLabs/example-projects/blob/master/todomvc) | [![E-commerce Example](https://github.com/DioxusLabs/example-projects/raw/master/ecommerce-site/demo.png)](https://github.com/DioxusLabs/example-projects/blob/master/ecommerce-site) |
+## 贡献代码
+- 在我们的 [问题追踪](https://github.com/dioxuslabs/dioxus/issues) 中汇报你遇到的问题。
+- 加入我们的 Discord 与我们交流。
 
 
-查看 [awesome-dioxus](https://github.com/DioxusLabs/awesome-dioxus) 查看更多有趣（~~NiuBi~~）的项目！
+<a href="https://github.com/dioxuslabs/dioxus/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
+</a>
 
-## 为什么使用 Dioxus 和 Rust ？
+## License
+This project is licensed under the [MIT license].
 
-TypeScript 是一个不错的 JavaScript 拓展集，但它仍然算是 JavaScript。
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
-TS 代码运行效率不高，而且有大量的配置项。
-
-相比之下，Dioxus 使用 Rust 编写将大大的提高效能。
-
-使用 Rust 开发，我们能获得：
-
-- 静态类型支持。
-- 变量默认不变性。
-- 简单直观的模块系统。
-- 内部集成的文档系统。
-- 先进的模式匹配系统。
-- 简洁、高效、强大的迭代器。
-- 内置的 单元测试 / 集成测试。
-- 优秀的异常处理系统。
-- 强大且健全的标准库。
-- 灵活的 `宏` 系统。
-- 使用 `crates.io` 管理包。
-
-Dioxus 能为开发者提供的：
-
-- 安全使用数据结构。
-- 安全的错误处理结果。
-- 拥有原生移动端的性能。
-- 直接访问系统的IO层。
-
-Dioxus 使 Rust 应用程序的编写速度和 React 应用程序一样快，但提供了更多的健壮性，让团队能在更短的时间内做出强大功能。
-
-### 不建议使用 Dioxus 的情况？
-
-您不该在这些情况下使用 Dioxus ：
-
-- 您不喜欢类似 React 的开发风格。
-- 您需要一个 `no-std` 的渲染器。
-- 您希望应用运行在 `不支持 Wasm 或 asm.js` 的浏览器。
-- 您需要一个 `Send + Sync` UI 解决方案（目前不支持）。
-
-### 项目生态
-
-想要加入我们一起为 Dioxus 生态努力吗？有很多项目都能在您的帮助下获得改变：
-
-- [TUI 渲染器](https://github.com/dioxusLabs/rink)
-- [CLI 开发工具](https://github.com/dioxusLabs/cli)
-- [官网及文档](https://github.com/dioxusLabs/docsite)
-- 动态网站 及 Web 服务器
-- 资源系统
-
-## 协议
-
-这个项目使用 [MIT 协议].
-
-[MIT 协议]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+terms or conditions.
