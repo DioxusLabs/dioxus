@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 mod any_props;
 mod arena;
 mod bump_frame;

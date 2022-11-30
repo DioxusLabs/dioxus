@@ -34,7 +34,6 @@ indexmap = "1.7"
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 anyhow = "1.0.66"
-bumpslab = "0.1.0"
 
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
@@ -43,4 +42,3 @@ dioxus = { path = "../dioxus" }
 [features]
 default = []
 serialize = ["serde"]
-debug_vdom = []

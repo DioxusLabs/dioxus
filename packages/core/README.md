@@ -1,52 +1,84 @@
-# Dioxus-core
+# dioxus-core
 
-This is the core crate for the Dioxus Virtual DOM. This README will focus on the technical design and layout of this Virtual DOM implementation. If you want to read more about using Dioxus, then check out the Dioxus crate, documentation, and website.
+dioxus-core is a fast and featureful VirtualDom implementation written in and for Rust.
 
-To build new apps with Dioxus or to extend the ecosystem with new hooks or components, use the higher-level `dioxus` crate with the appropriate feature flags.
+# Features
 
+- Functions as components
+- Hooks for local state
+- Task pool for spawning futures
+- Template-based architecture
+- Asynchronous components
+- Suspense boundaries
+- Error boundaries through the `anyhow` crate
+- Customizable memoization
+
+If just starting out, check out the Guides first.
+
+# General Theory
+
+The dioxus-core `VirtualDom` object is built around the concept of a `Template`. Templates describe a layout tree known at compile time with dynamic parts filled at runtime.
+
+Each component in the VirtualDom works as a dedicated render loop where re-renders are triggered by events external to the VirtualDom, or from the components themselves.
+
+When each component re-renders, it must return an `Element`. In Dioxus, the `Element` type is an alias for `Result<VNode>`. Between two renders, Dioxus compares the inner `VNode` object, and calculates the differences of the dynamic portions of each internal `Template`. If any attributes or elements are different between the old layout and new layout, Dioxus will write modifications to the `Mutations` object.
+
+Dioxus expects the target renderer to save its nodes in a list. Each element is given a numerical ID which can be used to directly index into that list for O(1) lookups.
+
+# Usage
+
+All Dioxus apps start as just a function that takes the [`Scope`] object and returns an [`Element`].
+
+The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler syntax of Rust into the logic required to build Templates.
+
+First, start with your app:
 
 ```rust, ignore
 fn app(cx: Scope) -> Element {
-    render!(div { "hello world" })
+    cx.render(rsx!( div { "hello world" } ))
 }
+```
 
-fn main() {
-    let mut renderer = SomeRenderer::new();
+Then, we'll want to create a new VirtualDom using this app as the root component.
 
-    // Creating a new virtualdom from a component
-    let mut dom = VirtualDom::new(app);
+```rust, ingore
+let mut dom = VirtualDom::new(app);
+```
 
-    // Patching the renderer with the changes to draw the screen
-    let edits = dom.rebuild();
-    renderer.apply(edits);
+To build the app into a stream of mutations, we'll use [`VirtualDom::rebuild`]:
 
-    // Injecting events
-    dom.handle_message(SchedulerMsg::Event(UserEvent {
-        scope_id: None,
-        priority: EventPriority::High,
-        element: ElementId(0),
-        name: "onclick",
-        data: Arc::new(()),
-    }));
+```rust, ignore
+let mutations = dom.rebuild();
 
-    // polling asynchronously
-    dom.wait_for_work().await;
+apply_edits_to_real_dom(mutations);
+```
 
-    // working with a deadline
-    if let Some(edits) = dom.work_with_deadline(|| false) {
-        renderer.apply(edits);
+We can then wait for any asynchronous components or pending futures using the `wait_for_work()` method. If we have a deadline, then we can use render_with_deadline instead:
+
+```rust, ignore
+// Wait for the dom to be marked dirty internally
+dom.wait_for_work().await;
+
+// Or wait for a deadline and then collect edits
+dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
+```
+
+If an event occurs from outside the virtualdom while waiting for work, then we can cancel the wait using a `select!` block and inject the event.
+
+```rust
+loop {
+    tokio::select! {
+        evt = real_dom.event() => dom.handle_event("click", evt.data, evt.element, evt.bubbles),
+        _ = dom.wait_for_work() => {}
     }
 
-    // getting state of scopes
-    let scope = dom.get_scope(ScopeId(0)).unwrap();
+    // Render any work without blocking the main thread for too long
+    let mutations = dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(10)));
 
-    // iterating through the tree
-    match scope.root_node() {
-        VNodes::Text(vtext) => dbg!(vtext),
-        VNodes::Element(vel) => dbg!(vel),
-        _ => todo!()
-    }
+    // And then apply the edits
+    real_dom.apply(mutations);
 }
+
 ```
 
 ## Internals
@@ -82,17 +114,3 @@ The final implementation of Dioxus must:
 - Support server-side-rendering (SSR). VNodes should render to a string that can be served via a web server.
 - Be "live". Components should be able to be both server rendered and client rendered without needing frontend APIs.
 - Be modular. Components and hooks should be work anywhere without worrying about target platform.
-
-
-## Safety
-
-Dioxus uses unsafe. The design of Dioxus *requires* unsafe (self-referential trees).
-
-All of our test suite passes MIRI without errors.
-
-Dioxus deals with arenas, lifetimes, asynchronous tasks, custom allocators, pinning, and a lot more foundational low-level work that is very difficult to implement with 0 unsafe.
-
-If you don't want to use a crate that uses unsafe, then this crate is not for you.
-
-However, we are always interested in decreasing the scope of the core VirtualDom to make it easier to review. We'd be happy to welcome PRs that can eliminate unsafe code while still upholding the numerous invariants required to execute certain features.
-

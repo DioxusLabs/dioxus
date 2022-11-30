@@ -14,7 +14,7 @@ use std::cell::Cell;
 use DynamicNode::*;
 
 impl<'b> VirtualDom {
-    pub fn diff_scope(&mut self, scope: ScopeId) {
+    pub(super) fn diff_scope(&mut self, scope: ScopeId) {
         let scope_state = &mut self.scopes[scope.0];
 
         self.scope_stack.push(scope);
@@ -59,7 +59,7 @@ impl<'b> VirtualDom {
         todo!("Not yet handling error rollover")
     }
 
-    pub fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
+    fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         if left_template.template.id != right_template.template.id {
             return self.light_diff_templates(left_template, right_template);
         }
@@ -185,7 +185,7 @@ impl<'b> VirtualDom {
     /// This is mostly implemented to help solve the issue where the same component is rendered under two different
     /// conditions:
     ///
-    /// ```rust
+    /// ```rust, ignore
     /// if enabled {
     ///     rsx!{ Component { enabled_sign: "abc" } }
     /// } else {
@@ -196,8 +196,7 @@ impl<'b> VirtualDom {
     /// However, we should not that it's explicit in the docs that this is not a guarantee. If you need to preserve state,
     /// then you should be passing in separate props instead.
     ///
-    /// ```
-    ///
+    /// ```rust, ignore
     /// let props = if enabled {
     ///     ComponentProps { enabled_sign: "abc" }
     /// } else {

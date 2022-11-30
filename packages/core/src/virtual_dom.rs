@@ -94,9 +94,9 @@ use std::{
 /// ## Building an event loop around Dioxus:
 ///
 /// Putting everything together, you can build an event loop around Dioxus by using the methods outlined above.
-/// ```rust
+/// ```rust, ignore
 /// fn app(cx: Scope) -> Element {
-///     cx.render(rsx!{
+///     cx.render(rsx! {
 ///         div { "Hello World" }
 ///     })
 /// }
@@ -121,7 +121,7 @@ use std::{
 /// where waiting on portions of the UI to finish rendering is important. To wait for suspense, use the
 /// [`VirtualDom::render_with_deadline`] method:
 ///
-/// ```rust
+/// ```rust, ignore
 /// let dom = VirtualDom::new(app);
 ///
 /// let deadline = tokio::time::sleep(Duration::from_millis(100));
@@ -134,7 +134,7 @@ use std::{
 /// suggest rendering with a deadline, and then looping between [`VirtualDom::wait_for_work`] and render_immediate until
 /// no suspended work is left.
 ///
-/// ```
+/// ```rust, ignore
 /// let dom = VirtualDom::new(app);
 ///
 /// let deadline = tokio::time::sleep(Duration::from_millis(20));
@@ -289,11 +289,6 @@ impl VirtualDom {
         let height = self.scopes[id.0].height;
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
-
-    /// Mark the entire tree as dirty.
-    ///
-    /// Will force a re-render of every component
-    pub fn mark_dirty_all(&mut self) {}
 
     /// Determine whether or not a scope is currently in a suspended state
     ///
@@ -609,6 +604,7 @@ impl VirtualDom {
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
+        // Simply drop this scope which drops all of its children
         self.drop_scope(ScopeId(0));
     }
 }
