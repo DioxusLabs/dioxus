@@ -161,7 +161,8 @@ impl DesktopContext {
 
 #[derive(Debug)]
 pub enum UserWindowEvent {
-    Update,
+    EditsReady,
+    Initialize,
 
     CloseWindow,
     DragWindow,
@@ -213,7 +214,7 @@ pub(super) fn handler(
     println!("user_event: {:?}", user_event);
 
     match user_event {
-        Update => desktop.try_load_ready_webviews(),
+        Initialize | EditsReady => desktop.try_load_ready_webviews(),
         CloseWindow => *control_flow = ControlFlow::Exit,
         DragWindow => {
             // if the drag_window has any errors, we don't do anything

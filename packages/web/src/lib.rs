@@ -54,21 +54,23 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
-use std::rc::Rc;
+use std::{rc::Rc, time::Duration};
 
 pub use crate::cfg::Config;
+use crate::dom::virtual_event_from_websys_event;
 pub use crate::util::use_eval;
-use dioxus_core::prelude::Component;
-use dioxus_core::SchedulerMsg;
-use dioxus_core::VirtualDom;
+use dioxus_core::{Element, ElementId, Scope, VirtualDom};
+use futures_util::{pin_mut, FutureExt, StreamExt};
+use gloo_timers::future::sleep;
+use web_sys::Event;
 
 mod cache;
 mod cfg;
 mod dom;
-#[cfg(any(feature = "hot-reload", debug_assertions))]
-mod hot_reload;
-#[cfg(feature = "hydrate")]
-mod rehydrate;
+// #[cfg(any(feature = "hot-reload", debug_assertions))]
+// mod hot_reload;
+// #[cfg(feature = "hydrate")]
+// mod rehydrate;
 // mod ric_raf;
 mod util;
 
@@ -92,7 +94,7 @@ mod util;
 ///     render!(div {"hello world"})
 /// }
 /// ```
-pub fn launch(root_component: Component) {
+pub fn launch(root_component: fn(Scope) -> Element) {
     launch_with_props(root_component, (), Config::default());
 }
 
@@ -115,7 +117,7 @@ pub fn launch(root_component: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config: Config) {
+pub fn launch_cfg(root: fn(Scope) -> Element, config: Config) {
     launch_with_props(root, (), config)
 }
 
@@ -143,10 +145,11 @@ pub fn launch_cfg(root: Component, config: Config) {
 ///     render!(div {"hello {cx.props.name}"})
 /// }
 /// ```
-pub fn launch_with_props<T>(root_component: Component<T>, root_properties: T, config: Config)
-where
-    T: Send + 'static,
-{
+pub fn launch_with_props<T: 'static>(
+    root_component: fn(Scope<T>) -> Element,
+    root_properties: T,
+    config: Config,
+) {
     wasm_bindgen_futures::spawn_local(run_with_props(root_component, root_properties, config));
 }
 
@@ -162,7 +165,9 @@ where
 ///     wasm_bindgen_futures::spawn_local(app_fut);
 /// }
 /// ```
-pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T, cfg: Config) {
+pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_props: T, cfg: Config) {
+    log::info!("Starting up");
+
     let mut dom = VirtualDom::new_with_props(root, root_props);
 
     #[cfg(feature = "panic_hook")]
@@ -170,8 +175,8 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         console_error_panic_hook::set_once();
     }
 
-    #[cfg(any(feature = "hot-reload", debug_assertions))]
-    hot_reload::init(&dom);
+    // #[cfg(any(feature = "hot-reload", debug_assertions))]
+    // hot_reload::init(&dom);
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
         wasm_bindgen::intern(s);
@@ -180,50 +185,48 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
         wasm_bindgen::intern(s);
     }
 
-    let tasks = dom.get_scheduler_channel();
+    // a    let should_hydrate = cfg.hydrate;
 
-    let sender_callback: Rc<dyn Fn(SchedulerMsg)> =
-        Rc::new(move |event| tasks.unbounded_send(event).unwrap());
+    let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
-    let should_hydrate = cfg.hydrate;
+    let mut websys_dom = dom::WebsysDom::new(cfg, tx);
 
-    let mut websys_dom = dom::WebsysDom::new(cfg, sender_callback);
+    log::info!("rebuilding app");
 
-    log::trace!("rebuilding app");
-
-    if should_hydrate {
-        // todo: we need to split rebuild and initialize into two phases
-        // it's a waste to produce edits just to get the vdom loaded
-        let _ = dom.rebuild();
-
-        #[cfg(feature = "hydrate")]
-        #[allow(unused_variables)]
-        if let Err(err) = websys_dom.rehydrate(&dom) {
-            log::error!(
-                "Rehydration failed {:?}. Rebuild DOM into element from scratch",
-                &err
-            );
-
-            websys_dom.root.set_text_content(None);
-
-            // errrrr we should split rebuild into two phases
-            // one that initializes things and one that produces edits
-            let edits = dom.rebuild();
-
-            websys_dom.apply_edits(edits.edits);
-        }
-    } else {
-        let edits = dom.rebuild();
-        websys_dom.apply_edits(edits.edits);
-    }
-
-    // let mut work_loop = ric_raf::RafLoop::new();
+    let edits = dom.rebuild();
+    websys_dom.apply_edits(edits.template_mutations);
+    websys_dom.apply_edits(edits.edits);
 
     loop {
         log::trace!("waiting for work");
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        dom.wait_for_work().await;
+
+        let mut res = {
+            let work = dom.wait_for_work().fuse();
+            pin_mut!(work);
+
+            futures_util::select! {
+                _ = work => None,
+                evt = rx.next() => evt
+            }
+        };
+
+        while let Some(evt) = res {
+            let name = evt.type_();
+            let element = walk_event_for_id(&evt);
+            let bubbles = dioxus_html::event_bubbles(name.as_str());
+
+            if let Some((element, target)) = element {
+                let data = virtual_event_from_websys_event(evt, target);
+                dom.handle_event(name.as_str(), data, element, bubbles);
+            }
+            res = rx.try_next().transpose().unwrap().ok();
+        }
+
+        let deadline = sleep(Duration::from_millis(50));
+
+        let edits = dom.render_with_deadline(deadline).await;
 
         log::trace!("working..");
 
@@ -232,14 +235,85 @@ pub async fn run_with_props<T: 'static + Send>(root: Component<T>, root_props: T
 
         // run the virtualdom work phase until the frame deadline is reached
         // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
-        let mutations = dom.work_with_deadline(|| false);
 
         // wait for the animation frame to fire so we can apply our changes
         // work_loop.wait_for_raf().await;
 
-        for edit in mutations {
-            // actually apply our changes during the animation frame
-            websys_dom.apply_edits(edit.edits);
+        // for edit in mutations {
+        //     // actually apply our changes during the animation frame
+        websys_dom.apply_edits(edits.template_mutations);
+        websys_dom.apply_edits(edits.edits);
+        // }
+    }
+}
+
+fn walk_event_for_id(event: &Event) -> Option<(ElementId, web_sys::Element)> {
+    use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+    use web_sys::{Document, Element, Event, HtmlElement};
+
+    let mut target = event
+        .target()
+        .expect("missing target")
+        .dyn_into::<Element>()
+        .expect("not a valid element");
+
+    // break Ok(UserEvent {
+    //     name: event_name_from_typ(&typ),
+    //     data: virtual_event_from_websys_event(event.clone(), target.clone()),
+    //     element: Some(ElementId(id)),
+    //     scope_id: None,
+    //     priority: dioxus_core::EventPriority::Medium,
+    //     bubbles: event.bubbles(),
+    // });
+
+    // break Ok(UserEvent {
+    //     name: event_name_from_typ(&typ),
+    //     data: virtual_event_from_websys_event(event.clone(), target.clone()),
+    //     element: None,
+    //     scope_id: None,
+    //     priority: dioxus_core::EventPriority::Low,
+    //     bubbles: event.bubbles(),
+    // });
+
+    loop {
+        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
+            Some(Ok(id)) => return Some((ElementId(id), target)),
+            Some(Err(_)) => return None,
+
+            // walk the tree upwards until we actually find an event target
+            None => match target.parent_element() {
+                Some(parent) => target = parent,
+                None => return None,
+            },
         }
     }
 }
+
+// if should_hydrate {
+//     // todo: we need to split rebuild and initialize into two phases
+//     // it's a waste to produce edits just to get the vdom loaded
+//     let _ = dom.rebuild();
+
+//     #[cfg(feature = "hydrate")]
+//     #[allow(unused_variables)]
+//     if let Err(err) = websys_dom.rehydrate(&dom) {
+//         log::error!(
+//             "Rehydration failed {:?}. Rebuild DOM into element from scratch",
+//             &err
+//         );
+
+//         websys_dom.root.set_text_content(None);
+
+//         // errrrr we should split rebuild into two phases
+//         // one that initializes things and one that produces edits
+//         let edits = dom.rebuild();
+
+//         websys_dom.apply_edits(edits.edits);
+//     }
+// } else {
+//     let edits = dom.rebuild();
+//     websys_dom.apply_edits(edits.template_mutations);
+//     websys_dom.apply_edits(edits.edits);
+// }
+
+// let mut work_loop = ric_raf::RafLoop::new();

@@ -13,7 +13,7 @@ pub(crate) struct ElementRef {
     pub path: ElementPath,
 
     // The actual template
-    pub template: *mut VNode<'static>,
+    pub template: *const VNode<'static>,
 }
 
 #[derive(Clone, Copy)]
@@ -58,8 +58,20 @@ impl VirtualDom {
     }
 
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<ElementRef> {
-        assert_ne!(el, ElementId(0));
+        if el.0 == 0 {
+            panic!(
+                "Invalid element set to 0 - {:#?}",
+                std::backtrace::Backtrace::force_capture()
+            )
+        }
+
+        println!("reclaiming {:?}", el);
         self.elements.try_remove(el.0)
+    }
+
+    pub(crate) fn update_template(&mut self, el: ElementId, node: &VNode) {
+        let node: *const VNode = node as *const _;
+        self.elements[el.0].template = unsafe { std::mem::transmute(node) };
     }
 
     // Drop a scope and all its children
@@ -73,21 +85,15 @@ impl VirtualDom {
             }
         }
 
-        let scope = self.scopes.get(id.0).unwrap();
-
-        if let Some(root) = unsafe { scope.as_ref().previous_frame().try_load_node() } {
-            let root = unsafe { root.extend_lifetime_ref() };
-            if let RenderReturn::Sync(Ok(node)) = root {
-                self.drop_scope_inner(node)
-            }
-        }
-
-        let scope = self.scopes.get(id.0).unwrap().as_ref();
+        let scope = self.scopes.get_mut(id.0).unwrap();
+        scope.props.take();
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        for hook in scope.hook_list.borrow_mut().drain(..) {
+        for hook in scope.hook_list.get_mut().drain(..) {
+            println!("dropping hook !");
             drop(unsafe { BumpBox::from_raw(hook) });
+            println!("hook dropped !");
         }
     }
 

@@ -50,7 +50,7 @@ fn rehydrates() {
 
     let mut dom = VirtualDom::new(app);
     let _ = dom.rebuild();
-    let out = dioxus_ssr::render_vdom_cfg(&dom, |c| c.pre_render(true));
+    let out = dioxus_ssr::render_vdom_cfg(&dom, Default::default());
 
     window()
         .unwrap()

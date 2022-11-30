@@ -82,7 +82,7 @@ pub struct ScopeState {
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
 
-    pub(crate) props: Box<dyn AnyProps<'static>>,
+    pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 

@@ -154,7 +154,7 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                                 "initialize" => {
                                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                                     println!("initializing...");
-                                    let _ = proxy.send_event(UserWindowEvent::Update);
+                                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
                                 }
                                 "browser_open" => {
                                     let data = message.params();

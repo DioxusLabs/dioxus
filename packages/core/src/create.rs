@@ -129,7 +129,7 @@ impl<'b> VirtualDom {
                                 AttributeValue::Listener(_) => {
                                     self.mutations.push(NewEventListener {
                                         // all listeners start with "on"
-                                        event_name: &unbounded_name[2..],
+                                        name: &unbounded_name[2..],
                                         scope: cur_scope,
                                         id,
                                     })

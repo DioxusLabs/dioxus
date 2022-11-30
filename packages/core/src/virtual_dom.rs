@@ -362,6 +362,8 @@ impl VirtualDom {
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
+                println!("{:?} \n {:?} \n {:?}", attr, name, element);
+
                 let this_path = template.template.attr_paths[idx];
 
                 // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
@@ -383,6 +385,8 @@ impl VirtualDom {
                 }
             }
 
+            println!("calling listeners: {:?}", listeners);
+
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
@@ -399,6 +403,8 @@ impl VirtualDom {
 
             parent_path = template.parent.and_then(|id| self.elements.get(id.0));
         }
+
+        println!("all listeners exhausted");
     }
 
     /// Wait for the scheduler to have any work.
@@ -448,12 +454,15 @@ impl VirtualDom {
         }
     }
 
-    /// Swap the current mutations with a new
-    fn finalize(&mut self) -> Mutations {
-        // todo: make this a routine
-        let mut out = Mutations::default();
-        std::mem::swap(&mut self.mutations, &mut out);
-        out
+    /// Process all events in the queue until there are no more left
+    pub fn process_events(&mut self) {
+        while let Ok(Some(msg)) = self.rx.try_next() {
+            match msg {
+                SchedulerMsg::Immediate(id) => self.mark_dirty(id),
+                SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
+                SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
+            }
+        }
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
@@ -515,6 +524,7 @@ impl VirtualDom {
     ///
     /// If no suspense trees are present
     pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
+        println!("render with deadline");
         pin_mut!(deadline);
 
         loop {
@@ -599,6 +609,14 @@ impl VirtualDom {
                 return self.finalize();
             }
         }
+    }
+
+    /// Swap the current mutations with a new
+    fn finalize(&mut self) -> Mutations {
+        // todo: make this a routine
+        let mut out = Mutations::default();
+        std::mem::swap(&mut self.mutations, &mut out);
+        out
     }
 }
 

@@ -158,7 +158,7 @@ pub enum Mutation<'a> {
     /// Create a new Event Listener.
     NewEventListener {
         /// The name of the event to listen for.
-        event_name: &'a str,
+        name: &'a str,
 
         /// The ID of the node to attach the listener to.
         scope: ScopeId,
@@ -169,11 +169,11 @@ pub enum Mutation<'a> {
 
     /// Remove an existing Event Listener.
     RemoveEventListener {
+        /// The name of the event to remove.
+        name: &'a str,
+
         /// The ID of the node to remove.
         id: ElementId,
-
-        /// The name of the event to remove.
-        event: &'a str,
     },
     Remove {
         id: ElementId,

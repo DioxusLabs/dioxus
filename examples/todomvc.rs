@@ -57,7 +57,10 @@ pub fn app(cx: Scope<()>) -> Element {
                         placeholder: "What needs to be done?",
                         value: "{draft}",
                         autofocus: "true",
-                        oninput: move |evt| draft.set(evt.value.clone()),
+                        oninput: move |evt| {
+                            println!("calling oninput");
+                            draft.set(evt.value.clone());
+                        },
                         onkeydown: move |evt| {
                             if evt.key() == Key::Enter && !draft.is_empty() {
                                 todos.make_mut().insert(
@@ -120,6 +123,8 @@ pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
     let todo = &todos[&cx.props.id];
     let completed = if todo.checked { "completed" } else { "" };
     let editing = if **is_editing { "editing" } else { "" };
+
+    println!("rendering todo entry");
 
     cx.render(rsx!{
         li {

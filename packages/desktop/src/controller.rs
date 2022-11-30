@@ -56,7 +56,7 @@ impl DesktopController {
                     let mut queue = edit_queue.lock().unwrap();
                     queue.push(serde_json::to_string(&edits.template_mutations).unwrap());
                     queue.push(serde_json::to_string(&edits.edits).unwrap());
-                    proxy.send_event(UserWindowEvent::Update).unwrap();
+                    proxy.send_event(UserWindowEvent::EditsReady).unwrap();
                 }
 
                 loop {
@@ -67,7 +67,7 @@ impl DesktopController {
                                 let name = value.event.clone();
                                 let el_id = ElementId(value.mounted_dom_id);
                                 if let Some(evt) = decode_event(value) {
-                                    dom.handle_event(&name,  evt, el_id, true);
+                                    dom.handle_event(&name,  evt, el_id,  dioxus_html::events::event_bubbles(&name));
                                 }
                             }
                         }
@@ -81,7 +81,7 @@ impl DesktopController {
                         let mut queue = edit_queue.lock().unwrap();
                         queue.push(serde_json::to_string(&muts.template_mutations).unwrap());
                         queue.push(serde_json::to_string(&muts.edits).unwrap());
-                        let _ = proxy.send_event(UserWindowEvent::Update);
+                        let _ = proxy.send_event(UserWindowEvent::EditsReady);
                     }
                 }
             })
@@ -115,6 +115,8 @@ impl DesktopController {
             }
 
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
+
+            println!("processing pending edits {:?}", new_queue.len());
 
             for edit in new_queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))

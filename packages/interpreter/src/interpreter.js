@@ -265,7 +265,14 @@ export class Interpreter {
   SaveTemplate(name, m) {
     this.templates[name] = this.stack.splice(this.stack.length - m);
   }
+  CreateStaticText(text) {
+    this.CreateTextNode(text);
+  }
+  CreateTextPlaceholder() {
+    this.CreateRawText("placeholder");
+  }
   handleEdit(edit) {
+    console.log(edit);
     switch (edit.type) {
       case "AppendChildren":
         this.AppendChildren(edit.m);
@@ -283,13 +290,13 @@ export class Interpreter {
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateStaticText":
-        this.CreateTextNode(edit.value);
+        this.CreateStaticText(edit.value)
         break;
       case "CreateStaticPlaceholder":
         this.CreateStaticPlaceholder();
         break;
       case "CreateTextPlaceholder":
-        this.CreateRawText("placeholder");
+        this.CreateTextPlaceholder();
         break;
       case "CreateStaticText":
         this.CreateRawText(edit.value);
@@ -301,7 +308,7 @@ export class Interpreter {
         this.HydrateText(edit.path, edit.value, edit.id);
         break;
       case "LoadTemplate":
-        this.LoadTemplate(edit.name, edit.index);
+        this.LoadTemplate(edit.name, edit.index, edit.id);
         break;
       case "SaveTemplate":
         this.SaveTemplate(edit.name, edit.m);

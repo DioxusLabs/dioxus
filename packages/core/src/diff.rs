@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use crate::{
     arena::ElementId,
     factory::RenderReturn,
@@ -59,9 +61,16 @@ impl<'b> VirtualDom {
     }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
+        println!(
+            "diffing node {:#?},\n\n{:#?}",
+            left_template.template.id, right_template.template.id
+        );
+
         if left_template.template.id != right_template.template.id {
             return self.light_diff_templates(left_template, right_template);
         }
+
+        println!("diffing attributs...");
 
         for (left_attr, right_attr) in left_template
             .dynamic_attrs
@@ -72,6 +81,11 @@ impl<'b> VirtualDom {
             right_attr
                 .mounted_element
                 .set(left_attr.mounted_element.get());
+
+            // We want to make sure anything listener that gets pulled is valid
+            if let AttributeValue::Listener(_) = right_attr.value {
+                self.update_template(left_attr.mounted_element.get(), right_template);
+            }
 
             if left_attr.value != right_attr.value || left_attr.volatile {
                 // todo: add more types of attribute values
@@ -92,6 +106,8 @@ impl<'b> VirtualDom {
             }
         }
 
+        println!("diffing dyn nodes...");
+
         for (idx, (left_node, right_node)) in left_template
             .dynamic_nodes
             .iter()
@@ -101,12 +117,23 @@ impl<'b> VirtualDom {
             match (left_node, right_node) {
                 (Text(left), Text(right)) => self.diff_vtext(left, right),
                 (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right),
+                (Placeholder(left), Placeholder(right)) => {
+                    right.set(left.get());
+                }
                 (Component(left), Component(right)) => {
                     self.diff_vcomponent(left, right, right_template, idx)
                 }
-                _ => self.replace(left_template, right_template),
+                (Placeholder(left), Fragment(right)) => {
+                    self.replace_placeholder_with_nodes(left, right)
+                }
+                (Fragment(left), Placeholder(right)) => {
+                    self.replace_nodes_with_placeholder(left, right)
+                }
+                _ => todo!(),
             };
         }
+
+        println!("applying roots...");
 
         // Make sure the roots get transferred over
         for (left, right) in left_template
@@ -116,6 +143,30 @@ impl<'b> VirtualDom {
         {
             right.set(left.get());
         }
+    }
+
+    fn replace_placeholder_with_nodes(&mut self, l: &'b Cell<ElementId>, r: &'b [VNode<'b>]) {
+        let m = self.create_children(r);
+        let id = l.get();
+        self.mutations.push(Mutation::ReplaceWith { id, m });
+        self.reclaim(id);
+    }
+
+    fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
+        // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
+        let placeholder = self.next_element(&l[0], &[]);
+        r.set(placeholder);
+        self.mutations
+            .push(Mutation::CreatePlaceholder { id: placeholder });
+
+        // Remove the old nodes, except for onea
+        let first = self.replace_inner(&l[0]);
+        self.remove_nodes(&l[1..]);
+
+        self.mutations
+            .push(Mutation::ReplaceWith { id: first, m: 1 });
+
+        self.try_reclaim(first);
     }
 
     fn diff_vcomponent(
@@ -140,6 +191,7 @@ impl<'b> VirtualDom {
             };
             self.mutations
                 .push(Mutation::ReplaceWith { id, m: created });
+            self.drop_scope(left.scope.get().unwrap());
             return;
         }
 
@@ -154,15 +206,12 @@ impl<'b> VirtualDom {
         // If the props are static, then we try to memoize by setting the new with the old
         // The target scopestate still has the reference to the old props, so there's no need to update anything
         // This also implicitly drops the new props since they're not used
-        if left.static_props && unsafe { old.memoize(new.as_ref()) } {
+        if left.static_props && unsafe { old.as_ref().unwrap().memoize(new.as_ref()) } {
             return;
         }
 
-        // If the props are dynamic *or* the memoization failed, then we need to diff the props
-
         // First, move over the props from the old to the new, dropping old props in the process
-        self.scopes[scope_id.0].props = unsafe { std::mem::transmute(new.as_ref()) };
-        right.props.set(Some(new));
+        self.scopes[scope_id.0].props = unsafe { std::mem::transmute(new) };
 
         // Now run the component and diff it
         self.run_scope(scope_id);
@@ -335,7 +384,7 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn diff_non_empty_fragment(&mut self, new: &'b [VNode<'b>], old: &'b [VNode<'b>]) {
+    fn diff_non_empty_fragment(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         let new_is_keyed = new[0].key.is_some();
         let old_is_keyed = old[0].key.is_some();
         debug_assert!(
@@ -346,6 +395,9 @@ impl<'b> VirtualDom {
             old.iter().all(|o| o.key.is_some() == old_is_keyed),
             "all siblings must be keyed or all siblings must be non-keyed"
         );
+
+        println!("Diffing fragment {:?}, {:?}", old.len(), new.len());
+
         if new_is_keyed && old_is_keyed {
             self.diff_keyed_children(old, new);
         } else {
@@ -368,7 +420,9 @@ impl<'b> VirtualDom {
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
-        match old.len().cmp(&new.len()) {
+        println!("Diffing non keyed children");
+
+        match dbg!(old.len().cmp(&new.len())) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..]),
             Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
             Ordering::Equal => {}

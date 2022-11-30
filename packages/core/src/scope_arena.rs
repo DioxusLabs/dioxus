@@ -28,7 +28,7 @@ impl VirtualDom {
             parent,
             id,
             height,
-            props,
+            props: Some(props),
             placeholder: Default::default(),
             node_arena_1: BumpFrame::new(50),
             node_arena_2: BumpFrame::new(50),
@@ -86,6 +86,8 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
+        println!("Running scope {:?}", scope_id);
+
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners
@@ -100,7 +102,8 @@ impl VirtualDom {
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
-            let props: &dyn AnyProps = mem::transmute(&*scope.props);
+            let props = scope.props.as_ref().unwrap().as_ref();
+            let props: &dyn AnyProps = mem::transmute(props);
             props.render(scope).extend_lifetime()
         };
 
