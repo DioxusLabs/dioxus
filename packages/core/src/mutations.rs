@@ -150,10 +150,6 @@ pub enum Mutation<'a> {
         id: ElementId,
     },
 
-    SetInnerText {
-        value: &'a str,
-    },
-
     SetText {
         value: &'a str,
         id: ElementId,

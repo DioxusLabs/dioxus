@@ -7,7 +7,7 @@ use crate::{
     scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
-    AttributeValue, DynamicNode, VFragment, VNode,
+    AttributeValue, DynamicNode, VNode,
 };
 use futures_util::FutureExt;
 use std::{
@@ -75,7 +75,7 @@ impl VirtualDom {
                         c.props.set(None);
                     }
                 }
-                DynamicNode::Fragment(VFragment::NonEmpty(f)) => {
+                DynamicNode::Fragment(f) => {
                     for node in *f {
                         self.ensure_drop_safety_inner(node);
                     }

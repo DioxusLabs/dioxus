@@ -89,12 +89,16 @@ pub enum TemplateNode<'a> {
 pub enum DynamicNode<'a> {
     Component(VComponent<'a>),
     Text(VText<'a>),
-    Fragment(VFragment<'a>),
+    Placeholder(Cell<ElementId>),
+    Fragment(&'a [VNode<'a>]),
 }
 
 impl<'a> DynamicNode<'a> {
     pub fn is_component(&self) -> bool {
         matches!(self, DynamicNode::Component(_))
+    }
+    pub fn placeholder() -> Self {
+        Self::Placeholder(Cell::new(ElementId(0)))
     }
 }
 
@@ -120,12 +124,6 @@ impl<'a> std::fmt::Debug for VComponent<'a> {
 pub struct VText<'a> {
     pub id: Cell<ElementId>,
     pub value: &'a str,
-}
-
-#[derive(Debug)]
-pub enum VFragment<'a> {
-    Empty(Cell<ElementId>),
-    NonEmpty(&'a [VNode<'a>]),
 }
 
 #[derive(Debug)]

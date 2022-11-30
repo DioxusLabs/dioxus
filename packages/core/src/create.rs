@@ -1,11 +1,13 @@
+use std::cell::Cell;
+
 use crate::factory::RenderReturn;
-use crate::innerlude::{VComponent, VFragment, VText};
+use crate::innerlude::{VComponent, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
 
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -55,15 +57,14 @@ impl<'b> VirtualDom {
                             1
                         }
 
-                        DynamicNode::Fragment(VFragment::Empty(slot)) => {
+                        DynamicNode::Placeholder(slot) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             self.mutations.push(CreatePlaceholder { id });
                             1
                         }
 
-                        DynamicNode::Fragment(VFragment::NonEmpty(_))
-                        | DynamicNode::Component { .. } => {
+                        DynamicNode::Fragment(_) | DynamicNode::Component { .. } => {
                             self.create_dynamic_node(template, &template.dynamic_nodes[*id], *id)
                         }
                     }
@@ -309,7 +310,8 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
-            Fragment(frag) => self.create_fragment(frag, template, idx),
+            Fragment(frag) => self.create_fragment(frag),
+            Placeholder(frag) => self.create_placeholder(frag, template, idx),
             Component(component) => self.create_component_node(template, component, idx),
         }
     }
@@ -340,34 +342,30 @@ impl<'b> VirtualDom {
         0
     }
 
-    pub(crate) fn create_fragment(
+    pub(crate) fn create_placeholder(
         &mut self,
-        frag: &'b VFragment<'b>,
+        slot: &Cell<ElementId>,
         template: &'b VNode<'b>,
         idx: usize,
     ) -> usize {
-        match frag {
-            VFragment::NonEmpty(nodes) => {
-                nodes.iter().fold(0, |acc, child| acc + self.create(child))
-            }
+        // Allocate a dynamic element reference for this text node
+        let id = self.next_element(template, template.template.node_paths[idx]);
 
-            VFragment::Empty(slot) => {
-                // Allocate a dynamic element reference for this text node
-                let id = self.next_element(template, template.template.node_paths[idx]);
+        // Make sure the text node is assigned to the correct element
+        slot.set(id);
 
-                // Make sure the text node is assigned to the correct element
-                slot.set(id);
+        // Assign the ID to the existing node in the template
+        self.mutations.push(AssignId {
+            path: &template.template.node_paths[idx][1..],
+            id,
+        });
 
-                // Assign the ID to the existing node in the template
-                self.mutations.push(AssignId {
-                    path: &template.template.node_paths[idx][1..],
-                    id,
-                });
+        // Since the placeholder is already in the DOM, we don't create any new nodes
+        0
+    }
 
-                // Since the placeholder is already in the DOM, we don't create any new nodes
-                0
-            }
-        }
+    pub(crate) fn create_fragment(&mut self, nodes: &'b [VNode<'b>]) -> usize {
+        nodes.iter().fold(0, |acc, child| acc + self.create(child))
     }
 
     pub(super) fn create_component_node(

@@ -24,6 +24,7 @@ pub(crate) mod innerlude {
     pub use crate::dirty_scope::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
+    pub use crate::factory::RenderReturn;
     pub use crate::fragment::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
@@ -87,6 +88,7 @@ pub use crate::innerlude::{
     Mutations,
     NodeFactory,
     Properties,
+    RenderReturn,
     Scope,
     ScopeId,
     ScopeState,
@@ -99,7 +101,6 @@ pub use crate::innerlude::{
     TemplateNode,
     UiEvent,
     VComponent,
-    VFragment,
     VNode,
     VText,
     VirtualDom,

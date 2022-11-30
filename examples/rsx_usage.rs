@@ -165,13 +165,13 @@ fn app(cx: Scope) -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: Default::default()};
+                let props = TallerProps {a: "hello", children: cx.render(rsx!(()))};
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: Default::default() },
+                ..TallerProps { a: "ballin!", children: cx.render(rsx!(()) )},
                 a: "not ballin!"
             }
 

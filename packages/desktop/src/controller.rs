@@ -67,7 +67,7 @@ impl DesktopController {
                                 let name = value.event.clone();
                                 let el_id = ElementId(value.mounted_dom_id);
                                 if let Some(evt) = decode_event(value) {
-                                    dom.handle_event(&name,  evt, el_id, true, EventPriority::Medium);
+                                    dom.handle_event(&name,  evt, el_id, true);
                                 }
                             }
                         }

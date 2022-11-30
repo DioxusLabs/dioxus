@@ -10,7 +10,7 @@ use std::future::Future;
 use crate::{
     any_props::{AnyProps, VProps},
     arena::ElementId,
-    innerlude::{DynamicNode, EventHandler, VComponent, VFragment, VText},
+    innerlude::{DynamicNode, EventHandler, VComponent, VText},
     Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
 };
 
@@ -148,12 +148,20 @@ pub trait IntoDynNode<'a, A = ()> {
 
 impl<'a> IntoDynNode<'a> for () {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0))))
+        DynamicNode::placeholder()
     }
 }
 impl<'a> IntoDynNode<'a> for VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(VFragment::NonEmpty(_cx.bump().alloc([self])))
+        DynamicNode::Fragment(_cx.bump().alloc([self]))
+    }
+}
+impl<'a> IntoDynNode<'a> for Element<'a> {
+    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
+        match self {
+            Ok(val) => val.into_vnode(_cx),
+            _ => DynamicNode::placeholder(),
+        }
     }
 }
 
@@ -161,7 +169,7 @@ impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {
             Some(val) => val.into_vnode(_cx),
-            None => DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
+            None => DynamicNode::placeholder(),
         }
     }
 }
@@ -170,14 +178,14 @@ impl<'a> IntoDynNode<'a> for &Element<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self.as_ref() {
             Ok(val) => val.clone().into_vnode(_cx),
-            _ => DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
+            _ => DynamicNode::placeholder(),
         }
     }
 }
 
 impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(VFragment::NonEmpty(cx.bump().alloc([self.call(cx)])))
+        DynamicNode::Fragment(cx.bump().alloc([self.call(cx)]))
     }
 }
 
@@ -201,14 +209,14 @@ impl<'b> IntoDynNode<'b> for Arguments<'_> {
 
 impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        DynamicNode::Fragment(VFragment::NonEmpty(_cx.bump().alloc([VNode {
+        DynamicNode::Fragment(_cx.bump().alloc([VNode {
             parent: self.parent,
             template: self.template,
             root_ids: self.root_ids,
             key: self.key,
             dynamic_nodes: self.dynamic_nodes,
             dynamic_attrs: self.dynamic_attrs,
-        }])))
+        }]))
     }
 }
 
@@ -243,8 +251,8 @@ where
         let children = nodes.into_bump_slice();
 
         match children.len() {
-            0 => DynamicNode::Fragment(VFragment::Empty(Cell::new(ElementId(0)))),
-            _ => DynamicNode::Fragment(VFragment::NonEmpty(children)),
+            0 => DynamicNode::placeholder(),
+            _ => DynamicNode::Fragment(children),
         }
     }
 }

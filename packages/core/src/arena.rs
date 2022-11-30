@@ -1,6 +1,6 @@
 use crate::{
     factory::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
-    ScopeId, VFragment,
+    ScopeId,
 };
 use bumpalo::boxed::Box as BumpBox;
 
@@ -101,7 +101,7 @@ impl VirtualDom {
         for (idx, _) in node.template.roots.iter().enumerate() {
             match node.dynamic_root(idx) {
                 Some(DynamicNode::Component(c)) => self.drop_scope(c.scope.get().unwrap()),
-                Some(DynamicNode::Fragment(VFragment::NonEmpty(nodes))) => {
+                Some(DynamicNode::Fragment(nodes)) => {
                     for node in *nodes {
                         self.drop_scope_inner(node);
                     }

@@ -1,7 +1,7 @@
 use crate::{
     arena::ElementId,
     factory::RenderReturn,
-    innerlude::{DirtyScope, VComponent, VFragment, VText},
+    innerlude::{DirtyScope, VComponent, VText},
     mutations::Mutation,
     nodes::{DynamicNode, VNode},
     scopes::ScopeId,
@@ -10,7 +10,6 @@ use crate::{
 };
 
 use fxhash::{FxHashMap, FxHashSet};
-use std::cell::Cell;
 use DynamicNode::*;
 
 impl<'b> VirtualDom {
@@ -101,7 +100,7 @@ impl<'b> VirtualDom {
         {
             match (left_node, right_node) {
                 (Text(left), Text(right)) => self.diff_vtext(left, right),
-                (Fragment(left), Fragment(right)) => self.diff_vfragment(left, right),
+                (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right),
                 (Component(left), Component(right)) => {
                     self.diff_vcomponent(left, right, right_template, idx)
                 }
@@ -231,40 +230,6 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn diff_vfragment(&mut self, left: &'b VFragment<'b>, right: &'b VFragment<'b>) {
-        use VFragment::*;
-        match (left, right) {
-            (Empty(l), Empty(r)) => r.set(l.get()),
-            (Empty(l), NonEmpty(r)) => self.replace_placeholder_with_nodes(l, r),
-            (NonEmpty(l), Empty(r)) => self.replace_nodes_with_placeholder(l, r),
-            (NonEmpty(old), NonEmpty(new)) => self.diff_non_empty_fragment(new, old),
-        }
-    }
-
-    fn replace_placeholder_with_nodes(&mut self, l: &'b Cell<ElementId>, r: &'b [VNode<'b>]) {
-        let m = self.create_children(r);
-        let id = l.get();
-        self.mutations.push(Mutation::ReplaceWith { id, m });
-        self.reclaim(id);
-    }
-
-    fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
-        // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
-        let placeholder = self.next_element(&l[0], &[]);
-        r.set(placeholder);
-        self.mutations
-            .push(Mutation::CreatePlaceholder { id: placeholder });
-
-        // Remove the old nodes, except for onea
-        let first = self.replace_inner(&l[0]);
-        self.remove_nodes(&l[1..]);
-
-        self.mutations
-            .push(Mutation::ReplaceWith { id: first, m: 1 });
-
-        self.try_reclaim(first);
-    }
-
     /// Remove all the top-level nodes, returning the firstmost root ElementId
     ///
     /// All IDs will be garbage collected
@@ -272,8 +237,8 @@ impl<'b> VirtualDom {
         let id = match node.dynamic_root(0) {
             None => node.root_ids[0].get(),
             Some(Text(t)) => t.id.get(),
-            Some(Fragment(VFragment::Empty(e))) => e.get(),
-            Some(Fragment(VFragment::NonEmpty(nodes))) => {
+            Some(Placeholder(e)) => e.get(),
+            Some(Fragment(nodes)) => {
                 let id = self.replace_inner(&nodes[0]);
                 self.remove_nodes(&nodes[1..]);
                 id
@@ -317,10 +282,8 @@ impl<'b> VirtualDom {
                     };
                 }
                 Text(t) => self.reclaim(t.id.get()),
-                Fragment(VFragment::Empty(t)) => self.reclaim(t.get()),
-                Fragment(VFragment::NonEmpty(nodes)) => {
-                    nodes.iter().for_each(|node| self.clean_up_node(node))
-                }
+                Placeholder(t) => self.reclaim(t.get()),
+                Fragment(nodes) => nodes.iter().for_each(|node| self.clean_up_node(node)),
             };
         }
 
@@ -351,12 +314,12 @@ impl<'b> VirtualDom {
                 self.mutations.push(Mutation::Remove { id });
                 self.reclaim(id);
             }
-            Some(Fragment(VFragment::Empty(e))) => {
+            Some(Placeholder(e)) => {
                 let id = e.get();
                 self.mutations.push(Mutation::Remove { id });
                 self.reclaim(id);
             }
-            Some(Fragment(VFragment::NonEmpty(nodes))) => self.remove_nodes(nodes),
+            Some(Fragment(nodes)) => self.remove_nodes(nodes),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
@@ -750,8 +713,8 @@ impl<'b> VirtualDom {
         for (idx, _) in node.template.roots.iter().enumerate() {
             let id = match node.dynamic_root(idx) {
                 Some(Text(t)) => t.id.get(),
-                Some(Fragment(VFragment::Empty(t))) => t.get(),
-                Some(Fragment(VFragment::NonEmpty(t))) => return self.remove_nodes(t),
+                Some(Placeholder(t)) => t.get(),
+                Some(Fragment(t)) => return self.remove_nodes(t),
                 Some(Component(comp)) => return self.remove_component(comp.scope.get().unwrap()),
                 None => node.root_ids[idx].get(),
             };
@@ -793,12 +756,12 @@ impl<'b> VirtualDom {
                     self.mutations.push(Mutation::PushRoot { id: t.id.get() });
                     onstack += 1;
                 }
-                Some(Fragment(VFragment::Empty(t))) => {
+                Some(Placeholder(t)) => {
                     self.mutations.push(Mutation::PushRoot { id: t.get() });
                     onstack += 1;
                 }
-                Some(Fragment(VFragment::NonEmpty(t))) => {
-                    for node in *t {
+                Some(Fragment(nodes)) => {
+                    for node in *nodes {
                         onstack += self.push_all_real_nodes(node);
                     }
                 }
@@ -842,8 +805,8 @@ impl<'b> VirtualDom {
         match node.dynamic_root(0) {
             None => node.root_ids[0].get(),
             Some(Text(t)) => t.id.get(),
-            Some(Fragment(VFragment::NonEmpty(t))) => self.find_first_element(&t[0]),
-            Some(Fragment(VFragment::Empty(t))) => t.get(),
+            Some(Fragment(t)) => self.find_first_element(&t[0]),
+            Some(Placeholder(t)) => t.get(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
@@ -858,8 +821,8 @@ impl<'b> VirtualDom {
         match node.dynamic_root(node.template.roots.len() - 1) {
             None => node.root_ids.last().unwrap().get(),
             Some(Text(t)) => t.id.get(),
-            Some(Fragment(VFragment::NonEmpty(t))) => self.find_last_element(t.last().unwrap()),
-            Some(Fragment(VFragment::Empty(t))) => t.get(),
+            Some(Fragment(t)) => self.find_last_element(t.last().unwrap()),
+            Some(Placeholder(t)) => t.get(),
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
