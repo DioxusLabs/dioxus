@@ -118,13 +118,6 @@ impl WebsysDom {
     }
 }
 
-pub struct DioxusWebsysEvent(web_sys::Event);
-
-// safety: currently the web is not multithreaded and our VirtualDom exists on the same thread
-#[allow(clippy::non_send_fields_in_send_ty)]
-unsafe impl Send for DioxusWebsysEvent {}
-unsafe impl Sync for DioxusWebsysEvent {}
-
 // todo: some of these events are being casted to the wrong event type.
 // We need tests that simulate clicks/etc and make sure every event type works.
 pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -> Rc<dyn Any> {

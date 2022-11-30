@@ -9,9 +9,8 @@
 //! - idle work
 //! - animations
 //! - jank-free rendering
-//! - noderefs
 //! - controlled components
-//! - re-hydration
+//! - hydration
 //! - and more.
 //!
 //! The actual implementation is farily thin, with the heavy lifting happening inside the Dioxus Core crate.
@@ -54,24 +53,22 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
-use std::{rc::Rc, time::Duration};
+use std::time::Duration;
 
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
 pub use crate::util::use_eval;
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
+use futures_channel::mpsc::unbounded;
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use gloo_timers::future::sleep;
-use web_sys::Event;
 
 mod cache;
 mod cfg;
 mod dom;
-// #[cfg(any(feature = "hot-reload", debug_assertions))]
-// mod hot_reload;
-// #[cfg(feature = "hydrate")]
+mod hot_reload;
 // mod rehydrate;
-// mod ric_raf;
+mod ric_raf;
 mod util;
 
 /// Launch the VirtualDOM given a root component and a configuration.
@@ -175,8 +172,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         console_error_panic_hook::set_once();
     }
 
-    // #[cfg(any(feature = "hot-reload", debug_assertions))]
-    // hot_reload::init(&dom);
+    let mut hotreload_rx = hot_reload::init();
 
     for s in crate::cache::BUILTIN_INTERNED_STRINGS {
         wasm_bindgen::intern(s);
@@ -185,7 +181,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         wasm_bindgen::intern(s);
     }
 
-    // a    let should_hydrate = cfg.hydrate;
+    let should_hydrate = cfg.hydrate;
 
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
@@ -193,30 +189,39 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     log::info!("rebuilding app");
 
-    let edits = dom.rebuild();
-    websys_dom.apply_edits(edits.template_mutations);
-    websys_dom.apply_edits(edits.edits);
+    if should_hydrate {
+    } else {
+        let edits = dom.rebuild();
+        websys_dom.apply_edits(edits.template_mutations);
+        websys_dom.apply_edits(edits.edits);
+    }
+
+    let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::trace!("waiting for work");
+
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-
         let mut res = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
-
             futures_util::select! {
                 _ = work => None,
+                new_template = hotreload_rx.next() => {
+                    todo!("Implement hot reload");
+                    None
+                }
                 evt = rx.next() => evt
             }
         };
 
+        // Dequeue all of the events from the channel in send order
+        // todo: we should re-order these if possible
         while let Some(evt) = res {
             let name = evt.type_();
             let element = walk_event_for_id(&evt);
             let bubbles = dioxus_html::event_bubbles(name.as_str());
-
             if let Some((element, target)) = element {
                 let data = virtual_event_from_websys_event(evt, target);
                 dom.handle_event(name.as_str(), data, element, bubbles);
@@ -224,56 +229,37 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             res = rx.try_next().transpose().unwrap().ok();
         }
 
-        let deadline = sleep(Duration::from_millis(50));
-
-        let edits = dom.render_with_deadline(deadline).await;
-
-        log::trace!("working..");
+        // Jank free rendering
+        //
+        // 1. wait for the browser to give us "idle" time
+        // 2. During idle time, diff the dom
+        // 3. Stop diffing if the deadline is exceded
+        // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in
-        // let mut deadline = work_loop.wait_for_idle_time().await;
+        let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        // let mutations = dom.work_with_deadline(|| (&mut deadline).now_or_never().is_some());
+        let edits = dom.render_with_deadline(deadline).await;
 
         // wait for the animation frame to fire so we can apply our changes
-        // work_loop.wait_for_raf().await;
+        work_loop.wait_for_raf().await;
 
-        // for edit in mutations {
-        //     // actually apply our changes during the animation frame
+        log::debug!("edits {:#?}", edits);
+
         websys_dom.apply_edits(edits.template_mutations);
         websys_dom.apply_edits(edits.edits);
-        // }
     }
 }
 
-fn walk_event_for_id(event: &Event) -> Option<(ElementId, web_sys::Element)> {
-    use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-    use web_sys::{Document, Element, Event, HtmlElement};
+fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
+    use wasm_bindgen::JsCast;
 
     let mut target = event
         .target()
         .expect("missing target")
-        .dyn_into::<Element>()
+        .dyn_into::<web_sys::Element>()
         .expect("not a valid element");
-
-    // break Ok(UserEvent {
-    //     name: event_name_from_typ(&typ),
-    //     data: virtual_event_from_websys_event(event.clone(), target.clone()),
-    //     element: Some(ElementId(id)),
-    //     scope_id: None,
-    //     priority: dioxus_core::EventPriority::Medium,
-    //     bubbles: event.bubbles(),
-    // });
-
-    // break Ok(UserEvent {
-    //     name: event_name_from_typ(&typ),
-    //     data: virtual_event_from_websys_event(event.clone(), target.clone()),
-    //     element: None,
-    //     scope_id: None,
-    //     priority: dioxus_core::EventPriority::Low,
-    //     bubbles: event.bubbles(),
-    // });
 
     loop {
         match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
@@ -315,5 +301,3 @@ fn walk_event_for_id(event: &Event) -> Option<(ElementId, web_sys::Element)> {
 //     websys_dom.apply_edits(edits.template_mutations);
 //     websys_dom.apply_edits(edits.edits);
 // }
-
-// let mut work_loop = ric_raf::RafLoop::new();
