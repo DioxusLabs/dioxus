@@ -38,3 +38,5 @@ dioxus create hello --template gh:dioxuslabs/dioxus-template
 ## Dioxus Config File
 
 Dioxus CLI will use `Dioxus.toml` file to Identify some project info and switch some cli feature.
+
+You can get more configure information from [Dioxus CLI Document](https://dioxuslabs.com/cli/configure.html).
