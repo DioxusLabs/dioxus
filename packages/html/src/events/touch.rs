@@ -1,6 +1,6 @@
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
-pub type TouchEvent = UiEvent<TouchData>;
+pub type TouchEvent = Event<TouchData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct TouchData {

@@ -39,7 +39,7 @@ pub fn use_state<T: 'static>(
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
         let setter = Rc::new({
-            dioxus_core::to_owned![update_callback, slot];
+            to_owned![update_callback, slot];
             move |new| {
                 {
                     let mut slot = slot.borrow_mut();

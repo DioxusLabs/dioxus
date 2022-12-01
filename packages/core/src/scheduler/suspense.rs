@@ -15,25 +15,11 @@ pub type SuspenseContext = Rc<SuspenseBoundary>;
 
 /// Essentially a fiber in React
 pub struct SuspenseBoundary {
-    pub id: ScopeId,
-    pub waiting_on: RefCell<HashSet<SuspenseId>>,
-    pub mutations: RefCell<Mutations<'static>>,
-    pub placeholder: Cell<Option<ElementId>>,
-
-    pub created_on_stack: Cell<usize>,
-
-    // whenever the suspense resolves, we call this onresolve function
-    // this lets us do things like putting up a loading spinner
-    //
-    // todo: we need a way of controlling whether or not a component hides itself but still processes changes
-    // If we run into suspense, we perform a diff, so its important that the old elements are still around.
-    //
-    // When the timer expires, I imagine a container could hide the elements and show the spinner. This, however,
-    // can not be
-    pub onresolve: Option<Box<dyn FnOnce()>>,
-
-    /// Called when
-    pub onstart: Option<Box<dyn FnOnce()>>,
+    pub(crate) id: ScopeId,
+    pub(crate) waiting_on: RefCell<HashSet<SuspenseId>>,
+    pub(crate) mutations: RefCell<Mutations<'static>>,
+    pub(crate) placeholder: Cell<Option<ElementId>>,
+    pub(crate) created_on_stack: Cell<usize>,
 }
 
 impl SuspenseBoundary {
@@ -44,8 +30,6 @@ impl SuspenseBoundary {
             mutations: RefCell::new(Mutations::default()),
             placeholder: Cell::new(None),
             created_on_stack: Cell::new(0),
-            onresolve: None,
-            onstart: None,
         }
     }
 }

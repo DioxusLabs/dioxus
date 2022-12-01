@@ -11,7 +11,7 @@ macro_rules! impl_event {
     ) => {
         $(
             $( #[$attr] )*
-            pub fn $name<'a>(_cx: &'a ::dioxus_core::ScopeState, _f: impl FnMut(::dioxus_core::UiEvent<$data>) + 'a) -> ::dioxus_core::Attribute<'a> {
+            pub fn $name<'a>(_cx: &'a ::dioxus_core::ScopeState, _f: impl FnMut(::dioxus_core::Event<$data>) + 'a) -> ::dioxus_core::Attribute<'a> {
                 ::dioxus_core::Attribute {
                     name: stringify!($name),
                     value: ::dioxus_core::AttributeValue::new_listener(_cx, _f),

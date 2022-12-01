@@ -28,7 +28,7 @@ fn manual_diffing() {
     *value.lock().unwrap() = "goodbye";
 
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild().santize().dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "goodbye", id: ElementId(4) },
@@ -62,7 +62,7 @@ fn events_generate() {
     let edits = dom.render_immediate();
 
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             CreatePlaceholder { id: ElementId(2) },
             ReplaceWith { id: ElementId(1), m: 1 }

@@ -11,7 +11,7 @@ use crate::{
     nodes::{Template, TemplateId},
     scheduler::{SuspenseBoundary, SuspenseId},
     scopes::{ScopeId, ScopeState},
-    AttributeValue, Element, Scope, SuspenseContext, UiEvent,
+    AttributeValue, Element, Event, Scope, SuspenseContext,
 };
 use futures_util::{pin_mut, StreamExt};
 use slab::Slab;
@@ -350,8 +350,8 @@ impl VirtualDom {
         let mut listeners = vec![];
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
-        let uievent = UiEvent {
-            bubbles: Rc::new(Cell::new(bubbles)),
+        let uievent = Event {
+            propogates: Rc::new(Cell::new(bubbles)),
             data,
         };
 
@@ -395,7 +395,7 @@ impl VirtualDom {
                         cb(uievent.clone());
                     }
 
-                    if !uievent.bubbles.get() {
+                    if !uievent.propogates.get() {
                         return;
                     }
                 }
@@ -534,9 +534,12 @@ impl VirtualDom {
                 let context = scope.has_context::<SuspenseContext>().unwrap();
 
                 self.mutations
-                    .extend(context.mutations.borrow_mut().template_mutations.drain(..));
+                    .template_edits
+                    .extend(context.mutations.borrow_mut().template_edits.drain(..));
+
                 self.mutations
-                    .extend(context.mutations.borrow_mut().drain(..));
+                    .dom_edits
+                    .extend(context.mutations.borrow_mut().dom_edits.drain(..));
 
                 // TODO: count how many nodes are on the stack?
                 self.mutations.push(Mutation::ReplaceWith {
@@ -556,7 +559,7 @@ impl VirtualDom {
                 }
 
                 // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = self.mutations.len();
+                let mutations_to_this_point = self.mutations.dom_edits.len();
 
                 // Run the scope and get the mutations
                 self.run_scope(dirty.id);
@@ -575,7 +578,8 @@ impl VirtualDom {
                     boundary_mut
                         .mutations
                         .borrow_mut()
-                        .extend(self.mutations.split_off(mutations_to_this_point));
+                        .dom_edits
+                        .extend(self.mutations.dom_edits.split_off(mutations_to_this_point));
 
                     // Attach suspended leaves
                     boundary

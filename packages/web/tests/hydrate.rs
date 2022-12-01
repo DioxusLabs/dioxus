@@ -23,7 +23,7 @@ fn makes_tree() {
     let mut dom = VirtualDom::new(app);
     let muts = dom.rebuild();
 
-    dbg!(muts.edits);
+    dbg!(muts.dom_edits);
 }
 
 #[wasm_bindgen_test]

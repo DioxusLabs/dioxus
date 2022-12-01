@@ -61,7 +61,7 @@ fn component_swap() {
     let mut dom = VirtualDom::new(app);
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
@@ -75,7 +75,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate().santize().dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }
@@ -84,7 +84,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate().santize().dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             ReplaceWith { id: ElementId(6), m: 1 }
@@ -93,7 +93,7 @@ fn component_swap() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate().santize().dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             ReplaceWith { id: ElementId(5), m: 1 }

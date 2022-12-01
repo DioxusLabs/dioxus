@@ -26,7 +26,7 @@ fn nested_passthru_creates() {
     let edits = dom.rebuild().santize();
 
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             AppendChildren { m: 1 },
@@ -64,7 +64,7 @@ fn nested_passthru_creates_add() {
     let mut dom = VirtualDom::new(app);
 
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild().santize().dom_edits,
         [
             // load 1
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
@@ -92,11 +92,11 @@ fn dynamic_node_as_root() {
     let edits = dom.rebuild().santize();
 
     // Since the roots were all dynamic, they should not cause any template muations
-    assert_eq!(edits.template_mutations, []);
+    assert_eq!(edits.template_edits, []);
 
     // The root node is text, so we just create it on the spot
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             CreateTextNode { value: "123", id: ElementId(1) },
             CreateTextNode { value: "456", id: ElementId(2) },

@@ -12,7 +12,7 @@ fn multiroot() {
     });
 
     assert_eq!(
-        dom.rebuild().santize().template_mutations,
+        dom.rebuild().santize().template_edits,
         [
             CreateElement { name: "div" },
             CreateStaticText { value: "Hello a" },

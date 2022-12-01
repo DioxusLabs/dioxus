@@ -192,8 +192,8 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     if should_hydrate {
     } else {
         let edits = dom.rebuild();
-        websys_dom.apply_edits(edits.template_mutations);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.apply_edits(edits.template_edits);
+        websys_dom.apply_edits(edits.dom_edits);
     }
 
     let mut work_loop = ric_raf::RafLoop::new();
@@ -247,8 +247,8 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
         log::debug!("edits {:#?}", edits);
 
-        websys_dom.apply_edits(edits.template_mutations);
-        websys_dom.apply_edits(edits.edits);
+        websys_dom.apply_edits(edits.template_edits);
+        websys_dom.apply_edits(edits.dom_edits);
     }
 }
 

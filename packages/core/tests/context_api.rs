@@ -20,7 +20,7 @@ fn state_shares() {
 
     let mut dom = VirtualDom::new(app);
     assert_eq!(
-        dom.rebuild().santize().edits,
+        dom.rebuild().santize().dom_edits,
         [
             CreateTextNode { value: "Value is 0", id: ElementId(1,) },
             AppendChildren { m: 1 },
@@ -37,7 +37,7 @@ fn state_shares() {
 
     dom.mark_dirty(ScopeId(2));
     assert_eq!(
-        dom.render_immediate().santize().edits,
+        dom.render_immediate().santize().dom_edits,
         [SetText { value: "Value is 2", id: ElementId(1,) },]
     );
 
@@ -45,7 +45,7 @@ fn state_shares() {
     dom.mark_dirty(ScopeId(2));
     let edits = dom.render_immediate();
     assert_eq!(
-        edits.santize().edits,
+        edits.santize().dom_edits,
         [SetText { value: "Value is 3", id: ElementId(1,) },]
     );
 }

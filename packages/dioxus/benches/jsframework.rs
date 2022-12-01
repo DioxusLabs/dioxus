@@ -46,7 +46,7 @@ fn create_rows(c: &mut Criterion) {
 
         b.iter(|| {
             let g = dom.rebuild();
-            assert!(g.edits.len() > 1);
+            assert!(g.dom_edits.len() > 1);
         })
     });
 }

@@ -280,7 +280,7 @@ impl Buffer {
         }
 
         match children {
-            [BodyNode::DynamicText(ref text)] => Some(text.source.as_ref().unwrap().value().len()),
+            [BodyNode::Text(ref text)] => Some(text.source.as_ref().unwrap().value().len()),
             [BodyNode::Component(ref comp)] => {
                 let attr_len = self.field_len(&comp.fields, &comp.manual_props);
 

@@ -23,7 +23,7 @@ fn test_original_diff() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // create template
             CreateElement { name: "div" },
@@ -36,7 +36,7 @@ fn test_original_diff() {
     );
 
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             // add to root
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
@@ -67,7 +67,7 @@ fn create() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // create template
             CreateElement { name: "div" },
@@ -99,7 +99,7 @@ fn create_list() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // create template
             CreateElement { name: "div" },
@@ -123,7 +123,7 @@ fn create_simple() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // create template
             CreateElement { name: "div" },
@@ -160,7 +160,7 @@ fn create_components() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // The "child" template
             CreateElement { name: "h1" },
@@ -196,7 +196,7 @@ fn anchors() {
     // note that the template under "false" doesn't show up since it's not loaded
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.template_mutations,
+        edits.template_edits,
         [
             // create each template
             CreateElement { name: "div" },
@@ -207,7 +207,7 @@ fn anchors() {
     );
 
     assert_eq!(
-        edits.edits,
+        edits.dom_edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             CreatePlaceholder { id: ElementId(2) },

@@ -1,18 +1,21 @@
 use crate::{
     any_props::AnyProps,
+    any_props::VProps,
     arena::ElementId,
     bump_frame::BumpFrame,
-    factory::RenderReturn,
+    factory::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
+    innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    Element, TaskId,
+    Attribute, Element, Properties, TaskId,
 };
-use bumpalo::Bump;
-use std::future::Future;
+use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
+    fmt::Arguments,
+    future::Future,
     rc::Rc,
     sync::Arc,
 };
@@ -59,9 +62,9 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
 
-/// A component's state.
+/// A component's state separate from its props.
 ///
-/// This struct stores all the important information about a component's state without the props.
+/// This struct exists to provide a common interface for all scopes without relying on generics.
 pub struct ScopeState {
     pub(crate) render_cnt: Cell<usize>,
 
@@ -86,7 +89,7 @@ pub struct ScopeState {
     pub(crate) placeholder: Cell<Option<ElementId>>,
 }
 
-impl ScopeState {
+impl<'src> ScopeState {
     pub(crate) fn current_frame(&self) -> &BumpFrame {
         match self.render_cnt.get() % 2 {
             0 => &self.node_arena_1,
@@ -359,8 +362,99 @@ impl ScopeState {
     ///     cx.render(lazy_tree)
     /// }
     ///```
-    pub fn render<'src>(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
+    pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         Ok(rsx.call(self))
+    }
+
+    /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator
+    pub fn text_node(&'src self, args: Arguments) -> DynamicNode<'src> {
+        DynamicNode::Text(VText {
+            value: self.raw_text(args),
+            id: Default::default(),
+        })
+    }
+
+    /// Allocate some text inside the [`ScopeState`] from [`Arguments`]
+    ///
+    /// Uses the currently active [`Bump`] allocator
+    pub fn raw_text(&'src self, args: Arguments) -> &'src str {
+        args.as_str().unwrap_or_else(|| {
+            use bumpalo::core_alloc::fmt::Write;
+            let mut str_buf = bumpalo::collections::String::new_in(self.bump());
+            str_buf.write_fmt(args).unwrap();
+            str_buf.into_bump_str()
+        })
+    }
+
+    /// Convert any item that implements [`IntoDynNode`] into a [`DynamicNode`] using the internal [`Bump`] allocator
+    pub fn make_node<'c, I>(&'src self, into: impl IntoDynNode<'src, I> + 'c) -> DynamicNode {
+        into.into_vnode(self)
+    }
+
+    /// Create a new [`Attribute`] from a name, value, namespace, and volatile bool
+    ///
+    /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
+    /// some renderers stay in sync with the VirtualDom's understanding of the world
+    pub fn attr(
+        &'src self,
+        name: &'static str,
+        value: impl IntoAttributeValue<'src>,
+        namespace: Option<&'static str>,
+        volatile: bool,
+    ) -> Attribute<'src> {
+        Attribute {
+            name,
+            namespace,
+            volatile,
+            mounted_element: Default::default(),
+            value: value.into_value(self.bump()),
+        }
+    }
+
+    /// Create a new [`DynamicNode::Component`] variant
+    ///
+    ///
+    /// The given component can be any of four signatures. Remember that an [`Element`] is really a [`Result<VNode>`].
+    ///
+    /// ```rust, ignore
+    /// // Without explicit props
+    /// fn(Scope) -> Element;
+    /// async fn(Scope<'_>) -> Element;
+    ///
+    /// // With explicit props
+    /// fn(Scope<Props>) -> Element;
+    /// async fn(Scope<Props<'_>>) -> Element;
+    /// ```
+    pub fn component<P, A, F: ComponentReturn<'src, A>>(
+        &'src self,
+        component: fn(Scope<'src, P>) -> F,
+        props: P,
+        fn_name: &'static str,
+    ) -> DynamicNode<'src>
+    where
+        P: Properties + 'src,
+    {
+        let vcomp = VProps::new(component, P::memoize, props);
+
+        // cast off the lifetime of the render return
+        let as_dyn: Box<dyn AnyProps<'src> + '_> = Box::new(vcomp);
+        let extended: Box<dyn AnyProps<'src> + 'src> = unsafe { std::mem::transmute(as_dyn) };
+
+        DynamicNode::Component(VComponent {
+            name: fn_name,
+            render_fn: component as *const (),
+            static_props: P::IS_STATIC,
+            props: Cell::new(Some(extended)),
+            scope: Cell::new(None),
+        })
+    }
+
+    /// Create a new [`EventHandler`] from an [`FnMut`]
+    pub fn event_handler<T>(&'src self, f: impl FnMut(T) + 'src) -> EventHandler<'src, T> {
+        let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
+        let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
+        let callback = RefCell::new(Some(caller));
+        EventHandler { callback }
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

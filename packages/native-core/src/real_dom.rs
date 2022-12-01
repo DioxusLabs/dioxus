@@ -67,7 +67,7 @@ impl<S: State> RealDom<S> {
         let mut nodes_updated = Vec::new();
         nodes_updated.push((RealNodeId::ElementId(ElementId(0)), NodeMask::ALL));
         for mutations in mutations_vec {
-            for e in mutations.edits {
+            for e in mutations.dom_edits {
                 use dioxus_core::DomEdit::*;
                 match e {
                     AppendChildren { root, children } => {

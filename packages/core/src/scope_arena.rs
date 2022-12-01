@@ -49,7 +49,7 @@ impl VirtualDom {
             .and_then(|id| self.scopes.get_mut(id.0).map(|f| f.as_mut() as *mut _))
     }
 
-    pub fn ensure_drop_safety(&self, scope: ScopeId) {
+    fn ensure_drop_safety(&self, scope: ScopeId) {
         let scope = &self.scopes[scope.0];
         let node = unsafe { scope.previous_frame().try_load_node() };
 

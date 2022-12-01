@@ -1,6 +1,6 @@
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
-pub type ToggleEvent = UiEvent<ToggleData>;
+pub type ToggleEvent = Event<ToggleData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct ToggleData {}

@@ -1,4 +1,5 @@
 #![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
 
 mod any_props;
 mod arena;
@@ -67,43 +68,13 @@ pub(crate) mod innerlude {
     /// )
     /// ```
     pub type Component<P = ()> = fn(Scope<P>) -> Element;
-
-    /// A list of attributes
-    pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
 }
 
 pub use crate::innerlude::{
-    // AnyAttributeValue, AnyEvent,
-    fc_to_builder,
-    Attribute,
-    AttributeValue,
-    Attributes,
-    Component,
-    DynamicNode,
-    Element,
-    ElementId,
-    Fragment,
-    LazyNodes,
-    Mutation,
-    Mutations,
-    NodeFactory,
-    Properties,
-    RenderReturn,
-    Scope,
-    ScopeId,
-    ScopeState,
-    Scoped,
-    SuspenseBoundary,
-    SuspenseContext,
-    TaskId,
-    Template,
-    TemplateAttribute,
-    TemplateNode,
-    UiEvent,
-    VComponent,
-    VNode,
-    VText,
-    VirtualDom,
+    fc_to_builder, Attribute, AttributeValue, Component, DynamicNode, Element, ElementId, Event,
+    Fragment, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState,
+    Scoped, SuspenseBoundary, SuspenseContext, TaskId, Template, TemplateAttribute, TemplateNode,
+    VComponent, VNode, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -111,9 +82,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Element, EventHandler, Fragment, LazyNodes, NodeFactory, Properties, Scope,
-        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, UiEvent,
-        VNode, VirtualDom,
+        fc_to_builder, Element, Event, EventHandler, Fragment, LazyNodes, Properties, Scope,
+        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, VNode,
+        VirtualDom,
     };
 }
 
@@ -121,28 +92,4 @@ pub mod exports {
     //! Important dependencies that are used by the rest of the library
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
-    pub use futures_channel;
-}
-
-#[macro_export]
-/// A helper macro for using hooks in async environements.
-///
-/// # Usage
-///
-///
-/// ```ignore
-/// let (data) = use_ref(&cx, || {});
-///
-/// let handle_thing = move |_| {
-///     to_owned![data]
-///     cx.spawn(async move {
-///         // do stuff
-///     });
-/// }
-/// ```
-macro_rules! to_owned {
-    ($($es:ident),+) => {$(
-        #[allow(unused_mut)]
-        let mut $es = $es.to_owned();
-    )*}
 }

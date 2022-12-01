@@ -19,36 +19,14 @@ use web_sys::{Document, Element, Event, HtmlElement};
 use crate::Config;
 
 pub struct WebsysDom {
-    pub interpreter: Interpreter,
-
-    pub(crate) root: Element,
-
-    pub handler: Closure<dyn FnMut(&Event)>,
+    interpreter: Interpreter,
+    handler: Closure<dyn FnMut(&Event)>,
+    root: Element,
 }
 
 impl WebsysDom {
     pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<Event>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
-        let callback: Box<dyn FnMut(&Event)> = Box::new(move |event: &web_sys::Event| {
-            _ = event_channel.unbounded_send(event.clone());
-
-            // if let Ok(synthetic_event) = decoded {
-            //     // Try to prevent default if the attribute is set
-            //     if let Some(node) = target.dyn_ref::<HtmlElement>() {
-            //         if let Some(name) = node.get_attribute("dioxus-prevent-default") {
-            //             if name == synthetic_event.name
-            //                 || name.trim_start_matches("on") == synthetic_event.name
-            //             {
-            //                 log::trace!("Preventing default");
-            //                 event.prevent_default();
-            //             }
-            //         }
-            //     }
-
-            //     sender_callback.as_ref()(SchedulerMsg::Event(synthetic_event))
-            // }
-        });
-
         // a match here in order to avoid some error during runtime browser test
         let document = load_document();
         let root = match document.get_element_by_id(&cfg.rootname) {
@@ -58,8 +36,10 @@ impl WebsysDom {
 
         Self {
             interpreter: Interpreter::new(root.clone()),
-            handler: Closure::wrap(callback),
             root,
+            handler: Closure::wrap(Box::new(move |event: &web_sys::Event| {
+                let _ = event_channel.unbounded_send(event.clone());
+            })),
         }
     }
 
@@ -99,11 +79,10 @@ impl WebsysDom {
                 }
                 SetText { value, id } => i.SetText(id.0 as u32, value.into()),
                 NewEventListener { name, scope, id } => {
-                    let handler: &Function = self.handler.as_ref().unchecked_ref();
                     self.interpreter.NewEventListener(
                         name,
                         id.0 as u32,
-                        handler,
+                        self.handler.as_ref().unchecked_ref(),
                         event_bubbles(&name[2..]),
                     );
                 }

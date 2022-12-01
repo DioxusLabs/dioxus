@@ -1,6 +1,6 @@
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
-pub type SelectionEvent = UiEvent<SelectionData>;
+pub type SelectionEvent = Event<SelectionData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct SelectionData {}

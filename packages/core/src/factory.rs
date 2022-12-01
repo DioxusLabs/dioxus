@@ -1,119 +1,21 @@
-use std::{
-    cell::{Cell, RefCell},
-    fmt::Arguments,
-};
-
+use crate::{innerlude::DynamicNode, AttributeValue, Element, LazyNodes, ScopeState, VNode};
 use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
+use std::fmt::Arguments;
 use std::future::Future;
 
-use crate::{
-    any_props::{AnyProps, VProps},
-    arena::ElementId,
-    innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    Attribute, AttributeValue, Element, LazyNodes, Properties, Scope, ScopeState, VNode,
-};
-
-impl ScopeState {
-    /// Create some text that's allocated along with the other vnodes
-    pub fn text<'a>(&'a self, args: Arguments) -> DynamicNode<'a> {
-        let (text, _) = self.raw_text(args);
-        DynamicNode::Text(VText {
-            id: Cell::new(ElementId(0)),
-            value: text,
-        })
-    }
-
-    pub fn raw_text_inline<'a>(&'a self, args: Arguments) -> &'a str {
-        self.raw_text(args).0
-    }
-
-    pub fn raw_text<'a>(&'a self, args: Arguments) -> (&'a str, bool) {
-        match args.as_str() {
-            Some(static_str) => (static_str, true),
-            None => {
-                use bumpalo::core_alloc::fmt::Write;
-                let mut str_buf = bumpalo::collections::String::new_in(self.bump());
-                str_buf.write_fmt(args).unwrap();
-                (str_buf.into_bump_str(), false)
-            }
-        }
-    }
-
-    pub fn fragment_from_iter<'a, 'c, I>(
-        &'a self,
-        node_iter: impl IntoDynNode<'a, I> + 'c,
-    ) -> DynamicNode {
-        node_iter.into_vnode(self)
-    }
-
-    /// Create a new [`Attribute`]
-    pub fn attr<'a>(
-        &'a self,
-        name: &'static str,
-        value: impl IntoAttributeValue<'a>,
-        namespace: Option<&'static str>,
-        volatile: bool,
-    ) -> Attribute<'a> {
-        Attribute {
-            name,
-            namespace,
-            volatile,
-            value: value.into_value(self.bump()),
-            mounted_element: Cell::new(ElementId(0)),
-        }
-    }
-
-    /// Create a new [`VNode::Component`]
-    pub fn component<'a, P, A, F: ComponentReturn<'a, A>>(
-        &'a self,
-        component: fn(Scope<'a, P>) -> F,
-        props: P,
-        fn_name: &'static str,
-    ) -> DynamicNode<'a>
-    where
-        P: Properties + 'a,
-    {
-        let as_component = component;
-        let vcomp = VProps::new(as_component, P::memoize, props);
-        let as_dyn: Box<dyn AnyProps<'a>> = Box::new(vcomp);
-        let extended: Box<dyn AnyProps> = unsafe { std::mem::transmute(as_dyn) };
-
-        // let as_dyn: &dyn AnyProps = self.bump().alloc(vcomp);
-        // todo: clean up borrowed props
-        // if !P::IS_STATIC {
-        // let vcomp = ex;
-        // let vcomp = unsafe { std::mem::transmute(vcomp) };
-        // self.items.borrow_mut().borrowed_props.push(vcomp);
-        // }
-
-        DynamicNode::Component(VComponent {
-            name: fn_name,
-            render_fn: component as *const (),
-            static_props: P::IS_STATIC,
-            props: Cell::new(Some(extended)),
-            scope: Cell::new(None),
-        })
-    }
-
-    /// Create a new [`EventHandler`] from an [`FnMut`]
-    pub fn event_handler<'a, T>(&'a self, f: impl FnMut(T) + 'a) -> EventHandler<'a, T> {
-        let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
-        let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
-        let callback = RefCell::new(Some(caller));
-        EventHandler { callback }
-    }
-}
-
+#[doc(hidden)]
 pub trait ComponentReturn<'a, A = ()> {
     fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a>;
 }
+
 impl<'a> ComponentReturn<'a> for Element<'a> {
     fn into_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
         RenderReturn::Sync(self)
     }
 }
 
+#[doc(hidden)]
 pub struct AsyncMarker;
 impl<'a, F> ComponentReturn<'a, AsyncMarker> for F
 where
@@ -142,6 +44,7 @@ impl<'a> RenderReturn<'a> {
     }
 }
 
+#[doc(hidden)]
 pub trait IntoDynNode<'a, A = ()> {
     fn into_vnode(self, cx: &'a ScopeState) -> DynamicNode<'a>;
 }
@@ -191,19 +94,19 @@ impl<'a, 'b> IntoDynNode<'a> for LazyNodes<'a, 'b> {
 
 impl<'a> IntoDynNode<'_> for &'a str {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
-        cx.text(format_args!("{}", self))
+        cx.text_node(format_args!("{}", self))
     }
 }
 
 impl IntoDynNode<'_> for String {
     fn into_vnode(self, cx: &ScopeState) -> DynamicNode {
-        cx.text(format_args!("{}", self))
+        cx.text_node(format_args!("{}", self))
     }
 }
 
 impl<'b> IntoDynNode<'b> for Arguments<'_> {
     fn into_vnode(self, cx: &'b ScopeState) -> DynamicNode<'b> {
-        cx.text(self)
+        cx.text_node(self)
     }
 }
 
@@ -235,6 +138,7 @@ impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
 }
 
 // Note that we're using the E as a generic but this is never crafted anyways.
+#[doc(hidden)]
 pub struct FromNodeIterator;
 impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
 where

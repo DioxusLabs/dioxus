@@ -77,7 +77,7 @@ impl ToTokens for CallBody {
             })
         } else {
             out_tokens.append_all(quote! {
-                ::dioxus::core::LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
                     #body
                 })
             })
@@ -106,7 +106,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let key_tokens = match key {
-            Some(tok) => quote! { Some( __cx.raw_text_inline(#tok) ) },
+            Some(tok) => quote! { Some( __cx.raw_text(#tok) ) },
             None => quote! { None },
         };
 

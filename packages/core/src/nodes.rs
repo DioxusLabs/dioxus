@@ -1,4 +1,4 @@
-use crate::{any_props::AnyProps, arena::ElementId, Element, ScopeId, ScopeState, UiEvent};
+use crate::{any_props::AnyProps, arena::ElementId, Element, Event, ScopeId, ScopeState};
 use bumpalo::boxed::Box as BumpBox;
 use std::{
     any::{Any, TypeId},
@@ -70,7 +70,6 @@ pub struct Template<'a> {
     pub attr_paths: &'a [&'a [u8]],
 }
 
-/// A weird-ish variant of VNodes with way more limited types
 #[derive(Debug, Clone, Copy)]
 pub enum TemplateNode<'a> {
     Element {
@@ -98,7 +97,7 @@ impl<'a> DynamicNode<'a> {
         matches!(self, DynamicNode::Component(_))
     }
     pub fn placeholder() -> Self {
-        Self::Placeholder(Cell::new(ElementId(0)))
+        Self::Placeholder(Default::default())
     }
 }
 
@@ -156,18 +155,18 @@ pub enum AttributeValue<'a> {
     None,
 }
 
-type ListenerCb<'a> = BumpBox<'a, dyn FnMut(UiEvent<dyn Any>) + 'a>;
+type ListenerCb<'a> = BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>;
 
 impl<'a> AttributeValue<'a> {
     pub fn new_listener<T: 'static>(
         cx: &'a ScopeState,
-        mut callback: impl FnMut(UiEvent<T>) + 'a,
+        mut callback: impl FnMut(Event<T>) + 'a,
     ) -> AttributeValue<'a> {
         let boxed: BumpBox<'a, dyn FnMut(_) + 'a> = unsafe {
-            BumpBox::from_raw(cx.bump().alloc(move |event: UiEvent<dyn Any>| {
+            BumpBox::from_raw(cx.bump().alloc(move |event: Event<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
-                    callback(UiEvent {
-                        bubbles: event.bubbles,
+                    callback(Event {
+                        propogates: event.propogates,
                         data,
                     })
                 }
