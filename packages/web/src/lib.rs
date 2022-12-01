@@ -197,6 +197,8 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     websys_dom.load_templates(&edits.templates);
     websys_dom.apply_edits(edits.edits);
+
+    // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
 
     let mut work_loop = ric_raf::RafLoop::new();
@@ -243,7 +245,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        // let deadline = gloo_timers::future::sleep(Duration::from_millis(10000));
         let edits = dom.render_with_deadline(deadline).await;
 
         // wait for the animation frame to fire so we can apply our changes

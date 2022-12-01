@@ -64,8 +64,9 @@ impl WebsysDom {
     }
 
     fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
+        use TemplateNode::*;
         match v {
-            TemplateNode::Element {
+            Element {
                 tag,
                 namespace,
                 attrs,
@@ -86,6 +87,12 @@ impl WebsysDom {
                     } = attr
                     {
                         match namespace {
+                            Some(ns) if *ns == "style" => el
+                                .dyn_ref::<HtmlElement>()
+                                .unwrap()
+                                .style()
+                                .set_property(name, value)
+                                .unwrap(),
                             Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
                             None => el.set_attribute(name, value).unwrap(),
                         }
@@ -99,9 +106,9 @@ impl WebsysDom {
                 el.dyn_into().unwrap()
             }
 
-            TemplateNode::Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
-            TemplateNode::DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
-            TemplateNode::Dynamic(_) => {
+            Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
+            DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
+            Dynamic(_) => {
                 let el = self.document.create_element("pre").unwrap();
                 el.toggle_attribute("hidden");
                 el.dyn_into().unwrap()
@@ -112,7 +119,6 @@ impl WebsysDom {
     pub fn apply_edits(&mut self, mut edits: Vec<Mutation>) {
         use Mutation::*;
         let i = &self.interpreter;
-
         for edit in edits.drain(..) {
             match edit {
                 AssignId { path, id } => i.AssignId(path, id.0 as u32),
@@ -145,9 +151,6 @@ impl WebsysDom {
                 RemoveEventListener { name, id } => i.RemoveEventListener(name, id.0 as u32),
                 Remove { id } => i.Remove(id.0 as u32),
                 PushRoot { id } => i.PushRoot(id.0 as u32),
-                // Mutation::RemoveEventListener { root, name: event } => self
-                //     .interpreter
-                //     .RemoveEventListener(root, event, event_bubbles(event)),
             }
         }
     }

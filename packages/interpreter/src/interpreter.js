@@ -1,9 +1,7 @@
 export function main() {
   let root = window.document.getElementById("main");
-  console.log("loading!");
   if (root != null) {
     window.interpreter = new Interpreter(root);
-    console.log("properly loaded!");
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
@@ -18,7 +16,6 @@ class ListenerMap {
   }
 
   create(event_name, element, handler, bubbles) {
-    console.log("creating listener for", event_name, element, handler, bubbles);
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = {};
@@ -81,7 +78,6 @@ export class Interpreter {
   }
   SaveTemplate(nodes, name) {
     this.templates[name] = nodes;
-    console.log(this.templates);
   }
   MountToRoot() {
     this.AppendChildren(this.stack.length - 1);
@@ -131,8 +127,7 @@ export class Interpreter {
     }
   }
   CreateRawText(text) {
-    const node = document.createTextNode(text);
-    this.stack.push(node);
+    this.stack.push(document.createTextNode(text));
   }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
@@ -218,8 +213,6 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    console.log("handling edits", edits, this.stack.length);
-
     for (let edit of edits) {
       this.handleEdit(edit);
     }
@@ -253,7 +246,6 @@ export class Interpreter {
     this.stack.push(node);
   }
   handleEdit(edit) {
-    console.log(edit);
     switch (edit.type) {
       case "AppendChildren":
         this.AppendChildren(edit.m);
@@ -261,26 +253,8 @@ export class Interpreter {
       case "AssignId":
         this.AssignId(edit.path, edit.id);
         break;
-      case "CreateElement":
-        this.CreateElement(edit.name);
-        break;
-      case "CreateElementNs":
-        this.CreateElementNs(edit.name, edit.namespace);
-        break;
       case "CreatePlaceholder":
         this.CreatePlaceholder(edit.id);
-        break;
-      case "CreateStaticText":
-        this.CreateStaticText(edit.value)
-        break;
-      case "CreateStaticPlaceholder":
-        this.CreateStaticPlaceholder();
-        break;
-      case "CreateTextPlaceholder":
-        this.CreateTextPlaceholder();
-        break;
-      case "CreateStaticText":
-        this.CreateRawText(edit.value);
         break;
       case "CreateTextNode":
         this.CreateTextNode(edit.value);
@@ -290,9 +264,6 @@ export class Interpreter {
         break;
       case "LoadTemplate":
         this.LoadTemplate(edit.name, edit.index, edit.id);
-        break;
-      case "SaveTemplate":
-        this.SaveTemplate(edit.name, edit.m);
         break;
       case "PushRoot":
         this.PushRoot(edit.id);
@@ -318,14 +289,8 @@ export class Interpreter {
       case "SetAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
         break;
-      case "SetStaticAttribute":
-        this.SetStaticAttribute(edit.name, edit.value, edit.ns);
-        break;
       case "SetBoolAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
-        break;
-      case "SetInnerText":
-        console.log("Set inner text?");
         break;
       case "RemoveAttribute":
         this.RemoveAttribute(edit.id, edit.name, edit.ns);
@@ -745,8 +710,6 @@ function is_element_node(node) {
 }
 
 function event_bubbles(event) {
-  console.log("event_bubbles", event);
-
   switch (event) {
     case "copy":
       return true;

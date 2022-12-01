@@ -131,9 +131,16 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
 /// }
 ///
 /// ```
-#[derive(Default)]
 pub struct EventHandler<'bump, T = ()> {
     pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+}
+
+impl<T> Default for EventHandler<'_, T> {
+    fn default() -> Self {
+        Self {
+            callback: Default::default(),
+        }
+    }
 }
 
 type ExternalListenerCallback<'bump, T> = bumpalo::boxed::Box<'bump, dyn FnMut(T) + 'bump>;

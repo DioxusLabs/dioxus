@@ -489,8 +489,7 @@ impl VirtualDom {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Ok(node)) => {
-                let m = self.create_scope(ScopeId(0), node);
-                // self.mutations.push(Mutation::AppendChildren { m });
+                let _m = self.create_scope(ScopeId(0), node);
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
