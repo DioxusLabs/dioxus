@@ -30,7 +30,7 @@ fn dual_stream() {
 
     use Mutation::*;
     assert_eq!(
-        edits.template_edits,
+        edits.templates,
         [
             CreateElement { name: "div" },
             SetStaticAttribute { name: "class", value: "asd", ns: None },
@@ -66,7 +66,7 @@ fn dual_stream() {
     );
 
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             SetAttribute { name: "class", value: "123", id: ElementId(1), ns: None },

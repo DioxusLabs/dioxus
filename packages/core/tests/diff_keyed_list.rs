@@ -21,7 +21,7 @@ fn keyed_diffing_out_of_order() {
     });
 
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
@@ -39,7 +39,7 @@ fn keyed_diffing_out_of_order() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().dom_edits,
+        dom.render_immediate().edits,
         [
             PushRoot { id: ElementId(7,) },
             InsertBefore { id: ElementId(5,), m: 1 },
@@ -64,7 +64,7 @@ fn keyed_diffing_out_of_order_adds() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().dom_edits,
+        dom.render_immediate().edits,
         [
             PushRoot { id: ElementId(5,) },
             PushRoot { id: ElementId(4,) },
@@ -90,7 +90,7 @@ fn keyed_diffing_out_of_order_adds_3() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().dom_edits,
+        dom.render_immediate().edits,
         [
             PushRoot { id: ElementId(5,) },
             PushRoot { id: ElementId(4,) },
@@ -116,7 +116,7 @@ fn keyed_diffing_out_of_order_adds_4() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().dom_edits,
+        dom.render_immediate().edits,
         [
             PushRoot { id: ElementId(5,) },
             PushRoot { id: ElementId(4,) },
@@ -142,7 +142,7 @@ fn keyed_diffing_out_of_order_adds_5() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().dom_edits,
+        dom.render_immediate().edits,
         [
             PushRoot { id: ElementId(5,) },
             InsertBefore { id: ElementId(4,), m: 1 },
@@ -167,7 +167,7 @@ fn keyed_diffing_additions() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6) },
             LoadTemplate { name: "template", index: 0, id: ElementId(7) },
@@ -192,7 +192,7 @@ fn keyed_diffing_additions_and_moves_on_ends() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             // create 11, 12
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -222,7 +222,7 @@ fn keyed_diffing_additions_and_moves_in_middle() {
     // LIS: 4, 5, 6
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             // create 5, 6
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -256,7 +256,7 @@ fn controlled_keyed_diffing_out_of_order() {
     // LIS: 5, 6
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             // remove 7
             Remove { id: ElementId(4,) },
@@ -289,7 +289,7 @@ fn controlled_keyed_diffing_out_of_order_max_test() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             Remove { id: ElementId(5,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
@@ -318,7 +318,7 @@ fn remove_list() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             Remove { id: ElementId(3) },
             Remove { id: ElementId(4) },
@@ -343,7 +343,7 @@ fn no_common_keys() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             Remove { id: ElementId(2) },
             Remove { id: ElementId(3) },

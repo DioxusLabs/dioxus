@@ -256,7 +256,7 @@ impl FocusState {
         if self.focus_iter.prune(mutations, rdom) {
             self.dirty = true;
         }
-        for m in &mutations.dom_edits {
+        for m in &mutations.edits {
             match m {
                 dioxus_core::DomEdit::ReplaceWith { root, .. } => remove_children(
                     &mut [&mut self.last_focused_id],

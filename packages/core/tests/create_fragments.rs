@@ -14,7 +14,7 @@ fn empty_fragment_creates_nothing() {
     let edits = vdom.rebuild();
 
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             CreatePlaceholder { id: ElementId(1) },
             AppendChildren { m: 1 }
@@ -32,7 +32,7 @@ fn root_fragments_work() {
     });
 
     assert_eq!(
-        vdom.rebuild().dom_edits.last().unwrap(),
+        vdom.rebuild().edits.last().unwrap(),
         &AppendChildren { m: 2 }
     );
 }
@@ -59,7 +59,7 @@ fn fragments_nested() {
     });
 
     assert_eq!(
-        vdom.rebuild().dom_edits.last().unwrap(),
+        vdom.rebuild().edits.last().unwrap(),
         &AppendChildren { m: 8 }
     );
 }
@@ -84,7 +84,7 @@ fn fragments_across_components() {
     }
 
     assert_eq!(
-        VirtualDom::new(app).rebuild().dom_edits.last().unwrap(),
+        VirtualDom::new(app).rebuild().edits.last().unwrap(),
         &AppendChildren { m: 8 }
     );
 }
@@ -98,7 +98,7 @@ fn list_fragments() {
         ))
     }
     assert_eq!(
-        VirtualDom::new(app).rebuild().dom_edits.last().unwrap(),
+        VirtualDom::new(app).rebuild().edits.last().unwrap(),
         &AppendChildren { m: 7 }
     );
 }

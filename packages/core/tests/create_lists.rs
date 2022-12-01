@@ -28,7 +28,7 @@ fn list_renders() {
     let edits = dom.rebuild().santize();
 
     assert_eq!(
-        edits.template_edits,
+        edits.templates,
         [
             // Create the outer div
             CreateElement { name: "div" },
@@ -51,7 +51,7 @@ fn list_renders() {
     );
 
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             // Load the outer div
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },

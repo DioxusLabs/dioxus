@@ -7,7 +7,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext};
 
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -224,81 +224,7 @@ impl<'b> VirtualDom {
             return;
         }
 
-        for node in template.template.roots {
-            self.create_static_node(node);
-        }
-
-        self.mutations.template_edits.push(SaveTemplate {
-            name: template.template.id,
-            m: template.template.roots.len(),
-        });
-    }
-
-    // todo: we shouldn't have any of instructions for building templates - renderers should be able to work with the
-    // template type directly, right?
-    pub(crate) fn create_static_node(&mut self, node: &'b TemplateNode<'static>) {
-        match *node {
-            // Todo: create the children's template
-            TemplateNode::Dynamic(_) => self
-                .mutations
-                .template_edits
-                .push(CreateStaticPlaceholder {}),
-            TemplateNode::Text(value) => self
-                .mutations
-                .template_edits
-                .push(CreateStaticText { value }),
-
-            TemplateNode::DynamicText { .. } => {
-                self.mutations.template_edits.push(CreateTextPlaceholder)
-            }
-
-            TemplateNode::Element {
-                attrs,
-                children,
-                namespace,
-                tag,
-                ..
-            } => {
-                match namespace {
-                    Some(namespace) => self.mutations.template_edits.push(CreateElementNamespace {
-                        name: tag,
-                        namespace,
-                    }),
-                    None => self
-                        .mutations
-                        .template_edits
-                        .push(CreateElement { name: tag }),
-                }
-
-                self.mutations
-                    .template_edits
-                    .extend(attrs.iter().filter_map(|attr| match attr {
-                        TemplateAttribute::Static {
-                            name,
-                            value,
-                            namespace,
-                            ..
-                        } => Some(SetStaticAttribute {
-                            name,
-                            value,
-                            ns: *namespace,
-                        }),
-                        _ => None,
-                    }));
-
-                if children.is_empty() {
-                    return;
-                }
-
-                children
-                    .iter()
-                    .for_each(|child| self.create_static_node(child));
-
-                self.mutations
-                    .template_edits
-                    .push(AppendChildren { m: children.len() })
-            }
-        }
+        self.mutations.templates.push(template.template);
     }
 
     pub(crate) fn create_dynamic_node(
@@ -404,7 +330,7 @@ impl<'b> VirtualDom {
     ) -> usize {
         // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
         // is encountered
-        let mutations_to_this_point = self.mutations.dom_edits.len();
+        let mutations_to_this_point = self.mutations.edits.len();
 
         // Create the component's root element
         let created = self.create_scope(scope, new);
@@ -430,10 +356,10 @@ impl<'b> VirtualDom {
         // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
         let split_off = unsafe {
             std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
-                self.mutations.dom_edits.split_off(mutations_to_this_point),
+                self.mutations.edits.split_off(mutations_to_this_point),
             )
         };
-        boundary.mutations.borrow_mut().dom_edits.extend(split_off);
+        boundary.mutations.borrow_mut().edits.extend(split_off);
         boundary.created_on_stack.set(created);
         boundary
             .waiting_on

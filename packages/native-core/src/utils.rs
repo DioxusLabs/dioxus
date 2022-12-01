@@ -72,7 +72,7 @@ impl PersistantElementIter {
     pub fn prune<S: State>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) -> bool {
         let mut changed = false;
         let ids_removed: Vec<_> = mutations
-            .dom_edits
+            .edits
             .iter()
             .filter_map(|e| {
                 // nodes within templates will never be removed
@@ -97,7 +97,7 @@ impl PersistantElementIter {
         for (el_id, child_idx) in self.stack.iter_mut() {
             if let NodePosition::InChild(child_idx) = child_idx {
                 if let NodeType::Element { children, .. } = &rdom[*el_id].node_data.node_type {
-                    for m in &mutations.dom_edits {
+                    for m in &mutations.edits {
                         match m {
                             DomEdit::Remove { root } => {
                                 let id = rdom.resolve_maybe_id(*root);

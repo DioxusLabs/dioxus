@@ -54,8 +54,8 @@ impl DesktopController {
                 {
                     let edits = dom.rebuild();
                     let mut queue = edit_queue.lock().unwrap();
-                    queue.push(serde_json::to_string(&edits.template_edits).unwrap());
-                    queue.push(serde_json::to_string(&edits.dom_edits).unwrap());
+                    queue.push(serde_json::to_string(&edits.templates).unwrap());
+                    queue.push(serde_json::to_string(&edits.edits).unwrap());
                     proxy.send_event(UserWindowEvent::EditsReady).unwrap();
                 }
 
@@ -79,8 +79,8 @@ impl DesktopController {
 
                     {
                         let mut queue = edit_queue.lock().unwrap();
-                        queue.push(serde_json::to_string(&muts.template_edits).unwrap());
-                        queue.push(serde_json::to_string(&muts.dom_edits).unwrap());
+                        queue.push(serde_json::to_string(&muts.templates).unwrap());
+                        queue.push(serde_json::to_string(&muts.edits).unwrap());
                         let _ = proxy.send_event(UserWindowEvent::EditsReady);
                     }
                 }

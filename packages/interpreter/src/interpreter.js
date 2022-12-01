@@ -79,6 +79,13 @@ export class Interpreter {
   pop() {
     return this.stack.pop();
   }
+  SaveTemplate(nodes, name) {
+    this.templates[name] = nodes;
+    console.log(this.templates);
+  }
+  MountToRoot() {
+    this.AppendChildren(this.stack.length - 1);
+  }
   SetNode(id, node) {
     this.nodes[id] = node;
   }
@@ -132,24 +139,11 @@ export class Interpreter {
     this.nodes[root] = node;
     this.stack.push(node);
   }
-  CreateElement(tag) {
-    const el = document.createElement(tag);
-    this.stack.push(el);
-  }
-  CreateElementNs(tag, ns) {
-    let el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-  }
   CreatePlaceholder(root) {
     let el = document.createElement("pre");
     el.hidden = true;
     this.stack.push(el);
     this.nodes[root] = el;
-  }
-  CreateStaticPlaceholder() {
-    let el = document.createElement("pre");
-    el.hidden = true;
-    this.stack.push(el);
   }
   NewEventListener(event_name, root, handler, bubbles) {
     const element = this.nodes[root];
@@ -166,10 +160,6 @@ export class Interpreter {
   }
   SetAttribute(id, field, value, ns) {
     const node = this.nodes[id];
-    this.SetAttributeInner(node, field, value, ns);
-  }
-  SetStaticAttribute(field, value, ns) {
-    const node = this.top();
     this.SetAttributeInner(node, field, value, ns);
   }
   SetAttributeInner(node, field, value, ns) {
@@ -261,15 +251,6 @@ export class Interpreter {
     let node = this.templates[name][index].cloneNode(true);
     this.nodes[id] = node;
     this.stack.push(node);
-  }
-  SaveTemplate(name, m) {
-    this.templates[name] = this.stack.splice(this.stack.length - m);
-  }
-  CreateStaticText(text) {
-    this.CreateTextNode(text);
-  }
-  CreateTextPlaceholder() {
-    this.CreateRawText("placeholder");
   }
   handleEdit(edit) {
     console.log(edit);

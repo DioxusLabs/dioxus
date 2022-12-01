@@ -7,7 +7,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{ElementId, Mutation, Mutations};
+use dioxus_core::{ElementId, Mutation, Mutations, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::{event_bubbles, CompositionData, FormData};
 use dioxus_interpreter_js::Interpreter;
 use futures_channel::mpsc;
@@ -19,6 +19,7 @@ use web_sys::{Document, Element, Event, HtmlElement};
 use crate::Config;
 
 pub struct WebsysDom {
+    document: Document,
     interpreter: Interpreter,
     handler: Closure<dyn FnMut(&Event)>,
     root: Element,
@@ -35,11 +36,76 @@ impl WebsysDom {
         };
 
         Self {
+            document,
             interpreter: Interpreter::new(root.clone()),
             root,
             handler: Closure::wrap(Box::new(move |event: &web_sys::Event| {
                 let _ = event_channel.unbounded_send(event.clone());
             })),
+        }
+    }
+
+    pub fn mount(&mut self) {
+        self.interpreter.MountToRoot();
+    }
+
+    pub fn load_templates(&mut self, templates: &[Template]) {
+        log::debug!("Loading templates {:?}", templates);
+
+        for template in templates {
+            let mut roots = vec![];
+
+            for root in template.roots {
+                roots.push(self.create_template_node(root))
+            }
+
+            self.interpreter.SaveTemplate(roots, template.id);
+        }
+    }
+
+    fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
+        match v {
+            TemplateNode::Element {
+                tag,
+                namespace,
+                attrs,
+                children,
+                ..
+            } => {
+                let el = match namespace {
+                    Some(ns) => self.document.create_element_ns(Some(ns), tag).unwrap(),
+                    None => self.document.create_element(tag).unwrap(),
+                };
+
+                for attr in *attrs {
+                    if let TemplateAttribute::Static {
+                        name,
+                        value,
+                        namespace,
+                        volatile,
+                    } = attr
+                    {
+                        match namespace {
+                            Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
+                            None => el.set_attribute(name, value).unwrap(),
+                        }
+                    }
+                }
+
+                for child in *children {
+                    el.append_child(&self.create_template_node(child));
+                }
+
+                el.dyn_into().unwrap()
+            }
+
+            TemplateNode::Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
+            TemplateNode::DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
+            TemplateNode::Dynamic(_) => {
+                let el = self.document.create_element("pre").unwrap();
+                el.toggle_attribute("hidden");
+                el.dyn_into().unwrap()
+            }
         }
     }
 
@@ -49,14 +115,8 @@ impl WebsysDom {
 
         for edit in edits.drain(..) {
             match edit {
-                AppendChildren { m } => i.AppendChildren(m as u32),
                 AssignId { path, id } => i.AssignId(path, id.0 as u32),
-                CreateElement { name } => i.CreateElement(name),
-                CreateElementNamespace { name, namespace } => i.CreateElementNs(name, namespace),
                 CreatePlaceholder { id } => i.CreatePlaceholder(id.0 as u32),
-                CreateStaticPlaceholder => i.CreateStaticPlaceholder(),
-                CreateTextPlaceholder => i.CreateTextPlaceholder(),
-                CreateStaticText { value } => i.CreateStaticText(value),
                 CreateTextNode { value, id } => i.CreateTextNode(value.into(), id.0 as u32),
                 HydrateText { path, value, id } => i.HydrateText(path, value, id.0 as u32),
                 LoadTemplate { name, index, id } => i.LoadTemplate(name, index as u32, id.0 as u32),
@@ -64,16 +124,12 @@ impl WebsysDom {
                 ReplacePlaceholder { path, m } => i.ReplacePlaceholder(path, m as u32),
                 InsertAfter { id, m } => i.InsertAfter(id.0 as u32, m as u32),
                 InsertBefore { id, m } => i.InsertBefore(id.0 as u32, m as u32),
-                SaveTemplate { name, m } => i.SaveTemplate(name, m as u32),
                 SetAttribute {
                     name,
                     value,
                     id,
                     ns,
                 } => i.SetAttribute(id.0 as u32, name, value.into(), ns),
-                SetStaticAttribute { name, value, ns } => {
-                    i.SetStaticAttribute(name, value.into(), ns)
-                }
                 SetBoolAttribute { name, value, id } => {
                     i.SetBoolAttribute(id.0 as u32, name, value)
                 }

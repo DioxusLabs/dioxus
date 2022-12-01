@@ -490,7 +490,7 @@ impl VirtualDom {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Ok(node)) => {
                 let m = self.create_scope(ScopeId(0), node);
-                self.mutations.push(Mutation::AppendChildren { m });
+                // self.mutations.push(Mutation::AppendChildren { m });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
@@ -534,12 +534,12 @@ impl VirtualDom {
                 let context = scope.has_context::<SuspenseContext>().unwrap();
 
                 self.mutations
-                    .template_edits
-                    .extend(context.mutations.borrow_mut().template_edits.drain(..));
+                    .templates
+                    .extend(context.mutations.borrow_mut().templates.drain(..));
 
                 self.mutations
-                    .dom_edits
-                    .extend(context.mutations.borrow_mut().dom_edits.drain(..));
+                    .edits
+                    .extend(context.mutations.borrow_mut().edits.drain(..));
 
                 // TODO: count how many nodes are on the stack?
                 self.mutations.push(Mutation::ReplaceWith {
@@ -559,7 +559,7 @@ impl VirtualDom {
                 }
 
                 // Save the current mutations length so we can split them into boundary
-                let mutations_to_this_point = self.mutations.dom_edits.len();
+                let mutations_to_this_point = self.mutations.edits.len();
 
                 // Run the scope and get the mutations
                 self.run_scope(dirty.id);
@@ -578,8 +578,8 @@ impl VirtualDom {
                     boundary_mut
                         .mutations
                         .borrow_mut()
-                        .dom_edits
-                        .extend(self.mutations.dom_edits.split_off(mutations_to_this_point));
+                        .edits
+                        .extend(self.mutations.edits.split_off(mutations_to_this_point));
 
                     // Attach suspended leaves
                     boundary

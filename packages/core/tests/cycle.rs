@@ -14,7 +14,7 @@ fn cycling_elements() {
 
     let edits = dom.rebuild().santize();
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AppendChildren { m: 1 },
@@ -23,7 +23,7 @@ fn cycling_elements() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
@@ -33,7 +33,7 @@ fn cycling_elements() {
     // notice that the IDs cycle back to ElementId(1), preserving a minimal memory footprint
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
@@ -42,7 +42,7 @@ fn cycling_elements() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },

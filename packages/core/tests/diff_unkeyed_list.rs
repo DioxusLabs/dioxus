@@ -17,7 +17,7 @@ fn list_creates_one_by_one() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
@@ -28,7 +28,7 @@ fn list_creates_one_by_one() {
     // Rendering the first item should replace the placeholder with an element
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
             HydrateText { path: &[0], value: "0", id: ElementId(4,) },
@@ -39,7 +39,7 @@ fn list_creates_one_by_one() {
     // Rendering the next item should insert after the previous
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             HydrateText { path: &[0], value: "1", id: ElementId(5,) },
@@ -50,7 +50,7 @@ fn list_creates_one_by_one() {
     // ... and again!
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
             HydrateText { path: &[0], value: "2", id: ElementId(7,) },
@@ -61,7 +61,7 @@ fn list_creates_one_by_one() {
     // once more
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
             HydrateText { path: &[0], value: "3", id: ElementId(9,) },
@@ -86,7 +86,7 @@ fn removes_one_by_one() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             // The container
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
@@ -108,14 +108,14 @@ fn removes_one_by_one() {
     // Rendering the first item should replace the placeholder with an element
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [Remove { id: ElementId(6) }]
     );
 
     // Remove div(2)
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [Remove { id: ElementId(4) }]
     );
 
@@ -123,7 +123,7 @@ fn removes_one_by_one() {
     // todo: this should just be a remove with no placeholder
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             CreatePlaceholder { id: ElementId(3) },
             ReplaceWith { id: ElementId(2), m: 1 }
@@ -134,7 +134,7 @@ fn removes_one_by_one() {
     // todo: this should actually be append to, but replace placeholder is fine for now
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "0", id: ElementId(4) },
@@ -161,7 +161,7 @@ fn list_shrink_multiroot() {
     });
 
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0,], id: ElementId(2,) },
@@ -171,7 +171,7 @@ fn list_shrink_multiroot() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "0", id: ElementId(4) },
@@ -183,7 +183,7 @@ fn list_shrink_multiroot() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             HydrateText { path: &[0], value: "1", id: ElementId(7) },
@@ -195,7 +195,7 @@ fn list_shrink_multiroot() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(10) },
             HydrateText { path: &[0], value: "2", id: ElementId(11) },
@@ -223,7 +223,7 @@ fn removes_one_by_one_multiroot() {
 
     // load the div and then assign the empty fragment as a placeholder
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             //
@@ -250,19 +250,19 @@ fn removes_one_by_one_multiroot() {
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [Remove { id: ElementId(10) }, Remove { id: ElementId(12) }]
     );
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [Remove { id: ElementId(6) }, Remove { id: ElementId(8) }]
     );
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
-        dom.render_immediate().santize().dom_edits,
+        dom.render_immediate().santize().edits,
         [
             Remove { id: ElementId(4) },
             CreatePlaceholder { id: ElementId(5) },
@@ -282,7 +282,7 @@ fn two_equal_fragments_are_equal_static() {
     });
 
     _ = dom.rebuild();
-    assert!(dom.render_immediate().dom_edits.is_empty());
+    assert!(dom.render_immediate().edits.is_empty());
 }
 
 #[test]
@@ -296,7 +296,7 @@ fn two_equal_fragments_are_equal() {
     });
 
     _ = dom.rebuild();
-    assert!(dom.render_immediate().dom_edits.is_empty());
+    assert!(dom.render_immediate().edits.is_empty());
 }
 
 #[test]
@@ -315,9 +315,9 @@ fn remove_many() {
     });
 
     let edits = dom.rebuild().santize();
-    assert!(edits.template_edits.is_empty());
+    assert!(edits.templates.is_empty());
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             CreatePlaceholder { id: ElementId(1,) },
             AppendChildren { m: 1 },
@@ -327,7 +327,7 @@ fn remove_many() {
     dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             HydrateText { path: &[0,], value: "hello 0", id: ElementId(3,) },
@@ -338,7 +338,7 @@ fn remove_many() {
     dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             HydrateText { path: &[0,], value: "hello 1", id: ElementId(4,) },
@@ -355,7 +355,7 @@ fn remove_many() {
     dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             Remove { id: ElementId(1,) },
             Remove { id: ElementId(5,) },
@@ -369,7 +369,7 @@ fn remove_many() {
     dom.mark_dirty(ScopeId(0));
     let edits = dom.render_immediate().santize();
     assert_eq!(
-        edits.dom_edits,
+        edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             HydrateText { path: &[0,], value: "hello 0", id: ElementId(10,) },

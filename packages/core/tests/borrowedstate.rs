@@ -8,7 +8,7 @@ fn test_borrowed_state() {
     let mut dom = VirtualDom::new(Parent);
 
     assert_eq!(
-        dom.rebuild().santize().dom_edits,
+        dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },

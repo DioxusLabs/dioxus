@@ -14,19 +14,19 @@ fn text_diff() {
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().dom_edits,
+        vdom.render_immediate().edits,
         [SetText { value: "hello 1", id: ElementId(2) }]
     );
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().dom_edits,
+        vdom.render_immediate().edits,
         [SetText { value: "hello 2", id: ElementId(2) }]
     );
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().dom_edits,
+        vdom.render_immediate().edits,
         [SetText { value: "hello 3", id: ElementId(2) }]
     );
 }
@@ -48,7 +48,7 @@ fn element_swap() {
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().santize().dom_edits,
+        vdom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
@@ -57,7 +57,7 @@ fn element_swap() {
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().santize().dom_edits,
+        vdom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
@@ -66,7 +66,7 @@ fn element_swap() {
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().santize().dom_edits,
+        vdom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             ReplaceWith { id: ElementId(1,), m: 1 },
@@ -75,7 +75,7 @@ fn element_swap() {
 
     vdom.mark_dirty(ScopeId(0));
     assert_eq!(
-        vdom.render_immediate().santize().dom_edits,
+        vdom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             ReplaceWith { id: ElementId(2,), m: 1 },

@@ -2,7 +2,7 @@
 
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
-use web_sys::Element;
+use web_sys::{Element, Node};
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
@@ -12,28 +12,16 @@ extern "C" {
     pub fn new(arg: Element) -> Interpreter;
 
     #[wasm_bindgen(method)]
-    pub fn AppendChildren(this: &Interpreter, many: u32);
+    pub fn SaveTemplate(this: &Interpreter, nodes: Vec<Node>, name: &str);
+
+    #[wasm_bindgen(method)]
+    pub fn MountToRoot(this: &Interpreter);
 
     #[wasm_bindgen(method)]
     pub fn AssignId(this: &Interpreter, path: &[u8], id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreateElement(this: &Interpreter, tag: &str);
-
-    #[wasm_bindgen(method)]
-    pub fn CreateElementNs(this: &Interpreter, tag: &str, ns: &str);
-
-    #[wasm_bindgen(method)]
     pub fn CreatePlaceholder(this: &Interpreter, id: u32);
-
-    #[wasm_bindgen(method)]
-    pub fn CreateStaticPlaceholder(this: &Interpreter);
-
-    #[wasm_bindgen(method)]
-    pub fn CreateTextPlaceholder(this: &Interpreter);
-
-    #[wasm_bindgen(method)]
-    pub fn CreateStaticText(this: &Interpreter, value: &str);
 
     #[wasm_bindgen(method)]
     pub fn CreateTextNode(this: &Interpreter, value: JsValue, id: u32);
@@ -57,13 +45,7 @@ extern "C" {
     pub fn InsertBefore(this: &Interpreter, id: u32, n: u32);
 
     #[wasm_bindgen(method)]
-    pub fn SaveTemplate(this: &Interpreter, name: &str, m: u32);
-
-    #[wasm_bindgen(method)]
     pub fn SetAttribute(this: &Interpreter, id: u32, name: &str, value: JsValue, ns: Option<&str>);
-
-    #[wasm_bindgen(method)]
-    pub fn SetStaticAttribute(this: &Interpreter, name: &str, value: JsValue, ns: Option<&str>);
 
     #[wasm_bindgen(method)]
     pub fn SetBoolAttribute(this: &Interpreter, id: u32, name: &str, value: bool);

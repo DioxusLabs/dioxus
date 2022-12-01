@@ -13,7 +13,7 @@ async fn it_works() {
 
     // We should at least get the top-level template in before pausing for the children
     assert_eq!(
-        mutations.template_edits,
+        mutations.templates,
         [
             CreateElement { name: "div" },
             CreateStaticText { value: "Waiting for child..." },
@@ -25,7 +25,7 @@ async fn it_works() {
 
     // And we should load it in and assign the placeholder properly
     assert_eq!(
-        mutations.dom_edits,
+        mutations.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?

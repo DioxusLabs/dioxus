@@ -1,6 +1,6 @@
 use fxhash::FxHashSet;
 
-use crate::{arena::ElementId, ScopeId};
+use crate::{arena::ElementId, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
@@ -18,11 +18,13 @@ pub struct Mutations<'a> {
     /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,
 
-    /// Any mutations required to build the templates using [`Mutations`]
-    pub template_edits: Vec<Mutation<'a>>,
+    /// Any templates encountered while diffing the DOM.
+    ///
+    /// These must be loaded into a cache before applying the edits
+    pub templates: Vec<Template<'a>>,
 
     /// Any mutations required to patch the renderer to match the layout of the VirtualDom
-    pub dom_edits: Vec<Mutation<'a>>,
+    pub edits: Vec<Mutation<'a>>,
 }
 
 impl<'a> Mutations<'a> {
@@ -30,21 +32,22 @@ impl<'a> Mutations<'a> {
     ///
     /// Used really only for testing
     pub fn santize(mut self) -> Self {
-        self.template_edits
-            .iter_mut()
-            .chain(self.dom_edits.iter_mut())
-            .for_each(|edit| match edit {
-                Mutation::LoadTemplate { name, .. } => *name = "template",
-                Mutation::SaveTemplate { name, .. } => *name = "template",
-                _ => {}
-            });
+        todo!()
+        // self.templates
+        //     .iter_mut()
+        //     .chain(self.dom_edits.iter_mut())
+        //     .for_each(|edit| match edit {
+        //         Mutation::LoadTemplate { name, .. } => *name = "template",
+        //         Mutation::SaveTemplate { name, .. } => *name = "template",
+        //         _ => {}
+        //     });
 
-        self
+        // self
     }
 
     /// Push a new mutation into the dom_edits list
     pub(crate) fn push(&mut self, mutation: Mutation<'static>) {
-        self.dom_edits.push(mutation)
+        self.edits.push(mutation)
     }
 }
 
@@ -59,33 +62,13 @@ each subtree has its own numbering scheme
 )]
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mutation<'a> {
-    /// Pop the topmost node from our stack and append them to the node
-    /// at the top of the stack.
-    AppendChildren {
-        /// How many nodes should be popped from the stack.
-        /// The node remaining on the stack will be the target for the append.
-        m: usize,
-    },
-
     AssignId {
         path: &'static [u8],
         id: ElementId,
     },
 
-    CreateElement {
-        name: &'a str,
-    },
-    CreateElementNamespace {
-        name: &'a str,
-        namespace: &'a str,
-    },
     CreatePlaceholder {
         id: ElementId,
-    },
-    CreateStaticPlaceholder,
-    CreateTextPlaceholder,
-    CreateStaticText {
-        value: &'a str,
     },
     CreateTextNode {
         value: &'a str,
@@ -131,15 +114,6 @@ pub enum Mutation<'a> {
         m: usize,
     },
 
-    /// Save the top m nodes as a placeholder
-    SaveTemplate {
-        /// The name of the template that we're saving
-        name: &'static str,
-
-        /// How many nodes are being saved into this template
-        m: usize,
-    },
-
     /// Set the value of a node's attribute.
     SetAttribute {
         /// The name of the attribute to set.
@@ -149,19 +123,6 @@ pub enum Mutation<'a> {
 
         /// The ID of the node to set the attribute of.
         id: ElementId,
-
-        /// The (optional) namespace of the attribute.
-        /// For instance, "style" is in the "style" namespace.
-        ns: Option<&'a str>,
-    },
-
-    /// Set the value of a node's attribute.
-    SetStaticAttribute {
-        /// The name of the attribute to set.
-        name: &'a str,
-
-        /// The value of the attribute.
-        value: &'a str,
 
         /// The (optional) namespace of the attribute.
         /// For instance, "style" is in the "style" namespace.

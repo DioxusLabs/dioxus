@@ -189,17 +189,20 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     log::info!("rebuilding app");
 
-    if should_hydrate {
-    } else {
-        let edits = dom.rebuild();
-        websys_dom.apply_edits(edits.template_edits);
-        websys_dom.apply_edits(edits.dom_edits);
-    }
+    // if should_hydrate {
+    // } else {
+    let edits = dom.rebuild();
+
+    log::debug!("Initial edits {:#?}", edits);
+
+    websys_dom.load_templates(&edits.templates);
+    websys_dom.apply_edits(edits.edits);
+    websys_dom.mount();
 
     let mut work_loop = ric_raf::RafLoop::new();
 
     loop {
-        log::trace!("waiting for work");
+        log::debug!("waiting for work");
 
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
@@ -240,6 +243,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
+        // let deadline = gloo_timers::future::sleep(Duration::from_millis(10000));
         let edits = dom.render_with_deadline(deadline).await;
 
         // wait for the animation frame to fire so we can apply our changes
@@ -247,8 +251,8 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
         log::debug!("edits {:#?}", edits);
 
-        websys_dom.apply_edits(edits.template_edits);
-        websys_dom.apply_edits(edits.dom_edits);
+        websys_dom.load_templates(&edits.templates);
+        websys_dom.apply_edits(edits.edits);
     }
 }
 

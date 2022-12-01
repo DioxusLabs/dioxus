@@ -62,6 +62,7 @@ impl<'a> VNode<'a> {
     }
 }
 
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[derive(Debug, Clone, Copy)]
 pub struct Template<'a> {
     pub id: &'a str,
@@ -71,6 +72,7 @@ pub struct Template<'a> {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 pub enum TemplateNode<'a> {
     Element {
         tag: &'a str,
@@ -126,11 +128,12 @@ pub struct VText<'a> {
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 pub enum TemplateAttribute<'a> {
     Static {
-        name: &'static str,
+        name: &'a str,
         value: &'a str,
-        namespace: Option<&'static str>,
+        namespace: Option<&'a str>,
         volatile: bool,
     },
     Dynamic(usize),
