@@ -165,11 +165,10 @@ Dioxus 那么优秀，但什么时候它不适合我呢？
   <img src="https://contrib.rocks/image?repo=dioxuslabs/dioxus&max=30&columns=10" />
 </a>
 
-## License
-This project is licensed under the [MIT license].
+## 开源协议
+
+本项目使用 [MIT license].
 
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
-Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
-terms or conditions.
+除非您另有明确声明，否则有意提交的任何贡献将被授权为 MIT 协议，没有任何附加条款或条件。
