@@ -1,9 +1,9 @@
 use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
-    factory::RenderReturn,
     innerlude::DirtyScope,
     innerlude::{SuspenseId, SuspenseLeaf},
+    nodes::RenderReturn,
     scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
@@ -18,7 +18,7 @@ use std::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: Box<dyn AnyProps<'static>>) -> &mut ScopeState {
+    pub(super) fn new_scope(&mut self, props: Box<dyn AnyProps<'static>>) -> &ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
@@ -86,8 +86,6 @@ impl VirtualDom {
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
-        println!("Running scope {:?}", scope_id);
-
         // Cycle to the next frame and then reset it
         // This breaks any latent references, invalidating every pointer referencing into it.
         // Remove all the outdated listeners

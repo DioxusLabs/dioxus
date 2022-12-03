@@ -1,13 +1,12 @@
 use std::cell::Cell;
 
-use crate::factory::RenderReturn;
 use crate::innerlude::{VComponent, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext};
+use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext};
 
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -25,7 +24,7 @@ impl<'b> VirtualDom {
     pub(crate) fn create(&mut self, template: &'b VNode<'b>) -> usize {
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        if !self.templates.contains_key(&template.template.id) {
+        if !self.templates.contains_key(&template.template.name) {
             self.register_template(template);
         }
 
@@ -75,7 +74,7 @@ impl<'b> VirtualDom {
 
                     template.root_ids[root_idx].set(this_id);
                     self.mutations.push(LoadTemplate {
-                        name: template.template.id,
+                        name: template.template.name,
                         index: root_idx,
                         id: this_id,
                     });
@@ -204,7 +203,7 @@ impl<'b> VirtualDom {
     fn register_template(&mut self, template: &'b VNode<'b>) {
         // First, make sure we mark the template as seen, regardless if we process it
         self.templates
-            .insert(template.template.id, template.template);
+            .insert(template.template.name, template.template);
 
         // If it's all dynamic nodes, then we don't need to register it
         // Quickly run through and see if it's all just dynamic nodes
@@ -342,7 +341,7 @@ impl<'b> VirtualDom {
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
         let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
-            Some(boundary) => boundary,
+            Some(boundary) => unsafe { &*(boundary as *const SuspenseContext) },
             _ => return created,
         };
 

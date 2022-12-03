@@ -2,9 +2,9 @@ use std::cell::Cell;
 
 use crate::{
     arena::ElementId,
-    factory::RenderReturn,
     innerlude::{DirtyScope, VComponent, VText},
     mutations::Mutation,
+    nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
     scopes::ScopeId,
     virtual_dom::VirtualDom,
@@ -63,10 +63,10 @@ impl<'b> VirtualDom {
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         println!(
             "diffing node {:#?},\n\n{:#?}",
-            left_template.template.id, right_template.template.id
+            left_template.template.name, right_template.template.name
         );
 
-        if left_template.template.id != right_template.template.id {
+        if left_template.template.name != right_template.template.name {
             return self.light_diff_templates(left_template, right_template);
         }
 

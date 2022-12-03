@@ -2,6 +2,8 @@ use dioxus_core::{ScopeState, TaskId};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
+use crate::{use_context, use_context_provider};
+
 /// Maintain a handle over a future that can be paused, resumed, and canceled.
 ///
 /// This is an upgraded form of [`use_future`] with an integrated channel system.
@@ -59,33 +61,33 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &CoroutineHandle<M>
+pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &Coroutine<M>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    cx.use_hook(|| {
+    use_context_provider(cx, || {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let task = cx.push_future(init(rx));
-        cx.provide_context(CoroutineHandle { tx, task })
+        Coroutine { tx, task }
     })
 }
 
 /// Get a handle to a coroutine higher in the tree
 ///
 /// See the docs for [`use_coroutine`] for more details.
-pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&CoroutineHandle<M>> {
-    cx.use_hook(|| cx.consume_context::<CoroutineHandle<M>>())
-        .as_ref()
+pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>> {
+    use_context::<Coroutine<M>>(cx)
 }
 
-pub struct CoroutineHandle<T> {
+pub struct Coroutine<T> {
     tx: UnboundedSender<T>,
     task: TaskId,
 }
 
-impl<T> Clone for CoroutineHandle<T> {
+// for use in futures
+impl<T> Clone for Coroutine<T> {
     fn clone(&self) -> Self {
         Self {
             tx: self.tx.clone(),
@@ -94,7 +96,7 @@ impl<T> Clone for CoroutineHandle<T> {
     }
 }
 
-impl<T> CoroutineHandle<T> {
+impl<T> Coroutine<T> {
     /// Get the ID of this coroutine
     #[must_use]
     pub fn task_id(&self) -> TaskId {
@@ -112,8 +114,8 @@ mod tests {
     #![allow(unused)]
 
     use super::*;
-    use dioxus_core::exports::futures_channel::mpsc::unbounded;
     use dioxus_core::prelude::*;
+    use futures_channel::mpsc::unbounded;
     use futures_util::StreamExt;
 
     fn app(cx: Scope, name: String) -> Element {
@@ -127,7 +129,7 @@ mod tests {
 
         let task3 = use_coroutine(&cx, |rx| complex_task(rx, 10));
 
-        None
+        todo!()
     }
 
     async fn view_task(mut rx: UnboundedReceiver<i32>) {

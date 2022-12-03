@@ -1,5 +1,5 @@
 use dioxus::core::ElementId;
-use dioxus::core::{Mutation::*, SuspenseBoundary};
+use dioxus::core::{Mutation::*, SuspenseContext};
 use dioxus::prelude::*;
 use dioxus_core::SuspenseContext;
 use std::future::IntoFuture;
@@ -12,16 +12,17 @@ async fn it_works() {
     let mutations = dom.rebuild().santize();
 
     // We should at least get the top-level template in before pausing for the children
-    assert_eq!(
-        mutations.templates,
-        [
-            CreateElement { name: "div" },
-            CreateStaticText { value: "Waiting for child..." },
-            CreateStaticPlaceholder,
-            AppendChildren { m: 2 },
-            SaveTemplate { name: "template", m: 1 }
-        ]
-    );
+    // note: we dont test template edits anymore
+    // assert_eq!(
+    //     mutations.templates,
+    //     [
+    //         CreateElement { name: "div" },
+    //         CreateStaticText { value: "Waiting for child..." },
+    //         CreateStaticPlaceholder,
+    //         AppendChildren { m: 2 },
+    //         SaveTemplate { name: "template", m: 1 }
+    //     ]
+    // );
 
     // And we should load it in and assign the placeholder properly
     assert_eq!(
@@ -31,7 +32,7 @@ async fn it_works() {
             // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
             // can we even?
             AssignId { path: &[1], id: ElementId(3) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
 
@@ -50,7 +51,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn suspense_boundary(cx: Scope) -> Element {
-    cx.use_hook(|| cx.provide_context(Rc::new(SuspenseBoundary::new(cx.scope_id()))));
+    cx.use_hook(|| cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id()))));
 
     // Ensure the right types are found
     cx.has_context::<SuspenseContext>().unwrap();

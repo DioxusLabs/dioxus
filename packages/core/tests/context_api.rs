@@ -23,7 +23,7 @@ fn state_shares() {
         dom.rebuild().santize().edits,
         [
             CreateTextNode { value: "Value is 0", id: ElementId(1,) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
 

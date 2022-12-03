@@ -29,7 +29,7 @@ fn nested_passthru_creates() {
         edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     )
 }
@@ -74,7 +74,7 @@ fn nested_passthru_creates_add() {
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             // load div that contains 4
             LoadTemplate { name: "template", index: 1, id: ElementId(4) },
-            AppendChildren { m: 4 },
+            AppendChildren { id: ElementId(0), m: 4 },
         ]
     );
 }
@@ -92,7 +92,7 @@ fn dynamic_node_as_root() {
     let edits = dom.rebuild().santize();
 
     // Since the roots were all dynamic, they should not cause any template muations
-    assert_eq!(edits.templates, []);
+    assert!(edits.templates.is_empty());
 
     // The root node is text, so we just create it on the spot
     assert_eq!(
@@ -100,7 +100,7 @@ fn dynamic_node_as_root() {
         [
             CreateTextNode { value: "123", id: ElementId(1) },
             CreateTextNode { value: "456", id: ElementId(2) },
-            AppendChildren { m: 2 }
+            AppendChildren { id: ElementId(0), m: 2 }
         ]
     )
 }

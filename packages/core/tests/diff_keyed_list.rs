@@ -33,7 +33,7 @@ fn keyed_diffing_out_of_order() {
             LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
             LoadTemplate { name: "template", index: 0, id: ElementId(10,) },
-            AppendChildren { m: 10 },
+            AppendChildren { m: 10, id: ElementId(0) },
         ]
     );
 

@@ -17,7 +17,7 @@ use std::mem;
 /// A concrete type provider for closures that build [`VNode`] structures.
 ///
 /// This struct wraps lazy structs that build [`VNode`] trees Normally, we cannot perform a blanket implementation over
-/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of [`IntoVNode`].
+/// closures, but if we wrap the closure in a concrete type, we can use it for different branches in matching.
 ///
 ///
 /// ```rust, ignore

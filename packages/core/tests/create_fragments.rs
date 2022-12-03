@@ -17,7 +17,7 @@ fn empty_fragment_creates_nothing() {
         edits.edits,
         [
             CreatePlaceholder { id: ElementId(1) },
-            AppendChildren { m: 1 }
+            AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
 }
@@ -33,7 +33,7 @@ fn root_fragments_work() {
 
     assert_eq!(
         vdom.rebuild().edits.last().unwrap(),
-        &AppendChildren { m: 2 }
+        &AppendChildren { id: ElementId(0), m: 2 }
     );
 }
 
@@ -60,7 +60,7 @@ fn fragments_nested() {
 
     assert_eq!(
         vdom.rebuild().edits.last().unwrap(),
-        &AppendChildren { m: 8 }
+        &AppendChildren { id: ElementId(0), m: 8 }
     );
 }
 
@@ -85,7 +85,7 @@ fn fragments_across_components() {
 
     assert_eq!(
         VirtualDom::new(app).rebuild().edits.last().unwrap(),
-        &AppendChildren { m: 8 }
+        &AppendChildren { id: ElementId(0), m: 8 }
     );
 }
 
@@ -99,6 +99,6 @@ fn list_fragments() {
     }
     assert_eq!(
         VirtualDom::new(app).rebuild().edits.last().unwrap(),
-        &AppendChildren { m: 7 }
+        &AppendChildren { id: ElementId(0), m: 7 }
     );
 }

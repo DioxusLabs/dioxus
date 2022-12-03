@@ -9,7 +9,7 @@ fn bool_test() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             SetBoolAttribute { name: "hidden", value: false, id: ElementId(1,) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     )
 }

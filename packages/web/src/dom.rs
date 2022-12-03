@@ -59,7 +59,7 @@ impl WebsysDom {
                 roots.push(self.create_template_node(root))
             }
 
-            self.interpreter.SaveTemplate(roots, template.id);
+            self.interpreter.SaveTemplate(roots, template.name);
         }
     }
 
@@ -77,13 +77,11 @@ impl WebsysDom {
                     Some(ns) => self.document.create_element_ns(Some(ns), tag).unwrap(),
                     None => self.document.create_element(tag).unwrap(),
                 };
-
                 for attr in *attrs {
                     if let TemplateAttribute::Static {
                         name,
                         value,
                         namespace,
-                        volatile,
                     } = attr
                     {
                         match namespace {
@@ -98,14 +96,11 @@ impl WebsysDom {
                         }
                     }
                 }
-
                 for child in *children {
                     el.append_child(&self.create_template_node(child));
                 }
-
                 el.dyn_into().unwrap()
             }
-
             Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
             DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
             Dynamic(_) => {

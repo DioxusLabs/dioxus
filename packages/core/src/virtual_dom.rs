@@ -5,11 +5,11 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    factory::RenderReturn,
     innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
     mutations::Mutation,
+    nodes::RenderReturn,
     nodes::{Template, TemplateId},
-    scheduler::{SuspenseBoundary, SuspenseId},
+    scheduler::SuspenseId,
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope, SuspenseContext,
 };
@@ -249,10 +249,10 @@ impl VirtualDom {
         // This could be unexpected, so we might rethink this behavior later
         //
         // We *could* just panic if the suspense boundary is not found
-        root.provide_context(Rc::new(SuspenseBoundary::new(ScopeId(0))));
+        root.provide_context(SuspenseContext::new(ScopeId(0)));
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
+        root.provide_context(ErrorBoundary::new(ScopeId(0)));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::null());
@@ -489,7 +489,11 @@ impl VirtualDom {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
             RenderReturn::Sync(Ok(node)) => {
-                let _m = self.create_scope(ScopeId(0), node);
+                let m = self.create_scope(ScopeId(0), node);
+                self.mutations.edits.push(Mutation::AppendChildren {
+                    id: ElementId(0),
+                    m,
+                });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),

@@ -1,9 +1,13 @@
 use crate::{
-    factory::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
+    nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
     ScopeId,
 };
 use bumpalo::boxed::Box as BumpBox;
 
+/// An Element's unique identifier.
+///
+/// `ElementId` is a `usize` that is unique across the entire VirtualDOM - but not unique across time. If a component is
+/// unmounted, then the `ElementId` will be reused for a new component.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct ElementId(pub usize);

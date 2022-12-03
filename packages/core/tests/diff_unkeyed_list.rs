@@ -21,7 +21,7 @@ fn list_creates_one_by_one() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0], id: ElementId(2,) },
-            AppendChildren { m: 1 },
+            AppendChildren { id: ElementId(0), m: 1 },
         ]
     );
 
@@ -100,7 +100,7 @@ fn removes_one_by_one() {
             // replace the placeholder in the template with the 3 templates on the stack
             ReplacePlaceholder { m: 3, path: &[0] },
             // Mount the div
-            AppendChildren { m: 1 }
+            AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
 
@@ -165,7 +165,7 @@ fn list_shrink_multiroot() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
             AssignId { path: &[0,], id: ElementId(2,) },
-            AppendChildren { m: 1 }
+            AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
 
@@ -244,7 +244,7 @@ fn removes_one_by_one_multiroot() {
             //
             ReplacePlaceholder { path: &[0], m: 6 },
             //
-            AppendChildren { m: 1 }
+            AppendChildren { id: ElementId(0), m: 1 }
         ]
     );
 
@@ -320,7 +320,7 @@ fn remove_many() {
         edits.edits,
         [
             CreatePlaceholder { id: ElementId(1,) },
-            AppendChildren { m: 1 },
+            AppendChildren { id: ElementId(0), m: 1 },
         ]
     );
 

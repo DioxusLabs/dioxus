@@ -3,11 +3,11 @@ use crate::{
     any_props::VProps,
     arena::ElementId,
     bump_frame::BumpFrame,
-    factory::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
     innerlude::{Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
-    Attribute, Element, Properties, TaskId,
+    nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
+    Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use std::{
@@ -23,7 +23,7 @@ use std::{
 /// A wrapper around the [`Scoped`] object that contains a reference to the [`ScopeState`] and properties for a given
 /// component.
 ///
-/// The [`Scope`] is your handle to the [`VirtualDom`] and the component state. Every component is given its own
+/// The [`Scope`] is your handle to the [`crate::VirtualDom`] and the component state. Every component is given its own
 /// [`ScopeState`] and merged with its properties to create a [`Scoped`].
 ///
 /// The [`Scope`] handle specifically exists to provide a stable reference to these items for the lifetime of the
@@ -56,8 +56,9 @@ impl<'a, T> std::ops::Deref for Scoped<'a, T> {
 
 /// A component's unique identifier.
 ///
-/// `ScopeId` is a `usize` that is unique across the entire [`VirtualDom`] and across time. [`ScopeID`]s will never be reused
-/// once a component has been unmounted.
+/// `ScopeId` is a `usize` that acts a key for the internal slab of Scopes. This means that the key is not unqiue across
+/// time. We do try and guarantee that between calls to `wait_for_work`, no ScopeIds will be recycled in order to give
+/// time for any logic that relies on these IDs to properly update.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug, PartialOrd, Ord)]
 pub struct ScopeId(pub usize);
@@ -177,9 +178,9 @@ impl<'src> ScopeState {
         self.height
     }
 
-    /// Get the Parent of this [`Scope`] within this Dioxus [`VirtualDom`].
+    /// Get the Parent of this [`Scope`] within this Dioxus [`crate::VirtualDom`].
     ///
-    /// This ID is not unique across Dioxus [`VirtualDom`]s or across time. IDs will be reused when components are unmounted.
+    /// This ID is not unique across Dioxus [`crate::VirtualDom`]s or across time. IDs will be reused when components are unmounted.
     ///
     /// The base component will not have a parent, and will return `None`.
     ///
@@ -198,9 +199,9 @@ impl<'src> ScopeState {
         self.parent.map(|p| unsafe { &*p }.id)
     }
 
-    /// Get the ID of this Scope within this Dioxus [`VirtualDom`].
+    /// Get the ID of this Scope within this Dioxus [`crate::VirtualDom`].
     ///
-    /// This ID is not unique across Dioxus [`VirtualDom`]s or across time. IDs will be reused when components are unmounted.
+    /// This ID is not unique across Dioxus [`crate::VirtualDom`]s or across time. IDs will be reused when components are unmounted.
     ///
     /// # Example
     ///
@@ -217,7 +218,7 @@ impl<'src> ScopeState {
 
     /// Create a subscription that schedules a future render for the reference component
     ///
-    /// ## Notice: you should prefer using [`schedule_update_any`] and [`scope_id`]
+    /// ## Notice: you should prefer using [`Self::schedule_update_any`] and [`Self::scope_id`]
     pub fn schedule_update(&self) -> Arc<dyn Fn() + Send + Sync + 'static> {
         let (chan, id) = (self.tasks.sender.clone(), self.scope_id());
         Arc::new(move || drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
@@ -240,7 +241,7 @@ impl<'src> ScopeState {
 
     /// Get the [`ScopeId`] of a mounted component.
     ///
-    /// `ScopeId` is not unique for the lifetime of the [`VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
+    /// `ScopeId` is not unique for the lifetime of the [`crate::VirtualDom`] - a [`ScopeId`] will be reused if a component is unmounted.
     pub fn needs_update_any(&self, id: ScopeId) {
         self.tasks
             .sender
@@ -249,20 +250,17 @@ impl<'src> ScopeState {
     }
 
     /// Return any context of type T if it exists on this scope
-    pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
-        self.shared_contexts
-            .borrow()
-            .get(&TypeId::of::<T>())
-            .and_then(|shared| shared.downcast_ref::<T>())
-            .cloned()
+    pub fn has_context<T: 'static>(&self) -> Option<&T> {
+        let contextex = self.shared_contexts.borrow();
+        let val = contextex.get(&TypeId::of::<T>())?;
+        let as_concrete = val.downcast_ref::<T>()? as *const T;
+        Some(unsafe { &*as_concrete })
     }
 
     /// Try to retrieve a shared state with type `T` from any parent scope.
     ///
-    /// The state will be cloned and returned, if it exists.
-    ///
-    /// We recommend wrapping the state in an `Rc` or `Arc` to avoid deep cloning.
-    pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
+    /// To release the borrow, use `cloned` if the context is clone.
+    pub fn consume_context<T: 'static>(&self) -> Option<&T> {
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
         }
@@ -272,26 +270,24 @@ impl<'src> ScopeState {
             // safety: all parent pointers are valid thanks to the bump arena
             let parent = unsafe { &*parent_ptr };
             if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                return Some(
-                    shared
-                        .downcast_ref::<T>()
-                        .expect("Context of type T should exist")
-                        .clone(),
-                );
+                let as_concrete = shared.downcast_ref::<T>()? as *const T;
+                return Some(unsafe { &*as_concrete });
             }
             search_parent = parent.parent;
         }
         None
     }
 
-    /// This method enables the ability to expose state to children further down the [`VirtualDom`] Tree.
+    /// Expose state to children further down the [`crate::VirtualDom`] Tree. Does not require `clone` on the context,
+    /// though we do recommend it.
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
     /// For a hook that provides the same functionality, use `use_provide_context` and `use_consume_context` instead.
     ///
-    /// When the component is dropped, so is the context. Be aware of this behavior when consuming
-    /// the context via Rc/Weak.
+    /// If a state is provided that already exists, the new value will not be inserted. Instead, this method will
+    /// return the existing value. This behavior is chosen so shared values do not need to be `Clone`. This particular
+    /// behavior might change in the future.
     ///
     /// # Example
     ///
@@ -308,12 +304,20 @@ impl<'src> ScopeState {
     ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
-        self.shared_contexts
-            .borrow_mut()
-            .insert(TypeId::of::<T>(), Box::new(value.clone()))
-            .and_then(|f| f.downcast::<T>().ok());
-        value
+    pub fn provide_context<T: 'static>(&self, value: T) -> &T {
+        let mut contexts = self.shared_contexts.borrow_mut();
+
+        let any = match contexts.get(&TypeId::of::<T>()) {
+            Some(item) => item.downcast_ref::<T>().unwrap() as *const T,
+            None => {
+                let boxed = Box::new(value);
+                let boxed_ptr = boxed.as_ref() as *const T;
+                contexts.insert(TypeId::of::<T>(), boxed);
+                boxed_ptr
+            }
+        };
+
+        unsafe { &*any }
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
@@ -349,7 +353,7 @@ impl<'src> ScopeState {
         self.tasks.remove(id);
     }
 
-    /// Take a lazy [`VNode`] structure and actually build it with the context of the efficient [`Bump`] allocator.
+    /// Take a lazy [`crate::VNode`] structure and actually build it with the context of the efficient [`bumpalo::Bump`] allocator.
     ///
     /// ## Example
     ///
@@ -455,6 +459,31 @@ impl<'src> ScopeState {
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
         let callback = RefCell::new(Some(caller));
         EventHandler { callback }
+    }
+
+    /// Create a new [`AttributeValue`] with the listener variant from a callback
+    ///
+    /// The callback must be confined to the lifetime of the ScopeState
+    pub fn listener<T: 'static>(
+        &'src self,
+        mut callback: impl FnMut(Event<T>) + 'src,
+    ) -> AttributeValue<'src> {
+        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
+        // This is the suggested way to build a bumpbox
+        //
+        // In theory, we could just use regular boxes
+        let boxed: BumpBox<'src, dyn FnMut(_) + 'src> = unsafe {
+            BumpBox::from_raw(self.bump().alloc(move |event: Event<dyn Any>| {
+                if let Ok(data) = event.data.downcast::<T>() {
+                    callback(Event {
+                        propogates: event.propogates,
+                        data,
+                    })
+                }
+            }))
+        };
+
+        AttributeValue::Listener(RefCell::new(Some(boxed)))
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

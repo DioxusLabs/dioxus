@@ -32,7 +32,7 @@ fn manual_diffing() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             HydrateText { path: &[0], value: "goodbye", id: ElementId(4) },
-            AppendChildren { m: 1 }
+            AppendChildren { m: 1, id: ElementId(0) }
         ]
     );
 }

@@ -4,9 +4,13 @@ use crate::{arena::ElementId, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
-/// This method returns "mutations" - IE the necessary changes to get the RealDOM to match the VirtualDOM. It also
-/// includes a list of NodeRefs that need to be applied and effects that need to be triggered after the RealDOM has
-/// applied the edits.
+/// This object provides a bunch of important information for a renderer to use patch the Real Dom with the state of the
+/// VirtualDom. This includes the scopes that were modified, the templates that were discovered, and a list of changes
+/// in the form of a [`Mutation`].
+///
+/// These changes are specific to one subtree, so to patch multiple subtrees, you'd need to handle each set separately.
+///
+/// Templates, however, apply to all subtrees, not just target subtree.
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
 #[derive(Debug, Default)]
@@ -32,17 +36,13 @@ impl<'a> Mutations<'a> {
     ///
     /// Used really only for testing
     pub fn santize(mut self) -> Self {
-        todo!()
-        // self.templates
-        //     .iter_mut()
-        //     .chain(self.dom_edits.iter_mut())
-        //     .for_each(|edit| match edit {
-        //         Mutation::LoadTemplate { name, .. } => *name = "template",
-        //         Mutation::SaveTemplate { name, .. } => *name = "template",
-        //         _ => {}
-        //     });
+        for edit in self.edits.iter_mut() {
+            if let Mutation::LoadTemplate { name, .. } = edit {
+                *name = "template"
+            }
+        }
 
-        // self
+        self
     }
 
     /// Push a new mutation into the dom_edits list
@@ -51,10 +51,10 @@ impl<'a> Mutations<'a> {
     }
 }
 
-/*
-each subtree has its own numbering scheme
-*/
-
+/// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
+/// of the Dioxus VirtualDom.
+///
+/// These edits can be serialized and sent over the network or through any interface
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),
@@ -62,37 +62,111 @@ each subtree has its own numbering scheme
 )]
 #[derive(Debug, PartialEq, Eq)]
 pub enum Mutation<'a> {
-    AssignId {
-        path: &'static [u8],
+    /// Add these m children to the target element
+    AppendChildren {
+        /// The ID of the element being mounted to
         id: ElementId,
-    },
 
-    CreatePlaceholder {
-        id: ElementId,
-    },
-    CreateTextNode {
-        value: &'a str,
-        id: ElementId,
-    },
-    HydrateText {
-        path: &'static [u8],
-        value: &'a str,
-        id: ElementId,
-    },
-    LoadTemplate {
-        name: &'static str,
-        index: usize,
-        id: ElementId,
-    },
-
-    // Take the current element and replace it with the element with the given id.
-    ReplaceWith {
-        id: ElementId,
+        /// The number of nodes on the stack
         m: usize,
     },
 
-    ReplacePlaceholder {
+    /// Assign the element at the given path the target ElementId.
+    ///
+    /// The path is in the form of a list of indices based on children. Templates cannot have more than 255 children per
+    /// element, hence the use of a single byte.
+    ///
+    ///
+    AssignId {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
         path: &'static [u8],
+
+        /// The ID we're assigning to this element/placeholder.
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Create an placeholder int he DOM that we will use later.
+    ///
+    /// Dioxus currently requires the use of placeholders to maintain a re-entrance point for things like list diffing
+    CreatePlaceholder {
+        /// The ID we're assigning to this element/placeholder.
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Create a node specifically for text with the given value
+    CreateTextNode {
+        /// The text content of this text node
+        value: &'a str,
+
+        /// The ID we're assigning to this specific text nodes
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Hydrate an existing text node at the given path with the given text.
+    ///
+    /// Assign this text node the given ID since we will likely need to modify this text at a later point
+    HydrateText {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
+        path: &'static [u8],
+
+        /// The value of the textnode that we want to set the placeholder with
+        value: &'a str,
+
+        /// The ID we're assigning to this specific text nodes
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Load and clone an existing node from a template saved under that specific name
+    ///
+    /// Dioxus guarantees that the renderer will have already been provided the template.
+    /// When the template is picked up in the template list, it should be saved under its "name" - here, the name
+    LoadTemplate {
+        /// The "name" of the template. When paired with `rsx!`, this is autogenerated
+        name: &'static str,
+
+        /// Which root are we loading from the template?
+        ///
+        /// The template is stored as a list of nodes. This index represents the position of that root
+        index: usize,
+
+        /// The ID we're assigning to this element being loaded from the template
+        ///
+        /// This will be used later to move the element around in lists
+        id: ElementId,
+    },
+
+    /// Replace the target element (given by its ID) with the topmost m nodes on the stack
+    ReplaceWith {
+        /// The ID of the node we're going to replace with
+        id: ElementId,
+
+        /// The number of nodes on the stack to use to replace
+        m: usize,
+    },
+
+    /// Replace an existing element in the template at the given path with the m nodes on the stack
+    ReplacePlaceholder {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
+        path: &'static [u8],
+
+        /// The number of nodes on the stack to use to replace
         m: usize,
     },
 

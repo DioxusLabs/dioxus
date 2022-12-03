@@ -8,13 +8,12 @@ use std::{
     rc::Rc,
 };
 
+/// An ID representing an ongoing suspended component
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct SuspenseId(pub usize);
+pub(crate) struct SuspenseId(pub usize);
 
-pub type SuspenseContext = Rc<SuspenseBoundary>;
-
-/// Essentially a fiber in React
-pub struct SuspenseBoundary {
+/// A boundary in the VirtualDom that captures all suspended components below it
+pub struct SuspenseContext {
     pub(crate) id: ScopeId,
     pub(crate) waiting_on: RefCell<HashSet<SuspenseId>>,
     pub(crate) mutations: RefCell<Mutations<'static>>,
@@ -22,7 +21,8 @@ pub struct SuspenseBoundary {
     pub(crate) created_on_stack: Cell<usize>,
 }
 
-impl SuspenseBoundary {
+impl SuspenseContext {
+    /// Create a new boundary for suspense
     pub fn new(id: ScopeId) -> Self {
         Self {
             id,
@@ -35,11 +35,11 @@ impl SuspenseBoundary {
 }
 
 pub(crate) struct SuspenseLeaf {
-    pub id: SuspenseId,
-    pub scope_id: ScopeId,
-    pub tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub notified: Cell<bool>,
-    pub task: *mut dyn Future<Output = Element<'static>>,
+    pub(crate) id: SuspenseId,
+    pub(crate) scope_id: ScopeId,
+    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub(crate) notified: Cell<bool>,
+    pub(crate) task: *mut dyn Future<Output = Element<'static>>,
 }
 
 impl RcWake for SuspenseLeaf {

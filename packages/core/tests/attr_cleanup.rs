@@ -26,7 +26,7 @@ fn attrs_cycle() {
         dom.rebuild().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
 

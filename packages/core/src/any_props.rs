@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use crate::{
-    factory::{ComponentReturn, RenderReturn},
     innerlude::Scoped,
+    nodes::{ComponentReturn, RenderReturn},
     scopes::{Scope, ScopeState},
     Element,
 };

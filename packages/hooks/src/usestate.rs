@@ -466,7 +466,7 @@ fn api_makes_sense() {
         }
 
         cx.spawn({
-            dioxus_core::to_owned![val];
+            to_owned![val];
             async move {
                 val.modify(|f| f + 1);
             }

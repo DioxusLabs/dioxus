@@ -2,9 +2,9 @@ use futures_util::FutureExt;
 use std::task::{Context, Poll};
 
 use crate::{
-    factory::RenderReturn,
     innerlude::{Mutation, Mutations, SuspenseContext},
-    TaskId, VNode, VirtualDom,
+    nodes::RenderReturn,
+    ScopeId, TaskId, VNode, VirtualDom,
 };
 
 use super::{waker::RcWake, SuspenseId};
@@ -14,7 +14,7 @@ impl VirtualDom {
     ///
     /// This is precise, meaning we won't poll every task, just tasks that have woken up as notified to use by the
     /// queue
-    pub fn handle_task_wakeup(&mut self, id: TaskId) {
+    pub(crate) fn handle_task_wakeup(&mut self, id: TaskId) {
         let mut tasks = self.scheduler.tasks.borrow_mut();
         let task = &tasks[id.0];
 
@@ -31,7 +31,15 @@ impl VirtualDom {
         }
     }
 
-    pub fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
+    pub(crate) fn acquire_suspense_boundary<'a>(&self, id: ScopeId) -> &'a SuspenseContext {
+        let ct = self.scopes[id.0]
+            .consume_context::<SuspenseContext>()
+            .unwrap();
+
+        unsafe { &*(ct as *const SuspenseContext) }
+    }
+
+    pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
         println!("suspense notified");
 
         let leaf = self
@@ -56,9 +64,8 @@ impl VirtualDom {
         // we should attach them to that component and then render its children
         // continue rendering the tree until we hit yet another suspended component
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
-            let fiber = &self.scopes[leaf.scope_id.0]
-                .consume_context::<SuspenseContext>()
-                .unwrap();
+            // safety: we're not going to modify the suspense context but we don't want to make a clone of it
+            let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
             println!("ready pool");
 

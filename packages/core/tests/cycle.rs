@@ -17,7 +17,7 @@ fn cycling_elements() {
         edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     );
 

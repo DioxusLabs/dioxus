@@ -35,7 +35,7 @@ impl SsrRender {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.id)
+            .entry(template.template.name)
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
 

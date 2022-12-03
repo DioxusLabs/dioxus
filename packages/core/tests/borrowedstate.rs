@@ -16,7 +16,7 @@ fn test_borrowed_state() {
             HydrateText { path: &[0,], value: "Hello w1!", id: ElementId(4,) },
             ReplacePlaceholder { path: &[1,], m: 1 },
             ReplacePlaceholder { path: &[0,], m: 1 },
-            AppendChildren { m: 1 },
+            AppendChildren { m: 1, id: ElementId(0) },
         ]
     )
 }

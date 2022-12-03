@@ -4,6 +4,10 @@ use std::cell::RefCell;
 use std::future::Future;
 use std::{pin::Pin, rc::Rc};
 
+/// A task's unique identifier.
+///
+/// `TaskId` is a `usize` that is unique across the entire VirtualDOM and across time. TaskIDs will never be reused
+/// once a Task has been completed.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct TaskId(pub usize);

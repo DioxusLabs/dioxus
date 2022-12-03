@@ -130,7 +130,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                id: concat!(
+                name: concat!(
                     file!(),
                     ":",
                     line!(),
@@ -187,8 +187,10 @@ impl<'a> DynamicContext<'a> {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
-                                volatile: dioxus_elements::#el_name::#name.2,
                                 value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
                             }
                         })
                     }
@@ -199,8 +201,10 @@ impl<'a> DynamicContext<'a> {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
-                                volatile: dioxus_elements::#el_name::#name.2,
                                 value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
                             }
                         })
                     }
@@ -226,7 +230,7 @@ impl<'a> DynamicContext<'a> {
                     out
                 });
 
-                let opt = el.children.len() == 1;
+                let _opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };
 
                 quote! {
@@ -235,7 +239,6 @@ impl<'a> DynamicContext<'a> {
                         namespace: dioxus_elements::#el_name::NAME_SPACE,
                         attrs: &[ #attrs ],
                         children: &[ #children ],
-                        inner_opt: #opt,
                     }
                 }
             }

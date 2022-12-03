@@ -9,7 +9,6 @@ mod diff;
 mod dirty_scope;
 mod error_boundary;
 mod events;
-mod factory;
 mod fragment;
 mod lazynodes;
 mod mutations;
@@ -25,10 +24,10 @@ pub(crate) mod innerlude {
     pub use crate::dirty_scope::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
-    pub use crate::factory::RenderReturn;
     pub use crate::fragment::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
+    pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scheduler::*;
@@ -72,9 +71,9 @@ pub(crate) mod innerlude {
 
 pub use crate::innerlude::{
     fc_to_builder, Attribute, AttributeValue, Component, DynamicNode, Element, ElementId, Event,
-    Fragment, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState,
-    Scoped, SuspenseBoundary, SuspenseContext, TaskId, Template, TemplateAttribute, TemplateNode,
-    VComponent, VNode, VText, VirtualDom,
+    Fragment, IntoDynNode, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope,
+    ScopeId, ScopeState, Scoped, SuspenseContext, TaskId, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
