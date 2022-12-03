@@ -67,7 +67,7 @@ impl Buffer {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
-            BodyNode::DynamicText(text) => self.write_text(text),
+            BodyNode::Text(text) => self.write_text(text),
             BodyNode::RawExpr(exp) => self.write_raw_expr(exp),
             _ => Ok(()),
         }

@@ -8,54 +8,38 @@ use std::{
     rc::Rc,
 };
 
+/// An ID representing an ongoing suspended component
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub struct SuspenseId(pub usize);
+pub(crate) struct SuspenseId(pub usize);
 
-pub type SuspenseContext = Rc<SuspenseBoundary>;
-
-/// Essentially a fiber in React
-pub struct SuspenseBoundary {
-    pub id: ScopeId,
-    pub waiting_on: RefCell<HashSet<SuspenseId>>,
-    pub mutations: RefCell<Mutations<'static>>,
-    pub placeholder: Cell<Option<ElementId>>,
-
-    pub created_on_stack: Cell<usize>,
-
-    // whenever the suspense resolves, we call this onresolve function
-    // this lets us do things like putting up a loading spinner
-    //
-    // todo: we need a way of controlling whether or not a component hides itself but still processes changes
-    // If we run into suspense, we perform a diff, so its important that the old elements are still around.
-    //
-    // When the timer expires, I imagine a container could hide the elements and show the spinner. This, however,
-    // can not be
-    pub onresolve: Option<Box<dyn FnOnce()>>,
-
-    /// Called when
-    pub onstart: Option<Box<dyn FnOnce()>>,
+/// A boundary in the VirtualDom that captures all suspended components below it
+pub struct SuspenseContext {
+    pub(crate) id: ScopeId,
+    pub(crate) waiting_on: RefCell<HashSet<SuspenseId>>,
+    pub(crate) mutations: RefCell<Mutations<'static>>,
+    pub(crate) placeholder: Cell<Option<ElementId>>,
+    pub(crate) created_on_stack: Cell<usize>,
 }
 
-impl SuspenseBoundary {
+impl SuspenseContext {
+    /// Create a new boundary for suspense
     pub fn new(id: ScopeId) -> Self {
         Self {
             id,
             waiting_on: Default::default(),
-            mutations: RefCell::new(Mutations::new()),
+            mutations: RefCell::new(Mutations::default()),
             placeholder: Cell::new(None),
             created_on_stack: Cell::new(0),
-            onresolve: None,
-            onstart: None,
         }
     }
 }
 
 pub(crate) struct SuspenseLeaf {
-    pub id: SuspenseId,
-    pub scope_id: ScopeId,
-    pub tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
-    pub notified: Cell<bool>,
-    pub task: *mut dyn Future<Output = Element<'static>>,
+    pub(crate) id: SuspenseId,
+    pub(crate) scope_id: ScopeId,
+    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub(crate) notified: Cell<bool>,
+    pub(crate) task: *mut dyn Future<Output = Element<'static>>,
 }
 
 impl RcWake for SuspenseLeaf {

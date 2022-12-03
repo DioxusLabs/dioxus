@@ -219,7 +219,7 @@ impl ToTokens for ContentField {
         match self {
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! {
-                __cx.raw_text(#s).0
+                __cx.raw_text(#s)
             }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.event_handler(#e)

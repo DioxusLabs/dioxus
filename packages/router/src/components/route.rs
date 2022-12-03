@@ -29,7 +29,8 @@ pub struct RouteProps<'a> {
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
     let router_root = cx
         .use_hook(|| cx.consume_context::<Arc<RouterCore>>())
-        .as_ref()?;
+        .as_ref()
+        .unwrap();
 
     cx.use_hook(|| {
         // create a bigger, better, longer route if one above us exists
@@ -55,6 +56,6 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         cx.render(rsx!(&cx.props.children))
     } else {
         log::trace!("Route should *not* render: {:?}", cx.scope_id());
-        None
+        cx.render(rsx!(()))
     }
 }

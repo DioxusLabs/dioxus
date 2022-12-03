@@ -22,25 +22,13 @@ fn test_original_diff() {
     });
 
     let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // create template
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            CreateStaticText { value: "Hello, world!" },
-            AppendChildren { m: 1 },
-            AppendChildren { m: 1 },
-            SaveTemplate { name: "template", m: 1 },
-        ]
-    );
 
     assert_eq!(
         edits.edits,
         [
             // add to root
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            AppendChildren { m: 1 }
+            AppendChildren { m: 1, id: ElementId(0) }
         ]
     )
 }
@@ -65,28 +53,31 @@ fn create() {
         })
     });
 
-    let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // create template
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            CreateStaticText { value: "Hello, world!" },
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            CreateStaticPlaceholder {},
-            AppendChildren { m: 1 },
-            AppendChildren { m: 1 },
-            AppendChildren { m: 2 },
-            AppendChildren { m: 1 },
-            SaveTemplate { name: "template", m: 1 },
-            // The fragment child template
-            CreateStaticText { value: "hello" },
-            CreateStaticText { value: "world" },
-            SaveTemplate { name: "template", m: 2 },
-        ]
-    );
+    let _edits = dom.rebuild().santize();
+
+    // todo: we don't test template mutations anymore since the templates are passed along
+
+    // assert_eq!(
+    //     edits.templates,
+    //     [
+    //         // create template
+    //         CreateElement { name: "div" },
+    //         CreateElement { name: "div" },
+    //         CreateStaticText { value: "Hello, world!" },
+    //         CreateElement { name: "div" },
+    //         CreateElement { name: "div" },
+    //         CreateStaticPlaceholder {},
+    //         AppendChildren { m: 1 },
+    //         AppendChildren { m: 1 },
+    //         AppendChildren { m: 2 },
+    //         AppendChildren { m: 1 },
+    //         SaveTemplate { name: "template", m: 1 },
+    //         // The fragment child template
+    //         CreateStaticText { value: "hello" },
+    //         CreateStaticText { value: "world" },
+    //         SaveTemplate { name: "template", m: 2 },
+    //     ]
+    // );
 }
 
 #[test]
@@ -97,17 +88,19 @@ fn create_list() {
         })
     });
 
-    let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // create template
-            CreateElement { name: "div" },
-            CreateStaticText { value: "hello" },
-            AppendChildren { m: 1 },
-            SaveTemplate { name: "template", m: 1 }
-        ]
-    );
+    let _edits = dom.rebuild().santize();
+
+    // note: we dont test template edits anymore
+    // assert_eq!(
+    //     edits.templates,
+    //     [
+    //         // create template
+    //         CreateElement { name: "div" },
+    //         CreateStaticText { value: "hello" },
+    //         AppendChildren { m: 1 },
+    //         SaveTemplate { name: "template", m: 1 }
+    //     ]
+    // );
 }
 
 #[test]
@@ -122,18 +115,20 @@ fn create_simple() {
     });
 
     let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // create template
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            CreateElement { name: "div" },
-            // add to root
-            SaveTemplate { name: "template", m: 4 }
-        ]
-    );
+
+    // note: we dont test template edits anymore
+    // assert_eq!(
+    //     edits.templates,
+    //     [
+    //         // create template
+    //         CreateElement { name: "div" },
+    //         CreateElement { name: "div" },
+    //         CreateElement { name: "div" },
+    //         CreateElement { name: "div" },
+    //         // add to root
+    //         SaveTemplate { name: "template", m: 4 }
+    //     ]
+    // );
 }
 #[test]
 fn create_components() {
@@ -158,26 +153,9 @@ fn create_components() {
         })
     }
 
-    let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // The "child" template
-            CreateElement { name: "h1" },
-            CreateElement { name: "div" },
-            CreateStaticPlaceholder {},
-            AppendChildren { m: 1 },
-            CreateElement { name: "p" },
-            SaveTemplate { name: "template", m: 3 },
-            // Sub template for component children
-            CreateStaticText { value: "abc1" },
-            SaveTemplate { name: "template", m: 1 },
-            CreateStaticText { value: "abc2" },
-            SaveTemplate { name: "template", m: 1 },
-            CreateStaticText { value: "abc3" },
-            SaveTemplate { name: "template", m: 1 }
-        ]
-    );
+    let _edits = dom.rebuild().santize();
+
+    // todo: test this
 }
 
 #[test]
@@ -195,23 +173,25 @@ fn anchors() {
 
     // note that the template under "false" doesn't show up since it's not loaded
     let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.template_mutations,
-        [
-            // create each template
-            CreateElement { name: "div" },
-            CreateStaticText { value: "hello" },
-            AppendChildren { m: 1 },
-            SaveTemplate { m: 1, name: "template" },
-        ]
-    );
+
+    // note: we dont test template edits anymore
+    // assert_eq!(
+    //     edits.templates,
+    //     [
+    //         // create each template
+    //         CreateElement { name: "div" },
+    //         CreateStaticText { value: "hello" },
+    //         AppendChildren { m: 1 },
+    //         SaveTemplate { m: 1, name: "template" },
+    //     ]
+    // );
 
     assert_eq!(
         edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             CreatePlaceholder { id: ElementId(2) },
-            AppendChildren { m: 2 }
+            AppendChildren { m: 2, id: ElementId(0) }
         ]
     )
 }

@@ -2,15 +2,15 @@ use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenP
 use crate::input_data::{
     decode_mouse_button_set, encode_mouse_button_set, MouseButton, MouseButtonSet,
 };
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 use keyboard_types::Modifiers;
 use std::fmt::{Debug, Formatter};
 
-pub type MouseEvent = UiEvent<MouseData>;
+pub type MouseEvent = Event<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 /// Data associated with a mouse event
 ///
 /// Do not use the deprecated fields; they may change or become private in the future.

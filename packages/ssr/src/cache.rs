@@ -3,6 +3,7 @@ use std::fmt::Write;
 
 pub struct StringCache {
     pub segments: Vec<Segment>,
+    pub template: Template<'static>,
 }
 
 #[derive(Default)]
@@ -40,6 +41,7 @@ impl StringCache {
 
         Ok(Self {
             segments: chain.segments,
+            template: template.template,
         })
     }
 

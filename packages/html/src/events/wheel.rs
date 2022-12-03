@@ -1,10 +1,10 @@
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 use euclid::UnknownUnit;
 use std::fmt::{Debug, Formatter};
 
 use crate::geometry::{LinesVector, PagesVector, PixelsVector, WheelDelta};
 
-pub type WheelEvent = UiEvent<WheelData>;
+pub type WheelEvent = Event<WheelData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone)]
 pub struct WheelData {

@@ -1,5 +1,5 @@
 use super::cache::Segment;
-use dioxus_core::{prelude::*, AttributeValue, DynamicNode, VText};
+use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn, VText};
 use std::collections::HashMap;
 use std::fmt::Write;
 use std::rc::Rc;
@@ -9,7 +9,7 @@ use crate::cache::StringCache;
 /// A virtualdom renderer that caches the templates it has seen for faster rendering
 #[derive(Default)]
 pub struct SsrRender {
-    template_cache: HashMap<Template<'static>, Rc<StringCache>>,
+    template_cache: HashMap<&'static str, Rc<StringCache>>,
 }
 
 impl SsrRender {
@@ -18,7 +18,11 @@ impl SsrRender {
         let root = scope.root_node();
 
         let mut out = String::new();
-        // self.render_template(&mut out, dom, root).unwrap();
+
+        match root {
+            RenderReturn::Sync(Ok(node)) => self.render_template(&mut out, dom, node).unwrap(),
+            _ => {}
+        };
 
         out
     }
@@ -31,7 +35,7 @@ impl SsrRender {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template)
+            .entry(template.template.name)
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
 
@@ -46,37 +50,38 @@ impl SsrRender {
                     };
                 }
                 Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
-                    DynamicNode::Component(_) => todo!(),
-                    DynamicNode::Text(_) => todo!(),
-                    DynamicNode::Fragment(_) => todo!(),
-                    DynamicNode::Placeholder(_) => todo!(),
-                    // todo!()
-                    // DynamicNode::Text(VText { id, value }) => {
-                    //     // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
-                    //     // if !*inner {
-                    //     write!(buf, "<!--#-->")?;
-                    //     // }
+                    DynamicNode::Component(node) => {
+                        let id = node.scope.get().unwrap();
+                        let scope = dom.get_scope(id).unwrap();
+                        let node = scope.root_node();
+                        match node {
+                            RenderReturn::Sync(Ok(node)) => self.render_template(buf, dom, node)?,
+                            _ => todo!(),
+                        }
+                    }
+                    DynamicNode::Text(text) => {
+                        // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
+                        // if !*inner {
+                        // write!(buf, "<!--#-->")?;
+                        // }
 
-                    //     // todo: escape the text
-                    //     write!(buf, "{}", value)?;
+                        // todo: escape the text
+                        write!(buf, "{}", text.value)?;
 
-                    //     // if !*inner {
-                    //     write!(buf, "<!--/#-->")?;
-                    //     // }
-                    // }
-                    // DynamicNode::Fragment { nodes, .. } => {
-                    //     for child in *nodes {
-                    //         self.render_template(buf, dom, child)?;
-                    //     }
-                    // }
-                    // DynamicNode::Component { scope, .. } => {
-                    //     let id = scope.get().unwrap();
-                    //     let scope = dom.get_scope(id).unwrap();
-                    //     self.render_template(buf, dom, scope.root_node())?;
-                    // }
-                    // DynamicNode::Placeholder(_el) => {
-                    //     write!(buf, "<!--placeholder-->")?;
-                    // }
+                        // if !*inner {
+                        // write!(buf, "<!--/#-->")?;
+                        // }
+                    }
+                    DynamicNode::Fragment(nodes) => {
+                        for child in *nodes {
+                            self.render_template(buf, dom, child)?;
+                        }
+                    }
+
+                    DynamicNode::Placeholder(_el) => {
+                        // todo write a placeholder if in pre-render mode
+                        // write!(buf, "<!--placeholder-->")?;
+                    }
                 },
 
                 Segment::PreRendered(contents) => buf.push_str(contents),

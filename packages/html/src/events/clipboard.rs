@@ -1,6 +1,6 @@
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
-pub type ClipboardEvent = UiEvent<ClipboardData>;
+pub type ClipboardEvent = Event<ClipboardData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone)]
 pub struct ClipboardData {

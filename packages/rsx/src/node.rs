@@ -131,10 +131,10 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text(#txt)
+                __cx.text_node(#txt)
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
-                 __cx.fragment_from_iter(#exp)
+                 __cx.make_node(#exp)
             }),
             BodyNode::ForLoop(exp) => {
                 let ForLoop {
@@ -144,7 +144,7 @@ impl ToTokens for BodyNode {
                 let renderer = TemplateRenderer { roots: &body };
 
                 tokens.append_all(quote! {
-                     __cx.fragment_from_iter(
+                     __cx.make_node(
                         (#expr).into_iter().map(|#pat| { #renderer })
                      )
                 })
@@ -152,7 +152,7 @@ impl ToTokens for BodyNode {
             BodyNode::IfChain(chain) => {
                 if is_if_chain_terminated(chain) {
                     tokens.append_all(quote! {
-                         __cx.fragment_from_iter(#chain)
+                         __cx.make_node(#chain)
                     });
                 } else {
                     let ExprIf {
@@ -206,7 +206,7 @@ impl ToTokens for BodyNode {
                     });
 
                     tokens.append_all(quote! {
-                        __cx.fragment_from_iter(#body)
+                        __cx.make_node(#body)
                     });
                 }
             }

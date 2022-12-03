@@ -1,10 +1,10 @@
 use std::any::Any;
 
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
 use crate::MouseData;
 
-pub type DragEvent = UiEvent<DragData>;
+pub type DragEvent = Event<DragData>;
 
 /// The DragEvent interface is a DOM event that represents a drag and drop interaction. The user initiates a drag by
 /// placing a pointer device (such as a mouse) on the touch surface and then dragging the pointer to a new location

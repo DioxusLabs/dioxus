@@ -1,14 +1,18 @@
 use std::marker::PhantomData;
 
 use crate::{
-    factory::{ComponentReturn, RenderReturn},
     innerlude::Scoped,
+    nodes::{ComponentReturn, RenderReturn},
     scopes::{Scope, ScopeState},
     Element,
 };
 
 /// A trait that essentially allows VComponentProps to be used generically
-pub unsafe trait AnyProps<'a> {
+///
+/// # Safety
+///
+/// This should not be implemented outside this module
+pub(crate) unsafe trait AnyProps<'a> {
     fn props_ptr(&self) -> *const ();
     fn render(&'a self, bump: &'a ScopeState) -> RenderReturn<'a>;
     unsafe fn memoize(&self, other: &dyn AnyProps) -> bool;
@@ -18,7 +22,6 @@ pub(crate) struct VProps<'a, P, A, F: ComponentReturn<'a, A> = Element<'a>> {
     pub render_fn: fn(Scope<'a, P>) -> F,
     pub memo: unsafe fn(&P, &P) -> bool,
     pub props: P,
-    // pub props: PropsAllocation<P>,
     _marker: PhantomData<A>,
 }
 
@@ -35,7 +38,6 @@ where
             render_fn,
             memo,
             props,
-            // props: PropsAllocation::Borrowed(props),
             _marker: PhantomData,
         }
     }
@@ -60,12 +62,12 @@ where
     }
 
     fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
-        let scope = cx.bump().alloc(Scoped {
+        let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
             props: &self.props,
             scope: cx,
         });
 
         // Call the render function directly
-        (self.render_fn)(scope).as_return(cx)
+        (self.render_fn)(scope).into_return(cx)
     }
 }

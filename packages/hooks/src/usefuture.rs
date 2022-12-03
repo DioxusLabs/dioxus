@@ -343,7 +343,7 @@ mod tests {
 
             let g = fut.await;
 
-            None
+            todo!()
         }
     }
 }

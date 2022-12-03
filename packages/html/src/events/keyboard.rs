@@ -1,11 +1,11 @@
 use crate::input_data::{decode_key_location, encode_key_location};
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 use keyboard_types::{Code, Key, Location, Modifiers};
 use std::convert::TryInto;
 use std::fmt::{Debug, Formatter};
 use std::str::FromStr;
 
-pub type KeyboardEvent = UiEvent<KeyboardData>;
+pub type KeyboardEvent = Event<KeyboardData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone)]
 pub struct KeyboardData {

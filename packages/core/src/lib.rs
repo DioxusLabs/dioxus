@@ -1,3 +1,6 @@
+#![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+
 mod any_props;
 mod arena;
 mod bump_frame;
@@ -6,9 +9,7 @@ mod diff;
 mod dirty_scope;
 mod error_boundary;
 mod events;
-mod factory;
 mod fragment;
-mod garbage;
 mod lazynodes;
 mod mutations;
 mod nodes;
@@ -21,10 +22,12 @@ mod virtual_dom;
 pub(crate) mod innerlude {
     pub use crate::arena::*;
     pub use crate::dirty_scope::*;
+    pub use crate::error_boundary::*;
     pub use crate::events::*;
     pub use crate::fragment::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
+    pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
     pub use crate::properties::*;
     pub use crate::scheduler::*;
@@ -64,45 +67,13 @@ pub(crate) mod innerlude {
     /// )
     /// ```
     pub type Component<P = ()> = fn(Scope<P>) -> Element;
-
-    /// A list of attributes
-    pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
 }
 
 pub use crate::innerlude::{
-    // AnyAttributeValue, AnyEvent,
-    fc_to_builder,
-    Attribute,
-    AttributeValue,
-    Attributes,
-    Component,
-    DynamicNode,
-    Element,
-    ElementId,
-    ElementRef,
-    EventPriority,
-    Fragment,
-    LazyNodes,
-    Mutation,
-    Mutations,
-    NodeFactory,
-    Properties,
-    Scope,
-    ScopeId,
-    ScopeState,
-    Scoped,
-    SuspenseBoundary,
-    SuspenseContext,
-    TaskId,
-    Template,
-    TemplateAttribute,
-    TemplateNode,
-    UiEvent,
-    VComponent,
-    VFragment,
-    VNode,
-    VText,
-    VirtualDom,
+    fc_to_builder, Attribute, AttributeValue, Component, DynamicNode, Element, ElementId, Event,
+    Fragment, IntoDynNode, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope,
+    ScopeId, ScopeState, Scoped, SuspenseContext, TaskId, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -110,9 +81,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Element, EventHandler, EventPriority, Fragment, LazyNodes, NodeFactory,
-        Properties, Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute,
-        TemplateNode, UiEvent, VNode, VirtualDom,
+        fc_to_builder, Element, Event, EventHandler, Fragment, LazyNodes, Properties, Scope,
+        ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode, VNode,
+        VirtualDom,
     };
 }
 
@@ -120,28 +91,4 @@ pub mod exports {
     //! Important dependencies that are used by the rest of the library
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
-    pub use futures_channel;
-}
-
-#[macro_export]
-/// A helper macro for using hooks in async environements.
-///
-/// # Usage
-///
-///
-/// ```ignore
-/// let (data) = use_ref(&cx, || {});
-///
-/// let handle_thing = move |_| {
-///     to_owned![data]
-///     cx.spawn(async move {
-///         // do stuff
-///     });
-/// }
-/// ```
-macro_rules! to_owned {
-    ($($es:ident),+) => {$(
-        #[allow(unused_mut)]
-        let mut $es = $es.to_owned();
-    )*}
 }

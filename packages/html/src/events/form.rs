@@ -1,8 +1,8 @@
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
 
-pub type FormEvent = UiEvent<FormData>;
+pub type FormEvent = Event<FormData>;
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]

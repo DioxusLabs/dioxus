@@ -1,9 +1,6 @@
 # Testing of Dioxus core
 
 
-NodeFactory
-- [] rsx, html, NodeFactory generate the same structures
-
 Diffing
 - [x] create elements
 - [x] create text
@@ -19,15 +16,13 @@ Diffing
 - [x] keyed diffing
 - [x] keyed diffing out of order
 - [x] keyed diffing with prefix/suffix
-- [x] suspended nodes work 
+- [x] suspended nodes work
 
 Lifecycle
 - [] Components mount properly
 - [] Components create new child components
 - [] Replaced components unmount old components and mount new
 - [] Post-render effects are called
-- [] 
-
 
 Shared Context
 - [] Shared context propagates downwards
@@ -37,7 +32,7 @@ Suspense
 - [] use_suspense generates suspended nodes
 
 
-Hooks 
+Hooks
 - [] Drop order is maintained
 - [] Shared hook state is okay
 - [] use_hook works

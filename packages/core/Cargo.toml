@@ -42,4 +42,3 @@ dioxus = { path = "../dioxus" }
 [features]
 default = []
 serialize = ["serde"]
-debug_vdom = []

@@ -1,9 +1,7 @@
 export function main() {
   let root = window.document.getElementById("main");
-  console.log("loading!");
   if (root != null) {
     window.interpreter = new Interpreter(root);
-    console.log("properly loaded!");
     window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
@@ -18,7 +16,6 @@ class ListenerMap {
   }
 
   create(event_name, element, handler, bubbles) {
-    console.log("creating listener for", event_name, element, handler, bubbles);
     if (bubbles) {
       if (this.global[event_name] === undefined) {
         this.global[event_name] = {};
@@ -79,6 +76,12 @@ export class Interpreter {
   pop() {
     return this.stack.pop();
   }
+  SaveTemplate(nodes, name) {
+    this.templates[name] = nodes;
+  }
+  MountToRoot() {
+    this.AppendChildren(this.stack.length - 1);
+  }
   SetNode(id, node) {
     this.nodes[id] = node;
   }
@@ -124,24 +127,12 @@ export class Interpreter {
     }
   }
   CreateRawText(text) {
-    const node = document.createTextNode(text);
-    this.stack.push(node);
+    this.stack.push(document.createTextNode(text));
   }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
-  }
-  CreateElement(tag, root) {
-    const el = document.createElement(tag);
-    this.nodes[root] = el;
-    this.stack.push(el);
-  }
-  CreateElementNs(tag, root, ns) {
-    console.log("creating element", tag, root, ns);
-    let el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-    this.nodes[root] = el;
   }
   CreatePlaceholder(root) {
     let el = document.createElement("pre");
@@ -162,9 +153,12 @@ export class Interpreter {
   SetText(root, text) {
     this.nodes[root].textContent = text;
   }
-  SetAttribute(root, field, value, ns) {
+  SetAttribute(id, field, value, ns) {
+    const node = this.nodes[id];
+    this.SetAttributeInner(node, field, value, ns);
+  }
+  SetAttributeInner(node, field, value, ns) {
     const name = field;
-    const node = this.nodes[root];
     if (ns === "style") {
       // ????? why do we need to do this
       if (node.style === undefined) {
@@ -219,8 +213,6 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    console.log("handling edits", edits, this.stack.length);
-
     for (let edit of edits) {
       this.handleEdit(edit);
     }
@@ -248,13 +240,10 @@ export class Interpreter {
     let node = this.LoadChild(path);
     node.replaceWith(...els);
   }
-  LoadTemplate(name, index) {
-    console.log("loading template", name, index);
+  LoadTemplate(name, index, id) {
     let node = this.templates[name][index].cloneNode(true);
+    this.nodes[id] = node;
     this.stack.push(node);
-  }
-  SaveTemplate(name, m) {
-    this.templates[name] = this.stack.splice(this.stack.length - m);
   }
   handleEdit(edit) {
     switch (edit.type) {
@@ -264,24 +253,17 @@ export class Interpreter {
       case "AssignId":
         this.AssignId(edit.path, edit.id);
         break;
-      case "CreateElement":
-        if (edit.namespace !== null && edit.namespace !== undefined) {
-          this.CreateElementNs(edit.name, edit.id, edit.namespace);
-        } else {
-          this.CreateElement(edit.name, edit.id);
-        }
-        break;
       case "CreatePlaceholder":
         this.CreatePlaceholder(edit.id);
         break;
       case "CreateTextNode":
         this.CreateTextNode(edit.value);
         break;
-      case "CreateStaticText":
-        this.CreateTextNode(edit.value);
-        break;
       case "HydrateText":
         this.HydrateText(edit.path, edit.value, edit.id);
+        break;
+      case "LoadTemplate":
+        this.LoadTemplate(edit.name, edit.index, edit.id);
         break;
       case "PushRoot":
         this.PushRoot(edit.id);
@@ -293,27 +275,21 @@ export class Interpreter {
         this.ReplacePlaceholder(edit.path, edit.m);
         break;
       case "InsertAfter":
-        this.InsertAfter(edit.id, edit.n);
+        this.InsertAfter(edit.id, edit.m);
         break;
       case "InsertBefore":
-        this.InsertBefore(edit.id, edit.n);
+        this.InsertBefore(edit.id, edit.m);
         break;
       case "Remove":
         this.Remove(edit.id);
-        break;
-      case "LoadTemplate":
-        this.LoadTemplate(edit.name, edit.index);
-        break;
-      case "SaveTemplate":
-        this.SaveTemplate(edit.name, edit.m);
-        break;
-      case "CreateElementNs":
-        this.CreateElementNs(edit.name, edit.id, edit.ns);
         break;
       case "SetText":
         this.SetText(edit.id, edit.value);
         break;
       case "SetAttribute":
+        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
+        break;
+      case "SetBoolAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
@@ -734,8 +710,6 @@ function is_element_node(node) {
 }
 
 function event_bubbles(event) {
-  console.log("event_bubbles", event);
-
   switch (event) {
     case "copy":
       return true;

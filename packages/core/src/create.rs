@@ -1,13 +1,14 @@
-use crate::factory::RenderReturn;
-use crate::innerlude::{VComponent, VFragment, VText};
+use std::cell::Cell;
+
+use crate::innerlude::{VComponent, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, ScopeId, SuspenseContext, TemplateAttribute};
+use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext};
 
-impl<'b: 'static> VirtualDom {
+impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
     ///
     /// This method pushes the ScopeID to the internal scopestack and returns the number of nodes created.
@@ -23,7 +24,7 @@ impl<'b: 'static> VirtualDom {
     pub(crate) fn create(&mut self, template: &'b VNode<'b>) -> usize {
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        if !self.templates.contains_key(&template.template.id) {
+        if !self.templates.contains_key(&template.template.name) {
             self.register_template(template);
         }
 
@@ -44,29 +45,36 @@ impl<'b: 'static> VirtualDom {
                         DynamicNode::Text(VText { id: slot, value }) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
-                            self.mutations.push(CreateTextNode { value, id });
+
+                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                            let unbounded_text = unsafe { std::mem::transmute(*value) };
+                            self.mutations.push(CreateTextNode {
+                                value: unbounded_text,
+                                id,
+                            });
+
                             1
                         }
 
-                        DynamicNode::Fragment(VFragment::Empty(slot)) => {
+                        DynamicNode::Placeholder(slot) => {
                             let id = self.next_element(template, template.template.node_paths[*id]);
                             slot.set(id);
                             self.mutations.push(CreatePlaceholder { id });
                             1
                         }
 
-                        DynamicNode::Fragment(VFragment::NonEmpty(_))
-                        | DynamicNode::Component { .. } => {
+                        DynamicNode::Fragment(_) | DynamicNode::Component { .. } => {
                             self.create_dynamic_node(template, &template.dynamic_nodes[*id], *id)
                         }
                     }
                 }
 
                 TemplateNode::Element { .. } | TemplateNode::Text(_) => {
-                    let this_id = self.next_element(template, &[]);
+                    let this_id = self.next_root(template, root_idx);
+
                     template.root_ids[root_idx].set(this_id);
                     self.mutations.push(LoadTemplate {
-                        name: template.template.id,
+                        name: template.template.name,
                         index: root_idx,
                         id: this_id,
                     });
@@ -80,23 +88,39 @@ impl<'b: 'static> VirtualDom {
                         // Else, it's deep in the template and we should create a new id for it
                         let id = match path.len() {
                             1 => this_id,
-                            _ => self.next_element(template, template.template.attr_paths[attr_id]),
+                            _ => {
+                                let id = self
+                                    .next_element(template, template.template.attr_paths[attr_id]);
+                                self.mutations.push(Mutation::AssignId {
+                                    path: &path[1..],
+                                    id,
+                                });
+                                id
+                            }
                         };
 
                         loop {
                             let attribute = template.dynamic_attrs.get(attr_id).unwrap();
                             attribute.mounted_element.set(id);
 
+                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                            let unbounded_name = unsafe { std::mem::transmute(attribute.name) };
+
                             match &attribute.value {
-                                AttributeValue::Text(value) => self.mutations.push(SetAttribute {
-                                    name: attribute.name,
-                                    value: *value,
-                                    ns: attribute.namespace,
-                                    id,
-                                }),
+                                AttributeValue::Text(value) => {
+                                    // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                                    let unbounded_value = unsafe { std::mem::transmute(*value) };
+
+                                    self.mutations.push(SetAttribute {
+                                        name: unbounded_name,
+                                        value: unbounded_value,
+                                        ns: attribute.namespace,
+                                        id,
+                                    })
+                                }
                                 AttributeValue::Bool(value) => {
                                     self.mutations.push(SetBoolAttribute {
-                                        name: attribute.name,
+                                        name: unbounded_name,
                                         value: *value,
                                         id,
                                     })
@@ -104,7 +128,7 @@ impl<'b: 'static> VirtualDom {
                                 AttributeValue::Listener(_) => {
                                     self.mutations.push(NewEventListener {
                                         // all listeners start with "on"
-                                        event_name: &attribute.name[2..],
+                                        name: &unbounded_name[2..],
                                         scope: cur_scope,
                                         id,
                                     })
@@ -179,7 +203,7 @@ impl<'b: 'static> VirtualDom {
     fn register_template(&mut self, template: &'b VNode<'b>) {
         // First, make sure we mark the template as seen, regardless if we process it
         self.templates
-            .insert(template.template.id, template.template);
+            .insert(template.template.name, template.template);
 
         // If it's all dynamic nodes, then we don't need to register it
         // Quickly run through and see if it's all just dynamic nodes
@@ -199,85 +223,7 @@ impl<'b: 'static> VirtualDom {
             return;
         }
 
-        for node in template.template.roots {
-            self.create_static_node(template, node);
-        }
-
-        self.mutations.template_mutations.push(SaveTemplate {
-            name: template.template.id,
-            m: template.template.roots.len(),
-        });
-    }
-
-    pub(crate) fn create_static_node(
-        &mut self,
-        template: &'b VNode<'b>,
-        node: &'b TemplateNode<'static>,
-    ) {
-        match *node {
-            // Todo: create the children's template
-            TemplateNode::Dynamic(_) => self
-                .mutations
-                .template_mutations
-                .push(CreateStaticPlaceholder {}),
-            TemplateNode::Text(value) => self
-                .mutations
-                .template_mutations
-                .push(CreateStaticText { value }),
-            TemplateNode::DynamicText { .. } => self
-                .mutations
-                .template_mutations
-                .push(CreateStaticText { value: "d" }),
-
-            TemplateNode::Element {
-                attrs,
-                children,
-                namespace,
-                tag,
-                ..
-            } => {
-                if let Some(namespace) = namespace {
-                    self.mutations
-                        .template_mutations
-                        .push(CreateElementNamespace {
-                            name: tag,
-                            namespace,
-                        });
-                } else {
-                    self.mutations
-                        .template_mutations
-                        .push(CreateElement { name: tag });
-                }
-
-                self.mutations
-                    .template_mutations
-                    .extend(attrs.into_iter().filter_map(|attr| match attr {
-                        TemplateAttribute::Static {
-                            name,
-                            value,
-                            namespace,
-                            ..
-                        } => Some(SetStaticAttribute {
-                            name,
-                            value,
-                            ns: *namespace,
-                        }),
-                        _ => None,
-                    }));
-
-                if children.is_empty() {
-                    return;
-                }
-
-                children
-                    .into_iter()
-                    .for_each(|child| self.create_static_node(template, child));
-
-                self.mutations
-                    .template_mutations
-                    .push(AppendChildren { m: children.len() })
-            }
-        }
+        self.mutations.templates.push(template.template);
     }
 
     pub(crate) fn create_dynamic_node(
@@ -289,7 +235,8 @@ impl<'b: 'static> VirtualDom {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
-            Fragment(frag) => self.create_fragment(frag, template, idx),
+            Fragment(frag) => self.create_fragment(frag),
+            Placeholder(frag) => self.create_placeholder(frag, template, idx),
             Component(component) => self.create_component_node(template, component, idx),
         }
     }
@@ -306,59 +253,60 @@ impl<'b: 'static> VirtualDom {
         // Make sure the text node is assigned to the correct element
         text.id.set(new_id);
 
+        // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        let value = unsafe { std::mem::transmute(text.value) };
+
         // Add the mutation to the list
         self.mutations.push(HydrateText {
             id: new_id,
             path: &template.template.node_paths[idx][1..],
-            value: text.value,
+            value,
         });
 
         // Since we're hydrating an existing node, we don't create any new nodes
         0
     }
 
-    pub(crate) fn create_fragment(
+    pub(crate) fn create_placeholder(
         &mut self,
-        frag: &'b VFragment<'b>,
+        slot: &Cell<ElementId>,
         template: &'b VNode<'b>,
         idx: usize,
     ) -> usize {
-        match frag {
-            VFragment::NonEmpty(nodes) => {
-                nodes.iter().fold(0, |acc, child| acc + self.create(child))
-            }
+        // Allocate a dynamic element reference for this text node
+        let id = self.next_element(template, template.template.node_paths[idx]);
 
-            VFragment::Empty(slot) => {
-                // Allocate a dynamic element reference for this text node
-                let id = self.next_element(template, template.template.node_paths[idx]);
+        // Make sure the text node is assigned to the correct element
+        slot.set(id);
 
-                // Make sure the text node is assigned to the correct element
-                slot.set(id);
+        // Assign the ID to the existing node in the template
+        self.mutations.push(AssignId {
+            path: &template.template.node_paths[idx][1..],
+            id,
+        });
 
-                // Assign the ID to the existing node in the template
-                self.mutations.push(AssignId {
-                    path: &template.template.node_paths[idx][1..],
-                    id,
-                });
-
-                // Since the placeholder is already in the DOM, we don't create any new nodes
-                0
-            }
-        }
+        // Since the placeholder is already in the DOM, we don't create any new nodes
+        0
     }
 
-    fn create_component_node(
+    pub(crate) fn create_fragment(&mut self, nodes: &'b [VNode<'b>]) -> usize {
+        nodes.iter().fold(0, |acc, child| acc + self.create(child))
+    }
+
+    pub(super) fn create_component_node(
         &mut self,
         template: &'b VNode<'b>,
         component: &'b VComponent<'b>,
         idx: usize,
     ) -> usize {
-        let props = component.props.replace(None).unwrap();
+        let props = component
+            .props
+            .replace(None)
+            .expect("Props to always exist when a component is being created");
 
-        let prop_ptr = unsafe { std::mem::transmute(props.as_ref()) };
-        let scope = self.new_scope(prop_ptr).id;
+        let unbounded_props = unsafe { std::mem::transmute(props) };
 
-        component.props.replace(Some(props));
+        let scope = self.new_scope(unbounded_props).id;
         component.scope.set(Some(scope));
 
         let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
@@ -366,10 +314,7 @@ impl<'b: 'static> VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Ok(t)) => {
-                self.mount_component(scope, template, t, idx)
-                // self.create(t)
-            }
+            Sync(Ok(t)) => self.mount_component(scope, template, t, idx),
             Sync(Err(_e)) => todo!("Propogate error upwards"),
             Async(_) => self.mount_component_placeholder(template, idx, scope),
         }
@@ -384,7 +329,7 @@ impl<'b: 'static> VirtualDom {
     ) -> usize {
         // Keep track of how many mutations are in the buffer in case we need to split them out if a suspense boundary
         // is encountered
-        let mutations_to_this_point = self.mutations.len();
+        let mutations_to_this_point = self.mutations.edits.len();
 
         // Create the component's root element
         let created = self.create_scope(scope, new);
@@ -396,7 +341,7 @@ impl<'b: 'static> VirtualDom {
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
         let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
-            Some(boundary) => boundary,
+            Some(boundary) => unsafe { &*(boundary as *const SuspenseContext) },
             _ => return created,
         };
 
@@ -410,7 +355,7 @@ impl<'b: 'static> VirtualDom {
         // Note that we break off dynamic mutations only - since static mutations aren't rendered immediately
         let split_off = unsafe {
             std::mem::transmute::<Vec<Mutation>, Vec<Mutation>>(
-                self.mutations.split_off(mutations_to_this_point),
+                self.mutations.edits.split_off(mutations_to_this_point),
             )
         };
         boundary.mutations.borrow_mut().edits.extend(split_off);

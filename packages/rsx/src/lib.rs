@@ -77,7 +77,7 @@ impl ToTokens for CallBody {
             })
         } else {
             out_tokens.append_all(quote! {
-                ::dioxus::core::LazyNodes::new( move | __cx: ::dioxus::core::NodeFactory| -> ::dioxus::core::VNode {
+                ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
                     #body
                 })
             })
@@ -106,7 +106,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let key_tokens = match key {
-            Some(tok) => quote! { Some( __cx.raw_text_inline(#tok) ) },
+            Some(tok) => quote! { Some( __cx.raw_text(#tok) ) },
             None => quote! { None },
         };
 
@@ -130,7 +130,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 
         out_tokens.append_all(quote! {
             static TEMPLATE: ::dioxus::core::Template = ::dioxus::core::Template {
-                id: concat!(
+                name: concat!(
                     file!(),
                     ":",
                     line!(),
@@ -144,7 +144,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 attr_paths: &[ #(#attr_paths),* ],
             };
             ::dioxus::core::VNode {
-                node_id: Default::default(),
                 parent: None,
                 key: #key_tokens,
                 template: TEMPLATE,
@@ -188,8 +187,10 @@ impl<'a> DynamicContext<'a> {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
-                                volatile: dioxus_elements::#el_name::#name.2,
                                 value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
                             }
                         })
                     }
@@ -200,8 +201,10 @@ impl<'a> DynamicContext<'a> {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
-                                volatile: dioxus_elements::#el_name::#name.2,
                                 value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
                             }
                         })
                     }
@@ -227,7 +230,7 @@ impl<'a> DynamicContext<'a> {
                     out
                 });
 
-                let opt = el.children.len() == 1;
+                let _opt = el.children.len() == 1;
                 let children = quote! { #(#children),* };
 
                 quote! {
@@ -236,7 +239,6 @@ impl<'a> DynamicContext<'a> {
                         namespace: dioxus_elements::#el_name::NAME_SPACE,
                         attrs: &[ #attrs ],
                         children: &[ #children ],
-                        inner_opt: #opt,
                     }
                 }
             }
@@ -255,10 +257,9 @@ impl<'a> DynamicContext<'a> {
                 self.dynamic_nodes.push(root);
                 self.node_paths.push(self.current_path.clone());
 
-                if let BodyNode::Text(_) = root {
-                    quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) }
-                } else {
-                    quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) }
+                match root {
+                    BodyNode::Text(_) => quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) },
+                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) },
                 }
             }
         }

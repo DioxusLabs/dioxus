@@ -1,108 +1,109 @@
-use bumpalo::boxed::Box as BumpBox;
 use std::{
-    any::Any,
     cell::{Cell, RefCell},
-    fmt::Debug,
     rc::Rc,
 };
 
-pub struct UiEvent<T: 'static + ?Sized> {
-    pub(crate) bubbles: Rc<Cell<bool>>,
+/// A wrapper around some generic data that handles the event's state
+///
+///
+/// Prevent this event from continuing to bubble up the tree to parent elements.
+///
+/// # Example
+///
+/// ```rust, ignore
+/// rsx! {
+///     button {
+///         onclick: move |evt: Event<MouseData>| {
+///             evt.cancel_bubble();
+///
+///         }
+///     }
+/// }
+/// ```
+pub struct Event<T: 'static + ?Sized> {
     pub(crate) data: Rc<T>,
+    pub(crate) propogates: Rc<Cell<bool>>,
 }
 
-impl UiEvent<dyn Any> {
-    pub fn downcast<T: 'static + Sized>(self) -> Option<UiEvent<T>> {
-        Some(UiEvent {
-            bubbles: self.bubbles,
-            data: self.data.downcast().ok()?,
-        })
+impl<T> Event<T> {
+    /// Prevent this event from continuing to bubble up the tree to parent elements.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///     button {
+    ///         onclick: move |evt: Event<MouseData>| {
+    ///             evt.cancel_bubble();
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    #[deprecated = "use stop_propogation instead"]
+    pub fn cancel_bubble(&self) {
+        self.propogates.set(false);
+    }
+
+    /// Prevent this event from continuing to bubble up the tree to parent elements.
+    ///
+    /// # Example
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///     button {
+    ///         onclick: move |evt: Event<MouseData>| {
+    ///             evt.cancel_bubble();
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn stop_propogation(&self) {
+        self.propogates.set(false);
+    }
+
+    /// Get a reference to the inner data from this event
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///     button {
+    ///         onclick: move |evt: Event<MouseData>| {
+    ///             let data = evt.inner.clone();
+    ///             cx.spawn(async move {
+    ///                 println!("{:?}", data);
+    ///             });
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    pub fn inner(&self) -> &Rc<T> {
+        &self.data
     }
 }
-impl<T: ?Sized> Clone for UiEvent<T> {
+
+impl<T: ?Sized> Clone for Event<T> {
     fn clone(&self) -> Self {
         Self {
-            bubbles: self.bubbles.clone(),
+            propogates: self.propogates.clone(),
             data: self.data.clone(),
         }
     }
 }
-impl<T> UiEvent<T> {
-    pub fn cancel_bubble(&self) {
-        self.bubbles.set(false);
-    }
-}
 
-impl<T> std::ops::Deref for UiEvent<T> {
+impl<T> std::ops::Deref for Event<T> {
     type Target = Rc<T>;
-
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
-impl<T: Debug> std::fmt::Debug for UiEvent<T> {
+impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.bubbles)
+            .field("bubble_state", &self.propogates)
             .field("data", &self.data)
             .finish()
     }
 }
-
-/// Priority of Event Triggers.
-///
-/// Internally, Dioxus will abort work that's taking too long if new, more important work arrives. Unlike React, Dioxus
-/// won't be afraid to pause work or flush changes to the Real Dom. This is called "cooperative scheduling". Some Renderers
-/// implement this form of scheduling internally, however Dioxus will perform its own scheduling as well.
-///
-/// The ultimate goal of the scheduler is to manage latency of changes, prioritizing "flashier" changes over "subtler" changes.
-///
-/// React has a 5-tier priority system. However, they break things into "Continuous" and "Discrete" priority. For now,
-/// we keep it simple, and just use a 3-tier priority system.
-///
-/// - `NoPriority` = 0
-/// - `LowPriority` = 1
-/// - `NormalPriority` = 2
-/// - `UserBlocking` = 3
-/// - `HighPriority` = 4
-/// - `ImmediatePriority` = 5
-///
-/// We still have a concept of discrete vs continuous though - discrete events won't be batched, but continuous events will.
-/// This means that multiple "scroll" events will be processed in a single frame, but multiple "click" events will be
-/// flushed before proceeding. Multiple discrete events is highly unlikely, though.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, PartialOrd, Ord)]
-pub enum EventPriority {
-    /// Work that must be completed during the EventHandler phase.
-    ///
-    /// Currently this is reserved for controlled inputs.
-    Immediate = 3,
-
-    /// "High Priority" work will not interrupt other high priority work, but will interrupt medium and low priority work.
-    ///
-    /// This is typically reserved for things like user interaction.
-    ///
-    /// React calls these "discrete" events, but with an extra category of "user-blocking" (Immediate).
-    High = 2,
-
-    /// "Medium priority" work is generated by page events not triggered by the user. These types of events are less important
-    /// than "High Priority" events and will take precedence over low priority events.
-    ///
-    /// This is typically reserved for VirtualEvents that are not related to keyboard or mouse input.
-    ///
-    /// React calls these "continuous" events (e.g. mouse move, mouse wheel, touch move, etc).
-    Medium = 1,
-
-    /// "Low Priority" work will always be preempted unless the work is significantly delayed, in which case it will be
-    /// advanced to the front of the work queue until completed.
-    ///
-    /// The primary user of Low Priority work is the asynchronous work system (Suspense).
-    ///
-    /// This is considered "idle" work or "background" work.
-    Low = 0,
-}
-
-type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 
 /// The callback type generated by the `rsx!` macro when an `on` field is specified for components.
 ///
@@ -112,9 +113,8 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 /// # Example
 ///
 /// ```rust, ignore
-///
 /// rsx!{
-///     MyComponent { onclick: move |evt| log::info!("clicked"), }
+///     MyComponent { onclick: move |evt| log::info!("clicked") }
 /// }
 ///
 /// #[derive(Props)]
@@ -132,21 +132,23 @@ type ExternalListenerCallback<'bump, T> = BumpBox<'bump, dyn FnMut(T) + 'bump>;
 ///
 /// ```
 pub struct EventHandler<'bump, T = ()> {
-    /// The (optional) callback that the user specified
-    /// Uses a `RefCell` to allow for interior mutability, and FnMut closures.
-    pub callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
+    pub(super) callback: RefCell<Option<ExternalListenerCallback<'bump, T>>>,
 }
 
-impl<'a, T> Default for EventHandler<'a, T> {
+impl<T> Default for EventHandler<'_, T> {
     fn default() -> Self {
         Self {
-            callback: RefCell::new(None),
+            callback: Default::default(),
         }
     }
 }
 
+type ExternalListenerCallback<'bump, T> = bumpalo::boxed::Box<'bump, dyn FnMut(T) + 'bump>;
+
 impl<T> EventHandler<'_, T> {
     /// Call this event handler with the appropriate event type
+    ///
+    /// This borrows the event using a RefCell. Recursively calling a listener will cause a panic.
     pub fn call(&self, event: T) {
         if let Some(callback) = self.callback.borrow_mut().as_mut() {
             callback(event);
@@ -154,6 +156,8 @@ impl<T> EventHandler<'_, T> {
     }
 
     /// Forcibly drop the internal handler callback, releasing memory
+    ///
+    /// This will force any future calls to "call" to not doing anything
     pub fn release(&self) {
         self.callback.replace(None);
     }
