@@ -6,6 +6,7 @@ use dioxus_native_core::state::{
     ChildDepState, ElementBorrowable, NodeDepState, ParentDepState, State,
 };
 use dioxus_native_core::tree::*;
+use dioxus_native_core::SendAnyMap;
 use dioxus_native_core_macro::State;
 
 macro_rules! dep {
@@ -112,7 +113,7 @@ macro_rules! test_state{
             let mut dom: RealDom<$s> = RealDom::new();
 
             let nodes_updated = dom.apply_mutations(vec![mutations]);
-            let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+            let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
             dom.traverse_depth_first(|n| {
                 $(
@@ -129,32 +130,32 @@ macro_rules! test_state{
     }
 }
 
-mod node_depends_on_child_and_parent {
-    use super::*;
-    #[derive(Debug, Clone, Default, PartialEq)]
-    struct Node(i32);
-    dep!(node(Node, (Child, Parent)));
+// mod node_depends_on_child_and_parent {
+//     use super::*;
+//     #[derive(Debug, Clone, Default, PartialEq)]
+//     struct Node(i32);
+//     dep!(node(Node, (Child, Parent)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
-    struct Child(i32);
-    dep!(child(Child, (Child,)));
+//     #[derive(Debug, Clone, Default, PartialEq)]
+//     struct Child(i32);
+//     dep!(child(Child, (Child,)));
 
-    #[derive(Debug, Clone, Default, PartialEq)]
-    struct Parent(i32);
-    dep!(parent(Parent, (Parent,)));
+//     #[derive(Debug, Clone, Default, PartialEq)]
+//     struct Parent(i32);
+//     dep!(parent(Parent, (Parent,)));
 
-    #[derive(Debug, Clone, Default, State)]
-    struct StateTester {
-        #[node_dep_state((child, parent))]
-        node: Node,
-        #[child_dep_state(child)]
-        child: Child,
-        #[parent_dep_state(parent)]
-        parent: Parent,
-    }
+//     #[derive(Debug, Clone, Default, State)]
+//     struct StateTester {
+//         #[node_dep_state((child, parent))]
+//         node: Node,
+//         #[child_dep_state(child)]
+//         child: Child,
+//         #[parent_dep_state(parent)]
+//         parent: Parent,
+//     }
 
-    // test_state!(StateTester, child: (child), node: (node), parent: (parent));
-}
+//     test_state!(StateTester, child: (child), node: (node), parent: (parent));
+// }
 
 // mod child_depends_on_node_that_depends_on_parent {
 //     use super::*;

@@ -164,9 +164,6 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 .iter()
                 .map(|m| m.impl_pass(state_strct.ty));
 
-            // let child_types = state_strct.child_states.iter().map(|s| &s.ty);
-            // let child_members = state_strct.child_states.iter().map(|s| &s.ident);
-
             let gen = quote! {
                 #(#impl_members)*
                 impl State for #type_name {

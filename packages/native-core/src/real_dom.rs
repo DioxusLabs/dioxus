@@ -206,7 +206,7 @@ impl<S: State> RealDom<S> {
                     }
                     LoadTemplate { name, index, id } => {
                         let template_id = self.templates[name][index];
-                        let clone_id = self.clone_node(template_id);
+                        let clone_id = self.clone_node(template_id, &mut nodes_updated);
                         self.set_element_id(clone_id, id);
                     }
                     ReplaceWith { id, m } => {
@@ -384,16 +384,21 @@ impl<S: State> RealDom<S> {
         self.tree.root()
     }
 
-    fn clone_node(&mut self, node_id: NodeId) -> RealNodeId {
+    fn clone_node(
+        &mut self,
+        node_id: NodeId,
+        nodes_updated: &mut FxHashMap<RealNodeId, NodeMask>,
+    ) -> RealNodeId {
         let node = self.tree.get(node_id).unwrap();
         let new_node = node.clone();
         let new_id = self.create_node(new_node);
+        mark_dirty(new_id, NodeMask::ALL, nodes_updated);
         let self_ptr = self as *mut Self;
         for child in self.tree.children_ids(node_id).unwrap() {
             unsafe {
                 // this is safe because no node has itself as a child
                 let self_mut = &mut *self_ptr;
-                let child_id = self_mut.clone_node(*child);
+                let child_id = self_mut.clone_node(*child, nodes_updated);
                 self_mut.add_child(new_id, child_id);
             }
         }
