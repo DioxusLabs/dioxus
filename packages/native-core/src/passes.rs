@@ -151,8 +151,8 @@ impl BitOr for MemberMask {
 }
 
 pub struct PassReturn {
-    progress: bool,
-    mark_dirty: bool,
+    pub progress: bool,
+    pub mark_dirty: bool,
 }
 
 pub trait Pass {
