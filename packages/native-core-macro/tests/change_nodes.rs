@@ -2,7 +2,8 @@ use dioxus::core::ElementId;
 use dioxus::prelude::*;
 use dioxus_native_core::real_dom::RealDom;
 use dioxus_native_core::state::State;
-use dioxus_native_core::RealNodeId;
+use dioxus_native_core::tree::*;
+use dioxus_native_core::NodeId;
 use dioxus_native_core_macro::State;
 
 #[derive(State, Default, Clone)]
@@ -34,13 +35,13 @@ fn remove_node() {
 
     let _to_update = dom.apply_mutations(vec![create]);
 
-    assert_eq!(dom[RealNodeId::ElementId(ElementId(0))].node_data.height, 0);
-    assert_eq!(dom[RealNodeId::UnaccessableId(0)].node_data.height, 1);
+    assert_eq!(dom.tree.height(NodeId(0)), Some(0));
+    assert_eq!(dom.tree.height(NodeId(1)), Some(1));
 
     dom.apply_mutations(vec![edit]);
 
     assert_eq!(dom.size(), 3);
-    assert_eq!(dom[RealNodeId::ElementId(ElementId(0))].node_data.height, 0);
+    assert_eq!(dom.tree.height(NodeId(0)), Some(0));
 }
 
 #[test]
@@ -68,11 +69,11 @@ fn add_node() {
     let _to_update = dom.apply_mutations(vec![create]);
 
     assert_eq!(dom.size(), 2);
-    assert_eq!(dom[RealNodeId::ElementId(ElementId(2))].node_data.height, 1);
+    assert_eq!(dom.tree.height(NodeId(2)), Some(1));
 
     dom.apply_mutations(vec![update]);
 
     assert_eq!(dom.size(), 3);
-    assert_eq!(dom[RealNodeId::ElementId(ElementId(3))].node_data.height, 0);
-    assert_eq!(dom[RealNodeId::UnaccessableId(0)].node_data.height, 1);
+    assert_eq!(dom.tree.height(NodeId(3)), Some(0));
+    assert_eq!(dom.tree.height(NodeId(0)), Some(1));
 }

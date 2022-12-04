@@ -148,16 +148,12 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
     let strct = Struct::new(type_name.clone(), &fields);
     match StateStruct::parse(&fields, &strct) {
         Ok(state_strct) => {
-            let members: Vec<_> = state_strct
-                .state_members
-                .iter()
-                .map(|m| &m.mem.ident)
-                .collect();
-            let member_types = state_strct.state_members.iter().map(|m| &m.mem.ty);
+            let member_types1 = state_strct.state_members.iter().map(|m| &m.mem.ty);
+            let member_types2 = state_strct.state_members.iter().map(|m| &m.mem.ty);
             let impl_members = state_strct
                 .state_members
                 .iter()
-                .map(|m| state_strct.impl_pass(m));
+                .map(|m| m.impl_pass(state_strct.ty));
 
             // let child_types = state_strct.child_states.iter().map(|s| &s.ty);
             // let child_members = state_strct.child_states.iter().map(|s| &s.ident);
@@ -165,22 +161,16 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let gen = quote! {
                 #(#impl_members)*
                 impl State for #type_name {
-                    const PASSES: &'static [AnyPass<Node<Self>>] = &[
-                        AnyPass(#(&#member_types),*)
+                    const PASSES: &'static [dioxus_native_core::AnyPass<dioxus_native_core::node::Node<Self>>] = &[
+                        #(dioxus_native_core::AnyPass(&#member_types1)),*
                     ];
-                    const MASKS: &'static [NodeMask] = &[#(#member_types::NODE_MASK),*];
+                    const MASKS: &'static [dioxus_native_core::NodeMask] = &[#(#member_types2::NODE_MASK),*];
                 }
             };
             gen.into()
         }
         Err(e) => e.into_compile_error().into(),
     }
-}
-
-struct Depenadants<'a> {
-    node: Vec<&'a Member>,
-    child: Vec<&'a Member>,
-    parent: Vec<&'a Member>,
 }
 
 struct Struct {
@@ -201,7 +191,9 @@ impl Struct {
 
 struct StateStruct<'a> {
     state_members: Vec<StateMember<'a>>,
+    #[allow(unused)]
     child_states: Vec<&'a Member>,
+    ty: &'a Ident,
 }
 
 impl<'a> StateStruct<'a> {
@@ -222,7 +214,7 @@ impl<'a> StateStruct<'a> {
             .collect();
         parse_err?;
         for i in 0..state_members.len() {
-            let deps = state_members[i].dep_mems.clone();
+            let deps: Vec<_> = state_members[i].dep_mems.iter().map(|m| m.id).collect();
             for dep in deps {
                 state_members[dep as usize].dependant_mems.push(i as u64);
             }
@@ -244,29 +236,10 @@ impl<'a> StateStruct<'a> {
 
         // members need to be sorted so that members are updated after the members they depend on
         Ok(Self {
+            ty: &strct.name,
             state_members,
             child_states: child_states.collect(),
         })
-    }
-
-    fn get_depenadants(&self, mem: &Member) -> Depenadants {
-        let mut dependants = Depenadants {
-            node: Vec::new(),
-            child: Vec::new(),
-            parent: Vec::new(),
-        };
-        for member in &self.state_members {
-            for (dep, _) in &member.dep_mems {
-                if *dep == mem {
-                    match member.dep_kind {
-                        DependencyKind::Node => dependants.node.push(member.mem),
-                        DependencyKind::Child => dependants.child.push(member.mem),
-                        DependencyKind::Parent => dependants.parent.push(member.mem),
-                    }
-                }
-            }
-        }
-        dependants
     }
 }
 
@@ -331,7 +304,7 @@ struct StateMember<'a> {
     // the kind of dependncies this state has
     dep_kind: DependencyKind,
     // the depenancy and if it is satified
-    dep_mems: Vec<u64>,
+    dep_mems: Vec<&'a Member>,
     // any members that depend on this member
     dependant_mems: Vec<u64>,
     // the context this state requires
@@ -362,7 +335,7 @@ impl<'a> StateMember<'a> {
                         .iter()
                         .filter_map(|name| {
                             if let Some(found) = parent.members.iter().find(|m| &m.ident == name) {
-                                Some((found.id, false))
+                                Some(found)
                             } else {
                                 err = Err(Error::new(
                                     name.span(),
@@ -391,9 +364,8 @@ impl<'a> StateMember<'a> {
     }
 
     /// generate code to call the resolve function for the state. This does not handle checking if resolving the state is necessary, or marking the states that depend on this state as dirty.
-    fn impl_pass(&self, parent_type: Type) -> quote::__private::TokenStream {
+    fn impl_pass(&self, parent_type: &Ident) -> quote::__private::TokenStream {
         let ident = &self.mem.ident;
-        let ty = &self.mem.ty;
         let get_ctx = if let Some(ctx_ty) = &self.ctx_ty {
             if ctx_ty == &parse_quote!(()) {
                 quote! {&()}
@@ -407,7 +379,7 @@ impl<'a> StateMember<'a> {
 
         let ty = &self.mem.ty;
         let node_view = quote!(dioxus_native_core::node_ref::NodeView::new(unsafe{&*{&node.node_data as *const _}}, #ty::NODE_MASK));
-        let dep_idents = self.dep_mems.iter().map(|m| &m.0.ident);
+        let dep_idents = self.dep_mems.iter().map(|m| &m.ident);
         let impl_specific = match self.dep_kind {
             DependencyKind::Node => {
                 quote! {
@@ -419,7 +391,7 @@ impl<'a> StateMember<'a> {
                 }
             }
             DependencyKind::Child => {
-                let update = if self.dep_mems.iter().any(|id| id == self.mem.id) {
+                let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
                     quote! {
                         if update {
                             PassReturn{
@@ -463,7 +435,7 @@ impl<'a> StateMember<'a> {
                 )
             }
             DependencyKind::Parent => {
-                let update = if self.dep_mems.iter().any(|id| id == self.mem.id) {
+                let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
                     quote! {
                         if update {
                             PassReturn{
@@ -503,12 +475,12 @@ impl<'a> StateMember<'a> {
             }
         };
         let pass_id = self.mem.id;
-        let depenancies = &self.dep_mems;
+        let depenancies = self.dep_mems.iter().map(|m| m.id);
         let dependants = &self.dependant_mems;
         let mask = self
             .dep_mems
             .iter()
-            .map(|m| m.0.id)
+            .map(|m| m.id)
             .fold(self.mem.id, |a, b| a | b);
         quote! {
             #impl_specific

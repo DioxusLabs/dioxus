@@ -1,7 +1,9 @@
 use std::hash::BuildHasherDefault;
 
+pub use node_ref::NodeMask;
+pub use passes::AnyPass;
 use rustc_hash::FxHasher;
-use tree::NodeId;
+pub use tree::NodeId;
 
 pub mod layout_attributes;
 pub mod node;

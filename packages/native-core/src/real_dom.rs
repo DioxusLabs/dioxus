@@ -1,6 +1,6 @@
 use dioxus_core::{ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::ops::{Index, IndexMut};
+use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
 use crate::node_ref::{AttributeMask, NodeMask};
@@ -26,7 +26,7 @@ fn mark_dirty(
 /// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
 #[derive(Debug)]
 pub struct RealDom<S: State> {
-    tree: Tree<Node<S>>,
+    pub tree: Tree<Node<S>>,
     /// a map from element id to real node id
     node_id_mapping: Vec<Option<RealNodeId>>,
     nodes_listening: FxHashMap<String, FxHashSet<RealNodeId>>,
@@ -398,6 +398,20 @@ impl<S: State> RealDom<S> {
             }
         }
         new_id
+    }
+}
+
+impl<S: State> Deref for RealDom<S> {
+    type Target = Tree<Node<S>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tree
+    }
+}
+
+impl<S: State> DerefMut for RealDom<S> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tree
     }
 }
 
