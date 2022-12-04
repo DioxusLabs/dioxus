@@ -3,7 +3,7 @@ extern crate proc_macro;
 mod sorted_slice;
 
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens};
+use quote::{quote, ToTokens, __private::Span};
 use sorted_slice::StrSlice;
 use syn::parenthesized;
 use syn::parse::ParseBuffer;
@@ -148,8 +148,17 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
     let strct = Struct::new(type_name.clone(), &fields);
     match StateStruct::parse(&fields, &strct) {
         Ok(state_strct) => {
-            let member_types1 = state_strct.state_members.iter().map(|m| &m.mem.ty);
-            let member_types2 = state_strct.state_members.iter().map(|m| &m.mem.ty);
+            let passes = state_strct.state_members.iter().map(|m| {
+                let unit = &m.mem.unit_type;
+                match m.dep_kind {
+                    DependencyKind::Node => quote! {dioxus_native_core::AnyPass::Node(&#unit)},
+                    DependencyKind::Child => quote! {dioxus_native_core::AnyPass::Upward(&#unit)},
+                    DependencyKind::Parent => {
+                        quote! {dioxus_native_core::AnyPass::Downward(&#unit)}
+                    }
+                }
+            });
+            let member_types = state_strct.state_members.iter().map(|m| &m.mem.ty);
             let impl_members = state_strct
                 .state_members
                 .iter()
@@ -162,9 +171,9 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 #(#impl_members)*
                 impl State for #type_name {
                     const PASSES: &'static [dioxus_native_core::AnyPass<dioxus_native_core::node::Node<Self>>] = &[
-                        #(dioxus_native_core::AnyPass(&#member_types1)),*
+                        #(#passes),*
                     ];
-                    const MASKS: &'static [dioxus_native_core::NodeMask] = &[#(#member_types2::NODE_MASK),*];
+                    const MASKS: &'static [dioxus_native_core::NodeMask] = &[#(#member_types::NODE_MASK),*];
                 }
             };
             gen.into()
@@ -183,7 +192,7 @@ impl Struct {
         let members = fields
             .iter()
             .enumerate()
-            .filter_map(|(i, f)| Member::parse(f, 1 << i))
+            .filter_map(|(i, f)| Member::parse(f, i as u64))
             .collect();
         Self { name, members }
     }
@@ -285,6 +294,7 @@ impl Parse for Dependency {
 struct Member {
     id: u64,
     ty: Type,
+    unit_type: Ident,
     ident: Ident,
 }
 
@@ -293,6 +303,11 @@ impl Member {
         Some(Self {
             id,
             ty: field.ty.clone(),
+            unit_type: Ident::new(
+                ("_Unit".to_string() + field.ty.to_token_stream().to_string().as_str()).as_str(),
+                Span::call_site(),
+            )
+            .into(),
             ident: field.ident.as_ref()?.clone(),
         })
     }
@@ -378,13 +393,14 @@ impl<'a> StateMember<'a> {
         };
 
         let ty = &self.mem.ty;
+        let unit_type = &self.mem.unit_type;
         let node_view = quote!(dioxus_native_core::node_ref::NodeView::new(unsafe{&*{&node.node_data as *const _}}, #ty::NODE_MASK));
         let dep_idents = self.dep_mems.iter().map(|m| &m.ident);
         let impl_specific = match self.dep_kind {
             DependencyKind::Node => {
                 quote! {
-                    impl NodePass<#parent_type> for #ty {
-                        fn pass(&self, node: &mut T, ctx: &SendAnyMap) -> bool {
+                    impl dioxus_native_core::NodePass<dioxus_native_core::node::Node<#parent_type>> for #unit_type {
+                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type>, ctx: &dioxus_native_core::SendAnyMap) -> bool {
                             node.state.#ident.reduce(#node_view, (#(&node.state.#dep_idents,)*), #get_ctx)
                         }
                     }
@@ -394,12 +410,12 @@ impl<'a> StateMember<'a> {
                 let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
                     quote! {
                         if update {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: true,
                                 mark_dirty: true,
                             }
                         } else {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: false,
                             }
@@ -408,12 +424,12 @@ impl<'a> StateMember<'a> {
                 } else {
                     quote! {
                         if update {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: true,
                             }
                         } else {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: false,
                             }
@@ -421,13 +437,13 @@ impl<'a> StateMember<'a> {
                     }
                 };
                 quote!(
-                    pub trait UpwardPass<T>: Pass {
+                    impl dioxus_native_core::UpwardPass<dioxus_native_core::node::Node<#parent_type>> for #unit_type{
                         fn pass<'a>(
                             &self,
-                            node: &mut T,
-                            children: &mut dyn Iterator<Item = &'a mut T>,
-                            ctx: &SendAnyMap,
-                        ) -> PassReturn {
+                            node: &mut dioxus_native_core::node::Node<#parent_type>,
+                            children: &mut dyn Iterator<Item = &'a mut dioxus_native_core::node::Node<#parent_type>>,
+                            ctx: &dioxus_native_core::SendAnyMap,
+                        ) -> dioxus_native_core::PassReturn {
                             let update = node.state.#ident.reduce(#node_view, children.map(|c| (#(&c.state.#dep_idents,)*)), #get_ctx);
                             #update
                         }
@@ -438,12 +454,12 @@ impl<'a> StateMember<'a> {
                 let update = if self.dep_mems.iter().any(|m| m.id == self.mem.id) {
                     quote! {
                         if update {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: true,
                                 mark_dirty: true,
                             }
                         } else {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: false,
                             }
@@ -452,12 +468,12 @@ impl<'a> StateMember<'a> {
                 } else {
                     quote! {
                         if update {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: true,
                             }
                         } else {
-                            PassReturn{
+                            dioxus_native_core::PassReturn{
                                 progress: false,
                                 mark_dirty: false,
                             }
@@ -465,9 +481,9 @@ impl<'a> StateMember<'a> {
                     }
                 };
                 quote!(
-                    impl DownwardPass<#parent_type> for #ty {
-                        fn pass(&self, node: &mut T, parent: Option<&mut T>, ctx: &SendAnyMap) -> PassReturn{
-                            let update = current_state.state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.state.#dep_idents,)*)), #get_ctx);
+                    impl dioxus_native_core::DownwardPass<dioxus_native_core::node::Node<#parent_type>> for #unit_type {
+                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type>, parent: Option<&mut dioxus_native_core::node::Node<#parent_type>>, ctx: &dioxus_native_core::SendAnyMap) -> dioxus_native_core::PassReturn{
+                            let update = node.state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.state.#dep_idents,)*)), #get_ctx);
                             #update
                         }
                     }
@@ -483,19 +499,21 @@ impl<'a> StateMember<'a> {
             .map(|m| m.id)
             .fold(self.mem.id, |a, b| a | b);
         quote! {
+            #[derive(Clone, Copy)]
+            struct #unit_type;
             #impl_specific
-            impl Pass for #ty {
-                fn pass_id(&self) -> PassId {
-                    PassId(#pass_id)
+            impl dioxus_native_core::Pass for #unit_type {
+                fn pass_id(&self) -> dioxus_native_core::PassId {
+                    dioxus_native_core::PassId(#pass_id)
                 }
-                fn dependancies(&self) -> &'static [PassId] {
-                    &[#(PassId(#depenancies)),*]
+                fn dependancies(&self) -> &'static [dioxus_native_core::PassId] {
+                    &[#(dioxus_native_core::PassId(#depenancies)),*]
                 }
-                fn dependants(&self) -> &'static [PassId] {
-                    &[#(PassId(#dependants)),*]
+                fn dependants(&self) -> &'static [dioxus_native_core::PassId] {
+                    &[#(dioxus_native_core::PassId(#dependants)),*]
                 }
-                fn mask(&self) -> MemberMask {
-                    MemberMask(#mask)
+                fn mask(&self) -> dioxus_native_core::MemberMask {
+                    dioxus_native_core::MemberMask(1 << #mask)
                 }
             }
         }

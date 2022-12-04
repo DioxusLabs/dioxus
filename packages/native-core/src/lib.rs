@@ -1,7 +1,9 @@
 use std::hash::BuildHasherDefault;
 
 pub use node_ref::NodeMask;
-pub use passes::AnyPass;
+pub use passes::{
+    AnyPass, DownwardPass, MemberMask, NodePass, Pass, PassId, PassReturn, UpwardPass,
+};
 use rustc_hash::FxHasher;
 pub use tree::NodeId;
 
@@ -18,7 +20,7 @@ pub mod utils;
 pub type RealNodeId = NodeId;
 pub(crate) type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub(crate) type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
-pub(crate) type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
+pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
 
 /// Used in derived state macros
 #[derive(Eq, PartialEq)]

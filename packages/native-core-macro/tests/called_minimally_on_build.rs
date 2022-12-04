@@ -1,161 +1,174 @@
-// use anymap::AnyMap;
-// use dioxus::prelude::*;
-// use dioxus_native_core::node_ref::*;
-// use dioxus_native_core::real_dom::*;
-// use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
-// use dioxus_native_core_macro::State;
+use anymap::AnyMap;
+use dioxus::prelude::*;
+use dioxus_native_core::node_ref::*;
+use dioxus_native_core::real_dom::*;
+use dioxus_native_core::state::{
+    ChildDepState, ElementBorrowable, NodeDepState, ParentDepState, State,
+};
+use dioxus_native_core::tree::*;
+use dioxus_native_core_macro::State;
 
-// macro_rules! dep {
-//     ( child( $name:ty, $dep:ty ) ) => {
-//         impl ChildDepState for $name {
-//             type Ctx = ();
-//             type DepState = $dep;
-//             const NODE_MASK: NodeMask = NodeMask::ALL;
-//             fn reduce<'a>(
-//                 &mut self,
-//                 _: NodeView,
-//                 _: impl Iterator<Item = &'a Self::DepState>,
-//                 _: &Self::Ctx,
-//             ) -> bool
-//             where
-//                 Self::DepState: 'a,
-//             {
-//                 self.0 += 1;
-//                 true
-//             }
-//         }
-//     };
+macro_rules! dep {
+    ( child( $name:ty, $dep:ty ) ) => {
+        impl ChildDepState for $name {
+            type Ctx = ();
+            type DepState = $dep;
+            const NODE_MASK: NodeMask = NodeMask::ALL;
+            fn reduce<'a>(
+                &mut self,
+                _: NodeView,
+                _: impl Iterator<Item = <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
+                _: &Self::Ctx,
+            ) -> bool
+            where
+                Self::DepState: 'a,
+            {
+                self.0 += 1;
+                true
+            }
+        }
+    };
 
-//     ( parent( $name:ty, $dep:ty ) ) => {
-//         impl ParentDepState for $name {
-//             type Ctx = ();
-//             type DepState = $dep;
-//             const NODE_MASK: NodeMask = NodeMask::ALL;
-//             fn reduce(&mut self, _: NodeView, _: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
-//                 self.0 += 1;
-//                 true
-//             }
-//         }
-//     };
+    ( parent( $name:ty, $dep:ty ) ) => {
+        impl ParentDepState for $name {
+            type Ctx = ();
+            type DepState = $dep;
+            const NODE_MASK: NodeMask = NodeMask::ALL;
+            fn reduce(
+                &mut self,
+                _: NodeView,
+                _: Option<<Self::DepState as ElementBorrowable>::ElementBorrowed<'_>>,
+                _: &Self::Ctx,
+            ) -> bool {
+                self.0 += 1;
+                true
+            }
+        }
+    };
 
-//     ( node( $name:ty, $dep:ty ) ) => {
-//         impl NodeDepState for $name {
-//             type Ctx = ();
-//             type DepState<'a> = $dep;
-//             const NODE_MASK: NodeMask = NodeMask::ALL;
-//             fn reduce(&mut self, _: NodeView, _: $dep, _: &Self::Ctx) -> bool {
-//                 self.0 += 1;
-//                 true
-//             }
-//         }
-//     };
-// }
+    ( node( $name:ty, $dep:ty ) ) => {
+        impl NodeDepState for $name {
+            type Ctx = ();
+            type DepState = $dep;
+            const NODE_MASK: NodeMask = NodeMask::ALL;
+            fn reduce(
+                &mut self,
+                _: NodeView,
+                _: <Self::DepState as ElementBorrowable>::ElementBorrowed<'_>,
+                _: &Self::Ctx,
+            ) -> bool {
+                self.0 += 1;
+                true
+            }
+        }
+    };
+}
 
-// macro_rules! test_state{
-//     ( $s:ty, child: ( $( $child:ident ),* ), node: ( $( $node:ident ),* ), parent: ( $( $parent:ident ),* ) ) => {
-//         #[test]
-//         fn state_reduce_initally_called_minimally() {
-//             #[allow(non_snake_case)]
-//             fn Base(cx: Scope) -> Element {
-//                 render!(div {
-//                     div{
-//                         div{
-//                             p{}
-//                         }
-//                         p{
-//                             "hello"
-//                         }
-//                         div{
-//                             h1{}
-//                         }
-//                         p{
-//                             "world"
-//                         }
-//                     }
-//                 })
-//             }
+macro_rules! test_state{
+    ( $s:ty, child: ( $( $child:ident ),* ), node: ( $( $node:ident ),* ), parent: ( $( $parent:ident ),* ) ) => {
+        #[test]
+        fn state_reduce_initally_called_minimally() {
+            #[allow(non_snake_case)]
+            fn Base(cx: Scope) -> Element {
+                render!(div {
+                    div{
+                        div{
+                            p{}
+                        }
+                        p{
+                            "hello"
+                        }
+                        div{
+                            h1{}
+                        }
+                        p{
+                            "world"
+                        }
+                    }
+                })
+            }
 
-//             let vdom = VirtualDom::new(Base);
+            let vdom = VirtualDom::new(Base);
 
-//             let mutations = vdom.create_vnodes(rsx! {
-//                 div {
-//                     div{
-//                         div{
-//                             p{}
-//                         }
-//                         p{
-//                             "hello"
-//                         }
-//                         div{
-//                             h1{}
-//                         }
-//                         p{
-//                             "world"
-//                         }
-//                     }
-//                 }
-//             });
+            let mutations = vdom.create_vnodes(rsx! {
+                div {
+                    div{
+                        div{
+                            p{}
+                        }
+                        p{
+                            "hello"
+                        }
+                        div{
+                            h1{}
+                        }
+                        p{
+                            "world"
+                        }
+                    }
+                }
+            });
 
-//             let mut dom: RealDom<$s> = RealDom::new();
+            let mut dom: RealDom<$s> = RealDom::new();
 
-//             let nodes_updated = dom.apply_mutations(vec![mutations]);
-//             let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+            let nodes_updated = dom.apply_mutations(vec![mutations]);
+            let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
 
-//             dom.traverse_depth_first(|n| {
-//                 $(
-//                     assert_eq!(n.state.$child.0, 1);
-//                 )*
-//                 $(
-//                     assert_eq!(n.state.$node.0, 1);
-//                 )*
-//                 $(
-//                     assert_eq!(n.state.$parent.0, 1);
-//                 )*
-//             });
-//         }
-//     }
-// }
+            dom.traverse_depth_first(|n| {
+                $(
+                    assert_eq!(n.state.$child.0, 1);
+                )*
+                $(
+                    assert_eq!(n.state.$node.0, 1);
+                )*
+                $(
+                    assert_eq!(n.state.$parent.0, 1);
+                )*
+            });
+        }
+    }
+}
 
-// mod node_depends_on_child_and_parent {
-//     use super::*;
-//     #[derive(Debug, Clone, Default, PartialEq)]
-//     struct Node(i32);
-//     dep!(node(Node, (&'a Child, &'a Parent)));
+mod node_depends_on_child_and_parent {
+    use super::*;
+    #[derive(Debug, Clone, Default, PartialEq)]
+    struct Node(i32);
+    dep!(node(Node, (Child, Parent)));
 
-//     #[derive(Debug, Clone, Default, PartialEq)]
-//     struct Child(i32);
-//     dep!(child(Child, Child));
+    #[derive(Debug, Clone, Default, PartialEq)]
+    struct Child(i32);
+    dep!(child(Child, (Child,)));
 
-//     #[derive(Debug, Clone, Default, PartialEq)]
-//     struct Parent(i32);
-//     dep!(parent(Parent, Parent));
+    #[derive(Debug, Clone, Default, PartialEq)]
+    struct Parent(i32);
+    dep!(parent(Parent, (Parent,)));
 
-//     #[derive(Debug, Clone, Default, State)]
-//     struct StateTester {
-//         #[node_dep_state((child, parent))]
-//         node: Node,
-//         #[child_dep_state(child)]
-//         child: Child,
-//         #[parent_dep_state(parent)]
-//         parent: Parent,
-//     }
+    #[derive(Debug, Clone, Default, State)]
+    struct StateTester {
+        #[node_dep_state((child, parent))]
+        node: Node,
+        #[child_dep_state(child)]
+        child: Child,
+        #[parent_dep_state(parent)]
+        parent: Parent,
+    }
 
-//     test_state!(StateTester, child: (child), node: (node), parent: (parent));
-// }
+    // test_state!(StateTester, child: (child), node: (node), parent: (parent));
+}
 
 // mod child_depends_on_node_that_depends_on_parent {
 //     use super::*;
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Node(i32);
-//     dep!(node(Node, (&'a Parent,)));
+//     dep!(node(Node, (Parent,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Child(i32);
-//     dep!(child(Child, Node));
+//     dep!(child(Child, (Node,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Parent(i32);
-//     dep!(parent(Parent, Parent));
+//     dep!(parent(Parent, (Parent,)));
 
 //     #[derive(Debug, Clone, Default, State)]
 //     struct StateTester {
@@ -174,15 +187,15 @@
 //     use super::*;
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Node(i32);
-//     dep!(node(Node, (&'a Child,)));
+//     dep!(node(Node, (Child,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Child(i32);
-//     dep!(child(Child, Child));
+//     dep!(child(Child, (Child,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Parent(i32);
-//     dep!(parent(Parent, Node));
+//     dep!(parent(Parent, (Node,)));
 
 //     #[derive(Debug, Clone, Default, State)]
 //     struct StateTester {
@@ -201,7 +214,7 @@
 //     use super::*;
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Node1(i32);
-//     dep!(node(Node1, (&'a Node2,)));
+//     dep!(node(Node1, (Node2,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Node2(i32);
@@ -226,11 +239,11 @@
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Child(i32);
-//     dep!(child(Child, Child));
+//     dep!(child(Child, (Child,)));
 
 //     #[derive(Debug, Clone, Default, PartialEq)]
 //     struct Parent(i32);
-//     dep!(parent(Parent, Parent));
+//     dep!(parent(Parent, (Parent,)));
 
 //     #[derive(Debug, Clone, Default, State)]
 //     struct StateTester {

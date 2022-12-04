@@ -111,10 +111,10 @@ impl DirtyNodeStates {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, PartialOrd, Ord)]
-pub struct PassId(u64);
+pub struct PassId(pub u64);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Default)]
-pub struct MemberMask(u64);
+pub struct MemberMask(pub u64);
 
 impl MemberMask {
     pub fn overlaps(&self, other: Self) -> bool {
