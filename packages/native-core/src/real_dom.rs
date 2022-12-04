@@ -1,8 +1,8 @@
-use dioxus_core::{ElementId, Mutations};
+use dioxus_core::{ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::ops::{Index, IndexMut};
 
-use crate::node::{Node, NodeType, OwnedAttributeDiscription};
+use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::passes::DirtyNodeStates;
 use crate::state::State;
@@ -95,45 +95,88 @@ impl<S: State> RealDom<S> {
         self.tree.add_child(node_id, child_id);
     }
 
+    fn create_template_node(
+        &mut self,
+        node: &TemplateNode,
+        mutations_vec: &mut FxHashMap<RealNodeId, NodeMask>,
+    ) -> Option<RealNodeId> {
+        match node {
+            TemplateNode::Element {
+                tag,
+                namespace,
+                attrs,
+                children,
+            } => {
+                let node = Node::new(NodeType::Element {
+                    tag: tag.to_string(),
+                    namespace: namespace.map(|s| s.to_string()),
+                    attributes: attrs
+                        .iter()
+                        .filter_map(|attr| match attr {
+                            dioxus_core::TemplateAttribute::Static {
+                                name,
+                                value,
+                                namespace,
+                            } => Some((
+                                OwnedAttributeDiscription {
+                                    namespace: namespace.map(|s| s.to_string()),
+                                    name: name.to_string(),
+                                    volatile: false,
+                                },
+                                OwnedAttributeValue::Text(value.to_string()),
+                            )),
+                            dioxus_core::TemplateAttribute::Dynamic(_) => None,
+                        })
+                        .collect(),
+                    listeners: FxHashSet::default(),
+                });
+                let node_id = self.create_node(node);
+                for child in *children {
+                    if let Some(child_id) = self.create_template_node(child, mutations_vec) {
+                        self.add_child(node_id, child_id);
+                    }
+                }
+                self.stack.push(node_id);
+                Some(node_id)
+            }
+            TemplateNode::Text(txt) => {
+                let node_id = self.create_node(Node::new(NodeType::Text {
+                    text: txt.to_string(),
+                }));
+                self.stack.push(node_id);
+                Some(node_id)
+            }
+            _ => None,
+        }
+    }
+
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
     pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> DirtyNodeStates {
         let mut nodes_updated: FxHashMap<RealNodeId, NodeMask> = FxHashMap::default();
         for mutations in mutations_vec {
+            for template in mutations.templates {
+                let mut template_root_ids = Vec::new();
+                for root in template.roots {
+                    if let Some(id) = self.create_template_node(root, &mut nodes_updated) {
+                        template_root_ids.push(id);
+                    }
+                }
+                self.templates
+                    .insert(template.name.to_string(), template_root_ids);
+            }
             for e in mutations.edits {
                 use dioxus_core::Mutation::*;
                 match e {
-                    AppendChildren { m } => {
-                        let data = self.stack.split_off(m);
-                        let (parent, children) = data.split_first().unwrap();
+                    AppendChildren { id, m } => {
+                        let children = self.stack.split_off(m);
+                        let parent = self.element_to_node_id(id);
                         for child in children {
-                            self.add_child(*parent, *child);
-                            mark_dirty(*parent, NodeMask::ALL, &mut nodes_updated);
+                            self.add_child(parent, child);
+                            mark_dirty(parent, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
                     AssignId { path, id } => {
                         self.set_element_id(self.load_child(path), id);
-                    }
-                    CreateElement { name } => {
-                        let node = Node::new(NodeType::Element {
-                            tag: name.to_string(),
-                            namespace: None,
-                            attributes: FxHashMap::default(),
-                            listeners: FxHashSet::default(),
-                        });
-                        let id = self.create_node(node);
-                        self.stack.push(id);
-                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                    }
-                    CreateElementNamespace { name, namespace } => {
-                        let node = Node::new(NodeType::Element {
-                            tag: name.to_string(),
-                            namespace: Some(namespace.to_string()),
-                            attributes: FxHashMap::default(),
-                            listeners: FxHashSet::default(),
-                        });
-                        let id = self.create_node(node);
-                        self.stack.push(id);
-                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
                     }
                     CreatePlaceholder { id } => {
                         let node = Node::new(NodeType::Placeholder);
@@ -141,20 +184,6 @@ impl<S: State> RealDom<S> {
                         self.set_element_id(node_id, id);
                         self.stack.push(node_id);
                         mark_dirty(node_id, NodeMask::ALL, &mut nodes_updated);
-                    }
-                    CreateStaticPlaceholder => {
-                        let node = Node::new(NodeType::Placeholder);
-                        let id = self.create_node(node);
-                        self.stack.push(id);
-                        mark_dirty(id, NodeMask::ALL, &mut nodes_updated);
-                    }
-                    CreateStaticText { value } => {
-                        let node = Node::new(NodeType::Text {
-                            text: value.to_string(),
-                        });
-                        let id = self.create_node(node);
-                        self.stack.push(id);
-                        mark_dirty(id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
                     CreateTextNode { value, id } => {
                         let node = Node::new(NodeType::Text {
@@ -214,10 +243,6 @@ impl<S: State> RealDom<S> {
                             mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                         }
                     }
-                    SaveTemplate { name, m } => {
-                        let template = self.stack.split_off(m);
-                        self.templates.insert(name.to_string(), template);
-                    }
                     SetAttribute {
                         name,
                         value,
@@ -243,26 +268,6 @@ impl<S: State> RealDom<S> {
                             );
                         }
                     }
-                    SetStaticAttribute { name, value, ns } => {
-                        let node_id = self.stack.last().unwrap();
-                        let node = self.tree.get_mut(*node_id).unwrap();
-                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
-                        {
-                            attributes.insert(
-                                OwnedAttributeDiscription {
-                                    name: name.to_string(),
-                                    namespace: ns.map(|s| s.to_string()),
-                                    volatile: false,
-                                },
-                                crate::node::OwnedAttributeValue::Text(value.to_string()),
-                            );
-                            mark_dirty(
-                                *node_id,
-                                NodeMask::new_with_attrs(AttributeMask::single(name)),
-                                &mut nodes_updated,
-                            );
-                        }
-                    }
                     SetBoolAttribute { name, value, id } => {
                         let node_id = self.element_to_node_id(id);
                         let node = self.tree.get_mut(node_id).unwrap();
@@ -283,18 +288,6 @@ impl<S: State> RealDom<S> {
                             );
                         }
                     }
-                    SetInnerText { value } => {
-                        let node_id = *self.stack.last().unwrap();
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Element { .. } = &mut node.node_data.node_type {
-                            self.tree.remove_all_children(node_id);
-                            let text_node = Node::new(NodeType::Text {
-                                text: value.to_string(),
-                            });
-                            let text_node_id = self.create_node(text_node);
-                            self.add_child(node_id, text_node_id);
-                        }
-                    }
                     SetText { value, id } => {
                         let node_id = self.element_to_node_id(id);
                         let node = self.tree.get_mut(node_id).unwrap();
@@ -303,41 +296,38 @@ impl<S: State> RealDom<S> {
                         }
                         mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                     }
-                    NewEventListener {
-                        event_name,
-                        scope: _,
-                        id,
-                    } => {
+                    NewEventListener { name, scope: _, id } => {
                         let node_id = self.element_to_node_id(id);
                         let node = self.tree.get_mut(node_id).unwrap();
                         if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
-                            match self.nodes_listening.get_mut(event_name) {
+                            match self.nodes_listening.get_mut(name) {
                                 Some(hs) => {
                                     hs.insert(node_id);
                                 }
                                 None => {
                                     let mut hs = FxHashSet::default();
                                     hs.insert(node_id);
-                                    self.nodes_listening.insert(event_name.to_string(), hs);
+                                    self.nodes_listening.insert(name.to_string(), hs);
                                 }
                             }
-                            listeners.insert(event_name.to_string());
+                            listeners.insert(name.to_string());
                         }
                     }
-                    RemoveEventListener { id, event } => {
+                    RemoveEventListener { id, name } => {
                         let node_id = self.element_to_node_id(id);
                         let node = self.tree.get_mut(node_id).unwrap();
                         if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
-                            listeners.remove(event);
+                            listeners.remove(name);
                         }
-                        self.nodes_listening
-                            .get_mut(event)
-                            .unwrap()
-                            .remove(&node_id);
+                        self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
                     }
                     Remove { id } => {
                         let node_id = self.element_to_node_id(id);
                         self.tree.remove(node_id);
+                    }
+                    PushRoot { id } => {
+                        let node_id = self.element_to_node_id(id);
+                        self.stack.push(node_id);
                     }
                 }
             }
