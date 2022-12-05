@@ -29,11 +29,11 @@ fn state_shares() {
 
     dom.mark_dirty(ScopeId(0));
     _ = dom.render_immediate();
-    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 1);
+    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), &1);
 
     dom.mark_dirty(ScopeId(0));
     _ = dom.render_immediate();
-    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), 2);
+    assert_eq!(dom.base_scope().consume_context::<i32>().unwrap(), &2);
 
     dom.mark_dirty(ScopeId(2));
     assert_eq!(

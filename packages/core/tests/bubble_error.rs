@@ -20,9 +20,9 @@ fn app(cx: Scope) -> Element {
 fn it_goes() {
     let mut dom = VirtualDom::new(app);
 
-    let edits = dom.rebuild().santize();
+    let _edits = dom.rebuild().santize();
 
     dom.mark_dirty(ScopeId(0));
 
-    dom.render_immediate();
+    _ = dom.render_immediate();
 }

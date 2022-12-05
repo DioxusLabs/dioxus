@@ -1,7 +1,4 @@
-use crate::{
-    nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
-    ScopeId,
-};
+use crate::{nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, DynamicNode, ScopeId};
 use bumpalo::boxed::Box as BumpBox;
 
 /// An Element's unique identifier.
@@ -64,12 +61,11 @@ impl VirtualDom {
     pub(crate) fn try_reclaim(&mut self, el: ElementId) -> Option<ElementRef> {
         if el.0 == 0 {
             panic!(
-                "Invalid element set to 0 - {:#?}",
+                "Cannot reclaim the root element - {:#?}",
                 std::backtrace::Backtrace::force_capture()
-            )
+            );
         }
 
-        println!("reclaiming {:?}", el);
         self.elements.try_remove(el.0)
     }
 
@@ -80,45 +76,60 @@ impl VirtualDom {
 
     // Drop a scope and all its children
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
-        let scope = self.scopes.get(id.0).unwrap();
-
-        if let Some(root) = scope.as_ref().try_root_node() {
-            let root = unsafe { root.extend_lifetime_ref() };
-            if let RenderReturn::Sync(Ok(node)) = root {
+        if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
+            if let RenderReturn::Sync(Ok(node)) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
 
-        let scope = self.scopes.get_mut(id.0).unwrap();
-        scope.props.take();
+        self.scopes[id.0].props.take();
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        for hook in scope.hook_list.get_mut().drain(..) {
-            println!("dropping hook !");
-            drop(unsafe { BumpBox::from_raw(hook) });
-            println!("hook dropped !");
-        }
+        self.scopes[id.0]
+            .hook_list
+            .get_mut()
+            .drain(..)
+            .for_each(|hook| drop(unsafe { BumpBox::from_raw(hook) }));
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
-        for attr in node.dynamic_attrs {
-            if let AttributeValue::Listener(l) = &attr.value {
-                l.borrow_mut().take();
-            }
-        }
+        node.clear_listeners();
+        node.dynamic_nodes.iter().for_each(|node| match node {
+            DynamicNode::Component(c) => self.drop_scope(c.scope.get().unwrap()),
+            DynamicNode::Fragment(nodes) => nodes
+                .into_iter()
+                .for_each(|node| self.drop_scope_inner(node)),
+            _ => {}
+        })
+    }
 
-        for (idx, _) in node.template.roots.iter().enumerate() {
-            match node.dynamic_root(idx) {
-                Some(DynamicNode::Component(c)) => self.drop_scope(c.scope.get().unwrap()),
-                Some(DynamicNode::Fragment(nodes)) => {
-                    for node in *nodes {
-                        self.drop_scope_inner(node);
-                    }
-                }
-                _ => {}
-            }
+    /// Descend through the tree, removing any borrowed props and listeners
+    pub(crate) fn ensure_drop_safety(&self, scope: ScopeId) {
+        let node = unsafe { self.scopes[scope.0].previous_frame().try_load_node() };
+
+        // And now we want to make sure the previous frame has dropped anything that borrows self
+        if let Some(RenderReturn::Sync(Ok(node))) = node {
+            self.ensure_drop_safety_inner(node);
         }
+    }
+
+    fn ensure_drop_safety_inner(&self, node: &VNode) {
+        node.clear_listeners();
+
+        node.dynamic_nodes.iter().for_each(|child| match child {
+            // Only descend if the props are borrowed
+            DynamicNode::Component(c) if !c.static_props => {
+                self.ensure_drop_safety(c.scope.get().unwrap());
+                c.props.set(None);
+            }
+
+            DynamicNode::Fragment(f) => f
+                .iter()
+                .for_each(|node| self.ensure_drop_safety_inner(node)),
+
+            _ => {}
+        });
     }
 }
 

@@ -629,6 +629,8 @@ impl VirtualDom {
 
 impl Drop for VirtualDom {
     fn drop(&mut self) {
+        println!("Dropping virtualdom");
+
         // Simply drop this scope which drops all of its children
         self.drop_scope(ScopeId(0));
     }

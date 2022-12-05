@@ -258,8 +258,6 @@ impl<'src> ScopeState {
     }
 
     /// Try to retrieve a shared state with type `T` from any parent scope.
-    ///
-    /// To release the borrow, use `cloned` if the context is clone.
     pub fn consume_context<T: 'static>(&self) -> Option<&T> {
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
@@ -307,17 +305,17 @@ impl<'src> ScopeState {
     pub fn provide_context<T: 'static>(&self, value: T) -> &T {
         let mut contexts = self.shared_contexts.borrow_mut();
 
-        let any = match contexts.get(&TypeId::of::<T>()) {
-            Some(item) => item.downcast_ref::<T>().unwrap() as *const T,
-            None => {
-                let boxed = Box::new(value);
-                let boxed_ptr = boxed.as_ref() as *const T;
-                contexts.insert(TypeId::of::<T>(), boxed);
-                boxed_ptr
-            }
-        };
+        if !contexts.contains_key(&TypeId::of::<T>()) {
+            contexts.insert(TypeId::of::<T>(), Box::new(value));
+        }
 
-        unsafe { &*any }
+        let out = contexts
+            .get(&TypeId::of::<T>())
+            .unwrap()
+            .downcast_ref::<T>()
+            .unwrap() as *const T;
+
+        unsafe { &*out }
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
