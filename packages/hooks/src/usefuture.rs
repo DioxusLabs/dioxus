@@ -51,7 +51,7 @@ where
 
         // Clone in our cells
         let values = state.values.clone();
-        let schedule_update = state.update.clone();
+        let _schedule_update = state.update.clone();
         let waker = state.waker.clone();
 
         // Cancel the current future
@@ -67,7 +67,7 @@ where
             match waker.borrow().as_ref() {
                 Some(waker) => waker.wake_by_ref(),
                 None => {
-                    println!("scheduling update");
+
                     // schedule_update()
                 }
             }
@@ -123,7 +123,7 @@ impl<T> UseFuture<T> {
     }
 
     // Manually set the value in the future slot without starting the future over
-    pub fn set(&self, new_value: T) {
+    pub fn set(&self, _new_value: T) {
         // self.slot.set(Some(new_value));
         // self.needs_regen.set(true);
         // (self.update)();

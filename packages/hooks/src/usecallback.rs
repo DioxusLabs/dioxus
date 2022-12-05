@@ -1,6 +1,4 @@
-use std::rc::Rc;
-
-use dioxus_core::{prelude::EventHandler, ScopeState};
+use dioxus_core::ScopeState;
 use std::future::Future;
 
 #[macro_export]
@@ -30,8 +28,8 @@ where
     move |evt| cx.spawn(hook(evt))
 }
 
-fn it_works(cx: &ScopeState) {
-    let p = use_callback(cx, || {
+fn _it_works(cx: &ScopeState) {
+    let _p = use_callback(cx, || {
         |()| async {
             //
         }
