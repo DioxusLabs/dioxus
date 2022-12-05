@@ -164,7 +164,10 @@ impl<S: State> RealDom<S> {
     }
 
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations(&mut self, mutations: Mutations) -> DirtyNodeStates {
+    pub fn apply_mutations(
+        &mut self,
+        mutations: Mutations,
+    ) -> (DirtyNodeStates, FxHashMap<RealNodeId, NodeMask>) {
         let mut nodes_updated: FxHashMap<RealNodeId, NodeMask> = FxHashMap::default();
         for template in mutations.templates {
             let mut template_root_ids = Vec::new();
@@ -348,7 +351,7 @@ impl<S: State> RealDom<S> {
         }
 
         let dirty_nodes = DirtyNodeStates::default();
-        for (n, mask) in nodes_updated {
+        for (&n, mask) in &nodes_updated {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
             if self.tree.contains(n) {
                 for (m, p) in S::MASKS.iter().zip(S::PASSES.iter()) {
@@ -359,7 +362,7 @@ impl<S: State> RealDom<S> {
             }
         }
 
-        dirty_nodes
+        (dirty_nodes, nodes_updated)
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.

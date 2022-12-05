@@ -221,10 +221,8 @@ pub trait State: Default + Clone + 'static {
         tree: &mut T,
         ctx: SendAnyMap,
     ) -> FxDashSet<RealNodeId> {
-        let set = FxDashSet::default();
         let passes = Self::PASSES.iter().collect();
-        resolve_passes(tree, dirty, passes, ctx);
-        set
+        resolve_passes(tree, dirty, passes, ctx)
     }
 }
 

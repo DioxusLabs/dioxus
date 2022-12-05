@@ -54,7 +54,8 @@ impl NodeDepState for PreventDefault {
             dioxus_native_core::node_ref::AttributeMask::Static(&sorted_str_slice!([
                 "dioxus-prevent-default"
             ])),
-        );
+        )
+        .with_listeners();
 
     fn reduce(
         &mut self,

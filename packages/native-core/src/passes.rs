@@ -215,8 +215,10 @@ fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
     while let Some(id) = dirty.pop_front() {
         let (node, parent) = tree.node_parent_mut(id).unwrap();
         let result = pass.pass(node, parent, ctx);
-        if result.mark_dirty || result.progress {
+        if result.mark_dirty {
             nodes_updated.insert(id);
+        }
+        if result.mark_dirty || result.progress {
             for id in tree.children_ids(id).unwrap() {
                 if result.mark_dirty {
                     for dependant in pass.dependants() {

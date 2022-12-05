@@ -6,7 +6,7 @@ use crossterm::{
 };
 use futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, NodeId, SendAnyMap, FxDashSet};
+use dioxus_native_core::{real_dom::RealDom, NodeId, SendAnyMap, FxDashSet, NodeMask};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
@@ -90,7 +90,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     {
         let mut rdom = rdom.borrow_mut();
         let mutations = dom.rebuild();
-        let to_update = rdom.apply_mutations(mutations);
+        let (to_update,_) = rdom.apply_mutations(mutations);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let _to_rerender = rdom.update_state(to_update, any_map);
@@ -135,16 +135,14 @@ fn render_vdom(
             let mut to_rerender =FxDashSet::default();
             to_rerender.insert(NodeId(0));
             let mut updated = true;
-
+            
             loop {
                 /*
                 -> render the nodes in the right place with tui/crossterm
                 -> wait for changes
                 -> resolve events
                 -> lazily update the layout and style based on nodes changed
-
                 use simd to compare lines for diffing?
-
                 todo: lazy re-rendering
                 */
 
@@ -244,11 +242,16 @@ fn render_vdom(
                     let mutations = vdom.render_immediate();
                     handler.prune(&mutations, &rdom);
                     // updates the dom's nodes
-                    let to_update = rdom.apply_mutations(mutations);
+                    let (to_update, dirty) = rdom.apply_mutations(mutations);
                     // update the style and layout
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
                     to_rerender = rdom.update_state(to_update, any_map);
+                    for (id, mask) in dirty {
+                        if mask.overlaps(&NodeMask::new().with_text()) {
+                            to_rerender.insert(id);
+                        }
+                    }
                 }
             }
 
