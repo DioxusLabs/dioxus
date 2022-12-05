@@ -1,24 +1,23 @@
 use anyhow::Result;
-use anymap::AnyMap;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use dioxus_core::exports::futures_channel::mpsc::unbounded;
+use futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, RealNodeId};
+use dioxus_native_core::{real_dom::RealDom, NodeId, SendAnyMap, FxDashSet};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
 use query::Query;
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::{Mutex, Arc}};
 use std::rc::Rc;
 use std::{io, time::Duration};
 use taffy::Taffy;
-pub use taffy::{geometry::Point, prelude::Size};
+pub use taffy::{geometry::Point, prelude::*};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
@@ -80,10 +79,10 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
 
     let cx = dom.base_scope();
     let rdom = Rc::new(RefCell::new(RealDom::new()));
-    let taffy = Rc::new(RefCell::new(Taffy::new()));
-    cx.provide_root_context(state);
-    cx.provide_root_context(TuiContext { tx: event_tx_clone });
-    cx.provide_root_context(Query {
+    let taffy = Arc::new(Mutex::new(Taffy::new()));
+    cx.provide_context(state);
+    cx.provide_context(TuiContext { tx: event_tx_clone });
+    cx.provide_context(Query {
         rdom: rdom.clone(),
         stretch: taffy.clone(),
     });
@@ -91,8 +90,8 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     {
         let mut rdom = rdom.borrow_mut();
         let mutations = dom.rebuild();
-        let to_update = rdom.apply_mutations(vec![mutations]);
-        let mut any_map = AnyMap::new();
+        let to_update = rdom.apply_mutations(mutations);
+        let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let _to_rerender = rdom.update_state(to_update, any_map);
     }
@@ -114,8 +113,8 @@ fn render_vdom(
     mut event_reciever: UnboundedReceiver<InputEvent>,
     handler: RinkInputHandler,
     cfg: Config,
-    rdom: Rc<RefCell<Dom>>,
-    taffy: Rc<RefCell<Taffy>>,
+    rdom: Rc<RefCell<TuiDom>>,
+    taffy: Arc<Mutex<Taffy>>,
     mut register_event: impl FnMut(crossterm::event::Event),
 ) -> Result<()> {
     tokio::runtime::Builder::new_current_thread()
@@ -133,10 +132,8 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender: rustc_hash::FxHashSet<RealNodeId> =
-                vec![RealNodeId::ElementId(ElementId(0))]
-                    .into_iter()
-                    .collect();
+            let mut to_rerender =FxDashSet::default();
+            to_rerender.insert(NodeId(0));
             let mut updated = true;
 
             loop {
@@ -153,17 +150,17 @@ fn render_vdom(
 
                 if !to_rerender.is_empty() || updated {
                     updated = false;
-                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &Dom) {
+                    fn resize(dims: Rect, taffy: &mut Taffy, rdom: &TuiDom) {
                         let width = dims.width;
                         let height = dims.height;
-                        let root_node = rdom[ElementId(0)].state.layout.node.unwrap();
+                        let root_node = rdom[NodeId(0)].state.layout.node.unwrap();
 
                         taffy
                             .compute_layout(
                                 root_node,
                                 Size {
-                                    width: taffy::prelude::Number::Defined((width - 1) as f32),
-                                    height: taffy::prelude::Number::Defined((height - 1) as f32),
+                                    width: AvailableSpace::Definite((width - 1) as f32),
+                                    height: AvailableSpace::Definite((height - 1) as f32),
                                 },
                             )
                             .unwrap();
@@ -172,15 +169,15 @@ fn render_vdom(
                         terminal.draw(|frame| {
                             let rdom = rdom.borrow();
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut taffy.borrow_mut(), &rdom);
-                            let root = &rdom[ElementId(0)];
+                            resize(frame.size(), &mut taffy.lock().expect("taffy lock poisoned"), &rdom);
+                            let root = &rdom[NodeId(0)];
                             render::render_vnode(
                                 frame,
-                                &taffy.borrow(),
+                                &taffy.lock().expect("taffy lock poisoned"),
                                 &rdom,
                                 root,
                                 cfg,
-                                Point::zero(),
+                                Point::ZERO,
                             );
                         })?;
                     } else {
@@ -192,7 +189,7 @@ fn render_vdom(
                                 width: 100,
                                 height: 100,
                             },
-                            &mut taffy.borrow_mut(),
+                            &mut taffy.lock().expect("taffy lock poisoned"),
                             &rdom,
                         );
                     }
@@ -234,23 +231,21 @@ fn render_vdom(
                 {
                     let evts = {
                         let mut rdom = rdom.borrow_mut();
-                        handler.get_events(&taffy.borrow(), &mut rdom)
+                        handler.get_events(&taffy.lock().expect("taffy lock poisoned"), &mut rdom)
                     };
                     {
                         updated |= handler.state().focus_state.clean();
                     }
                     for e in evts {
-                        vdom.handle_message(SchedulerMsg::Event(e));
+                        vdom.handle_event(e.name, e.data, e.id, e.bubbles)
                     }
                     let mut rdom = rdom.borrow_mut();
-                    let mutations = vdom.work_with_deadline(|| false);
-                    for m in &mutations {
-                        handler.prune(m, &rdom);
-                    }
+                    let mutations = vdom.render_immediate();
+                    handler.prune(&mutations, &rdom);
                     // updates the dom's nodes
                     let to_update = rdom.apply_mutations(mutations);
                     // update the style and layout
-                    let mut any_map = AnyMap::new();
+                    let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
                     to_rerender = rdom.update_state(to_update, any_map);
                 }

@@ -493,7 +493,7 @@ impl<'a> StateMember<'a> {
         let mask = self
             .dep_mems
             .iter()
-            .map(|m| 1 << m.id)
+            .map(|m| 1u64 << m.id)
             .fold(1 << self.mem.id, |a, b| a | b);
         quote! {
             #[derive(Clone, Copy)]

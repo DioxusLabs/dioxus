@@ -4,12 +4,12 @@ use crate::style_attributes::StyleModifier;
 use dioxus_native_core::{real_dom::RealDom, state::*};
 use dioxus_native_core_macro::{sorted_str_slice, State};
 
-pub(crate) type Dom = RealDom<NodeState>;
-pub(crate) type Node = dioxus_native_core::real_dom::Node<NodeState>;
+pub(crate) type TuiDom = RealDom<NodeState>;
+pub(crate) type TuiNode = dioxus_native_core::node::Node<NodeState>;
 
 #[derive(Debug, Clone, State, Default)]
 pub(crate) struct NodeState {
-    #[child_dep_state(layout, RefCell<Stretch>)]
+    #[child_dep_state(layout, Mutex<Stretch>)]
     pub layout: TaffyLayout,
     #[parent_dep_state(style)]
     pub style: StyleModifier,
@@ -45,7 +45,8 @@ impl Default for PreventDefault {
     }
 }
 
-impl NodeDepState<()> for PreventDefault {
+impl NodeDepState for PreventDefault {
+    type DepState = ();
     type Ctx = ();
 
     const NODE_MASK: dioxus_native_core::node_ref::NodeMask =

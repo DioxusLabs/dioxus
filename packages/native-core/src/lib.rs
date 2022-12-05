@@ -18,8 +18,8 @@ pub mod utils;
 
 /// A id for a node that lives in the real dom.
 pub type RealNodeId = NodeId;
-pub(crate) type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
-pub(crate) type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
+pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
+pub type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
 pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
 
 /// Used in derived state macros

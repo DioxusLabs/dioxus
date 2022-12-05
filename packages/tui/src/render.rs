@@ -1,3 +1,4 @@
+use dioxus_native_core::tree::TreeView;
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
@@ -10,7 +11,7 @@ use crate::{
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, Dom, Node,
+    Config, TuiDom, TuiNode,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -18,12 +19,12 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Taffy,
-    rdom: &Dom,
-    node: &Node,
+    rdom: &TuiDom,
+    node: &TuiNode,
     cfg: Config,
     parent_location: Point<f32>,
 ) {
-    use dioxus_native_core::real_dom::NodeType;
+    use dioxus_native_core::node::NodeType;
 
     if let NodeType::Placeholder = &node.node_data.node_type {
         return;
@@ -68,7 +69,7 @@ pub(crate) fn render_vnode(
                 frame.render_widget(WidgetWithContext::new(label, cfg), area);
             }
         }
-        NodeType::Element { children, .. } => {
+        NodeType::Element { .. } => {
             let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
@@ -76,7 +77,7 @@ pub(crate) fn render_vnode(
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            for c in children {
+            for c in rdom.children_ids(node.node_data.node_id).unwrap() {
                 render_vnode(frame, layout, rdom, &rdom[*c], cfg, location);
             }
         }
@@ -84,7 +85,7 @@ pub(crate) fn render_vnode(
     }
 }
 
-impl RinkWidget for &Node {
+impl RinkWidget for &TuiNode {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 

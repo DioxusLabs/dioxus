@@ -151,184 +151,180 @@ impl<S: State> RealDom<S> {
     }
 
     /// Updates the dom with some mutations and return a set of nodes that were updated. Pass the dirty nodes to update_state.
-    pub fn apply_mutations(&mut self, mutations_vec: Vec<Mutations>) -> DirtyNodeStates {
+    pub fn apply_mutations(&mut self, mutations: Mutations) -> DirtyNodeStates {
         let mut nodes_updated: FxHashMap<RealNodeId, NodeMask> = FxHashMap::default();
-        for mutations in mutations_vec {
-            for template in mutations.templates {
-                let mut template_root_ids = Vec::new();
-                for root in template.roots {
-                    if let Some(id) = self.create_template_node(root, &mut nodes_updated) {
-                        template_root_ids.push(id);
+        for template in mutations.templates {
+            let mut template_root_ids = Vec::new();
+            for root in template.roots {
+                if let Some(id) = self.create_template_node(root, &mut nodes_updated) {
+                    template_root_ids.push(id);
+                }
+            }
+            self.templates
+                .insert(template.name.to_string(), template_root_ids);
+        }
+        for e in mutations.edits {
+            use dioxus_core::Mutation::*;
+            match e {
+                AppendChildren { id, m } => {
+                    let children = self.stack.split_off(m);
+                    let parent = self.element_to_node_id(id);
+                    for child in children {
+                        self.add_child(parent, child);
+                        mark_dirty(parent, NodeMask::ALL, &mut nodes_updated);
                     }
                 }
-                self.templates
-                    .insert(template.name.to_string(), template_root_ids);
-            }
-            for e in mutations.edits {
-                use dioxus_core::Mutation::*;
-                match e {
-                    AppendChildren { id, m } => {
-                        let children = self.stack.split_off(m);
-                        let parent = self.element_to_node_id(id);
-                        for child in children {
-                            self.add_child(parent, child);
-                            mark_dirty(parent, NodeMask::ALL, &mut nodes_updated);
-                        }
+                AssignId { path, id } => {
+                    self.set_element_id(self.load_child(path), id);
+                }
+                CreatePlaceholder { id } => {
+                    let node = Node::new(NodeType::Placeholder);
+                    let node_id = self.create_node(node);
+                    self.set_element_id(node_id, id);
+                    self.stack.push(node_id);
+                    mark_dirty(node_id, NodeMask::ALL, &mut nodes_updated);
+                }
+                CreateTextNode { value, id } => {
+                    let node = Node::new(NodeType::Text {
+                        text: value.to_string(),
+                    });
+                    let node_id = self.create_node(node);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    node.node_data.element_id = Some(id);
+                    self.stack.push(node_id);
+                    mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
+                }
+                HydrateText { path, value, id } => {
+                    let node_id = self.load_child(path);
+                    self.set_element_id(node_id, id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Text { text } = &mut node.node_data.node_type {
+                        *text = value.to_string();
                     }
-                    AssignId { path, id } => {
-                        self.set_element_id(self.load_child(path), id);
+                    mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
+                }
+                LoadTemplate { name, index, id } => {
+                    let template_id = self.templates[name][index];
+                    let clone_id = self.clone_node(template_id, &mut nodes_updated);
+                    self.set_element_id(clone_id, id);
+                }
+                ReplaceWith { id, m } => {
+                    let new_nodes = self.stack.split_off(m);
+                    let old_node_id = self.element_to_node_id(id);
+                    for new in new_nodes {
+                        self.tree.insert_after(old_node_id, new);
+                        mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    CreatePlaceholder { id } => {
-                        let node = Node::new(NodeType::Placeholder);
-                        let node_id = self.create_node(node);
-                        self.set_element_id(node_id, id);
-                        self.stack.push(node_id);
-                        mark_dirty(node_id, NodeMask::ALL, &mut nodes_updated);
+                    self.tree.remove(old_node_id);
+                }
+                ReplacePlaceholder { path, m } => {
+                    let new_nodes = self.stack.split_off(m);
+                    let old_node_id = self.load_child(path);
+                    for new in new_nodes {
+                        self.tree.insert_after(old_node_id, new);
+                        mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    CreateTextNode { value, id } => {
-                        let node = Node::new(NodeType::Text {
-                            text: value.to_string(),
-                        });
-                        let node_id = self.create_node(node);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        node.node_data.element_id = Some(id);
-                        self.stack.push(node_id);
-                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
+                    self.tree.remove(old_node_id);
+                }
+                InsertAfter { id, m } => {
+                    let new_nodes = self.stack.split_off(m);
+                    let old_node_id = self.element_to_node_id(id);
+                    for new in new_nodes {
+                        self.tree.insert_after(old_node_id, new);
+                        mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    HydrateText { path, value, id } => {
-                        let node_id = self.load_child(path);
-                        self.set_element_id(node_id, id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Text { text } = &mut node.node_data.node_type {
-                            *text = value.to_string();
-                        }
-                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
+                }
+                InsertBefore { id, m } => {
+                    let new_nodes = self.stack.split_off(m);
+                    let old_node_id = self.element_to_node_id(id);
+                    for new in new_nodes {
+                        self.tree.insert_before(old_node_id, new);
+                        mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    LoadTemplate { name, index, id } => {
-                        let template_id = self.templates[name][index];
-                        let clone_id = self.clone_node(template_id, &mut nodes_updated);
-                        self.set_element_id(clone_id, id);
+                }
+                SetAttribute {
+                    name,
+                    value,
+                    id,
+                    ns,
+                } => {
+                    let node_id = self.element_to_node_id(id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
+                        attributes.insert(
+                            OwnedAttributeDiscription {
+                                name: name.to_string(),
+                                namespace: ns.map(|s| s.to_string()),
+                                volatile: false,
+                            },
+                            crate::node::OwnedAttributeValue::Text(value.to_string()),
+                        );
+                        mark_dirty(
+                            node_id,
+                            NodeMask::new_with_attrs(AttributeMask::single(name)),
+                            &mut nodes_updated,
+                        );
                     }
-                    ReplaceWith { id, m } => {
-                        let new_nodes = self.stack.split_off(m);
-                        let old_node_id = self.element_to_node_id(id);
-                        for new in new_nodes {
-                            self.tree.insert_after(old_node_id, new);
-                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
-                        }
-                        self.tree.remove(old_node_id);
+                }
+                SetBoolAttribute { name, value, id } => {
+                    let node_id = self.element_to_node_id(id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
+                        attributes.insert(
+                            OwnedAttributeDiscription {
+                                name: name.to_string(),
+                                namespace: None,
+                                volatile: false,
+                            },
+                            crate::node::OwnedAttributeValue::Bool(value),
+                        );
+                        mark_dirty(
+                            node_id,
+                            NodeMask::new_with_attrs(AttributeMask::single(name)),
+                            &mut nodes_updated,
+                        );
                     }
-                    ReplacePlaceholder { path, m } => {
-                        let new_nodes = self.stack.split_off(m);
-                        let old_node_id = self.load_child(path);
-                        for new in new_nodes {
-                            self.tree.insert_after(old_node_id, new);
-                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
-                        }
-                        self.tree.remove(old_node_id);
+                }
+                SetText { value, id } => {
+                    let node_id = self.element_to_node_id(id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Text { text } = &mut node.node_data.node_type {
+                        *text = value.to_string();
                     }
-                    InsertAfter { id, m } => {
-                        let new_nodes = self.stack.split_off(m);
-                        let old_node_id = self.element_to_node_id(id);
-                        for new in new_nodes {
-                            self.tree.insert_after(old_node_id, new);
-                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
-                        }
-                    }
-                    InsertBefore { id, m } => {
-                        let new_nodes = self.stack.split_off(m);
-                        let old_node_id = self.element_to_node_id(id);
-                        for new in new_nodes {
-                            self.tree.insert_before(old_node_id, new);
-                            mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
-                        }
-                    }
-                    SetAttribute {
-                        name,
-                        value,
-                        id,
-                        ns,
-                    } => {
-                        let node_id = self.element_to_node_id(id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
-                        {
-                            attributes.insert(
-                                OwnedAttributeDiscription {
-                                    name: name.to_string(),
-                                    namespace: ns.map(|s| s.to_string()),
-                                    volatile: false,
-                                },
-                                crate::node::OwnedAttributeValue::Text(value.to_string()),
-                            );
-                            mark_dirty(
-                                node_id,
-                                NodeMask::new_with_attrs(AttributeMask::single(name)),
-                                &mut nodes_updated,
-                            );
-                        }
-                    }
-                    SetBoolAttribute { name, value, id } => {
-                        let node_id = self.element_to_node_id(id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type
-                        {
-                            attributes.insert(
-                                OwnedAttributeDiscription {
-                                    name: name.to_string(),
-                                    namespace: None,
-                                    volatile: false,
-                                },
-                                crate::node::OwnedAttributeValue::Bool(value),
-                            );
-                            mark_dirty(
-                                node_id,
-                                NodeMask::new_with_attrs(AttributeMask::single(name)),
-                                &mut nodes_updated,
-                            );
-                        }
-                    }
-                    SetText { value, id } => {
-                        let node_id = self.element_to_node_id(id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Text { text } = &mut node.node_data.node_type {
-                            *text = value.to_string();
-                        }
-                        mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
-                    }
-                    NewEventListener { name, scope: _, id } => {
-                        let node_id = self.element_to_node_id(id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
-                            match self.nodes_listening.get_mut(name) {
-                                Some(hs) => {
-                                    hs.insert(node_id);
-                                }
-                                None => {
-                                    let mut hs = FxHashSet::default();
-                                    hs.insert(node_id);
-                                    self.nodes_listening.insert(name.to_string(), hs);
-                                }
+                    mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
+                }
+                NewEventListener { name, scope: _, id } => {
+                    let node_id = self.element_to_node_id(id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
+                        match self.nodes_listening.get_mut(name) {
+                            Some(hs) => {
+                                hs.insert(node_id);
                             }
-                            listeners.insert(name.to_string());
+                            None => {
+                                let mut hs = FxHashSet::default();
+                                hs.insert(node_id);
+                                self.nodes_listening.insert(name.to_string(), hs);
+                            }
                         }
+                        listeners.insert(name.to_string());
                     }
-                    RemoveEventListener { id, name } => {
-                        let node_id = self.element_to_node_id(id);
-                        let node = self.tree.get_mut(node_id).unwrap();
-                        if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
-                            listeners.remove(name);
-                        }
-                        self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
+                }
+                RemoveEventListener { id, name } => {
+                    let node_id = self.element_to_node_id(id);
+                    let node = self.tree.get_mut(node_id).unwrap();
+                    if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {
+                        listeners.remove(name);
                     }
-                    Remove { id } => {
-                        let node_id = self.element_to_node_id(id);
-                        self.tree.remove(node_id);
-                    }
-                    PushRoot { id } => {
-                        let node_id = self.element_to_node_id(id);
-                        self.stack.push(node_id);
-                    }
+                    self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
+                }
+                Remove { id } => {
+                    let node_id = self.element_to_node_id(id);
+                    self.tree.remove(node_id);
+                }
+                PushRoot { id } => {
+                    let node_id = self.element_to_node_id(id);
+                    self.stack.push(node_id);
                 }
             }
         }

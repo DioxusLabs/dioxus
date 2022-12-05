@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use dioxus_core::ElementId;
@@ -10,7 +11,7 @@ use taffy::{
     Taffy,
 };
 
-use crate::Dom;
+use crate::TuiDom;
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -45,24 +46,28 @@ use crate::Dom;
 /// ```
 #[derive(Clone)]
 pub struct Query {
-    pub(crate) rdom: Rc<RefCell<Dom>>,
-    pub(crate) stretch: Rc<RefCell<Taffy>>,
+    pub(crate) rdom: Rc<RefCell<TuiDom>>,
+    pub(crate) stretch: Arc<Mutex<Taffy>>,
 }
 
 impl Query {
     pub fn get(&self, id: ElementId) -> ElementRef {
-        ElementRef::new(self.rdom.borrow(), self.stretch.borrow(), id)
+        ElementRef::new(
+            self.rdom.borrow(),
+            self.stretch.lock().expect("taffy lock poisoned"),
+            id,
+        )
     }
 }
 
 pub struct ElementRef<'a> {
-    inner: Ref<'a, Dom>,
-    stretch: Ref<'a, Taffy>,
+    inner: Ref<'a, TuiDom>,
+    stretch: MutexGuard<'a, Taffy>,
     id: ElementId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, Dom>, stretch: Ref<'a, Taffy>, id: ElementId) -> Self {
+    fn new(inner: Ref<'a, TuiDom>, stretch: MutexGuard<'a, Taffy>, id: ElementId) -> Self {
         Self { inner, stretch, id }
     }
 
