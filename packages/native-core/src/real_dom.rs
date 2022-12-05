@@ -138,26 +138,22 @@ impl<S: State> RealDom<S> {
                     let child_id = self.create_template_node(child, mutations_vec);
                     self.add_child(node_id, child_id);
                 }
-                self.stack.push(node_id);
                 node_id
             }
             TemplateNode::Text(txt) => {
                 let node_id = self.create_node(Node::new(NodeType::Text {
                     text: txt.to_string(),
                 }));
-                self.stack.push(node_id);
                 node_id
             }
             TemplateNode::Dynamic(_) => {
                 let node_id = self.create_node(Node::new(NodeType::Placeholder));
-                self.stack.push(node_id);
                 node_id
             }
             TemplateNode::DynamicText(_) => {
                 let node_id = self.create_node(Node::new(NodeType::Text {
                     text: String::new(),
                 }));
-                self.stack.push(node_id);
                 node_id
             }
         }
