@@ -1,7 +1,7 @@
-use std::{convert::TryInto, sync::Arc};
-
 use dioxus::{events::MouseData, prelude::*};
-use dioxus_core::UiEvent;
+use dioxus_core::Event;
+use std::rc::Rc;
+use std::{convert::TryInto, sync::Arc};
 
 fn main() {
     dioxus_tui::launch(app);
@@ -12,7 +12,7 @@ fn app(cx: Scope) -> Element {
         "#".to_string() + &c.iter().map(|c| format!("{c:02X?}")).collect::<String>()
     }
 
-    fn get_brightness(m: Arc<MouseData>) -> i32 {
+    fn get_brightness(m: &Rc<MouseData>) -> i32 {
         let b: i32 = m.held_buttons().len().try_into().unwrap();
         127 * b
     }
@@ -32,8 +32,8 @@ fn app(cx: Scope) -> Element {
     let buttons = use_state(&cx, || "".to_string());
     let modifiers = use_state(&cx, || "".to_string());
 
-    let update_data = move |event: UiEvent<MouseData>| {
-        let mouse_data = event.data;
+    let update_data = move |event: Event<MouseData>| {
+        let mouse_data = event.inner();
 
         page_coordinates.set(format!("{:?}", mouse_data.page_coordinates()));
         element_coordinates.set(format!("{:?}", mouse_data.element_coordinates()));
@@ -62,9 +62,9 @@ fn app(cx: Scope) -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: "{q1_color_str}",
-                    onmouseenter: move |m| q1_color.set([get_brightness(m.data), 0, 0]),
-                    onmousedown: move |m| q1_color.set([get_brightness(m.data), 0, 0]),
-                    onmouseup: move |m| q1_color.set([get_brightness(m.data), 0, 0]),
+                    onmouseenter: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
+                    onmousedown: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
+                    onmouseup: move |m| q1_color.set([get_brightness(m.inner()), 0, 0]),
                     onwheel: move |w| q1_color.set([q1_color[0] + (10.0*w.delta().strip_units().y) as i32, 0, 0]),
                     onmouseleave: move |_| q1_color.set([200; 3]),
                     onmousemove: update_data,
@@ -76,9 +76,9 @@ fn app(cx: Scope) -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: "{q2_color_str}",
-                    onmouseenter: move |m| q2_color.set([get_brightness(m.data); 3]),
-                    onmousedown: move |m| q2_color.set([get_brightness(m.data); 3]),
-                    onmouseup: move |m| q2_color.set([get_brightness(m.data); 3]),
+                    onmouseenter: move |m| q2_color.set([get_brightness(m.inner()); 3]),
+                    onmousedown: move |m| q2_color.set([get_brightness(m.inner()); 3]),
+                    onmouseup: move |m| q2_color.set([get_brightness(m.inner()); 3]),
                     onwheel: move |w| q2_color.set([q2_color[0] + (10.0*w.delta().strip_units().y) as i32;3]),
                     onmouseleave: move |_| q2_color.set([200; 3]),
                     onmousemove: update_data,
@@ -96,9 +96,9 @@ fn app(cx: Scope) -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: "{q3_color_str}",
-                    onmouseenter: move |m| q3_color.set([0, get_brightness(m.data), 0]),
-                    onmousedown: move |m| q3_color.set([0, get_brightness(m.data), 0]),
-                    onmouseup: move |m| q3_color.set([0, get_brightness(m.data), 0]),
+                    onmouseenter: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
+                    onmousedown: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
+                    onmouseup: move |m| q3_color.set([0, get_brightness(m.inner()), 0]),
                     onwheel: move |w| q3_color.set([0, q3_color[1] + (10.0*w.delta().strip_units().y) as i32, 0]),
                     onmouseleave: move |_| q3_color.set([200; 3]),
                     onmousemove: update_data,
@@ -110,9 +110,9 @@ fn app(cx: Scope) -> Element {
                     justify_content: "center",
                     align_items: "center",
                     background_color: "{q4_color_str}",
-                    onmouseenter: move |m| q4_color.set([0, 0, get_brightness(m.data)]),
-                    onmousedown: move |m| q4_color.set([0, 0, get_brightness(m.data)]),
-                    onmouseup: move |m| q4_color.set([0, 0, get_brightness(m.data)]),
+                    onmouseenter: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
+                    onmousedown: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
+                    onmouseup: move |m| q4_color.set([0, 0, get_brightness(m.inner())]),
                     onwheel: move |w| q4_color.set([0, 0, q4_color[2] + (10.0*w.delta().strip_units().y) as i32]),
                     onmouseleave: move |_| q4_color.set([200; 3]),
                     onmousemove: update_data,
