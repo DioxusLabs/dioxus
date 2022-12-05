@@ -69,7 +69,6 @@ impl VirtualDom {
             )
         }
 
-        println!("reclaiming {:?}", el);
         self.elements.try_remove(el.0)
     }
 
@@ -95,9 +94,7 @@ impl VirtualDom {
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
         for hook in scope.hook_list.get_mut().drain(..) {
-            println!("dropping hook !");
             drop(unsafe { BumpBox::from_raw(hook) });
-            println!("hook dropped !");
         }
     }
 

@@ -16,7 +16,7 @@ use query::Query;
 use std::{cell::RefCell, sync::{Mutex, Arc}};
 use std::rc::Rc;
 use std::{io, time::Duration};
-use taffy::Taffy;
+use taffy::{Taffy};
 pub use taffy::{geometry::Point, prelude::*};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
@@ -168,12 +168,13 @@ fn render_vdom(
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
                             let rdom = rdom.borrow();
+                            let mut taffy =taffy.lock().expect("taffy lock poisoned");
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut taffy.lock().expect("taffy lock poisoned"), &rdom);
+                            resize(frame.size(), &mut *taffy, &rdom);
                             let root = &rdom[NodeId(0)];
                             render::render_vnode(
                                 frame,
-                                &taffy.lock().expect("taffy lock poisoned"),
+                                &*taffy,
                                 &rdom,
                                 root,
                                 cfg,

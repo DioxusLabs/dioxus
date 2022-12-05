@@ -388,11 +388,6 @@ impl<'b> VirtualDom {
         // Set the placeholder of the scope
         self.scopes[scope.0].placeholder.set(Some(new_id));
 
-        println!(
-            "assigning id {:?} to path {:?}, template: {:?}",
-            new_id, &template.template.node_paths, template.template
-        );
-
         // Since the placeholder is already in the DOM, we don't create any new nodes
         self.mutations.push(AssignId {
             id: new_id,

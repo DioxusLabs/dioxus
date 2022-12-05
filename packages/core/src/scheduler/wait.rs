@@ -40,8 +40,6 @@ impl VirtualDom {
     }
 
     pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
-        println!("suspense notified");
-
         let leaf = self
             .scheduler
             .leaves
@@ -66,13 +64,6 @@ impl VirtualDom {
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
             // safety: we're not going to modify the suspense context but we don't want to make a clone of it
             let fiber = self.acquire_suspense_boundary(leaf.scope_id);
-
-            println!("ready pool");
-
-            println!(
-                "Existing mutations {:?}, scope {:?}",
-                fiber.mutations, fiber.id
-            );
 
             let scope = &mut self.scopes[scope_id.0];
             let arena = scope.current_frame();
@@ -106,16 +97,9 @@ impl VirtualDom {
                 std::mem::swap(&mut self.mutations, mutations);
 
                 if fiber.waiting_on.borrow().is_empty() {
-                    println!("fiber is finished!");
                     self.finished_fibers.push(fiber.id);
-                } else {
-                    println!("fiber is not finished {:?}", fiber.waiting_on);
                 }
-            } else {
-                println!("nodes arent right");
             }
-        } else {
-            println!("not ready");
         }
     }
 }

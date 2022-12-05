@@ -61,16 +61,9 @@ impl<'b> VirtualDom {
     }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
-        println!(
-            "diffing node {:#?},\n\n{:#?}",
-            left_template.template.name, right_template.template.name
-        );
-
         if left_template.template.name != right_template.template.name {
             return self.light_diff_templates(left_template, right_template);
         }
-
-        println!("diffing attributs...");
 
         for (left_attr, right_attr) in left_template
             .dynamic_attrs
@@ -106,8 +99,6 @@ impl<'b> VirtualDom {
             }
         }
 
-        println!("diffing dyn nodes...");
-
         for (idx, (left_node, right_node)) in left_template
             .dynamic_nodes
             .iter()
@@ -132,8 +123,6 @@ impl<'b> VirtualDom {
                 _ => todo!(),
             };
         }
-
-        println!("applying roots...");
 
         // Make sure the roots get transferred over
         for (left, right) in left_template
@@ -396,8 +385,6 @@ impl<'b> VirtualDom {
             "all siblings must be keyed or all siblings must be non-keyed"
         );
 
-        println!("Diffing fragment {:?}, {:?}", old.len(), new.len());
-
         if new_is_keyed && old_is_keyed {
             self.diff_keyed_children(old, new);
         } else {
@@ -419,8 +406,6 @@ impl<'b> VirtualDom {
         // Handled these cases in `diff_children` before calling this function.
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
-
-        println!("Diffing non keyed children");
 
         match dbg!(old.len().cmp(&new.len())) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..]),

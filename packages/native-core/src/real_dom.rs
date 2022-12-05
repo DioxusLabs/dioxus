@@ -1,5 +1,6 @@
 use dioxus_core::{ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt::Debug;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
@@ -32,6 +33,7 @@ pub struct RealDom<S: State> {
     nodes_listening: FxHashMap<String, FxHashSet<RealNodeId>>,
     stack: Vec<RealNodeId>,
     templates: FxHashMap<String, Vec<RealNodeId>>,
+    root_initialized: bool,
 }
 
 impl<S: State> Default for RealDom<S> {
@@ -55,10 +57,11 @@ impl<S: State> RealDom<S> {
 
         RealDom {
             tree,
-            node_id_mapping: Vec::new(),
+            node_id_mapping: vec![Some(root_id)],
             nodes_listening: FxHashMap::default(),
             stack: vec![root_id],
             templates: FxHashMap::default(),
+            root_initialized: false,
         }
     }
 
@@ -99,7 +102,7 @@ impl<S: State> RealDom<S> {
         &mut self,
         node: &TemplateNode,
         mutations_vec: &mut FxHashMap<RealNodeId, NodeMask>,
-    ) -> Option<RealNodeId> {
+    ) -> RealNodeId {
         match node {
             TemplateNode::Element {
                 tag,
@@ -132,21 +135,31 @@ impl<S: State> RealDom<S> {
                 });
                 let node_id = self.create_node(node);
                 for child in *children {
-                    if let Some(child_id) = self.create_template_node(child, mutations_vec) {
-                        self.add_child(node_id, child_id);
-                    }
+                    let child_id = self.create_template_node(child, mutations_vec);
+                    self.add_child(node_id, child_id);
                 }
                 self.stack.push(node_id);
-                Some(node_id)
+                node_id
             }
             TemplateNode::Text(txt) => {
                 let node_id = self.create_node(Node::new(NodeType::Text {
                     text: txt.to_string(),
                 }));
                 self.stack.push(node_id);
-                Some(node_id)
+                node_id
             }
-            _ => None,
+            TemplateNode::Dynamic(_) => {
+                let node_id = self.create_node(Node::new(NodeType::Placeholder));
+                self.stack.push(node_id);
+                node_id
+            }
+            TemplateNode::DynamicText(_) => {
+                let node_id = self.create_node(Node::new(NodeType::Text {
+                    text: String::new(),
+                }));
+                self.stack.push(node_id);
+                node_id
+            }
         }
     }
 
@@ -156,12 +169,16 @@ impl<S: State> RealDom<S> {
         for template in mutations.templates {
             let mut template_root_ids = Vec::new();
             for root in template.roots {
-                if let Some(id) = self.create_template_node(root, &mut nodes_updated) {
-                    template_root_ids.push(id);
-                }
+                let id = self.create_template_node(root, &mut nodes_updated);
+                template_root_ids.push(id);
             }
             self.templates
                 .insert(template.name.to_string(), template_root_ids);
+        }
+        if !self.root_initialized {
+            self.root_initialized = true;
+            let root_id = self.tree.root();
+            nodes_updated.insert(root_id, NodeMask::ALL);
         }
         for e in mutations.edits {
             use dioxus_core::Mutation::*;
@@ -171,7 +188,7 @@ impl<S: State> RealDom<S> {
                     let parent = self.element_to_node_id(id);
                     for child in children {
                         self.add_child(parent, child);
-                        mark_dirty(parent, NodeMask::ALL, &mut nodes_updated);
+                        mark_dirty(child, NodeMask::ALL, &mut nodes_updated);
                     }
                 }
                 AssignId { path, id } => {
@@ -207,6 +224,7 @@ impl<S: State> RealDom<S> {
                     let template_id = self.templates[name][index];
                     let clone_id = self.clone_node(template_id, &mut nodes_updated);
                     self.set_element_id(clone_id, id);
+                    self.stack.push(clone_id);
                 }
                 ReplaceWith { id, m } => {
                     let new_nodes = self.stack.split_off(m);
@@ -218,7 +236,7 @@ impl<S: State> RealDom<S> {
                     self.tree.remove(old_node_id);
                 }
                 ReplacePlaceholder { path, m } => {
-                    let new_nodes = self.stack.split_off(m);
+                    let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.load_child(path);
                     for new in new_nodes {
                         self.tree.insert_after(old_node_id, new);

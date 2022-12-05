@@ -3,6 +3,7 @@ use dioxus_core::ElementId;
 use crate::{
     node::{NodeData, NodeType, OwnedAttributeView},
     state::union_ordered_iter,
+    RealNodeId,
 };
 
 /// A view into a [VNode] with limited access.
@@ -24,6 +25,11 @@ impl<'a> NodeView<'a> {
     /// Get the id of the node
     pub fn id(&self) -> Option<ElementId> {
         self.inner.element_id
+    }
+
+    /// Get the node id of the node
+    pub fn node_id(&self) -> RealNodeId {
+        self.inner.node_id
     }
 
     /// Get the tag of the node if the tag is enabled in the mask

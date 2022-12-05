@@ -17,7 +17,7 @@ impl<T> PossiblyUninitalized<T> {
     pub fn unwrap(self) -> T {
         match self {
             Self::Initialized(i) => i,
-            _ => panic!(),
+            _ => panic!("uninitalized"),
         }
     }
     pub fn ok(self) -> Option<T> {

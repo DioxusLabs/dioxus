@@ -334,7 +334,7 @@ pub fn resolve_passes<T, Tr: TreeView<T>>(
                 if pass
                     .dependancies()
                     .iter()
-                    .all(|d| resolved_passes.contains(d))
+                    .all(|d| resolved_passes.contains(d) || *d == pass_id)
                     && !pass_mask.overlaps(currently_borrowed)
                 {
                     let pass = passes.remove(i);
