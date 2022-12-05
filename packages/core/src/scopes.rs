@@ -81,7 +81,7 @@ pub struct ScopeState {
     pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
@@ -250,17 +250,18 @@ impl<'src> ScopeState {
     }
 
     /// Return any context of type T if it exists on this scope
-    pub fn has_context<T: 'static>(&self) -> Option<Rc<T>> {
+    pub fn has_context<T: 'static + Clone>(&self) -> Option<T> {
         self.shared_contexts
             .borrow()
             .get(&TypeId::of::<T>())?
-            .clone()
-            .downcast()
-            .ok()
+            .downcast_ref::<T>()
+            .cloned()
     }
 
     /// Try to retrieve a shared state with type `T` from any parent scope.
-    pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
+    ///
+    /// Clones the state if it exists.
+    pub fn consume_context<T: 'static + Clone>(&self) -> Option<T> {
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
         }
@@ -270,7 +271,7 @@ impl<'src> ScopeState {
             // safety: all parent pointers are valid thanks to the bump arena
             let parent = unsafe { &*parent_ptr };
             if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                return shared.clone().downcast().ok();
+                return shared.downcast_ref::<T>().cloned();
             }
             search_parent = parent.parent;
         }
@@ -303,15 +304,14 @@ impl<'src> ScopeState {
     ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static>(&self, value: T) -> Rc<T> {
-        let mut contexts = self.shared_contexts.borrow_mut();
-        contexts.insert(TypeId::of::<T>(), Rc::new(value));
-        contexts
-            .get(&TypeId::of::<T>())
-            .unwrap()
-            .clone()
-            .downcast()
-            .unwrap()
+    pub fn provide_context<T: 'static + Clone>(&self, value: T) -> T {
+        let value2 = value.clone();
+
+        self.shared_contexts
+            .borrow_mut()
+            .insert(TypeId::of::<T>(), Box::new(value));
+
+        value2
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.

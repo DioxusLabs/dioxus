@@ -34,9 +34,9 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn acquire_suspense_boundary<'a>(&self, id: ScopeId) -> Rc<SuspenseContext> {
+    pub(crate) fn acquire_suspense_boundary<'a>(&'a self, id: ScopeId) -> Rc<SuspenseContext> {
         self.scopes[id.0]
-            .consume_context::<SuspenseContext>()
+            .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
     }
 

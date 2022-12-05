@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::innerlude::{VComponent, VText};
 use crate::mutations::Mutation;
@@ -340,7 +341,7 @@ impl<'b> VirtualDom {
         }
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
+        let boundary = match self.scopes[scope.0].has_context::<Rc<SuspenseContext>>() {
             Some(boundary) => boundary,
             _ => return created,
         };
