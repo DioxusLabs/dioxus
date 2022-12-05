@@ -493,8 +493,8 @@ impl<'a> StateMember<'a> {
         let mask = self
             .dep_mems
             .iter()
-            .map(|m| m.id)
-            .fold(self.mem.id, |a, b| a | b);
+            .map(|m| 1 << m.id)
+            .fold(1 << self.mem.id, |a, b| a | b);
         quote! {
             #[derive(Clone, Copy)]
             struct #unit_type;
@@ -510,7 +510,7 @@ impl<'a> StateMember<'a> {
                     &[#(dioxus_native_core::PassId(#dependants)),*]
                 }
                 fn mask(&self) -> dioxus_native_core::MemberMask {
-                    dioxus_native_core::MemberMask(1 << #mask)
+                    dioxus_native_core::MemberMask(#mask)
                 }
             }
         }
