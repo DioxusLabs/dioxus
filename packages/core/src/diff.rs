@@ -167,7 +167,6 @@ impl<'b> VirtualDom {
     ) {
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
-            dbg!(&left, &right);
             let created = self.create_component_node(right_template, right, idx);
             let head = unsafe {
                 self.scopes[left.scope.get().unwrap().0]
@@ -407,7 +406,7 @@ impl<'b> VirtualDom {
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
-        match dbg!(old.len().cmp(&new.len())) {
+        match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..]),
             Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
             Ordering::Equal => {}

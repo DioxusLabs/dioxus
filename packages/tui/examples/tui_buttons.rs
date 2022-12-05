@@ -23,12 +23,12 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
 
     cx.render(rsx! {
         div{
-            width: "100%",
-            height: "100%",
+            width: "20px",
+            height: "5px",
             background_color: "{color}",
             tabindex: "{cx.props.layer}",
             onkeydown: |e| {
-                if let Code::Space = e.data.code() {
+                if let Code::Space = e.inner().code() {
                     toggle.modify(|f| !f);
                 }
             },
@@ -60,7 +60,7 @@ fn app(cx: Scope) -> Element {
             height: "100%",
 
             (1..8).map(|y|
-                cx.render(rsx!{
+                rsx!{
                     div{
                         display: "flex",
                         flex_direction: "row",
@@ -68,26 +68,26 @@ fn app(cx: Scope) -> Element {
                         height: "100%",
                         (1..8).map(|x|{
                             if (x + y) % 2 == 0{
-                                cx.render(rsx!{
+                                rsx!{
                                     div{
-                                        width: "100%",
-                                        height: "100%",
+                                        width: "20px",
+                                        height: "5px",
                                         background_color: "rgb(100, 100, 100)",
                                     }
-                                })
+                                }
                             }
                             else{
                                 let layer = (x + y) % 3;
-                                cx.render(rsx!{
+                                rsx!{
                                     Button{
                                         color_offset: x * y,
                                         layer: layer as u16,
                                     }
-                                })
+                                }
                             }
                         })
                     }
-                })
+                }
             )
         }
     })
