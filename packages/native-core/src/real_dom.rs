@@ -62,7 +62,7 @@ impl<S: State> RealDom<S> {
         }
     }
 
-    fn element_to_node_id(&self, element_id: ElementId) -> RealNodeId {
+    pub fn element_to_node_id(&self, element_id: ElementId) -> RealNodeId {
         self.node_id_mapping.get(element_id.0).unwrap().unwrap()
     }
 
