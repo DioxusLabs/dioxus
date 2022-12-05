@@ -34,21 +34,22 @@ impl ElementRef {
 
 impl VirtualDom {
     pub(crate) fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
-        let entry = self.elements.vacant_entry();
-        let id = entry.key();
-        entry.insert(ElementRef {
-            template: template as *const _ as *mut _,
-            path: ElementPath::Deep(path),
-        });
-        ElementId(id)
+        self.next(template, ElementPath::Deep(path))
     }
 
     pub(crate) fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
+        self.next(template, ElementPath::Root(path))
+    }
+
+    fn next(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
+
+        println!("claiming {:?}", id);
+
         entry.insert(ElementRef {
             template: template as *const _ as *mut _,
-            path: ElementPath::Root(path),
+            path,
         });
         ElementId(id)
     }
@@ -65,6 +66,8 @@ impl VirtualDom {
                 std::backtrace::Backtrace::force_capture()
             );
         }
+
+        println!("Reclaiming {:?}", el.0);
 
         self.elements.try_remove(el.0)
     }
@@ -100,8 +103,20 @@ impl VirtualDom {
             DynamicNode::Fragment(nodes) => nodes
                 .into_iter()
                 .for_each(|node| self.drop_scope_inner(node)),
-            _ => {}
-        })
+            DynamicNode::Placeholder(t) => {
+                self.try_reclaim(t.get());
+            }
+            DynamicNode::Text(t) => {
+                self.try_reclaim(t.id.get());
+            }
+        });
+
+        for root in node.root_ids {
+            let id = root.get();
+            if id.0 != 0 {
+                self.try_reclaim(id);
+            }
+        }
     }
 
     /// Descend through the tree, removing any borrowed props and listeners

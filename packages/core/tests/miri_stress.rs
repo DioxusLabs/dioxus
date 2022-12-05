@@ -98,7 +98,7 @@ fn memo_works_properly() {
     let mut dom = VirtualDom::new(app);
 
     _ = dom.rebuild();
-    todo!()
+    // todo!()
     // dom.hard_diff(ScopeId(0));
     // dom.hard_diff(ScopeId(0));
     // dom.hard_diff(ScopeId(0));

@@ -1,5 +1,8 @@
 use futures_util::FutureExt;
-use std::task::{Context, Poll};
+use std::{
+    rc::Rc,
+    task::{Context, Poll},
+};
 
 use crate::{
     innerlude::{Mutation, Mutations, SuspenseContext},
@@ -31,17 +34,13 @@ impl VirtualDom {
         }
     }
 
-    pub(crate) fn acquire_suspense_boundary<'a>(&self, id: ScopeId) -> &'a SuspenseContext {
-        let ct = self.scopes[id.0]
+    pub(crate) fn acquire_suspense_boundary<'a>(&self, id: ScopeId) -> Rc<SuspenseContext> {
+        self.scopes[id.0]
             .consume_context::<SuspenseContext>()
-            .unwrap();
-
-        unsafe { &*(ct as *const SuspenseContext) }
+            .unwrap()
     }
 
     pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
-        println!("suspense notified");
-
         let leaf = self
             .scheduler
             .leaves

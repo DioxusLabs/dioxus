@@ -73,7 +73,6 @@ async fn async_text(cx: Scope<'_>) -> Element {
 
     let age = use_future!(cx, || async {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        println!("long future completed");
         1234
     });
 

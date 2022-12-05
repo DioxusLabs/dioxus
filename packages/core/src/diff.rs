@@ -25,52 +25,44 @@ impl<'b> VirtualDom {
                 .previous_frame()
                 .try_load_node()
                 .expect("Call rebuild before diffing");
+
             let new = scope_state
                 .current_frame()
                 .try_load_node()
                 .expect("Call rebuild before diffing");
-            self.diff_maybe_node(old, new);
+
+            use RenderReturn::{Async, Sync};
+
+            match (old, new) {
+                (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
+
+                // Err cases
+                (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
+                (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
+                (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
+
+                // Async
+                (Sync(Ok(_l)), Async(_)) => todo!(),
+                (Sync(Err(_e)), Async(_)) => todo!(),
+                (Async(_), Sync(Ok(_r))) => todo!(),
+                (Async(_), Sync(Err(_e))) => { /* nothing */ }
+                (Async(_), Async(_)) => { /* nothing */ }
+            };
         }
         self.scope_stack.pop();
     }
 
-    fn diff_maybe_node(&mut self, old: &'b RenderReturn<'b>, new: &'b RenderReturn<'b>) {
-        use RenderReturn::{Async, Sync};
-        match (old, new) {
-            (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
-
-            // Err cases
-            (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
-            (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
-            (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
-
-            // Async
-            (Sync(Ok(_l)), Async(_)) => todo!(),
-            (Sync(Err(_e)), Async(_)) => todo!(),
-            (Async(_), Sync(Ok(_r))) => todo!(),
-            (Async(_), Sync(Err(_e))) => { /* nothing */ }
-            (Async(_), Async(_)) => { /* nothing */ }
-        }
-    }
-
     fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _e: &anyhow::Error) {
-        todo!("Not yet handling error rollover")
+        return;
     }
     fn diff_err_to_ok(&mut self, _e: &anyhow::Error, _l: &'b VNode<'b>) {
-        todo!("Not yet handling error rollover")
+        return;
     }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
-        println!(
-            "diffing node {:#?},\n\n{:#?}",
-            left_template.template.name, right_template.template.name
-        );
-
         if left_template.template.name != right_template.template.name {
             return self.light_diff_templates(left_template, right_template);
         }
-
-        println!("diffing attributs...");
 
         for (left_attr, right_attr) in left_template
             .dynamic_attrs
@@ -106,8 +98,6 @@ impl<'b> VirtualDom {
             }
         }
 
-        println!("diffing dyn nodes...");
-
         for (idx, (left_node, right_node)) in left_template
             .dynamic_nodes
             .iter()
@@ -133,8 +123,6 @@ impl<'b> VirtualDom {
             };
         }
 
-        println!("applying roots...");
-
         // Make sure the roots get transferred over
         for (left, right) in left_template
             .root_ids
@@ -153,15 +141,17 @@ impl<'b> VirtualDom {
     }
 
     fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
+        // Remove the old nodes, except for one
+        self.remove_nodes(&l[1..]);
+
+        // Now create the new one
+        let first = self.replace_inner(&l[0]);
+
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element(&l[0], &[]);
         r.set(placeholder);
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });
-
-        // Remove the old nodes, except for onea
-        let first = self.replace_inner(&l[0]);
-        self.remove_nodes(&l[1..]);
 
         self.mutations
             .push(Mutation::ReplaceWith { id: first, m: 1 });
@@ -178,7 +168,6 @@ impl<'b> VirtualDom {
     ) {
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
-            dbg!(&left, &right);
             let created = self.create_component_node(right_template, right, idx);
             let head = unsafe {
                 self.scopes[left.scope.get().unwrap().0]
@@ -396,8 +385,6 @@ impl<'b> VirtualDom {
             "all siblings must be keyed or all siblings must be non-keyed"
         );
 
-        println!("Diffing fragment {:?}, {:?}", old.len(), new.len());
-
         if new_is_keyed && old_is_keyed {
             self.diff_keyed_children(old, new);
         } else {
@@ -420,9 +407,7 @@ impl<'b> VirtualDom {
         debug_assert!(!new.is_empty());
         debug_assert!(!old.is_empty());
 
-        println!("Diffing non keyed children");
-
-        match dbg!(old.len().cmp(&new.len())) {
+        match old.len().cmp(&new.len()) {
             Ordering::Greater => self.remove_nodes(&old[new.len()..]),
             Ordering::Less => self.create_and_insert_after(&new[old.len()..], old.last().unwrap()),
             Ordering::Equal => {}
@@ -760,7 +745,8 @@ impl<'b> VirtualDom {
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
-        nodes.iter().for_each(|node| self.remove_node(node));
+        // note that we iterate in reverse to unlink lists of nodes in their rough index order
+        nodes.iter().rev().for_each(|node| self.remove_node(node));
     }
 
     fn remove_node(&mut self, node: &'b VNode<'b>) {

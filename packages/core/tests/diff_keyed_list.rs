@@ -320,9 +320,9 @@ fn remove_list() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            Remove { id: ElementId(3) },
+            Remove { id: ElementId(5) },
             Remove { id: ElementId(4) },
-            Remove { id: ElementId(5) }
+            Remove { id: ElementId(3) },
         ]
     );
 }
@@ -345,10 +345,10 @@ fn no_common_keys() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            Remove { id: ElementId(2) },
             Remove { id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            Remove { id: ElementId(2) },
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
             LoadTemplate { name: "template", index: 0, id: ElementId(4) },
             ReplaceWith { id: ElementId(1), m: 3 }
         ]

@@ -357,11 +357,11 @@ fn remove_many() {
     assert_eq!(
         edits.edits,
         [
-            Remove { id: ElementId(1,) },
-            Remove { id: ElementId(5,) },
-            Remove { id: ElementId(7,) },
             Remove { id: ElementId(9,) },
-            CreatePlaceholder { id: ElementId(9,) },
+            Remove { id: ElementId(7,) },
+            Remove { id: ElementId(5,) },
+            Remove { id: ElementId(1,) },
+            CreatePlaceholder { id: ElementId(3,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );
@@ -372,8 +372,8 @@ fn remove_many() {
         edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-            HydrateText { path: &[0,], value: "hello 0", id: ElementId(10,) },
-            ReplaceWith { id: ElementId(9,), m: 1 },
+            HydrateText { path: &[0,], value: "hello 0", id: ElementId(1,) },
+            ReplaceWith { id: ElementId(3,), m: 1 },
         ]
     )
 }

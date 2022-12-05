@@ -41,7 +41,7 @@ fn app(cx: Scope) -> Element {
 
 Then, we'll want to create a new VirtualDom using this app as the root component.
 
-```rust, ingore
+```rust, ignore
 let mut dom = VirtualDom::new(app);
 ```
 
@@ -65,9 +65,9 @@ dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
 
 If an event occurs from outside the virtualdom while waiting for work, then we can cancel the wait using a `select!` block and inject the event.
 
-```rust
+```rust, ignore
 loop {
-    tokio::select! {
+    select! {
         evt = real_dom.event() => dom.handle_event("click", evt.data, evt.element, evt.bubbles),
         _ = dom.wait_for_work() => {}
     }

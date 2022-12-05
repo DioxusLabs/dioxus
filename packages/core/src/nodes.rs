@@ -424,6 +424,8 @@ impl<'a> IntoDynNode<'a> for VNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([self]))
     }
 }
+
+// An element that's an error is currently lost into the ether
 impl<'a> IntoDynNode<'a> for Element<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {

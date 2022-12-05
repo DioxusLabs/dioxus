@@ -341,7 +341,7 @@ impl<'b> VirtualDom {
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
         let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
-            Some(boundary) => unsafe { &*(boundary as *const SuspenseContext) },
+            Some(boundary) => boundary,
             _ => return created,
         };
 
@@ -387,11 +387,6 @@ impl<'b> VirtualDom {
 
         // Set the placeholder of the scope
         self.scopes[scope.0].placeholder.set(Some(new_id));
-
-        println!(
-            "assigning id {:?} to path {:?}, template: {:?}",
-            new_id, &template.template.node_paths, template.template
-        );
 
         // Since the placeholder is already in the DOM, we don't create any new nodes
         self.mutations.push(AssignId {

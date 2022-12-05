@@ -81,7 +81,7 @@ pub struct ScopeState {
     pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Rc<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: HashSet<TaskId>,
@@ -250,15 +250,17 @@ impl<'src> ScopeState {
     }
 
     /// Return any context of type T if it exists on this scope
-    pub fn has_context<T: 'static>(&self) -> Option<&T> {
-        let contextex = self.shared_contexts.borrow();
-        let val = contextex.get(&TypeId::of::<T>())?;
-        let as_concrete = val.downcast_ref::<T>()? as *const T;
-        Some(unsafe { &*as_concrete })
+    pub fn has_context<T: 'static>(&self) -> Option<Rc<T>> {
+        self.shared_contexts
+            .borrow()
+            .get(&TypeId::of::<T>())?
+            .clone()
+            .downcast()
+            .ok()
     }
 
     /// Try to retrieve a shared state with type `T` from any parent scope.
-    pub fn consume_context<T: 'static>(&self) -> Option<&T> {
+    pub fn consume_context<T: 'static>(&self) -> Option<Rc<T>> {
         if let Some(this_ctx) = self.has_context() {
             return Some(this_ctx);
         }
@@ -268,8 +270,7 @@ impl<'src> ScopeState {
             // safety: all parent pointers are valid thanks to the bump arena
             let parent = unsafe { &*parent_ptr };
             if let Some(shared) = parent.shared_contexts.borrow().get(&TypeId::of::<T>()) {
-                let as_concrete = shared.downcast_ref::<T>()? as *const T;
-                return Some(unsafe { &*as_concrete });
+                return shared.clone().downcast().ok();
             }
             search_parent = parent.parent;
         }
@@ -281,7 +282,7 @@ impl<'src> ScopeState {
     ///
     /// This is a "fundamental" operation and should only be called during initialization of a hook.
     ///
-    /// For a hook that provides the same functionality, use `use_provide_context` and `use_consume_context` instead.
+    /// For a hook that provides the same functionality, use `use_provide_context` and `use_context` instead.
     ///
     /// If a state is provided that already exists, the new value will not be inserted. Instead, this method will
     /// return the existing value. This behavior is chosen so shared values do not need to be `Clone`. This particular
@@ -302,20 +303,15 @@ impl<'src> ScopeState {
     ///     render!(div { "hello {state.0}" })
     /// }
     /// ```
-    pub fn provide_context<T: 'static>(&self, value: T) -> &T {
+    pub fn provide_context<T: 'static>(&self, value: T) -> Rc<T> {
         let mut contexts = self.shared_contexts.borrow_mut();
-
-        if !contexts.contains_key(&TypeId::of::<T>()) {
-            contexts.insert(TypeId::of::<T>(), Box::new(value));
-        }
-
-        let out = contexts
+        contexts.insert(TypeId::of::<T>(), Rc::new(value));
+        contexts
             .get(&TypeId::of::<T>())
             .unwrap()
-            .downcast_ref::<T>()
-            .unwrap() as *const T;
-
-        unsafe { &*out }
+            .clone()
+            .downcast()
+            .unwrap()
     }
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
