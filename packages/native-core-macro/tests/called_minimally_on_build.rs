@@ -2,7 +2,11 @@ use anymap::AnyMap;
 use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;
-use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
+use dioxus_native_core::state::{
+    ChildDepState, ElementBorrowable, NodeDepState, ParentDepState, State,
+};
+use dioxus_native_core::tree::*;
+use dioxus_native_core::SendAnyMap;
 use dioxus_native_core_macro::State;
 
 macro_rules! dep {
@@ -14,7 +18,7 @@ macro_rules! dep {
             fn reduce<'a>(
                 &mut self,
                 _: NodeView,
-                _: impl Iterator<Item = &'a Self::DepState>,
+                _: impl Iterator<Item = <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
                 _: &Self::Ctx,
             ) -> bool
             where
@@ -34,7 +38,7 @@ macro_rules! dep {
             fn reduce(
                 &mut self,
                 _: NodeView,
-                _: Option<&Self::DepState>,
+                _: Option<<Self::DepState as ElementBorrowable>::ElementBorrowed<'_>>,
                 _: &Self::Ctx,
             ) -> bool {
                 self.0 += 1;
@@ -43,14 +47,15 @@ macro_rules! dep {
         }
     };
 
-    ( node( $name:ty, ($($l:lifetime),*), $dep:ty ) ) => {
-        impl<$($l),*> NodeDepState<$dep> for $name {
+    ( node( $name:ty, $dep:ty ) ) => {
+        impl NodeDepState for $name {
             type Ctx = ();
+            type DepState = $dep;
             const NODE_MASK: NodeMask = NodeMask::ALL;
             fn reduce(
                 &mut self,
                 _: NodeView,
-                _: $dep,
+                _: <Self::DepState as ElementBorrowable>::ElementBorrowed<'_>,
                 _: &Self::Ctx,
             ) -> bool {
                 self.0 += 1;
@@ -66,49 +71,34 @@ macro_rules! test_state{
         fn state_reduce_initally_called_minimally() {
             #[allow(non_snake_case)]
             fn Base(cx: Scope) -> Element {
-                render!(div {
-                    div{
+                render!{
+                    div {
                         div{
-                            p{}
-                        }
-                        p{
-                            "hello"
-                        }
-                        div{
-                            h1{}
-                        }
-                        p{
-                            "world"
-                        }
-                    }
-                })
-            }
-
-            let vdom = VirtualDom::new(Base);
-
-            let mutations = vdom.create_vnodes(rsx! {
-                div {
-                    div{
-                        div{
-                            p{}
-                        }
-                        p{
-                            "hello"
-                        }
-                        div{
-                            h1{}
-                        }
-                        p{
-                            "world"
+                            div{
+                                p{}
+                            }
+                            p{
+                                "hello"
+                            }
+                            div{
+                                h1{}
+                            }
+                            p{
+                                "world"
+                            }
                         }
                     }
                 }
-            });
+            }
+
+            let mut vdom = VirtualDom::new(Base);
+
+            let mutations = vdom.rebuild();
 
             let mut dom: RealDom<$s> = RealDom::new();
 
-            let nodes_updated = dom.apply_mutations(vec![mutations]);
-            let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+            let (nodes_updated, _) = dom.apply_mutations(mutations);
+            let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
             dom.traverse_depth_first(|n| {
                 $(
@@ -129,15 +119,15 @@ mod node_depends_on_child_and_parent {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node,  ('a, 'b), (&'a Child, &'b Parent)));
+    dep!(node(Node, (Child, Parent)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
-    dep!(child(Child, Child));
+    dep!(child(Child, (Child,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Parent(i32);
-    dep!(parent(Parent, Parent));
+    dep!(parent(Parent, (Parent,)));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
@@ -156,15 +146,15 @@ mod child_depends_on_node_that_depends_on_parent {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, ('a), (&'a Parent,)));
+    dep!(node(Node, (Parent,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
-    dep!(child(Child, Node));
+    dep!(child(Child, (Node,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Parent(i32);
-    dep!(parent(Parent, Parent));
+    dep!(parent(Parent, (Parent,)));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
@@ -183,15 +173,15 @@ mod parent_depends_on_node_that_depends_on_child {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, ('a), (&'a Child,)));
+    dep!(node(Node, (Child,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
-    dep!(child(Child, Child));
+    dep!(child(Child, (Child,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Parent(i32);
-    dep!(parent(Parent, Node));
+    dep!(parent(Parent, (Node,)));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
@@ -210,11 +200,11 @@ mod node_depends_on_other_node_state {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node1(i32);
-    dep!(node(Node1, ('a), (&'a Node2,)));
+    dep!(node(Node1, (Node2,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node2(i32);
-    dep!(node(Node2, (), ()));
+    dep!(node(Node2, ()));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
@@ -231,15 +221,15 @@ mod node_child_and_parent_state_depends_on_self {
     use super::*;
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Node(i32);
-    dep!(node(Node, (), ()));
+    dep!(node(Node, ()));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Child(i32);
-    dep!(child(Child, Child));
+    dep!(child(Child, (Child,)));
 
     #[derive(Debug, Clone, Default, PartialEq)]
     struct Parent(i32);
-    dep!(parent(Parent, Parent));
+    dep!(parent(Parent, (Parent,)));
 
     #[derive(Debug, Clone, Default, State)]
     struct StateTester {
