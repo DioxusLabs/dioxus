@@ -4,19 +4,22 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use futures_channel::mpsc::unbounded;
 use dioxus_core::*;
-use dioxus_native_core::{real_dom::RealDom, NodeId, SendAnyMap, FxDashSet, NodeMask};
+use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
 use focus::FocusState;
 use futures::{
     channel::mpsc::{UnboundedReceiver, UnboundedSender},
     pin_mut, StreamExt,
 };
+use futures_channel::mpsc::unbounded;
 use query::Query;
-use std::{cell::RefCell, sync::{Mutex, Arc}};
 use std::rc::Rc;
+use std::{
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
 use std::{io, time::Duration};
-use taffy::{Taffy};
+use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
@@ -36,11 +39,11 @@ pub use hooks::*;
 pub(crate) use node::*;
 
 // the layout space has a multiplier of 10 to minimize rounding errors
-pub(crate)fn screen_to_layout_space(screen: u16) -> f32{
+pub(crate) fn screen_to_layout_space(screen: u16) -> f32 {
     screen as f32 * 10.0
 }
 
-pub(crate)fn layout_to_screen_space(layout: f32) -> f32{
+pub(crate) fn layout_to_screen_space(layout: f32) -> f32 {
     layout / 10.0
 }
 
@@ -99,7 +102,7 @@ pub fn launch_cfg(app: Component<()>, cfg: Config) {
     {
         let mut rdom = rdom.borrow_mut();
         let mutations = dom.rebuild();
-        let (to_update,_) = rdom.apply_mutations(mutations);
+        let (to_update, _) = rdom.apply_mutations(mutations);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
         let _to_rerender = rdom.update_state(to_update, any_map);
@@ -141,10 +144,10 @@ fn render_vdom(
                 terminal.clear().unwrap();
             }
 
-            let mut to_rerender =FxDashSet::default();
+            let mut to_rerender = FxDashSet::default();
             to_rerender.insert(NodeId(0));
             let mut updated = true;
-            
+
             loop {
                 /*
                 -> render the nodes in the right place with tui/crossterm
@@ -158,45 +161,33 @@ fn render_vdom(
                 if !to_rerender.is_empty() || updated {
                     updated = false;
                     fn resize(dims: Rect, taffy: &mut Taffy, rdom: &TuiDom) {
-                        let width = screen_to_layout_space(dims.width );
+                        let width = screen_to_layout_space(dims.width);
                         let height = screen_to_layout_space(dims.height);
                         let root_node = rdom[NodeId(0)].state.layout.node.unwrap();
-                        
+
                         // the root node fills the entire area
-                        
-                        let mut style=*taffy.style(root_node).unwrap();
-                        style.size=Size {
-                            width: Dimension::Points(width ),
-                            height: Dimension::Points(height ),
+
+                        let mut style = *taffy.style(root_node).unwrap();
+                        style.size = Size {
+                            width: Dimension::Points(width),
+                            height: Dimension::Points(height),
                         };
                         taffy.set_style(root_node, style).unwrap();
-                        
-                        let size =Size {
+
+                        let size = Size {
                             width: AvailableSpace::Definite(width),
                             height: AvailableSpace::Definite(height),
                         };
-                            taffy
-                            .compute_layout(
-                                root_node,
-                                size
-                            )
-                            .unwrap();
+                        taffy.compute_layout(root_node, size).unwrap();
                     }
                     if let Some(terminal) = &mut terminal {
                         terminal.draw(|frame| {
                             let rdom = rdom.borrow();
-                            let mut taffy =taffy.lock().expect("taffy lock poisoned");
+                            let mut taffy = taffy.lock().expect("taffy lock poisoned");
                             // size is guaranteed to not change when rendering
                             resize(frame.size(), &mut *taffy, &rdom);
                             let root = &rdom[NodeId(0)];
-                            render::render_vnode(
-                                frame,
-                                &*taffy,
-                                &rdom,
-                                root,
-                                cfg,
-                                Point::ZERO,
-                            );
+                            render::render_vnode(frame, &*taffy, &rdom, root, cfg, Point::ZERO);
                         })?;
                     } else {
                         let rdom = rdom.borrow();
