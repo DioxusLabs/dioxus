@@ -12,7 +12,7 @@ fn app(cx: Scope) -> Element {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            onwheel: move |evt| alpha.set((**alpha + evt.data.delta().strip_units().y as i64).min(100).max(0)),
+            onwheel: move |evt| alpha.set((**alpha + evt.inner().delta().strip_units().y as i64).min(100).max(0)),
 
             p {
                 background_color: "black",
