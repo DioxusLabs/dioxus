@@ -35,6 +35,8 @@ indexmap = "1.7"
 serde = { version = "1", features = ["derive"], optional = true }
 anyhow = "1.0.66"
 
+smallbox = "0.8.1"
+
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
 dioxus = { path = "../dioxus" }

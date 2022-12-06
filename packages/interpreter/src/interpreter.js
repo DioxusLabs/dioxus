@@ -92,8 +92,8 @@ export class Interpreter {
   PopRoot() {
     this.stack.pop();
   }
-  AppendChildren(many) {
-    let root = this.stack[this.stack.length - (1 + many)];
+  AppendChildren(id, many) {
+    let root = this.nodes[id];
     let to_add = this.stack.splice(this.stack.length - many);
     for (let i = 0; i < many; i++) {
       root.appendChild(to_add[i]);

@@ -14,6 +14,7 @@ use crate::{
     AttributeValue, Element, Event, Scope, SuspenseContext,
 };
 use futures_util::{pin_mut, StreamExt};
+use fxhash::FxHashMap;
 use slab::Slab;
 use std::{
     any::Any,
@@ -148,7 +149,7 @@ use std::{
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) templates: HashMap<TemplateId, Template<'static>>,
+    pub(crate) templates: FxHashMap<TemplateId, Template<'static>>,
     pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
@@ -362,8 +363,6 @@ impl VirtualDom {
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                println!("{:?} \n {:?} \n {:?}", attr, name, element);
-
                 let this_path = template.template.attr_paths[idx];
 
                 // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
@@ -385,8 +384,6 @@ impl VirtualDom {
                 }
             }
 
-            println!("calling listeners: {:?}", listeners);
-
             // Now that we've accumulated all the parent attributes for the target element, call them in reverse order
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
@@ -403,8 +400,6 @@ impl VirtualDom {
 
             parent_path = template.parent.and_then(|id| self.elements.get(id.0));
         }
-
-        println!("all listeners exhausted");
     }
 
     /// Wait for the scheduler to have any work.
@@ -527,7 +522,6 @@ impl VirtualDom {
     ///
     /// If no suspense trees are present
     pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
-        println!("render with deadline");
         pin_mut!(deadline);
 
         loop {
@@ -538,11 +532,11 @@ impl VirtualDom {
 
                 self.mutations
                     .templates
-                    .extend(context.mutations.borrow_mut().templates.drain(..));
+                    .append(&mut context.mutations.borrow_mut().templates);
 
                 self.mutations
                     .edits
-                    .extend(context.mutations.borrow_mut().edits.drain(..));
+                    .append(&mut context.mutations.borrow_mut().edits);
 
                 // TODO: count how many nodes are on the stack?
                 self.mutations.push(Mutation::ReplaceWith {

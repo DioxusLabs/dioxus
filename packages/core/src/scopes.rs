@@ -10,6 +10,7 @@ use crate::{
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
+use fxhash::{FxHashMap, FxHashSet};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -81,10 +82,10 @@ pub struct ScopeState {
     pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: HashSet<TaskId>,
+    pub(crate) spawned_tasks: FxHashSet<TaskId>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
@@ -383,9 +384,35 @@ impl<'src> ScopeState {
     /// Uses the currently active [`Bump`] allocator
     pub fn raw_text(&'src self, args: Arguments) -> &'src str {
         args.as_str().unwrap_or_else(|| {
-            use bumpalo::core_alloc::fmt::Write;
             let mut str_buf = bumpalo::collections::String::new_in(self.bump());
-            str_buf.write_fmt(args).unwrap();
+            struct Wrapper<'a, 'b>(&'a mut bumpalo::collections::Vec<'b, u8>);
+
+            impl<'a, 'b> std::fmt::Write for Wrapper<'a, 'b> {
+                fn write_str(&mut self, s: &str) -> std::fmt::Result {
+                    unsafe {
+                        copy(s, self.0);
+                    }
+                    Ok(())
+                }
+                fn write_char(&mut self, c: char) -> std::fmt::Result {
+                    self.0.push(c as u8);
+                    Ok(())
+                }
+            }
+
+            unsafe fn copy<'a>(s: &str, buf: &mut bumpalo::collections::Vec<'a, u8>) {
+                let old_len = buf.len();
+                buf.reserve(s.len());
+                let ptr = buf.as_mut_ptr().add(old_len);
+                let bytes = s.as_bytes();
+                let str_ptr = bytes.as_ptr();
+                for o in 0..s.len() {
+                    *ptr.add(o) = *str_ptr.add(o);
+                }
+                buf.set_len(old_len + s.len());
+            }
+
+            let _ = unsafe { std::fmt::write(&mut Wrapper(str_buf.as_mut_vec()), args) };
             str_buf.into_bump_str()
         })
     }

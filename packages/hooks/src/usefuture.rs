@@ -67,7 +67,6 @@ where
             match waker.borrow().as_ref() {
                 Some(waker) => waker.wake_by_ref(),
                 None => {
-                    println!("scheduling update");
                     // schedule_update()
                 }
             }

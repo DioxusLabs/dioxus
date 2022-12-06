@@ -73,4 +73,7 @@ extern "C" {
 
     #[wasm_bindgen(method)]
     pub fn PushRoot(this: &Interpreter, id: u32);
+
+    #[wasm_bindgen(method)]
+    pub fn AppendChildren(this: &Interpreter, id: u32, m: u32);
 }
