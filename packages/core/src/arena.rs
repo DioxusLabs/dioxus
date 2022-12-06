@@ -83,13 +83,13 @@ impl VirtualDom {
 
         self.scopes[id.0].props.take();
 
+        let scope = &mut self.scopes[id.0];
+
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
-        self.scopes[id.0]
-            .hook_list
-            .get_mut()
-            .drain(..)
-            .for_each(|hook| drop(unsafe { BumpBox::from_raw(hook) }));
+        for hook in scope.hook_list.get_mut().drain(..) {
+            drop(unsafe { BumpBox::from_raw(hook) });
+        }
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
