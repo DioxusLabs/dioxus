@@ -2,6 +2,7 @@ use crate::{node::NodeType, real_dom::RealDom, state::State, tree::TreeView, Nod
 use dioxus_core::{Mutation, Mutations};
 use std::fmt::Debug;
 
+#[derive(Debug)]
 pub enum ElementProduced {
     /// The iterator produced an element by progressing to the next node in a depth first order.
     Progressed(RealNodeId),
@@ -124,20 +125,20 @@ impl PersistantElementIter {
 
     /// get the next element
     pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
-        if self.stack.is_empty() {
+        let r=if self.stack.is_empty() {
             let id = NodeId(0);
             let new = (id, NodePosition::AtNode);
             self.stack.push(new);
             ElementProduced::Looped(id)
         } else {
-            let (last, o_child_idx) = self.stack.last_mut().unwrap();
+            let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
             match &node.node_data.node_type {
                 NodeType::Element { .. } => {
                     let children = rdom.tree.children_ids(*last).unwrap();
-                    *o_child_idx = o_child_idx.map(|i| i + 1);
+                    *old_child_idx = old_child_idx.map(|i| i + 1);
                     // if we have children, go to the next child
-                    let child_idx = o_child_idx.get_or_insert(0);
+                    let child_idx = old_child_idx.get_or_insert(0);
                     if child_idx >= children.len() {
                         self.pop();
                         self.next(rdom)
@@ -155,7 +156,9 @@ impl PersistantElementIter {
                     ElementProduced::Progressed(self.pop())
                 }
             }
-        }
+        };
+        println!("next: {:?}", r);
+        r
     }
 
     /// get the previous element
@@ -183,17 +186,17 @@ impl PersistantElementIter {
             let new_node = NodeId(0);
             ElementProduced::Looped(push_back(&mut self.stack, new_node, rdom))
         } else {
-            let (last, o_child_idx) = self.stack.last_mut().unwrap();
+            let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
             match &node.node_data.node_type {
                 NodeType::Element { .. } => {
                     let children = rdom.tree.children_ids(*last).unwrap();
                     // if we have children, go to the next child
-                    if let NodePosition::InChild(0) = o_child_idx {
+                    if let NodePosition::InChild(0) = old_child_idx {
                         ElementProduced::Progressed(self.pop())
                     } else {
-                        *o_child_idx = o_child_idx.map(|i| i - 1);
-                        if let NodePosition::InChild(child_idx) = o_child_idx {
+                        *old_child_idx = old_child_idx.map(|i| i - 1);
+                        if let NodePosition::InChild(child_idx) = old_child_idx {
                             if *child_idx >= children.len() || children.is_empty() {
                                 self.pop();
                                 self.prev(rdom)

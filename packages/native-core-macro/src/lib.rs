@@ -189,7 +189,7 @@ impl Struct {
         let members = fields
             .iter()
             .enumerate()
-            .filter_map(|(i, f)| Member::parse(f, i as u64))
+            .filter_map(|(i, f)| Member::parse(&name, f, i as u64))
             .collect();
         Self { name, members }
     }
@@ -296,12 +296,15 @@ struct Member {
 }
 
 impl Member {
-    fn parse(field: &Field, id: u64) -> Option<Self> {
+    fn parse(parent: &Ident, field: &Field, id: u64) -> Option<Self> {
         Some(Self {
             id,
             ty: field.ty.clone(),
             unit_type: Ident::new(
-                ("_Unit".to_string() + field.ty.to_token_stream().to_string().as_str()).as_str(),
+                ("_Unit".to_string()
+                    + parent.to_token_stream().to_string().as_str()
+                    + field.ty.to_token_stream().to_string().as_str())
+                .as_str(),
                 Span::call_site(),
             )
             .into(),
