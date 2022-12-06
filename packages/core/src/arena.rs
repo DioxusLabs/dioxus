@@ -45,8 +45,6 @@ impl VirtualDom {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
 
-        println!("claiming {:?}", id);
-
         entry.insert(ElementRef {
             template: template as *const _ as *mut _,
             path,
@@ -66,8 +64,6 @@ impl VirtualDom {
                 std::backtrace::Backtrace::force_capture()
             );
         }
-
-        println!("Reclaiming {:?}", el.0);
 
         self.elements.try_remove(el.0)
     }

@@ -1,19 +1,20 @@
 use dioxus_core::VirtualDom;
-use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess::local_socket::LocalSocketStream;
+// use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
 use std::{sync::Arc, sync::Mutex};
 
-fn handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalSocketStream> {
+fn _handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalSocketStream> {
     connection
         .map_err(|error| eprintln!("Incoming connection failed: {}", error))
         .ok()
 }
 
-pub(crate) fn init(dom: &VirtualDom) {
+pub(crate) fn _init(_dom: &VirtualDom) {
     let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
         Arc::new(Mutex::new(None));
-    let latest_in_connection_handle = latest_in_connection.clone();
+    let _latest_in_connection_handle = latest_in_connection.clone();
 
     // connect to processes for incoming data
     std::thread::spawn(move || {

@@ -76,12 +76,8 @@ impl DesktopController {
                         .render_with_deadline(tokio::time::sleep(Duration::from_millis(16)))
                         .await;
 
-                    {
-                        let mut queue = edit_queue.lock().unwrap();
-                        queue.push(serde_json::to_string(&muts.templates).unwrap());
-                        queue.push(serde_json::to_string(&muts.edits).unwrap());
-                        let _ = proxy.send_event(UserWindowEvent::EditsReady);
-                    }
+                    edit_queue.lock().unwrap().push(serde_json::to_string(&muts).unwrap());
+                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
                 }
             })
         });

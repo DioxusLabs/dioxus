@@ -65,7 +65,7 @@ impl StringCache {
                         TemplateAttribute::Static { name, value, .. } => {
                             write!(chain, " {}=\"{}\"", name, value)?;
                         }
-                        TemplateAttribute::Dynamic(index) => {
+                        TemplateAttribute::Dynamic { id: index } => {
                             chain.segments.push(Segment::Attr(*index))
                         }
                     }

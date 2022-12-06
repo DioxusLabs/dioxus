@@ -137,7 +137,7 @@ export class Interpreter {
     this.stack.push(el);
     this.nodes[root] = el;
   }
-  NewEventListener(event_name, root, handler, bubbles) {
+  NewEventListener(event_name, root, bubbles, handler) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     this.listeners.create(event_name, element, handler, bubbles);
@@ -210,7 +210,7 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    // a json blob of things
+
     for (let template of edits.templates) {
       this.SaveTemplate(template);
     }
@@ -219,15 +219,15 @@ export class Interpreter {
       this.handleEdit(edit);
     }
   }
+
   SaveTemplate(template) {
-    console.log("saving template", template);
     let roots = [];
     for (let root of template.roots) {
       roots.push(this.MakeTemplateNode(root));
     }
-    console.log("saving template", template.name, roots);
     this.templates[template.name] = roots;
   }
+
   MakeTemplateNode(node) {
     console.log("making template node", node);
     switch (node.type) {
@@ -340,17 +340,12 @@ export class Interpreter {
         this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(edit.id, edit.event_name);
+        this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-        // console.log("creating listener! ", edit);
-
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-
-          console.log("event", event);
-
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -431,17 +426,14 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.event_name,
+                event: edit.name,
                 mounted_dom_id: parseInt(realId),
                 contents: contents,
               })
             );
           }
         };
-
-        console.log("adding event listener", edit);
-        this.NewEventListener(edit.event_name, edit.id, handler, event_bubbles(edit.event_name));
-
+        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
         break;
     }
   }

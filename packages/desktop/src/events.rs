@@ -42,7 +42,6 @@ macro_rules! match_data {
     ) => {
         match $name {
             $( $($mname)|* => {
-                println!("casting to type {:?}", std::any::TypeId::of::<$tip>());
                 let val: $tip = from_value::<$tip>($m).ok()?;
                 Rc::new(val) as Rc<dyn Any>
             })*

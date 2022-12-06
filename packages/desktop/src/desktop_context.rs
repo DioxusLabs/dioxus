@@ -211,8 +211,6 @@ pub(super) fn handler(
     };
     let window = webview.window();
 
-    println!("user_event: {:?}", user_event);
-
     match user_event {
         Initialize | EditsReady => desktop.try_load_ready_webviews(),
         CloseWindow => *control_flow = ControlFlow::Exit,

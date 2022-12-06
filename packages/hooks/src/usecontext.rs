@@ -1,5 +1,4 @@
 use dioxus_core::ScopeState;
-use std::rc::Rc;
 
 /// Consume some context in the tree, providing a sharable handle to the value
 pub fn use_context<T: 'static + Clone>(cx: &ScopeState) -> Option<&T> {

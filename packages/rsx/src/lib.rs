@@ -217,7 +217,7 @@ impl<'a> DynamicContext<'a> {
                         let ct = self.dynamic_attributes.len();
                         self.dynamic_attributes.push(attr);
                         self.attr_paths.push(self.current_path.clone());
-                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) })
+                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } })
                     }
                 });
 

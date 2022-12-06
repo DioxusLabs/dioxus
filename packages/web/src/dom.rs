@@ -53,61 +53,8 @@ impl WebsysDom {
         log::debug!("Loading templates {:?}", templates);
 
         for template in templates {
-            let mut roots = vec![];
-
-            for root in template.roots {
-                roots.push(self.create_template_node(root))
-            }
-
-            self.interpreter.SaveTemplate(roots, template.name);
-        }
-    }
-
-    fn create_template_node(&self, v: &TemplateNode) -> web_sys::Node {
-        use TemplateNode::*;
-        match v {
-            Element {
-                tag,
-                namespace,
-                attrs,
-                children,
-                ..
-            } => {
-                let el = match namespace {
-                    Some(ns) => self.document.create_element_ns(Some(ns), tag).unwrap(),
-                    None => self.document.create_element(tag).unwrap(),
-                };
-                for attr in *attrs {
-                    if let TemplateAttribute::Static {
-                        name,
-                        value,
-                        namespace,
-                    } = attr
-                    {
-                        match namespace {
-                            Some(ns) if *ns == "style" => el
-                                .dyn_ref::<HtmlElement>()
-                                .unwrap()
-                                .style()
-                                .set_property(name, value)
-                                .unwrap(),
-                            Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
-                            None => el.set_attribute(name, value).unwrap(),
-                        }
-                    }
-                }
-                for child in *children {
-                    el.append_child(&self.create_template_node(child));
-                }
-                el.dyn_into().unwrap()
-            }
-            Text { text: t } => self.document.create_text_node(t).dyn_into().unwrap(),
-            DynamicText { id: _ } => self.document.create_text_node("p").dyn_into().unwrap(),
-            Dynamic { id: _ } => {
-                let el = self.document.create_element("pre").unwrap();
-                el.toggle_attribute("hidden");
-                el.dyn_into().unwrap()
-            }
+            self.interpreter
+                .SaveTemplate(serde_wasm_bindgen::to_value(&template).unwrap());
         }
     }
 

@@ -277,7 +277,10 @@ pub enum TemplateAttribute<'a> {
     /// The attribute in this position is actually determined dynamically at runtime
     ///
     /// This is the index into the dynamic_attributes field on the container VNode
-    Dynamic(usize),
+    Dynamic {
+        /// The index
+        id: usize,
+    },
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
