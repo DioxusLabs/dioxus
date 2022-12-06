@@ -16,6 +16,7 @@ dioxus = { path="../dioxus" }
 dioxus-router-core = { path = "../router-core"}
 futures-channel = "0.3.25"
 futures-util = "0.3.25"
+log = "0.4.17"
 
 # for wasm
 

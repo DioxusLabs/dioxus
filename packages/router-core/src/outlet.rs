@@ -20,18 +20,18 @@ impl OutletData {
     /// # use dioxus_router_core::{Name, OutletData};
     /// let mut d = OutletData::default();
     /// let (m, a, n);
-    /// (m, d) = d.next(None);
-    /// (a, d) = d.next(None);
-    /// (n, d) = d.next(Some(Name::of::<bool>()));
+    /// (m, d) = d.next(&None);
+    /// (a, d) = d.next(&None);
+    /// (n, d) = d.next(&Some(Name::of::<bool>()));
     ///
     /// assert_eq!(m, 0);
     /// assert_eq!(a, 1);
     /// assert_eq!(n, 0);
     /// ```
-    pub fn next(&self, name: Option<Name>) -> (usize, Self) {
+    pub fn next(&self, name: &Option<Name>) -> (usize, Self) {
         let mut next = self.clone();
 
-        let depth = next.depth(name.clone()).map(|d| d + 1).unwrap_or(0);
+        let depth = next.depth(name).map(|d| d + 1).unwrap_or(0);
 
         next.set_depth(name, depth);
 
@@ -43,17 +43,17 @@ impl OutletData {
     /// ```rust
     /// # use dioxus_router_core::OutletData;
     /// let mut d = OutletData::default();
-    /// let b = d.depth(None);
-    /// d.set_depth(None, 18);
-    /// let a = d.depth(None);
+    /// let b = d.depth(&None);
+    /// d.set_depth(&None, 18);
+    /// let a = d.depth(&None);
     ///
     /// assert_eq!(b, None);
     /// assert_eq!(a, Some(18));
     /// ```
-    pub fn depth(&self, name: Option<Name>) -> Option<usize> {
+    pub fn depth(&self, name: &Option<Name>) -> Option<usize> {
         match name {
             None => self.main,
-            Some(n) => self.named.get(&n).copied(),
+            Some(n) => self.named.get(n).copied(),
         }
     }
 
@@ -62,17 +62,17 @@ impl OutletData {
     /// ```rust
     /// # use dioxus_router_core::OutletData;
     /// let mut d = OutletData::default();
-    /// let b = d.depth(None);
-    /// d.set_depth(None, 18);
-    /// let a = d.depth(None);
+    /// let b = d.depth(&None);
+    /// d.set_depth(&None, 18);
+    /// let a = d.depth(&None);
     ///
     /// assert_eq!(b, None);
     /// assert_eq!(a, Some(18));
     /// ```
-    pub fn set_depth(&mut self, name: Option<Name>, depth: usize) {
+    pub fn set_depth(&mut self, name: &Option<Name>, depth: usize) {
         match name {
             None => self.main = Some(depth),
-            Some(n) => _ = self.named.insert(n, depth),
+            Some(n) => _ = self.named.insert(n.clone(), depth),
         }
     }
 }
@@ -107,18 +107,18 @@ mod tests {
     fn depth() {
         let td = test_data();
 
-        assert_eq!(td.depth(None), Some(18));
-        assert_eq!(td.depth(Some(Name::of::<bool>())), Some(0));
+        assert_eq!(td.depth(&None), Some(18));
+        assert_eq!(td.depth(&Some(Name::of::<bool>())), Some(0));
 
-        assert_eq!(td.depth(Some(Name::of::<u8>())), Some(8));
-        assert_eq!(td.depth(Some(Name::of::<u16>())), Some(16));
-        assert_eq!(td.depth(Some(Name::of::<u32>())), Some(32));
-        assert_eq!(td.depth(Some(Name::of::<u64>())), Some(64));
+        assert_eq!(td.depth(&Some(Name::of::<u8>())), Some(8));
+        assert_eq!(td.depth(&Some(Name::of::<u16>())), Some(16));
+        assert_eq!(td.depth(&Some(Name::of::<u32>())), Some(32));
+        assert_eq!(td.depth(&Some(Name::of::<u64>())), Some(64));
 
-        assert_eq!(td.depth(Some(Name::of::<i8>())), None);
-        assert_eq!(td.depth(Some(Name::of::<i16>())), None);
-        assert_eq!(td.depth(Some(Name::of::<i32>())), None);
-        assert_eq!(td.depth(Some(Name::of::<i64>())), None);
+        assert_eq!(td.depth(&Some(Name::of::<i8>())), None);
+        assert_eq!(td.depth(&Some(Name::of::<i16>())), None);
+        assert_eq!(td.depth(&Some(Name::of::<i32>())), None);
+        assert_eq!(td.depth(&Some(Name::of::<i64>())), None);
     }
 
     #[test]
@@ -126,21 +126,21 @@ mod tests {
         let mut td = test_data();
 
         // set
-        td.set_depth(None, 0);
-        td.set_depth(Some(Name::of::<bool>()), 1);
+        td.set_depth(&None, 0);
+        td.set_depth(&Some(Name::of::<bool>()), 1);
 
-        td.set_depth(Some(Name::of::<u8>()), 2);
-        td.set_depth(Some(Name::of::<u16>()), 4);
-        td.set_depth(Some(Name::of::<u32>()), 8);
-        td.set_depth(Some(Name::of::<u64>()), 16);
+        td.set_depth(&Some(Name::of::<u8>()), 2);
+        td.set_depth(&Some(Name::of::<u16>()), 4);
+        td.set_depth(&Some(Name::of::<u32>()), 8);
+        td.set_depth(&Some(Name::of::<u64>()), 16);
 
-        td.set_depth(Some(Name::of::<i8>()), 32);
-        td.set_depth(Some(Name::of::<i16>()), 64);
-        td.set_depth(Some(Name::of::<i32>()), 128);
-        td.set_depth(Some(Name::of::<i64>()), 256);
+        td.set_depth(&Some(Name::of::<i8>()), 32);
+        td.set_depth(&Some(Name::of::<i16>()), 64);
+        td.set_depth(&Some(Name::of::<i32>()), 128);
+        td.set_depth(&Some(Name::of::<i64>()), 256);
 
         // check
-        assert_eq!(td.depth(None), Some(0));
+        assert_eq!(td.depth(&None), Some(0));
         assert_eq!(*td.named.get(&Name::of::<bool>()).unwrap(), 1);
 
         assert_eq!(*td.named.get(&Name::of::<u8>()).unwrap(), 2);
@@ -158,43 +158,43 @@ mod tests {
     fn next() {
         let td = test_data();
 
-        let (current, next) = td.next(None);
+        let (current, next) = td.next(&None);
         assert_eq!(current, 19);
-        assert_eq!(next.depth(None), Some(19));
+        assert_eq!(next.depth(&None), Some(19));
 
-        let (current, next) = td.next(Some(Name::of::<bool>()));
+        let (current, next) = td.next(&Some(Name::of::<bool>()));
         assert_eq!(current, 1);
         assert_eq!(*next.named.get(&Name::of::<bool>()).unwrap(), 1);
 
-        let (current, next) = td.next(Some(Name::of::<u8>()));
+        let (current, next) = td.next(&Some(Name::of::<u8>()));
         assert_eq!(current, 9);
         assert_eq!(*next.named.get(&Name::of::<u8>()).unwrap(), 9);
 
-        let (current, next) = td.next(Some(Name::of::<u16>()));
+        let (current, next) = td.next(&Some(Name::of::<u16>()));
         assert_eq!(current, 17);
         assert_eq!(*next.named.get(&Name::of::<u16>()).unwrap(), 17);
 
-        let (current, next) = td.next(Some(Name::of::<u32>()));
+        let (current, next) = td.next(&Some(Name::of::<u32>()));
         assert_eq!(current, 33);
         assert_eq!(*next.named.get(&Name::of::<u32>()).unwrap(), 33);
 
-        let (current, next) = td.next(Some(Name::of::<u64>()));
+        let (current, next) = td.next(&Some(Name::of::<u64>()));
         assert_eq!(current, 65);
         assert_eq!(*next.named.get(&Name::of::<u64>()).unwrap(), 65);
 
-        let (current, next) = td.next(Some(Name::of::<i8>()));
+        let (current, next) = td.next(&Some(Name::of::<i8>()));
         assert_eq!(current, 0);
         assert_eq!(*next.named.get(&Name::of::<i8>()).unwrap(), 0);
 
-        let (current, next) = td.next(Some(Name::of::<i16>()));
+        let (current, next) = td.next(&Some(Name::of::<i16>()));
         assert_eq!(current, 0);
         assert_eq!(*next.named.get(&Name::of::<i16>()).unwrap(), 0);
 
-        let (current, next) = td.next(Some(Name::of::<i32>()));
+        let (current, next) = td.next(&Some(Name::of::<i32>()));
         assert_eq!(current, 0);
         assert_eq!(*next.named.get(&Name::of::<i32>()).unwrap(), 0);
 
-        let (current, next) = td.next(Some(Name::of::<i64>()));
+        let (current, next) = td.next(&Some(Name::of::<i64>()));
         assert_eq!(current, 0);
         assert_eq!(*next.named.get(&Name::of::<i64>()).unwrap(), 0);
     }

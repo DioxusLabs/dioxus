@@ -1,4 +1,9 @@
-pub(crate) mod contexts {
+pub mod components {
+    mod outlet;
+    pub use outlet::*;
+}
+
+mod contexts {
     pub(crate) mod router;
 }
 
@@ -9,4 +14,8 @@ pub mod hooks {
 
 pub mod prelude {
     pub use dioxus_router_core::prelude::*;
+}
+
+mod utils {
+    pub(crate) mod use_router_internal;
 }
