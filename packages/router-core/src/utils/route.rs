@@ -434,7 +434,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "not yet implemented"]
     fn no_fallback() {
         let state = route_segment(
             &test_segment(),
@@ -446,22 +445,17 @@ mod tests {
         let state = state.unwrap_left();
         assert_eq!(
             state.content,
-            vec![
-                ContentAtom("fallback"),
-                ContentAtom("keep route"),
-                ContentAtom("keep")
-            ]
+            vec![ContentAtom("no fallback"), ContentAtom("keep route"),]
         );
         assert!(state.names.is_empty());
         assert!(state.parameters.is_empty());
     }
 
     #[test]
-    #[ignore = "not yet implemented"]
     fn no_fallback_with_clearing() {
         let state = route_segment(
             &test_segment(),
-            &["fallback", "clear", "invalid"],
+            &["no_fallback", "clear", "invalid"],
             Default::default(),
         );
         assert!(state.is_left());
