@@ -11,9 +11,14 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-rwlock = "1.3.0"
 dioxus = { path="../dioxus" }
 dioxus-router-core = { path = "../router-core"}
+futures-channel = "0.3.25"
+futures-util = "0.3.25"
 
 # for wasm
 
 [features]
+regex = ["dioxus-router-core/regex"]
+serde = ["dioxus-router-core/serde"]
