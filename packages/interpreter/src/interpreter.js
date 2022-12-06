@@ -76,9 +76,6 @@ export class Interpreter {
   pop() {
     return this.stack.pop();
   }
-  SaveTemplate(nodes, name) {
-    this.templates[name] = nodes;
-  }
   MountToRoot() {
     this.AppendChildren(this.stack.length - 1);
   }
@@ -213,8 +210,55 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    for (let edit of edits) {
+    // a json blob of things
+    for (let template of edits.templates) {
+      this.SaveTemplate(template);
+    }
+
+    for (let edit of edits.edits) {
       this.handleEdit(edit);
+    }
+  }
+  SaveTemplate(template) {
+    console.log("saving template", template);
+    let roots = [];
+    for (let root of template.roots) {
+      roots.push(this.MakeTemplateNode(root));
+    }
+    console.log("saving template", template.name, roots);
+    this.templates[template.name] = roots;
+  }
+  MakeTemplateNode(node) {
+    console.log("making template node", node);
+    switch (node.type) {
+      case "Text":
+        return document.createTextNode(node.text);
+      case "Dynamic":
+        let dyn = document.createElement("pre");
+        dyn.hidden = true;
+        return dyn;
+      case "DynamicText":
+        return document.createTextNode("placeholder");
+      case "Element":
+        let el;
+
+        if (node.namespace != null) {
+          el = document.createElementNS(node.namespace, node.tag);
+        } else {
+          el = document.createElement(node.tag);
+        }
+
+        for (let attr of node.attrs) {
+          if (attr.type == "Static") {
+            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+          }
+        }
+
+        for (let child of node.children) {
+          el.appendChild(this.MakeTemplateNode(child));
+        }
+
+        return el;
     }
   }
   AssignId(path, id) {

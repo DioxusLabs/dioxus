@@ -101,9 +101,9 @@ impl WebsysDom {
                 }
                 el.dyn_into().unwrap()
             }
-            Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
-            DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
-            Dynamic(_) => {
+            Text { text: t } => self.document.create_text_node(t).dyn_into().unwrap(),
+            DynamicText { id: _ } => self.document.create_text_node("p").dyn_into().unwrap(),
+            Dynamic { id: _ } => {
                 let el = self.document.create_element("pre").unwrap();
                 el.toggle_attribute("hidden");
                 el.dyn_into().unwrap()
@@ -116,6 +116,7 @@ impl WebsysDom {
         let i = &self.interpreter;
         for edit in edits.drain(..) {
             match edit {
+                AppendChildren { id, m } => i.AppendChildren(id, m),
                 AssignId { path, id } => i.AssignId(path, id.0 as u32),
                 CreatePlaceholder { id } => i.CreatePlaceholder(id.0 as u32),
                 CreateTextNode { value, id } => i.CreateTextNode(value.into(), id.0 as u32),

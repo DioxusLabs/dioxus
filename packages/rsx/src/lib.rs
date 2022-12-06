@@ -245,7 +245,7 @@ impl<'a> DynamicContext<'a> {
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.source.as_ref().unwrap();
-                quote! { ::dioxus::core::TemplateNode::Text(#text) }
+                quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
             }
 
             BodyNode::RawExpr(_)
@@ -258,8 +258,10 @@ impl<'a> DynamicContext<'a> {
                 self.node_paths.push(self.current_path.clone());
 
                 match root {
-                    BodyNode::Text(_) => quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) },
-                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) },
+                    BodyNode::Text(_) => {
+                        quote! { ::dioxus::core::TemplateNode::DynamicText { id: #ct } }
+                    }
+                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic { id: #ct } },
                 }
             }
         }

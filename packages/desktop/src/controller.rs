@@ -54,8 +54,7 @@ impl DesktopController {
                 {
                     let edits = dom.rebuild();
                     let mut queue = edit_queue.lock().unwrap();
-                    queue.push(serde_json::to_string(&edits.templates).unwrap());
-                    queue.push(serde_json::to_string(&edits.edits).unwrap());
+                    queue.push(serde_json::to_string(&edits).unwrap());
                     proxy.send_event(UserWindowEvent::EditsReady).unwrap();
                 }
 
@@ -115,8 +114,6 @@ impl DesktopController {
             }
 
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
-
-            println!("processing pending edits {:?}", new_queue.len());
 
             for edit in new_queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))

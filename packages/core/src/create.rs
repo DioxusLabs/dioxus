@@ -40,7 +40,7 @@ impl<'b> VirtualDom {
         for (root_idx, root) in template.template.roots.iter().enumerate() {
             // We might need to generate an ID for the root node
             on_stack += match root {
-                TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
+                TemplateNode::DynamicText { id } | TemplateNode::Dynamic { id } => {
                     match &template.dynamic_nodes[*id] {
                         // a dynamic text node doesn't replace a template node, instead we create it on the fly
                         DynamicNode::Text(VText { id: slot, value }) => {
@@ -70,7 +70,7 @@ impl<'b> VirtualDom {
                     }
                 }
 
-                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                TemplateNode::Element { .. } | TemplateNode::Text { .. } => {
                     let this_id = self.next_root(template, root_idx);
 
                     template.root_ids[root_idx].set(this_id);
@@ -215,7 +215,7 @@ impl<'b> VirtualDom {
             .filter(|root| {
                 matches!(
                     root,
-                    TemplateNode::Dynamic(_) | TemplateNode::DynamicText(_)
+                    TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
                 )
             })
             .count();

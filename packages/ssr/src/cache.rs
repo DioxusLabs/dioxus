@@ -81,8 +81,8 @@ impl StringCache {
                 }
                 cur_path.pop();
             }
-            TemplateNode::Text(text) => write!(chain, "{}", text)?,
-            TemplateNode::Dynamic(idx) | TemplateNode::DynamicText(idx) => {
+            TemplateNode::Text { text } => write!(chain, "{}", text)?,
+            TemplateNode::Dynamic { id: idx } | TemplateNode::DynamicText { id: idx } => {
                 chain.segments.push(Segment::Node(*idx))
             }
         }

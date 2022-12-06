@@ -1,6 +1,5 @@
 //! Convert a serialized event to an event trigger
 
-use dioxus_core::ElementId;
 use dioxus_html::events::*;
 use serde::{Deserialize, Serialize};
 use serde_json::from_value;

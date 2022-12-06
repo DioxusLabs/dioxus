@@ -78,8 +78,8 @@ impl<'a> VNode<'a> {
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&'a DynamicNode<'a>> {
         match &self.template.roots[idx] {
-            TemplateNode::Element { .. } | TemplateNode::Text(_) => None,
-            TemplateNode::Dynamic(id) | TemplateNode::DynamicText(id) => {
+            TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
+            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
                 Some(&self.dynamic_nodes[*id])
             }
         }
@@ -132,7 +132,7 @@ pub struct Template<'a> {
 ///
 /// This can be created at compile time, saving the VirtualDom time when diffing the tree
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize), serde(tag = "type"))]
 pub enum TemplateNode<'a> {
     /// An statically known element in the dom.
     ///
@@ -159,15 +159,15 @@ pub enum TemplateNode<'a> {
     },
 
     /// This template node is just a piece of static text
-    Text(&'a str),
+    Text { text: &'a str },
 
     /// This template node is unknown, and needs to be created at runtime.
-    Dynamic(usize),
+    Dynamic { id: usize },
 
     /// This template node is known to be some text, but needs to be created at runtime
     ///
     /// This is separate from the pure Dynamic variant for various optimizations
-    DynamicText(usize),
+    DynamicText { id: usize },
 }
 
 /// A node created at runtime
@@ -252,7 +252,11 @@ pub struct VText<'a> {
 
 /// An attribute of the TemplateNode, created at compile time
 #[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(tag = "type")
+)]
 pub enum TemplateAttribute<'a> {
     /// This attribute is entirely known at compile time, enabling
     Static {
