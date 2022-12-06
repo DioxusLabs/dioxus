@@ -23,7 +23,7 @@ use std::{
 use taffy::geometry::{Point, Size};
 use taffy::{prelude::Layout, Taffy};
 
-use crate::FocusState;
+use crate::{layout_to_screen_space, FocusState};
 use crate::{TuiDom, TuiNode};
 
 pub(crate) struct Event {
@@ -243,7 +243,15 @@ impl InnerInputState {
     ) {
         fn layout_contains_point(layout: &Layout, point: ScreenPoint) -> bool {
             let Point { x, y } = layout.location;
+            let (x, y) = (
+                layout_to_screen_space(x).round(),
+                layout_to_screen_space(y).round(),
+            );
             let Size { width, height } = layout.size;
+            let (width, height) = (
+                layout_to_screen_space(width).round(),
+                layout_to_screen_space(height).round(),
+            );
 
             let layout_rect = Rect::new(Point2D::new(x, y), Size2D::new(width, height));
             layout_rect.contains(point.cast())

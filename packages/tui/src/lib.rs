@@ -35,6 +35,15 @@ pub use config::*;
 pub use hooks::*;
 pub(crate) use node::*;
 
+// the layout space has a multiplier of 10 to minimize rounding errors
+pub(crate)fn screen_to_layout_space(screen: u16) -> f32{
+    screen as f32 * 10.0
+}
+
+pub(crate)fn layout_to_screen_space(layout: f32) -> f32{
+    layout / 10.0
+}
+
 #[derive(Clone)]
 pub struct TuiContext {
     tx: UnboundedSender<InputEvent>,
@@ -149,22 +158,22 @@ fn render_vdom(
                 if !to_rerender.is_empty() || updated {
                     updated = false;
                     fn resize(dims: Rect, taffy: &mut Taffy, rdom: &TuiDom) {
-                        let width = dims.width;
-                        let height = dims.height;
+                        let width = screen_to_layout_space(dims.width );
+                        let height = screen_to_layout_space(dims.height);
                         let root_node = rdom[NodeId(0)].state.layout.node.unwrap();
                         
                         // the root node fills the entire area
                         
                         let mut style=*taffy.style(root_node).unwrap();
                         style.size=Size {
-                            width: Dimension::Points(width as f32),
-                            height: Dimension::Points(height as f32),
+                            width: Dimension::Points(width ),
+                            height: Dimension::Points(height ),
                         };
                         taffy.set_style(root_node, style).unwrap();
                         
                         let size =Size {
-                            width: AvailableSpace::Definite(width as f32),
-                            height: AvailableSpace::Definite(height as f32),
+                            width: AvailableSpace::Definite(width),
+                            height: AvailableSpace::Definite(height),
                         };
                             taffy
                             .compute_layout(
@@ -195,8 +204,8 @@ fn render_vdom(
                             Rect {
                                 x: 0,
                                 y: 0,
-                                width: 100,
-                                height: 100,
+                                width: 1000,
+                                height: 1000,
                             },
                             &mut taffy.lock().expect("taffy lock poisoned"),
                             &rdom,

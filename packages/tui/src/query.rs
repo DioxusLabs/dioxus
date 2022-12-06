@@ -11,7 +11,7 @@ use taffy::{
     Taffy,
 };
 
-use crate::TuiDom;
+use crate::{layout_to_screen_space, TuiDom};
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -72,19 +72,28 @@ impl<'a> ElementRef<'a> {
     }
 
     pub fn size(&self) -> Option<Size<u32>> {
-        self.layout().map(|l| l.size.map(|v| v as u32))
+        self.layout().map(|l| l.size.map(|v| v.round() as u32))
     }
 
     pub fn pos(&self) -> Option<Point<u32>> {
         self.layout().map(|l| Point {
-            x: l.location.x as u32,
-            y: l.location.y as u32,
+            x: l.location.x.round() as u32,
+            y: l.location.y.round() as u32,
         })
     }
 
-    pub fn layout(&self) -> Option<&Layout> {
-        self.stretch
+    pub fn layout(&self) -> Option<Layout> {
+        let layout = self
+            .stretch
             .layout(self.inner[self.id].state.layout.node.ok()?)
-            .ok()
+            .ok();
+        layout.map(|layout| Layout {
+            order: layout.order,
+            size: layout.size.map(|v| layout_to_screen_space(v)),
+            location: Point {
+                x: layout_to_screen_space(layout.location.x),
+                y: layout_to_screen_space(layout.location.y),
+            },
+        })
     }
 }

@@ -125,7 +125,7 @@ impl PersistantElementIter {
 
     /// get the next element
     pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
-        let r = if self.stack.is_empty() {
+        if self.stack.is_empty() {
             let id = NodeId(0);
             let new = (id, NodePosition::AtNode);
             self.stack.push(new);
@@ -156,9 +156,7 @@ impl PersistantElementIter {
                     ElementProduced::Progressed(self.pop())
                 }
             }
-        };
-        println!("next: {:?}", r);
-        r
+        }
     }
 
     /// get the previous element

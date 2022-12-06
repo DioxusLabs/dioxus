@@ -8,6 +8,7 @@ use taffy::{
 use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
+    layout_to_screen_space,
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
@@ -36,15 +37,12 @@ pub(crate) fn render_vnode(
     location.x += parent_location.x;
     location.y += parent_location.y;
 
-    let Point { mut x, mut y } = location;
-    x = x.floor();
-    y = y.floor();
-    let Size {
-        mut width,
-        mut height,
-    } = size;
-    width = width.ceil();
-    height = height.ceil();
+    let Point { x: fx, y: fy } = location;
+    let x = layout_to_screen_space(fx).round() as u16;
+    let y = layout_to_screen_space(fy).round() as u16;
+    let Size { width, height } = *size;
+    let width = layout_to_screen_space(fx + width).round() as u16 + x;
+    let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
     match &node.node_data.node_type {
         NodeType::Text { text } => {
@@ -69,7 +67,7 @@ pub(crate) fn render_vnode(
                 text,
                 style: node.state.style.core,
             };
-            let area = Rect::new(x as u16, y as u16, width as u16, height as u16);
+            let area = Rect::new(x, y, width, height);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
@@ -77,7 +75,7 @@ pub(crate) fn render_vnode(
             }
         }
         NodeType::Element { .. } => {
-            let area = Rect::new(x as u16, y as u16, width as u16, height as u16);
+            let area = Rect::new(x, y, width, height);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {

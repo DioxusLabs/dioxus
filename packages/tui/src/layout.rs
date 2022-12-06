@@ -7,6 +7,8 @@ use dioxus_native_core::state::ChildDepState;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
+use crate::screen_to_layout_space;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum PossiblyUninitalized<T> {
     Uninitalized,
@@ -66,10 +68,10 @@ impl ChildDepState for TaffyLayout {
             style = Style {
                 size: Size {
                     // characters are 1 point tall
-                    height: Dimension::Points(1.0),
+                    height: Dimension::Points(screen_to_layout_space(1)),
 
                     // text is as long as it is declared
-                    width: Dimension::Points(char_len as f32),
+                    width: Dimension::Points(screen_to_layout_space(char_len as u16)),
                 },
                 ..Default::default()
             };
