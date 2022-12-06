@@ -56,17 +56,17 @@ pub(crate) fn union_ordered_iter<'a>(
 /// impl ChildDepState for Layout {
 ///     type Ctx = ();
 ///     // The layout depends on the layout of the children.
-///     type DepState = Layout;
+///     type DepState = (Layout,);
 ///     fn reduce<'a>(
 ///         &mut self,
 ///         _node: NodeView,
-///         children: impl Iterator<Item = &'a Self::DepState>,
+///         children: impl Iterator<Item = (&'a Self,)>,
 ///         _ctx: &Self::Ctx,
 ///     ) -> bool
 ///     where
 ///         Self::DepState: 'a{
 ///         /// Children are layed out form left to right. The width of the parent is the sum of the widths and the max of the heights.
-///         let new = children.copied().reduce(|c1, c2| Layout{
+///         let new = children.map(|(&c,)|c).reduce(|c1, c2| Layout{
 ///             width: c1.width + c2.width,
 ///             height: c1.height.max(c2.height)
 ///         }).unwrap_or_default();
@@ -108,7 +108,7 @@ pub trait ChildDepState {
 /// impl ParentDepState for FontSize {
 ///     type Ctx = ();
 ///     // The font size depends on the font size of the parent element.
-///     type DepState = Self;
+///     type DepState = (Self,);
 ///     const NODE_MASK: NodeMask =
 ///         NodeMask::new_with_attrs(AttributeMask::Static(&[
 ///             "font-size"
@@ -116,12 +116,12 @@ pub trait ChildDepState {
 ///     fn reduce<'a>(
 ///         &mut self,
 ///         node: NodeView,
-///         parent: Option<&'a Self::DepState>,
+///         parent: Option<(&'a Self,)>,
 ///         ctx: &Self::Ctx,
 ///     ) -> bool{
 ///         let old = *self;
 ///         // If the font size was set on the parent, it is passed down to the current element
-///         if let Some(parent) = parent {
+///         if let Some((parent,)) = parent {
 ///             *self = *parent;
 ///         }
 ///         // If the current node overrides the font size, use that size insead.
@@ -168,6 +168,7 @@ pub trait ParentDepState {
 ///
 /// impl NodeDepState for TabIndex {
 ///     type Ctx = ();
+///     type DepState = ();
 ///     const NODE_MASK: NodeMask =
 ///         NodeMask::new_with_attrs(AttributeMask::Static(&[
 ///             "tabindex"
