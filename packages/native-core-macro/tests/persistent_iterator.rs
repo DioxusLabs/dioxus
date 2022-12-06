@@ -1,9 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_native_core::{
-    real_dom::{ RealDom},
-    node::NodeType,
-    state::State,
-    utils::PersistantElementIter,
+    node::NodeType, real_dom::RealDom, state::State, utils::PersistantElementIter,
 };
 use dioxus_native_core_macro::State;
 
@@ -109,10 +106,10 @@ fn traverse() {
 fn persist_removes() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation()%2{
-            0=>3,
-            1=>2,
-            _ => unreachable!()
+        let children = match cx.generation() % 2 {
+            0 => 3,
+            1 => 2,
+            _ => unreachable!(),
         };
         render!(
             div{
@@ -158,7 +155,8 @@ fn persist_removes() {
     // "3"
     iter2.next(&rdom).id();
 
-    let update = vdom.rebuild();
+    vdom.mark_dirty(ScopeId(0));
+    let update = vdom.render_immediate();
     iter1.prune(&update, &rdom);
     iter2.prune(&update, &rdom);
     let _to_update = rdom.apply_mutations(update);
@@ -188,10 +186,10 @@ fn persist_removes() {
 fn persist_instertions_before() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation()%2{
-            0=>3,
-            1=>2,
-            _ => unreachable!()
+        let children = match cx.generation() % 2 {
+            0 => 3,
+            1 => 2,
+            _ => unreachable!(),
         };
         render!(
             div{
@@ -212,7 +210,7 @@ fn persist_instertions_before() {
 
     let build = vdom.rebuild();
     let _to_update = rdom.apply_mutations(build);
-    
+
     let mut iter = PersistantElementIter::new();
     // div
     iter.next(&rdom).id();
@@ -224,8 +222,9 @@ fn persist_instertions_before() {
     iter.next(&rdom).id();
     // "2"
     iter.next(&rdom).id();
-    
-    let update = vdom.rebuild();
+
+    vdom.mark_dirty(ScopeId(0));
+    let update = vdom.render_immediate();
     iter.prune(&update, &rdom);
     let _to_update = rdom.apply_mutations(update);
 
@@ -242,10 +241,10 @@ fn persist_instertions_before() {
 fn persist_instertions_after() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        let children = match cx.generation()%2{
-            0=>3,
-            1=>2,
-            _ => unreachable!()
+        let children = match cx.generation() % 2 {
+            0 => 3,
+            1 => 2,
+            _ => unreachable!(),
         };
         render!(
             div{

@@ -8,35 +8,11 @@ use dioxus_native_core::{node_ref::*, NodeId, RealNodeId, SendAnyMap};
 use dioxus_native_core_macro::State;
 
 #[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart1 {
-    #[child_dep_state(child_counter)]
-    child_counter: ChildDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart2 {
-    #[parent_dep_state(parent_counter)]
-    parent_counter: ParentDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart3 {
-    #[node_dep_state()]
-    node_counter: NodeDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
 struct CallCounterState {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
-    #[state]
-    part2: CallCounterStatePart2,
     #[parent_dep_state(parent_counter)]
     parent_counter: ParentDepCallCounter,
-    #[state]
-    part1: CallCounterStatePart1,
-    #[state]
-    part3: CallCounterStatePart3,
     #[node_dep_state()]
     node_counter: NodeDepCallCounter,
 }
@@ -69,6 +45,7 @@ impl ParentDepState for ParentDepCallCounter {
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
+        println!("ParentDepCallCounter::reduce on {:?}\n{}", _node, self.0);
         true
     }
 }
@@ -170,15 +147,11 @@ fn state_initial() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
         render! {
-            div{
-                p{}
-                h1{}
-                div {
-                    p{
-                        color: "red"
-                    }
-                    h1{}
+            div {
+                p{
+                    color: "red"
                 }
+                h1{}
             }
         }
     }
@@ -262,11 +235,10 @@ fn state_reduce_parent_called_minimally_on_update() {
         let width = if cx.generation() == 0 { "100%" } else { "99%" };
         cx.render(rsx! {
             div {
+                width: "{width}",
                 div{
                     div{
-                        p{
-                            width: "{width}",
-                        }
+                        p{}
                     }
                     p{
                         "hello"
@@ -288,12 +260,18 @@ fn state_reduce_parent_called_minimally_on_update() {
 
     let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
     let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
-    let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
+    vdom.mark_dirty(ScopeId(0));
+    let (nodes_updated, _) = dom.apply_mutations(vdom.render_immediate());
     let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
+    let mut is_root = true;
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part2.parent_counter.0, 2);
-        assert_eq!(n.state.parent_counter.0, 2);
+        if is_root {
+            is_root = false;
+            assert_eq!(n.state.parent_counter.0, 1);
+        } else {
+            assert_eq!(n.state.parent_counter.0, 2);
+        }
     });
 }
 
@@ -303,20 +281,30 @@ fn state_reduce_child_called_minimally_on_update() {
     fn Base(cx: Scope) -> Element {
         let width = if cx.generation() == 0 { "100%" } else { "99%" };
         cx.render(rsx! {
+            // updated: 2
             div {
+                // updated: 2
                 div{
+                    // updated: 2
                     div{
+                        // updated: 2
                         p{
                             width: "{width}",
                         }
                     }
+                    // updated: 1
                     p{
+                        // updated: 1
                         "hello"
                     }
+                    // updated: 1
                     div{
+                        // updated: 1
                         h1{}
                     }
+                    // updated: 1
                     p{
+                        // updated: 1
                         "world"
                     }
                 }
@@ -330,26 +318,20 @@ fn state_reduce_child_called_minimally_on_update() {
 
     let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
     let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
-    let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
+    vdom.mark_dirty(ScopeId(0));
+    let (nodes_updated, _) = dom.apply_mutations(vdom.render_immediate());
     let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
+    let mut traverse_count = 0;
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part1.child_counter.0, {
-            let id = n.node_data.node_id.0;
-            if id > 4 {
-                1
-            } else {
-                2
-            }
-        });
         assert_eq!(n.state.child_counter.0, {
-            let id = n.node_data.node_id.0;
-            if id > 4 {
+            if traverse_count > 4 {
                 1
             } else {
                 2
             }
         });
+        traverse_count += 1;
     });
 }
 
@@ -439,16 +421,4 @@ fn dependancies_order_independant() {
         assert_eq!(&n.state.b, &b);
         assert_eq!(&n.state.c, &c);
     });
-}
-
-#[derive(Clone, Default, State)]
-struct DependanciesStateTest {
-    #[node_dep_state(c)]
-    b: BDepCallCounter,
-    #[node_dep_state()]
-    c: CDepCallCounter,
-    #[node_dep_state(b)]
-    a: ADepCallCounter,
-    #[state]
-    child: UnorderedDependanciesState,
 }
