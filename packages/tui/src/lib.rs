@@ -158,12 +158,12 @@ fn render_vdom(
                         let mut style=*taffy.style(root_node).unwrap();
                         style.size=Size {
                             width: Dimension::Points(width as f32),
-                            height: Dimension::Points(height  as f32),
+                            height: Dimension::Points(height as f32),
                         };
                         taffy.set_style(root_node, style).unwrap();
                         
                         let size =Size {
-                            width: AvailableSpace::Definite(width  as f32),
+                            width: AvailableSpace::Definite(width as f32),
                             height: AvailableSpace::Definite(height as f32),
                         };
                             taffy
