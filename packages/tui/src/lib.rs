@@ -152,14 +152,24 @@ fn render_vdom(
                         let width = dims.width;
                         let height = dims.height;
                         let root_node = rdom[NodeId(0)].state.layout.node.unwrap();
-
-                        taffy
+                        
+                        // the root node fills the entire area
+                        
+                        let mut style=*taffy.style(root_node).unwrap();
+                        style.size=Size {
+                            width: Dimension::Points(width as f32),
+                            height: Dimension::Points(height  as f32),
+                        };
+                        taffy.set_style(root_node, style).unwrap();
+                        
+                        let size =Size {
+                            width: AvailableSpace::Definite(width  as f32),
+                            height: AvailableSpace::Definite(height as f32),
+                        };
+                            taffy
                             .compute_layout(
                                 root_node,
-                                Size {
-                                    width: AvailableSpace::Definite((width - 1) as f32),
-                                    height: AvailableSpace::Definite((height - 1) as f32),
-                                },
+                                size
                             )
                             .unwrap();
                     }

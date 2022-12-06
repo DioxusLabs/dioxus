@@ -23,8 +23,8 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
 
     cx.render(rsx! {
         div{
-            width: "20px",
-            height: "5px",
+            width: "100%",
+            height: "100%",
             background_color: "{color}",
             tabindex: "{cx.props.layer}",
             onkeydown: |e| {
@@ -70,8 +70,8 @@ fn app(cx: Scope) -> Element {
                             if (x + y) % 2 == 0{
                                 rsx!{
                                     div{
-                                        width: "20px",
-                                        height: "5px",
+                                        width: "100%",
+                                        height: "100%",
                                         background_color: "rgb(100, 100, 100)",
                                     }
                                 }

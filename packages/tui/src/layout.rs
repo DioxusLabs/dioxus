@@ -1,6 +1,5 @@
 use std::sync::{Arc, Mutex};
 
-use dioxus_core::*;
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
@@ -96,12 +95,6 @@ impl ChildDepState for TaffyLayout {
                         apply_layout_attributes(&attribute.name, text, &mut style);
                     }
                 }
-            }
-
-            // the root node fills the entire area
-            if node.id() == Some(ElementId(0)) {
-                apply_layout_attributes("width", "100%", &mut style);
-                apply_layout_attributes("height", "100%", &mut style);
             }
 
             // Set all direct nodes as our children
