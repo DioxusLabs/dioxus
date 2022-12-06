@@ -1,54 +1,26 @@
-use std::cmp::Ordering;
+use std::hash::BuildHasherDefault;
 
-use dioxus_core::ElementId;
+pub use node_ref::NodeMask;
+pub use passes::{
+    AnyPass, DownwardPass, MemberMask, NodePass, Pass, PassId, PassReturn, UpwardPass,
+};
+use rustc_hash::FxHasher;
+pub use tree::NodeId;
 
 pub mod layout_attributes;
+pub mod node;
 pub mod node_ref;
+pub mod passes;
 pub mod real_dom;
 pub mod state;
-#[doc(hidden)]
-pub mod traversable;
+pub mod tree;
 pub mod utils;
 
 /// A id for a node that lives in the real dom.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RealNodeId {
-    ElementId(ElementId),
-    UnaccessableId(usize),
-}
-
-impl RealNodeId {
-    pub fn as_element_id(&self) -> ElementId {
-        match self {
-            RealNodeId::ElementId(id) => *id,
-            RealNodeId::UnaccessableId(_) => panic!("Expected element id"),
-        }
-    }
-
-    pub fn as_unaccessable_id(&self) -> usize {
-        match self {
-            RealNodeId::ElementId(_) => panic!("Expected unaccessable id"),
-            RealNodeId::UnaccessableId(id) => *id,
-        }
-    }
-}
-
-impl Ord for RealNodeId {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.partial_cmp(other).unwrap()
-    }
-}
-
-impl PartialOrd for RealNodeId {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        match (self, other) {
-            (Self::ElementId(a), Self::ElementId(b)) => a.0.partial_cmp(&b.0),
-            (Self::UnaccessableId(a), Self::UnaccessableId(b)) => a.partial_cmp(b),
-            (Self::ElementId(_), Self::UnaccessableId(_)) => Some(Ordering::Greater),
-            (Self::UnaccessableId(_), Self::ElementId(_)) => Some(Ordering::Less),
-        }
-    }
-}
+pub type RealNodeId = NodeId;
+pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
+pub type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
+pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
 
 /// Used in derived state macros
 #[derive(Eq, PartialEq)]

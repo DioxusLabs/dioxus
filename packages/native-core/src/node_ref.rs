@@ -1,5 +1,7 @@
+use dioxus_core::ElementId;
+
 use crate::{
-    real_dom::{NodeData, NodeType, OwnedAttributeView},
+    node::{NodeData, NodeType, OwnedAttributeView},
     state::union_ordered_iter,
     RealNodeId,
 };
@@ -21,8 +23,13 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the id of the node
-    pub fn id(&self) -> RealNodeId {
-        self.inner.id.unwrap()
+    pub fn id(&self) -> Option<ElementId> {
+        self.inner.element_id
+    }
+
+    /// Get the node id of the node
+    pub fn node_id(&self) -> RealNodeId {
+        self.inner.node_id
     }
 
     /// Get the tag of the node if the tag is enabled in the mask
@@ -41,7 +48,7 @@ impl<'a> NodeView<'a> {
         self.mask
             .namespace
             .then_some(match &self.inner.node_type {
-                NodeType::Element { namespace, .. } => *namespace,
+                NodeType::Element { namespace, .. } => namespace.as_deref(),
                 _ => None,
             })
             .flatten()
@@ -92,7 +99,7 @@ impl<'a> NodeView<'a> {
 pub enum AttributeMask {
     All,
     /// A list of attribute names that are visible, this list must be sorted
-    Dynamic(Vec<&'static str>),
+    Dynamic(Vec<String>),
     /// A list of attribute names that are visible, this list must be sorted
     Static(&'static [&'static str]),
 }
@@ -104,14 +111,14 @@ impl AttributeMask {
     fn contains_attribute(&self, attr: &str) -> bool {
         match self {
             AttributeMask::All => true,
-            AttributeMask::Dynamic(l) => l.binary_search(&attr).is_ok(),
+            AttributeMask::Dynamic(l) => l.binary_search_by_key(&attr, |s| s.as_str()).is_ok(),
             AttributeMask::Static(l) => l.binary_search(&attr).is_ok(),
         }
     }
 
     /// Create a new dynamic attribute mask with a single attribute
-    pub fn single(new: &'static str) -> Self {
-        Self::Dynamic(vec![new])
+    pub fn single(new: &str) -> Self {
+        Self::Dynamic(vec![new.to_string()])
     }
 
     /// Ensure the attribute list is sorted.
@@ -132,15 +139,27 @@ impl AttributeMask {
     /// Combine two attribute masks
     pub fn union(&self, other: &Self) -> Self {
         let new = match (self, other) {
-            (AttributeMask::Dynamic(s), AttributeMask::Dynamic(o)) => AttributeMask::Dynamic(
-                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
-            ),
-            (AttributeMask::Static(s), AttributeMask::Dynamic(o)) => AttributeMask::Dynamic(
-                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
-            ),
-            (AttributeMask::Dynamic(s), AttributeMask::Static(o)) => AttributeMask::Dynamic(
-                union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
-            ),
+            (AttributeMask::Dynamic(s), AttributeMask::Dynamic(o)) => {
+                AttributeMask::Dynamic(union_ordered_iter(
+                    s.iter().map(|s| s.as_str()),
+                    o.iter().map(|s| s.as_str()),
+                    s.len() + o.len(),
+                ))
+            }
+            (AttributeMask::Static(s), AttributeMask::Dynamic(o)) => {
+                AttributeMask::Dynamic(union_ordered_iter(
+                    s.iter().copied(),
+                    o.iter().map(|s| s.as_str()),
+                    s.len() + o.len(),
+                ))
+            }
+            (AttributeMask::Dynamic(s), AttributeMask::Static(o)) => {
+                AttributeMask::Dynamic(union_ordered_iter(
+                    s.iter().map(|s| s.as_str()),
+                    o.iter().copied(),
+                    s.len() + o.len(),
+                ))
+            }
             (AttributeMask::Static(s), AttributeMask::Static(o)) => AttributeMask::Dynamic(
                 union_ordered_iter(s.iter().copied(), o.iter().copied(), s.len() + o.len()),
             ),
@@ -152,9 +171,9 @@ impl AttributeMask {
 
     /// Check if two attribute masks overlap
     fn overlaps(&self, other: &Self) -> bool {
-        fn overlaps_iter(
-            self_iter: impl Iterator<Item = &'static str>,
-            mut other_iter: impl Iterator<Item = &'static str>,
+        fn overlaps_iter<'a>(
+            self_iter: impl Iterator<Item = &'a str>,
+            mut other_iter: impl Iterator<Item = &'a str>,
         ) -> bool {
             if let Some(mut other_attr) = other_iter.next() {
                 for self_attr in self_iter {
@@ -179,13 +198,13 @@ impl AttributeMask {
             (AttributeMask::Dynamic(v), AttributeMask::All) => !v.is_empty(),
             (AttributeMask::Static(s), AttributeMask::All) => !s.is_empty(),
             (AttributeMask::Dynamic(v1), AttributeMask::Dynamic(v2)) => {
-                overlaps_iter(v1.iter().copied(), v2.iter().copied())
+                overlaps_iter(v1.iter().map(|s| s.as_str()), v2.iter().map(|s| s.as_str()))
             }
             (AttributeMask::Dynamic(v), AttributeMask::Static(s)) => {
-                overlaps_iter(v.iter().copied(), s.iter().copied())
+                overlaps_iter(v.iter().map(|s| s.as_str()), s.iter().copied())
             }
             (AttributeMask::Static(s), AttributeMask::Dynamic(v)) => {
-                overlaps_iter(v.iter().copied(), s.iter().copied())
+                overlaps_iter(v.iter().map(|s| s.as_str()), s.iter().copied())
             }
             (AttributeMask::Static(s1), AttributeMask::Static(s2)) => {
                 overlaps_iter(s1.iter().copied(), s2.iter().copied())

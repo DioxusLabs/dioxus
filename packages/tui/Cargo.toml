@@ -23,10 +23,11 @@ crossterm = "0.23.0"
 anyhow = "1.0.42"
 tokio = { version = "1.15.0", features = ["full"] }
 futures = "0.3.19"
-taffy = "0.1.0"
+taffy = "0.2.1"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "0.12.1"
+futures-channel = "0.3.25"
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }

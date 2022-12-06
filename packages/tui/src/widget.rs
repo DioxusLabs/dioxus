@@ -22,8 +22,9 @@ impl<'a> RinkBuffer<'a> {
 
     pub fn set(&mut self, x: u16, y: u16, new: RinkCell) {
         let area = self.buf.area();
-        if x < area.x || x > area.width || y < area.y || y > area.height {
-            panic!("({x}, {y}) is not in {area:?}");
+        if x < area.x || x >= area.width + area.x || y < area.y || y >= area.height + area.y {
+            // panic!("({x}, {y}) is not in {area:?}");
+            return;
         }
         let mut cell = self.buf.get_mut(x, y);
         cell.bg = convert(self.cfg.rendering_mode, new.bg.blend(cell.bg));

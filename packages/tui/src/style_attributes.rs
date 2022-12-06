@@ -31,8 +31,8 @@
 
 use dioxus_native_core::{
     layout_attributes::parse_value,
+    node::OwnedAttributeView,
     node_ref::{AttributeMask, NodeMask, NodeView},
-    real_dom::OwnedAttributeView,
     state::ParentDepState,
 };
 use dioxus_native_core_macro::sorted_str_slice;
@@ -48,12 +48,12 @@ pub struct StyleModifier {
 
 impl ParentDepState for StyleModifier {
     type Ctx = ();
-    type DepState = Self;
+    type DepState = (Self,);
     // todo: seperate each attribute into it's own class
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(SORTED_STYLE_ATTRS)).with_element();
 
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, _: &Self::Ctx) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {
             new.core.fg = None;
@@ -91,7 +91,7 @@ impl ParentDepState for StyleModifier {
         }
 
         // keep the text styling from the parent element
-        if let Some(parent) = parent {
+        if let Some((parent,)) = parent {
             let mut new_style = new.core.merge(parent.core);
             new_style.bg = new.core.bg;
             new.core = new_style;
