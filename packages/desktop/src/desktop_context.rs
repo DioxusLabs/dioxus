@@ -281,7 +281,7 @@ impl DesktopController {
 
                 let ui_view_controller = window.ui_view_controller() as *mut Object;
                 let _: () = msg_send![ui_view_controller, setView: view];
-                desktop.views.push(ui_view);
+                self.views.push(ui_view);
             },
 
             #[cfg(target_os = "ios")]
@@ -289,7 +289,7 @@ impl DesktopController {
                 use objc::runtime::Object;
                 use objc::*;
                 assert!(is_main_thread());
-                if let Some(view) = desktop.views.pop() {
+                if let Some(view) = self.views.pop() {
                     let ui_view_controller = window.ui_view_controller() as *mut Object;
                     let _: () = msg_send![ui_view_controller, setView: view];
                 }
