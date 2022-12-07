@@ -23,3 +23,4 @@ sledgehammer_utils = { version = "0.1.0" }
 [features]
 default = []
 web = ["wasm-bindgen", "js-sys", "web-sys"]
+sledgehammer = ["wasm-bindgen", "js-sys", "web-sys"]

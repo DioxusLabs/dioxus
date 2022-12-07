@@ -1,8 +1,8 @@
 pub static INTERPRETER_JS: &str = include_str!("./interpreter.js");
 
-#[cfg(feature = "web")]
+#[cfg(feature = "sledgehammer")]
 mod sledgehammer_bindings;
-#[cfg(feature = "web")]
+#[cfg(feature = "sledgehammer")]
 pub use sledgehammer_bindings::*;
 
 #[cfg(feature = "web")]
