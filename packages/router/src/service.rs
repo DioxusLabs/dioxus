@@ -415,7 +415,7 @@ mod web {
             }
         }
 
-        fn attach_listeners(&self, svc: std::sync::Weak<crate::RouterService>) {
+        fn attach_listeners(&self, svc: std::rc::Weak<crate::RouterService>) {
             self._listener.set(Some(EventListener::new(
                 &web_sys::window().unwrap(),
                 "popstate",
