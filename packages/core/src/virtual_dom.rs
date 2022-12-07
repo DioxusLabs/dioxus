@@ -20,7 +20,7 @@ use std::{
     any::Any,
     borrow::BorrowMut,
     cell::Cell,
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeSet},
     future::Future,
     rc::Rc,
 };
