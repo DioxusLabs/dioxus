@@ -234,6 +234,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             res = rx.try_next().transpose().unwrap().ok();
         }
 
+        // Todo: This is currently disabled because it has a negative impact on responce times for events but it could be re-enabled for tasks
         // Jank free rendering
         //
         // 1. wait for the browser to give us "idle" time
@@ -242,13 +243,13 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in
-        let deadline = work_loop.wait_for_idle_time().await;
+        // let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let edits = dom.render_with_deadline(deadline).await;
+        let edits = dom.render_immediate();
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         log::debug!("edits {:#?}", edits);
 
