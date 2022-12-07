@@ -239,11 +239,10 @@ impl VirtualDom {
             mutations: Mutations::default(),
         };
 
-        let root = dom.new_scope(Box::new(VProps::new(
-            root,
-            |_, _| unreachable!(),
-            root_props,
-        )));
+        let root = dom.new_scope(
+            Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
+            "app",
+        );
 
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior later

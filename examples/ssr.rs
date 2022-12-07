@@ -5,7 +5,7 @@
 use std::fmt::Write;
 
 use dioxus::prelude::*;
-use dioxus_ssr::config::SsrConfig;
+use dioxus_ssr::config::Config;
 
 fn main() {
     // We can render VirtualDoms
@@ -26,7 +26,7 @@ fn main() {
     // We can configure the SSR rendering to add ids for rehydration
     println!(
         "{}",
-        dioxus_ssr::render_vdom_cfg(&vdom, SsrConfig::default().pre_render(true))
+        dioxus_ssr::render_vdom_cfg(&vdom, Config::default().pre_render(true))
     );
 
     // We can even render as a writer

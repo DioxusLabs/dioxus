@@ -2,6 +2,7 @@ use dioxus::core::ElementId;
 use dioxus::core::{Mutation::*, SuspenseContext};
 use dioxus::prelude::*;
 use std::future::IntoFuture;
+use std::rc::Rc;
 use std::time::Duration;
 
 #[tokio::test]
@@ -51,11 +52,11 @@ fn app(cx: Scope) -> Element {
 
 fn suspense_boundary(cx: Scope) -> Element {
     cx.use_hook(|| {
-        cx.provide_context(SuspenseContext::new(cx.scope_id()));
+        cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id())));
     });
 
     // Ensure the right types are found
-    cx.has_context::<SuspenseContext>().unwrap();
+    cx.has_context::<Rc<SuspenseContext>>().unwrap();
 
     cx.render(rsx!(async_child {}))
 }

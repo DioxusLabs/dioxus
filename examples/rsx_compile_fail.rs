@@ -2,13 +2,13 @@
 //! It also proves that lifetimes work properly, especially when used with use_ref
 
 use dioxus::prelude::*;
-use dioxus_ssr::config::SsrConfig;
+use dioxus_ssr::config::Config;
 
 fn main() {
     let mut vdom = VirtualDom::new(example);
     _ = vdom.rebuild();
 
-    let out = dioxus_ssr::render_vdom_cfg(&vdom, SsrConfig::default().newline(true).indent(true));
+    let out = dioxus_ssr::render_vdom_cfg(&vdom, Config::default().newline(true).indent(true));
     println!("{}", out);
 }
 

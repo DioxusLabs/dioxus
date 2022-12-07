@@ -68,6 +68,7 @@ pub struct ScopeId(pub usize);
 /// This struct exists to provide a common interface for all scopes without relying on generics.
 pub struct ScopeState {
     pub(crate) render_cnt: Cell<usize>,
+    pub(crate) name: &'static str,
 
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
@@ -113,6 +114,11 @@ impl<'src> ScopeState {
             0 => &mut self.node_arena_2,
             _ => unreachable!(),
         }
+    }
+
+    /// Get the name of this component
+    pub fn name(&self) -> &str {
+        self.name
     }
 
     /// Get the current render since the inception of this component

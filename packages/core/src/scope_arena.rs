@@ -17,7 +17,11 @@ use std::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: Box<dyn AnyProps<'static>>) -> &ScopeState {
+    pub(super) fn new_scope(
+        &mut self,
+        props: Box<dyn AnyProps<'static>>,
+        name: &'static str,
+    ) -> &ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
@@ -28,6 +32,7 @@ impl VirtualDom {
             id,
             height,
             props: Some(props),
+            name,
             placeholder: Default::default(),
             node_arena_1: BumpFrame::new(50),
             node_arena_2: BumpFrame::new(50),

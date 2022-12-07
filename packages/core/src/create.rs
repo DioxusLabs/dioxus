@@ -307,7 +307,8 @@ impl<'b> VirtualDom {
 
         let unbounded_props = unsafe { std::mem::transmute(props) };
 
-        let scope = self.new_scope(unbounded_props).id;
+        let scope = self.new_scope(unbounded_props, component.name);
+        let scope = scope.id;
         component.scope.set(Some(scope));
 
         let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
