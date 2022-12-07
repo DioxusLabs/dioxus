@@ -1,6 +1,6 @@
 use fxhash::FxHashSet;
 
-use crate::{arena::ElementId, ScopeId, ScopeState, Template};
+use crate::{arena::ElementId, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
@@ -256,10 +256,4 @@ pub enum Mutation<'a> {
         /// The ID of the root node to push.
         id: ElementId,
     },
-}
-
-#[test]
-fn sizes() {
-    println!("mutations: {}", std::mem::size_of::<Mutation>());
-    println!("scope: {}", std::mem::size_of::<ScopeState>());
 }

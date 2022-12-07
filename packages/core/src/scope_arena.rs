@@ -9,6 +9,7 @@ use crate::{
     virtual_dom::VirtualDom,
     AttributeValue, DynamicNode, VNode,
 };
+use bumpalo::Bump;
 use futures_util::FutureExt;
 use std::{
     mem,
@@ -94,7 +95,13 @@ impl VirtualDom {
         let mut new_nodes = unsafe {
             let scope = self.scopes[scope_id.0].as_mut();
 
-            scope.previous_frame_mut().bump.reset();
+            // if this frame hasn't been intialized yet, we can guess the size of the next frame to be more efficient
+            if scope.previous_frame().bump.allocated_bytes() == 0 {
+                scope.previous_frame_mut().bump =
+                    Bump::with_capacity(scope.current_frame().bump.allocated_bytes());
+            } else {
+                scope.previous_frame_mut().bump.reset();
+            }
 
             // Make sure to reset the hook counter so we give out hooks in the right order
             scope.hook_idx.set(0);
@@ -160,8 +167,8 @@ impl VirtualDom {
         let frame = scope.previous_frame();
 
         // set the new head of the bump frame
-        let alloced = &*frame.bump.alloc(new_nodes);
-        frame.node.set(alloced);
+        let allocated = &*frame.bump.alloc(new_nodes);
+        frame.node.set(allocated);
 
         // And move the render generation forward by one
         scope.render_cnt.set(scope.render_cnt.get() + 1);
@@ -173,6 +180,6 @@ impl VirtualDom {
         });
 
         // rebind the lifetime now that its stored internally
-        unsafe { mem::transmute(alloced) }
+        unsafe { mem::transmute(allocated) }
     }
 }
