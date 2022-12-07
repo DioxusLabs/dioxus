@@ -7,7 +7,7 @@ pub mod template;
 use dioxus_core::{Element, LazyNodes, Scope, VirtualDom};
 use std::cell::Cell;
 
-use crate::renderer::Renderer;
+pub use crate::renderer::Renderer;
 
 /// A convenience function to render an `rsx!` call to a string
 ///
@@ -43,4 +43,13 @@ pub fn render_lazy(f: LazyNodes<'_, '_>) -> String {
 /// We generally recommend creating a new `Renderer` to take advantage of template caching.
 pub fn render(dom: &VirtualDom) -> String {
     Renderer::new().render(dom)
+}
+
+/// A convenience function to pre-render an existing VirtualDom to a string
+///
+/// We generally recommend creating a new `Renderer` to take advantage of template caching.
+pub fn pre_render(dom: &VirtualDom) -> String {
+    let mut renderer = Renderer::new();
+    renderer.pre_render = true;
+    renderer.render(dom)
 }

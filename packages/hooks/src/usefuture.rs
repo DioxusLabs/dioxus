@@ -51,7 +51,7 @@ where
 
         // Clone in our cells
         let values = state.values.clone();
-        let _schedule_update = state.update.clone();
+        let schedule_update = state.update.clone();
         let waker = state.waker.clone();
 
         // Cancel the current future
@@ -66,10 +66,7 @@ where
             // if there's a waker, we dont re-render the component. Instead we just progress that future
             match waker.borrow().as_ref() {
                 Some(waker) => waker.wake_by_ref(),
-                None => {
-
-                    // schedule_update()
-                }
+                None => schedule_update(),
             }
         })));
     }

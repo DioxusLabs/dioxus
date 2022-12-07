@@ -24,7 +24,7 @@ macro_rules! use_callback {
         )
     };
 }
-pub fn use_callback<'a, T, R, F>(cx: &'a ScopeState, make: impl FnOnce() -> R) -> impl FnMut(T) + 'a
+pub fn use_callback<T, R, F>(cx: &ScopeState, make: impl FnOnce() -> R) -> impl FnMut(T) + '_
 where
     R: FnMut(T) -> F + 'static,
     F: Future<Output = ()> + 'static,

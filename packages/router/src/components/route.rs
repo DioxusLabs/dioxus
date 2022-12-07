@@ -42,7 +42,7 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         });
 
         // submit our rout
-        router_root.register_total_route(route_context.total_route.clone(), cx.scope_id());
+        router_root.register_total_route(route_context.total_route, cx.scope_id());
     });
 
     log::trace!("Checking Route: {:?}", cx.props.to);

@@ -60,7 +60,7 @@ impl Component {
         match self
             .fields
             .iter()
-            .find(|f| f.name.to_string() == "key")
+            .find(|f| f.name == "key")
             .map(|f| &f.content)
         {
             Some(ContentField::Formatted(fmt)) => Some(fmt),

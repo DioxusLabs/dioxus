@@ -105,7 +105,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         }
     };
 
-    let route = use_route(&cx);
+    let route = use_route(cx);
     let url = route.url();
     let path = url.path();
     let active = path == cx.props.to;
