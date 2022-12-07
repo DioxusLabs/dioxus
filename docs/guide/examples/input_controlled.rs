@@ -7,7 +7,7 @@ fn main() {
 
 // ANCHOR: component
 fn App(cx: Scope) -> Element {
-    let name = use_state(&cx, || "bob".to_string());
+    let name = use_state(cx, || "bob".to_string());
 
     cx.render(rsx! {
         input {

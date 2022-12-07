@@ -44,7 +44,7 @@ use crate::{use_context, use_context_provider};
 ///     Stop,
 /// }
 ///
-/// let chat_client = use_coroutine(&cx, |rx: UnboundedReceiver<Action>| async move {
+/// let chat_client = use_coroutine(cx, |rx: UnboundedReceiver<Action>| async move {
 ///     while let Some(action) = rx.next().await {
 ///         match action {
 ///             Action::Start => {}
@@ -119,15 +119,15 @@ mod tests {
     use futures_util::StreamExt;
 
     fn app(cx: Scope, name: String) -> Element {
-        let task = use_coroutine(&cx, |mut rx: UnboundedReceiver<i32>| async move {
+        let task = use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
             while let Some(msg) = rx.next().await {
                 println!("got message: {}", msg);
             }
         });
 
-        let task2 = use_coroutine(&cx, view_task);
+        let task2 = use_coroutine(cx, view_task);
 
-        let task3 = use_coroutine(&cx, |rx| complex_task(rx, 10));
+        let task3 = use_coroutine(cx, |rx| complex_task(rx, 10));
 
         todo!()
     }

@@ -17,13 +17,13 @@ fn App(cx: Scope) -> Element {
     // But `if` statements only run if the conditional is true!
     // So we might violate rule 2.
     if you_are_happy && you_know_it {
-        let something = use_state(&cx, || "hands");
+        let something = use_state(cx, || "hands");
         println!("clap your {something}")
     }
 
     // ✅ instead, *always* call use_state
     // You can put other stuff in the conditional though
-    let something = use_state(&cx, || "hands");
+    let something = use_state(cx, || "hands");
     if you_are_happy && you_know_it {
         println!("clap your {something}")
     }
@@ -33,12 +33,12 @@ fn App(cx: Scope) -> Element {
     // ❌ don't call hooks inside closures!
     // We can't guarantee that the closure, if used, will be called at the same time every time
     let _a = || {
-        let b = use_state(&cx, || 0);
+        let b = use_state(cx, || 0);
         b.get()
     };
 
     // ✅ instead, move hook `b` outside
-    let b = use_state(&cx, || 0);
+    let b = use_state(cx, || 0);
     let _a = || b.get();
     // ANCHOR_END: closure
 
@@ -50,12 +50,12 @@ fn App(cx: Scope) -> Element {
     // ❌ Do not use hooks in loops!
     // In this case, if the length of the Vec changes, we break rule 2
     for _name in &names {
-        let is_selected = use_state(&cx, || false);
+        let is_selected = use_state(cx, || false);
         println!("selected: {is_selected}");
     }
 
     // ✅ Instead, use a hashmap with use_ref
-    let selection_map = use_ref(&cx, HashMap::<&str, bool>::new);
+    let selection_map = use_ref(cx, HashMap::<&str, bool>::new);
 
     for name in &names {
         let is_selected = selection_map.read()[name];

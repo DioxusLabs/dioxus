@@ -6,9 +6,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let window = use_window(&cx);
+    let window = use_window(cx);
 
-    let level = use_state(&cx, || 1.0);
+    let level = use_state(cx, || 1.0);
     cx.render(rsx! {
         input {
             r#type: "number",

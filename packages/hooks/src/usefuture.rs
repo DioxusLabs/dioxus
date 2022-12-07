@@ -319,10 +319,10 @@ mod tests {
             let fut = use_future(cx, (), |_| async move {});
 
             // runs when a is changed
-            let fut = use_future(cx, (&cx.props.a,), |(a,)| async move {});
+            let fut = use_future(cx, (cx.props.a,), |(a,)| async move {});
 
             // runs when a or b is changed
-            let fut = use_future(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
+            let fut = use_future(cx, (cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
 
             let a = use_future!(cx, || async move {
                 // do the thing!

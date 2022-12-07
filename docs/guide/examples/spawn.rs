@@ -8,7 +8,7 @@ fn main() {
 
 fn App(cx: Scope) -> Element {
     // ANCHOR: spawn
-    let logged_in = use_state(&cx, || false);
+    let logged_in = use_state(cx, || false);
 
     let log_in = move |_| {
         cx.spawn({
@@ -62,10 +62,10 @@ pub fn Tokio(cx: Scope) -> Element {
 }
 
 pub fn ToOwnedMacro(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
-    let age = use_state(&cx, || 0);
-    let name = use_state(&cx, || 0);
-    let description = use_state(&cx, || 0);
+    let count = use_state(cx, || 0);
+    let age = use_state(cx, || 0);
+    let name = use_state(cx, || 0);
+    let description = use_state(cx, || 0);
 
     let _ = || {
         // ANCHOR: to_owned_macro

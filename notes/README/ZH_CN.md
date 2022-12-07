@@ -54,7 +54,7 @@ Dioxus 是一个可移植的、高性能的、符合人体工程学的框架，�
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
         h1 { "High-Five counter: {count}" }

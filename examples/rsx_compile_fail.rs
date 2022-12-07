@@ -13,14 +13,14 @@ fn main() {
 }
 
 fn example(cx: Scope) -> Element {
-    let items = use_state(&cx, || {
+    let items = use_state(cx, || {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
         }]
     });
 
-    let things = use_ref(&cx, || {
+    let things = use_ref(cx, || {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
@@ -28,7 +28,7 @@ fn example(cx: Scope) -> Element {
     });
     let things_list = things.read();
 
-    let mything = use_ref(&cx, || Some(String::from("asd")));
+    let mything = use_ref(cx, || Some(String::from("asd")));
     let mything_read = mything.read();
 
     cx.render(rsx!(

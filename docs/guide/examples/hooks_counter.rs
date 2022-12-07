@@ -7,7 +7,7 @@ fn main() {
 
 // ANCHOR: component
 fn App(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx!(
         h1 { "High-Five counter: {count}" }

@@ -200,7 +200,7 @@ fn app(cx: Scope) -> Element {
 
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
-            helper(&cx, "hello world!")
+            helper(cx, "hello world!")
 
             // Strings can be supplied directly
             String::from("Hello world!")

@@ -36,7 +36,7 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let id = use_route(&cx).segment("id")?;
+    let id = use_route(cx).segment("id")?;
 
     log::trace!("rendering blog post {}", id);
 

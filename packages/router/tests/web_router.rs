@@ -47,7 +47,7 @@ fn simple_test() {
     }
 
     fn BlogPost(cx: Scope) -> Element {
-        let _id = use_route(&cx).parse_segment::<usize>("id")?;
+        let _id = use_route(cx).parse_segment::<usize>("id")?;
 
         cx.render(rsx! {
             div {

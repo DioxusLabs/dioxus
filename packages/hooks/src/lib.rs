@@ -5,7 +5,7 @@
 ///
 ///
 /// ```ignore
-/// let (data) = use_ref(&cx, || {});
+/// let (data) = use_ref(cx, || {});
 ///
 /// let handle_thing = move |_| {
 ///     to_owned![data]

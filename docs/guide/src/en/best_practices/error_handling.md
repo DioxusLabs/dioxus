@@ -56,7 +56,7 @@ The next "best" way of handling errors in Dioxus is to match on the error locall
 To do this, we simply have an error state built into our component:
 
 ```rust
-let err = use_state(&cx, || None);
+let err = use_state(cx, || None);
 ```
 
 Whenever we perform an action that generates an error, we'll set that error state. We can then match on the error in a number of ways (early return, return Element, etc).
@@ -64,7 +64,7 @@ Whenever we perform an action that generates an error, we'll set that error stat
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let error = use_state(&cx, || None);
+    let error = use_state(cx, || None);
 
     cx.render(match *error {
         Some(error) => rsx!(
@@ -85,7 +85,7 @@ If you're dealing with a handful of components with minimal nesting, you can jus
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let error = use_state(&cx, || None);
+    let error = use_state(cx, || None);
 
     if let Some(error) = **error {
         return cx.render(rsx!{ "An error occured" });
@@ -125,7 +125,7 @@ Then, in our top level component, we want to explicitly handle the possible erro
 
 ```rust
 fn TopLevel(cx: Scope) -> Element {
-    let error = use_read(&cx, INPUT_ERROR);
+    let error = use_read(cx, INPUT_ERROR);
 
     match error {
         TooLong => return cx.render(rsx!{ "FAILED: Too long!" }),
@@ -139,7 +139,7 @@ Now, whenever a downstream component has an error in its actions, it can simply 
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let set_error = use_set(&cx, INPUT_ERROR);
+    let set_error = use_set(cx, INPUT_ERROR);
 
     cx.render(rsx!{
         input {

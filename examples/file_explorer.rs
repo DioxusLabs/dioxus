@@ -19,7 +19,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let files = use_ref(&cx, Files::new);
+    let files = use_ref(cx, Files::new);
 
     cx.render(rsx! {
         div {

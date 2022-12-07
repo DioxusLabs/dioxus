@@ -13,7 +13,7 @@ struct Todo {
     is_editing: bool,
 }
 
-let todos = use_ref(&cx, || vec![Todo::new()]);
+let todos = use_ref(cx, || vec![Todo::new()]);
 
 cx.render(rsx!{
     ul {
@@ -40,7 +40,7 @@ Instead, let's refactor our Todo component to handle its own state:
 ```rust
 #[inline_props]
 fn Todo<'a>(cx: Scope, todo: &'a Todo) -> Element {
-    let is_hovered = use_state(&cx, || false);
+    let is_hovered = use_state(cx, || false);
 
     cx.render(rsx!{
         li {
@@ -80,15 +80,15 @@ struct State {
 }
 
 // in the component
-let state = use_ref(&cx, State::new)
+let state = use_ref(cx, State::new)
 ```
 
 The "better" approach for this particular component would be to break the state apart into different values:
 
 ```rust
-let count = use_state(&cx, || 0);
-let color = use_state(&cx, || "red");
-let names = use_state(&cx, HashMap::new);
+let count = use_state(cx, || 0);
+let color = use_state(cx, || "red");
+let names = use_state(cx, HashMap::new);
 ```
 
 You might recognize that our "names" value is a HashMap – which is not terribly cheap to clone every time we update its value. To solve this issue, we *highly* suggest using a library like [`im`](https://crates.io/crates/im) which will take advantage of structural sharing to make clones and mutations much cheaper.
@@ -96,7 +96,7 @@ You might recognize that our "names" value is a HashMap – which is not terribl
 When combined with the `make_mut` method on `use_state`, you can get really succinct updates to collections:
 
 ```rust
-let todos = use_state(&cx, im_rc::HashMap::default);
+let todos = use_state(cx, im_rc::HashMap::default);
 
 todos.make_mut().insert("new todo", Todo {
     contents: "go get groceries",

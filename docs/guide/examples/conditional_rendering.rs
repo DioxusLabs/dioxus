@@ -6,7 +6,7 @@ fn main() {
 }
 
 pub fn App(cx: Scope) -> Element {
-    let is_logged_in = use_state(&cx, || false);
+    let is_logged_in = use_state(cx, || false);
 
     cx.render(rsx!(LogIn {
         is_logged_in: **is_logged_in,

@@ -26,8 +26,8 @@ use crate::{layout_to_screen_space, TuiDom};
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
-///     let hue = use_state(&cx, || 0.0);
-///     let brightness = use_state(&cx, || 0.0);
+///     let hue = use_state(cx, || 0.0);
+///     let brightness = use_state(cx, || 0.0);
 ///     let tui_query: Query = cx.consume_context().unwrap();
 ///     cx.render(rsx! {
 ///         div{
