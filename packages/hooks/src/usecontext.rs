@@ -1,6 +1,8 @@
 use dioxus_core::ScopeState;
 
 /// Consume some context in the tree, providing a sharable handle to the value
+///
+/// Does not regenerate the value if the value is changed at the parent.
 pub fn use_context<T: 'static + Clone>(cx: &ScopeState) -> Option<&T> {
     cx.use_hook(|| cx.consume_context::<T>()).as_ref()
 }

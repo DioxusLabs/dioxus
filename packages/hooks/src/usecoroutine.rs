@@ -2,8 +2,6 @@ use dioxus_core::{ScopeState, TaskId};
 pub use futures_channel::mpsc::{UnboundedReceiver, UnboundedSender};
 use std::future::Future;
 
-use crate::{use_context, use_context_provider};
-
 /// Maintain a handle over a future that can be paused, resumed, and canceled.
 ///
 /// This is an upgraded form of [`use_future`] with an integrated channel system.
@@ -67,10 +65,10 @@ where
     G: FnOnce(UnboundedReceiver<M>) -> F,
     F: Future<Output = ()> + 'static,
 {
-    use_context_provider(cx, || {
+    cx.use_hook(|| {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let task = cx.push_future(init(rx));
-        Coroutine { tx, task }
+        cx.provide_context(Coroutine { tx, task })
     })
 }
 
@@ -78,7 +76,8 @@ where
 ///
 /// See the docs for [`use_coroutine`] for more details.
 pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>> {
-    use_context::<Coroutine<M>>(cx)
+    cx.use_hook(|| cx.consume_context::<Coroutine<M>>())
+        .as_ref()
 }
 
 pub struct Coroutine<T> {

@@ -39,15 +39,15 @@ pub struct RouterProps<'a> {
 /// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let svc = use_context_provider(cx, || {
-        RouterService::new(
+    let svc = cx.use_hook(|| {
+        cx.provide_context(RouterService::new(
             cx,
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
                 initial_url: cx.props.initial_url.clone(),
             },
-        )
+        ))
     });
 
     // next time we run the rout_found will be filled

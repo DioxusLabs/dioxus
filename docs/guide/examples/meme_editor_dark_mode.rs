@@ -1,7 +1,6 @@
 // ANCHOR: all
 #![allow(non_snake_case)]
 
-use dioxus::events::FormData;
 use dioxus::prelude::*;
 
 fn main() {
@@ -14,7 +13,7 @@ struct DarkMode(bool);
 
 pub fn App(cx: Scope) -> Element {
     // ANCHOR: context_provider
-    use_context_provider(cx, || DarkMode(false));
+    use_shared_state_provider(cx, || DarkMode(false));
     // ANCHOR_END: context_provider
 
     let is_dark_mode = use_is_dark_mode(cx);
@@ -37,7 +36,7 @@ pub fn App(cx: Scope) -> Element {
 
 pub fn use_is_dark_mode(cx: &ScopeState) -> bool {
     // ANCHOR: use_context
-    let dark_mode_context = use_context::<DarkMode>(cx);
+    let dark_mode_context = use_shared_state::<DarkMode>(cx);
     // ANCHOR_END: use_context
 
     dark_mode_context
@@ -47,7 +46,7 @@ pub fn use_is_dark_mode(cx: &ScopeState) -> bool {
 
 // ANCHOR: toggle
 pub fn DarkModeToggle(cx: Scope) -> Element {
-    let dark_mode = use_context::<DarkMode>(cx)?;
+    let dark_mode = use_shared_state::<DarkMode>(cx).unwrap();
 
     let style = if dark_mode.read().0 {
         "color:white"
