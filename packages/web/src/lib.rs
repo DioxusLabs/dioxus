@@ -53,15 +53,15 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
-use std::time::Duration;
+
 
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
 pub use crate::util::use_eval;
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
-use futures_channel::mpsc::unbounded;
+
 use futures_util::{pin_mut, FutureExt, StreamExt};
-use gloo_timers::future::sleep;
+
 
 mod cache;
 mod cfg;
@@ -181,7 +181,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         wasm_bindgen::intern(s);
     }
 
-    let should_hydrate = cfg.hydrate;
+    let _should_hydrate = cfg.hydrate;
 
     let (tx, mut rx) = futures_channel::mpsc::unbounded();
 
@@ -201,7 +201,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    let _work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::debug!("waiting for work");
@@ -214,7 +214,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
             futures_util::select! {
                 _ = work => None,
-                new_template = hotreload_rx.next() => {
+                _new_template = hotreload_rx.next() => {
                     todo!("Implement hot reload");
                     None
                 }

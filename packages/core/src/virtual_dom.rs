@@ -16,14 +16,7 @@ use crate::{
 use futures_util::{pin_mut, StreamExt};
 use fxhash::FxHashMap;
 use slab::Slab;
-use std::{
-    any::Any,
-    borrow::BorrowMut,
-    cell::Cell,
-    collections::{BTreeSet},
-    future::Future,
-    rc::Rc,
-};
+use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
