@@ -211,6 +211,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         let mut res = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
+
             futures_util::select! {
                 _ = work => None,
                 new_template = hotreload_rx.next() => {

@@ -220,7 +220,12 @@ impl<S: State> RealDom<S> {
                     let node = self.tree.get_mut(node_id).unwrap();
                     if let NodeType::Text { text } = &mut node.node_data.node_type {
                         *text = value.to_string();
+                    } else {
+                        node.node_data.node_type = NodeType::Text {
+                            text: value.to_string(),
+                        };
                     }
+
                     mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                 }
                 LoadTemplate { name, index, id } => {

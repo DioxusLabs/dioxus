@@ -25,6 +25,7 @@ fn app(cx: Scope) -> Element {
         if val.get() == "0" {
             val.set(String::new());
         }
+
         val.make_mut().push_str(num.to_string().as_str());
     };
 
@@ -99,12 +100,8 @@ fn app(cx: Scope) -> Element {
                                 }
                             }
                             div { class: "digit-keys",
-                                button { class: "calculator-key key-0", onclick: move |_| input_digit(0),
-                                    "0"
-                                }
-                                button { class: "calculator-key key-dot", onclick: move |_| val.make_mut().push('.'),
-                                    "●"
-                                }
+                                button { class: "calculator-key key-0", onclick: move |_| input_digit(0), "0" }
+                                button { class: "calculator-key key-dot", onclick: move |_| val.make_mut().push('.'), "●" }
                                 (1..10).map(|k| rsx!{
                                     button {
                                         class: "calculator-key {k}",
@@ -116,22 +113,13 @@ fn app(cx: Scope) -> Element {
                             }
                         }
                         div { class: "operator-keys",
-                            button { class: "calculator-key key-divide", onclick: move |_| input_operator("/"),
-                                "÷"
-                            }
-                            button { class: "calculator-key key-multiply", onclick: move |_| input_operator("*"),
-                                "×"
-                            }
-                            button { class: "calculator-key key-subtract", onclick: move |_| input_operator("-"),
-                                "−"
-                            }
-                            button { class: "calculator-key key-add", onclick: move |_| input_operator("+"),
-                                "+"
-                            }
-                            button { class: "calculator-key key-equals",
-                                onclick: move |_| {
-                                    val.set(format!("{}", calc_val(val.as_str())));
-                                },
+                            button { class: "calculator-key key-divide", onclick: move |_| input_operator("/"), "÷" }
+                            button { class: "calculator-key key-multiply", onclick: move |_| input_operator("*"), "×" }
+                            button { class: "calculator-key key-subtract", onclick: move |_| input_operator("-"), "−" }
+                            button { class: "calculator-key key-add", onclick: move |_| input_operator("+"), "+" }
+                            button {
+                                class: "calculator-key key-equals",
+                                onclick: move |_| val.set(format!("{}", calc_val(val.as_str()))),
                                 "="
                             }
                         }

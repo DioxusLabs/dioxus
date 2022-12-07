@@ -210,7 +210,6 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-
     for (let template of edits.templates) {
       this.SaveTemplate(template);
     }
@@ -276,7 +275,16 @@ export class Interpreter {
   }
   HydrateText(path, value, id) {
     let node = this.LoadChild(path);
-    node.textContent = value;
+
+    if (node.nodeType == Node.TEXT_NODE) {
+      node.textContent = value;
+    } else {
+      // replace with a textnode
+      let text = document.createTextNode(value);
+      node.replaceWith(text);
+      node = text;
+    }
+
     this.nodes[id] = node;
   }
   ReplacePlaceholder(path, m) {

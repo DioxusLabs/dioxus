@@ -1,7 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use crate::events::{decode_event, EventMessage};
 use dioxus_core::*;
-use futures_channel::mpsc::UnboundedReceiver;
+use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
@@ -22,6 +22,9 @@ pub(super) struct DesktopController {
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
+    pub(super) proxy: EventLoopProxy<UserWindowEvent>,
+    pub(super) event_tx: UnboundedSender<serde_json::Value>,
+
     #[cfg(target_os = "ios")]
     pub(super) views: Vec<*mut Object>,
 }
@@ -33,9 +36,10 @@ impl DesktopController {
         root: Component<P>,
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
-        mut event_rx: UnboundedReceiver<serde_json::Value>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
+        let (event_tx, mut event_rx) = unbounded();
+        let proxy2 = proxy.clone();
 
         let pending_edits = edit_queue.clone();
         let desktop_context_proxy = proxy.clone();
@@ -87,6 +91,8 @@ impl DesktopController {
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,
+            proxy: proxy2,
+            event_tx,
             #[cfg(target_os = "ios")]
             views: vec![],
         }
@@ -116,5 +122,9 @@ impl DesktopController {
                     .unwrap();
             }
         }
+    }
+
+    pub(crate) fn set_template(&self, serialized_template: String) {
+        todo!()
     }
 }

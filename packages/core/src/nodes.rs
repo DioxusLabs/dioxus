@@ -159,15 +159,24 @@ pub enum TemplateNode<'a> {
     },
 
     /// This template node is just a piece of static text
-    Text { text: &'a str },
+    Text {
+        /// The actual text
+        text: &'a str,
+    },
 
     /// This template node is unknown, and needs to be created at runtime.
-    Dynamic { id: usize },
+    Dynamic {
+        /// The index of the dynamic node in the VNode's dynamic_nodes list
+        id: usize,
+    },
 
     /// This template node is known to be some text, but needs to be created at runtime
     ///
     /// This is separate from the pure Dynamic variant for various optimizations
-    DynamicText { id: usize },
+    DynamicText {
+        /// The index of the dynamic node in the VNode's dynamic_nodes list
+        id: usize,
+    },
 }
 
 /// A node created at runtime

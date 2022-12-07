@@ -17,6 +17,12 @@ macro_rules! use_callback {
             move || $($rest)*
         )
     };
+    ($cx:ident, $($rest:tt)*) => {
+        use_callback(
+            $cx,
+            move || $($rest)*
+        )
+    };
 }
 pub fn use_callback<'a, T, R, F>(cx: &'a ScopeState, make: impl FnOnce() -> R) -> impl FnMut(T) + 'a
 where

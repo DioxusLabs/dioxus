@@ -35,13 +35,13 @@ fn app(cx: Scope) -> Element {
                 nav { class: "md:ml-auto flex flex-wrap items-center text-base justify-center" }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
-                    onmousedown: |evt| evt.cancel_bubble(),
+                    onmousedown: |evt| evt.stop_propogation(),
                     onclick: move |_| window.set_minimized(true),
                     "Minimize"
                 }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
-                    onmousedown: |evt| evt.cancel_bubble(),
+                    onmousedown: |evt| evt.stop_propogation(),
                     onclick: move |_| {
 
                         window.set_fullscreen(!**fullscreen);
@@ -52,7 +52,7 @@ fn app(cx: Scope) -> Element {
                 }
                 button {
                     class: "inline-flex items-center bg-gray-800 border-0 py-1 px-3 focus:outline-none hover:bg-gray-700 rounded text-base mt-4 md:mt-0",
-                    onmousedown: |evt| evt.cancel_bubble(),
+                    onmousedown: |evt| evt.stop_propogation(),
                     onclick: move |_| window.close(),
                     "Close"
                 }
@@ -66,7 +66,7 @@ fn app(cx: Scope) -> Element {
                 div {
                     button {
                         class: "inline-flex items-center text-white bg-green-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
-                        onmousedown: |evt| evt.cancel_bubble(),
+                        onmousedown: |evt| evt.stop_propogation(),
                         onclick: move |_| {
                             window.set_always_on_top(!always_on_top);
                             always_on_top.set(!always_on_top);
@@ -77,7 +77,7 @@ fn app(cx: Scope) -> Element {
                 div {
                     button {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
-                        onmousedown: |evt| evt.cancel_bubble(),
+                        onmousedown: |evt| evt.stop_propogation(),
                         onclick: move |_| {
                             window.set_decorations(!decorations);
                             decorations.set(!decorations);
@@ -88,7 +88,7 @@ fn app(cx: Scope) -> Element {
                 div {
                     button {
                         class: "inline-flex items-center text-white bg-blue-500 border-0 py-1 px-3 hover:bg-green-700 rounded",
-                        onmousedown: |evt| evt.cancel_bubble(),
+                        onmousedown: |evt| evt.stop_propogation(),
                         onclick: move |_| window.set_title("Dioxus Application"),
                         "Change Title"
                     }

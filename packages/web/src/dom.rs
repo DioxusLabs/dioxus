@@ -14,15 +14,14 @@ use futures_channel::mpsc;
 use js_sys::Function;
 use std::{any::Any, rc::Rc};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-use web_sys::{Document, Element, Event, HtmlElement};
+use web_sys::{Document, Element, Event};
 
 use crate::Config;
 
 pub struct WebsysDom {
-    document: Document,
     interpreter: Interpreter,
     handler: Closure<dyn FnMut(&Event)>,
-    root: Element,
+    _root: Element,
 }
 
 impl WebsysDom {
@@ -36,9 +35,8 @@ impl WebsysDom {
         };
 
         Self {
-            document,
             interpreter: Interpreter::new(root.clone()),
-            root,
+            _root: root,
             handler: Closure::wrap(Box::new(move |event: &web_sys::Event| {
                 let _ = event_channel.unbounded_send(event.clone());
             })),
@@ -63,7 +61,7 @@ impl WebsysDom {
         let i = &self.interpreter;
         for edit in edits.drain(..) {
             match edit {
-                AppendChildren { id, m } => i.AppendChildren(id, m),
+                AppendChildren { id, m } => i.AppendChildren(m as u32),
                 AssignId { path, id } => i.AssignId(path, id.0 as u32),
                 CreatePlaceholder { id } => i.CreatePlaceholder(id.0 as u32),
                 CreateTextNode { value, id } => i.CreateTextNode(value.into(), id.0 as u32),
@@ -87,8 +85,8 @@ impl WebsysDom {
                     self.interpreter.NewEventListener(
                         name,
                         id.0 as u32,
-                        self.handler.as_ref().unchecked_ref(),
                         event_bubbles(&name[2..]),
+                        self.handler.as_ref().unchecked_ref(),
                     );
                 }
                 RemoveEventListener { name, id } => i.RemoveEventListener(name, id.0 as u32),

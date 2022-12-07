@@ -6,7 +6,7 @@ use dioxus_ssr::config::SsrConfig;
 
 fn main() {
     let mut vdom = VirtualDom::new(example);
-    vdom.rebuild();
+    _ = vdom.rebuild();
 
     let out = dioxus_ssr::render_vdom_cfg(&vdom, SsrConfig::default().newline(true).indent(true));
     println!("{}", out);
