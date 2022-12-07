@@ -237,7 +237,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
             .unwrap();
     }
 
-
     // start serve dev-server at 0.0.0.0:8080
     print_console_info(
         port,
@@ -453,13 +452,13 @@ pub struct PrettierOptions {
 }
 
 fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions) {
-
     if let Ok(native_clearseq) = Command::new(if cfg!(target_os = "windows") {
         "cls"
     } else {
         "clear"
     })
-    .output() {
+    .output()
+    {
         print!("{}", String::from_utf8_lossy(&native_clearseq.stdout));
     } else {
         // Try ANSI-Escape characters
@@ -497,7 +496,7 @@ fn print_console_info(port: u16, config: &CrateConfig, options: PrettierOptions)
         "False"
     };
 
-    if options.changed.len() <= 0 {
+    if options.changed.is_empty() {
         println!(
             "{} @ v{} [{}] \n",
             "Dioxus".bold().green(),
