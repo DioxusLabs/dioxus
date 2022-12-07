@@ -18,5 +18,17 @@ fn app(cx: Scope) -> Element {
             onclick: move |_| val.set("invalid"),
             "Set an invalid number"
         }
+        (0..5).map(|i| rsx! {
+            demo_c { x: i }
+        })
+    })
+}
+
+#[inline_props]
+fn demo_c(cx: Scope, x: i32) -> Element {
+    cx.render(rsx! {
+        h1 {
+            "asdasdasdasd {x}"
+        }
     })
 }

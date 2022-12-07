@@ -5,10 +5,11 @@ use dioxus::prelude::*;
 
 fn main() {
     let mut vdom = VirtualDom::new(example);
-    vdom.rebuild();
+    _ = vdom.rebuild();
 
-    let out = dioxus_ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
-    println!("{}", out);
+    let mut renderer = dioxus_ssr::Renderer::new();
+    renderer.pretty = true;
+    renderer.render(&vdom);
 }
 
 fn example(cx: Scope) -> Element {

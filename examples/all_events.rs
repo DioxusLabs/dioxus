@@ -1,4 +1,4 @@
-use dioxus::{events::*, prelude::*};
+use dioxus::{events::*, html::MouseEvent, prelude::*};
 
 fn main() {
     dioxus_desktop::launch(app);

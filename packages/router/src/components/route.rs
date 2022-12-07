@@ -1,7 +1,5 @@
+use crate::{RouteContext, RouterContext};
 use dioxus::prelude::*;
-use std::sync::Arc;
-
-use crate::{RouteContext, RouterCore};
 
 /// Props for the [`Route`](struct.Route.html) component.
 #[derive(Props)]
@@ -27,14 +25,13 @@ pub struct RouteProps<'a> {
 /// )
 /// ```
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
-    let router_root = cx
-        .use_hook(|| cx.consume_context::<Arc<RouterCore>>())
-        .as_ref()?;
+    let router_root = use_context::<RouterContext>(cx).unwrap();
+    let root_context = use_context::<RouteContext>(cx);
 
     cx.use_hook(|| {
         // create a bigger, better, longer route if one above us exists
-        let total_route = match cx.consume_context::<RouteContext>() {
-            Some(ctx) => ctx.total_route,
+        let total_route = match root_context {
+            Some(ctx) => ctx.total_route.clone(),
             None => cx.props.to.to_string(),
         };
 
@@ -55,6 +52,6 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         cx.render(rsx!(&cx.props.children))
     } else {
         log::trace!("Route should *not* render: {:?}", cx.scope_id());
-        None
+        cx.render(rsx!(()))
     }
 }

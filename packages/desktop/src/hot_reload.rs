@@ -1,4 +1,7 @@
-use dioxus_core::{SchedulerMsg, SetTemplateMsg, VirtualDom};
+#![allow(dead_code)]
+
+use dioxus_core::VirtualDom;
+
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
@@ -10,21 +13,22 @@ fn handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalS
         .ok()
 }
 
-pub(crate) fn init(dom: &VirtualDom) {
+pub(crate) fn init(_dom: &VirtualDom) {
     let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
         Arc::new(Mutex::new(None));
+
     let latest_in_connection_handle = latest_in_connection.clone();
 
     // connect to processes for incoming data
     std::thread::spawn(move || {
-        if let Ok(listener) = LocalSocketListener::bind("@dioxusin") {
+        let temp_file = std::env::temp_dir().join("@dioxusin");
+
+        if let Ok(listener) = LocalSocketListener::bind(temp_file) {
             for conn in listener.incoming().filter_map(handle_error) {
                 *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
             }
         }
     });
-
-    let mut channel = dom.get_scheduler_channel();
 
     std::thread::spawn(move || {
         loop {
@@ -32,10 +36,11 @@ pub(crate) fn init(dom: &VirtualDom) {
                 let mut buf = String::new();
                 match conn.read_line(&mut buf) {
                     Ok(_) => {
-                        let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
-                        channel
-                            .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
-                            .unwrap();
+                        todo!()
+                        // let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
+                        // channel
+                        //     .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
+                        //     .unwrap();
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {

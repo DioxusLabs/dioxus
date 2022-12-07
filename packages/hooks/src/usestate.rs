@@ -39,7 +39,7 @@ pub fn use_state<T: 'static>(
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
         let setter = Rc::new({
-            dioxus_core::to_owned![update_callback, slot];
+            to_owned![update_callback, slot];
             move |new| {
                 {
                     let mut slot = slot.borrow_mut();
@@ -466,12 +466,14 @@ fn api_makes_sense() {
         }
 
         cx.spawn({
-            dioxus_core::to_owned![val];
+            to_owned![val];
             async move {
                 val.modify(|f| f + 1);
             }
         });
 
-        cx.render(LazyNodes::new(|f| f.static_text("asd")))
+        // cx.render(LazyNodes::new(|f| f.static_text("asd")))
+
+        todo!()
     }
 }

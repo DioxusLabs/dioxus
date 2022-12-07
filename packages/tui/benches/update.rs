@@ -73,7 +73,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     let count = use_state(&cx, || 0);
     let counts = use_ref(&cx, || vec![0; size * size]);
 
-    let ctx: TuiContext = cx.consume_context().unwrap();
+    let ctx: &TuiContext = cx.consume_context().unwrap();
     if *count.get() + 1 >= (size * size) {
         ctx.quit();
     } else {
@@ -88,14 +88,14 @@ fn Grid(cx: Scope<GridProps>) -> Element {
         });
     }
 
-    cx.render(rsx! {
+    render! {
         div{
             width: "100%",
             height: "100%",
             flex_direction: "column",
             (0..size).map(|x|
                     {
-                    cx.render(rsx! {
+                    rsx! {
                         div{
                             width: "100%",
                             height: "100%",
@@ -104,7 +104,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
                                 {
                                     let alpha = y as f32*100.0/size as f32 + counts.read()[x*size + y] as f32;
                                     let key = format!("{}-{}", x, y);
-                                    cx.render(rsx! {
+                                    rsx! {
                                         Box{
                                             x: x,
                                             y: y,
@@ -112,15 +112,15 @@ fn Grid(cx: Scope<GridProps>) -> Element {
                                             hue: alpha,
                                             key: "{key}",
                                         }
-                                    })
+                                    }
                                 }
                             )
                         }
-                    })
+                    }
                 }
             )
         }
-    })
+    }
 }
 
 fn app3(cx: Scope) -> Element {

@@ -15,7 +15,7 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div { "hello {name}!" }
         Child {}
-        ChildWithRef{}
+        ChildWithRef {}
     })
 }
 

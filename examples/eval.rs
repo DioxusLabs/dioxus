@@ -16,7 +16,7 @@ fn app(cx: Scope) -> Element {
                 oninput: move |e| script.set(e.value.clone()),
             }
             button {
-                onclick: move |_| eval(script),
+                onclick: move |_| eval(script.to_string()),
                 "Execute"
             }
         }

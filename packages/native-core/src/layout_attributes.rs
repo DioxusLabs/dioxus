@@ -343,14 +343,14 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-left" => {}
         "border-left-color" => {}
         "border-left-style" => {
-            if style.border.start == Dimension::default() {
+            if style.border.left == Dimension::default() {
                 let v = Dimension::Points(1.0);
-                style.border.start = v;
+                style.border.left = v;
             }
         }
         "border-left-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.start = v;
+                style.border.left = v;
             }
         }
         "border-radius" => {}
@@ -358,11 +358,11 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
         "border-right-color" => {}
         "border-right-style" => {
             let v = Dimension::Points(1.0);
-            style.border.end = v;
+            style.border.right = v;
         }
         "border-right-width" => {
             if let Some(v) = parse_value(value) {
-                style.border.end = v;
+                style.border.right = v;
             }
         }
         "border-spacing" => {}
@@ -375,13 +375,13 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
                 let v = Dimension::Points(1.0);
                 style.border.bottom = v;
             }
-            if style.border.start == Dimension::default() {
+            if style.border.left == Dimension::default() {
                 let v = Dimension::Points(1.0);
-                style.border.start = v;
+                style.border.left = v;
             }
-            if style.border.end == Dimension::default() {
+            if style.border.right == Dimension::default() {
                 let v = Dimension::Points(1.0);
-                style.border.end = v;
+                style.border.right = v;
             }
         }
         "border-top" => {}
@@ -404,8 +404,8 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
             if values.len() == 1 {
                 if let Some(dim) = parse_value(values[0]) {
                     style.border = Rect {
-                        start: dim,
-                        end: dim,
+                        right: dim,
+                        left: dim,
                         top: dim,
                         bottom: dim,
                     };
@@ -414,8 +414,8 @@ fn apply_border(name: &str, value: &str, style: &mut Style) {
                 let border_widths = [
                     &mut style.border.top,
                     &mut style.border.bottom,
-                    &mut style.border.start,
-                    &mut style.border.end,
+                    &mut style.border.left,
+                    &mut style.border.right,
                 ];
                 for (v, width) in values.into_iter().zip(border_widths) {
                     if let Some(w) = parse_value(v) {
@@ -512,12 +512,12 @@ fn apply_padding(name: &str, value: &str, style: &mut Style) {
             "padding" => {
                 style.padding.top = v;
                 style.padding.bottom = v;
-                style.padding.start = v;
-                style.padding.end = v;
+                style.padding.left = v;
+                style.padding.right = v;
             }
             "padding-bottom" => style.padding.bottom = v,
-            "padding-left" => style.padding.start = v,
-            "padding-right" => style.padding.end = v,
+            "padding-left" => style.padding.left = v,
+            "padding-right" => style.padding.right = v,
             "padding-top" => style.padding.top = v,
             _ => {}
         }
@@ -578,13 +578,13 @@ fn apply_margin(name: &str, value: &str, style: &mut Style) {
             "margin" => {
                 style.margin.top = dim;
                 style.margin.bottom = dim;
-                style.margin.start = dim;
-                style.margin.end = dim;
+                style.margin.left = dim;
+                style.margin.right = dim;
             }
             "margin-top" => style.margin.top = dim,
             "margin-bottom" => style.margin.bottom = dim,
-            "margin-left" => style.margin.start = dim,
-            "margin-right" => style.margin.end = dim,
+            "margin-left" => style.margin.left = dim,
+            "margin-right" => style.margin.right = dim,
             _ => {}
         }
     }

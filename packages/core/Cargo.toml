@@ -18,40 +18,27 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 bumpalo = { version = "3.6", features = ["collections", "boxed"] }
 
 # faster hashmaps
-rustc-hash = "1.1.0"
+fxhash = "0.2"
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
 futures-util = { version = "0.3", default-features = false }
 
-smallvec = "1.6"
-
 slab = "0.4"
 
 futures-channel = "0.3.21"
 
-# internally used
-log = "0.4"
-
-# used for noderefs
-once_cell = "1.8"
-
+indexmap = "1.7"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
-
-# todo: I want to get rid of this
-backtrace = { version = "0.3" }
-
-# allows cloing trait objects
-dyn-clone = "1.0.9"
+anyhow = "1.0.66"
 
 [dev-dependencies]
+tokio = { version = "*", features = ["full"] }
 dioxus = { path = "../dioxus" }
 
 [features]
 default = []
 serialize = ["serde"]
-debug_vdom = []
-hot-reload = []

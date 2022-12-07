@@ -1,43 +1,18 @@
-use anymap::AnyMap;
 use dioxus::core::ElementId;
-use dioxus::core::{AttributeValue, DomEdit, Mutations};
-use dioxus::core_macro::rsx_without_templates;
+use dioxus::core::{AttributeValue, Mutations};
 use dioxus::prelude::*;
 use dioxus_native_core::real_dom::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
-use dioxus_native_core::{node_ref::*, RealNodeId};
+use dioxus_native_core::tree::TreeView;
+use dioxus_native_core::{node_ref::*, NodeId, RealNodeId, SendAnyMap};
 use dioxus_native_core_macro::State;
-
-#[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart1 {
-    #[child_dep_state(child_counter)]
-    child_counter: ChildDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart2 {
-    #[parent_dep_state(parent_counter)]
-    parent_counter: ParentDepCallCounter,
-}
-
-#[derive(Debug, Clone, Default, State)]
-struct CallCounterStatePart3 {
-    #[node_dep_state()]
-    node_counter: NodeDepCallCounter,
-}
 
 #[derive(Debug, Clone, Default, State)]
 struct CallCounterState {
     #[child_dep_state(child_counter)]
     child_counter: ChildDepCallCounter,
-    #[state]
-    part2: CallCounterStatePart2,
     #[parent_dep_state(parent_counter)]
     parent_counter: ParentDepCallCounter,
-    #[state]
-    part1: CallCounterStatePart1,
-    #[state]
-    part3: CallCounterStatePart3,
     #[node_dep_state()]
     node_counter: NodeDepCallCounter,
 }
@@ -46,12 +21,12 @@ struct CallCounterState {
 struct ChildDepCallCounter(u32);
 impl ChildDepState for ChildDepCallCounter {
     type Ctx = ();
-    type DepState = Self;
+    type DepState = (Self,);
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce<'a>(
         &mut self,
         _: NodeView,
-        _: impl Iterator<Item = &'a Self::DepState>,
+        _: impl Iterator<Item = (&'a Self,)>,
         _: &Self::Ctx,
     ) -> bool
     where
@@ -66,23 +41,20 @@ impl ChildDepState for ChildDepCallCounter {
 struct ParentDepCallCounter(u32);
 impl ParentDepState for ParentDepCallCounter {
     type Ctx = ();
-    type DepState = Self;
+    type DepState = (Self,);
     const NODE_MASK: NodeMask = NodeMask::ALL;
-    fn reduce(
-        &mut self,
-        _node: NodeView,
-        _parent: Option<&Self::DepState>,
-        _ctx: &Self::Ctx,
-    ) -> bool {
+    fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
+        println!("ParentDepCallCounter::reduce on {:?}\n{}", _node, self.0);
         true
     }
 }
 
 #[derive(Debug, Clone, Default)]
 struct NodeDepCallCounter(u32);
-impl NodeDepState<()> for NodeDepCallCounter {
+impl NodeDepState for NodeDepCallCounter {
     type Ctx = ();
+    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
@@ -95,12 +67,12 @@ impl NodeDepState<()> for NodeDepCallCounter {
 struct BubbledUpStateTester(Option<String>, Vec<Box<BubbledUpStateTester>>);
 impl ChildDepState for BubbledUpStateTester {
     type Ctx = u32;
-    type DepState = Self;
+    type DepState = (Self,);
     const NODE_MASK: NodeMask = NodeMask::new().with_tag();
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        children: impl Iterator<Item = &'a Self::DepState>,
+        children: impl Iterator<Item = (&'a Self,)>,
         ctx: &Self::Ctx,
     ) -> bool
     where
@@ -109,7 +81,10 @@ impl ChildDepState for BubbledUpStateTester {
         assert_eq!(*ctx, 42);
         *self = BubbledUpStateTester(
             node.tag().map(|s| s.to_string()),
-            children.into_iter().map(|c| Box::new(c.clone())).collect(),
+            children
+                .into_iter()
+                .map(|(c,)| Box::new(c.clone()))
+                .collect(),
         );
         true
     }
@@ -119,13 +94,13 @@ impl ChildDepState for BubbledUpStateTester {
 struct PushedDownStateTester(Option<String>, Option<Box<PushedDownStateTester>>);
 impl ParentDepState for PushedDownStateTester {
     type Ctx = u32;
-    type DepState = Self;
+    type DepState = (Self,);
     const NODE_MASK: NodeMask = NodeMask::new().with_tag();
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, ctx: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
         *self = PushedDownStateTester(
             node.tag().map(|s| s.to_string()),
-            parent.map(|c| Box::new(c.clone())),
+            parent.map(|(c,)| Box::new(c.clone())),
         );
         true
     }
@@ -133,8 +108,9 @@ impl ParentDepState for PushedDownStateTester {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 struct NodeStateTester(Option<String>, Vec<(String, String)>);
-impl NodeDepState<()> for NodeStateTester {
+impl NodeDepState for NodeStateTester {
     type Ctx = u32;
+    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::All).with_tag();
     fn reduce(&mut self, node: NodeView, _sibling: (), ctx: &Self::Ctx) -> bool {
         assert_eq!(*ctx, 42);
@@ -170,31 +146,29 @@ struct StateTester {
 fn state_initial() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        render!(div {
-            p{}
-            h1{}
-        })
+        render! {
+            div {
+                p{
+                    color: "red"
+                }
+                h1{}
+            }
+        }
     }
 
-    let vdom = VirtualDom::new(Base);
+    let mut vdom = VirtualDom::new(Base);
 
-    let mutations = vdom.create_vnodes(rsx! {
-        div {
-            p{
-                color: "red"
-            }
-            h1{}
-        }
-    });
+    let mutations = vdom.rebuild();
 
     let mut dom: RealDom<StateTester> = RealDom::new();
 
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let mut ctx = AnyMap::new();
+    let (nodes_updated, _) = dom.apply_mutations(mutations);
+    let mut ctx = SendAnyMap::new();
     ctx.insert(42u32);
     let _to_rerender = dom.update_state(nodes_updated, ctx);
 
-    let root_div = &dom[RealNodeId::ElementId(ElementId(2))];
+    let root_div_id = dom.children_ids(NodeId(0)).unwrap()[0];
+    let root_div = &dom.get(root_div_id).unwrap();
     assert_eq!(root_div.state.bubbled.0, Some("div".to_string()));
     assert_eq!(
         root_div.state.bubbled.1,
@@ -214,7 +188,8 @@ fn state_initial() {
     assert_eq!(root_div.state.node.0, Some("div".to_string()));
     assert_eq!(root_div.state.node.1, vec![]);
 
-    let child_p = &dom[RealNodeId::UnaccessableId(3)];
+    let child_p_id = dom.children_ids(root_div_id).unwrap()[0];
+    let child_p = &dom[child_p_id];
     assert_eq!(child_p.state.bubbled.0, Some("p".to_string()));
     assert_eq!(child_p.state.bubbled.1, Vec::new());
     assert_eq!(child_p.state.pushed.0, Some("p".to_string()));
@@ -234,7 +209,8 @@ fn state_initial() {
         vec![("color".to_string(), "red".to_string())]
     );
 
-    let child_h1 = &dom[RealNodeId::UnaccessableId(4)];
+    let child_h1_id = dom.children_ids(root_div_id).unwrap()[1];
+    let child_h1 = &dom[child_h1_id];
     assert_eq!(child_h1.state.bubbled.0, Some("h1".to_string()));
     assert_eq!(child_h1.state.bubbled.1, Vec::new());
     assert_eq!(child_h1.state.pushed.0, Some("h1".to_string()));
@@ -256,66 +232,46 @@ fn state_initial() {
 fn state_reduce_parent_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        render!(div {
-            width: "100%",
-            div{
+        let width = if cx.generation() == 0 { "100%" } else { "99%" };
+        cx.render(rsx! {
+            div {
+                width: "{width}",
                 div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
+                    div{
+                        p{}
+                    }
+                    p{
+                        "hello"
+                    }
+                    div{
+                        h1{}
+                    }
+                    p{
+                        "world"
+                    }
                 }
             }
         })
     }
 
-    let vdom = VirtualDom::new(Base);
-
-    let mutations = vdom.create_vnodes(rsx_without_templates! {
-        div {
-            width: "100%",
-            div{
-                div{
-                    p{}
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        }
-    });
+    let mut vdom = VirtualDom::new(Base);
 
     let mut dom: RealDom<CallCounterState> = RealDom::new();
 
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
-    let nodes_updated = dom.apply_mutations(vec![Mutations {
-        edits: vec![DomEdit::SetAttribute {
-            root: Some(1),
-            field: "width",
-            value: AttributeValue::Text("99%"),
-            ns: Some("style"),
-        }],
-        dirty_scopes: rustc_hash::FxHashSet::default(),
-        refs: Vec::new(),
-    }]);
-    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+    let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
+    let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
+    vdom.mark_dirty(ScopeId(0));
+    let (nodes_updated, _) = dom.apply_mutations(vdom.render_immediate());
+    let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
+    let mut is_root = true;
     dom.traverse_depth_first(|n| {
-        assert_eq!(n.state.part2.parent_counter.0, 2);
-        assert_eq!(n.state.parent_counter.0, 2);
+        if is_root {
+            is_root = false;
+            assert_eq!(n.state.parent_counter.0, 1);
+        } else {
+            assert_eq!(n.state.parent_counter.0, 2);
+        }
     });
 }
 
@@ -323,90 +279,59 @@ fn state_reduce_parent_called_minimally_on_update() {
 fn state_reduce_child_called_minimally_on_update() {
     #[allow(non_snake_case)]
     fn Base(cx: Scope) -> Element {
-        cx.render(rsx_without_templates!(div {
-            div{
+        let width = if cx.generation() == 0 { "100%" } else { "99%" };
+        cx.render(rsx! {
+            // updated: 2
+            div {
+                // updated: 2
                 div{
+                    // updated: 2
+                    div{
+                        // updated: 2
+                        p{
+                            width: "{width}",
+                        }
+                    }
+                    // updated: 1
                     p{
-                        width: "100%",
+                        // updated: 1
+                        "hello"
+                    }
+                    // updated: 1
+                    div{
+                        // updated: 1
+                        h1{}
+                    }
+                    // updated: 1
+                    p{
+                        // updated: 1
+                        "world"
                     }
                 }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
             }
-        }))
+        })
     }
 
-    let vdom = VirtualDom::new(Base);
-
-    let mutations = vdom.create_vnodes(rsx_without_templates! {
-        div {
-            div{
-                div{
-                    p{
-                        width: "100%",
-                    }
-                }
-                p{
-                    "hello"
-                }
-                div{
-                    h1{}
-                }
-                p{
-                    "world"
-                }
-            }
-        }
-    });
+    let mut vdom = VirtualDom::new(Base);
 
     let mut dom: RealDom<CallCounterState> = RealDom::new();
 
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
-    let nodes_updated = dom.apply_mutations(vec![Mutations {
-        edits: vec![DomEdit::SetAttribute {
-            root: Some(4),
-            field: "width",
-            value: AttributeValue::Text("99%"),
-            ns: Some("style"),
-        }],
-        dirty_scopes: rustc_hash::FxHashSet::default(),
-        refs: Vec::new(),
-    }]);
-    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+    let (nodes_updated, _) = dom.apply_mutations(vdom.rebuild());
+    let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
+    vdom.mark_dirty(ScopeId(0));
+    let (nodes_updated, _) = dom.apply_mutations(vdom.render_immediate());
+    let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
+    let mut traverse_count = 0;
     dom.traverse_depth_first(|n| {
-        assert_eq!(
-            n.state.part1.child_counter.0,
-            if let Some(RealNodeId::ElementId(ElementId(id))) = n.node_data.id {
-                if id > 4 {
-                    1
-                } else {
-                    2
-                }
+        assert_eq!(n.state.child_counter.0, {
+            if traverse_count > 4 {
+                1
             } else {
-                panic!()
+                2
             }
-        );
-        assert_eq!(
-            n.state.child_counter.0,
-            if let Some(RealNodeId::ElementId(ElementId(id))) = n.node_data.id {
-                if id > 4 {
-                    1
-                } else {
-                    2
-                }
-            } else {
-                panic!()
-            }
-        );
+        });
+        traverse_count += 1;
     });
 }
 
@@ -422,13 +347,14 @@ struct UnorderedDependanciesState {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct ADepCallCounter(usize, BDepCallCounter);
-impl<'a> NodeDepState<(&'a BDepCallCounter,)> for ADepCallCounter {
+impl NodeDepState for ADepCallCounter {
     type Ctx = ();
+    type DepState = (BDepCallCounter,);
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(
         &mut self,
         _node: NodeView,
-        (sibling,): (&'a BDepCallCounter,),
+        (sibling,): (&BDepCallCounter,),
         _ctx: &Self::Ctx,
     ) -> bool {
         self.0 += 1;
@@ -439,13 +365,14 @@ impl<'a> NodeDepState<(&'a BDepCallCounter,)> for ADepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct BDepCallCounter(usize, CDepCallCounter);
-impl<'a> NodeDepState<(&'a CDepCallCounter,)> for BDepCallCounter {
+impl NodeDepState for BDepCallCounter {
     type Ctx = ();
+    type DepState = (CDepCallCounter,);
     const NODE_MASK: NodeMask = NodeMask::NONE;
     fn reduce(
         &mut self,
         _node: NodeView,
-        (sibling,): (&'a CDepCallCounter,),
+        (sibling,): (&CDepCallCounter,),
         _ctx: &Self::Ctx,
     ) -> bool {
         self.0 += 1;
@@ -456,8 +383,9 @@ impl<'a> NodeDepState<(&'a CDepCallCounter,)> for BDepCallCounter {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct CDepCallCounter(usize);
-impl NodeDepState<()> for CDepCallCounter {
+impl NodeDepState for CDepCallCounter {
     type Ctx = ();
+    type DepState = ();
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce(&mut self, _node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
@@ -477,21 +405,13 @@ fn dependancies_order_independant() {
         })
     }
 
-    let vdom = VirtualDom::new(Base);
-
-    let mutations = vdom.create_vnodes(rsx! {
-        div {
-            width: "100%",
-            p{
-                "hello"
-            }
-        }
-    });
+    let mut vdom = VirtualDom::new(Base);
 
     let mut dom: RealDom<UnorderedDependanciesState> = RealDom::new();
 
-    let nodes_updated = dom.apply_mutations(vec![mutations]);
-    let _to_rerender = dom.update_state(nodes_updated, AnyMap::new());
+    let mutations = vdom.rebuild();
+    let (nodes_updated, _) = dom.apply_mutations(mutations);
+    let _to_rerender = dom.update_state(nodes_updated, SendAnyMap::new());
 
     let c = CDepCallCounter(1);
     let b = BDepCallCounter(1, c.clone());
@@ -501,16 +421,4 @@ fn dependancies_order_independant() {
         assert_eq!(&n.state.b, &b);
         assert_eq!(&n.state.c, &c);
     });
-}
-
-#[derive(Clone, Default, State)]
-struct DependanciesStateTest {
-    #[node_dep_state(c)]
-    b: BDepCallCounter,
-    #[node_dep_state()]
-    c: CDepCallCounter,
-    #[node_dep_state(b)]
-    a: ADepCallCounter,
-    #[state]
-    child: UnorderedDependanciesState,
 }

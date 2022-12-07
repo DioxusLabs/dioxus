@@ -3,9 +3,10 @@ use super::*;
 use proc_macro2::{Span, TokenStream as TokenStream2};
 use quote::{quote, ToTokens, TokenStreamExt};
 use syn::{
+    braced,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    token, Block, Expr, ExprIf, LitStr, Pat, Result,
+    token, Expr, ExprIf, LitStr, Pat, Result,
 };
 
 /*
@@ -55,17 +56,18 @@ impl Parse for BodyNode {
             // - one ident
             // - followed by `{`
             // - 1st char is lowercase
+            // - no underscores (reserved for components)
             //
             // example:
             // div {}
             if let Some(ident) = path.get_ident() {
+                let el_name = ident.to_string();
+
+                let first_char = el_name.chars().next().unwrap();
+
                 if body_stream.peek(token::Brace)
-                    && ident
-                        .to_string()
-                        .chars()
-                        .next()
-                        .unwrap()
-                        .is_ascii_lowercase()
+                    && first_char.is_ascii_lowercase()
+                    && !el_name.contains('_')
                 {
                     return Ok(BodyNode::Element(stream.parse::<Element>()?));
                 }
@@ -97,14 +99,20 @@ impl Parse for BodyNode {
             let pat = stream.parse::<Pat>()?;
             let _i = stream.parse::<Token![in]>()?;
             let expr = stream.parse::<Box<Expr>>()?;
-            let body = stream.parse::<Block>()?;
+
+            let body;
+            braced!(body in stream);
+            let mut children = vec![];
+            while !body.is_empty() {
+                children.push(body.parse()?);
+            }
 
             return Ok(BodyNode::ForLoop(ForLoop {
                 for_token: _f,
                 pat,
                 in_token: _i,
                 expr,
-                body,
+                body: children,
             }));
         }
 
@@ -123,28 +131,28 @@ impl ToTokens for BodyNode {
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {
-                __cx.text(#txt)
+                __cx.text_node(#txt)
             }),
             BodyNode::RawExpr(exp) => tokens.append_all(quote! {
-                 __cx.fragment_from_iter(#exp)
+                 __cx.make_node(#exp)
             }),
             BodyNode::ForLoop(exp) => {
                 let ForLoop {
                     pat, expr, body, ..
                 } = exp;
 
+                let renderer = TemplateRenderer { roots: body };
+
                 tokens.append_all(quote! {
-                     __cx.fragment_from_iter(
-                        (#expr).into_iter().map(|#pat| {
-                            #body
-                        })
+                     __cx.make_node(
+                        (#expr).into_iter().map(|#pat| { #renderer })
                      )
                 })
             }
             BodyNode::IfChain(chain) => {
                 if is_if_chain_terminated(chain) {
                     tokens.append_all(quote! {
-                         __cx.fragment_from_iter(#chain)
+                         __cx.make_node(#chain)
                     });
                 } else {
                     let ExprIf {
@@ -198,7 +206,7 @@ impl ToTokens for BodyNode {
                     });
 
                     tokens.append_all(quote! {
-                        __cx.fragment_from_iter(#body)
+                        __cx.make_node(#body)
                     });
                 }
             }
@@ -212,7 +220,7 @@ pub struct ForLoop {
     pub pat: Pat,
     pub in_token: Token![in],
     pub expr: Box<Expr>,
-    pub body: Block,
+    pub body: Vec<BodyNode>,
 }
 
 fn is_if_chain_terminated(chain: &ExprIf) -> bool {

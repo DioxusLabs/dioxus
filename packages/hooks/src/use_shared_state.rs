@@ -63,7 +63,7 @@ impl<T> ProvidedStateInner<T> {
 pub fn use_context<T: 'static>(cx: &ScopeState) -> Option<UseSharedState<T>> {
     let state = cx.use_hook(|| {
         let scope_id = cx.scope_id();
-        let root = cx.consume_context::<ProvidedState<T>>();
+        let root = cx.consume_context::<ProvidedState<T>>().cloned();
 
         if let Some(root) = root.as_ref() {
             root.borrow_mut().consumers.insert(scope_id);
@@ -179,6 +179,7 @@ pub fn use_context_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) 
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
         }));
-        cx.provide_context(state)
+
+        cx.provide_context(state);
     });
 }

@@ -1,7 +1,7 @@
 // ANCHOR: all
 #![allow(non_snake_case)]
 
-use dioxus::events::FormEvent;
+use dioxus::events::FormData;
 use dioxus::prelude::*;
 
 fn main() {
@@ -150,7 +150,7 @@ fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
 fn CaptionEditor<'a>(
     cx: Scope<'a>,
     caption: &'a str,
-    on_input: EventHandler<'a, FormEvent>,
+    on_input: EventHandler<'a, FormData>,
 ) -> Element<'a> {
     let is_dark_mode = use_is_dark_mode(&cx);
 

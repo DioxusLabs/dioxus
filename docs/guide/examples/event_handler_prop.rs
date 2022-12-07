@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use dioxus::events::MouseEvent;
+use dioxus::events::MouseData;
 use dioxus::prelude::*;
 
 fn main() {
@@ -20,7 +20,7 @@ fn App(cx: Scope) -> Element {
 // ANCHOR: component_with_handler
 #[derive(Props)]
 pub struct FancyButtonProps<'a> {
-    on_click: EventHandler<'a, MouseEvent>,
+    on_click: EventHandler<'a, MouseData>,
 }
 
 pub fn FancyButton<'a>(cx: Scope<'a, FancyButtonProps<'a>>) -> Element<'a> {
