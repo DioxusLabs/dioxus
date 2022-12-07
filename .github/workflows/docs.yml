@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: docs
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # NOTE: Comment out when https://github.com/rust-lang/mdBook/pull/1306 is merged and released
       # - name: Setup mdBook
