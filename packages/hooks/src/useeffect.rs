@@ -77,12 +77,12 @@ mod tests {
             });
 
             // runs when a is changed
-            use_effect(cx, (cx.props.a,), |(a,)| async move {
+            use_effect(cx, (&cx.props.a,), |(a,)| async move {
                 //
             });
 
             // runs when a or b is changed
-            use_effect(cx, (cx.props.a, &cx.props.b), |(a, b)| async move {
+            use_effect(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move {
                 //
             });
 

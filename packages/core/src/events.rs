@@ -21,7 +21,8 @@ use std::{
 /// }
 /// ```
 pub struct Event<T: 'static + ?Sized> {
-    pub(crate) data: Rc<T>,
+    /// The data associated with this event
+    pub data: Rc<T>,
     pub(crate) propogates: Rc<Cell<bool>>,
 }
 
