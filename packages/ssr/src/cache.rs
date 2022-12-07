@@ -70,7 +70,7 @@ impl StringCache {
                         }
                     }
                 }
-                if children.len() == 0 && tag_is_self_closing(tag) {
+                if children.is_empty() && tag_is_self_closing(tag) {
                     write!(chain, "/>")?;
                 } else {
                     write!(chain, ">")?;
@@ -92,9 +92,21 @@ impl StringCache {
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {
-    match tag {
-        "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta"
-        | "param" | "source" | "track" | "wbr" => true,
-        _ => false,
-    }
+    matches!(
+        tag,
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
+    )
 }

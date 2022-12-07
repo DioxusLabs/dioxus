@@ -12,7 +12,7 @@ use crate::renderer::Renderer;
 /// A convenience function to render an `rsx!` call to a string
 ///
 /// For advanced rendering, create a new `SsrRender`.
-pub fn render_lazy<'a, 'b>(f: LazyNodes<'a, 'b>) -> String {
+pub fn render_lazy(f: LazyNodes<'_, '_>) -> String {
     // We need to somehow get the lazy call into the virtualdom even with the lifetime
     // Since the lazy lifetime is valid for this function, we can just transmute it to static temporarily
     // This is okay since we're returning an owned value

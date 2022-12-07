@@ -96,9 +96,9 @@ impl VirtualDom {
         node.clear_listeners();
         node.dynamic_nodes.iter().for_each(|node| match node {
             DynamicNode::Component(c) => self.drop_scope(c.scope.get().unwrap()),
-            DynamicNode::Fragment(nodes) => nodes
-                .into_iter()
-                .for_each(|node| self.drop_scope_inner(node)),
+            DynamicNode::Fragment(nodes) => {
+                nodes.iter().for_each(|node| self.drop_scope_inner(node))
+            }
             DynamicNode::Placeholder(t) => {
                 self.try_reclaim(t.get());
             }

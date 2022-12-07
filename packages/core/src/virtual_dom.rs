@@ -530,11 +530,11 @@ impl VirtualDom {
 
                 self.mutations
                     .templates
-                    .extend(context.mutations.borrow_mut().templates.drain(..));
+                    .append(&mut context.mutations.borrow_mut().templates);
 
                 self.mutations
                     .edits
-                    .extend(context.mutations.borrow_mut().edits.drain(..));
+                    .append(&mut context.mutations.borrow_mut().edits);
 
                 // TODO: count how many nodes are on the stack?
                 self.mutations.push(Mutation::ReplaceWith {
