@@ -48,7 +48,7 @@ fn LogIn<'a>(
 fn LogInWarning(cx: Scope, is_logged_in: bool) -> Element {
     // ANCHOR: conditional_none
     if *is_logged_in {
-        return None;
+        return cx.render(rsx!(()));
     }
 
     cx.render(rsx! {

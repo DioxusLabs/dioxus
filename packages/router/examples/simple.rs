@@ -36,7 +36,9 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let id = use_route(cx).segment("id")?;
+    let Some(id) = use_route(cx).segment("id") else {
+        return cx.render(rsx! { div { "No blog post id" } })
+    };
 
     log::trace!("rendering blog post {}", id);
 

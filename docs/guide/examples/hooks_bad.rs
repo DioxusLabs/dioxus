@@ -63,5 +63,5 @@ fn App(cx: Scope) -> Element {
     }
     // ANCHOR_END: loop
 
-    None
+    cx.render(rsx!(()))
 }

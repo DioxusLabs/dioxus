@@ -1,7 +1,6 @@
 // ANCHOR: all
 #![allow(non_snake_case)]
 
-use dioxus::events::FormData;
 use dioxus::prelude::*;
 
 fn main() {
@@ -83,7 +82,7 @@ fn Meme<'a>(cx: Scope<'a>, caption: &'a str) -> Element<'a> {
 fn CaptionEditor<'a>(
     cx: Scope<'a>,
     caption: &'a str,
-    on_input: EventHandler<'a, FormData>,
+    on_input: EventHandler<'a, FormEvent>,
 ) -> Element<'a> {
     let input_style = r"
         border: none;

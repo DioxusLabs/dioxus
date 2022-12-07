@@ -58,7 +58,7 @@ pub fn Tokio(cx: Scope) -> Element {
         // ANCHOR_END: tokio
     };
 
-    None
+    cx.render(rsx!(()))
 }
 
 pub fn ToOwnedMacro(cx: Scope) -> Element {
@@ -69,7 +69,7 @@ pub fn ToOwnedMacro(cx: Scope) -> Element {
 
     let _ = || {
         // ANCHOR: to_owned_macro
-        use dioxus::core::to_owned;
+        use dioxus::hooks::to_owned;
 
         cx.spawn({
             to_owned![count, age, name, description];
@@ -80,5 +80,5 @@ pub fn ToOwnedMacro(cx: Scope) -> Element {
         // ANCHOR_END: to_owned_macro
     };
 
-    None
+    cx.render(rsx!(()))
 }

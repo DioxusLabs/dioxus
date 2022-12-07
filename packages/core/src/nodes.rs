@@ -514,6 +514,14 @@ impl<'a> IntoTemplate<'a> for VNode<'a> {
         self
     }
 }
+impl<'a> IntoTemplate<'a> for Element<'a> {
+    fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
+        match self {
+            Ok(val) => val.into_template(_cx),
+            _ => VNode::empty().unwrap(),
+        }
+    }
+}
 impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
     fn into_template(self, cx: &'a ScopeState) -> VNode<'a> {
         self.call(cx)

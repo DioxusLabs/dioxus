@@ -26,7 +26,7 @@ fn App(cx: Scope) -> Element {
             background_color: "red",
             justify_content: "center",
             align_items: "center",
-            onkeydown: move |k: KeyboardEvent| if let KeyCode::Q = k.data.key_code {
+            onkeydown: move |k: KeyboardEvent| if let KeyCode::Q = k.key_code {
                 tui_ctx.quit();
             },
 

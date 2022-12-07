@@ -56,5 +56,5 @@ fn RandomDog(cx: Scope, breed: String) -> Element {
     });
     // ANCHOR_END: dependency
 
-    None
+    cx.render(rsx!(()))
 }

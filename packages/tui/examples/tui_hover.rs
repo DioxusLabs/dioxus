@@ -1,7 +1,7 @@
 use dioxus::{events::MouseData, prelude::*};
 use dioxus_core::Event;
+use std::convert::TryInto;
 use std::rc::Rc;
-use std::{convert::TryInto, sync::Arc};
 
 fn main() {
     dioxus_tui::launch(app);
