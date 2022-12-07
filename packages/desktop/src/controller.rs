@@ -1,7 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use crate::events::{decode_event, EventMessage};
 use dioxus_core::*;
-use futures_channel::mpsc::UnboundedReceiver;
+use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
@@ -22,6 +22,9 @@ pub(super) struct DesktopController {
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
+    pub(super) proxy: EventLoopProxy<UserWindowEvent>,
+    pub(super) event_tx: UnboundedSender<serde_json::Value>,
+
     #[cfg(target_os = "ios")]
     pub(super) views: Vec<*mut Object>,
 }
@@ -33,9 +36,10 @@ impl DesktopController {
         root: Component<P>,
         props: P,
         proxy: EventLoopProxy<UserWindowEvent>,
-        mut event_rx: UnboundedReceiver<serde_json::Value>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
+        let (event_tx, mut event_rx) = unbounded();
+        let proxy2 = proxy.clone();
 
         let pending_edits = edit_queue.clone();
         let desktop_context_proxy = proxy.clone();
@@ -54,8 +58,7 @@ impl DesktopController {
                 {
                     let edits = dom.rebuild();
                     let mut queue = edit_queue.lock().unwrap();
-                    queue.push(serde_json::to_string(&edits.templates).unwrap());
-                    queue.push(serde_json::to_string(&edits.edits).unwrap());
+                    queue.push(serde_json::to_string(&edits).unwrap());
                     proxy.send_event(UserWindowEvent::EditsReady).unwrap();
                 }
 
@@ -77,12 +80,8 @@ impl DesktopController {
                         .render_with_deadline(tokio::time::sleep(Duration::from_millis(16)))
                         .await;
 
-                    {
-                        let mut queue = edit_queue.lock().unwrap();
-                        queue.push(serde_json::to_string(&muts.templates).unwrap());
-                        queue.push(serde_json::to_string(&muts.edits).unwrap());
-                        let _ = proxy.send_event(UserWindowEvent::EditsReady);
-                    }
+                    edit_queue.lock().unwrap().push(serde_json::to_string(&muts).unwrap());
+                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
                 }
             })
         });
@@ -92,6 +91,8 @@ impl DesktopController {
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,
+            proxy: proxy2,
+            event_tx,
             #[cfg(target_os = "ios")]
             views: vec![],
         }
@@ -116,12 +117,14 @@ impl DesktopController {
 
             let (_id, view) = self.webviews.iter_mut().next().unwrap();
 
-            println!("processing pending edits {:?}", new_queue.len());
-
             for edit in new_queue.drain(..) {
                 view.evaluate_script(&format!("window.interpreter.handleEdits({})", edit))
                     .unwrap();
             }
         }
+    }
+
+    pub(crate) fn set_template(&self, _serialized_template: String) {
+        todo!("hot reloading currently WIP")
     }
 }

@@ -1,6 +1,5 @@
 //! Convert a serialized event to an event trigger
 
-use dioxus_core::ElementId;
 use dioxus_html::events::*;
 use serde::{Deserialize, Serialize};
 use serde_json::from_value;
@@ -43,7 +42,6 @@ macro_rules! match_data {
     ) => {
         match $name {
             $( $($mname)|* => {
-                println!("casting to type {:?}", std::any::TypeId::of::<$tip>());
                 let val: $tip = from_value::<$tip>($m).ok()?;
                 Rc::new(val) as Rc<dyn Any>
             })*

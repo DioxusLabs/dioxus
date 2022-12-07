@@ -11,7 +11,7 @@ use dioxus_core::{Mutation, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::{event_bubbles, CompositionData, FormData};
 use dioxus_interpreter_js::{save_template, Channel};
 use futures_channel::mpsc;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::{any::Any, rc::Rc};
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event, HtmlElement};
@@ -106,15 +106,15 @@ impl WebsysDom {
                     }
                 }
                 for child in *children {
-                    el.append_child(&self.create_template_node(child));
+                    let _ = el.append_child(&self.create_template_node(child));
                 }
                 el.dyn_into().unwrap()
             }
-            Text(t) => self.document.create_text_node(t).dyn_into().unwrap(),
-            DynamicText(_) => self.document.create_text_node("p").dyn_into().unwrap(),
-            Dynamic(_) => {
+            Text { text } => self.document.create_text_node(text).dyn_into().unwrap(),
+            DynamicText { .. } => self.document.create_text_node("p").dyn_into().unwrap(),
+            Dynamic { .. } => {
                 let el = self.document.create_element("pre").unwrap();
-                el.toggle_attribute("hidden");
+                let _ = el.toggle_attribute("hidden");
                 el.dyn_into().unwrap()
             }
         }

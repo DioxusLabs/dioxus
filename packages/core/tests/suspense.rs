@@ -1,9 +1,9 @@
 use dioxus::core::ElementId;
 use dioxus::core::{Mutation::*, SuspenseContext};
 use dioxus::prelude::*;
-use dioxus_core::SuspenseContext;
 use std::future::IntoFuture;
-use std::{rc::Rc, time::Duration};
+use std::rc::Rc;
+use std::time::Duration;
 
 #[tokio::test]
 async fn it_works() {
@@ -51,10 +51,12 @@ fn app(cx: Scope) -> Element {
 }
 
 fn suspense_boundary(cx: Scope) -> Element {
-    cx.use_hook(|| cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id()))));
+    cx.use_hook(|| {
+        cx.provide_context(Rc::new(SuspenseContext::new(cx.scope_id())));
+    });
 
     // Ensure the right types are found
-    cx.has_context::<SuspenseContext>().unwrap();
+    cx.has_context::<Rc<SuspenseContext>>().unwrap();
 
     cx.render(rsx!(async_child {}))
 }
@@ -72,7 +74,6 @@ async fn async_text(cx: Scope<'_>) -> Element {
 
     let age = use_future!(cx, || async {
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-        println!("long future completed");
         1234
     });
 

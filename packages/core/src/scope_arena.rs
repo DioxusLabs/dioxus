@@ -7,7 +7,6 @@ use crate::{
     scheduler::RcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
-    AttributeValue, DynamicNode, VNode,
 };
 use bumpalo::Bump;
 use futures_util::FutureExt;
@@ -19,7 +18,11 @@ use std::{
 };
 
 impl VirtualDom {
-    pub(super) fn new_scope(&mut self, props: Box<dyn AnyProps<'static>>) -> &ScopeState {
+    pub(super) fn new_scope(
+        &mut self,
+        props: Box<dyn AnyProps<'static>>,
+        name: &'static str,
+    ) -> &ScopeState {
         let parent = self.acquire_current_scope_raw();
         let entry = self.scopes.vacant_entry();
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
@@ -30,6 +33,7 @@ impl VirtualDom {
             id,
             height,
             props: Some(props),
+            name,
             placeholder: Default::default(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
@@ -48,42 +52,6 @@ impl VirtualDom {
             .last()
             .copied()
             .and_then(|id| self.scopes.get_mut(id.0).map(|f| f.as_mut() as *mut _))
-    }
-
-    fn ensure_drop_safety(&self, scope: ScopeId) {
-        let scope = &self.scopes[scope.0];
-        let node = unsafe { scope.previous_frame().try_load_node() };
-
-        // And now we want to make sure the previous frame has dropped anything that borrows self
-        if let Some(RenderReturn::Sync(Ok(node))) = node {
-            self.ensure_drop_safety_inner(node);
-        }
-    }
-
-    fn ensure_drop_safety_inner(&self, node: &VNode) {
-        for attr in node.dynamic_attrs {
-            if let AttributeValue::Listener(l) = &attr.value {
-                l.borrow_mut().take();
-            }
-        }
-
-        for child in node.dynamic_nodes {
-            match child {
-                DynamicNode::Component(c) => {
-                    // Only descend if the props are borrowed
-                    if !c.static_props {
-                        self.ensure_drop_safety(c.scope.get().unwrap());
-                        c.props.set(None);
-                    }
-                }
-                DynamicNode::Fragment(f) => {
-                    for node in *f {
-                        self.ensure_drop_safety_inner(node);
-                    }
-                }
-                _ => {}
-            }
-        }
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {

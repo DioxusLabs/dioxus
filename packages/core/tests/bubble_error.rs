@@ -17,12 +17,12 @@ fn app(cx: Scope) -> Element {
 }
 
 #[test]
-fn it_goes() {
+fn bubbles_error() {
     let mut dom = VirtualDom::new(app);
 
-    let edits = dom.rebuild().santize();
+    let _edits = dom.rebuild().santize();
 
     dom.mark_dirty(ScopeId(0));
 
-    dom.render_immediate();
+    _ = dom.render_immediate();
 }

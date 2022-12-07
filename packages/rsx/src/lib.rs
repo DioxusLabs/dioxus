@@ -180,10 +180,10 @@ impl<'a> DynamicContext<'a> {
                 // [0, 2]
                 // [0, 2, 1]
 
-                let static_attrs = el.attributes.iter().filter_map(|attr| match &attr.attr {
+                let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
                         let value = value.source.as_ref().unwrap();
-                        Some(quote! {
+                        quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
@@ -192,12 +192,12 @@ impl<'a> DynamicContext<'a> {
                                 // todo: we don't diff these so we never apply the volatile flag
                                 // volatile: dioxus_elements::#el_name::#name.2,
                             }
-                        })
+                        }
                     }
 
                     ElementAttr::CustomAttrText { name, value } if value.is_static() => {
                         let value = value.source.as_ref().unwrap();
-                        Some(quote! {
+                        quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
                                 namespace: dioxus_elements::#el_name::#name.1,
@@ -206,7 +206,7 @@ impl<'a> DynamicContext<'a> {
                                 // todo: we don't diff these so we never apply the volatile flag
                                 // volatile: dioxus_elements::#el_name::#name.2,
                             }
-                        })
+                        }
                     }
 
                     ElementAttr::AttrExpression { .. }
@@ -217,7 +217,7 @@ impl<'a> DynamicContext<'a> {
                         let ct = self.dynamic_attributes.len();
                         self.dynamic_attributes.push(attr);
                         self.attr_paths.push(self.current_path.clone());
-                        Some(quote! { ::dioxus::core::TemplateAttribute::Dynamic(#ct) })
+                        quote! { ::dioxus::core::TemplateAttribute::Dynamic { id: #ct } }
                     }
                 });
 
@@ -245,7 +245,7 @@ impl<'a> DynamicContext<'a> {
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.source.as_ref().unwrap();
-                quote! { ::dioxus::core::TemplateNode::Text(#text) }
+                quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
             }
 
             BodyNode::RawExpr(_)
@@ -258,8 +258,10 @@ impl<'a> DynamicContext<'a> {
                 self.node_paths.push(self.current_path.clone());
 
                 match root {
-                    BodyNode::Text(_) => quote! { ::dioxus::core::TemplateNode::DynamicText(#ct) },
-                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic(#ct) },
+                    BodyNode::Text(_) => {
+                        quote! { ::dioxus::core::TemplateNode::DynamicText { id: #ct } }
+                    }
+                    _ => quote! { ::dioxus::core::TemplateNode::Dynamic { id: #ct } },
                 }
             }
         }

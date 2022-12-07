@@ -1,6 +1,5 @@
-use crate::{cfg::RouterCfg, RouterCore};
+use crate::{cfg::RouterCfg, RouterContext, RouterService};
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 /// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
@@ -21,7 +20,7 @@ pub struct RouterProps<'a> {
     ///
     /// This lets you easily implement redirects
     #[props(default)]
-    pub onchange: EventHandler<'a, Arc<RouterCore>>,
+    pub onchange: EventHandler<'a, RouterContext>,
 
     /// Set the active class of all Link components contained in this router.
     ///
@@ -40,15 +39,15 @@ pub struct RouterProps<'a> {
 /// Will fallback to HashRouter is BrowserRouter is not available, or through configuration.
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
-    let svc = cx.use_hook(|| {
-        cx.provide_context(RouterCore::new(
-            &cx,
+    let svc = use_context_provider(cx, || {
+        RouterService::new(
+            cx,
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),
                 initial_url: cx.props.initial_url.clone(),
             },
-        ))
+        )
     });
 
     // next time we run the rout_found will be filled

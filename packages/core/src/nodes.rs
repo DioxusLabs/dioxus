@@ -78,9 +78,17 @@ impl<'a> VNode<'a> {
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&'a DynamicNode<'a>> {
         match &self.template.roots[idx] {
-            TemplateNode::Element { .. } | TemplateNode::Text(_) => None,
-            TemplateNode::Dynamic(id) | TemplateNode::DynamicText(id) => {
+            TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
+            TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
                 Some(&self.dynamic_nodes[*id])
+            }
+        }
+    }
+
+    pub(crate) fn clear_listeners(&self) {
+        for attr in self.dynamic_attrs {
+            if let AttributeValue::Listener(l) = &attr.value {
+                l.borrow_mut().take();
             }
         }
     }
@@ -124,7 +132,7 @@ pub struct Template<'a> {
 ///
 /// This can be created at compile time, saving the VirtualDom time when diffing the tree
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize), serde(tag = "type"))]
 pub enum TemplateNode<'a> {
     /// An statically known element in the dom.
     ///
@@ -151,15 +159,24 @@ pub enum TemplateNode<'a> {
     },
 
     /// This template node is just a piece of static text
-    Text(&'a str),
+    Text {
+        /// The actual text
+        text: &'a str,
+    },
 
     /// This template node is unknown, and needs to be created at runtime.
-    Dynamic(usize),
+    Dynamic {
+        /// The index of the dynamic node in the VNode's dynamic_nodes list
+        id: usize,
+    },
 
     /// This template node is known to be some text, but needs to be created at runtime
     ///
     /// This is separate from the pure Dynamic variant for various optimizations
-    DynamicText(usize),
+    DynamicText {
+        /// The index of the dynamic node in the VNode's dynamic_nodes list
+        id: usize,
+    },
 }
 
 /// A node created at runtime
@@ -244,7 +261,11 @@ pub struct VText<'a> {
 
 /// An attribute of the TemplateNode, created at compile time
 #[derive(Debug, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(tag = "type")
+)]
 pub enum TemplateAttribute<'a> {
     /// This attribute is entirely known at compile time, enabling
     Static {
@@ -265,7 +286,10 @@ pub enum TemplateAttribute<'a> {
     /// The attribute in this position is actually determined dynamically at runtime
     ///
     /// This is the index into the dynamic_attributes field on the container VNode
-    Dynamic(usize),
+    Dynamic {
+        /// The index
+        id: usize,
+    },
 }
 
 /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`
@@ -416,6 +440,8 @@ impl<'a> IntoDynNode<'a> for VNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([self]))
     }
 }
+
+// An element that's an error is currently lost into the ether
 impl<'a> IntoDynNode<'a> for Element<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {

@@ -1,5 +1,7 @@
 //! Tests related to safety of the library.
 
+use std::rc::Rc;
+
 use dioxus::prelude::*;
 use dioxus_core::SuspenseContext;
 
@@ -18,5 +20,5 @@ fn root_node_isnt_null() {
 
     // There should be a default suspense context
     // todo: there should also be a default error boundary
-    assert!(scope.has_context::<SuspenseContext>().is_some());
+    assert!(scope.has_context::<Rc<SuspenseContext>>().is_some());
 }

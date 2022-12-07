@@ -76,9 +76,6 @@ export class Interpreter {
   pop() {
     return this.stack.pop();
   }
-  SaveTemplate(nodes, name) {
-    this.templates[name] = nodes;
-  }
   MountToRoot() {
     this.AppendChildren(this.stack.length - 1);
   }
@@ -140,7 +137,7 @@ export class Interpreter {
     this.stack.push(el);
     this.nodes[root] = el;
   }
-  NewEventListener(event_name, root, handler, bubbles) {
+  NewEventListener(event_name, root, bubbles, handler) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     this.listeners.create(event_name, element, handler, bubbles);
@@ -213,8 +210,54 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    for (let edit of edits) {
+    for (let template of edits.templates) {
+      this.SaveTemplate(template);
+    }
+
+    for (let edit of edits.edits) {
       this.handleEdit(edit);
+    }
+  }
+
+  SaveTemplate(template) {
+    let roots = [];
+    for (let root of template.roots) {
+      roots.push(this.MakeTemplateNode(root));
+    }
+    this.templates[template.name] = roots;
+  }
+
+  MakeTemplateNode(node) {
+    console.log("making template node", node);
+    switch (node.type) {
+      case "Text":
+        return document.createTextNode(node.text);
+      case "Dynamic":
+        let dyn = document.createElement("pre");
+        dyn.hidden = true;
+        return dyn;
+      case "DynamicText":
+        return document.createTextNode("placeholder");
+      case "Element":
+        let el;
+
+        if (node.namespace != null) {
+          el = document.createElementNS(node.namespace, node.tag);
+        } else {
+          el = document.createElement(node.tag);
+        }
+
+        for (let attr of node.attrs) {
+          if (attr.type == "Static") {
+            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+          }
+        }
+
+        for (let child of node.children) {
+          el.appendChild(this.MakeTemplateNode(child));
+        }
+
+        return el;
     }
   }
   AssignId(path, id) {
@@ -232,7 +275,16 @@ export class Interpreter {
   }
   HydrateText(path, value, id) {
     let node = this.LoadChild(path);
-    node.textContent = value;
+
+    if (node.nodeType == Node.TEXT_NODE) {
+      node.textContent = value;
+    } else {
+      // replace with a textnode
+      let text = document.createTextNode(value);
+      node.replaceWith(text);
+      node = text;
+    }
+
     this.nodes[id] = node;
   }
   ReplacePlaceholder(path, m) {
@@ -296,17 +348,12 @@ export class Interpreter {
         this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(edit.id, edit.event_name);
+        this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
-        // console.log("creating listener! ", edit);
-
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-
-          console.log("event", event);
-
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -387,17 +434,14 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.event_name,
+                event: edit.name,
                 mounted_dom_id: parseInt(realId),
                 contents: contents,
               })
             );
           }
         };
-
-        console.log("adding event listener", edit);
-        this.NewEventListener(edit.event_name, edit.id, handler, event_bubbles(edit.event_name));
-
+        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
         break;
     }
   }

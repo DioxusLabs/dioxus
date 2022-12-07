@@ -1,4 +1,7 @@
+#![allow(dead_code)]
+
 use dioxus_core::VirtualDom;
+
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
 use std::time::Duration;
@@ -10,18 +13,21 @@ fn handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalS
         .ok()
 }
 
-pub(crate) fn init(dom: &VirtualDom) {
+pub(crate) fn init(_dom: &VirtualDom) {
     let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
         Arc::new(Mutex::new(None));
+
     let latest_in_connection_handle = latest_in_connection.clone();
 
     // connect to processes for incoming data
     std::thread::spawn(move || {
-        // if let Ok(listener) = LocalSocketListener::bind("@dioxusin") {
-        //     for conn in listener.incoming().filter_map(handle_error) {
-        //         *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
-        //     }
-        // }
+        let temp_file = std::env::temp_dir().join("@dioxusin");
+
+        if let Ok(listener) = LocalSocketListener::bind(temp_file) {
+            for conn in listener.incoming().filter_map(handle_error) {
+                *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
+            }
+        }
     });
 
     std::thread::spawn(move || {

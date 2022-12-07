@@ -240,20 +240,19 @@ impl VirtualDom {
             mutations: Mutations::default(),
         };
 
-        let root = dom.new_scope(Box::new(VProps::new(
-            root,
-            |_, _| unreachable!(),
-            root_props,
-        )));
+        let root = dom.new_scope(
+            Box::new(VProps::new(root, |_, _| unreachable!(), root_props)),
+            "app",
+        );
 
         // The root component is always a suspense boundary for any async children
         // This could be unexpected, so we might rethink this behavior later
         //
         // We *could* just panic if the suspense boundary is not found
-        root.provide_context(SuspenseContext::new(ScopeId(0)));
+        root.provide_context(Rc::new(SuspenseContext::new(ScopeId(0))));
 
         // Unlike react, we provide a default error boundary that just renders the error as a string
-        root.provide_context(ErrorBoundary::new(ScopeId(0)));
+        root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
         dom.elements.insert(ElementRef::null());
@@ -297,7 +296,7 @@ impl VirtualDom {
     /// currently suspended.
     pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
         !self.scopes[id.0]
-            .consume_context::<SuspenseContext>()
+            .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
             .waiting_on
             .borrow()
@@ -528,7 +527,7 @@ impl VirtualDom {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
                 let scope = &mut self.scopes[finished_fiber.0];
-                let context = scope.has_context::<SuspenseContext>().unwrap();
+                let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations
                     .templates
@@ -566,7 +565,7 @@ impl VirtualDom {
                 // No placeholder necessary since this is a diff
                 if !self.collected_leaves.is_empty() {
                     let mut boundary = self.scopes[dirty.id.0]
-                        .consume_context::<SuspenseContext>()
+                        .consume_context::<Rc<SuspenseContext>>()
                         .unwrap();
 
                     let boundary_mut = boundary.borrow_mut();

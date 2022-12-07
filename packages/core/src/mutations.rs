@@ -13,6 +13,7 @@ use crate::{arena::ElementId, ScopeId, Template};
 /// Templates, however, apply to all subtrees, not just target subtree.
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[derive(Debug, Default)]
 #[must_use = "not handling edits can lead to visual inconsistencies in UI"]
 pub struct Mutations<'a> {

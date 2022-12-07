@@ -65,12 +65,12 @@ impl StringCache {
                         TemplateAttribute::Static { name, value, .. } => {
                             write!(chain, " {}=\"{}\"", name, value)?;
                         }
-                        TemplateAttribute::Dynamic(index) => {
+                        TemplateAttribute::Dynamic { id: index } => {
                             chain.segments.push(Segment::Attr(*index))
                         }
                     }
                 }
-                if children.len() == 0 && tag_is_self_closing(tag) {
+                if children.is_empty() && tag_is_self_closing(tag) {
                     write!(chain, "/>")?;
                 } else {
                     write!(chain, ">")?;
@@ -81,8 +81,8 @@ impl StringCache {
                 }
                 cur_path.pop();
             }
-            TemplateNode::Text(text) => write!(chain, "{}", text)?,
-            TemplateNode::Dynamic(idx) | TemplateNode::DynamicText(idx) => {
+            TemplateNode::Text { text } => write!(chain, "{}", text)?,
+            TemplateNode::Dynamic { id: idx } | TemplateNode::DynamicText { id: idx } => {
                 chain.segments.push(Segment::Node(*idx))
             }
         }
@@ -92,9 +92,21 @@ impl StringCache {
 }
 
 fn tag_is_self_closing(tag: &str) -> bool {
-    match tag {
-        "area" | "base" | "br" | "col" | "embed" | "hr" | "img" | "input" | "link" | "meta"
-        | "param" | "source" | "track" | "wbr" => true,
-        _ => false,
-    }
+    matches!(
+        tag,
+        "area"
+            | "base"
+            | "br"
+            | "col"
+            | "embed"
+            | "hr"
+            | "img"
+            | "input"
+            | "link"
+            | "meta"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
+    )
 }

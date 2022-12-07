@@ -66,9 +66,7 @@ where
             // if there's a waker, we dont re-render the component. Instead we just progress that future
             match waker.borrow().as_ref() {
                 Some(waker) => waker.wake_by_ref(),
-                None => {
-                    // schedule_update()
-                }
+                None => schedule_update(),
             }
         })));
     }
@@ -122,7 +120,7 @@ impl<T> UseFuture<T> {
     }
 
     // Manually set the value in the future slot without starting the future over
-    pub fn set(&self, new_value: T) {
+    pub fn set(&self, _new_value: T) {
         // self.slot.set(Some(new_value));
         // self.needs_regen.set(true);
         // (self.update)();

@@ -8,16 +8,16 @@ fn miri_rollover() {
 
     _ = dom.rebuild();
 
-    for x in 0..3 {
+    for _ in 0..3 {
         dom.handle_event("click", Rc::new(MouseData::default()), ElementId(2), true);
         dom.process_events();
-        dom.render_immediate();
+        _ = dom.render_immediate();
     }
 }
 
 fn app(cx: Scope) -> Element {
     let mut idx = use_state(cx, || 0);
-    let onhover = |h| println!("go!");
+    let onhover = |_| println!("go!");
 
     cx.render(rsx! {
         div {
@@ -31,7 +31,7 @@ fn app(cx: Scope) -> Element {
             button { onclick: move |_| idx -= 1, "-" }
             ul {
                 (0..**idx).map(|i| rsx! {
-                    Child { i: i, onhover: onhover }
+                    child_example { i: i, onhover: onhover }
                 })
             }
         }
@@ -39,7 +39,7 @@ fn app(cx: Scope) -> Element {
 }
 
 #[inline_props]
-fn Child<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
+fn child_example<'a>(cx: Scope<'a>, i: i32, onhover: EventHandler<'a, MouseEvent>) -> Element {
     cx.render(rsx! {
         li {
             onmouseover: move |e| onhover.call(e),

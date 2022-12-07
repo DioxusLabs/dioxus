@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let login = use_callback!(cx, || move |evt: MouseEvent| async move {
+    let login = use_callback!(cx, move |_| async move {
         let res = reqwest::get("https://dog.ceo/api/breeds/list/all")
             .await
             .unwrap()
@@ -13,7 +13,7 @@ fn app(cx: Scope) -> Element {
             .await
             .unwrap();
 
-        println!("{}, ", res);
+        println!("{:#?}, ", res);
     });
 
     cx.render(rsx! {

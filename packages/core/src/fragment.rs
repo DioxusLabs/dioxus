@@ -29,8 +29,8 @@ use crate::innerlude::*;
 pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     let children = cx.props.0.as_ref().map_err(|e| anyhow::anyhow!("{}", e))?;
     Ok(VNode {
-        key: children.key.clone(),
-        parent: children.parent.clone(),
+        key: children.key,
+        parent: children.parent,
         template: children.template,
         root_ids: children.root_ids,
         dynamic_nodes: children.dynamic_nodes,

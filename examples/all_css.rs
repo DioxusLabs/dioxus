@@ -406,6 +406,8 @@ fn app(cx: Scope) -> Element {
             wrap_through: "a",
             writing_mode: "a",
             z_index: "a",
+
+            "This example isn't quite useful yet"
         }
     })
 }

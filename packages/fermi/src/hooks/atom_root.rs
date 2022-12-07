@@ -1,6 +1,7 @@
+use std::rc::Rc;
+
 use crate::AtomRoot;
 use dioxus_core::ScopeState;
-use std::rc::Rc;
 
 // Returns the atom root, initiaizing it at the root of the app if it does not exist.
 pub fn use_atom_root(cx: &ScopeState) -> &Rc<AtomRoot> {

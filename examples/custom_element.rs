@@ -10,7 +10,7 @@ fn main() {
     let mut dom = VirtualDom::new(app);
     let _ = dom.rebuild();
 
-    let output = dioxus_ssr::render_vdom(&dom);
+    let output = dioxus_ssr::render(&dom);
 
     println!("{}", output);
 }

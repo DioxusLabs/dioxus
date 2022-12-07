@@ -1,6 +1,4 @@
-use std::sync::Arc;
-
-use crate::{use_route, RouterCore};
+use crate::{use_route, RouterContext};
 use dioxus::prelude::*;
 
 /// Props for the [`Link`](struct.Link.html) component.
@@ -77,7 +75,7 @@ pub struct LinkProps<'a> {
 /// }
 /// ```
 pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
-    let svc = cx.use_hook(|| cx.consume_context::<Arc<RouterCore>>());
+    let svc = use_context::<RouterContext>(cx);
 
     let LinkProps {
         to,
@@ -107,7 +105,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         }
     };
 
-    let route = use_route(&cx);
+    let route = use_route(cx);
     let url = route.url();
     let path = url.path();
     let active = path == cx.props.to;

@@ -12,10 +12,13 @@ extern "C" {
     pub fn new(arg: Element) -> Interpreter;
 
     #[wasm_bindgen(method)]
-    pub fn SaveTemplate(this: &Interpreter, nodes: Vec<Node>, name: &str);
+    pub fn SaveTemplate(this: &Interpreter, template: JsValue);
 
     #[wasm_bindgen(method)]
     pub fn MountToRoot(this: &Interpreter);
+
+    #[wasm_bindgen(method)]
+    pub fn AppendChildren(this: &Interpreter, m: u32);
 
     #[wasm_bindgen(method)]
     pub fn AssignId(this: &Interpreter, path: &[u8], id: u32);
@@ -58,8 +61,8 @@ extern "C" {
         this: &Interpreter,
         name: &str,
         id: u32,
-        handler: &Function,
         bubbles: bool,
+        handler: &Function,
     );
 
     #[wasm_bindgen(method)]

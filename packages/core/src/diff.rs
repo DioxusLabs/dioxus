@@ -25,40 +25,35 @@ impl<'b> VirtualDom {
                 .previous_frame()
                 .try_load_node()
                 .expect("Call rebuild before diffing");
+
             let new = scope_state
                 .current_frame()
                 .try_load_node()
                 .expect("Call rebuild before diffing");
-            self.diff_maybe_node(old, new);
+
+            use RenderReturn::{Async, Sync};
+
+            match (old, new) {
+                (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
+
+                // Err cases
+                (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
+                (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
+                (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
+
+                // Async
+                (Sync(Ok(_l)), Async(_)) => todo!(),
+                (Sync(Err(_e)), Async(_)) => todo!(),
+                (Async(_), Sync(Ok(_r))) => todo!(),
+                (Async(_), Sync(Err(_e))) => { /* nothing */ }
+                (Async(_), Async(_)) => { /* nothing */ }
+            };
         }
         self.scope_stack.pop();
     }
 
-    fn diff_maybe_node(&mut self, old: &'b RenderReturn<'b>, new: &'b RenderReturn<'b>) {
-        use RenderReturn::{Async, Sync};
-        match (old, new) {
-            (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
-
-            // Err cases
-            (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
-            (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
-            (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
-
-            // Async
-            (Sync(Ok(_l)), Async(_)) => todo!(),
-            (Sync(Err(_e)), Async(_)) => todo!(),
-            (Async(_), Sync(Ok(_r))) => todo!(),
-            (Async(_), Sync(Err(_e))) => { /* nothing */ }
-            (Async(_), Async(_)) => { /* nothing */ }
-        }
-    }
-
-    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _e: &anyhow::Error) {
-        todo!("Not yet handling error rollover")
-    }
-    fn diff_err_to_ok(&mut self, _e: &anyhow::Error, _l: &'b VNode<'b>) {
-        todo!("Not yet handling error rollover")
-    }
+    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _e: &anyhow::Error) {}
+    fn diff_err_to_ok(&mut self, _e: &anyhow::Error, _l: &'b VNode<'b>) {}
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         if !std::ptr::eq(left_template.template.name, right_template.template.name)
@@ -144,15 +139,17 @@ impl<'b> VirtualDom {
     }
 
     fn replace_nodes_with_placeholder(&mut self, l: &'b [VNode<'b>], r: &'b Cell<ElementId>) {
+        // Remove the old nodes, except for one
+        self.remove_nodes(&l[1..]);
+
+        // Now create the new one
+        let first = self.replace_inner(&l[0]);
+
         // Create the placeholder first, ensuring we get a dedicated ID for the placeholder
         let placeholder = self.next_element(&l[0], &[]);
         r.set(placeholder);
         self.mutations
             .push(Mutation::CreatePlaceholder { id: placeholder });
-
-        // Remove the old nodes, except for onea
-        let first = self.replace_inner(&l[0]);
-        self.remove_nodes(&l[1..]);
 
         self.mutations
             .push(Mutation::ReplaceWith { id: first, m: 1 });
@@ -746,7 +743,8 @@ impl<'b> VirtualDom {
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
-        nodes.iter().for_each(|node| self.remove_node(node));
+        // note that we iterate in reverse to unlink lists of nodes in their rough index order
+        nodes.iter().rev().for_each(|node| self.remove_node(node));
     }
 
     fn remove_node(&mut self, node: &'b VNode<'b>) {
@@ -911,7 +909,7 @@ fn matching_components<'a>(
         .zip(right.template.roots.iter())
         .map(|(l, r)| {
             let (l, r) = match (l, r) {
-                (TemplateNode::Dynamic(l), TemplateNode::Dynamic(r)) => (l, r),
+                (TemplateNode::Dynamic { id: l }, TemplateNode::Dynamic { id: r }) => (l, r),
                 _ => return None,
             };
 

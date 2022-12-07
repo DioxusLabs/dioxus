@@ -21,10 +21,7 @@ pub struct IfmtInput {
 
 impl IfmtInput {
     pub fn is_static(&self) -> bool {
-        match self.segments.as_slice() {
-            &[Segment::Literal(_)] => true,
-            _ => false,
-        }
+        matches!(self.segments.as_slice(), &[Segment::Literal(_)])
     }
 }
 

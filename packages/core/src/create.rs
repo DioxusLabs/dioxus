@@ -1,4 +1,5 @@
 use std::cell::Cell;
+use std::rc::Rc;
 
 use crate::innerlude::{VComponent, VText};
 use crate::mutations::Mutation;
@@ -42,7 +43,7 @@ impl<'b> VirtualDom {
         for (root_idx, root) in template.template.roots.iter().enumerate() {
             // We might need to generate an ID for the root node
             on_stack += match root {
-                TemplateNode::DynamicText(id) | TemplateNode::Dynamic(id) => {
+                TemplateNode::DynamicText { id } | TemplateNode::Dynamic { id } => {
                     match &template.dynamic_nodes[*id] {
                         // a dynamic text node doesn't replace a template node, instead we create it on the fly
                         DynamicNode::Text(VText { id: slot, value }) => {
@@ -72,7 +73,7 @@ impl<'b> VirtualDom {
                     }
                 }
 
-                TemplateNode::Element { .. } | TemplateNode::Text(_) => {
+                TemplateNode::Element { .. } | TemplateNode::Text { .. } => {
                     let this_id = self.next_root(template, root_idx);
 
                     template.root_ids[root_idx].set(this_id);
@@ -213,7 +214,7 @@ impl<'b> VirtualDom {
         if template.template.roots.iter().all(|root| {
             matches!(
                 root,
-                TemplateNode::Dynamic(_) | TemplateNode::DynamicText(_)
+                TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
             )
         }) {
             return;
@@ -302,7 +303,8 @@ impl<'b> VirtualDom {
 
         let unbounded_props = unsafe { std::mem::transmute(props) };
 
-        let scope = self.new_scope(unbounded_props).id;
+        let scope = self.new_scope(unbounded_props, component.name);
+        let scope = scope.id;
         component.scope.set(Some(scope));
 
         let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
@@ -336,8 +338,8 @@ impl<'b> VirtualDom {
         }
 
         // If running the scope has collected some leaves and *this* component is a boundary, then handle the suspense
-        let boundary = match self.scopes[scope.0].has_context::<SuspenseContext>() {
-            Some(boundary) => unsafe { &*(boundary as *const SuspenseContext) },
+        let boundary = match self.scopes[scope.0].has_context::<Rc<SuspenseContext>>() {
+            Some(boundary) => boundary,
             _ => return created,
         };
 

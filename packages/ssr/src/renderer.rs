@@ -1,146 +1,181 @@
-// use dioxus_core::VirtualDom;
+use super::cache::Segment;
+use crate::cache::StringCache;
+use dioxus_core::{prelude::*, AttributeValue, DynamicNode, RenderReturn};
+use std::collections::HashMap;
+use std::fmt::Write;
+use std::rc::Rc;
 
-// use crate::config::SsrConfig;
+/// A virtualdom renderer that caches the templates it has seen for faster rendering
+#[derive(Default)]
+pub struct Renderer {
+    /// should we do our best to prettify the output?
+    pub pretty: bool,
 
-// pub struct SsrRenderer {
-//     vdom: VirtualDom,
-//     cfg: SsrConfig,
-// }
+    /// Control if elements are written onto a new line
+    pub newline: bool,
 
-// impl Default for SsrRenderer {
-//     fn default() -> Self {
-//         Self::new(SsrConfig::default())
-//     }
-// }
+    /// Should we sanitize text nodes? (escape HTML)
+    pub sanitize: bool,
 
-// impl SsrRenderer {
-//     pub fn new(cfg: SsrConfig) -> Self {
-//         Self {
-//             vdom: VirtualDom::new(app),
-//             cfg,
-//         }
-//     }
+    /// Choose to write ElementIDs into elements so the page can be re-hydrated later on
+    pub pre_render: bool,
 
-//     pub fn render_lazy<'a>(&'a mut self, f: LazyNodes<'a, '_>) -> String {
-//         let scope = self.vdom.base_scope();
-//         let root = f.call(scope);
-//         format!(
-//             "{:}",
-//             TextRenderer {
-//                 cfg: self.cfg.clone(),
-//                 root: &root,
-//                 vdom: Some(&self.vdom),
-//             }
-//         )
-//     }
+    // Currently not implemented
+    // Don't proceed onto new components. Instead, put the name of the component.
+    pub skip_components: bool,
 
-//     fn html_render(
-//         &self,
-//         node: &VNode,
-//         f: &mut impl Write,
-//         il: u16,
-//         last_node_was_text: &mut bool,
-//     ) -> std::fmt::Result {
-//         // match &node {
-//         //     VNode::Text(text) => {
-//         //         if *last_node_was_text {
-//         //             write!(f, "<!--spacer-->")?;
-//         //         }
+    /// A cache of templates that have been rendered
+    template_cache: HashMap<&'static str, Rc<StringCache>>,
+}
 
-//         //         if self.cfg.indent {
-//         //             for _ in 0..il {
-//         //                 write!(f, "    ")?;
-//         //             }
-//         //         }
+impl Renderer {
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-//         //         *last_node_was_text = true;
+    pub fn render(&mut self, dom: &VirtualDom) -> String {
+        let mut buf = String::new();
+        self.render_to(&mut buf, dom).unwrap();
+        buf
+    }
 
-//         //         write!(f, "{}", text.text)?
-//         //     }
-//         //     VNode::Element(el) => {
-//         //         *last_node_was_text = false;
+    pub fn render_to(&mut self, buf: &mut impl Write, dom: &VirtualDom) -> std::fmt::Result {
+        self.render_scope(buf, dom, ScopeId(0))
+    }
 
-//         //         if self.cfg.indent {
-//         //             for _ in 0..il {
-//         //                 write!(f, "    ")?;
-//         //             }
-//         //         }
+    pub fn render_scope(
+        &mut self,
+        buf: &mut impl Write,
+        dom: &VirtualDom,
+        scope: ScopeId,
+    ) -> std::fmt::Result {
+        // We should never ever run into async or errored nodes in SSR
+        // Error boundaries and suspense boundaries will convert these to sync
+        if let RenderReturn::Sync(Ok(node)) = dom.get_scope(scope).unwrap().root_node() {
+            self.render_template(buf, dom, node)?
+        };
 
-//         //         write!(f, "<{}", el.tag)?;
+        Ok(())
+    }
 
-//         //         let inner_html = render_attributes(el.attributes.iter(), f)?;
+    fn render_template(
+        &mut self,
+        buf: &mut impl Write,
+        dom: &VirtualDom,
+        template: &VNode,
+    ) -> std::fmt::Result {
+        let entry = self
+            .template_cache
+            .entry(template.template.name)
+            .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
+            .clone();
 
-//         //         match self.cfg.newline {
-//         //             true => writeln!(f, ">")?,
-//         //             false => write!(f, ">")?,
-//         //         }
+        for segment in entry.segments.iter() {
+            match segment {
+                Segment::Attr(idx) => {
+                    let attr = &template.dynamic_attrs[*idx];
+                    match attr.value {
+                        AttributeValue::Text(value) => write!(buf, " {}=\"{}\"", attr.name, value)?,
+                        AttributeValue::Bool(value) => write!(buf, " {}={}", attr.name, value)?,
+                        _ => {}
+                    };
+                }
+                Segment::Node(idx) => match &template.dynamic_nodes[*idx] {
+                    DynamicNode::Component(node) => {
+                        if self.skip_components {
+                            write!(buf, "<{}><{}/>", node.name, node.name)?;
+                        } else {
+                            let id = node.scope.get().unwrap();
+                            let scope = dom.get_scope(id).unwrap();
+                            let node = scope.root_node();
+                            match node {
+                                RenderReturn::Sync(Ok(node)) => {
+                                    self.render_template(buf, dom, node)?
+                                }
+                                _ => todo!(
+                                    "generally, scopes should be sync, only if being traversed"
+                                ),
+                            }
+                        }
+                    }
+                    DynamicNode::Text(text) => {
+                        // in SSR, we are concerned that we can't hunt down the right text node since they might get merged
+                        if self.pre_render {
+                            write!(buf, "<!--#-->")?;
+                        }
 
-//         //         if let Some(inner_html) = inner_html {
-//         //             write!(f, "{}", inner_html)?;
-//         //         } else {
-//         //             let mut last_node_was_text = false;
-//         //             for child in el.children {
-//         //                 self.html_render(child, f, il + 1, &mut last_node_was_text)?;
-//         //             }
-//         //         }
+                        // todo: escape the text
+                        write!(buf, "{}", text.value)?;
 
-//         //         if self.cfg.newline {
-//         //             writeln!(f)?;
-//         //         }
-//         //         if self.cfg.indent {
-//         //             for _ in 0..il {
-//         //                 write!(f, "    ")?;
-//         //             }
-//         //         }
+                        if self.pre_render {
+                            write!(buf, "<!--#-->")?;
+                        }
+                    }
+                    DynamicNode::Fragment(nodes) => {
+                        for child in *nodes {
+                            self.render_template(buf, dom, child)?;
+                        }
+                    }
 
-//         //         write!(f, "</{}>", el.tag)?;
-//         //         if self.cfg.newline {
-//         //             writeln!(f)?;
-//         //         }
-//         //     }
-//         //     VNode::Fragment(frag) => match frag.children.len() {
-//         //         0 => {
-//         //             *last_node_was_text = false;
-//         //             if self.cfg.indent {
-//         //                 for _ in 0..il {
-//         //                     write!(f, "    ")?;
-//         //                 }
-//         //             }
-//         //             write!(f, "<!--placeholder-->")?;
-//         //         }
-//         //         _ => {
-//         //             for child in frag.children {
-//         //                 self.html_render(child, f, il + 1, last_node_was_text)?;
-//         //             }
-//         //         }
-//         //     },
-//         //     VNode::Component(vcomp) => {
-//         //         let idx = vcomp.scope.get().unwrap();
+                    DynamicNode::Placeholder(_el) => {
+                        if self.pre_render {
+                            write!(buf, "<pre><pre/>")?;
+                        }
+                    }
+                },
 
-//         //         if let (Some(vdom), false) = (self.vdom, self.cfg.skip_components) {
-//         //             let new_node = vdom.get_scope(idx).unwrap().root_node();
-//         //             self.html_render(new_node, f, il + 1, last_node_was_text)?;
-//         //         } else {
-//         //         }
-//         //     }
-//         //     VNode::Template(t) => {
-//         //         if let Some(vdom) = self.vdom {
-//         //             todo!()
-//         //         } else {
-//         //             panic!("Cannot render template without vdom");
-//         //         }
-//         //     }
-//         //     VNode::Placeholder(_) => {
-//         //         todo!()
-//         //     }
-//         // }
-//         Ok(())
-//     }
-// }
+                Segment::PreRendered(contents) => write!(buf, "{}", contents)?,
+            }
+        }
 
-// impl<'a: 'c, 'c> Display for SsrRenderer<'a, '_, 'c> {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         let mut last_node_was_text = false;
-//         self.html_render(self.root, f, 0, &mut last_node_was_text)
-//     }
-// }
+        Ok(())
+    }
+}
+
+#[test]
+fn to_string_works() {
+    use dioxus::prelude::*;
+
+    fn app(cx: Scope) -> Element {
+        let dynamic = 123;
+        let dyn2 = "</diiiiiiiiv>"; // todo: escape this
+
+        render! {
+            div { class: "asdasdasd", class: "asdasdasd", id: "id-{dynamic}",
+                "Hello world 1 -->" "{dynamic}" "<-- Hello world 2"
+                div { "nest 1" }
+                div {}
+                div { "nest 2" }
+                "{dyn2}"
+                (0..5).map(|i| rsx! { div { "finalize {i}" } })
+            }
+        }
+    }
+
+    let mut dom = VirtualDom::new(app);
+    _ = dom.rebuild();
+
+    let mut renderer = Renderer::new();
+
+    let out = renderer.render(&dom);
+
+    use Segment::*;
+    assert_eq!(
+        renderer.template_cache.iter().next().unwrap().1.segments,
+        vec![
+            PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
+            Attr(0,),
+            PreRendered(">Hello world 1 -->".into(),),
+            Node(0,),
+            PreRendered("<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),),
+            Node(1,),
+            Node(2,),
+            PreRendered("</div>".into(),),
+        ]
+    );
+
+    assert_eq!(
+        out,
+        "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --><!--#-->123<!--/#--><-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div><!--#--></diiiiiiiiv><!--/#--><div><!--#-->finalize 0<!--/#--></div><div><!--#-->finalize 1<!--/#--></div><div><!--#-->finalize 2<!--/#--></div><div><!--#-->finalize 3<!--/#--></div><div><!--#-->finalize 4<!--/#--></div></div>"
+    );
+}
