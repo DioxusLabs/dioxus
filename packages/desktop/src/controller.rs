@@ -124,7 +124,7 @@ impl DesktopController {
         }
     }
 
-    pub(crate) fn set_template(&self, serialized_template: String) {
-        todo!()
+    pub(crate) fn set_template(&self, _serialized_template: String) {
+        todo!("hot reloading currently WIP")
     }
 }

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use dioxus_core::VirtualDom;
 
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
