@@ -84,9 +84,6 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
             width: "{width}",
             height: "{height}",
             border_style: "{border}",
-            flex_direction: "row",
-            align_items: "center",
-            justify_content: "center",
 
             onkeydown: move |k| {
                 if k.key() == Key::Enter {

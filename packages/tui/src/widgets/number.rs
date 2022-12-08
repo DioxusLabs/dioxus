@@ -206,26 +206,6 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
             }
 
             "{text_after_second_cursor}"
-
-            div{
-                background_color: "rgba(255, 255, 255, 50%)",
-                color: "black",
-                Input{
-                    r#type: "button",
-                    onclick: move |_| {
-                        decrease();
-                    }
-                    value: "<",
-                }
-                " "
-                Input{
-                    r#type: "button",
-                    onclick: move |_| {
-                        increase();
-                    }
-                    value: ">",
-                }
-            }
         }
     }
 }

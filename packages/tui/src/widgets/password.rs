@@ -88,7 +88,6 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
             width: "{width}",
             height: "{height}",
             border_style: "{border}",
-            align_items: "left",
 
             onkeydown: move |k| {
                 if k.key()== Key::Enter {
