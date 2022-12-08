@@ -1,4 +1,7 @@
 pub mod components {
+    mod link;
+    pub use link::*;
+
     mod outlet;
     pub use outlet::*;
 }
