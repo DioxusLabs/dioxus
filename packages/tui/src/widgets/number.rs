@@ -1,9 +1,7 @@
 use crate::widgets::get_root_id;
-use crate::widgets::Input;
 use crate::Query;
 use crossterm::{cursor::MoveTo, execute};
 use dioxus::prelude::*;
-use dioxus_core::prelude::fc_to_builder;
 use dioxus_elements::input_data::keyboard_types::Key;
 use dioxus_html as dioxus_elements;
 use dioxus_html::FormData;
