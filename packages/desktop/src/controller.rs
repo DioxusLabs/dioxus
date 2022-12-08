@@ -3,6 +3,7 @@ use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -17,6 +18,7 @@ use wry::{
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
     pub(super) sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+    pub(super) eval_sender: tokio::sync::mpsc::UnboundedSender<Value>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
@@ -38,6 +40,7 @@ impl DesktopController {
         let pending_edits = edit_queue.clone();
         let return_sender = sender.clone();
         let desktop_context_proxy = proxy.clone();
+        let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel::<Value>();
 
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "spawn" onto multiple threads
@@ -50,7 +53,7 @@ impl DesktopController {
                 let mut dom =
                     VirtualDom::new_with_props_and_scheduler(root, props, (sender, receiver));
 
-                let window_context = DesktopContext::new(desktop_context_proxy);
+                let window_context = DesktopContext::new(desktop_context_proxy, eval_reciever);
 
                 dom.base_scope().provide_context(window_context);
 
@@ -88,6 +91,7 @@ impl DesktopController {
         Self {
             pending_edits,
             sender: return_sender,
+            eval_sender,
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,

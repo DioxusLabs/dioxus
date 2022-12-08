@@ -13,7 +13,7 @@ mod hot_reload;
 mod protocol;
 
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_eval, use_window, DesktopContext};
+pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
 pub use wry;
 pub use wry::application as tao;
 
@@ -126,7 +126,11 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                 let window = builder.build(event_loop).unwrap();
                 let window_id = window.id();
 
-                let (is_ready, sender) = (desktop.is_ready.clone(), desktop.sender.clone());
+                let (is_ready, sender, eval_sender) = (
+                    desktop.is_ready.clone(),
+                    desktop.sender.clone(),
+                    desktop.eval_sender.clone(),
+                );
 
                 let proxy = proxy.clone();
 
@@ -143,6 +147,10 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                     .with_ipc_handler(move |_window: &Window, payload: String| {
                         parse_ipc_message(&payload)
                             .map(|message| match message.method() {
+                                "eval_result" => {
+                                    let result = message.params();
+                                    eval_sender.send(result).unwrap();
+                                }
                                 "user_event" => {
                                     let event = trigger_from_serialized(message.params());
                                     log::trace!("User event: {:?}", event);

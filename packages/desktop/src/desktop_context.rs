@@ -1,5 +1,11 @@
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use serde::de::Error;
+use serde_json::Value;
+use std::future::Future;
+use std::future::IntoFuture;
+use std::pin::Pin;
+use std::rc::Rc;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
@@ -33,11 +39,18 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 pub struct DesktopContext {
     /// The wry/tao proxy to the current window
     pub proxy: ProxyType,
+    pub(super) eval_reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
 }
 
 impl DesktopContext {
-    pub(crate) fn new(proxy: ProxyType) -> Self {
-        Self { proxy }
+    pub(crate) fn new(
+        proxy: ProxyType,
+        eval_reciever: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    ) -> Self {
+        Self {
+            proxy,
+            eval_reciever: Rc::new(tokio::sync::Mutex::new(eval_reciever)),
+        }
     }
 
     /// trigger the drag-window event
@@ -245,7 +258,13 @@ pub(super) fn handler(
         }
 
         Eval(code) => {
-            if let Err(e) = webview.evaluate_script(code.as_str()) {
+            let script = format!(
+                r#"window.ipc.postMessage(JSON.stringify({{"method":"eval_result", params: (function(){{
+                    {}
+                }})()}}));"#,
+                code
+            );
+            if let Err(e) = webview.evaluate_script(&script) {
                 // we can't panic this error.
                 log::warn!("Eval script error: {e}");
             }
@@ -280,10 +299,36 @@ pub(super) fn handler(
 }
 
 /// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) {
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
     let desktop = use_window(cx).clone();
+    cx.use_hook(|| {
+        move |script| {
+            desktop.eval(script);
+            let recv = desktop.eval_reciever.clone();
+            EvalResult { reciever: recv }
+        }
+    })
+}
 
-    cx.use_hook(|| move |script| desktop.eval(script))
+/// A future that resolves to the result of a JavaScript evaluation.
+pub struct EvalResult {
+    reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>>,
+}
+
+impl IntoFuture for EvalResult {
+    type Output = Result<serde_json::Value, serde_json::Error>;
+
+    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut reciever = self.reciever.lock().await;
+            match reciever.recv().await {
+                Some(result) => Ok(result),
+                None => Err(serde_json::Error::custom("No result returned")),
+            }
+        }) as Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>
+    }
 }
 
 #[cfg(target_os = "ios")]
