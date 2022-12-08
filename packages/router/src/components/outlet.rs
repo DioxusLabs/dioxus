@@ -44,14 +44,17 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     });
 
     // get content
-    let X: Component = match name {
+    let content = match name {
         None => state.content.get(*depth),
         Some(n) => state.named_content.get(n).and_then(|n| n.get(*depth)),
-    }?
-    .0
-    .clone();
-
-    render! {
-        X { }
     }
+    .cloned();
+
+    cx.render(match content {
+        Some(content) => {
+            let X = content.0;
+            rsx! { X { } }
+        }
+        None => rsx! { Fragment { } },
+    })
 }
