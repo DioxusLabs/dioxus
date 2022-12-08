@@ -57,7 +57,7 @@
 use std::rc::Rc;
 
 pub use crate::cfg::Config;
-pub use crate::util::use_eval;
+pub use crate::util::{use_eval, EvalResult};
 use dioxus_core::prelude::Component;
 use dioxus_core::SchedulerMsg;
 use dioxus_core::VirtualDom;
