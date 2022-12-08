@@ -36,7 +36,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let state = use_ref(&cx, Calculator::new);
+    let state = use_ref(cx, Calculator::new);
 
     cx.render(rsx! {
         style { include_str!("./assets/calculator.css") }

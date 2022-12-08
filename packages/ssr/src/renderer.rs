@@ -156,26 +156,29 @@ fn to_string_works() {
     _ = dom.rebuild();
 
     let mut renderer = Renderer::new();
-
     let out = renderer.render(&dom);
 
-    use Segment::*;
-    assert_eq!(
-        renderer.template_cache.iter().next().unwrap().1.segments,
-        vec![
-            PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
-            Attr(0,),
-            PreRendered(">Hello world 1 -->".into(),),
-            Node(0,),
-            PreRendered("<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),),
-            Node(1,),
-            Node(2,),
-            PreRendered("</div>".into(),),
-        ]
-    );
+    for item in renderer.template_cache.iter() {
+        if item.1.segments.len() > 5 {
+            assert_eq!(
+                item.1.segments,
+                vec![
+                    PreRendered("<div class=\"asdasdasd\" class=\"asdasdasd\"".into(),),
+                    Attr(0,),
+                    PreRendered(">Hello world 1 -->".into(),),
+                    Node(0,),
+                    PreRendered(
+                        "<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div>".into(),
+                    ),
+                    Node(1,),
+                    Node(2,),
+                    PreRendered("</div>".into(),),
+                ]
+            );
+        }
+    }
 
-    assert_eq!(
-        out,
-        "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 --><!--#-->123<!--/#--><-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div><!--#--></diiiiiiiiv><!--/#--><div><!--#-->finalize 0<!--/#--></div><div><!--#-->finalize 1<!--/#--></div><div><!--#-->finalize 2<!--/#--></div><div><!--#-->finalize 3<!--/#--></div><div><!--#-->finalize 4<!--/#--></div></div>"
-    );
+    use Segment::*;
+
+    assert_eq!(out, "<div class=\"asdasdasd\" class=\"asdasdasd\" id=\"id-123\">Hello world 1 -->123<-- Hello world 2<div>nest 1</div><div></div><div>nest 2</div></diiiiiiiiv><div>finalize 0</div><div>finalize 1</div><div>finalize 2</div><div>finalize 3</div><div>finalize 4</div></div>");
 }

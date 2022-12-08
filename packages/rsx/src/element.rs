@@ -192,16 +192,16 @@ impl ToTokens for Element {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttr {
-    /// attribute: "valuee {}"
+    /// `attribute: "value"`
     AttrText { name: Ident, value: IfmtInput },
 
-    /// attribute: true,
+    /// `attribute: true`
     AttrExpression { name: Ident, value: Expr },
 
-    /// "attribute": "value {}"
+    /// `"attribute": "value"`
     CustomAttrText { name: LitStr, value: IfmtInput },
 
-    /// "attribute": true,
+    /// `"attribute": true`
     CustomAttrExpression { name: LitStr, value: Expr },
 
     // /// onclick: move |_| {}

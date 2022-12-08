@@ -12,15 +12,15 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let window = dioxus_desktop::use_window(&cx);
+    let window = dioxus_desktop::use_window(cx);
 
     // if you want to make window fullscreen, you need close the resizable.
     // window.set_fullscreen(true);
     // window.set_resizable(false);
 
-    let fullscreen = use_state(&cx, || false);
-    let always_on_top = use_state(&cx, || false);
-    let decorations = use_state(&cx, || false);
+    let fullscreen = use_state(cx, || false);
+    let always_on_top = use_state(cx, || false);
+    let decorations = use_state(cx, || false);
 
     cx.render(rsx!(
         link { href:"https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css", rel:"stylesheet" }

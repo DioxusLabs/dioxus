@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let alpha = use_state(&cx, || 100);
+    let alpha = use_state(cx, || 100);
 
     cx.render(rsx! {
         div {

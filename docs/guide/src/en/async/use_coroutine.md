@@ -10,7 +10,7 @@ The basic setup for coroutines is the `use_coroutine` hook. Most coroutines we w
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let ws: &UseCoroutine<()> = use_coroutine(&cx, |rx| async move {
+    let ws: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
         // Connect to some sort of service
         let mut conn = connect_to_ws_server().await;
 
@@ -27,7 +27,7 @@ For many services, a simple async loop will handle the majority of use cases.
 However, if we want to temporarily disable the coroutine, we can "pause" it using the `pause` method, and "resume" it using the `resume` method:
 
 ```rust
-let sync: &UseCoroutine<()> = use_coroutine(&cx, |rx| async move {
+let sync: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
     // code for syncing
 });
 
@@ -63,7 +63,7 @@ enum ProfileUpdate {
     SetAge(i32)
 }
 
-let profile = use_coroutine(&cx, |mut rx: UnboundedReciver<ProfileUpdate>| async move {
+let profile = use_coroutine(cx, |mut rx: UnboundedReciver<ProfileUpdate>| async move {
     let mut server = connect_to_server().await;
 
     while let Ok(msg) = rx.next().await {
@@ -86,9 +86,9 @@ cx.render(rsx!{
 For sufficiently complex apps, we could build a bunch of different useful "services" that loop on channels to update the app.
 
 ```rust
-let profile = use_coroutine(&cx, profile_service);
-let editor = use_coroutine(&cx, editor_service);
-let sync = use_coroutine(&cx, sync_service);
+let profile = use_coroutine(cx, profile_service);
+let editor = use_coroutine(cx, editor_service);
+let sync = use_coroutine(cx, sync_service);
 
 async fn profile_service(rx: UnboundedReceiver<ProfileCommand>) {
     // do stuff
@@ -109,9 +109,9 @@ We can combine coroutines with Fermi to emulate Redux Toolkit's Thunk system wit
 static USERNAME: Atom<String> = |_| "default".to_string();
 
 fn app(cx: Scope) -> Element {
-    let atoms = use_atom_root(&cx);
+    let atoms = use_atom_root(cx);
 
-    use_coroutine(&cx, |rx| sync_service(rx, atoms.clone()));
+    use_coroutine(cx, |rx| sync_service(rx, atoms.clone()));
 
     cx.render(rsx!{
         Banner {}
@@ -119,7 +119,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Banner(cx: Scope) -> Element {
-    let username = use_read(&cx, USERNAME);
+    let username = use_read(cx, USERNAME);
 
     cx.render(rsx!{
         h1 { "Welcome back, {username}" }
@@ -158,8 +158,8 @@ To yield values from a coroutine, simply bring in a `UseState` handle and set th
 
 
 ```rust
-let sync_status = use_state(&cx, || Status::Launching);
-let sync_task = use_coroutine(&cx, |rx: UnboundedReceiver<SyncAction>| {
+let sync_status = use_state(cx, || Status::Launching);
+let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
     to_owned![sync_status];
     async move {
         loop {
@@ -176,7 +176,7 @@ Coroutine handles are automatically injected through the context API. `use_corou
 
 ```rust
 fn Child(cx: Scope) -> Element {
-    let sync_task = use_coroutine_handle::<SyncAction>(&cx);
+    let sync_task = use_coroutine_handle::<SyncAction>(cx);
 
     sync_task.send(SyncAction::SetUsername);
 }

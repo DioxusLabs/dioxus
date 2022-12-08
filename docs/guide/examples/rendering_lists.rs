@@ -14,9 +14,9 @@ struct Comment {
 
 pub fn App(cx: Scope) -> Element {
     // ANCHOR: render_list
-    let comment_field = use_state(&cx, String::new);
-    let mut next_id = use_state(&cx, || 0);
-    let comments = use_ref(&cx, Vec::<Comment>::new);
+    let comment_field = use_state(cx, String::new);
+    let mut next_id = use_state(cx, || 0);
+    let comments = use_ref(cx, Vec::<Comment>::new);
 
     let comments_lock = comments.read();
     let comments_rendered = comments_lock.iter().map(|comment| {

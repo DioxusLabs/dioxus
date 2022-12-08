@@ -1,4 +1,3 @@
-use anymap::AnyMap;
 use dioxus::prelude::*;
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::real_dom::*;

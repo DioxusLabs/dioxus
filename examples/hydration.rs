@@ -20,7 +20,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let val = use_state(&cx, || 0);
+    let val = use_state(cx, || 0);
 
     cx.render(rsx! {
         div {

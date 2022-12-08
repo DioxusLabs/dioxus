@@ -5,7 +5,7 @@
 ///
 ///
 /// ```ignore
-/// let (data) = use_ref(&cx, || {});
+/// let (data) = use_ref(cx, || {});
 ///
 /// let handle_thing = move |_| {
 ///     to_owned![data]
@@ -30,8 +30,8 @@ pub use usestate::{use_state, UseState};
 mod useref;
 pub use useref::*;
 
-// mod use_shared_state;
-// pub use use_shared_state::*;
+mod use_shared_state;
+pub use use_shared_state::*;
 
 mod usecoroutine;
 pub use usecoroutine::*;

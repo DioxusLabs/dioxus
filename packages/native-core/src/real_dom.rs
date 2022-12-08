@@ -132,7 +132,7 @@ impl<S: State> RealDom<S> {
                                 },
                                 OwnedAttributeValue::Text(value.to_string()),
                             )),
-                            dioxus_core::TemplateAttribute::Dynamic(_) => None,
+                            dioxus_core::TemplateAttribute::Dynamic { .. } => None,
                         })
                         .collect(),
                     listeners: FxHashSet::default(),
@@ -144,17 +144,17 @@ impl<S: State> RealDom<S> {
                 }
                 node_id
             }
-            TemplateNode::Text(txt) => {
+            TemplateNode::Text { text } => {
                 let node_id = self.create_node(Node::new(NodeType::Text {
-                    text: txt.to_string(),
+                    text: text.to_string(),
                 }));
                 node_id
             }
-            TemplateNode::Dynamic(_) => {
+            TemplateNode::Dynamic { .. } => {
                 let node_id = self.create_node(Node::new(NodeType::Placeholder));
                 node_id
             }
-            TemplateNode::DynamicText(_) => {
+            TemplateNode::DynamicText { .. } => {
                 let node_id = self.create_node(Node::new(NodeType::Text {
                     text: String::new(),
                 }));

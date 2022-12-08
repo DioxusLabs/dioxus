@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let val = use_state(&cx, || "0.0001");
+    let val = use_state(cx, || "0.0001");
 
     let num = match val.parse::<f32>() {
         Err(_) => return cx.render(rsx!("Parsing failed")),

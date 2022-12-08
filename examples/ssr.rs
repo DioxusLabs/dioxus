@@ -2,16 +2,13 @@
 //!
 //! This example shows how we can render the Dioxus Virtualdom using SSR.
 
-use std::fmt::Write;
-
 use dioxus::prelude::*;
-use dioxus_ssr::config::Config;
 
 fn main() {
     // We can render VirtualDoms
     let mut vdom = VirtualDom::new(app);
     let _ = vdom.rebuild();
-    println!("{}", dioxus_ssr::render_vdom(&vdom));
+    println!("{}", dioxus_ssr::render(&vdom));
 
     // Or we can render rsx! calls themselves
     println!(
@@ -24,17 +21,12 @@ fn main() {
     );
 
     // We can configure the SSR rendering to add ids for rehydration
-    println!(
-        "{}",
-        dioxus_ssr::render_vdom_cfg(&vdom, Config::default().pre_render(true))
-    );
+    println!("{}", dioxus_ssr::pre_render(&vdom));
 
-    // We can even render as a writer
+    // We can render to a buf directly too
     let mut file = String::new();
-    let _ = file.write_fmt(format_args!(
-        "{}",
-        dioxus_ssr::SsrRender::default().render_vdom(&vdom)
-    ));
+    let mut renderer = dioxus_ssr::Renderer::default();
+    renderer.render_to(&mut file, &vdom).unwrap();
     println!("{}", file);
 }
 

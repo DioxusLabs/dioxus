@@ -7,13 +7,12 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{ElementId, Mutation, Mutations, Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{Mutation, Template};
 use dioxus_html::{event_bubbles, CompositionData, FormData};
 use dioxus_interpreter_js::Interpreter;
 use futures_channel::mpsc;
-use js_sys::Function;
 use std::{any::Any, rc::Rc};
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{Document, Element, Event};
 
 use crate::Config;
@@ -61,7 +60,7 @@ impl WebsysDom {
         let i = &self.interpreter;
         for edit in edits.drain(..) {
             match edit {
-                AppendChildren { id, m } => i.AppendChildren(m as u32),
+                AppendChildren { id, m } => i.AppendChildren(m as u32, id.0 as u32),
                 AssignId { path, id } => i.AssignId(path, id.0 as u32),
                 CreatePlaceholder { id } => i.CreatePlaceholder(id.0 as u32),
                 CreateTextNode { value, id } => i.CreateTextNode(value.into(), id.0 as u32),
@@ -81,7 +80,7 @@ impl WebsysDom {
                     i.SetBoolAttribute(id.0 as u32, name, value)
                 }
                 SetText { value, id } => i.SetText(id.0 as u32, value.into()),
-                NewEventListener { name, scope, id } => {
+                NewEventListener { name, id, .. } => {
                     self.interpreter.NewEventListener(
                         name,
                         id.0 as u32,
