@@ -32,7 +32,7 @@ jobs:
           cd router && mdbook build -d ../nightly/router  && cd ..
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.2.3
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
           branch: gh-pages # The branch the action should deploy to.
           folder: docs/nightly # The folder the action should deploy.
