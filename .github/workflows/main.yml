@@ -62,7 +62,7 @@ jobs:
       - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
-      - uses: jetli/wasm-pack-action@v0.3.0
+      - uses: jetli/wasm-pack-action@v0.4.0
       - uses: actions-rs/cargo@v1
         with:
           command: make
