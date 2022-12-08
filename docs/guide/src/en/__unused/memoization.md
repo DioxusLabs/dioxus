@@ -8,8 +8,8 @@ For example, let's say we have a component that has two children:
 ```rust
 fn Demo(cx: Scope) -> Element {
     // don't worry about these 2, we'll cover them later
-    let name = use_state(&cx, || String::from("bob"));
-    let age = use_state(&cx, || 21);
+    let name = use_state(cx, || String::from("bob"));
+    let age = use_state(cx, || 21);
 
     cx.render(rsx!{
         Name { name: name }

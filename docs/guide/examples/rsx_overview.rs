@@ -103,7 +103,7 @@ pub fn Expression(cx: Scope) -> Element {
     // ANCHOR: expression
     let text = "Dioxus";
     cx.render(rsx!(span {
-        [text.to_uppercase()]
+        text.to_uppercase()
     }))
     // ANCHOR_END: expression
 }

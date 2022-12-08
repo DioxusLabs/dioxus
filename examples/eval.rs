@@ -6,9 +6,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let script = use_state(&cx, String::new);
-    let eval = dioxus_desktop::use_eval(&cx);
-    let future: &UseRef<Option<EvalResult>> = use_ref(&cx, || None);
+    let script = use_state(cx, String::new);
+    let eval = dioxus_desktop::use_eval(cx);
+    let future: &UseRef<Option<EvalResult>> = use_ref(cx, || None);
     if future.read().is_some() {
         let future_clone = future.clone();
         cx.spawn(async move {

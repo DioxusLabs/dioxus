@@ -3,7 +3,7 @@
 //! This module provides support for a type called `LazyNodes` which is a micro-heap located on the stack to make calls
 //! to `rsx!` more efficient.
 //!
-//! To support returning rsx! from branches in match statements, we need to use dynamic dispatch on [`NodeFactory`] closures.
+//! To support returning rsx! from branches in match statements, we need to use dynamic dispatch on [`ScopeState`] closures.
 //!
 //! This can be done either through boxing directly, or by using dynamic-sized-types and a custom allocator. In our case,
 //! we build a tiny alloactor in the stack and allocate the closure into that.
@@ -11,13 +11,13 @@
 //! The logic for this was borrowed from <https://docs.rs/stack_dst/0.6.1/stack_dst/>. Unfortunately, this crate does not
 //! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
-use crate::innerlude::{NodeFactory, VNode};
+use crate::{innerlude::VNode, ScopeState};
 use std::mem;
 
 /// A concrete type provider for closures that build [`VNode`] structures.
 ///
 /// This struct wraps lazy structs that build [`VNode`] trees Normally, we cannot perform a blanket implementation over
-/// closures, but if we wrap the closure in a concrete type, we can maintain separate implementations of [`IntoVNode`].
+/// closures, but if we wrap the closure in a concrete type, we can use it for different branches in matching.
 ///
 ///
 /// ```rust, ignore
@@ -31,7 +31,7 @@ type StackHeapSize = [usize; 16];
 
 enum StackNodeStorage<'a, 'b> {
     Stack(LazyStack),
-    Heap(Box<dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b>),
+    Heap(Box<dyn FnMut(Option<&'a ScopeState>) -> Option<VNode<'a>> + 'b>),
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
@@ -40,11 +40,11 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     /// If the closure cannot fit into the stack allocation (16 bytes), then it
     /// is placed on the heap. Most closures will fit into the stack, and is
     /// the most optimal way to use the creation function.
-    pub fn new(val: impl FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b) -> Self {
+    pub fn new(val: impl FnOnce(&'a ScopeState) -> VNode<'a> + 'b) -> Self {
         // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
         let mut slot = Some(val);
 
-        let val = move |fac: Option<NodeFactory<'a>>| {
+        let val = move |fac: Option<&'a ScopeState>| {
             fac.map(
                 slot.take()
                     .expect("LazyNodes closure to be called only once"),
@@ -65,13 +65,13 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     /// Create a new [`LazyNodes`] closure, but force it onto the heap.
     pub fn new_boxed<F>(inner: F) -> Self
     where
-        F: FnOnce(NodeFactory<'a>) -> VNode<'a> + 'b,
+        F: FnOnce(&'a ScopeState) -> VNode<'a> + 'b,
     {
         // there's no way to call FnOnce without a box, so we need to store it in a slot and use static dispatch
         let mut slot = Some(inner);
 
         Self {
-            inner: StackNodeStorage::Heap(Box::new(move |fac: Option<NodeFactory<'a>>| {
+            inner: StackNodeStorage::Heap(Box::new(move |fac: Option<&'a ScopeState>| {
                 fac.map(
                     slot.take()
                         .expect("LazyNodes closure to be called only once"),
@@ -82,9 +82,9 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
 
     unsafe fn new_inner<F>(val: F) -> Self
     where
-        F: FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> + 'b,
+        F: FnMut(Option<&'a ScopeState>) -> Option<VNode<'a>> + 'b,
     {
-        let mut ptr: *const _ = &val as &dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>;
+        let mut ptr: *const _ = &val as &dyn FnMut(Option<&'a ScopeState>) -> Option<VNode<'a>>;
 
         assert_eq!(
             ptr as *const u8, &val as *const _ as *const u8,
@@ -160,12 +160,10 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     /// ```rust, ignore
     /// let f = LazyNodes::new(move |f| f.element("div", [], [], [] None));
     ///
-    /// let fac = NodeFactory::new(&cx);
-    ///
     /// let node = f.call(cac);
     /// ```
     #[must_use]
-    pub fn call(self, f: NodeFactory<'a>) -> VNode<'a> {
+    pub fn call(self, f: &'a ScopeState) -> VNode<'a> {
         match self.inner {
             StackNodeStorage::Heap(mut lazy) => {
                 lazy(Some(f)).expect("Closure should not be called twice")
@@ -182,18 +180,18 @@ struct LazyStack {
 }
 
 impl LazyStack {
-    fn call<'a>(&mut self, f: NodeFactory<'a>) -> VNode<'a> {
+    fn call<'a>(&mut self, f: &'a ScopeState) -> VNode<'a> {
         let LazyStack { buf, .. } = self;
         let data = buf.as_ref();
 
         let info_size =
-            mem::size_of::<*mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>>>()
+            mem::size_of::<*mut dyn FnMut(Option<&'a ScopeState>) -> Option<VNode<'a>>>()
                 / mem::size_of::<usize>()
                 - 1;
 
         let info_ofs = data.len() - info_size;
 
-        let g: *mut dyn FnMut(Option<NodeFactory<'a>>) -> Option<VNode<'a>> =
+        let g: *mut dyn FnMut(Option<&'a ScopeState>) -> Option<VNode<'a>> =
             unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
 
         self.dropped = true;
@@ -208,14 +206,14 @@ impl Drop for LazyStack {
             let LazyStack { buf, .. } = self;
             let data = buf.as_ref();
 
-            let info_size = mem::size_of::<
-                *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>>,
-            >() / mem::size_of::<usize>()
-                - 1;
+            let info_size =
+                mem::size_of::<*mut dyn FnMut(Option<&ScopeState>) -> Option<VNode<'_>>>()
+                    / mem::size_of::<usize>()
+                    - 1;
 
             let info_ofs = data.len() - info_size;
 
-            let g: *mut dyn FnMut(Option<NodeFactory<'_>>) -> Option<VNode<'_>> =
+            let g: *mut dyn FnMut(Option<&ScopeState>) -> Option<VNode<'_>> =
                 unsafe { make_fat_ptr(data[..].as_ptr() as usize, &data[info_ofs..]) };
 
             self.dropped = true;
@@ -249,74 +247,4 @@ unsafe fn make_fat_ptr<T: ?Sized>(data_ptr: usize, meta_vals: &[usize]) -> *mut 
 
 fn round_to_words(len: usize) -> usize {
     (len + mem::size_of::<usize>() - 1) / mem::size_of::<usize>()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::innerlude::{Element, Scope, VirtualDom};
-
-    #[test]
-    fn it_works() {
-        fn app(cx: Scope<()>) -> Element {
-            cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
-        }
-
-        let mut dom = VirtualDom::new(app);
-        dom.rebuild();
-
-        let g = dom.base_scope().root_node();
-        dbg!(g);
-    }
-
-    #[test]
-    fn it_drops() {
-        use std::rc::Rc;
-
-        struct AppProps {
-            inner: Rc<i32>,
-        }
-
-        fn app(cx: Scope<AppProps>) -> Element {
-            struct DropInner {
-                id: i32,
-            }
-            impl Drop for DropInner {
-                fn drop(&mut self) {
-                    eprintln!("dropping inner");
-                }
-            }
-
-            let caller = {
-                let it = (0..10).map(|i| {
-                    let val = cx.props.inner.clone();
-                    LazyNodes::new(move |f| {
-                        eprintln!("hell closure");
-                        let inner = DropInner { id: i };
-                        f.text(format_args!("hello world {:?}, {:?}", inner.id, val))
-                    })
-                });
-
-                LazyNodes::new(|f| {
-                    eprintln!("main closure");
-                    f.fragment_from_iter(it)
-                })
-            };
-
-            cx.render(caller)
-        }
-
-        let inner = Rc::new(0);
-        let mut dom = VirtualDom::new_with_props(
-            app,
-            AppProps {
-                inner: inner.clone(),
-            },
-        );
-        dom.rebuild();
-
-        drop(dom);
-
-        assert_eq!(Rc::strong_count(&inner), 1);
-    }
 }

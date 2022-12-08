@@ -1,6 +1,12 @@
 #![allow(missing_docs)]
 use dioxus_core::{ScopeState, TaskId};
-use std::{any::Any, cell::Cell, future::Future, rc::Rc, sync::Arc};
+use std::{
+    any::Any,
+    cell::{Cell, RefCell},
+    future::{Future, IntoFuture},
+    rc::Rc,
+    sync::Arc,
+};
 
 /// A future that resolves to a value.
 ///
@@ -28,16 +34,13 @@ where
     let state = cx.use_hook(move || UseFuture {
         update: cx.schedule_update(),
         needs_regen: Cell::new(true),
-        slot: Rc::new(Cell::new(None)),
-        value: None,
+        values: Default::default(),
         task: Cell::new(None),
         dependencies: Vec::new(),
+        waker: Default::default(),
     });
 
-    if let Some(value) = state.slot.take() {
-        state.value = Some(value);
-        state.task.set(None);
-    }
+    *state.waker.borrow_mut() = None;
 
     if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
         // We don't need regen anymore
@@ -47,8 +50,9 @@ where
         let fut = future(dependencies.out());
 
         // Clone in our cells
-        let slot = state.slot.clone();
+        let values = state.values.clone();
         let schedule_update = state.update.clone();
+        let waker = state.waker.clone();
 
         // Cancel the current future
         if let Some(current) = state.task.take() {
@@ -57,8 +61,13 @@ where
 
         state.task.set(Some(cx.push_future(async move {
             let res = fut.await;
-            slot.set(Some(res));
-            schedule_update();
+            values.borrow_mut().push(Box::leak(Box::new(res)));
+
+            // if there's a waker, we dont re-render the component. Instead we just progress that future
+            match waker.borrow().as_ref() {
+                Some(waker) => waker.wake_by_ref(),
+                None => schedule_update(),
+            }
         })));
     }
 
@@ -74,10 +83,10 @@ pub enum FutureState<'a, T> {
 pub struct UseFuture<T> {
     update: Arc<dyn Fn()>,
     needs_regen: Cell<bool>,
-    value: Option<T>,
-    slot: Rc<Cell<Option<T>>>,
     task: Cell<Option<TaskId>>,
     dependencies: Vec<Box<dyn Any>>,
+    waker: Rc<RefCell<Option<std::task::Waker>>>,
+    values: Rc<RefCell<Vec<*mut T>>>,
 }
 
 pub enum UseFutureState<'a, T> {
@@ -105,22 +114,28 @@ impl<T> UseFuture<T> {
 
     // clears the value in the future slot without starting the future over
     pub fn clear(&self) -> Option<T> {
-        (self.update)();
-        self.slot.replace(None)
+        todo!()
+        // (self.update)();
+        // self.slot.replace(None)
     }
 
     // Manually set the value in the future slot without starting the future over
-    pub fn set(&self, new_value: T) {
-        self.slot.set(Some(new_value));
-        self.needs_regen.set(true);
-        (self.update)();
+    pub fn set(&self, _new_value: T) {
+        // self.slot.set(Some(new_value));
+        // self.needs_regen.set(true);
+        // (self.update)();
+        todo!()
     }
 
     /// Return any value, even old values if the future has not yet resolved.
     ///
     /// If the future has never completed, the returned value will be `None`.
     pub fn value(&self) -> Option<&T> {
-        self.value.as_ref()
+        self.values
+            .borrow_mut()
+            .last()
+            .cloned()
+            .map(|x| unsafe { &*x })
     }
 
     /// Get the ID of the future in Dioxus' internal scheduler
@@ -130,18 +145,48 @@ impl<T> UseFuture<T> {
 
     /// Get the current stateof the future.
     pub fn state(&self) -> UseFutureState<T> {
-        match (&self.task.get(), &self.value) {
-            // If we have a task and an existing value, we're reloading
-            (Some(_), Some(val)) => UseFutureState::Reloading(val),
+        todo!()
+        // match (&self.task.get(), &self.value) {
+        //     // If we have a task and an existing value, we're reloading
+        //     (Some(_), Some(val)) => UseFutureState::Reloading(val),
 
-            // no task, but value - we're done
-            (None, Some(val)) => UseFutureState::Complete(val),
+        //     // no task, but value - we're done
+        //     (None, Some(val)) => UseFutureState::Complete(val),
 
-            // no task, no value - something's wrong? return pending
-            (None, None) => UseFutureState::Pending,
+        //     // no task, no value - something's wrong? return pending
+        //     (None, None) => UseFutureState::Pending,
 
-            // Task, no value - we're still pending
-            (Some(_), None) => UseFutureState::Pending,
+        //     // Task, no value - we're still pending
+        //     (Some(_), None) => UseFutureState::Pending,
+        // }
+    }
+}
+
+impl<'a, T> IntoFuture for &'a UseFuture<T> {
+    type Output = &'a T;
+    type IntoFuture = UseFutureAwait<'a, T>;
+    fn into_future(self) -> Self::IntoFuture {
+        UseFutureAwait { hook: self }
+    }
+}
+
+pub struct UseFutureAwait<'a, T> {
+    hook: &'a UseFuture<T>,
+}
+
+impl<'a, T> Future for UseFutureAwait<'a, T> {
+    type Output = &'a T;
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        match self.hook.values.borrow_mut().last().cloned() {
+            Some(value) => std::task::Poll::Ready(unsafe { &*value }),
+            None => {
+                self.hook.waker.replace(Some(cx.waker().clone()));
+                std::task::Poll::Pending
+            }
         }
     }
 }
@@ -239,6 +284,19 @@ impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g,);
 impl_dep!(A = a, B = b, C = c, D = d, E = e, F = f, G = g, H = h,);
 
+/// A helper macro that merges uses the closure syntax to elaborate the dependency array
+#[macro_export]
+macro_rules! use_future {
+    ($cx:ident, || $($rest:tt)*) => { use_future( $cx, (), |_| $($rest)* ) };
+    ($cx:ident, | $($args:tt),* | $($rest:tt)*) => {
+        use_future(
+            $cx,
+            ($($args),*),
+            |($($args),*)| $($rest)*
+        )
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,23 +314,33 @@ mod tests {
             e: i32,
         }
 
-        fn app(cx: Scope<MyProps>) -> Element {
+        async fn app(cx: Scope<'_, MyProps>) -> Element {
             // should only ever run once
-            let fut = use_future(&cx, (), |_| async move {
-                //
-            });
+            let fut = use_future(cx, (), |_| async move {});
 
             // runs when a is changed
-            let fut = use_future(&cx, (&cx.props.a,), |(a,)| async move {
-                //
-            });
+            let fut = use_future(cx, (&cx.props.a,), |(a,)| async move {});
 
             // runs when a or b is changed
-            let fut = use_future(&cx, (&cx.props.a, &cx.props.b), |(a, b)| async move {
-                //
+            let fut = use_future(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move { 123 });
+
+            let a = use_future!(cx, || async move {
+                // do the thing!
             });
 
-            None
+            let b = &123;
+            let c = &123;
+
+            let a = use_future!(cx, |b, c| async move {
+                let a = b + c;
+                let blah = "asd";
+            });
+
+            let g2 = a.await;
+
+            let g = fut.await;
+
+            todo!()
         }
     }
 }

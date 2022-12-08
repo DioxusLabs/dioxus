@@ -89,7 +89,7 @@ You must provide a valid URL `{scheme}://{?authority}/{?path}`.
 
 ```rust
 Router {
-    initial_url: "https://dioxuslab.com/blog",  // Set the initial url. 
+    initial_url: "https://dioxuslab.com/blog",  // Set the initial url.
     Link { to: "/", "Home" },
     Link { to: "/blog", "Blog" }, // The router will render this route.
 }
@@ -109,7 +109,7 @@ For any route, you can get a handle the current route with the `use_route` hook.
 
 ```rust
 fn Title(cx: Scope) -> Element {
-    let route = use_route(&cx);
+    let route = use_route(cx);
 
     assert_eq!(route.segments(), &["dogs", "breeds", "yorkie", "hugo"]);
 
@@ -130,7 +130,7 @@ Router {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let route = use_route(&cx);
+    let route = use_route(cx);
 
     match route.segment("post").and_then(parse) {
         Some(post) => cx.render(rsx!{ div { "Post {post}" } })
@@ -168,7 +168,7 @@ Listeners can also be attached downstream in your app with the `RouteListener` h
 
 ```rust
 fn TitleCard(cx: Scope) -> Element {
-    let (title, set_title) = use_state(&cx, || "First");
+    let (title, set_title) = use_state(cx, || "First");
 
     cx.render(rsx!{
         h1 { "render {title}" }

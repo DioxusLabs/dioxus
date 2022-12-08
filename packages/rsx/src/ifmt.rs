@@ -20,6 +20,12 @@ pub struct IfmtInput {
 }
 
 impl IfmtInput {
+    pub fn is_static(&self) -> bool {
+        matches!(self.segments.as_slice(), &[Segment::Literal(_)])
+    }
+}
+
+impl IfmtInput {
     pub fn to_static(&self) -> Option<String> {
         self.segments
             .iter()

@@ -1,6 +1,7 @@
 use std::{
     cell::{Ref, RefCell},
     rc::Rc,
+    sync::{Arc, Mutex, MutexGuard},
 };
 
 use dioxus_core::ElementId;
@@ -10,7 +11,7 @@ use taffy::{
     Taffy,
 };
 
-use crate::Dom;
+use crate::{layout_to_screen_space, TuiDom};
 
 /// Allows querying the layout of nodes after rendering. It will only provide a correct value after a node is rendered.
 /// Provided as a root context for all tui applictions.
@@ -25,8 +26,8 @@ use crate::Dom;
 /// }
 ///
 /// fn app(cx: Scope) -> Element {
-///     let hue = use_state(&cx, || 0.0);
-///     let brightness = use_state(&cx, || 0.0);
+///     let hue = use_state(cx, || 0.0);
+///     let brightness = use_state(cx, || 0.0);
 ///     let tui_query: Query = cx.consume_context().unwrap();
 ///     cx.render(rsx! {
 ///         div{
@@ -45,41 +46,54 @@ use crate::Dom;
 /// ```
 #[derive(Clone)]
 pub struct Query {
-    pub(crate) rdom: Rc<RefCell<Dom>>,
-    pub(crate) stretch: Rc<RefCell<Taffy>>,
+    pub(crate) rdom: Rc<RefCell<TuiDom>>,
+    pub(crate) stretch: Arc<Mutex<Taffy>>,
 }
 
 impl Query {
     pub fn get(&self, id: ElementId) -> ElementRef {
-        ElementRef::new(self.rdom.borrow(), self.stretch.borrow(), id)
+        ElementRef::new(
+            self.rdom.borrow(),
+            self.stretch.lock().expect("taffy lock poisoned"),
+            id,
+        )
     }
 }
 
 pub struct ElementRef<'a> {
-    inner: Ref<'a, Dom>,
-    stretch: Ref<'a, Taffy>,
+    inner: Ref<'a, TuiDom>,
+    stretch: MutexGuard<'a, Taffy>,
     id: ElementId,
 }
 
 impl<'a> ElementRef<'a> {
-    fn new(inner: Ref<'a, Dom>, stretch: Ref<'a, Taffy>, id: ElementId) -> Self {
+    fn new(inner: Ref<'a, TuiDom>, stretch: MutexGuard<'a, Taffy>, id: ElementId) -> Self {
         Self { inner, stretch, id }
     }
 
     pub fn size(&self) -> Option<Size<u32>> {
-        self.layout().map(|l| l.size.map(|v| v as u32))
+        self.layout().map(|l| l.size.map(|v| v.round() as u32))
     }
 
     pub fn pos(&self) -> Option<Point<u32>> {
         self.layout().map(|l| Point {
-            x: l.location.x as u32,
-            y: l.location.y as u32,
+            x: l.location.x.round() as u32,
+            y: l.location.y.round() as u32,
         })
     }
 
-    pub fn layout(&self) -> Option<&Layout> {
-        self.stretch
+    pub fn layout(&self) -> Option<Layout> {
+        let layout = self
+            .stretch
             .layout(self.inner[self.id].state.layout.node.ok()?)
-            .ok()
+            .ok();
+        layout.map(|layout| Layout {
+            order: layout.order,
+            size: layout.size.map(|v| layout_to_screen_space(v)),
+            location: Point {
+                x: layout_to_screen_space(layout.location.x),
+                y: layout_to_screen_space(layout.location.y),
+            },
+        })
     }
 }

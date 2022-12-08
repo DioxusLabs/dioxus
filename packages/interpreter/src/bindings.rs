@@ -2,7 +2,7 @@
 
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, Node};
+use web_sys::Element;
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
@@ -12,86 +12,68 @@ extern "C" {
     pub fn new(arg: Element) -> Interpreter;
 
     #[wasm_bindgen(method)]
-    pub fn SetNode(this: &Interpreter, id: usize, node: Node);
+    pub fn SaveTemplate(this: &Interpreter, template: JsValue);
 
     #[wasm_bindgen(method)]
-    pub fn AppendChildren(this: &Interpreter, root: Option<u64>, children: Vec<u64>);
+    pub fn MountToRoot(this: &Interpreter);
 
     #[wasm_bindgen(method)]
-    pub fn ReplaceWith(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
+    pub fn AppendChildren(this: &Interpreter, m: u32, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn InsertAfter(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
+    pub fn AssignId(this: &Interpreter, path: &[u8], id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn InsertBefore(this: &Interpreter, root: Option<u64>, nodes: Vec<u64>);
+    pub fn CreatePlaceholder(this: &Interpreter, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn Remove(this: &Interpreter, root: Option<u64>);
+    pub fn CreateTextNode(this: &Interpreter, value: JsValue, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreateTextNode(this: &Interpreter, text: JsValue, root: Option<u64>);
+    pub fn HydrateText(this: &Interpreter, path: &[u8], value: &str, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreateElement(this: &Interpreter, tag: &str, root: Option<u64>, children: u32);
+    pub fn LoadTemplate(this: &Interpreter, name: &str, index: u32, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreateElementNs(
-        this: &Interpreter,
-        tag: &str,
-        root: Option<u64>,
-        ns: &str,
-        children: u32,
-    );
+    pub fn ReplaceWith(this: &Interpreter, id: u32, m: u32);
 
     #[wasm_bindgen(method)]
-    pub fn CreatePlaceholder(this: &Interpreter, root: Option<u64>);
+    pub fn ReplacePlaceholder(this: &Interpreter, path: &[u8], m: u32);
+
+    #[wasm_bindgen(method)]
+    pub fn InsertAfter(this: &Interpreter, id: u32, n: u32);
+
+    #[wasm_bindgen(method)]
+    pub fn InsertBefore(this: &Interpreter, id: u32, n: u32);
+
+    #[wasm_bindgen(method)]
+    pub fn SetAttribute(this: &Interpreter, id: u32, name: &str, value: JsValue, ns: Option<&str>);
+
+    #[wasm_bindgen(method)]
+    pub fn SetBoolAttribute(this: &Interpreter, id: u32, name: &str, value: bool);
+
+    #[wasm_bindgen(method)]
+    pub fn SetText(this: &Interpreter, id: u32, text: JsValue);
 
     #[wasm_bindgen(method)]
     pub fn NewEventListener(
         this: &Interpreter,
         name: &str,
-        root: Option<u64>,
-        handler: &Function,
+        id: u32,
         bubbles: bool,
+        handler: &Function,
     );
 
     #[wasm_bindgen(method)]
-    pub fn RemoveEventListener(this: &Interpreter, root: Option<u64>, name: &str, bubbles: bool);
+    pub fn RemoveEventListener(this: &Interpreter, name: &str, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn SetText(this: &Interpreter, root: Option<u64>, text: JsValue);
+    pub fn RemoveAttribute(this: &Interpreter, id: u32, field: &str, ns: Option<&str>);
 
     #[wasm_bindgen(method)]
-    pub fn SetAttribute(
-        this: &Interpreter,
-        root: Option<u64>,
-        field: &str,
-        value: JsValue,
-        ns: Option<&str>,
-    );
+    pub fn Remove(this: &Interpreter, id: u32);
 
     #[wasm_bindgen(method)]
-    pub fn RemoveAttribute(this: &Interpreter, root: Option<u64>, field: &str, ns: Option<&str>);
-
-    #[wasm_bindgen(method)]
-    pub fn CloneNode(this: &Interpreter, root: Option<u64>, new_id: u64);
-
-    #[wasm_bindgen(method)]
-    pub fn CloneNodeChildren(this: &Interpreter, root: Option<u64>, new_ids: Vec<u64>);
-
-    #[wasm_bindgen(method)]
-    pub fn FirstChild(this: &Interpreter);
-
-    #[wasm_bindgen(method)]
-    pub fn NextSibling(this: &Interpreter);
-
-    #[wasm_bindgen(method)]
-    pub fn ParentNode(this: &Interpreter);
-
-    #[wasm_bindgen(method)]
-    pub fn StoreWithId(this: &Interpreter, id: u64);
-
-    #[wasm_bindgen(method)]
-    pub fn SetLastNode(this: &Interpreter, id: u64);
+    pub fn PushRoot(this: &Interpreter, id: u32);
 }

@@ -1,6 +1,5 @@
-use crate::{cfg::RouterCfg, RouterCore};
+use crate::{cfg::RouterCfg, RouterContext, RouterService};
 use dioxus::prelude::*;
-use std::sync::Arc;
 
 /// The props for the [`Router`](fn.Router.html) component.
 #[derive(Props)]
@@ -21,7 +20,7 @@ pub struct RouterProps<'a> {
     ///
     /// This lets you easily implement redirects
     #[props(default)]
-    pub onchange: EventHandler<'a, Arc<RouterCore>>,
+    pub onchange: EventHandler<'a, RouterContext>,
 
     /// Set the active class of all Link components contained in this router.
     ///
@@ -41,8 +40,8 @@ pub struct RouterProps<'a> {
 #[allow(non_snake_case)]
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let svc = cx.use_hook(|| {
-        cx.provide_context(RouterCore::new(
-            &cx,
+        cx.provide_context(RouterService::new(
+            cx,
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),

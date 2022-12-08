@@ -1,4 +1,3 @@
-
 [workspace]
 members = [
     "packages/dioxus",
@@ -13,15 +12,14 @@ members = [
     "packages/mobile",
     "packages/interpreter",
     "packages/fermi",
-    "packages/tui",
     "packages/liveview",
     "packages/autofmt",
     "packages/rsx",
+    "docs/guide",
+    "packages/tui",
     "packages/native-core",
     "packages/native-core-macro",
-    "docs/guide",
 ]
-
 
 # This is a "virtual package"
 # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
@@ -37,11 +35,11 @@ homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 rust-version = "1.60.0"
-
+publish = false
 
 [dev-dependencies]
 dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop", features = ["hot-reload"] }
+dioxus-desktop = { path = "./packages/desktop" }
 dioxus-ssr = { path = "./packages/ssr" }
 dioxus-router = { path = "./packages/router" }
 fermi = { path = "./packages/fermi" }

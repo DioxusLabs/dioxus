@@ -8,7 +8,7 @@ fn main() {
 
 fn App(cx: Scope) -> Element {
     // ANCHOR: spawn
-    let logged_in = use_state(&cx, || false);
+    let logged_in = use_state(cx, || false);
 
     let log_in = move |_| {
         cx.spawn({
@@ -58,18 +58,18 @@ pub fn Tokio(cx: Scope) -> Element {
         // ANCHOR_END: tokio
     };
 
-    None
+    cx.render(rsx!(()))
 }
 
 pub fn ToOwnedMacro(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
-    let age = use_state(&cx, || 0);
-    let name = use_state(&cx, || 0);
-    let description = use_state(&cx, || 0);
+    let count = use_state(cx, || 0);
+    let age = use_state(cx, || 0);
+    let name = use_state(cx, || 0);
+    let description = use_state(cx, || 0);
 
     let _ = || {
         // ANCHOR: to_owned_macro
-        use dioxus::core::to_owned;
+        use dioxus::hooks::to_owned;
 
         cx.spawn({
             to_owned![count, age, name, description];
@@ -80,5 +80,5 @@ pub fn ToOwnedMacro(cx: Scope) -> Element {
         // ANCHOR_END: to_owned_macro
     };
 
-    None
+    cx.render(rsx!(()))
 }

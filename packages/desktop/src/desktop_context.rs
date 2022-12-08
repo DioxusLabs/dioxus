@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
 use serde::de::Error;
@@ -5,7 +7,6 @@ use serde_json::Value;
 use std::future::Future;
 use std::future::IntoFuture;
 use std::pin::Pin;
-use std::rc::Rc;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
@@ -165,11 +166,17 @@ impl DesktopContext {
 
 #[derive(Debug)]
 pub enum UserWindowEvent {
-    Update,
+    EditsReady,
+    Initialize,
 
     CloseWindow,
     DragWindow,
     FocusWindow,
+
+    /// Set a new Dioxus template for hot-reloading
+    ///
+    /// Is a no-op in release builds. Must fit the right format for templates
+    SetTemplate(String),
 
     Visible(bool),
     Minimize(bool),
@@ -198,103 +205,106 @@ pub enum UserWindowEvent {
     PopView,
 }
 
-pub(super) fn handler(
-    user_event: UserWindowEvent,
-    desktop: &mut DesktopController,
-    control_flow: &mut ControlFlow,
-) {
-    // currently dioxus-desktop supports a single window only,
-    // so we can grab the only webview from the map;
-    // on wayland it is possible that a user event is emitted
-    // before the webview is initialized. ignore the event.
-    let webview = if let Some(webview) = desktop.webviews.values().next() {
-        webview
-    } else {
-        return;
-    };
-    let window = webview.window();
+impl DesktopController {
+    pub(super) fn handle_event(
+        &mut self,
+        user_event: UserWindowEvent,
+        control_flow: &mut ControlFlow,
+    ) {
+        // currently dioxus-desktop supports a single window only,
+        // so we can grab the only webview from the map;
+        // on wayland it is possible that a user event is emitted
+        // before the webview is initialized. ignore the event.
+        let webview = if let Some(webview) = self.webviews.values().next() {
+            webview
+        } else {
+            return;
+        };
 
-    match user_event {
-        Update => desktop.try_load_ready_webviews(),
-        CloseWindow => *control_flow = ControlFlow::Exit,
-        DragWindow => {
-            // if the drag_window has any errors, we don't do anything
-            window.fullscreen().is_none().then(|| window.drag_window());
-        }
-        Visible(state) => window.set_visible(state),
-        Minimize(state) => window.set_minimized(state),
-        Maximize(state) => window.set_maximized(state),
-        MaximizeToggle => window.set_maximized(!window.is_maximized()),
-        Fullscreen(state) => {
-            if let Some(handle) = window.current_monitor() {
-                window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
+        let window = webview.window();
+
+        match user_event {
+            Initialize | EditsReady => self.try_load_ready_webviews(),
+            SetTemplate(template) => self.set_template(template),
+            CloseWindow => *control_flow = ControlFlow::Exit,
+            DragWindow => {
+                // if the drag_window has any errors, we don't do anything
+                window.fullscreen().is_none().then(|| window.drag_window());
             }
-        }
-        FocusWindow => window.set_focus(),
-        Resizable(state) => window.set_resizable(state),
-        AlwaysOnTop(state) => window.set_always_on_top(state),
-
-        CursorVisible(state) => window.set_cursor_visible(state),
-        CursorGrab(state) => {
-            let _ = window.set_cursor_grab(state);
-        }
-
-        SetTitle(content) => window.set_title(&content),
-        SetDecorations(state) => window.set_decorations(state),
-
-        SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
-
-        Print => {
-            if let Err(e) = webview.print() {
-                // we can't panic this error.
-                log::warn!("Open print modal failed: {e}");
+            Visible(state) => window.set_visible(state),
+            Minimize(state) => window.set_minimized(state),
+            Maximize(state) => window.set_maximized(state),
+            MaximizeToggle => window.set_maximized(!window.is_maximized()),
+            Fullscreen(state) => {
+                if let Some(handle) = window.current_monitor() {
+                    window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
+                }
             }
-        }
-        DevTool => {
-            #[cfg(debug_assertions)]
-            webview.open_devtools();
-            #[cfg(not(debug_assertions))]
-            log::warn!("Devtools are disabled in release builds");
-        }
+            FocusWindow => window.set_focus(),
+            Resizable(state) => window.set_resizable(state),
+            AlwaysOnTop(state) => window.set_always_on_top(state),
 
-        Eval(code) => {
-            let script = format!(
-                r#"window.ipc.postMessage(JSON.stringify({{"method":"eval_result", params: (function(){{
-                    {}
-                }})()}}));"#,
-                code
-            );
-            if let Err(e) = webview.evaluate_script(&script) {
-                // we can't panic this error.
-                log::warn!("Eval script error: {e}");
+            Eval(code) => {
+                let script = format!(
+                    r#"window.ipc.postMessage(JSON.stringify({{"method":"eval_result", params: (function(){{
+                        {}
+                    }})()}}));"#,
+                    code
+                );
+                if let Err(e) = webview.evaluate_script(&script) {
+                    // we can't panic this error.
+                    log::warn!("Eval script error: {e}");
+                }
             }
-        }
+            CursorVisible(state) => window.set_cursor_visible(state),
+            CursorGrab(state) => {
+                let _ = window.set_cursor_grab(state);
+            }
 
-        #[cfg(target_os = "ios")]
-        PushView(view) => unsafe {
-            use objc::runtime::Object;
-            use objc::*;
-            assert!(is_main_thread());
-            let ui_view = window.ui_view() as *mut Object;
-            let ui_view_frame: *mut Object = msg_send![ui_view, frame];
-            let _: () = msg_send![view, setFrame: ui_view_frame];
-            let _: () = msg_send![view, setAutoresizingMask: 31];
+            SetTitle(content) => window.set_title(&content),
+            SetDecorations(state) => window.set_decorations(state),
 
-            let ui_view_controller = window.ui_view_controller() as *mut Object;
-            let _: () = msg_send![ui_view_controller, setView: view];
-            desktop.views.push(ui_view);
-        },
+            SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
 
-        #[cfg(target_os = "ios")]
-        PopView => unsafe {
-            use objc::runtime::Object;
-            use objc::*;
-            assert!(is_main_thread());
-            if let Some(view) = desktop.views.pop() {
+            Print => {
+                if let Err(e) = webview.print() {
+                    // we can't panic this error.
+                    log::warn!("Open print modal failed: {e}");
+                }
+            }
+            DevTool => {
+                #[cfg(debug_assertions)]
+                webview.open_devtools();
+                #[cfg(not(debug_assertions))]
+                log::warn!("Devtools are disabled in release builds");
+            }
+
+            #[cfg(target_os = "ios")]
+            PushView(view) => unsafe {
+                use objc::runtime::Object;
+                use objc::*;
+                assert!(is_main_thread());
+                let ui_view = window.ui_view() as *mut Object;
+                let ui_view_frame: *mut Object = msg_send![ui_view, frame];
+                let _: () = msg_send![view, setFrame: ui_view_frame];
+                let _: () = msg_send![view, setAutoresizingMask: 31];
+
                 let ui_view_controller = window.ui_view_controller() as *mut Object;
                 let _: () = msg_send![ui_view_controller, setView: view];
-            }
-        },
+                self.views.push(ui_view);
+            },
+
+            #[cfg(target_os = "ios")]
+            PopView => unsafe {
+                use objc::runtime::Object;
+                use objc::*;
+                assert!(is_main_thread());
+                if let Some(view) = self.views.pop() {
+                    let ui_view_controller = window.ui_view_controller() as *mut Object;
+                    let _: () = msg_send![ui_view_controller, setView: view];
+                }
+            },
+        }
     }
 }
 

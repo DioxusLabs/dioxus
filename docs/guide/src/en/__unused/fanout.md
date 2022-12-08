@@ -28,8 +28,8 @@ If we used global state like use_context or fermi, we might be tempted to inject
 
 ```rust
 fn Titlebar(cx: Scope<TitlebarProps>) -> Element {
-    let title = use_read(&cx, TITLE);
-    let subtitle = use_read(&cx, SUBTITLE);
+    let title = use_read(cx, TITLE);
+    let subtitle = use_read(cx, SUBTITLE);
 
     cx.render(rsx!{/* ui */})
 }
@@ -43,11 +43,11 @@ To enable our titlebar component to be used across apps, we want to lift our ato
 
 ```rust
 fn DocsiteTitlesection(cx: Scope) {
-    let title = use_read(&cx, TITLE);
-    let subtitle = use_read(&cx, SUBTITLE);
+    let title = use_read(cx, TITLE);
+    let subtitle = use_read(cx, SUBTITLE);
 
-    let username = use_read(&cx, USERNAME);
-    let points = use_read(&cx, POINTS);
+    let username = use_read(cx, USERNAME);
+    let points = use_read(cx, POINTS);
 
     cx.render(rsx!{
         TitleBar { title: title, subtitle: subtitle }

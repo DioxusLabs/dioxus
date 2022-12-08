@@ -17,7 +17,7 @@ use crate::UseFutureDep;
 ///
 /// #[inline_props]
 /// fn app(cx: Scope, name: &str) -> Element {
-///     use_effect(&cx, (name,), |(name,)| async move {
+///     use_effect(cx, (name,), |(name,)| async move {
 ///         set_title(name);
 ///     }))
 /// }
@@ -72,21 +72,21 @@ mod tests {
 
         fn app(cx: Scope<MyProps>) -> Element {
             // should only ever run once
-            use_effect(&cx, (), |_| async move {
+            use_effect(cx, (), |_| async move {
                 //
             });
 
             // runs when a is changed
-            use_effect(&cx, (&cx.props.a,), |(a,)| async move {
+            use_effect(cx, (&cx.props.a,), |(a,)| async move {
                 //
             });
 
             // runs when a or b is changed
-            use_effect(&cx, (&cx.props.a, &cx.props.b), |(a, b)| async move {
+            use_effect(cx, (&cx.props.a, &cx.props.b), |(a, b)| async move {
                 //
             });
 
-            None
+            todo!()
         }
     }
 }

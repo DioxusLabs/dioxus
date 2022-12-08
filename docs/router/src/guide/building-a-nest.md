@@ -10,12 +10,12 @@ Let's create a new ``navbar`` component:
 fn navbar(cx: Scope) -> Element {
     cx.render(rsx! {
         ul {
-            
+
         }
     })
 }
 ```
-Our navbar will be a list of links going between our pages. We could always use an HTML anchor element but that would cause our page to unnecessarily reload. Instead we want to use the ``Link`` component provided by Dioxus Router. 
+Our navbar will be a list of links going between our pages. We could always use an HTML anchor element but that would cause our page to unnecessarily reload. Instead we want to use the ``Link`` component provided by Dioxus Router.
 
 The Link component is very similar to the Route component. It takes a path and an element. Add the Link component into your use statement and then add some links:
 ```rs
@@ -38,7 +38,7 @@ fn navbar(cx: Scope) -> Element {
 }
 ```
 >By default, the Link component only works for links within your application. To link to external sites, add the ``external: true`` property.
->```rs 
+>```rs
 >Link { to: "https://github.com", external: true, "GitHub"}
 >```
 
@@ -66,7 +66,7 @@ We want to store our blogs in a database and load them as needed. This'll help p
 We could utilize a search page that loads a blog when clicked but then our users won't be able to share our blogs easily. This is where URL parameters come in. And finally, we also want our site to tell users they are on a blog page whenever the URL starts with``/blog``.
 
 The path to our blog will look like ``/blog/myBlogPage``. ``myBlogPage`` being the URL parameter.
-Dioxus Router uses the ``:name`` pattern so our route will look like ``/blog/:post``.  
+Dioxus Router uses the ``:name`` pattern so our route will look like ``/blog/:post``.
 
 First, lets tell users when they are on a blog page. Add a new route in your app component.
 ```rs
@@ -77,7 +77,7 @@ fn app(cx: Scope) -> Element {
             self::navbar {}
             Route { to: "/", self::homepage {}}
             // NEW
-            Route { 
+            Route {
                 to: "/blog",
             }
             Route { to: "", self::page_not_found {}}
@@ -93,7 +93,7 @@ fn app(cx: Scope) -> Element {
             p { "-- Dioxus Blog --" }
             self::navbar {}
             Route { to: "/", self::homepage {}}
-            Route { 
+            Route {
                 to: "/blog",
                 Route { to: "/:post", "This is my blog post!" } // NEW
             }
@@ -109,7 +109,7 @@ fn app(cx: Scope) -> Element {
         Router {
             self::navbar {}
             Route { to: "/", self::homepage {}}
-            Route { 
+            Route {
                 to: "/blog",
                 p { "-- Dioxus Blog --" } // MOVED
                 Route { to: "/:post", "This is my blog post!" }
@@ -119,7 +119,7 @@ fn app(cx: Scope) -> Element {
     })
 }
 ```
-Now our ``-- Dioxus Blog --`` text will be displayed whenever a user is on a path that starts with ``/blog``. Displaying content in a way that is page-agnostic is useful when building navigation menus, footers, and similar. 
+Now our ``-- Dioxus Blog --`` text will be displayed whenever a user is on a path that starts with ``/blog``. Displaying content in a way that is page-agnostic is useful when building navigation menus, footers, and similar.
 
 All that's left is to handle our URL parameter. We will begin by creating a ``get_blog_post`` function. In a real site, this function would call an API endpoint to get a blog post from the database. However, that is out of the scope of this guide so we will be utilizing static text.
 ```rs
@@ -153,7 +153,7 @@ use dioxus::{
 ...
 
 fn blog_post(cx: Scope) -> Element {
-    let route = use_route(&cx); // NEW
+    let route = use_route(cx); // NEW
     let blog_text = "";
 
     cx.render(rsx! {
@@ -165,7 +165,7 @@ Dioxus Router provides built in methods to extract information from a route. We 
 The ``segment`` method also parses the parameter into any type for us. We'll use a match expression that handles a parsing error and on success, uses our helper function to grab the blog post.
 ```rs
 fn blog_post(cx: Scope) -> Element {
-    let route = use_route(&cx);
+    let route = use_route(cx);
 
     // NEW
     let blog_text = match route.segment::<String>("post").unwrap() {

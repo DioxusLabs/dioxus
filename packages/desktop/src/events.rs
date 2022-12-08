@@ -1,13 +1,10 @@
 //! Convert a serialized event to an event trigger
 
-use std::any::Any;
-use std::sync::Arc;
-
-use dioxus_core::ElementId;
-use dioxus_core::{EventPriority, UserEvent};
-use dioxus_html::event_bubbles;
-use dioxus_html::on::*;
+use dioxus_html::events::*;
 use serde::{Deserialize, Serialize};
+use serde_json::from_value;
+use std::any::Any;
+use std::rc::Rc;
 
 #[derive(Deserialize, Serialize)]
 pub(crate) struct IpcMessage {
@@ -35,187 +32,60 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
     }
 }
 
-#[derive(Deserialize, Serialize)]
-struct ImEvent {
-    event: String,
-    mounted_dom_id: ElementId,
-    contents: serde_json::Value,
+macro_rules! match_data {
+    (
+        $m:ident;
+        $name:ident;
+        $(
+            $tip:ty => $($mname:literal)|* ;
+        )*
+    ) => {
+        match $name {
+            $( $($mname)|* => {
+                let val: $tip = from_value::<$tip>($m).ok()?;
+                Rc::new(val) as Rc<dyn Any>
+            })*
+            _ => return None,
+        }
+    };
 }
 
-pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
-    let ImEvent {
-        event,
-        mounted_dom_id,
-        contents,
-    } = serde_json::from_value(val).unwrap();
-
-    let mounted_dom_id = Some(mounted_dom_id);
-    let name = event_name_from_type(&event);
-
-    let event = make_synthetic_event(&event, contents);
-
-    UserEvent {
-        name,
-        priority: EventPriority::Low,
-        scope_id: None,
-        element: mounted_dom_id,
-        bubbles: event_bubbles(name),
-        data: event,
-    }
+#[derive(Deserialize)]
+pub struct EventMessage {
+    pub contents: serde_json::Value,
+    pub event: String,
+    pub mounted_dom_id: usize,
 }
 
-fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Send + Sync> {
-    match name {
-        "copy" | "cut" | "paste" => {
-            //
-            Arc::new(ClipboardData {})
-        }
-        "compositionend" | "compositionstart" | "compositionupdate" => {
-            Arc::new(serde_json::from_value::<CompositionData>(val).unwrap())
-        }
-        "keydown" | "keypress" | "keyup" => {
-            let evt = serde_json::from_value::<KeyboardData>(val).unwrap();
-            Arc::new(evt)
-        }
-        "focus" | "blur" | "focusout" | "focusin" => {
-            //
-            Arc::new(FocusData {})
-        }
+pub fn decode_event(value: EventMessage) -> Option<Rc<dyn Any>> {
+    let val = value.contents;
+    let name = value.event.as_str();
+    type DragData = MouseData;
 
-        // todo: these handlers might get really slow if the input box gets large and allocation pressure is heavy
-        // don't have a good solution with the serialized event problem
-        "change" | "input" | "invalid" | "reset" | "submit" => {
-            Arc::new(serde_json::from_value::<FormData>(val).unwrap())
-        }
+    let evt = match_data! { val; name;
+        MouseData => "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup";
+        ClipboardData => "copy" | "cut" | "paste";
+        CompositionData => "compositionend" | "compositionstart" | "compositionupdate";
+        KeyboardData => "keydown" | "keypress" | "keyup";
+        FocusData => "blur" | "focus" | "focusin" | "focusout";
+        FormData => "change" | "input" | "invalid" | "reset" | "submit";
+        DragData => "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop";
+        PointerData => "pointerlockchange" | "pointerlockerror" | "pointerdown" | "pointermove" | "pointerup" | "pointerover" | "pointerout" | "pointerenter" | "pointerleave" | "gotpointercapture" | "lostpointercapture";
+        SelectionData => "selectstart" | "selectionchange" | "select";
+        TouchData => "touchcancel" | "touchend" | "touchmove" | "touchstart";
+        ScrollData => "scroll";
+        WheelData => "wheel";
+        MediaData => "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied"
+            | "encrypted" | "ended" | "interruptbegin" | "interruptend" | "loadeddata"
+            | "loadedmetadata" | "loadstart" | "pause" | "play" | "playing" | "progress"
+            | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend" | "timeupdate"
+            | "volumechange" | "waiting" | "error" | "load" | "loadend" | "timeout";
+        AnimationData => "animationstart" | "animationend" | "animationiteration";
+        TransitionData => "transitionend";
+        ToggleData => "toggle";
+        // ImageData => "load" | "error";
+        // OtherData => "abort" | "afterprint" | "beforeprint" | "beforeunload" | "hashchange" | "languagechange" | "message" | "offline" | "online" | "pagehide" | "pageshow" | "popstate" | "rejectionhandled" | "storage" | "unhandledrejection" | "unload" | "userproximity" | "vrdisplayactivate" | "vrdisplayblur" | "vrdisplayconnect" | "vrdisplaydeactivate" | "vrdisplaydisconnect" | "vrdisplayfocus" | "vrdisplaypointerrestricted" | "vrdisplaypointerunrestricted" | "vrdisplaypresentchange";
+    };
 
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
-        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
-        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
-            Arc::new(serde_json::from_value::<MouseData>(val).unwrap())
-        }
-        "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
-        | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
-            Arc::new(serde_json::from_value::<PointerData>(val).unwrap())
-        }
-        "select" => {
-            //
-            Arc::new(serde_json::from_value::<SelectionData>(val).unwrap())
-        }
-
-        "touchcancel" | "touchend" | "touchmove" | "touchstart" => {
-            Arc::new(serde_json::from_value::<TouchData>(val).unwrap())
-        }
-
-        "scroll" => Arc::new(ScrollData {}),
-
-        "wheel" => Arc::new(serde_json::from_value::<WheelData>(val).unwrap()),
-
-        "animationstart" | "animationend" | "animationiteration" => {
-            Arc::new(serde_json::from_value::<AnimationData>(val).unwrap())
-        }
-
-        "transitionend" => Arc::new(serde_json::from_value::<TransitionData>(val).unwrap()),
-
-        "abort" | "canplay" | "canplaythrough" | "durationchange" | "emptied" | "encrypted"
-        | "ended" | "error" | "loadeddata" | "loadedmetadata" | "loadstart" | "pause" | "play"
-        | "playing" | "progress" | "ratechange" | "seeked" | "seeking" | "stalled" | "suspend"
-        | "timeupdate" | "volumechange" | "waiting" => {
-            //
-            Arc::new(MediaData {})
-        }
-
-        "toggle" => Arc::new(ToggleData {}),
-
-        _ => Arc::new(()),
-    }
-}
-
-fn event_name_from_type(typ: &str) -> &'static str {
-    match typ {
-        "copy" => "copy",
-        "cut" => "cut",
-        "paste" => "paste",
-        "compositionend" => "compositionend",
-        "compositionstart" => "compositionstart",
-        "compositionupdate" => "compositionupdate",
-        "keydown" => "keydown",
-        "keypress" => "keypress",
-        "keyup" => "keyup",
-        "focus" => "focus",
-        "focusout" => "focusout",
-        "focusin" => "focusin",
-        "blur" => "blur",
-        "change" => "change",
-        "input" => "input",
-        "invalid" => "invalid",
-        "reset" => "reset",
-        "submit" => "submit",
-        "click" => "click",
-        "contextmenu" => "contextmenu",
-        "doubleclick" => "doubleclick",
-        "dblclick" => "dblclick",
-        "drag" => "drag",
-        "dragend" => "dragend",
-        "dragenter" => "dragenter",
-        "dragexit" => "dragexit",
-        "dragleave" => "dragleave",
-        "dragover" => "dragover",
-        "dragstart" => "dragstart",
-        "drop" => "drop",
-        "mousedown" => "mousedown",
-        "mouseenter" => "mouseenter",
-        "mouseleave" => "mouseleave",
-        "mousemove" => "mousemove",
-        "mouseout" => "mouseout",
-        "mouseover" => "mouseover",
-        "mouseup" => "mouseup",
-        "pointerdown" => "pointerdown",
-        "pointermove" => "pointermove",
-        "pointerup" => "pointerup",
-        "pointercancel" => "pointercancel",
-        "gotpointercapture" => "gotpointercapture",
-        "lostpointercapture" => "lostpointercapture",
-        "pointerenter" => "pointerenter",
-        "pointerleave" => "pointerleave",
-        "pointerover" => "pointerover",
-        "pointerout" => "pointerout",
-        "select" => "select",
-        "touchcancel" => "touchcancel",
-        "touchend" => "touchend",
-        "touchmove" => "touchmove",
-        "touchstart" => "touchstart",
-        "scroll" => "scroll",
-        "wheel" => "wheel",
-        "animationstart" => "animationstart",
-        "animationend" => "animationend",
-        "animationiteration" => "animationiteration",
-        "transitionend" => "transitionend",
-        "abort" => "abort",
-        "canplay" => "canplay",
-        "canplaythrough" => "canplaythrough",
-        "durationchange" => "durationchange",
-        "emptied" => "emptied",
-        "encrypted" => "encrypted",
-        "ended" => "ended",
-        "error" => "error",
-        "loadeddata" => "loadeddata",
-        "loadedmetadata" => "loadedmetadata",
-        "loadstart" => "loadstart",
-        "pause" => "pause",
-        "play" => "play",
-        "playing" => "playing",
-        "progress" => "progress",
-        "ratechange" => "ratechange",
-        "seeked" => "seeked",
-        "seeking" => "seeking",
-        "stalled" => "stalled",
-        "suspend" => "suspend",
-        "timeupdate" => "timeupdate",
-        "volumechange" => "volumechange",
-        "waiting" => "waiting",
-        "toggle" => "toggle",
-        a => {
-            panic!("unsupported event type {:?}", a);
-        }
-    }
+    Some(evt)
 }

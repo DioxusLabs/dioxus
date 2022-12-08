@@ -42,7 +42,7 @@ use std::future::Future;
 ///     Stop,
 /// }
 ///
-/// let chat_client = use_coroutine(&cx, |rx: UnboundedReceiver<Action>| async move {
+/// let chat_client = use_coroutine(cx, |rx: UnboundedReceiver<Action>| async move {
 ///     while let Some(action) = rx.next().await {
 ///         match action {
 ///             Action::Start => {}
@@ -59,7 +59,7 @@ use std::future::Future;
 ///     }
 /// })
 /// ```
-pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &CoroutineHandle<M>
+pub fn use_coroutine<M, G, F>(cx: &ScopeState, init: G) -> &Coroutine<M>
 where
     M: 'static,
     G: FnOnce(UnboundedReceiver<M>) -> F,
@@ -68,24 +68,25 @@ where
     cx.use_hook(|| {
         let (tx, rx) = futures_channel::mpsc::unbounded();
         let task = cx.push_future(init(rx));
-        cx.provide_context(CoroutineHandle { tx, task })
+        cx.provide_context(Coroutine { tx, task })
     })
 }
 
 /// Get a handle to a coroutine higher in the tree
 ///
 /// See the docs for [`use_coroutine`] for more details.
-pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&CoroutineHandle<M>> {
-    cx.use_hook(|| cx.consume_context::<CoroutineHandle<M>>())
+pub fn use_coroutine_handle<M: 'static>(cx: &ScopeState) -> Option<&Coroutine<M>> {
+    cx.use_hook(|| cx.consume_context::<Coroutine<M>>())
         .as_ref()
 }
 
-pub struct CoroutineHandle<T> {
+pub struct Coroutine<T> {
     tx: UnboundedSender<T>,
     task: TaskId,
 }
 
-impl<T> Clone for CoroutineHandle<T> {
+// for use in futures
+impl<T> Clone for Coroutine<T> {
     fn clone(&self) -> Self {
         Self {
             tx: self.tx.clone(),
@@ -94,7 +95,7 @@ impl<T> Clone for CoroutineHandle<T> {
     }
 }
 
-impl<T> CoroutineHandle<T> {
+impl<T> Coroutine<T> {
     /// Get the ID of this coroutine
     #[must_use]
     pub fn task_id(&self) -> TaskId {
@@ -112,22 +113,22 @@ mod tests {
     #![allow(unused)]
 
     use super::*;
-    use dioxus_core::exports::futures_channel::mpsc::unbounded;
     use dioxus_core::prelude::*;
+    use futures_channel::mpsc::unbounded;
     use futures_util::StreamExt;
 
     fn app(cx: Scope, name: String) -> Element {
-        let task = use_coroutine(&cx, |mut rx: UnboundedReceiver<i32>| async move {
+        let task = use_coroutine(cx, |mut rx: UnboundedReceiver<i32>| async move {
             while let Some(msg) = rx.next().await {
                 println!("got message: {}", msg);
             }
         });
 
-        let task2 = use_coroutine(&cx, view_task);
+        let task2 = use_coroutine(cx, view_task);
 
-        let task3 = use_coroutine(&cx, |rx| complex_task(rx, 10));
+        let task3 = use_coroutine(cx, |rx| complex_task(rx, 10));
 
-        None
+        todo!()
     }
 
     async fn view_task(mut rx: UnboundedReceiver<i32>) {
