@@ -6,7 +6,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use dioxus_core::ElementId;
-use dioxus_html::event_bubbles;
+// use dioxus_html::event_bubbles;
 use dioxus_html::events::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -29,7 +29,7 @@ struct ImEvent {
     contents: serde_json::Value,
 }
 
-pub fn trigger_from_serialized(val: serde_json::Value) -> () {
+pub fn trigger_from_serialized(_val: serde_json::Value) {
     todo!()
     // let ImEvent {
     //     event,

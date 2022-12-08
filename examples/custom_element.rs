@@ -16,7 +16,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    // let nf = NodeFactory::new(&cx);
+    // let nf = NodeFactory::new(cx);
 
     // let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
 

@@ -27,7 +27,7 @@ enum Event {
 const MAX_EVENTS: usize = 8;
 
 fn app(cx: Scope) -> Element {
-    let events = use_ref(&cx, Vec::new);
+    let events = use_ref(cx, Vec::new);
 
     let events_lock = events.read();
     let first_index = events_lock.len().saturating_sub(MAX_EVENTS);

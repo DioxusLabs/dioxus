@@ -2,7 +2,7 @@
 
 use js_sys::Function;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, Node};
+use web_sys::Element;
 
 #[wasm_bindgen(module = "/src/interpreter.js")]
 extern "C" {
@@ -18,7 +18,7 @@ extern "C" {
     pub fn MountToRoot(this: &Interpreter);
 
     #[wasm_bindgen(method)]
-    pub fn AppendChildren(this: &Interpreter, m: u32);
+    pub fn AppendChildren(this: &Interpreter, m: u32, id: u32);
 
     #[wasm_bindgen(method)]
     pub fn AssignId(this: &Interpreter, path: &[u8], id: u32);

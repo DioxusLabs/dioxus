@@ -7,7 +7,7 @@ fn main() {
 
 // ANCHOR: component
 fn App(cx: Scope) -> Element {
-    let list = use_ref(&cx, Vec::new);
+    let list = use_ref(cx, Vec::new);
     let list_formatted = format!("{:?}", *list.read());
 
     cx.render(rsx!(

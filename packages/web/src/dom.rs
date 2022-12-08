@@ -155,7 +155,7 @@ impl WebsysDom {
                     i.set_attribute(id.0 as u32, name, if *value { "true" } else { "false" }, "")
                 }
                 SetText { value, id } => i.set_text(id.0 as u32, value),
-                NewEventListener { name, scope: _, id } => {
+                NewEventListener { name, id, .. } => {
                     i.new_event_listener(name, id.0 as u32, event_bubbles(&name[2..]) as u8);
                 }
                 RemoveEventListener { name, id } => {

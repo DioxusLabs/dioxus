@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: docs
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
 
       # NOTE: Comment out when https://github.com/rust-lang/mdBook/pull/1306 is merged and released
       # - name: Setup mdBook
@@ -32,7 +32,7 @@ jobs:
           cd router && mdbook build -d ../nightly/router  && cd ..
 
       - name: Deploy 🚀
-        uses: JamesIves/github-pages-deploy-action@v4.2.3
+        uses: JamesIves/github-pages-deploy-action@v4.4.1
         with:
           branch: gh-pages # The branch the action should deploy to.
           folder: docs/nightly # The folder the action should deploy.

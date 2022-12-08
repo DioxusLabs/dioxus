@@ -1,10 +1,8 @@
-use dioxus::core::ElementId;
-use dioxus::core::{AttributeValue, Mutations};
 use dioxus::prelude::*;
 use dioxus_native_core::real_dom::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
 use dioxus_native_core::tree::TreeView;
-use dioxus_native_core::{node_ref::*, NodeId, RealNodeId, SendAnyMap};
+use dioxus_native_core::{node_ref::*, NodeId, SendAnyMap};
 use dioxus_native_core_macro::State;
 
 #[derive(Debug, Clone, Default, State)]

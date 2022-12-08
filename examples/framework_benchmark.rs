@@ -32,8 +32,8 @@ impl Label {
 }
 
 fn app(cx: Scope) -> Element {
-    let items = use_ref(&cx, Vec::new);
-    let selected = use_state(&cx, || None);
+    let items = use_ref(cx, Vec::new);
+    let selected = use_state(cx, || None);
 
     cx.render(rsx! {
         div { class: "container",

@@ -28,7 +28,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
         h1 { "Count: {count}" }
@@ -138,7 +138,7 @@ struct CardProps {
 }
 
 static Card: Component<CardProps> = |cx| {
-	let mut count = use_state(&cx, || 0);
+	let mut count = use_state(cx, || 0);
 	cx.render(rsx!(
 		aside {
 			h2 { "{cx.props.title}" }
@@ -191,7 +191,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
         h1 { "Count: {count}" }
@@ -260,7 +260,7 @@ Dioxus understands the lifetimes of data borrowed from `Scope`, so you can safel
 
 
 ```rust
-let name = use_state(&cx, || "asd");
+let name = use_state(cx, || "asd");
 rsx! {
 	div {
 		button { onclick: move |_| name.set("abc") }
@@ -274,7 +274,7 @@ Because we know the lifetime of your handlers, we can also expose this to childr
 
 ```rust
 fn app(cx: Scope) -> Element {
-	let name = use_state(&cx, || "asd");
+	let name = use_state(cx, || "asd");
 	cx.render(rsx!{
 		Button { name: name }
 	})

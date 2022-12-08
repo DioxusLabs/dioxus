@@ -33,7 +33,7 @@ fn key_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -70,7 +70,7 @@ fn mouse_down() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -104,7 +104,7 @@ fn mouse_up() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -143,7 +143,7 @@ fn mouse_enter() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -182,7 +182,7 @@ fn mouse_exit() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -221,7 +221,7 @@ fn mouse_move() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -260,7 +260,7 @@ fn wheel() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -300,7 +300,7 @@ fn click() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {
@@ -339,7 +339,7 @@ fn context_menu() {
     dioxus_tui::launch_cfg(app, dioxus_tui::Config::new().with_headless());
 
     fn app(cx: Scope) -> Element {
-        let render_count = use_state(&cx, || 0);
+        let render_count = use_state(cx, || 0);
         let tui_ctx: TuiContext = cx.consume_context().unwrap();
         let render_count_handle = render_count.clone();
         cx.spawn(async move {

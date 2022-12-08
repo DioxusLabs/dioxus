@@ -53,15 +53,12 @@
 //     - Do the VDOM work during the idlecallback
 //     - Do DOM work in the next requestAnimationFrame callback
 
-
-
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
 pub use crate::util::use_eval;
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
 
 use futures_util::{pin_mut, FutureExt, StreamExt};
-
 
 mod cache;
 mod cfg;
@@ -193,8 +190,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     // } else {
     let edits = dom.rebuild();
 
-    log::debug!("Initial edits {:#?}", edits);
-
     websys_dom.load_templates(&edits.templates);
     websys_dom.apply_edits(edits.edits);
 
@@ -216,7 +211,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
                 _ = work => None,
                 _new_template = hotreload_rx.next() => {
                     todo!("Implement hot reload");
-                    None
                 }
                 evt = rx.next() => evt
             }
@@ -251,8 +245,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
         // wait for the animation frame to fire so we can apply our changes
         // work_loop.wait_for_raf().await;
-
-        log::debug!("edits {:#?}", edits);
 
         websys_dom.load_templates(&edits.templates);
         websys_dom.apply_edits(edits.edits);

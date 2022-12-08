@@ -10,7 +10,7 @@ A configuração básica para corrotinas é o _hook_ `use_coroutine`. A maioria 
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let ws: &UseCoroutine<()> = use_coroutine(&cx, |rx| async move {
+    let ws: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
         // Connect to some sort of service
         let mut conn = connect_to_ws_server().await;
 
@@ -27,7 +27,7 @@ Para muitos serviços, um _loop_ assíncrono simples lidará com a maioria dos c
 No entanto, se quisermos desabilitar temporariamente a corrotina, podemos "pausá-la" usando o método `pause` e "retomá-la" usando o método `resume`:
 
 ```rust
-let sync: &UseCoroutine<()> = use_coroutine(&cx, |rx| async move {
+let sync: &UseCoroutine<()> = use_coroutine(cx, |rx| async move {
     // code for syncing
 });
 
@@ -62,7 +62,7 @@ enum ProfileUpdate {
     SetAge(i32)
 }
 
-let profile = use_coroutine(&cx, |mut rx: UnboundedReciver<ProfileUpdate>| async move {
+let profile = use_coroutine(cx, |mut rx: UnboundedReciver<ProfileUpdate>| async move {
     let mut server = connect_to_server().await;
 
     while let Ok(msg) = rx.next().await {
@@ -85,9 +85,9 @@ cx.render(rsx!{
 Para aplicativos suficientemente complexos, poderíamos criar vários "serviços" úteis diferentes que fazem um _loop_ nos canais para atualizar o aplicativo.
 
 ```rust
-let profile = use_coroutine(&cx, profile_service);
-let editor = use_coroutine(&cx, editor_service);
-let sync = use_coroutine(&cx, sync_service);
+let profile = use_coroutine(cx, profile_service);
+let editor = use_coroutine(cx, editor_service);
+let sync = use_coroutine(cx, sync_service);
 
 async fn profile_service(rx: UnboundedReceiver<ProfileCommand>) {
     // do stuff
@@ -108,9 +108,9 @@ Podemos combinar corrotinas com `Fermi` para emular o sistema `Thunk` do **Redux
 static USERNAME: Atom<String> = |_| "default".to_string();
 
 fn app(cx: Scope) -> Element {
-    let atoms = use_atom_root(&cx);
+    let atoms = use_atom_root(cx);
 
-    use_coroutine(&cx, |rx| sync_service(rx, atoms.clone()));
+    use_coroutine(cx, |rx| sync_service(rx, atoms.clone()));
 
     cx.render(rsx!{
         Banner {}
@@ -118,7 +118,7 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Banner(cx: Scope) -> Element {
-    let username = use_read(&cx, USERNAME);
+    let username = use_read(cx, USERNAME);
 
     cx.render(rsx!{
         h1 { "Welcome back, {username}" }
@@ -156,8 +156,8 @@ async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
 Para obter valores de uma corrotina, basta usar um identificador `UseState` e definir o valor sempre que sua corrotina concluir seu trabalho.
 
 ```rust
-let sync_status = use_state(&cx, || Status::Launching);
-let sync_task = use_coroutine(&cx, |rx: UnboundedReceiver<SyncAction>| {
+let sync_status = use_state(cx, || Status::Launching);
+let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
     to_owned![sync_status];
     async move {
         loop {
@@ -174,7 +174,7 @@ Os identificadores de corrotina são injetados automaticamente por meio da API d
 
 ```rust
 fn Child(cx: Scope) -> Element {
-    let sync_task = use_coroutine_handle::<SyncAction>(&cx);
+    let sync_task = use_coroutine_handle::<SyncAction>(cx);
 
     sync_task.send(SyncAction::SetUsername);
 }

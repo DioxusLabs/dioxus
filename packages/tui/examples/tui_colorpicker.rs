@@ -8,8 +8,8 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let hue = use_state(&cx, || 0.0);
-    let brightness = use_state(&cx, || 0.0);
+    let hue = use_state(cx, || 0.0);
+    let brightness = use_state(cx, || 0.0);
     let tui_query: &Query = cx.consume_context().unwrap();
     // disable templates so that every node has an id and can be queried
     cx.render(rsx! {

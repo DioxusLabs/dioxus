@@ -199,8 +199,8 @@ impl<'a> DynamicContext<'a> {
                         let value = value.source.as_ref().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
-                                name: dioxus_elements::#el_name::#name.0,
-                                namespace: dioxus_elements::#el_name::#name.1,
+                                name: #name,
+                                namespace: None,
                                 value: #value,
 
                                 // todo: we don't diff these so we never apply the volatile flag

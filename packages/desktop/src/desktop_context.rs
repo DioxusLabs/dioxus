@@ -21,9 +21,12 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 
 /// Get a closure that executes any JavaScript in the WebView context.
 pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String)> {
-    let desktop = use_window(cx).clone();
+    let desktop = use_window(cx);
 
-    &*cx.use_hook(|| Rc::new(move |script| desktop.eval(script)) as Rc<dyn Fn(String)>)
+    &*cx.use_hook(|| {
+        let desktop = desktop.clone();
+        Rc::new(move |script| desktop.eval(script))
+    } as Rc<dyn Fn(String)>)
 }
 
 /// An imperative interface to the current window.

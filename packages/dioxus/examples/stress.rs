@@ -4,26 +4,26 @@ use rand::prelude::*;
 fn main() {
     let mut dom = VirtualDom::new(app);
 
-    dom.rebuild();
+    _ = dom.rebuild();
 
     for _ in 0..1000 {
-        dom.rebuild();
+        _ = dom.rebuild();
     }
 }
 
 fn app(cx: Scope) -> Element {
     let mut rng = SmallRng::from_entropy();
 
-    render! (
+    cx.render(rsx! (
         table {
             tbody {
                 (0..10_000_usize).map(|f| {
                     let label = Label::new(&mut rng);
-                    rsx!( Row { row_id: f, label: label } )
+                    rsx!( table_row { row_id: f, label: label } )
                 })
             }
         }
-    )
+    ))
 }
 
 #[derive(PartialEq, Props)]
@@ -31,9 +31,9 @@ struct RowProps {
     row_id: usize,
     label: Label,
 }
-fn Row(cx: Scope<RowProps>) -> Element {
+fn table_row(cx: Scope<RowProps>) -> Element {
     let [adj, col, noun] = cx.props.label.0;
-    render! {
+    cx.render(rsx! {
         tr {
             td { class:"col-md-1", "{cx.props.row_id}" }
             td { class:"col-md-1", onclick: move |_| { /* run onselect */ },
@@ -46,7 +46,7 @@ fn Row(cx: Scope<RowProps>) -> Element {
             }
             td { class: "col-md-6" }
         }
-    }
+    })
 }
 
 #[derive(PartialEq)]

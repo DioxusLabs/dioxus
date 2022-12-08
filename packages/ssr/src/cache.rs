@@ -1,6 +1,7 @@
 use dioxus_core::prelude::*;
 use std::fmt::Write;
 
+#[derive(Debug)]
 pub struct StringCache {
     pub segments: Vec<Segment>,
     pub template: Template<'static>,

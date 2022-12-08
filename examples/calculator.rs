@@ -19,7 +19,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let val = use_state(&cx, || String::from("0"));
+    let val = use_state(cx, || String::from("0"));
 
     let input_digit = move |num: u8| {
         if val.get() == "0" {
