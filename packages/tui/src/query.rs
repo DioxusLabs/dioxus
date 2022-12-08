@@ -89,7 +89,7 @@ impl<'a> ElementRef<'a> {
             .ok();
         layout.map(|layout| Layout {
             order: layout.order,
-            size: layout.size.map(|v| layout_to_screen_space(v)),
+            size: layout.size.map(layout_to_screen_space),
             location: Point {
                 x: layout_to_screen_space(layout.location.x),
                 y: layout_to_screen_space(layout.location.y),
