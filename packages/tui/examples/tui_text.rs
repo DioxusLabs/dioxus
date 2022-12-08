@@ -5,14 +5,14 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let alpha = use_state(&cx, || 100);
+    let alpha = use_state(cx, || 100);
 
     cx.render(rsx! {
         div {
             width: "100%",
             height: "100%",
             flex_direction: "column",
-            onwheel: move |evt| alpha.set((**alpha + evt.data.delta().strip_units().y as i64).min(100).max(0)),
+            onwheel: move |evt| alpha.set((**alpha + evt.inner().delta().strip_units().y as i64).min(100).max(0)),
 
             p {
                 background_color: "black",

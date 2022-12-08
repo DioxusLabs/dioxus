@@ -13,8 +13,8 @@ struct ButtonProps {
 
 #[allow(non_snake_case)]
 fn Button(cx: Scope<ButtonProps>) -> Element {
-    let toggle = use_state(&cx, || false);
-    let hovered = use_state(&cx, || false);
+    let toggle = use_state(cx, || false);
+    let hovered = use_state(cx, || false);
 
     let hue = cx.props.color_offset % 255;
     let saturation = if *toggle.get() { 50 } else { 25 } + if *hovered.get() { 50 } else { 25 };
@@ -28,7 +28,7 @@ fn Button(cx: Scope<ButtonProps>) -> Element {
             background_color: "{color}",
             tabindex: "{cx.props.layer}",
             onkeydown: |e| {
-                if let Code::Space = e.data.code() {
+                if let Code::Space = e.inner().code() {
                     toggle.modify(|f| !f);
                 }
             },
@@ -60,7 +60,7 @@ fn app(cx: Scope) -> Element {
             height: "100%",
 
             (1..8).map(|y|
-                cx.render(rsx!{
+                rsx!{
                     div{
                         display: "flex",
                         flex_direction: "row",
@@ -68,26 +68,26 @@ fn app(cx: Scope) -> Element {
                         height: "100%",
                         (1..8).map(|x|{
                             if (x + y) % 2 == 0{
-                                cx.render(rsx!{
+                                rsx!{
                                     div{
                                         width: "100%",
                                         height: "100%",
                                         background_color: "rgb(100, 100, 100)",
                                     }
-                                })
+                                }
                             }
                             else{
                                 let layer = (x + y) % 3;
-                                cx.render(rsx!{
+                                rsx!{
                                     Button{
                                         color_offset: x * y,
                                         layer: layer as u16,
                                     }
-                                })
+                                }
                             }
                         })
                     }
-                })
+                }
             )
         }
     })

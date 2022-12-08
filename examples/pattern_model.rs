@@ -19,6 +19,7 @@
 
 use dioxus::events::*;
 use dioxus::html::input_data::keyboard_types::Key;
+use dioxus::html::MouseEvent;
 use dioxus::prelude::*;
 use dioxus_desktop::wry::application::dpi::LogicalSize;
 use dioxus_desktop::{Config, WindowBuilder};
@@ -35,7 +36,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let state = use_ref(&cx, Calculator::new);
+    let state = use_ref(cx, Calculator::new);
 
     cx.render(rsx! {
         style { include_str!("./assets/calculator.css") }

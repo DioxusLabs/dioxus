@@ -1,5 +1,8 @@
+#![allow(non_upper_case_globals)]
+
 use crate::{GlobalAttributes, SvgAttributes};
-use dioxus_core::*;
+
+pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
 macro_rules! builder_constructors {
     (
@@ -18,23 +21,17 @@ macro_rules! builder_constructors {
             $(#[$attr])*
             pub struct $name;
 
-            impl DioxusElement for $name {
-                const TAG_NAME: &'static str = stringify!($name);
-                const NAME_SPACE: Option<&'static str> = None;
+
+            impl $name {
+                pub const TAG_NAME: &'static str = stringify!($name);
+                pub const NAME_SPACE: Option<&'static str> = None;
+
+                $(
+                    pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
+                )*
             }
 
             impl GlobalAttributes for $name {}
-
-            impl $name {
-                $(
-                    #[allow(non_upper_case_globals)]
-                    pub const $fil: AttributeDiscription = AttributeDiscription{
-                        name: stringify!($fil),
-                        namespace: None,
-                        volatile: false
-                    };
-                )*
-            }
         )*
     };
 
@@ -49,22 +46,14 @@ macro_rules! builder_constructors {
             $(#[$attr])*
             pub struct $name;
 
-            impl DioxusElement for $name {
-                const TAG_NAME: &'static str = stringify!($name);
-                const NAME_SPACE: Option<&'static str> = Some($namespace);
-            }
-
             impl SvgAttributes for $name {}
 
             impl $name {
-                $(
+                pub const TAG_NAME: &'static str = stringify!($name);
+                pub const NAME_SPACE: Option<&'static str> = Some($namespace);
 
-                    #[allow(non_upper_case_globals)]
-                    pub const $fil: AttributeDiscription = AttributeDiscription{
-                        name: stringify!($fil),
-                        namespace: Some(stringify!($namespace)),
-                        volatile: false
-                    };
+                $(
+                    pub const $fil: AttributeDiscription = (stringify!($fil), Some(stringify!($namespace)), false)
                 )*
             }
         )*
@@ -1068,19 +1057,10 @@ impl input {
     /// - `time`
     /// - `url`
     /// - `week`
-    #[allow(non_upper_case_globals)]
-    pub const r#type: AttributeDiscription = AttributeDiscription {
-        name: "type",
-        namespace: None,
-        volatile: false,
-    };
 
-    #[allow(non_upper_case_globals)]
-    pub const value: AttributeDiscription = AttributeDiscription {
-        name: "value",
-        namespace: None,
-        volatile: true,
-    };
+    pub const r#type: AttributeDiscription = ("type", None, false);
+
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 
 /*
@@ -1090,63 +1070,29 @@ volatile attributes
 impl script {
     // r#async: Bool,
     // r#type: String, // TODO could be an enum
-    #[allow(non_upper_case_globals)]
-    pub const r#type: AttributeDiscription = AttributeDiscription {
-        name: "type",
-        namespace: None,
-        volatile: false,
-    };
 
-    #[allow(non_upper_case_globals)]
-    pub const r#script: AttributeDiscription = AttributeDiscription {
-        name: "script",
-        namespace: None,
-        volatile: false,
-    };
+    pub const r#type: AttributeDiscription = ("type", None, false);
+
+    pub const r#script: AttributeDiscription = ("script", None, false);
 }
 
 impl button {
-    #[allow(non_upper_case_globals)]
-    pub const r#type: AttributeDiscription = AttributeDiscription {
-        name: "type",
-        namespace: None,
-        volatile: false,
-    };
+    pub const r#type: AttributeDiscription = ("type", None, false);
 }
 
 impl select {
-    #[allow(non_upper_case_globals)]
-    pub const value: AttributeDiscription = AttributeDiscription {
-        name: "value",
-        namespace: None,
-        volatile: true,
-    };
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 
 impl option {
-    #[allow(non_upper_case_globals)]
-    pub const selected: AttributeDiscription = AttributeDiscription {
-        name: "selected",
-        namespace: None,
-        volatile: true,
-    };
+    pub const selected: AttributeDiscription = ("selected", None, true);
 }
 
 impl textarea {
-    #[allow(non_upper_case_globals)]
-    pub const value: AttributeDiscription = AttributeDiscription {
-        name: "value",
-        namespace: None,
-        volatile: true,
-    };
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 impl label {
-    #[allow(non_upper_case_globals)]
-    pub const r#for: AttributeDiscription = AttributeDiscription {
-        name: "for",
-        namespace: None,
-        volatile: false,
-    };
+    pub const r#for: AttributeDiscription = ("for", None, false);
 }
 
 builder_constructors! {

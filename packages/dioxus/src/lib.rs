@@ -7,7 +7,7 @@ pub use dioxus_hooks as hooks;
 
 pub mod events {
     #[cfg(feature = "html")]
-    pub use dioxus_html::{on::*, KeyCode};
+    pub use dioxus_html::prelude::*;
 }
 
 #[cfg(feature = "html")]
@@ -32,5 +32,5 @@ pub mod prelude {
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
+    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
 }

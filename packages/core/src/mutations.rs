@@ -1,407 +1,260 @@
-//! Instructions returned by the VirtualDOM on how to modify the Real DOM.
-//!
-//! This module contains an internal API to generate these instructions.
-//!
-//! Beware that changing code in this module will break compatibility with
-//! interpreters for these types of DomEdits.
+use fxhash::FxHashSet;
 
-use crate::innerlude::*;
-use std::{any::Any, fmt::Debug};
+use crate::{arena::ElementId, ScopeId, Template};
 
-/// ## Mutations
+/// A container for all the relevant steps to modify the Real DOM
 ///
-/// This method returns "mutations" - IE the necessary changes to get the RealDOM to match the VirtualDOM. It also
-/// includes a list of NodeRefs that need to be applied and effects that need to be triggered after the RealDOM has
-/// applied the edits.
+/// This object provides a bunch of important information for a renderer to use patch the Real Dom with the state of the
+/// VirtualDom. This includes the scopes that were modified, the templates that were discovered, and a list of changes
+/// in the form of a [`Mutation`].
+///
+/// These changes are specific to one subtree, so to patch multiple subtrees, you'd need to handle each set separately.
+///
+/// Templates, however, apply to all subtrees, not just target subtree.
 ///
 /// Mutations are the only link between the RealDOM and the VirtualDOM.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[derive(Debug, Default)]
+#[must_use = "not handling edits can lead to visual inconsistencies in UI"]
 pub struct Mutations<'a> {
-    /// The list of edits that need to be applied for the RealDOM to match the VirtualDOM.
-    pub edits: Vec<DomEdit<'a>>,
+    /// The ID of the subtree that these edits are targetting
+    pub subtree: usize,
 
     /// The list of Scopes that were diffed, created, and removed during the Diff process.
     pub dirty_scopes: FxHashSet<ScopeId>,
 
-    /// The list of nodes to connect to the RealDOM.
-    pub refs: Vec<NodeRefMutation<'a>>,
+    /// Any templates encountered while diffing the DOM.
+    ///
+    /// These must be loaded into a cache before applying the edits
+    pub templates: Vec<Template<'a>>,
+
+    /// Any mutations required to patch the renderer to match the layout of the VirtualDom
+    pub edits: Vec<Mutation<'a>>,
 }
 
-impl Debug for Mutations<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Mutations")
-            .field("edits", &self.edits)
-            .field("noderefs", &self.refs)
-            .finish()
+impl<'a> Mutations<'a> {
+    /// Rewrites IDs to just be "template", so you can compare the mutations
+    ///
+    /// Used really only for testing
+    pub fn santize(mut self) -> Self {
+        for edit in self.edits.iter_mut() {
+            if let Mutation::LoadTemplate { name, .. } = edit {
+                *name = "template"
+            }
+        }
+
+        self
+    }
+
+    /// Push a new mutation into the dom_edits list
+    pub(crate) fn push(&mut self, mutation: Mutation<'static>) {
+        self.edits.push(mutation)
     }
 }
 
-/// A `DomEdit` represents a serialized form of the VirtualDom's trait-based API. This allows streaming edits across the
-/// network or through FFI boundaries.
-#[derive(Debug, PartialEq)]
+/// A `Mutation` represents a single instruction for the renderer to use to modify the UI tree to match the state
+/// of the Dioxus VirtualDom.
+///
+/// These edits can be serialized and sent over the network or through any interface
 #[cfg_attr(
     feature = "serialize",
     derive(serde::Serialize, serde::Deserialize),
     serde(tag = "type")
 )]
-pub enum DomEdit<'bump> {
-    /// Pop the topmost node from our stack and append them to the node
-    /// at the top of the stack.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Mutation<'a> {
+    /// Add these m children to the target element
     AppendChildren {
-        /// The parent to append nodes to.
-        root: Option<u64>,
+        /// The ID of the element being mounted to
+        id: ElementId,
 
-        /// The ids of the children to append.
-        children: Vec<u64>,
+        /// The number of nodes on the stack
+        m: usize,
     },
 
-    /// Replace a given (single) node with a handful of nodes currently on the stack.
-    ReplaceWith {
-        /// The ID of the node to be replaced.
-        root: Option<u64>,
+    /// Assign the element at the given path the target ElementId.
+    ///
+    /// The path is in the form of a list of indices based on children. Templates cannot have more than 255 children per
+    /// element, hence the use of a single byte.
+    ///
+    ///
+    AssignId {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
+        path: &'static [u8],
 
-        /// The ids of the nodes to replace the root with.
-        nodes: Vec<u64>,
+        /// The ID we're assigning to this element/placeholder.
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Create an placeholder int he DOM that we will use later.
+    ///
+    /// Dioxus currently requires the use of placeholders to maintain a re-entrance point for things like list diffing
+    CreatePlaceholder {
+        /// The ID we're assigning to this element/placeholder.
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Create a node specifically for text with the given value
+    CreateTextNode {
+        /// The text content of this text node
+        value: &'a str,
+
+        /// The ID we're assigning to this specific text nodes
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Hydrate an existing text node at the given path with the given text.
+    ///
+    /// Assign this text node the given ID since we will likely need to modify this text at a later point
+    HydrateText {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
+        path: &'static [u8],
+
+        /// The value of the textnode that we want to set the placeholder with
+        value: &'a str,
+
+        /// The ID we're assigning to this specific text nodes
+        ///
+        /// This will be used later to modify the element or replace it with another element.
+        id: ElementId,
+    },
+
+    /// Load and clone an existing node from a template saved under that specific name
+    ///
+    /// Dioxus guarantees that the renderer will have already been provided the template.
+    /// When the template is picked up in the template list, it should be saved under its "name" - here, the name
+    LoadTemplate {
+        /// The "name" of the template. When paired with `rsx!`, this is autogenerated
+        name: &'static str,
+
+        /// Which root are we loading from the template?
+        ///
+        /// The template is stored as a list of nodes. This index represents the position of that root
+        index: usize,
+
+        /// The ID we're assigning to this element being loaded from the template
+        ///
+        /// This will be used later to move the element around in lists
+        id: ElementId,
+    },
+
+    /// Replace the target element (given by its ID) with the topmost m nodes on the stack
+    ReplaceWith {
+        /// The ID of the node we're going to replace with
+        id: ElementId,
+
+        /// The number of nodes on the stack to use to replace
+        m: usize,
+    },
+
+    /// Replace an existing element in the template at the given path with the m nodes on the stack
+    ReplacePlaceholder {
+        /// The path of the child of the topmost node on the stack
+        ///
+        /// A path of `[]` represents the topmost node. A path of `[0]` represents the first child.
+        /// `[0,1,2]` represents 1st child's 2nd child's 3rd child.
+        path: &'static [u8],
+
+        /// The number of nodes on the stack to use to replace
+        m: usize,
     },
 
     /// Insert a number of nodes after a given node.
     InsertAfter {
         /// The ID of the node to insert after.
-        root: Option<u64>,
+        id: ElementId,
 
         /// The ids of the nodes to insert after the target node.
-        nodes: Vec<u64>,
+        m: usize,
     },
 
     /// Insert a number of nodes before a given node.
     InsertBefore {
         /// The ID of the node to insert before.
-        root: Option<u64>,
+        id: ElementId,
 
         /// The ids of the nodes to insert before the target node.
-        nodes: Vec<u64>,
+        m: usize,
     },
 
-    /// Remove a particular node from the DOM
-    Remove {
-        /// The ID of the node to remove.
-        root: Option<u64>,
+    /// Set the value of a node's attribute.
+    SetAttribute {
+        /// The name of the attribute to set.
+        name: &'a str,
+        /// The value of the attribute.
+        value: &'a str,
+
+        /// The ID of the node to set the attribute of.
+        id: ElementId,
+
+        /// The (optional) namespace of the attribute.
+        /// For instance, "style" is in the "style" namespace.
+        ns: Option<&'a str>,
     },
 
-    /// Create a new purely-text node
-    CreateTextNode {
-        /// The ID the new node should have.
-        root: Option<u64>,
+    /// Set the value of a node's attribute.
+    SetBoolAttribute {
+        /// The name of the attribute to set.
+        name: &'a str,
 
+        /// The value of the attribute.
+        value: bool,
+
+        /// The ID of the node to set the attribute of.
+        id: ElementId,
+    },
+
+    /// Set the textcontent of a node.
+    SetText {
         /// The textcontent of the node
-        text: &'bump str,
-    },
+        value: &'a str,
 
-    /// Create a new purely-element node
-    CreateElement {
-        /// The ID the new node should have.
-        root: Option<u64>,
-
-        /// The tagname of the node
-        tag: &'bump str,
-
-        /// The number of children nodes that will follow this message.
-        children: u32,
-    },
-
-    /// Create a new purely-comment node with a given namespace
-    CreateElementNs {
-        /// The ID the new node should have.
-        root: Option<u64>,
-
-        /// The namespace of the node
-        tag: &'bump str,
-
-        /// The namespace of the node (like `SVG`)
-        ns: &'static str,
-
-        /// The number of children nodes that will follow this message.
-        children: u32,
-    },
-
-    /// Create a new placeholder node.
-    /// In most implementations, this will either be a hidden div or a comment node.
-    CreatePlaceholder {
-        /// The ID the new node should have.
-        root: Option<u64>,
+        /// The ID of the node to set the textcontent of.
+        id: ElementId,
     },
 
     /// Create a new Event Listener.
     NewEventListener {
         /// The name of the event to listen for.
-        event_name: &'static str,
+        name: &'a str,
 
         /// The ID of the node to attach the listener to.
         scope: ScopeId,
 
         /// The ID of the node to attach the listener to.
-        root: Option<u64>,
+        id: ElementId,
     },
 
     /// Remove an existing Event Listener.
     RemoveEventListener {
-        /// The ID of the node to remove.
-        root: Option<u64>,
-
         /// The name of the event to remove.
-        event: &'static str,
-    },
+        name: &'a str,
 
-    /// Set the textcontent of a node.
-    SetText {
-        /// The ID of the node to set the textcontent of.
-        root: Option<u64>,
-
-        /// The textcontent of the node
-        text: &'bump str,
-    },
-
-    /// Set the value of a node's attribute.
-    SetAttribute {
-        /// The ID of the node to set the attribute of.
-        root: Option<u64>,
-
-        /// The name of the attribute to set.
-        field: &'static str,
-
-        /// The value of the attribute.
-        value: AttributeValue<'bump>,
-
-        // value: &'bump str,
-        /// The (optional) namespace of the attribute.
-        /// For instance, "style" is in the "style" namespace.
-        ns: Option<&'bump str>,
-    },
-
-    /// Remove an attribute from a node.
-    RemoveAttribute {
         /// The ID of the node to remove.
-        root: Option<u64>,
-
-        /// The name of the attribute to remove.
-        name: &'static str,
-
-        /// The namespace of the attribute.
-        ns: Option<&'bump str>,
+        id: ElementId,
     },
 
-    /// Clones a node.
-    CloneNode {
-        /// The ID of the node to clone.
-        id: Option<u64>,
-
-        /// The ID of the new node.
-        new_id: u64,
+    /// Remove a particular node from the DOM
+    Remove {
+        /// The ID of the node to remove.
+        id: ElementId,
     },
 
-    /// Clones the children of a node. (allows cloning fragments)
-    CloneNodeChildren {
-        /// The ID of the node to clone.
-        id: Option<u64>,
-
-        /// The ID of the new node.
-        new_ids: Vec<u64>,
+    /// Push the given root node onto our stack.
+    PushRoot {
+        /// The ID of the root node to push.
+        id: ElementId,
     },
-
-    /// Navigates to the last node to the first child of the current node.
-    FirstChild {},
-
-    /// Navigates to the last node to the last child of the current node.
-    NextSibling {},
-
-    /// Navigates to the last node to the parent of the current node.
-    ParentNode {},
-
-    /// Stores the last node with a new id.
-    StoreWithId {
-        /// The ID of the node to store.
-        id: u64,
-    },
-
-    /// Manually set the last node.
-    SetLastNode {
-        /// The ID to set the last node to.
-        id: u64,
-    },
-}
-
-use rustc_hash::FxHashSet;
-use DomEdit::*;
-
-#[allow(unused)]
-impl<'a> Mutations<'a> {
-    pub(crate) fn new() -> Self {
-        Self {
-            edits: Vec::new(),
-            refs: Vec::new(),
-            dirty_scopes: Default::default(),
-        }
-    }
-
-    pub(crate) fn replace_with(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(ReplaceWith { nodes, root });
-    }
-
-    pub(crate) fn insert_after(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(InsertAfter { nodes, root });
-    }
-
-    pub(crate) fn insert_before(&mut self, root: Option<u64>, nodes: Vec<u64>) {
-        self.edits.push(InsertBefore { nodes, root });
-    }
-
-    pub(crate) fn append_children(&mut self, root: Option<u64>, children: Vec<u64>) {
-        self.edits.push(AppendChildren { root, children });
-    }
-
-    // Remove Nodes from the dom
-    pub(crate) fn remove(&mut self, id: Option<u64>) {
-        self.edits.push(Remove { root: id });
-    }
-
-    // Create
-    pub(crate) fn create_text_node(&mut self, text: &'a str, id: Option<u64>) {
-        self.edits.push(CreateTextNode { text, root: id });
-    }
-
-    pub(crate) fn create_element(
-        &mut self,
-        tag: &'static str,
-        ns: Option<&'static str>,
-        id: Option<u64>,
-        children: u32,
-    ) {
-        match ns {
-            Some(ns) => self.edits.push(CreateElementNs {
-                root: id,
-                ns,
-                tag,
-                children,
-            }),
-            None => self.edits.push(CreateElement {
-                root: id,
-                tag,
-                children,
-            }),
-        }
-    }
-
-    // placeholders are nodes that don't get rendered but still exist as an "anchor" in the real dom
-    pub(crate) fn create_placeholder(&mut self, id: Option<u64>) {
-        self.edits.push(CreatePlaceholder { root: id });
-    }
-
-    // events
-    pub(crate) fn new_event_listener(&mut self, listener: &Listener, scope: ScopeId) {
-        let Listener {
-            event,
-            mounted_node,
-            ..
-        } = listener;
-
-        let element_id = Some(mounted_node.get().unwrap().into());
-
-        self.edits.push(NewEventListener {
-            scope,
-            event_name: event,
-            root: element_id,
-        });
-    }
-
-    pub(crate) fn remove_event_listener(&mut self, event: &'static str, root: Option<u64>) {
-        self.edits.push(RemoveEventListener { event, root });
-    }
-
-    // modify
-    pub(crate) fn set_text(&mut self, text: &'a str, root: Option<u64>) {
-        self.edits.push(SetText { text, root });
-    }
-
-    pub(crate) fn set_attribute(&mut self, attribute: &'a Attribute<'a>, root: Option<u64>) {
-        let Attribute {
-            value, attribute, ..
-        } = attribute;
-
-        self.edits.push(SetAttribute {
-            field: attribute.name,
-            value: value.clone(),
-            ns: attribute.namespace,
-            root,
-        });
-    }
-
-    pub(crate) fn remove_attribute(&mut self, attribute: &Attribute, root: Option<u64>) {
-        let Attribute { attribute, .. } = attribute;
-
-        self.edits.push(RemoveAttribute {
-            name: attribute.name,
-            ns: attribute.namespace,
-            root,
-        });
-    }
-
-    pub(crate) fn mark_dirty_scope(&mut self, scope: ScopeId) {
-        self.dirty_scopes.insert(scope);
-    }
-
-    pub(crate) fn clone_node(&mut self, id: Option<u64>, new_id: u64) {
-        self.edits.push(CloneNode { id, new_id });
-    }
-
-    pub(crate) fn clone_node_children(&mut self, id: Option<u64>, new_ids: Vec<u64>) {
-        self.edits.push(CloneNodeChildren { id, new_ids });
-    }
-
-    pub(crate) fn first_child(&mut self) {
-        self.edits.push(FirstChild {});
-    }
-
-    pub(crate) fn next_sibling(&mut self) {
-        self.edits.push(NextSibling {});
-    }
-
-    pub(crate) fn parent_node(&mut self) {
-        self.edits.push(ParentNode {});
-    }
-
-    pub(crate) fn store_with_id(&mut self, id: u64) {
-        self.edits.push(StoreWithId { id });
-    }
-
-    pub(crate) fn set_last_node(&mut self, id: u64) {
-        self.edits.push(SetLastNode { id });
-    }
-}
-
-// refs are only assigned once
-pub struct NodeRefMutation<'a> {
-    pub element: &'a mut Option<once_cell::sync::OnceCell<Box<dyn Any>>>,
-    pub element_id: ElementId,
-}
-
-impl<'a> std::fmt::Debug for NodeRefMutation<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NodeRefMutation")
-            .field("element_id", &self.element_id)
-            .finish()
-    }
-}
-
-impl<'a> NodeRefMutation<'a> {
-    pub fn downcast_ref<T: 'static>(&self) -> Option<&T> {
-        self.element
-            .as_ref()
-            .and_then(|f| f.get())
-            .and_then(|f| f.downcast_ref::<T>())
-    }
-    pub fn downcast_mut<T: 'static>(&mut self) -> Option<&mut T> {
-        self.element
-            .as_mut()
-            .and_then(|f| f.get_mut())
-            .and_then(|f| f.downcast_mut::<T>())
-    }
 }

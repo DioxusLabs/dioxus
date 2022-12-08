@@ -10,9 +10,9 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let count = use_state(cx, || 0);
 
-    use_future(&cx, (), move |_| {
+    use_future(cx, (), move |_| {
         let mut count = count.clone();
         async move {
             loop {

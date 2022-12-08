@@ -22,10 +22,10 @@ pub struct TodoItem {
 }
 
 pub fn app(cx: Scope<()>) -> Element {
-    let todos = use_state(&cx, im_rc::HashMap::<u32, TodoItem>::default);
-    let filter = use_state(&cx, || FilterState::All);
-    let draft = use_state(&cx, || "".to_string());
-    let todo_id = use_state(&cx, || 0);
+    let todos = use_state(cx, im_rc::HashMap::<u32, TodoItem>::default);
+    let filter = use_state(cx, || FilterState::All);
+    let draft = use_state(cx, || "".to_string());
+    let todo_id = use_state(cx, || 0);
 
     // Filter the todos based on the filter state
     let mut filtered_todos = todos
@@ -57,7 +57,9 @@ pub fn app(cx: Scope<()>) -> Element {
                         placeholder: "What needs to be done?",
                         value: "{draft}",
                         autofocus: "true",
-                        oninput: move |evt| draft.set(evt.value.clone()),
+                        oninput: move |evt| {
+                            draft.set(evt.value.clone());
+                        },
                         onkeydown: move |evt| {
                             if evt.key() == Key::Enter && !draft.is_empty() {
                                 todos.make_mut().insert(
@@ -114,7 +116,7 @@ pub struct TodoEntryProps<'a> {
 }
 
 pub fn TodoEntry<'a>(cx: Scope<'a, TodoEntryProps<'a>>) -> Element {
-    let is_editing = use_state(&cx, || false);
+    let is_editing = use_state(cx, || false);
 
     let todos = cx.props.todos.get();
     let todo = &todos[&cx.props.id];

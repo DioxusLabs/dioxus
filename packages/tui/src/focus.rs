@@ -1,6 +1,7 @@
-use crate::{node::PreventDefault, Dom};
+use crate::{node::PreventDefault, TuiDom};
 
 use dioxus_native_core::{
+    tree::TreeView,
     utils::{ElementProduced, PersistantElementIter},
     RealNodeId,
 };
@@ -10,7 +11,6 @@ use std::{cmp::Ordering, num::NonZeroU16};
 
 use dioxus_native_core::{
     node_ref::{AttributeMask, NodeMask, NodeView},
-    real_dom::NodeType,
     state::NodeDepState,
 };
 
@@ -64,7 +64,8 @@ pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
-impl NodeDepState<()> for Focus {
+impl NodeDepState for Focus {
+    type DepState = ();
     type Ctx = ();
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
@@ -77,7 +78,7 @@ impl NodeDepState<()> for Focus {
             {
                 if let Some(index) = a
                     .value
-                    .as_int32()
+                    .as_int()
                     .or_else(|| a.value.as_text().and_then(|v| v.parse::<i32>().ok()))
                 {
                     match index.cmp(&0) {
@@ -126,7 +127,7 @@ pub(crate) struct FocusState {
 
 impl FocusState {
     /// Returns true if the focus has changed.
-    pub fn progress(&mut self, rdom: &mut Dom, forward: bool) -> bool {
+    pub fn progress(&mut self, rdom: &mut TuiDom, forward: bool) -> bool {
         if let Some(last) = self.last_focused_id {
             if rdom[last].state.prevent_default == PreventDefault::KeyDown {
                 return false;
@@ -234,10 +235,10 @@ impl FocusState {
         false
     }
 
-    pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &Dom) {
+    pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &TuiDom) {
         fn remove_children(
             to_prune: &mut [&mut Option<RealNodeId>],
-            rdom: &Dom,
+            rdom: &TuiDom,
             removed: RealNodeId,
         ) {
             for opt in to_prune.iter_mut() {
@@ -247,8 +248,8 @@ impl FocusState {
                     }
                 }
             }
-            if let NodeType::Element { children, .. } = &rdom[removed].node_data.node_type {
-                for child in children {
+            if let Some(children) = &rdom.children_ids(removed) {
+                for child in *children {
                     remove_children(to_prune, rdom, *child);
                 }
             }
@@ -258,22 +259,22 @@ impl FocusState {
         }
         for m in &mutations.edits {
             match m {
-                dioxus_core::DomEdit::ReplaceWith { root, .. } => remove_children(
+                dioxus_core::Mutation::ReplaceWith { id, .. } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    rdom.resolve_maybe_id(*root),
+                    rdom.element_to_node_id(*id),
                 ),
-                dioxus_core::DomEdit::Remove { root } => remove_children(
+                dioxus_core::Mutation::Remove { id } => remove_children(
                     &mut [&mut self.last_focused_id],
                     rdom,
-                    rdom.resolve_maybe_id(*root),
+                    rdom.element_to_node_id(*id),
                 ),
                 _ => (),
             }
         }
     }
 
-    pub(crate) fn set_focus(&mut self, rdom: &mut Dom, id: RealNodeId) {
+    pub(crate) fn set_focus(&mut self, rdom: &mut TuiDom, id: RealNodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
             rdom[old].state.focused = false;
         }

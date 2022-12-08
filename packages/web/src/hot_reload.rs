@@ -1,11 +1,24 @@
-use dioxus_core::SchedulerMsg;
-use dioxus_core::SetTemplateMsg;
-use dioxus_core::VirtualDom;
+#![allow(dead_code)]
+
+use futures_channel::mpsc::UnboundedReceiver;
+
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, WebSocket};
 
-pub(crate) fn init(dom: &VirtualDom) {
+#[cfg(not(debug_assertions))]
+pub(crate) fn init() -> UnboundedReceiver<String> {
+    let (tx, rx) = futures_channel::mpsc::unbounded();
+
+    std::mem::forget(tx);
+
+    rx
+}
+
+#[cfg(debug_assertions)]
+pub(crate) fn init() -> UnboundedReceiver<String> {
+    use std::convert::TryInto;
+
     let window = web_sys::window().unwrap();
 
     let protocol = if window.location().protocol().unwrap() == "https:" {
@@ -20,18 +33,20 @@ pub(crate) fn init(dom: &VirtualDom) {
     );
 
     let ws = WebSocket::new(&url).unwrap();
-    let mut channel = dom.get_scheduler_channel();
+
+    let (tx, rx) = futures_channel::mpsc::unbounded();
 
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-            let msg: SetTemplateMsg = serde_json::from_str(&format!("{text}")).unwrap();
-            channel
-                .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
-                .unwrap();
+            if let Ok(val) = text.try_into() {
+                _ = tx.unbounded_send(val);
+            }
         }
     }) as Box<dyn FnMut(MessageEvent)>);
 
     ws.set_onmessage(Some(cl.as_ref().unchecked_ref()));
     cl.forget();
+
+    rx
 }

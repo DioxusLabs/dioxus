@@ -8,8 +8,8 @@ fn main() {
 // ANCHOR: component
 fn App(cx: Scope) -> Element {
     // ANCHOR: use_state_calls
-    let mut count_a = use_state(&cx, || 0);
-    let mut count_b = use_state(&cx, || 0);
+    let mut count_a = use_state(cx, || 0);
+    let mut count_b = use_state(cx, || 0);
     // ANCHOR_END: use_state_calls
 
     cx.render(rsx!(

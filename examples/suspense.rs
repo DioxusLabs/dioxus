@@ -53,7 +53,7 @@ fn app(cx: Scope) -> Element {
 /// Suspense is achieved my moving the future into only the component that
 /// actually renders the data.
 fn Doggo(cx: Scope) -> Element {
-    let fut = use_future(&cx, (), |_| async move {
+    let fut = use_future(cx, (), |_| async move {
         reqwest::get("https://dog.ceo/api/breeds/image/random/")
             .await
             .unwrap()

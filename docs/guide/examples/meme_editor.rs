@@ -1,7 +1,6 @@
 // ANCHOR: all
 #![allow(non_snake_case)]
 
-use dioxus::events::FormEvent;
 use dioxus::prelude::*;
 
 fn main() {
@@ -18,7 +17,7 @@ fn MemeEditor(cx: Scope) -> Element {
         width: fit-content;
     ";
 
-    let caption = use_state(&cx, || "me waiting for my rust code to compile".to_string());
+    let caption = use_state(cx, || "me waiting for my rust code to compile".to_string());
 
     cx.render(rsx! {
         div {

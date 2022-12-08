@@ -10,17 +10,17 @@ fn main() {
 static NAME: Atom<String> = |_| "world".to_string();
 
 fn app(cx: Scope) -> Element {
-    let name = use_read(&cx, NAME);
+    let name = use_read(cx, NAME);
 
     cx.render(rsx! {
         div { "hello {name}!" }
         Child {}
-        ChildWithRef{}
+        ChildWithRef {}
     })
 }
 
 fn Child(cx: Scope) -> Element {
-    let set_name = use_set(&cx, NAME);
+    let set_name = use_set(cx, NAME);
 
     cx.render(rsx! {
         button {
@@ -33,7 +33,7 @@ fn Child(cx: Scope) -> Element {
 static NAMES: AtomRef<Vec<String>> = |_| vec!["world".to_string()];
 
 fn ChildWithRef(cx: Scope) -> Element {
-    let names = use_atom_ref(&cx, NAMES);
+    let names = use_atom_ref(cx, NAMES);
 
     cx.render(rsx! {
         div {

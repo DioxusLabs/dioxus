@@ -20,7 +20,7 @@ Our component is really simple – we just call `use_ref` to get an initial calc
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let state = use_ref(&cx, Calculator::new);
+    let state = use_ref(cx, Calculator::new);
 
     cx.render(rsx!{
         // the rendering code

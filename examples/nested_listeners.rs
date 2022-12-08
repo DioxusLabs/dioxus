@@ -22,7 +22,7 @@ fn app(cx: Scope) -> Element {
             button {
                 onclick: move |evt| {
                     println!("clicked! bottom no bubbling");
-                    evt.cancel_bubble();
+                    evt.stop_propogation();
                 },
                 "Dont propogate"
             }

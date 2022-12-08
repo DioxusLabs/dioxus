@@ -192,16 +192,16 @@ impl ToTokens for Element {
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ElementAttr {
-    /// attribute: "valuee {}"
+    /// `attribute: "value"`
     AttrText { name: Ident, value: IfmtInput },
 
-    /// attribute: true,
+    /// `attribute: true`
     AttrExpression { name: Ident, value: Expr },
 
-    /// "attribute": "value {}"
+    /// `"attribute": "value"`
     CustomAttrText { name: LitStr, value: IfmtInput },
 
-    /// "attribute": true,
+    /// `"attribute": true`
     CustomAttrExpression { name: LitStr, value: Expr },
 
     // /// onclick: move |_| {}
@@ -244,29 +244,57 @@ impl ToTokens for ElementAttrNamed {
         tokens.append_all(match attr {
             ElementAttr::AttrText { name, value } => {
                 quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::AttrExpression { name, value } => {
                 quote! {
-                    __cx.attr_disciption( dioxus_elements::#el_name::#name, #value)
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
-                    __cx.attr( #name, #value, None, false )
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
-                    __cx.attr( #name, #value, None, false )
+                    __cx.attr(
+                        dioxus_elements::#el_name::#name.0,
+                        #value,
+                        None,
+                        false
+                    )
                 }
             }
             ElementAttr::EventTokens { name, tokens } => {
                 quote! {
-                    dioxus_elements::on::#name(__cx, #tokens)
+                    dioxus_elements::events::#name(__cx, #tokens)
                 }
             }
         });
     }
 }
+
+// ::dioxus::core::Attribute {
+//     name: stringify!(#name),
+//     namespace: None,
+//     volatile: false,
+//     mounted_node: Default::default(),
+//     value: ::dioxus::core::AttributeValue::Text(#value),
+// }
