@@ -18,11 +18,12 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let router = match use_router_internal(&cx) {
         Some(r) => r,
         None => {
-            error!("`Outlet` must have access to a parent router, will be inactive");
+            let msg = "`Outlet` must have access to a parent router";
+            error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
-            panic!("`Outlet` must have access to a parent router");
+            panic!("{}", msg);
             #[cfg(not(debug_assertions))]
-            return None;
+            anyhow::bail!("{msg}");
         }
     };
     let state = loop {

@@ -54,11 +54,12 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let router = match use_router_internal(&cx) {
         Some(r) => r,
         None => {
-            error!("`Link` must have access to a parent router, will be inactive");
+            let msg = "`Link` must have access to a parent router";
+            error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
-            panic!("`Link` must have access to a parent router");
+            panic!("{}", msg);
             #[cfg(not(debug_assertions))]
-            return None;
+            anyhow::bail!("{msg}");
         }
     };
     let state = loop {
