@@ -14,15 +14,9 @@ use crate::{
     AttributeValue, Element, Event, Scope, SuspenseContext,
 };
 use futures_util::{pin_mut, StreamExt};
+use fxhash::FxHashMap;
 use slab::Slab;
-use std::{
-    any::Any,
-    borrow::BorrowMut,
-    cell::Cell,
-    collections::{BTreeSet, HashMap},
-    future::Future,
-    rc::Rc,
-};
+use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -148,7 +142,7 @@ use std::{
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) templates: HashMap<TemplateId, Template<'static>>,
+    pub(crate) templates: FxHashMap<TemplateId, Template<'static>>,
     pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,

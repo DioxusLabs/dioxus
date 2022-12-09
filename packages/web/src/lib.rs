@@ -55,7 +55,7 @@
 
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
-pub use crate::util::use_eval;
+pub use crate::util::{use_eval, EvalResult};
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
@@ -197,7 +197,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    let _work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::debug!("waiting for work");
@@ -230,6 +230,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             res = rx.try_next().transpose().unwrap().ok();
         }
 
+        // Todo: This is currently disabled because it has a negative impact on responce times for events but it could be re-enabled for tasks
         // Jank free rendering
         //
         // 1. wait for the browser to give us "idle" time
@@ -238,13 +239,13 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in
-        let deadline = work_loop.wait_for_idle_time().await;
+        // let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let edits = dom.render_with_deadline(deadline).await;
+        let edits = dom.render_immediate();
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         websys_dom.load_templates(&edits.templates);
         websys_dom.apply_edits(edits.edits);
