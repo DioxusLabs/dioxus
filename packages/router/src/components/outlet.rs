@@ -56,6 +56,6 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
             let X = content.0;
             rsx! { X { } }
         }
-        None => rsx! { Fragment { } },
+        None => rsx! { div { } },
     })
 }
