@@ -14,7 +14,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
-    "web"
+    "sledgehammer"
 ] }
 
 js-sys = "0.3.56"
