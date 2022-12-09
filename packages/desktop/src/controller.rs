@@ -5,6 +5,7 @@ use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -19,6 +20,7 @@ use wry::{
 
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
+    pub(super) eval_sender: tokio::sync::mpsc::UnboundedSender<Value>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
@@ -43,6 +45,7 @@ impl DesktopController {
 
         let pending_edits = edit_queue.clone();
         let desktop_context_proxy = proxy.clone();
+        let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel::<Value>();
 
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "tokio::spawn" onto multiple threads
@@ -54,7 +57,7 @@ impl DesktopController {
 
             runtime.block_on(async move {
                 let mut dom = VirtualDom::new_with_props(root, props)
-                    .with_root_context(DesktopContext::new(desktop_context_proxy));
+                    .with_root_context(DesktopContext::new(desktop_context_proxy, eval_reciever));
                 {
                     let edits = dom.rebuild();
                     let mut queue = edit_queue.lock().unwrap();
@@ -88,6 +91,7 @@ impl DesktopController {
 
         Self {
             pending_edits,
+            eval_sender,
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,

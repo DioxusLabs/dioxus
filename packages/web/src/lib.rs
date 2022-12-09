@@ -55,9 +55,8 @@
 
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
-pub use crate::util::use_eval;
+pub use crate::util::{use_eval, EvalResult};
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
-
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
 mod cache;
