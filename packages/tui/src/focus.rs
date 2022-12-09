@@ -79,7 +79,7 @@ impl NodeDepState for Focus {
                 if let Some(index) = a
                     .value
                     .as_int()
-                    .or_else(|| a.value.as_text().and_then(|v| v.parse::<i32>().ok()))
+                    .or_else(|| a.value.as_text().and_then(|v| v.parse::<i64>().ok()))
                 {
                     match index.cmp(&0) {
                         Ordering::Less => FocusLevel::Unfocusable,

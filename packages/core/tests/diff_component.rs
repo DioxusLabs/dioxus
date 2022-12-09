@@ -59,19 +59,21 @@ fn component_swap() {
     }
 
     let mut dom = VirtualDom::new(app);
-    let edits = dom.rebuild().santize();
-    assert_eq!(
-        edits.edits,
-        [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(4) },
-            ReplacePlaceholder { path: &[1], m: 3 },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5) },
-            AppendChildren { m: 2, id: ElementId(0) }
-        ]
-    );
+    {
+        let edits = dom.rebuild().santize();
+        assert_eq!(
+            edits.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(2) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(4) },
+                ReplacePlaceholder { path: &[1], m: 3 },
+                LoadTemplate { name: "template", index: 0, id: ElementId(5) },
+                AppendChildren { m: 2, id: ElementId(0) }
+            ]
+        );
+    }
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(

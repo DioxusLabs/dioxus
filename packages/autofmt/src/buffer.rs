@@ -144,8 +144,8 @@ impl Buffer {
         let mut total = 0;
 
         for attr in attributes {
-            if self.current_span_is_primary(attr.attr.flart()) {
-                'line: for line in self.src[..attr.attr.flart().start().line - 1].iter().rev() {
+            if self.current_span_is_primary(attr.attr.start()) {
+                'line: for line in self.src[..attr.attr.start().start().line - 1].iter().rev() {
                     match (line.trim().starts_with("//"), line.is_empty()) {
                         (true, _) => return 100000,
                         (_, true) => continue 'line,

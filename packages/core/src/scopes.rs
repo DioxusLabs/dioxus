@@ -4,7 +4,7 @@ use crate::{
     arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    innerlude::{Scheduler, SchedulerMsg},
+    innerlude::{ListenerCb, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
@@ -483,7 +483,7 @@ impl<'src> ScopeState {
             }))
         };
 
-        AttributeValue::Listener(RefCell::new(Some(boxed)))
+        AttributeValue::Listener(ListenerCb(RefCell::new(Some(boxed))))
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

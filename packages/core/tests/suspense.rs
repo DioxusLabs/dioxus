@@ -9,32 +9,34 @@ use std::time::Duration;
 async fn it_works() {
     let mut dom = VirtualDom::new(app);
 
-    let mutations = dom.rebuild().santize();
+    {
+        let mutations = dom.rebuild().santize();
 
-    // We should at least get the top-level template in before pausing for the children
-    // note: we dont test template edits anymore
-    // assert_eq!(
-    //     mutations.templates,
-    //     [
-    //         CreateElement { name: "div" },
-    //         CreateStaticText { value: "Waiting for child..." },
-    //         CreateStaticPlaceholder,
-    //         AppendChildren { m: 2 },
-    //         SaveTemplate { name: "template", m: 1 }
-    //     ]
-    // );
+        // We should at least get the top-level template in before pausing for the children
+        // note: we dont test template edits anymore
+        // assert_eq!(
+        //     mutations.templates,
+        //     [
+        //         CreateElement { name: "div" },
+        //         CreateStaticText { value: "Waiting for child..." },
+        //         CreateStaticPlaceholder,
+        //         AppendChildren { m: 2 },
+        //         SaveTemplate { name: "template", m: 1 }
+        //     ]
+        // );
 
-    // And we should load it in and assign the placeholder properly
-    assert_eq!(
-        mutations.edits,
-        [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
-            // can we even?
-            AssignId { path: &[1], id: ElementId(3) },
-            AppendChildren { m: 1, id: ElementId(0) },
-        ]
-    );
+        // And we should load it in and assign the placeholder properly
+        assert_eq!(
+            mutations.edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1) },
+                // hmmmmmmmmm.... with suspense how do we guarantee that IDs increase linearly?
+                // can we even?
+                AssignId { path: &[1], id: ElementId(3) },
+                AppendChildren { m: 1, id: ElementId(0) },
+            ]
+        );
+    }
 
     // wait just a moment, not enough time for the boundary to resolve
 

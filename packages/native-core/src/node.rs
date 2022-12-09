@@ -1,6 +1,7 @@
 use crate::{state::State, tree::NodeId};
-use dioxus_core::ElementId;
+use dioxus_core::{AnyValueBox, AttributeValue, ElementId};
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::fmt::Debug;
 
 /// The node is stored client side and stores only basic data about the node.
 #[derive(Debug, Clone)]
@@ -72,13 +73,41 @@ pub struct OwnedAttributeView<'a> {
     pub value: &'a OwnedAttributeValue,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum OwnedAttributeValue {
     Text(String),
-    Float(f32),
-    Int(i32),
+    Float(f64),
+    Int(i64),
     Bool(bool),
+    Any(AnyValueBox),
     None,
+}
+
+impl Debug for OwnedAttributeValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
+            Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
+            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+            Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
+            Self::Any(_) => f.debug_tuple("Any").finish(),
+            Self::None => write!(f, "None"),
+        }
+    }
+}
+
+impl From<AttributeValue<'_>> for OwnedAttributeValue {
+    fn from(value: AttributeValue<'_>) -> Self {
+        match value {
+            AttributeValue::Text(text) => Self::Text(text.to_string()),
+            AttributeValue::Float(float) => Self::Float(float),
+            AttributeValue::Int(int) => Self::Int(int),
+            AttributeValue::Bool(bool) => Self::Bool(bool),
+            AttributeValue::Any(any) => Self::Any(any),
+            AttributeValue::None => Self::None,
+            _ => Self::None,
+        }
+    }
 }
 
 impl OwnedAttributeValue {
@@ -89,14 +118,14 @@ impl OwnedAttributeValue {
         }
     }
 
-    pub fn as_float(&self) -> Option<f32> {
+    pub fn as_float(&self) -> Option<f64> {
         match self {
             OwnedAttributeValue::Float(float) => Some(*float),
             _ => None,
         }
     }
 
-    pub fn as_int(&self) -> Option<i32> {
+    pub fn as_int(&self) -> Option<i64> {
         match self {
             OwnedAttributeValue::Int(int) => Some(*int),
             _ => None,

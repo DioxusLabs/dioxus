@@ -105,27 +105,10 @@ impl<'b> VirtualDom {
                             attribute.mounted_element.set(id);
 
                             // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                            let unbounded_name = unsafe { std::mem::transmute(attribute.name) };
+                            let unbounded_name: &str =
+                                unsafe { std::mem::transmute(attribute.name) };
 
                             match &attribute.value {
-                                AttributeValue::Text(value) => {
-                                    // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                                    let unbounded_value = unsafe { std::mem::transmute(*value) };
-
-                                    self.mutations.push(SetAttribute {
-                                        name: unbounded_name,
-                                        value: unbounded_value,
-                                        ns: attribute.namespace,
-                                        id,
-                                    })
-                                }
-                                AttributeValue::Bool(value) => {
-                                    self.mutations.push(SetBoolAttribute {
-                                        name: unbounded_name,
-                                        value: *value,
-                                        id,
-                                    })
-                                }
                                 AttributeValue::Listener(_) => {
                                     self.mutations.push(NewEventListener {
                                         // all listeners start with "on"
@@ -134,10 +117,18 @@ impl<'b> VirtualDom {
                                         id,
                                     })
                                 }
-                                AttributeValue::Float(_) => todo!(),
-                                AttributeValue::Int(_) => todo!(),
-                                AttributeValue::Any(_) => todo!(),
-                                AttributeValue::None => todo!(),
+                                _ => {
+                                    // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                                    let unbounded_value =
+                                        unsafe { std::mem::transmute(attribute.value.clone()) };
+
+                                    self.mutations.push(SetAttribute {
+                                        name: unbounded_name,
+                                        value: unbounded_value,
+                                        ns: attribute.namespace,
+                                        id,
+                                    })
+                                }
                             }
 
                             // Only push the dynamic attributes forward if they match the current path (same element)

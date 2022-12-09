@@ -386,7 +386,7 @@ impl VirtualDom {
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    if let Some(cb) = listener.borrow_mut().as_deref_mut() {
+                    if let Some(cb) = listener.0.borrow_mut().as_deref_mut() {
                         cb(uievent.clone());
                     }
 
@@ -493,7 +493,7 @@ impl VirtualDom {
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 
-        self.finalize()
+        unsafe { std::mem::transmute(self.finalize()) }
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
@@ -591,7 +591,7 @@ impl VirtualDom {
 
             // If there's no pending suspense, then we have no reason to wait for anything
             if self.scheduler.leaves.borrow().is_empty() {
-                return self.finalize();
+                return unsafe { std::mem::transmute(self.finalize()) };
             }
 
             // Poll the suspense leaves in the meantime
@@ -605,13 +605,13 @@ impl VirtualDom {
             if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
                 // release the borrowed
                 drop(work);
-                return self.finalize();
+                return unsafe { std::mem::transmute(self.finalize()) };
             }
         }
     }
 
     /// Swap the current mutations with a new
-    fn finalize(&mut self) -> Mutations {
+    fn finalize(&mut self) -> Mutations<'static> {
         // todo: make this a routine
         let mut out = Mutations::default();
         std::mem::swap(&mut self.mutations, &mut out);

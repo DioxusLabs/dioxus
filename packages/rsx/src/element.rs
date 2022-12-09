@@ -211,7 +211,7 @@ pub enum ElementAttr {
 }
 
 impl ElementAttr {
-    pub fn flart(&self) -> Span {
+    pub fn start(&self) -> Span {
         match self {
             ElementAttr::AttrText { name, .. } => name.span(),
             ElementAttr::AttrExpression { name, .. } => name.span(),
@@ -265,7 +265,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #name,
                         #value,
                         None,
                         false
@@ -275,7 +275,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #name,
                         #value,
                         None,
                         false

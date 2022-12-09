@@ -2,6 +2,7 @@
 //!
 //! This tests to ensure we clean it up
 
+use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
 
@@ -22,6 +23,8 @@ fn attrs_cycle() {
         }
     });
 
+    let bump = Bump::new();
+
     assert_eq!(
         dom.rebuild().santize().edits,
         [
@@ -36,8 +39,13 @@ fn attrs_cycle() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
             AssignId { path: &[0,], id: ElementId(3,) },
-            SetAttribute { name: "class", value: "1", id: ElementId(3,), ns: None },
-            SetAttribute { name: "id", value: "1", id: ElementId(3,), ns: None },
+            SetAttribute {
+                name: "class",
+                value: "1".into_value(&bump),
+                id: ElementId(3,),
+                ns: None
+            },
+            SetAttribute { name: "id", value: "1".into_value(&bump), id: ElementId(3,), ns: None },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
@@ -57,8 +65,13 @@ fn attrs_cycle() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             AssignId { path: &[0], id: ElementId(1) },
-            SetAttribute { name: "class", value: "3", id: ElementId(1), ns: None },
-            SetAttribute { name: "id", value: "3", id: ElementId(1), ns: None },
+            SetAttribute {
+                name: "class",
+                value: "3".into_value(&bump),
+                id: ElementId(1),
+                ns: None
+            },
+            SetAttribute { name: "id", value: "3".into_value(&bump), id: ElementId(1), ns: None },
             ReplaceWith { id: ElementId(3), m: 1 }
         ]
     );

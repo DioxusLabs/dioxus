@@ -102,11 +102,7 @@ impl<S: State> RealDom<S> {
         self.tree.add_child(node_id, child_id);
     }
 
-    fn create_template_node(
-        &mut self,
-        node: &TemplateNode,
-        mutations_vec: &mut FxHashMap<RealNodeId, NodeMask>,
-    ) -> RealNodeId {
+    fn create_template_node(&mut self, node: &TemplateNode) -> RealNodeId {
         match node {
             TemplateNode::Element {
                 tag,
@@ -139,27 +135,18 @@ impl<S: State> RealDom<S> {
                 });
                 let node_id = self.create_node(node);
                 for child in *children {
-                    let child_id = self.create_template_node(child, mutations_vec);
+                    let child_id = self.create_template_node(child);
                     self.add_child(node_id, child_id);
                 }
                 node_id
             }
-            TemplateNode::Text { text } => {
-                let node_id = self.create_node(Node::new(NodeType::Text {
-                    text: text.to_string(),
-                }));
-                node_id
-            }
-            TemplateNode::Dynamic { .. } => {
-                let node_id = self.create_node(Node::new(NodeType::Placeholder));
-                node_id
-            }
-            TemplateNode::DynamicText { .. } => {
-                let node_id = self.create_node(Node::new(NodeType::Text {
-                    text: String::new(),
-                }));
-                node_id
-            }
+            TemplateNode::Text { text } => self.create_node(Node::new(NodeType::Text {
+                text: text.to_string(),
+            })),
+            TemplateNode::Dynamic { .. } => self.create_node(Node::new(NodeType::Placeholder)),
+            TemplateNode::DynamicText { .. } => self.create_node(Node::new(NodeType::Text {
+                text: String::new(),
+            })),
         }
     }
 
@@ -172,7 +159,7 @@ impl<S: State> RealDom<S> {
         for template in mutations.templates {
             let mut template_root_ids = Vec::new();
             for root in template.roots {
-                let id = self.create_template_node(root, &mut nodes_updated);
+                let id = self.create_template_node(root);
                 template_root_ids.push(id);
             }
             self.templates
@@ -283,26 +270,7 @@ impl<S: State> RealDom<S> {
                                 namespace: ns.map(|s| s.to_string()),
                                 volatile: false,
                             },
-                            crate::node::OwnedAttributeValue::Text(value.to_string()),
-                        );
-                        mark_dirty(
-                            node_id,
-                            NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            &mut nodes_updated,
-                        );
-                    }
-                }
-                SetBoolAttribute { name, value, id } => {
-                    let node_id = self.element_to_node_id(id);
-                    let node = self.tree.get_mut(node_id).unwrap();
-                    if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
-                        attributes.insert(
-                            OwnedAttributeDiscription {
-                                name: name.to_string(),
-                                namespace: None,
-                                volatile: false,
-                            },
-                            crate::node::OwnedAttributeValue::Bool(value),
+                            OwnedAttributeValue::from(value),
                         );
                         mark_dirty(
                             node_id,

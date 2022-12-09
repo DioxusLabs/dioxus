@@ -75,10 +75,21 @@ impl WebsysDom {
                     value,
                     id,
                     ns,
-                } => i.SetAttribute(id.0 as u32, name, value.into(), ns),
-                SetBoolAttribute { name, value, id } => {
-                    i.SetBoolAttribute(id.0 as u32, name, value)
-                }
+                } => match value {
+                    dioxus_core::AttributeValue::Text(txt) => {
+                        i.SetAttribute(id.0 as u32, name, txt.into(), ns)
+                    }
+                    dioxus_core::AttributeValue::Float(f) => {
+                        i.SetAttribute(id.0 as u32, name, f.into(), ns)
+                    }
+                    dioxus_core::AttributeValue::Int(n) => {
+                        i.SetAttribute(id.0 as u32, name, n.into(), ns)
+                    }
+                    dioxus_core::AttributeValue::Bool(b) => {
+                        i.SetBoolAttribute(id.0 as u32, name, b)
+                    }
+                    _ => unreachable!(),
+                },
                 SetText { value, id } => i.SetText(id.0 as u32, value.into()),
                 NewEventListener { name, id, .. } => {
                     self.interpreter.NewEventListener(

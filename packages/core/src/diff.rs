@@ -77,20 +77,14 @@ impl<'b> VirtualDom {
 
             if left_attr.value != right_attr.value || left_attr.volatile {
                 // todo: add more types of attribute values
-                match right_attr.value {
-                    AttributeValue::Text(text) => {
-                        let name = unsafe { std::mem::transmute(left_attr.name) };
-                        let value = unsafe { std::mem::transmute(text) };
-                        self.mutations.push(Mutation::SetAttribute {
-                            id: left_attr.mounted_element.get(),
-                            ns: right_attr.namespace,
-                            name,
-                            value,
-                        });
-                    }
-                    // todo: more types of attribute values
-                    _ => todo!("other attribute types"),
-                }
+                let name = unsafe { std::mem::transmute(left_attr.name) };
+                let value = unsafe { std::mem::transmute(right_attr.value.clone()) };
+                self.mutations.push(Mutation::SetAttribute {
+                    id: left_attr.mounted_element.get(),
+                    ns: right_attr.namespace,
+                    name,
+                    value,
+                });
             }
         }
 

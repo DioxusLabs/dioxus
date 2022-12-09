@@ -20,22 +20,24 @@ fn keyed_diffing_out_of_order() {
         cx.render(rsx!(order.iter().map(|i| rsx!(div { key: "{i}" }))))
     });
 
-    assert_eq!(
-        dom.rebuild().santize().edits,
-        [
-            LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(7,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
-            LoadTemplate { name: "template", index: 0, id: ElementId(10,) },
-            AppendChildren { m: 10, id: ElementId(0) },
-        ]
-    );
+    {
+        assert_eq!(
+            dom.rebuild().santize().edits,
+            [
+                LoadTemplate { name: "template", index: 0, id: ElementId(1,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(3,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(4,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(5,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(6,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(7,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(8,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(9,) },
+                LoadTemplate { name: "template", index: 0, id: ElementId(10,) },
+                AppendChildren { m: 10, id: ElementId(0) },
+            ]
+        );
+    }
 
     dom.mark_dirty(ScopeId(0));
     assert_eq!(
@@ -44,7 +46,7 @@ fn keyed_diffing_out_of_order() {
             PushRoot { id: ElementId(7,) },
             InsertBefore { id: ElementId(5,), m: 1 },
         ]
-    )
+    );
 }
 
 /// Should result in moves only
@@ -70,7 +72,7 @@ fn keyed_diffing_out_of_order_adds() {
             PushRoot { id: ElementId(4,) },
             InsertBefore { id: ElementId(1,), m: 2 },
         ]
-    )
+    );
 }
 
 /// Should result in moves only

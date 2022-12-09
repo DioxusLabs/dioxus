@@ -8,6 +8,7 @@ use std::{
     cell::{Cell, RefCell},
     fmt::Arguments,
     future::Future,
+    rc::Rc,
 };
 
 pub type TemplateId = &'static str;
@@ -88,7 +89,7 @@ impl<'a> VNode<'a> {
     pub(crate) fn clear_listeners(&self) {
         for attr in self.dynamic_attrs {
             if let AttributeValue::Listener(l) = &attr.value {
-                l.borrow_mut().take();
+                l.0.borrow_mut().take();
             }
         }
     }
@@ -317,6 +318,9 @@ pub struct Attribute<'a> {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
+#[derive(Clone)]
 pub enum AttributeValue<'a> {
     /// Text attribute
     Text(&'a str),
@@ -331,16 +335,67 @@ pub enum AttributeValue<'a> {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(RefCell<Option<ListenerCb<'a>>>),
+    Listener(ListenerCb<'a>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(BumpBox<'a, dyn AnyValue>),
+    Any(AnyValueBox),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
 }
 
-type ListenerCb<'a> = BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>;
+pub type ListenerCbInner<'a> = RefCell<Option<BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>>>;
+pub struct ListenerCb<'a>(pub ListenerCbInner<'a>);
+
+impl Clone for ListenerCb<'_> {
+    fn clone(&self) -> Self {
+        panic!("ListenerCb cannot be cloned")
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'a> serde::Serialize for ListenerCb<'a> {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("ListenerCb cannot be serialized")
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        panic!("ListenerCb cannot be deserialized")
+    }
+}
+
+/// A boxed value that implements PartialEq and Any
+#[derive(Clone)]
+pub struct AnyValueBox(pub Rc<dyn AnyValue>);
+
+#[cfg(feature = "serialize")]
+impl serde::Serialize for AnyValueBox {
+    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        panic!("AnyValueBox cannot be serialized")
+    }
+}
+
+#[cfg(feature = "serialize")]
+impl<'de> serde::Deserialize<'de> for AnyValueBox {
+    fn deserialize<D>(_: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        panic!("AnyValueBox cannot be deserialized")
+    }
+}
 
 impl<'a> std::fmt::Debug for AttributeValue<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -364,8 +419,8 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(r0.as_ref()),
-            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+            (Self::Any(l0), Self::Any(r0)) => l0.0.any_cmp(r0.0.as_ref()),
+            _ => false,
         }
     }
 }
@@ -559,26 +614,36 @@ impl<'a> IntoAttributeValue<'a> for &'a str {
         AttributeValue::Text(self)
     }
 }
+
 impl<'a> IntoAttributeValue<'a> for f64 {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Float(self)
     }
 }
+
 impl<'a> IntoAttributeValue<'a> for i64 {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Int(self)
     }
 }
+
 impl<'a> IntoAttributeValue<'a> for bool {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Bool(self)
     }
 }
+
 impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
     fn into_value(self, bump: &'a Bump) -> AttributeValue<'a> {
         use bumpalo::core_alloc::fmt::Write;
         let mut str_buf = bumpalo::collections::String::new_in(bump);
         str_buf.write_fmt(self).unwrap();
         AttributeValue::Text(str_buf.into_bump_str())
+    }
+}
+
+impl<'a> IntoAttributeValue<'a> for AnyValueBox {
+    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+        AttributeValue::Any(self)
     }
 }
