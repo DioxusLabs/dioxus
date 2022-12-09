@@ -23,3 +23,7 @@ log = "0.4.17"
 [features]
 regex = ["dioxus-router-core/regex"]
 serde = ["dioxus-router-core/serde"]
+
+[dev-dependencies]
+dioxus = { path = "../dioxus" }
+dioxus-desktop = { path = "../desktop" }
