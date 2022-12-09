@@ -1,4 +1,6 @@
 pub mod components {
+    pub(crate) mod default_errors;
+
     mod link;
     pub use link::*;
 
@@ -17,6 +19,14 @@ pub mod hooks {
 
 pub mod prelude {
     pub use dioxus_router_core::prelude::*;
+
+    pub use crate::components::*;
+    pub use crate::hooks::*;
+
+    use dioxus::core::Component;
+    pub fn comp(component: Component) -> ContentAtom<Component> {
+        ContentAtom(component)
+    }
 }
 
 mod utils {

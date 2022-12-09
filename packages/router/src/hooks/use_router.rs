@@ -6,7 +6,15 @@ use dioxus_router_core::{
     RouterService, RouterState, RoutingCallback,
 };
 
-use crate::contexts::router::RouterContext;
+use crate::{
+    contexts::router::RouterContext,
+    prelude::{
+        comp,
+        default_errors::{
+            FailureExternalNavigation, FailureNamedNavigation, FailureRedirectionLimit,
+        },
+    },
+};
 
 pub fn use_router<'a>(
     cx: &'a ScopeState,
@@ -70,9 +78,9 @@ pub struct RouterConfiguration {
 impl Default for RouterConfiguration {
     fn default() -> Self {
         Self {
-            failure_external_navigation: todo!("provide default component for external navigation"),
-            failure_named_navigation: todo!("provide default component for named navigation"),
-            failure_redirection_limit: todo!("provide default component for redirection limit"),
+            failure_external_navigation: comp(FailureExternalNavigation),
+            failure_named_navigation: comp(FailureNamedNavigation),
+            failure_redirection_limit: comp(FailureRedirectionLimit),
             history: Box::new(MemoryHistory::default()),
             on_update: None,
             synchronous: false,
