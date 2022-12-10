@@ -14,7 +14,7 @@ use crate::{
     AttributeValue, Element, Event, Scope, SuspenseContext,
 };
 use futures_util::{pin_mut, StreamExt};
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 use slab::Slab;
 use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
 
