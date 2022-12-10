@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};
@@ -141,7 +143,10 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer = TemplateRenderer { roots: body };
+                let renderer: TemplateRenderer = TemplateRenderer {
+                    roots: body,
+                    phantom: PhantomData,
+                };
 
                 tokens.append_all(quote! {
                      __cx.make_node(

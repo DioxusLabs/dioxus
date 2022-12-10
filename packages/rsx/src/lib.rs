@@ -15,6 +15,7 @@
 mod errors;
 mod component;
 mod element;
+mod hot_reloading_context;
 mod ifmt;
 mod node;
 
@@ -22,6 +23,7 @@ mod node;
 pub use component::*;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
+use hot_reloading_context::{Empty, HotReloadingContext};
 pub use ifmt::*;
 pub use node::*;
 
@@ -35,24 +37,29 @@ use syn::{
 
 /// Fundametnally, every CallBody is a template
 #[derive(Default)]
-pub struct CallBody {
+pub struct CallBody<Ctx: HotReloadingContext = Empty> {
     pub roots: Vec<BodyNode>,
 
     // set this after
     pub inline_cx: bool,
+
+    phantom: std::marker::PhantomData<Ctx>,
 }
 
-impl CallBody {
+impl<Ctx: HotReloadingContext> CallBody<Ctx> {
     /// This function intentionally leaks memory to create a static template.
     /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
     /// the previous_location is the location of the previous template at the time the template was originally compiled.
     pub fn leak_template(&self, previous_location: &'static str) -> Template {
-        let mut renderer = TemplateRenderer { roots: &self.roots };
+        let mut renderer: TemplateRenderer<Ctx> = TemplateRenderer {
+            roots: &self.roots,
+            phantom: std::marker::PhantomData,
+        };
         renderer.leak_template(previous_location)
     }
 }
 
-impl Parse for CallBody {
+impl<Ctx: HotReloadingContext> Parse for CallBody<Ctx> {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut roots = Vec::new();
 
@@ -69,14 +76,18 @@ impl Parse for CallBody {
         Ok(Self {
             roots,
             inline_cx: false,
+            phantom: std::marker::PhantomData,
         })
     }
 }
 
 /// Serialize the same way, regardless of flavor
-impl ToTokens for CallBody {
+impl<Ctx: HotReloadingContext> ToTokens for CallBody<Ctx> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body = TemplateRenderer { roots: &self.roots };
+        let body: TemplateRenderer<Ctx> = TemplateRenderer {
+            roots: &self.roots,
+            phantom: std::marker::PhantomData,
+        };
 
         if self.inline_cx {
             out_tokens.append_all(quote! {
@@ -95,13 +106,14 @@ impl ToTokens for CallBody {
     }
 }
 
-pub struct TemplateRenderer<'a> {
+pub struct TemplateRenderer<'a, Ctx: HotReloadingContext = Empty> {
     pub roots: &'a [BodyNode],
+    phantom: std::marker::PhantomData<Ctx>,
 }
 
-impl<'a> TemplateRenderer<'a> {
+impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
     fn leak_template(&mut self, previous_location: &'static str) -> Template<'static> {
-        let mut context = DynamicContext::default();
+        let mut context: DynamicContext<Ctx> = DynamicContext::default();
 
         let roots: Vec<_> = self
             .roots
@@ -138,9 +150,9 @@ impl<'a> TemplateRenderer<'a> {
     }
 }
 
-impl<'a> ToTokens for TemplateRenderer<'a> {
+impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let mut context = DynamicContext::default();
+        let mut context: DynamicContext<Ctx> = DynamicContext::default();
 
         let key = match self.roots.get(0) {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
@@ -199,17 +211,31 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 }
 // As we print out the dynamic nodes, we want to keep track of them in a linear fashion
 // We'll use the size of the vecs to determine the index of the dynamic node in the final
-#[derive(Default)]
-pub struct DynamicContext<'a> {
+pub struct DynamicContext<'a, Ctx: HotReloadingContext> {
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a ElementAttrNamed>,
     current_path: Vec<u8>,
 
     node_paths: Vec<Vec<u8>>,
     attr_paths: Vec<Vec<u8>>,
+
+    phantom: std::marker::PhantomData<Ctx>,
 }
 
-impl<'a> DynamicContext<'a> {
+impl<'a, Ctx: HotReloadingContext> Default for DynamicContext<'a, Ctx> {
+    fn default() -> Self {
+        Self {
+            dynamic_nodes: Vec::new(),
+            dynamic_attributes: Vec::new(),
+            current_path: Vec::new(),
+            node_paths: Vec::new(),
+            attr_paths: Vec::new(),
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
     fn leak_node(&mut self, root: &'a BodyNode) -> TemplateNode<'static> {
         match root {
             BodyNode::Element(el) => {
@@ -222,15 +248,24 @@ impl<'a> DynamicContext<'a> {
                 // [0, 2]
                 // [0, 2, 1]
 
+                let element_name_rust = el.name.to_string();
+
                 let static_attrs: Vec<_> = el
                     .attributes
                     .iter()
                     .map(|attr| match &attr.attr {
-                        ElementAttr::AttrText { name: _, value } if value.is_static() => {
+                        ElementAttr::AttrText { name, value } if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
+                            let attribute_name_rust = name.to_string();
+                            let (name, namespace) =
+                                Ctx::map_attribute(&element_name_rust, &attribute_name_rust)
+                                    .unwrap_or((
+                                        Box::leak(attribute_name_rust.into_boxed_str()),
+                                        None,
+                                    ));
                             TemplateAttribute::Static {
-                                name: "todo",
-                                namespace: None,
+                                name,
+                                namespace,
                                 value: Box::leak(value.value().into_boxed_str()),
                                 // name: dioxus_elements::#el_name::#name.0,
                                 // namespace: dioxus_elements::#el_name::#name.1,
@@ -277,15 +312,11 @@ impl<'a> DynamicContext<'a> {
                     })
                     .collect();
 
-                // TemplateNode::Element {
-                //     tag: dioxus_elements::#el_name::TAG_NAME,
-                //     namespace: dioxus_elements::#el_name::NAME_SPACE,
-                //     attrs: &[ #attrs ],
-                //     children: &[ #children ],
-                // }
+                let (tag, namespace) = Ctx::map_element(&element_name_rust)
+                    .unwrap_or((Box::leak(element_name_rust.into_boxed_str()), None));
                 TemplateNode::Element {
-                    tag: "todo",
-                    namespace: None,
+                    tag,
+                    namespace,
                     attrs: Box::leak(static_attrs.into_boxed_slice()),
                     children: Box::leak(children.into_boxed_slice()),
                 }
@@ -420,7 +451,7 @@ impl<'a> DynamicContext<'a> {
 #[test]
 fn template() {
     let input = quote! {
-        div {
+        svg {
             width: 100,
             height: "100px",
             "width2": 100,
@@ -431,7 +462,33 @@ fn template() {
             (0..10).map(|i| rsx!{"{i}"})
         }
     };
-    let call_body: CallBody = syn::parse2(input).unwrap();
+
+    struct Mock;
+
+    impl HotReloadingContext for Mock {
+        fn map_attribute(
+            element_name_rust: &str,
+            attribute_name_rust: &str,
+        ) -> Option<(&'static str, Option<&'static str>)> {
+            match element_name_rust {
+                "svg" => match attribute_name_rust {
+                    "width" => Some(("width", Some("style"))),
+                    "height" => Some(("height", Some("style"))),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+
+        fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)> {
+            match element_name_rust {
+                "svg" => Some(("svg", Some("svg"))),
+                _ => None,
+            }
+        }
+    }
+
+    let call_body: CallBody<Mock> = syn::parse2(input).unwrap();
 
     let template = call_body.leak_template("testing");
 
@@ -442,13 +499,13 @@ fn template() {
         Template {
             name: "testing",
             roots: &[TemplateNode::Element {
-                tag: "div",
-                namespace: None,
+                tag: "svg",
+                namespace: Some("svg"),
                 attrs: &[
                     TemplateAttribute::Dynamic { id: 0 },
                     TemplateAttribute::Static {
                         name: "height",
-                        namespace: None,
+                        namespace: Some("style"),
                         value: "100px",
                     },
                     TemplateAttribute::Dynamic { id: 1 },
