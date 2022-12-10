@@ -385,14 +385,17 @@ impl PartialEq for AnyValueRc {
 
 impl AnyValueRc {
     /// Returns a reference to the inner value without checking the type.
-    pub fn downcast_ref_unchecked<T: Any + PartialEq>(&self) -> &T {
+    ///
+    /// # Safety
+    /// The caller must ensure that the type of the inner value is `T`.
+    pub unsafe fn downcast_ref_unchecked<T: Any + PartialEq>(&self) -> &T {
         unsafe { &*(self.0.as_ref() as *const dyn AnyValue as *const T) }
     }
 
     /// Returns a reference to the inner value.
     pub fn downcast_ref<T: Any + PartialEq>(&self) -> Option<&T> {
         if self.0.our_typeid() == TypeId::of::<T>() {
-            Some(self.downcast_ref_unchecked())
+            Some(unsafe { self.downcast_ref_unchecked() })
         } else {
             None
         }
@@ -411,7 +414,9 @@ fn test_any_value_rc() {
     assert!(!a.is::<i64>());
     assert_eq!(a.downcast_ref::<i32>(), Some(&1i32));
     assert_eq!(a.downcast_ref::<i64>(), None);
-    assert_eq!(a.downcast_ref_unchecked::<i32>(), &1i32);
+    unsafe {
+        assert_eq!(a.downcast_ref_unchecked::<i32>(), &1i32);
+    }
 }
 
 #[cfg(feature = "serialize")]
