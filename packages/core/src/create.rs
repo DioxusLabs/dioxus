@@ -208,19 +208,12 @@ impl<'b> VirtualDom {
 
         // If it's all dynamic nodes, then we don't need to register it
         // Quickly run through and see if it's all just dynamic nodes
-        let dynamic_roots = template
-            .template
-            .roots
-            .iter()
-            .filter(|root| {
-                matches!(
-                    root,
-                    TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
-                )
-            })
-            .count();
-
-        if dynamic_roots == template.template.roots.len() {
+        if template.template.roots.iter().all(|root| {
+            matches!(
+                root,
+                TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
+            )
+        }) {
             return;
         }
 

@@ -458,6 +458,26 @@ impl VirtualDom {
         }
     }
 
+    /// Replace a template at runtime. This will re-render all components that use this template.
+    /// This is the primitive that enables hot-reloading.
+    ///
+    /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
+    pub fn replace_template(&mut self, template: Template<'static>) {
+        self.templates.insert(template.name, template);
+        // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
+        for (_, scope) in &self.scopes {
+            if let Some(RenderReturn::Sync(Ok(sync))) = scope.try_root_node() {
+                if sync.template.name == template.name {
+                    let height = scope.height;
+                    self.dirty_scopes.insert(DirtyScope {
+                        height,
+                        id: scope.id,
+                    });
+                }
+            }
+        }
+    }
+
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
     ///
     /// The mutations item expects the RealDom's stack to be the root of the application.

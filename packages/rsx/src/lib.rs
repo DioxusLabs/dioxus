@@ -17,10 +17,10 @@ mod component;
 mod element;
 mod ifmt;
 mod node;
-mod template;
 
 // Re-export the namespaces into each other
 pub use component::*;
+use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
 pub use ifmt::*;
 pub use node::*;
@@ -40,6 +40,16 @@ pub struct CallBody {
 
     // set this after
     pub inline_cx: bool,
+}
+
+impl CallBody {
+    /// This function intentionally leaks memory to create a static template.
+    /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
+    /// the previous_location is the location of the previous template at the time the template was originally compiled.
+    pub fn leak_template(&self, previous_location: &'static str) -> Template {
+        let mut renderer = TemplateRenderer { roots: &self.roots };
+        renderer.leak_template(previous_location)
+    }
 }
 
 impl Parse for CallBody {
@@ -89,15 +99,48 @@ pub struct TemplateRenderer<'a> {
     pub roots: &'a [BodyNode],
 }
 
+impl<'a> TemplateRenderer<'a> {
+    fn leak_template(&mut self, previous_location: &'static str) -> Template<'static> {
+        let mut context = DynamicContext::default();
+
+        let roots: Vec<_> = self
+            .roots
+            .iter()
+            .enumerate()
+            .map(|(idx, root)| {
+                context.current_path.push(idx as u8);
+                let out = context.leak_node(root);
+                context.current_path.pop();
+                out
+            })
+            .collect();
+
+        Template {
+            name: previous_location,
+            roots: Box::leak(roots.into_boxed_slice()),
+            node_paths: Box::leak(
+                context
+                    .node_paths
+                    .into_iter()
+                    .map(|path| &*Box::leak(path.into_boxed_slice()))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            ),
+            attr_paths: Box::leak(
+                context
+                    .attr_paths
+                    .into_iter()
+                    .map(|path| &*Box::leak(path.into_boxed_slice()))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice(),
+            ),
+        }
+    }
+}
+
 impl<'a> ToTokens for TemplateRenderer<'a> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let mut context = DynamicContext {
-            dynamic_nodes: vec![],
-            dynamic_attributes: vec![],
-            current_path: vec![],
-            attr_paths: vec![],
-            node_paths: vec![],
-        };
+        let mut context = DynamicContext::default();
 
         let key = match self.roots.get(0) {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
@@ -156,6 +199,7 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
 }
 // As we print out the dynamic nodes, we want to keep track of them in a linear fashion
 // We'll use the size of the vecs to determine the index of the dynamic node in the final
+#[derive(Default)]
 pub struct DynamicContext<'a> {
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a ElementAttrNamed>,
@@ -166,6 +210,111 @@ pub struct DynamicContext<'a> {
 }
 
 impl<'a> DynamicContext<'a> {
+    fn leak_node(&mut self, root: &'a BodyNode) -> TemplateNode<'static> {
+        match root {
+            BodyNode::Element(el) => {
+                // dynamic attributes
+                // [0]
+                // [0, 1]
+                // [0, 1]
+                // [0, 1]
+                // [0, 1, 2]
+                // [0, 2]
+                // [0, 2, 1]
+
+                let static_attrs: Vec<_> = el
+                    .attributes
+                    .iter()
+                    .map(|attr| match &attr.attr {
+                        ElementAttr::AttrText { name: _, value } if value.is_static() => {
+                            let value = value.source.as_ref().unwrap();
+                            TemplateAttribute::Static {
+                                name: "todo",
+                                namespace: None,
+                                value: Box::leak(value.value().into_boxed_str()),
+                                // name: dioxus_elements::#el_name::#name.0,
+                                // namespace: dioxus_elements::#el_name::#name.1,
+                                // value: #value,
+
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
+                            }
+                        }
+
+                        ElementAttr::CustomAttrText { name, value } if value.is_static() => {
+                            let value = value.source.as_ref().unwrap();
+                            TemplateAttribute::Static {
+                                name: Box::leak(name.value().into_boxed_str()),
+                                namespace: None,
+                                value: Box::leak(value.value().into_boxed_str()),
+                                // todo: we don't diff these so we never apply the volatile flag
+                                // volatile: dioxus_elements::#el_name::#name.2,
+                            }
+                        }
+
+                        ElementAttr::AttrExpression { .. }
+                        | ElementAttr::AttrText { .. }
+                        | ElementAttr::CustomAttrText { .. }
+                        | ElementAttr::CustomAttrExpression { .. }
+                        | ElementAttr::EventTokens { .. } => {
+                            let ct = self.dynamic_attributes.len();
+                            self.dynamic_attributes.push(attr);
+                            self.attr_paths.push(self.current_path.clone());
+                            TemplateAttribute::Dynamic { id: ct }
+                        }
+                    })
+                    .collect();
+
+                let children: Vec<_> = el
+                    .children
+                    .iter()
+                    .enumerate()
+                    .map(|(idx, root)| {
+                        self.current_path.push(idx as u8);
+                        let out = self.leak_node(root);
+                        self.current_path.pop();
+                        out
+                    })
+                    .collect();
+
+                // TemplateNode::Element {
+                //     tag: dioxus_elements::#el_name::TAG_NAME,
+                //     namespace: dioxus_elements::#el_name::NAME_SPACE,
+                //     attrs: &[ #attrs ],
+                //     children: &[ #children ],
+                // }
+                TemplateNode::Element {
+                    tag: "todo",
+                    namespace: None,
+                    attrs: Box::leak(static_attrs.into_boxed_slice()),
+                    children: Box::leak(children.into_boxed_slice()),
+                }
+            }
+
+            BodyNode::Text(text) if text.is_static() => {
+                let text = text.source.as_ref().unwrap();
+                TemplateNode::Text {
+                    text: Box::leak(text.value().into_boxed_str()),
+                }
+            }
+
+            BodyNode::RawExpr(_)
+            | BodyNode::Text(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::Component(_) => {
+                let ct = self.dynamic_nodes.len();
+                self.dynamic_nodes.push(root);
+                self.node_paths.push(self.current_path.clone());
+
+                match root {
+                    BodyNode::Text(_) => TemplateNode::DynamicText { id: ct },
+                    _ => TemplateNode::Dynamic { id: ct },
+                }
+            }
+        }
+    }
+
     fn render_static_node(&mut self, root: &'a BodyNode) -> TokenStream2 {
         match root {
             BodyNode::Element(el) => {
@@ -266,4 +415,63 @@ impl<'a> DynamicContext<'a> {
             }
         }
     }
+}
+
+#[test]
+fn template() {
+    let input = quote! {
+        div {
+            width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p {
+                "hello world"
+            }
+            (0..10).map(|i| rsx!{"{i}"})
+        }
+    };
+    let call_body: CallBody = syn::parse2(input).unwrap();
+
+    let template = call_body.leak_template("testing");
+
+    dbg!(template);
+
+    assert_eq!(
+        template,
+        Template {
+            name: "testing",
+            roots: &[TemplateNode::Element {
+                tag: "div",
+                namespace: None,
+                attrs: &[
+                    TemplateAttribute::Dynamic { id: 0 },
+                    TemplateAttribute::Static {
+                        name: "height",
+                        namespace: None,
+                        value: "100px",
+                    },
+                    TemplateAttribute::Dynamic { id: 1 },
+                    TemplateAttribute::Static {
+                        name: "height2",
+                        namespace: None,
+                        value: "100px",
+                    },
+                ],
+                children: &[
+                    TemplateNode::Element {
+                        tag: "p",
+                        namespace: None,
+                        attrs: &[],
+                        children: &[TemplateNode::Text {
+                            text: "hello world",
+                        }],
+                    },
+                    TemplateNode::Dynamic { id: 0 }
+                ],
+            }],
+            node_paths: &[&[0, 1,],],
+            attr_paths: &[&[0,], &[0,],],
+        },
+    )
 }
