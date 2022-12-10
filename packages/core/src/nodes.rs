@@ -338,7 +338,7 @@ pub enum AttributeValue<'a> {
     Listener(ListenerCb<'a>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(AnyValueBox),
+    Any(AnyValueRc),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -375,10 +375,47 @@ impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
 
 /// A boxed value that implements PartialEq and Any
 #[derive(Clone)]
-pub struct AnyValueBox(pub Rc<dyn AnyValue>);
+pub struct AnyValueRc(pub Rc<dyn AnyValue>);
+
+impl PartialEq for AnyValueRc {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.any_cmp(other.0.as_ref())
+    }
+}
+
+impl AnyValueRc {
+    /// Returns a reference to the inner value without checking the type.
+    pub fn downcast_ref_unchecked<T: Any + PartialEq>(&self) -> &T {
+        unsafe { &*(self.0.as_ref() as *const dyn AnyValue as *const T) }
+    }
+
+    /// Returns a reference to the inner value.
+    pub fn downcast_ref<T: Any + PartialEq>(&self) -> Option<&T> {
+        if self.0.our_typeid() == TypeId::of::<T>() {
+            Some(self.downcast_ref_unchecked())
+        } else {
+            None
+        }
+    }
+
+    /// Checks if the inner value is of type `T`.
+    pub fn is<T: Any + PartialEq>(&self) -> bool {
+        self.0.our_typeid() == TypeId::of::<T>()
+    }
+}
+
+#[test]
+fn test_any_value_rc() {
+    let a = AnyValueRc(Rc::new(1i32));
+    assert!(a.is::<i32>());
+    assert!(!a.is::<i64>());
+    assert_eq!(a.downcast_ref::<i32>(), Some(&1i32));
+    assert_eq!(a.downcast_ref::<i64>(), None);
+    assert_eq!(a.downcast_ref_unchecked::<i32>(), &1i32);
+}
 
 #[cfg(feature = "serialize")]
-impl serde::Serialize for AnyValueBox {
+impl serde::Serialize for AnyValueRc {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -388,7 +425,7 @@ impl serde::Serialize for AnyValueBox {
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for AnyValueBox {
+impl<'de> serde::Deserialize<'de> for AnyValueRc {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -419,7 +456,7 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => l0.0.any_cmp(r0.0.as_ref()),
+            (Self::Any(l0), Self::Any(r0)) => l0 == r0,
             _ => false,
         }
     }
@@ -642,7 +679,7 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for AnyValueBox {
+impl<'a> IntoAttributeValue<'a> for AnyValueRc {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Any(self)
     }

@@ -185,9 +185,9 @@ fn render_vdom(
                             let rdom = rdom.borrow();
                             let mut taffy = taffy.lock().expect("taffy lock poisoned");
                             // size is guaranteed to not change when rendering
-                            resize(frame.size(), &mut *taffy, &rdom);
+                            resize(frame.size(), &mut taffy, &rdom);
                             let root = &rdom[NodeId(0)];
-                            render::render_vnode(frame, &*taffy, &rdom, root, cfg, Point::ZERO);
+                            render::render_vnode(frame, &taffy, &rdom, root, cfg, Point::ZERO);
                         })?;
                     } else {
                         let rdom = rdom.borrow();

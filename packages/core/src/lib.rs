@@ -70,7 +70,7 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    fc_to_builder, AnyValueBox, Attribute, AttributeValue, Component, DynamicNode, Element,
+    fc_to_builder, AnyValueRc, Attribute, AttributeValue, Component, DynamicNode, Element,
     ElementId, Event, Fragment, IntoAttributeValue, IntoDynNode, LazyNodes, Mutation, Mutations,
     Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped, SuspenseContext, TaskId,
     Template, TemplateAttribute, TemplateNode, VComponent, VNode, VText, VirtualDom,
