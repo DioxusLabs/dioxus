@@ -55,9 +55,6 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
     /// ```
     #[must_use]
     pub fn call(mut self, f: &'a ScopeState) -> VNode<'a> {
-        if self.inner.is_heap() {
-            panic!();
-        }
         (self.inner)(f)
     }
 }
