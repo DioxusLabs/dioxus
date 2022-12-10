@@ -19,12 +19,15 @@ mod hot_reloading_context;
 mod ifmt;
 mod node;
 
+use std::{borrow::Borrow, hash::Hash};
+
 // Re-export the namespaces into each other
 pub use component::*;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
 use hot_reloading_context::{Empty, HotReloadingContext};
 pub use ifmt::*;
+use internment::Intern;
 pub use node::*;
 
 // imports
@@ -34,6 +37,13 @@ use syn::{
     parse::{Parse, ParseStream},
     Result, Token,
 };
+
+// interns a object into a static object, resusing the value if it already exists
+fn intern<'a, T: Eq + Hash + Send + Sync + ?Sized + 'static>(
+    s: impl Into<Intern<T>>,
+) -> &'static T {
+    s.into().as_ref()
+}
 
 /// Fundametnally, every CallBody is a template
 #[derive(Default)]
@@ -47,15 +57,20 @@ pub struct CallBody<Ctx: HotReloadingContext = Empty> {
 }
 
 impl<Ctx: HotReloadingContext> CallBody<Ctx> {
+    /// This will try to create a new template from the current body and the previous body. This will return None if the rsx has some dynamic part that has changed.
     /// This function intentionally leaks memory to create a static template.
     /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
     /// the previous_location is the location of the previous template at the time the template was originally compiled.
-    pub fn leak_template(&self, previous_location: &'static str) -> Template {
+    pub fn update_template(
+        &self,
+        template: Option<&CallBody<Ctx>>,
+        location: &'static str,
+    ) -> Option<Template> {
         let mut renderer: TemplateRenderer<Ctx> = TemplateRenderer {
             roots: &self.roots,
             phantom: std::marker::PhantomData,
         };
-        renderer.leak_template(previous_location)
+        renderer.update_template(template, location)
     }
 }
 
@@ -112,7 +127,11 @@ pub struct TemplateRenderer<'a, Ctx: HotReloadingContext = Empty> {
 }
 
 impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
-    fn leak_template(&mut self, previous_location: &'static str) -> Template<'static> {
+    fn update_template(
+        &mut self,
+        previous_call: Option<&CallBody<Ctx>>,
+        location: &'static str,
+    ) -> Option<Template<'static>> {
         let mut context: DynamicContext<Ctx> = DynamicContext::default();
 
         let roots: Vec<_> = self
@@ -121,32 +140,32 @@ impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
             .enumerate()
             .map(|(idx, root)| {
                 context.current_path.push(idx as u8);
-                let out = context.leak_node(root);
+                let out = context.update_node(root);
                 context.current_path.pop();
                 out
             })
             .collect();
 
-        Template {
-            name: previous_location,
-            roots: Box::leak(roots.into_boxed_slice()),
-            node_paths: Box::leak(
+        Some(Template {
+            name: location,
+            roots: intern(roots.as_slice()),
+            node_paths: intern(
                 context
                     .node_paths
                     .into_iter()
-                    .map(|path| &*Box::leak(path.into_boxed_slice()))
+                    .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
-                    .into_boxed_slice(),
+                    .as_slice(),
             ),
-            attr_paths: Box::leak(
+            attr_paths: intern(
                 context
                     .attr_paths
                     .into_iter()
-                    .map(|path| &*Box::leak(path.into_boxed_slice()))
+                    .map(|path| intern(path.as_slice()))
                     .collect::<Vec<_>>()
-                    .into_boxed_slice(),
+                    .as_slice(),
             ),
-        }
+        })
     }
 }
 
@@ -209,8 +228,9 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
         });
     }
 }
-// As we print out the dynamic nodes, we want to keep track of them in a linear fashion
-// We'll use the size of the vecs to determine the index of the dynamic node in the final
+
+// As we create the dynamic nodes, we want to keep track of them in a linear fashion
+// We'll use the size of the vecs to determine the index of the dynamic node in the final output
 pub struct DynamicContext<'a, Ctx: HotReloadingContext> {
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a ElementAttrNamed>,
@@ -236,7 +256,7 @@ impl<'a, Ctx: HotReloadingContext> Default for DynamicContext<'a, Ctx> {
 }
 
 impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
-    fn leak_node(&mut self, root: &'a BodyNode) -> TemplateNode<'static> {
+    fn update_node(&mut self, root: &'a BodyNode) -> TemplateNode<'static> {
         match root {
             BodyNode::Element(el) => {
                 // dynamic attributes
@@ -250,7 +270,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
 
                 let element_name_rust = el.name.to_string();
 
-                let static_attrs: Vec<_> = el
+                let static_attrs: Vec<TemplateAttribute<'static>> = el
                     .attributes
                     .iter()
                     .map(|attr| match &attr.attr {
@@ -259,14 +279,11 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                             let attribute_name_rust = name.to_string();
                             let (name, namespace) =
                                 Ctx::map_attribute(&element_name_rust, &attribute_name_rust)
-                                    .unwrap_or((
-                                        Box::leak(attribute_name_rust.into_boxed_str()),
-                                        None,
-                                    ));
+                                    .unwrap_or((intern(attribute_name_rust.as_str()), None));
                             TemplateAttribute::Static {
                                 name,
                                 namespace,
-                                value: Box::leak(value.value().into_boxed_str()),
+                                value: intern(value.value().as_str()),
                                 // name: dioxus_elements::#el_name::#name.0,
                                 // namespace: dioxus_elements::#el_name::#name.1,
                                 // value: #value,
@@ -279,9 +296,9 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                         ElementAttr::CustomAttrText { name, value } if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
                             TemplateAttribute::Static {
-                                name: Box::leak(name.value().into_boxed_str()),
+                                name: intern(name.value().as_str()),
                                 namespace: None,
-                                value: Box::leak(value.value().into_boxed_str()),
+                                value: intern(value.value().as_str()),
                                 // todo: we don't diff these so we never apply the volatile flag
                                 // volatile: dioxus_elements::#el_name::#name.2,
                             }
@@ -306,26 +323,26 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                     .enumerate()
                     .map(|(idx, root)| {
                         self.current_path.push(idx as u8);
-                        let out = self.leak_node(root);
+                        let out = self.update_node(root);
                         self.current_path.pop();
                         out
                     })
                     .collect();
 
                 let (tag, namespace) = Ctx::map_element(&element_name_rust)
-                    .unwrap_or((Box::leak(element_name_rust.into_boxed_str()), None));
+                    .unwrap_or((intern(element_name_rust.as_str()), None));
                 TemplateNode::Element {
                     tag,
                     namespace,
-                    attrs: Box::leak(static_attrs.into_boxed_slice()),
-                    children: Box::leak(children.into_boxed_slice()),
+                    attrs: intern(static_attrs.into_boxed_slice()),
+                    children: intern(children.as_slice()),
                 }
             }
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.source.as_ref().unwrap();
                 TemplateNode::Text {
-                    text: Box::leak(text.value().into_boxed_str()),
+                    text: intern(text.value().as_str()),
                 }
             }
 
@@ -490,7 +507,7 @@ fn template() {
 
     let call_body: CallBody<Mock> = syn::parse2(input).unwrap();
 
-    let template = call_body.leak_template("testing");
+    let template = call_body.update_template(None, "testing").unwrap();
 
     dbg!(template);
 
