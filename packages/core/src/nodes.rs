@@ -394,7 +394,7 @@ impl AnyValueRc {
 
     /// Returns a reference to the inner value.
     pub fn downcast_ref<T: Any + PartialEq>(&self) -> Option<&T> {
-        if self.0.our_typeid() == TypeId::of::<T>() {
+        if self.0.type_id() == TypeId::of::<T>() {
             Some(unsafe { self.downcast_ref_unchecked() })
         } else {
             None
@@ -403,7 +403,7 @@ impl AnyValueRc {
 
     /// Checks if the inner value is of type `T`.
     pub fn is<T: Any + PartialEq>(&self) -> bool {
-        self.0.our_typeid() == TypeId::of::<T>()
+        self.0.type_id() == TypeId::of::<T>()
     }
 }
 
@@ -468,22 +468,17 @@ impl<'a> PartialEq for AttributeValue<'a> {
 }
 
 #[doc(hidden)]
-pub trait AnyValue {
+pub trait AnyValue: Any {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-    fn our_typeid(&self) -> TypeId;
 }
 
 impl<T: PartialEq + Any> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.type_id() != other.our_typeid() {
+        if self.type_id() != other.type_id() {
             return false;
         }
 
         self == unsafe { &*(other as *const _ as *const T) }
-    }
-
-    fn our_typeid(&self) -> TypeId {
-        self.type_id()
     }
 }
 
