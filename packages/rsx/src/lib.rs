@@ -182,30 +182,36 @@ impl<'a> DynamicContext<'a> {
 
                 let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
-                        quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
-                                name: dioxus_elements::#el_name::#name.0,
-                                namespace: dioxus_elements::#el_name::#name.1,
-                                value: #value,
+                        if let Some(value) = value.to_static() {
+                            quote! {
+                                ::dioxus::core::TemplateAttribute::Static {
+                                    name: dioxus_elements::#el_name::#name.0,
+                                    namespace: dioxus_elements::#el_name::#name.1,
+                                    value: #value,
 
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
+                                    // todo: we don't diff these so we never apply the volatile flag
+                                    // volatile: dioxus_elements::#el_name::#name.2,
+                                }
                             }
+                        } else {
+                            unreachable!()
                         }
                     }
 
                     ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
-                        quote! {
-                            ::dioxus::core::TemplateAttribute::Static {
-                                name: #name,
-                                namespace: None,
-                                value: #value,
+                        if let Some(value) = value.to_static() {
+                            quote! {
+                                ::dioxus::core::TemplateAttribute::Static {
+                                    name: #name,
+                                    namespace: None,
+                                    value: #value,
 
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
+                                    // todo: we don't diff these so we never apply the volatile flag
+                                    // volatile: dioxus_elements::#el_name::#name.2,
+                                }
                             }
+                        } else {
+                            unreachable!()
                         }
                     }
 
@@ -244,8 +250,11 @@ impl<'a> DynamicContext<'a> {
             }
 
             BodyNode::Text(text) if text.is_static() => {
-                let text = text.source.as_ref().unwrap();
-                quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
+                if let Some(text) = text.to_static() {
+                    quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
+                } else {
+                    unreachable!()
+                }
             }
 
             BodyNode::RawExpr(_)
