@@ -18,7 +18,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 bumpalo = { version = "3.6", features = ["collections", "boxed"] }
 
 # faster hashmaps
-fxhash = "0.2"
+rustc-hash = "1.1.0"
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"

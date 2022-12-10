@@ -1,4 +1,4 @@
-use fxhash::FxHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{arena::ElementId, ScopeId, Template};
 
