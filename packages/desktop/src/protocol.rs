@@ -104,10 +104,10 @@ fn get_asset_root() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let bundle = core_foundation::bundle::CFBundle::main_bundle();
-        let bundle_path = dbg!(bundle.path()?);
-        let resources_path = dbg!(bundle.resources_path()?);
-        let absolute_resources_root = dbg!(bundle_path.join(resources_path));
-        let canonical_resources_root = dbg!(dunce::canonicalize(absolute_resources_root).ok()?);
+        let bundle_path = bundle.path()?;
+        let resources_path = bundle.resources_path()?;
+        let absolute_resources_root = bundle_path.join(resources_path);
+        let canonical_resources_root = dunce::canonicalize(absolute_resources_root).ok()?;
 
         return Some(canonical_resources_root);
     }
