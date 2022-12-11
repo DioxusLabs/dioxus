@@ -44,7 +44,7 @@ fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>
 }
 
 /// Fundametnally, every CallBody is a template
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CallBody<Ctx: HotReloadingContext = Empty> {
     pub roots: Vec<BodyNode>,
 
@@ -130,14 +130,14 @@ impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
         previous_call: Option<CallBody<Ctx>>,
         location: &'static str,
     ) -> Option<Template<'static>> {
-        let mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
+        let mut mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
 
         let mut context: DynamicContext<Ctx> = DynamicContext::default();
 
         let mut roots = Vec::new();
         for (idx, root) in self.roots.iter().enumerate() {
             context.current_path.push(idx as u8);
-            roots.push(context.update_node(root, mapping.as_ref())?);
+            roots.push(context.update_node(root, &mut mapping)?);
             context.current_path.pop();
         }
 
@@ -226,7 +226,7 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
 
 #[derive(Debug, Default)]
 struct DynamicMapping {
-    attribute_to_idx: HashMap<ElementAttrNamed, Vec<usize>>,
+    attribute_to_idx: HashMap<ElementAttr, Vec<usize>>,
     last_attribute_idx: usize,
     node_to_idx: HashMap<BodyNode, Vec<usize>>,
     last_element_idx: usize,
@@ -242,19 +242,17 @@ impl DynamicMapping {
         new
     }
 
-    fn get_attribute_idx(&self, attr: &ElementAttrNamed) -> Option<usize> {
+    fn get_attribute_idx(&mut self, attr: &ElementAttr) -> Option<usize> {
         self.attribute_to_idx
-            .get(attr)
-            .and_then(|idxs| idxs.last().copied())
+            .get_mut(attr)
+            .and_then(|idxs| idxs.pop())
     }
 
-    fn get_node_idx(&self, node: &BodyNode) -> Option<usize> {
-        self.node_to_idx
-            .get(node)
-            .and_then(|idxs| idxs.last().copied())
+    fn get_node_idx(&mut self, node: &BodyNode) -> Option<usize> {
+        self.node_to_idx.get_mut(node).and_then(|idxs| idxs.pop())
     }
 
-    fn insert_attribute(&mut self, attr: ElementAttrNamed) -> usize {
+    fn insert_attribute(&mut self, attr: ElementAttr) -> usize {
         let idx = self.last_attribute_idx;
         self.last_attribute_idx += 1;
 
@@ -292,7 +290,7 @@ impl DynamicMapping {
                         | ElementAttr::CustomAttrText { .. }
                         | ElementAttr::CustomAttrExpression { .. }
                         | ElementAttr::EventTokens { .. } => {
-                            self.insert_attribute(attr);
+                            self.insert_attribute(attr.attr);
                         }
                     }
                 }
@@ -345,7 +343,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
     fn update_node(
         &mut self,
         root: &'a BodyNode,
-        mapping: Option<&DynamicMapping>,
+        mapping: &mut Option<DynamicMapping>,
     ) -> Option<TemplateNode<'static>> {
         match root {
             BodyNode::Element(el) => {
@@ -382,7 +380,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                         | ElementAttr::CustomAttrExpression { .. }
                         | ElementAttr::EventTokens { .. } => {
                             let ct = match mapping {
-                                Some(mapping) => mapping.get_attribute_idx(attr)?,
+                                Some(mapping) => mapping.get_attribute_idx(&attr.attr)?,
                                 None => self.dynamic_attributes.len(),
                             };
                             self.dynamic_attributes.push(attr);
@@ -625,9 +623,12 @@ fn diff_template() {
                 "hello world"
             }
             (0..10).map(|i| rsx!{"{i}"}),
+            (0..10).map(|i| rsx!{"{i}"}),
+            (0..11).map(|i| rsx!{"{i}"}),
         }
     };
 
+    #[derive(Debug)]
     struct Mock;
 
     impl HotReloadingContext for Mock {
@@ -656,7 +657,6 @@ fn diff_template() {
     let call_body1: CallBody<Mock> = syn::parse2(input).unwrap();
 
     let template = call_body1.update_template(None, "testing").unwrap();
-
     dbg!(template);
 
     // scrambling the attributes should not cause a full rebuild
@@ -665,7 +665,9 @@ fn diff_template() {
             "width2": 100,
             height: "100px",
             "height2": "100px",
-            // width: 100,
+            width: 100,
+            (0..11).map(|i| rsx!{"{i}"}),
+            (0..10).map(|i| rsx!{"{i}"}),
             (0..10).map(|i| rsx!{"{i}"}),
             p {
                 "hello world"
@@ -679,5 +681,43 @@ fn diff_template() {
         .update_template(Some(call_body1), "testing")
         .unwrap();
 
-    dbg!(template);
+    assert_eq!(
+        template,
+        Template {
+            name: "testing",
+            roots: &[TemplateNode::Element {
+                tag: "div",
+                namespace: None,
+                attrs: &[
+                    TemplateAttribute::Dynamic { id: 1 },
+                    TemplateAttribute::Static {
+                        name: "height",
+                        namespace: None,
+                        value: "100px",
+                    },
+                    TemplateAttribute::Static {
+                        name: "height2",
+                        namespace: None,
+                        value: "100px",
+                    },
+                    TemplateAttribute::Dynamic { id: 0 },
+                ],
+                children: &[
+                    TemplateNode::Dynamic { id: 2 },
+                    TemplateNode::Dynamic { id: 1 },
+                    TemplateNode::Dynamic { id: 0 },
+                    TemplateNode::Element {
+                        tag: "p",
+                        namespace: None,
+                        attrs: &[],
+                        children: &[TemplateNode::Text {
+                            text: "hello world",
+                        }],
+                    },
+                ],
+            }],
+            node_paths: &[&[0, 0], &[0, 1], &[0, 2]],
+            attr_paths: &[&[0], &[0]]
+        },
+    )
 }
