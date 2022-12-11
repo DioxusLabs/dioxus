@@ -2,7 +2,7 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
-use dioxus_rsx::try_parse_template;
+// use dioxus_rsx::try_parse_template;
 
 use std::{path::PathBuf, sync::Arc};
 

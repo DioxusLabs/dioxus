@@ -8,7 +8,7 @@ use axum::{
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
-use dioxus_rsx::try_parse_template;
+// use dioxus_rsx::try_parse_template;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 

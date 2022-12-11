@@ -58,7 +58,7 @@ zip = "0.6.2"
 tower = "0.4.12"
 
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus/" }
+
 
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 lazy_static = "1.4.0"
@@ -72,6 +72,7 @@ mlua = { version = "0.8.1", features = [
     "macros",
 ] }
 ctrlc = "3.2.3"
+dioxus-rsx = "0.0.1"
 
 [[bin]]
 path = "src/main.rs"
