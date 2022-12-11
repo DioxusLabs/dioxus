@@ -19,7 +19,7 @@ mod hot_reloading_context;
 mod ifmt;
 mod node;
 
-use std::{borrow::Borrow, hash::Hash};
+use std::{collections::HashMap, hash::Hash};
 
 // Re-export the namespaces into each other
 pub use component::*;
@@ -39,9 +39,7 @@ use syn::{
 };
 
 // interns a object into a static object, resusing the value if it already exists
-fn intern<'a, T: Eq + Hash + Send + Sync + ?Sized + 'static>(
-    s: impl Into<Intern<T>>,
-) -> &'static T {
+fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>) -> &'static T {
     s.into().as_ref()
 }
 
@@ -63,7 +61,7 @@ impl<Ctx: HotReloadingContext> CallBody<Ctx> {
     /// the previous_location is the location of the previous template at the time the template was originally compiled.
     pub fn update_template(
         &self,
-        template: Option<&CallBody<Ctx>>,
+        template: Option<CallBody<Ctx>>,
         location: &'static str,
     ) -> Option<Template> {
         let mut renderer: TemplateRenderer<Ctx> = TemplateRenderer {
@@ -129,22 +127,19 @@ pub struct TemplateRenderer<'a, Ctx: HotReloadingContext = Empty> {
 impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
     fn update_template(
         &mut self,
-        previous_call: Option<&CallBody<Ctx>>,
+        previous_call: Option<CallBody<Ctx>>,
         location: &'static str,
     ) -> Option<Template<'static>> {
+        let mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
+
         let mut context: DynamicContext<Ctx> = DynamicContext::default();
 
-        let roots: Vec<_> = self
-            .roots
-            .iter()
-            .enumerate()
-            .map(|(idx, root)| {
-                context.current_path.push(idx as u8);
-                let out = context.update_node(root);
-                context.current_path.pop();
-                out
-            })
-            .collect();
+        let mut roots = Vec::new();
+        for (idx, root) in self.roots.iter().enumerate() {
+            context.current_path.push(idx as u8);
+            roots.push(context.update_node(root, mapping.as_ref())?);
+            context.current_path.pop();
+        }
 
         Some(Template {
             name: location,
@@ -229,6 +224,97 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
     }
 }
 
+#[derive(Debug, Default)]
+struct DynamicMapping {
+    attribute_to_idx: HashMap<ElementAttrNamed, Vec<usize>>,
+    last_attribute_idx: usize,
+    node_to_idx: HashMap<BodyNode, Vec<usize>>,
+    last_element_idx: usize,
+}
+
+impl DynamicMapping {
+    fn from(nodes: Vec<BodyNode>) -> Self {
+        let mut new = Self::default();
+        for node in nodes {
+            new.add_node(node);
+        }
+        println!("{:#?}", new);
+        new
+    }
+
+    fn get_attribute_idx(&self, attr: &ElementAttrNamed) -> Option<usize> {
+        self.attribute_to_idx
+            .get(attr)
+            .and_then(|idxs| idxs.last().copied())
+    }
+
+    fn get_node_idx(&self, node: &BodyNode) -> Option<usize> {
+        self.node_to_idx
+            .get(node)
+            .and_then(|idxs| idxs.last().copied())
+    }
+
+    fn insert_attribute(&mut self, attr: ElementAttrNamed) -> usize {
+        let idx = self.last_attribute_idx;
+        self.last_attribute_idx += 1;
+
+        self.attribute_to_idx
+            .entry(attr)
+            .or_insert_with(Vec::new)
+            .push(idx);
+
+        idx
+    }
+
+    fn insert_node(&mut self, node: BodyNode) -> usize {
+        let idx = self.last_element_idx;
+        self.last_element_idx += 1;
+
+        self.node_to_idx
+            .entry(node)
+            .or_insert_with(Vec::new)
+            .push(idx);
+
+        idx
+    }
+
+    fn add_node(&mut self, node: BodyNode) {
+        match node {
+            BodyNode::Element(el) => {
+                for attr in el.attributes {
+                    match &attr.attr {
+                        ElementAttr::CustomAttrText { value, .. }
+                        | ElementAttr::AttrText { value, .. }
+                            if value.is_static() => {}
+
+                        ElementAttr::AttrExpression { .. }
+                        | ElementAttr::AttrText { .. }
+                        | ElementAttr::CustomAttrText { .. }
+                        | ElementAttr::CustomAttrExpression { .. }
+                        | ElementAttr::EventTokens { .. } => {
+                            self.insert_attribute(attr);
+                        }
+                    }
+                }
+
+                for child in el.children {
+                    self.add_node(child);
+                }
+            }
+
+            BodyNode::Text(text) if text.is_static() => {}
+
+            BodyNode::RawExpr(_)
+            | BodyNode::Text(_)
+            | BodyNode::ForLoop(_)
+            | BodyNode::IfChain(_)
+            | BodyNode::Component(_) => {
+                self.insert_node(node);
+            }
+        }
+    }
+}
+
 // As we create the dynamic nodes, we want to keep track of them in a linear fashion
 // We'll use the size of the vecs to determine the index of the dynamic node in the final output
 pub struct DynamicContext<'a, Ctx: HotReloadingContext> {
@@ -256,52 +342,38 @@ impl<'a, Ctx: HotReloadingContext> Default for DynamicContext<'a, Ctx> {
 }
 
 impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
-    fn update_node(&mut self, root: &'a BodyNode) -> TemplateNode<'static> {
+    fn update_node(
+        &mut self,
+        root: &'a BodyNode,
+        mapping: Option<&DynamicMapping>,
+    ) -> Option<TemplateNode<'static>> {
         match root {
             BodyNode::Element(el) => {
-                // dynamic attributes
-                // [0]
-                // [0, 1]
-                // [0, 1]
-                // [0, 1]
-                // [0, 1, 2]
-                // [0, 2]
-                // [0, 2, 1]
-
                 let element_name_rust = el.name.to_string();
 
-                let static_attrs: Vec<TemplateAttribute<'static>> = el
-                    .attributes
-                    .iter()
-                    .map(|attr| match &attr.attr {
+                let mut static_attrs = Vec::new();
+                for attr in &el.attributes {
+                    match &attr.attr {
                         ElementAttr::AttrText { name, value } if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
                             let attribute_name_rust = name.to_string();
                             let (name, namespace) =
                                 Ctx::map_attribute(&element_name_rust, &attribute_name_rust)
                                     .unwrap_or((intern(attribute_name_rust.as_str()), None));
-                            TemplateAttribute::Static {
+                            static_attrs.push(TemplateAttribute::Static {
                                 name,
                                 namespace,
                                 value: intern(value.value().as_str()),
-                                // name: dioxus_elements::#el_name::#name.0,
-                                // namespace: dioxus_elements::#el_name::#name.1,
-                                // value: #value,
-
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
-                            }
+                            })
                         }
 
                         ElementAttr::CustomAttrText { name, value } if value.is_static() => {
                             let value = value.source.as_ref().unwrap();
-                            TemplateAttribute::Static {
+                            static_attrs.push(TemplateAttribute::Static {
                                 name: intern(name.value().as_str()),
                                 namespace: None,
                                 value: intern(value.value().as_str()),
-                                // todo: we don't diff these so we never apply the volatile flag
-                                // volatile: dioxus_elements::#el_name::#name.2,
-                            }
+                            })
                         }
 
                         ElementAttr::AttrExpression { .. }
@@ -309,41 +381,39 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                         | ElementAttr::CustomAttrText { .. }
                         | ElementAttr::CustomAttrExpression { .. }
                         | ElementAttr::EventTokens { .. } => {
-                            let ct = self.dynamic_attributes.len();
+                            let ct = match mapping {
+                                Some(mapping) => mapping.get_attribute_idx(attr)?,
+                                None => self.dynamic_attributes.len(),
+                            };
                             self.dynamic_attributes.push(attr);
                             self.attr_paths.push(self.current_path.clone());
-                            TemplateAttribute::Dynamic { id: ct }
+                            static_attrs.push(TemplateAttribute::Dynamic { id: ct })
                         }
-                    })
-                    .collect();
+                    }
+                }
 
-                let children: Vec<_> = el
-                    .children
-                    .iter()
-                    .enumerate()
-                    .map(|(idx, root)| {
-                        self.current_path.push(idx as u8);
-                        let out = self.update_node(root);
-                        self.current_path.pop();
-                        out
-                    })
-                    .collect();
+                let mut children = Vec::new();
+                for (idx, root) in el.children.iter().enumerate() {
+                    self.current_path.push(idx as u8);
+                    children.push(self.update_node(root, mapping)?);
+                    self.current_path.pop();
+                }
 
                 let (tag, namespace) = Ctx::map_element(&element_name_rust)
                     .unwrap_or((intern(element_name_rust.as_str()), None));
-                TemplateNode::Element {
+                Some(TemplateNode::Element {
                     tag,
                     namespace,
                     attrs: intern(static_attrs.into_boxed_slice()),
                     children: intern(children.as_slice()),
-                }
+                })
             }
 
             BodyNode::Text(text) if text.is_static() => {
                 let text = text.source.as_ref().unwrap();
-                TemplateNode::Text {
+                Some(TemplateNode::Text {
                     text: intern(text.value().as_str()),
-                }
+                })
             }
 
             BodyNode::RawExpr(_)
@@ -351,14 +421,17 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
             | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
             | BodyNode::Component(_) => {
-                let ct = self.dynamic_nodes.len();
+                let ct = match mapping {
+                    Some(mapping) => mapping.get_node_idx(root)?,
+                    None => self.dynamic_nodes.len(),
+                };
                 self.dynamic_nodes.push(root);
                 self.node_paths.push(self.current_path.clone());
 
-                match root {
+                Some(match root {
                     BodyNode::Text(_) => TemplateNode::DynamicText { id: ct },
                     _ => TemplateNode::Dynamic { id: ct },
-                }
+                })
             }
         }
     }
@@ -367,16 +440,6 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
         match root {
             BodyNode::Element(el) => {
                 let el_name = &el.name;
-
-                // dynamic attributes
-                // [0]
-                // [0, 1]
-                // [0, 1]
-                // [0, 1]
-                // [0, 1, 2]
-                // [0, 2]
-                // [0, 2, 1]
-
                 let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
                         let value = value.source.as_ref().unwrap();
@@ -466,7 +529,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
 }
 
 #[test]
-fn template() {
+fn create_template() {
     let input = quote! {
         svg {
             width: 100,
@@ -548,4 +611,73 @@ fn template() {
             attr_paths: &[&[0,], &[0,],],
         },
     )
+}
+
+#[test]
+fn diff_template() {
+    let input = quote! {
+        svg {
+            width: 100,
+            height: "100px",
+            "width2": 100,
+            "height2": "100px",
+            p {
+                "hello world"
+            }
+            (0..10).map(|i| rsx!{"{i}"}),
+        }
+    };
+
+    struct Mock;
+
+    impl HotReloadingContext for Mock {
+        fn map_attribute(
+            element_name_rust: &str,
+            attribute_name_rust: &str,
+        ) -> Option<(&'static str, Option<&'static str>)> {
+            match element_name_rust {
+                "svg" => match attribute_name_rust {
+                    "width" => Some(("width", Some("style"))),
+                    "height" => Some(("height", Some("style"))),
+                    _ => None,
+                },
+                _ => None,
+            }
+        }
+
+        fn map_element(element_name_rust: &str) -> Option<(&'static str, Option<&'static str>)> {
+            match element_name_rust {
+                "svg" => Some(("svg", Some("svg"))),
+                _ => None,
+            }
+        }
+    }
+
+    let call_body1: CallBody<Mock> = syn::parse2(input).unwrap();
+
+    let template = call_body1.update_template(None, "testing").unwrap();
+
+    dbg!(template);
+
+    // scrambling the attributes should not cause a full rebuild
+    let input = quote! {
+        div {
+            "width2": 100,
+            height: "100px",
+            "height2": "100px",
+            // width: 100,
+            (0..10).map(|i| rsx!{"{i}"}),
+            p {
+                "hello world"
+            }
+        }
+    };
+
+    let call_body2: CallBody<Mock> = syn::parse2(input).unwrap();
+
+    let template = call_body2
+        .update_template(Some(call_body1), "testing")
+        .unwrap();
+
+    dbg!(template);
 }
