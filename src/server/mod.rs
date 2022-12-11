@@ -8,7 +8,6 @@ use axum::{
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
-use dioxus_core::{prelude::TemplateId, SetTemplateMsg};
 use dioxus_rsx::try_parse_template;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
@@ -139,55 +138,55 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                         }
                                         DiffResult::RsxChanged(changed) => {
                                             log::info!("🪁 reloading rsx");
-                                            for (old, new) in changed.into_iter() {
-                                                let hr = get_location(
-                                                    &crate_dir,
-                                                    &path.to_path_buf(),
-                                                    old.to_token_stream(),
-                                                );
-                                                // get the original source code to preserve whitespace
-                                                let span = new.span();
-                                                let start = span.start();
-                                                let end = span.end();
-                                                let mut lines: Vec<_> = src
-                                                    .lines()
-                                                    .skip(start.line - 1)
-                                                    .take(end.line - start.line + 1)
-                                                    .collect();
-                                                if let Some(first) = lines.first_mut() {
-                                                    *first = first.split_at(start.column).1;
-                                                }
-                                                if let Some(last) = lines.last_mut() {
-                                                    // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                                    if start.line == end.line {
-                                                        *last = last
-                                                            .split_at(end.column - start.column)
-                                                            .0;
-                                                    } else {
-                                                        *last = last.split_at(end.column).0;
-                                                    }
-                                                }
-                                                let rsx = lines.join("\n");
+                                            // for (old, new) in changed.into_iter() {
+                                            //     let hr = get_location(
+                                            //         &crate_dir,
+                                            //         &path.to_path_buf(),
+                                            //         old.to_token_stream(),
+                                            //     );
+                                            //     // get the original source code to preserve whitespace
+                                            //     let span = new.span();
+                                            //     let start = span.start();
+                                            //     let end = span.end();
+                                            //     let mut lines: Vec<_> = src
+                                            //         .lines()
+                                            //         .skip(start.line - 1)
+                                            //         .take(end.line - start.line + 1)
+                                            //         .collect();
+                                            //     if let Some(first) = lines.first_mut() {
+                                            //         *first = first.split_at(start.column).1;
+                                            //     }
+                                            //     if let Some(last) = lines.last_mut() {
+                                            //         // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
+                                            //         if start.line == end.line {
+                                            //             *last = last
+                                            //                 .split_at(end.column - start.column)
+                                            //                 .0;
+                                            //         } else {
+                                            //             *last = last.split_at(end.column).0;
+                                            //         }
+                                            //     }
+                                            //     let rsx = lines.join("\n");
 
-                                                let old_dyn_ctx = try_parse_template(
-                                                    &format!("{}", old.tokens),
-                                                    hr.to_owned(),
-                                                    None,
-                                                )
-                                                .map(|(_, old_dyn_ctx)| old_dyn_ctx);
-                                                if let Ok((template, _)) = try_parse_template(
-                                                    &rsx,
-                                                    hr.to_owned(),
-                                                    old_dyn_ctx.ok(),
-                                                ) {
-                                                    messages.push(SetTemplateMsg(
-                                                        TemplateId(hr),
-                                                        template,
-                                                    ));
-                                                } else {
-                                                    needs_rebuild = true;
-                                                }
-                                            }
+                                            //     let old_dyn_ctx = try_parse_template(
+                                            //         &format!("{}", old.tokens),
+                                            //         hr.to_owned(),
+                                            //         None,
+                                            //     )
+                                            //     .map(|(_, old_dyn_ctx)| old_dyn_ctx);
+                                            //     // if let Ok((template, _)) = try_parse_template(
+                                            //     //     &rsx,
+                                            //     //     hr.to_owned(),
+                                            //     //     old_dyn_ctx.ok(),
+                                            //     // ) {
+                                            //     //     messages.push(SetTemplateMsg(
+                                            //     //         TemplateId(hr),
+                                            //     //         template,
+                                            //     //     ));
+                                            //     // } else {
+                                            //     //     needs_rebuild = true;
+                                            //     // }
+                                            // }
                                         }
                                     }
                                 }

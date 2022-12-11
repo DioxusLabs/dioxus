@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-cli"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "CLI tool for developing, testing, and publishing Dioxus apps"
@@ -58,8 +58,6 @@ zip = "0.6.2"
 tower = "0.4.12"
 
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-
-dioxus-core = { git = "https://github.com/dioxuslabs/dioxus/" }
 dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus/" }
 
 proc-macro2 = { version = "1.0", features = ["span-locations"] }

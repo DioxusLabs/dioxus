@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "dioxus-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "atty",
@@ -574,7 +574,6 @@ dependencies = [
  "colored 2.0.0",
  "convert_case",
  "ctrlc",
- "dioxus-core",
  "dioxus-rsx",
  "dirs 4.0.0",
  "fern",

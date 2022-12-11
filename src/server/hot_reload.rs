@@ -2,7 +2,6 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
-use dioxus_core::{prelude::TemplateId, CodeLocation, OwnedCodeLocation, SetTemplateMsg};
 use dioxus_rsx::try_parse_template;
 
 use std::{path::PathBuf, sync::Arc};
@@ -21,7 +20,7 @@ use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<SetTemplateMsg>,
+    pub messages: broadcast::Sender<String>,
     pub build_manager: Arc<BuildManager>,
     pub last_file_rebuild: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
@@ -75,7 +74,7 @@ pub async fn hot_reload_handler(
         log::info!("🔥 Hot Reload WebSocket connected");
         {
             // update any rsx calls that changed before the websocket connected.
-            let mut messages = Vec::new();
+            // let mut messages = Vec::new();
 
             {
                 log::info!("🔮 Finding updates since last compile...");
@@ -98,11 +97,11 @@ pub async fn hot_reload_handler(
                             if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file)
                             {
                                 for (old, new) in changed.into_iter() {
-                                    let hr = get_location(
-                                        &state.watcher_config.crate_dir,
-                                        k,
-                                        old.to_token_stream(),
-                                    );
+                                    // let hr = get_location(
+                                    //     &state.watcher_config.crate_dir,
+                                    //     k,
+                                    //     old.to_token_stream(),
+                                    // );
                                     // get the original source code to preserve whitespace
                                     let span = new.span();
                                     let start = span.start();
@@ -125,32 +124,32 @@ pub async fn hot_reload_handler(
                                     }
                                     let rsx = lines.join("\n");
 
-                                    let old_dyn_ctx = try_parse_template(
-                                        &format!("{}", old.tokens),
-                                        hr.to_owned(),
-                                        None,
-                                    )
-                                    .map(|(_, old_dyn_ctx)| old_dyn_ctx);
-                                    if let Ok((template, _)) =
-                                        try_parse_template(&rsx, hr.to_owned(), old_dyn_ctx.ok())
-                                    {
-                                        messages.push(SetTemplateMsg(TemplateId(hr), template));
-                                    }
+                                    // let old_dyn_ctx = try_parse_template(
+                                    //     &format!("{}", old.tokens),
+                                    //     hr.to_owned(),
+                                    //     None,
+                                    // )
+                                    // .map(|(_, old_dyn_ctx)| old_dyn_ctx);
+                                    // if let Ok((template, _)) =
+                                    //     try_parse_template(&rsx, hr.to_owned(), old_dyn_ctx.ok())
+                                    // {
+                                    //     // messages.push(SetTemplateMsg(TemplateId(hr), template));
+                                    // }
                                 }
                             }
                         }
                     }
                 }
             }
-            for msg in messages {
-                if socket
-                    .send(Message::Text(serde_json::to_string(&msg).unwrap()))
-                    .await
-                    .is_err()
-                {
-                    return;
-                }
-            }
+            // for msg in messages {
+            //     if socket
+            //         .send(Message::Text(serde_json::to_string(&msg).unwrap()))
+            //         .await
+            //         .is_err()
+            //     {
+            //         return;
+            //     }
+            // }
             log::info!("finished");
         }
 
@@ -173,13 +172,13 @@ pub async fn hot_reload_handler(
     })
 }
 
-pub fn get_location(crate_path: &Path, path: &Path, ts: TokenStream) -> CodeLocation {
-    let span = ts.span().start();
-    let relative = path.strip_prefix(crate_path).unwrap();
-    CodeLocation::Dynamic(Box::new(OwnedCodeLocation {
-        file_path: relative.display().to_string(),
-        crate_path: crate_path.display().to_string(),
-        line: span.line as u32,
-        column: span.column as u32 + 1,
-    }))
-}
+// pub fn get_location(crate_path: &Path, path: &Path, ts: TokenStream) -> CodeLocation {
+//     let span = ts.span().start();
+//     let relative = path.strip_prefix(crate_path).unwrap();
+//     CodeLocation::Dynamic(Box::new(OwnedCodeLocation {
+//         file_path: relative.display().to_string(),
+//         crate_path: crate_path.display().to_string(),
+//         line: span.line as u32,
+//         column: span.column as u32 + 1,
+//     }))
+// }
