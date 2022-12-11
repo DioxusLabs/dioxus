@@ -8,7 +8,7 @@ use cargo_metadata::{diagnostic::Diagnostic, Message};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Serialize;
 use std::{
-    fs::{copy, create_dir_all, remove_dir_all, File},
+    fs::{copy, create_dir_all, File},
     io::Read,
     panic,
     path::PathBuf,
@@ -241,7 +241,7 @@ pub fn build(config: &CrateConfig, quiet: bool) -> Result<BuildResult> {
     })
 }
 
-pub fn build_desktop(config: &CrateConfig, is_serve: bool) -> Result<()> {
+pub fn build_desktop(config: &CrateConfig, _is_serve: bool) -> Result<()> {
     log::info!("🚅 Running build [Desktop] command...");
 
     let ignore_files = build_assets(config)?;
