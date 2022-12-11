@@ -41,7 +41,7 @@ pub(crate) fn render_vnode(
     let x = layout_to_screen_space(fx).round() as u16;
     let y = layout_to_screen_space(fy).round() as u16;
     let Size { width, height } = *size;
-    let width = layout_to_screen_space(fx + width).round() as u16 + x;
+    let width = layout_to_screen_space(fx + width).round() as u16 - x;
     let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
     match &node.node_data.node_type {

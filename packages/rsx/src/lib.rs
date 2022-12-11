@@ -182,7 +182,7 @@ impl<'a> DynamicContext<'a> {
 
                 let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
+                        let value = value.to_static().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
@@ -196,7 +196,7 @@ impl<'a> DynamicContext<'a> {
                     }
 
                     ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
+                        let value = value.to_static().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: #name,
@@ -244,7 +244,7 @@ impl<'a> DynamicContext<'a> {
             }
 
             BodyNode::Text(text) if text.is_static() => {
-                let text = text.source.as_ref().unwrap();
+                let text = text.to_static().unwrap();
                 quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
             }
 

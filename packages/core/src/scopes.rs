@@ -10,7 +10,7 @@ use crate::{
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
