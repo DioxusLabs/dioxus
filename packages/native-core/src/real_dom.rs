@@ -339,12 +339,12 @@ impl<S: State> RealDom<S> {
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
-    pub fn update_state(
+    pub fn update_state_single_threaded(
         &mut self,
         nodes_updated: DirtyNodeStates,
         ctx: SendAnyMap,
     ) -> FxDashSet<RealNodeId> {
-        S::update(nodes_updated, &mut self.tree, ctx)
+        S::update_single_threaded(nodes_updated, &mut self.tree, ctx)
     }
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
@@ -393,6 +393,21 @@ impl<S: State> RealDom<S> {
             }
         }
         new_id
+    }
+}
+
+impl<S: State + Sync> RealDom<S>
+where
+    Tree<Node<S>>: Sync,
+{
+    /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
+    /// This will resolve the state in parallel
+    pub fn update_state(
+        &mut self,
+        nodes_updated: DirtyNodeStates,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        S::update(nodes_updated, &mut self.tree, ctx)
     }
 }
 

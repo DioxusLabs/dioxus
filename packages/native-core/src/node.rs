@@ -1,5 +1,5 @@
 use crate::{state::State, tree::NodeId};
-use dioxus_core::{AnyValueRc, AttributeValue, ElementId};
+use dioxus_core::{AnyValueContainer, AttributeValue, ElementId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
 
@@ -79,7 +79,7 @@ pub enum OwnedAttributeValue {
     Float(f64),
     Int(i64),
     Bool(bool),
-    Any(AnyValueRc),
+    Any(AnyValueContainer),
     None,
 }
 

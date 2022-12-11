@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use crate::node::Node;
 use crate::node_ref::{NodeMask, NodeView};
-use crate::passes::{resolve_passes, AnyPass, DirtyNodeStates};
+use crate::passes::{resolve_passes, resolve_passes_single_threaded, AnyPass, DirtyNodeStates};
 use crate::tree::TreeView;
 use crate::{FxDashSet, RealNodeId, SendAnyMap};
 
@@ -217,13 +217,23 @@ pub trait State: Default + Clone + 'static {
     const MASKS: &'static [NodeMask];
 
     #[doc(hidden)]
-    fn update<T: TreeView<Node<Self>>>(
+    fn update<T: TreeView<Node<Self>> + Sync>(
         dirty: DirtyNodeStates,
         tree: &mut T,
         ctx: SendAnyMap,
     ) -> FxDashSet<RealNodeId> {
         let passes = Self::PASSES.iter().collect();
         resolve_passes(tree, dirty, passes, ctx)
+    }
+
+    #[doc(hidden)]
+    fn update_single_threaded<T: TreeView<Node<Self>>>(
+        dirty: DirtyNodeStates,
+        tree: &mut T,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        let passes = Self::PASSES.iter().collect();
+        resolve_passes_single_threaded(tree, dirty, passes, ctx)
     }
 }
 

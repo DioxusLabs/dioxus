@@ -338,7 +338,7 @@ pub enum AttributeValue<'a> {
     Listener(ListenerCb<'a>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(AnyValueRc),
+    Any(AnyValueContainer),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -375,26 +375,38 @@ impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
 
 /// A boxed value that implements PartialEq and Any
 #[derive(Clone)]
-pub struct AnyValueRc(pub Rc<dyn AnyValue>);
+#[cfg(not(feature = "sync_attributes"))]
+pub struct AnyValueContainer(pub Rc<dyn AnyValue>);
 
-impl PartialEq for AnyValueRc {
+#[derive(Clone)]
+#[cfg(feature = "sync_attributes")]
+pub struct AnyValueContainer(pub std::sync::Arc<dyn AnyValue>);
+
+impl PartialEq for AnyValueContainer {
     fn eq(&self, other: &Self) -> bool {
         self.0.any_cmp(other.0.as_ref())
     }
 }
 
-impl AnyValueRc {
+impl AnyValueContainer {
+    pub fn new<T: AnyValueBounds>(value: T) -> Self {
+        #[cfg(feature = "sync_attributes")]
+        return Self(std::sync::Arc::new(value));
+        #[cfg(not(feature = "sync_attributes"))]
+        return Self(Rc::new(value));
+    }
+
     /// Returns a reference to the inner value without checking the type.
     ///
     /// # Safety
     /// The caller must ensure that the type of the inner value is `T`.
-    pub unsafe fn downcast_ref_unchecked<T: Any + PartialEq>(&self) -> &T {
-        unsafe { &*(self.0.as_ref() as *const dyn AnyValue as *const T) }
+    pub unsafe fn downcast_ref_unchecked<T: AnyValueBounds>(&self) -> &T {
+        unsafe { &*(self.0.as_ref() as *const _ as *const T) }
     }
 
     /// Returns a reference to the inner value.
-    pub fn downcast_ref<T: Any + PartialEq>(&self) -> Option<&T> {
-        if self.0.type_id() == TypeId::of::<T>() {
+    pub fn downcast_ref<T: AnyValueBounds>(&self) -> Option<&T> {
+        if self.0.our_typeid() == TypeId::of::<T>() {
             Some(unsafe { self.downcast_ref_unchecked() })
         } else {
             None
@@ -402,25 +414,25 @@ impl AnyValueRc {
     }
 
     /// Checks if the inner value is of type `T`.
-    pub fn is<T: Any + PartialEq>(&self) -> bool {
-        self.0.type_id() == TypeId::of::<T>()
+    pub fn is<T: AnyValueBounds>(&self) -> bool {
+        self.0.our_typeid() == TypeId::of::<T>()
     }
 }
 
 #[test]
 fn test_any_value_rc() {
-    let a = AnyValueRc(Rc::new(1i32));
-    assert!(a.is::<i32>());
-    assert!(!a.is::<i64>());
+    let a = AnyValueContainer::new(1i32);
     assert_eq!(a.downcast_ref::<i32>(), Some(&1i32));
     assert_eq!(a.downcast_ref::<i64>(), None);
+    assert!(a.is::<i32>());
+    assert!(!a.is::<i64>());
     unsafe {
         assert_eq!(a.downcast_ref_unchecked::<i32>(), &1i32);
     }
 }
 
 #[cfg(feature = "serialize")]
-impl serde::Serialize for AnyValueRc {
+impl serde::Serialize for AnyValueContainer {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -430,7 +442,7 @@ impl serde::Serialize for AnyValueRc {
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for AnyValueRc {
+impl<'de> serde::Deserialize<'de> for AnyValueContainer {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
@@ -467,19 +479,37 @@ impl<'a> PartialEq for AttributeValue<'a> {
     }
 }
 
+#[cfg(feature = "sync_attributes")]
+pub trait AnyValueBounds: Any + PartialEq + Sync {}
+#[cfg(not(feature = "sync_attributes"))]
+pub trait AnyValueBounds: Any + PartialEq {}
+
 #[doc(hidden)]
-pub trait AnyValue: Any {
+#[cfg(feature = "sync_attributes")]
+pub trait AnyValue: Sync {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+    fn our_typeid(&self) -> TypeId;
 }
 
-impl<T: PartialEq + Any> AnyValue for T {
+impl<T: AnyValueBounds> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.type_id() != other.type_id() {
+        if self.our_typeid() != other.our_typeid() {
             return false;
         }
 
         self == unsafe { &*(other as *const _ as *const T) }
     }
+
+    fn our_typeid(&self) -> TypeId {
+        self.type_id()
+    }
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "sync_attributes"))]
+pub trait AnyValue {
+    fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+    fn our_typeid(&self) -> TypeId;
 }
 
 #[doc(hidden)]
@@ -679,7 +709,7 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for AnyValueRc {
+impl<'a> IntoAttributeValue<'a> for AnyValueContainer {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Any(self)
     }

@@ -564,8 +564,8 @@ impl<'a, T, Tr: TreeView<T>> SharedView<'a, T, Tr> {
     }
 }
 
-unsafe impl<'a, T, Tr: TreeView<T>> Send for SharedView<'a, T, Tr> {}
-unsafe impl<'a, T, Tr: TreeView<T>> Sync for SharedView<'a, T, Tr> {}
+unsafe impl<'a, T, Tr: TreeView<T> + Send> Send for SharedView<'a, T, Tr> {}
+unsafe impl<'a, T, Tr: TreeView<T> + Sync> Sync for SharedView<'a, T, Tr> {}
 impl<'a, T, Tr: TreeView<T>> Clone for SharedView<'a, T, Tr> {
     fn clone(&self) -> Self {
         Self {
