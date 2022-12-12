@@ -81,9 +81,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Element, Event, EventHandler, Fragment, IntoAttributeValue, LazyNodes,
-        Properties, Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute,
-        TemplateNode, VNode, VirtualDom,
+        fc_to_builder, Component, Element, Event, EventHandler, Fragment, IntoAttributeValue,
+        LazyNodes, Properties, Scope, ScopeId, ScopeState, Scoped, TaskId, Template,
+        TemplateAttribute, TemplateNode, VNode, VirtualDom,
     };
 }
 
