@@ -210,7 +210,17 @@ mod js {
         "{nodes[$id$] = LoadChild($ptr$, $len$);}"
     }
     fn hydrate_text(ptr: u32, len: u8, value: &str, id: u32) {
-        "{node = LoadChild($ptr$, $len$); node.textContent = $value$; nodes[$id$] = node;}"
+        r#"{
+            node = LoadChild($ptr$, $len$);
+            if (node.nodeType == Node.TEXT_NODE) {
+                node.textContent = value;
+            } else {
+                let text = document.createTextNode(value);
+                node.replaceWith(text);
+                node = text;
+            }
+            nodes[$id$] = node;
+        }"#
     }
     fn replace_placeholder(ptr: u32, len: u8, n: u32) {
         "{els = stack.splice(stack.length - $n$); node = LoadChild($ptr$, $len$); node.replaceWith(...els);}"
