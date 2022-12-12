@@ -13,6 +13,9 @@ mod contexts {
 }
 
 pub mod hooks {
+    mod use_navigate;
+    pub use use_navigate::*;
+
     mod use_router;
     pub use use_router::*;
 

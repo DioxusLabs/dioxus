@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    fmt::Debug,
     sync::{Arc, Weak},
 };
 
@@ -35,6 +36,32 @@ pub enum RouterMessage<I> {
     /// Navigate to the next history entry.
     GoForward,
 }
+
+impl<I: Debug> Debug for RouterMessage<I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Subscribe(arg0) => f.debug_tuple("Subscribe").field(arg0).finish(),
+            Self::Push(arg0) => f.debug_tuple("Push").field(arg0).finish(),
+            Self::Replace(arg0) => f.debug_tuple("Replace").field(arg0).finish(),
+            Self::Update => write!(f, "Update"),
+            Self::GoBack => write!(f, "GoBack"),
+            Self::GoForward => write!(f, "GoForward"),
+        }
+    }
+}
+
+impl<I: PartialEq> PartialEq for RouterMessage<I> {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Subscribe(l0), Self::Subscribe(r0)) => l0 == r0,
+            (Self::Push(l0), Self::Push(r0)) => l0 == r0,
+            (Self::Replace(l0), Self::Replace(r0)) => l0 == r0,
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
+    }
+}
+
+impl<I: Eq> Eq for RouterMessage<I> {}
 
 enum NavigationFailure {
     External(String),

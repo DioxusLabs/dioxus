@@ -3,7 +3,7 @@ use dioxus::{core::Component, prelude::*};
 use dioxus_router_core::{
     history::{HistoryProvider, MemoryHistory},
     routes::{ContentAtom, Segment},
-    RouterService, RouterState, RoutingCallback,
+    Navigator, RouterService, RouterState, RoutingCallback,
 };
 
 use crate::{
@@ -20,7 +20,10 @@ pub fn use_router<'a>(
     cx: &'a ScopeState,
     cfg: &dyn Fn() -> RouterConfiguration,
     content: &dyn Fn() -> Segment<Component>,
-) -> (RwLockReadGuard<'a, RouterState<Component>>, ()) {
+) -> (
+    RwLockReadGuard<'a, RouterState<Component>>,
+    Navigator<ScopeId>,
+) {
     let (service, state, sender) = cx.use_hook(|| {
         let cfg = cfg();
         let content = content();
@@ -62,7 +65,7 @@ pub fn use_router<'a>(
                 break state;
             }
         },
-        (),
+        sender.clone().into(),
     )
 }
 

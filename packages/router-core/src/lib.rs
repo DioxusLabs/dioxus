@@ -8,6 +8,9 @@ pub use name::*;
 
 pub mod navigation;
 
+mod navigator;
+pub use navigator::*;
+
 mod outlet;
 pub use outlet::*;
 
