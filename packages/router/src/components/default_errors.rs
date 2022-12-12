@@ -1,10 +1,17 @@
-use crate::components::Link;
+use crate::{components::Link, hooks::use_route};
 use dioxus::prelude::*;
-use dioxus_router_core::prelude::{named, RootIndex};
+use dioxus_router_core::prelude::{named, FailureExternalNavigation as FENName, RootIndex};
 
 #[allow(non_snake_case)]
 pub fn FailureExternalNavigation(cx: Scope) -> Element {
-    todo!("add href to FailureExternalNavigation link");
+    let state = use_route(&cx).expect(
+        "`FailureExternalNavigation` can only be mounted by the router itself, \
+            since it is not exposed",
+    );
+    let href = state.parameter::<FENName>().expect(
+        "`FailureExternalNavigation` cannot be mounted without receiving its parameter, \
+            since it is not exposed",
+    );
 
     render! {
         h1 { "External Navigation Failure!" }
@@ -13,6 +20,8 @@ pub fn FailureExternalNavigation(cx: Scope) -> Element {
             "operation has failed. Click the link below to complete the navigation manually."
         }
         a {
+            href: "{href}",
+            rel: "noopener noreferrer",
             "Click here to fix the failure."
         }
     }
