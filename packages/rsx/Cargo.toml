@@ -1,8 +1,13 @@
 [package]
 name = "dioxus-rsx"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2018"
 license = "MIT/Apache-2.0"
+description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+documentation = "https://docs.rs/dioxus-rsx"
+keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -10,5 +15,4 @@ license = "MIT/Apache-2.0"
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = { version = "1.0" }
-dioxus-core = { path = "../core", features = ["serialize"] }
 serde = { version = "1.0", features = ["derive"] }

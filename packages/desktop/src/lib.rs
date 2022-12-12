@@ -17,7 +17,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_eval, use_window, DesktopContext};
+pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
 use futures_channel::mpsc::UnboundedSender;
 pub use wry;
 pub use wry::application as tao;
@@ -142,6 +142,7 @@ impl DesktopController {
             event_loop,
             self.is_ready.clone(),
             self.proxy.clone(),
+            self.eval_sender.clone(),
             self.event_tx.clone(),
         );
 
@@ -154,6 +155,7 @@ fn build_webview(
     event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
     is_ready: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
+    eval_sender: tokio::sync::mpsc::UnboundedSender<serde_json::Value>,
     event_tx: UnboundedSender<serde_json::Value>,
 ) -> wry::webview::WebView {
     let builder = cfg.window.clone();
@@ -183,6 +185,10 @@ fn build_webview(
         .with_ipc_handler(move |_window: &Window, payload: String| {
             parse_ipc_message(&payload)
                 .map(|message| match message.method() {
+                    "eval_result" => {
+                        let result = message.params();
+                        eval_sender.send(result).unwrap();
+                    }
                     "user_event" => {
                         _ = event_tx.unbounded_send(message.params());
                     }

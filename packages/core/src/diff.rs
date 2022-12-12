@@ -11,7 +11,7 @@ use crate::{
     AttributeValue, TemplateNode,
 };
 
-use fxhash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use DynamicNode::*;
 
 impl<'b> VirtualDom {
@@ -56,7 +56,9 @@ impl<'b> VirtualDom {
     fn diff_err_to_ok(&mut self, _e: &anyhow::Error, _l: &'b VNode<'b>) {}
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
-        if left_template.template.name != right_template.template.name {
+        if !std::ptr::eq(left_template.template.name, right_template.template.name)
+            && left_template.template.name != right_template.template.name
+        {
             return self.light_diff_templates(left_template, right_template);
         }
 
@@ -432,7 +434,7 @@ impl<'b> VirtualDom {
     // The stack is empty upon entry.
     fn diff_keyed_children(&mut self, old: &'b [VNode<'b>], new: &'b [VNode<'b>]) {
         if cfg!(debug_assertions) {
-            let mut keys = fxhash::FxHashSet::default();
+            let mut keys = rustc_hash::FxHashSet::default();
             let mut assert_unique_keys = |children: &'b [VNode<'b>]| {
                 keys.clear();
                 for child in children {

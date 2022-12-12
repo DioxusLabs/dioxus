@@ -10,10 +10,10 @@ use crate::{
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
     fmt::Arguments,
     future::Future,
     rc::Rc,
@@ -82,10 +82,10 @@ pub struct ScopeState {
     pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: HashSet<TaskId>,
+    pub(crate) spawned_tasks: FxHashSet<TaskId>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,

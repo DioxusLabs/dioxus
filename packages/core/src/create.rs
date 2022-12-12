@@ -36,6 +36,9 @@ impl<'b> VirtualDom {
 
         let cur_scope = self.scope_stack.last().copied().unwrap();
 
+        // we know that this will generate at least one mutation per node
+        self.mutations.edits.reserve(template.template.roots.len());
+
         let mut on_stack = 0;
         for (root_idx, root) in template.template.roots.iter().enumerate() {
             // We might need to generate an ID for the root node
@@ -208,19 +211,12 @@ impl<'b> VirtualDom {
 
         // If it's all dynamic nodes, then we don't need to register it
         // Quickly run through and see if it's all just dynamic nodes
-        let dynamic_roots = template
-            .template
-            .roots
-            .iter()
-            .filter(|root| {
-                matches!(
-                    root,
-                    TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
-                )
-            })
-            .count();
-
-        if dynamic_roots == template.template.roots.len() {
+        if template.template.roots.iter().all(|root| {
+            matches!(
+                root,
+                TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
+            )
+        }) {
             return;
         }
 
@@ -291,7 +287,7 @@ impl<'b> VirtualDom {
     }
 
     pub(crate) fn create_fragment(&mut self, nodes: &'b [VNode<'b>]) -> usize {
-        nodes.iter().fold(0, |acc, child| acc + self.create(child))
+        nodes.iter().map(|child| self.create(child)).sum()
     }
 
     pub(super) fn create_component_node(
@@ -302,7 +298,7 @@ impl<'b> VirtualDom {
     ) -> usize {
         let props = component
             .props
-            .replace(None)
+            .take()
             .expect("Props to always exist when a component is being created");
 
         let unbounded_props = unsafe { std::mem::transmute(props) };

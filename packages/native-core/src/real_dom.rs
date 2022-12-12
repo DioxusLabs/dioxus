@@ -102,11 +102,7 @@ impl<S: State> RealDom<S> {
         self.tree.add_child(node_id, child_id);
     }
 
-    fn create_template_node(
-        &mut self,
-        node: &TemplateNode,
-        mutations_vec: &mut FxHashMap<RealNodeId, NodeMask>,
-    ) -> RealNodeId {
+    fn create_template_node(&mut self, node: &TemplateNode) -> RealNodeId {
         match node {
             TemplateNode::Element {
                 tag,
@@ -139,27 +135,18 @@ impl<S: State> RealDom<S> {
                 });
                 let node_id = self.create_node(node);
                 for child in *children {
-                    let child_id = self.create_template_node(child, mutations_vec);
+                    let child_id = self.create_template_node(child);
                     self.add_child(node_id, child_id);
                 }
                 node_id
             }
-            TemplateNode::Text { text } => {
-                let node_id = self.create_node(Node::new(NodeType::Text {
-                    text: text.to_string(),
-                }));
-                node_id
-            }
-            TemplateNode::Dynamic { .. } => {
-                let node_id = self.create_node(Node::new(NodeType::Placeholder));
-                node_id
-            }
-            TemplateNode::DynamicText { .. } => {
-                let node_id = self.create_node(Node::new(NodeType::Text {
-                    text: String::new(),
-                }));
-                node_id
-            }
+            TemplateNode::Text { text } => self.create_node(Node::new(NodeType::Text {
+                text: text.to_string(),
+            })),
+            TemplateNode::Dynamic { .. } => self.create_node(Node::new(NodeType::Placeholder)),
+            TemplateNode::DynamicText { .. } => self.create_node(Node::new(NodeType::Text {
+                text: String::new(),
+            })),
         }
     }
 
@@ -172,7 +159,7 @@ impl<S: State> RealDom<S> {
         for template in mutations.templates {
             let mut template_root_ids = Vec::new();
             for root in template.roots {
-                let id = self.create_template_node(root, &mut nodes_updated);
+                let id = self.create_template_node(root);
                 template_root_ids.push(id);
             }
             self.templates
