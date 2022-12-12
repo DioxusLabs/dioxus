@@ -44,4 +44,5 @@ dioxus = { path = "../dioxus" }
 [features]
 default = []
 serialize = ["serde"]
+# Adds a Sync + Send bound on any values in attributes
 sync_attributes = []

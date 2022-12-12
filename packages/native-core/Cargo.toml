@@ -30,4 +30,5 @@ dioxus = { path = "../dioxus", version = "^0.2.1" }
 
 [features]
 default = ["parallel"]
+# This makes core only accept sync and send any values for attributes to allow for parallel resolution of passes.
 parallel = ["dioxus-core/sync_attributes"]

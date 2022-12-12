@@ -390,7 +390,7 @@ impl PartialEq for AnyValueContainer {
 
 impl AnyValueContainer {
     /// Create a new AnyValueContainer containing the specified data.
-    pub fn new<T: AnyValueBounds>(value: T) -> Self {
+    pub fn new<T: AnyValue + 'static>(value: T) -> Self {
         #[cfg(feature = "sync_attributes")]
         return Self(std::sync::Arc::new(value));
         #[cfg(not(feature = "sync_attributes"))]
@@ -401,12 +401,12 @@ impl AnyValueContainer {
     ///
     /// # Safety
     /// The caller must ensure that the type of the inner value is `T`.
-    pub unsafe fn downcast_ref_unchecked<T: AnyValueBounds>(&self) -> &T {
+    pub unsafe fn downcast_ref_unchecked<T: Any>(&self) -> &T {
         unsafe { &*(self.0.as_ref() as *const _ as *const T) }
     }
 
     /// Returns a reference to the inner value.
-    pub fn downcast_ref<T: AnyValueBounds>(&self) -> Option<&T> {
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
         if self.0.our_typeid() == TypeId::of::<T>() {
             Some(unsafe { self.downcast_ref_unchecked() })
         } else {
@@ -415,7 +415,7 @@ impl AnyValueContainer {
     }
 
     /// Checks if the inner value is of type `T`.
-    pub fn is<T: AnyValueBounds>(&self) -> bool {
+    pub fn is<T: Any>(&self) -> bool {
         self.0.our_typeid() == TypeId::of::<T>()
     }
 }
@@ -480,20 +480,28 @@ impl<'a> PartialEq for AttributeValue<'a> {
     }
 }
 
-#[cfg(feature = "sync_attributes")]
-pub trait AnyValueBounds: Any + PartialEq + Sync + Send {}
-#[cfg(feature = "sync_attributes")]
-impl<T: Any + PartialEq + Send + Sync> AnyValueBounds for T {}
-#[cfg(not(feature = "sync_attributes"))]
-pub trait AnyValueBounds: Any + PartialEq {}
-#[cfg(not(feature = "sync_attributes"))]
-impl<T: Any + PartialEq> AnyValueBounds for T {}
-
+// Some renderers need attributes to be sync and send. The rest of the attributes are already sync and send, but there is no way to force Any values to be sync and send on the renderer side.
+// The sync_attributes flag restricts any valuse to be sync and send.
 #[doc(hidden)]
 #[cfg(feature = "sync_attributes")]
 pub trait AnyValue: Sync + Send {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
     fn our_typeid(&self) -> TypeId;
+}
+
+#[cfg(feature = "sync_attributes")]
+impl<T: Any + PartialEq + Send + Sync> AnyValue for T {
+    fn any_cmp(&self, other: &dyn AnyValue) -> bool {
+        if self.our_typeid() != other.our_typeid() {
+            return false;
+        }
+
+        self == unsafe { &*(other as *const _ as *const T) }
+    }
+
+    fn our_typeid(&self) -> TypeId {
+        self.type_id()
+    }
 }
 
 #[doc(hidden)]
@@ -503,7 +511,8 @@ pub trait AnyValue {
     fn our_typeid(&self) -> TypeId;
 }
 
-impl<T: AnyValueBounds> AnyValue for T {
+#[cfg(not(feature = "sync_attributes"))]
+impl<T: Any + PartialEq> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
         if self.our_typeid() != other.our_typeid() {
             return false;
