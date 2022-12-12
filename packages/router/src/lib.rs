@@ -15,6 +15,9 @@ mod contexts {
 pub mod hooks {
     mod use_router;
     pub use use_router::*;
+
+    mod use_route;
+    pub use use_route::*;
 }
 
 pub mod prelude {
