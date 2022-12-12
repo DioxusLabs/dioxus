@@ -8,7 +8,6 @@ use std::{
     cell::{Cell, RefCell},
     fmt::Arguments,
     future::Future,
-    rc::Rc,
 };
 
 pub type TemplateId = &'static str;
@@ -376,10 +375,11 @@ impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
 /// A boxed value that implements PartialEq and Any
 #[derive(Clone)]
 #[cfg(not(feature = "sync_attributes"))]
-pub struct AnyValueContainer(pub Rc<dyn AnyValue>);
+pub struct AnyValueContainer(pub std::rc::Rc<dyn AnyValue>);
 
 #[derive(Clone)]
 #[cfg(feature = "sync_attributes")]
+/// A boxed value that implements PartialEq, Any, Sync, and Send
 pub struct AnyValueContainer(pub std::sync::Arc<dyn AnyValue>);
 
 impl PartialEq for AnyValueContainer {
@@ -389,11 +389,12 @@ impl PartialEq for AnyValueContainer {
 }
 
 impl AnyValueContainer {
+    /// Create a new AnyValueContainer containing the specified data.
     pub fn new<T: AnyValueBounds>(value: T) -> Self {
         #[cfg(feature = "sync_attributes")]
         return Self(std::sync::Arc::new(value));
         #[cfg(not(feature = "sync_attributes"))]
-        return Self(Rc::new(value));
+        return Self(std::rc::Rc::new(value));
     }
 
     /// Returns a reference to the inner value without checking the type.
@@ -480,13 +481,24 @@ impl<'a> PartialEq for AttributeValue<'a> {
 }
 
 #[cfg(feature = "sync_attributes")]
-pub trait AnyValueBounds: Any + PartialEq + Sync {}
+pub trait AnyValueBounds: Any + PartialEq + Sync + Send {}
+#[cfg(feature = "sync_attributes")]
+impl<T: Any + PartialEq + Send + Sync> AnyValueBounds for T {}
 #[cfg(not(feature = "sync_attributes"))]
 pub trait AnyValueBounds: Any + PartialEq {}
+#[cfg(not(feature = "sync_attributes"))]
+impl<T: Any + PartialEq> AnyValueBounds for T {}
 
 #[doc(hidden)]
 #[cfg(feature = "sync_attributes")]
-pub trait AnyValue: Sync {
+pub trait AnyValue: Sync + Send {
+    fn any_cmp(&self, other: &dyn AnyValue) -> bool;
+    fn our_typeid(&self) -> TypeId;
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "sync_attributes"))]
+pub trait AnyValue {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
     fn our_typeid(&self) -> TypeId;
 }
@@ -503,13 +515,6 @@ impl<T: AnyValueBounds> AnyValue for T {
     fn our_typeid(&self) -> TypeId {
         self.type_id()
     }
-}
-
-#[doc(hidden)]
-#[cfg(not(feature = "sync_attributes"))]
-pub trait AnyValue {
-    fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-    fn our_typeid(&self) -> TypeId;
 }
 
 #[doc(hidden)]
