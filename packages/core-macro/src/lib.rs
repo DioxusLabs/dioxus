@@ -26,11 +26,6 @@ pub fn derive_typed_builder(input: proc_macro::TokenStream) -> proc_macro::Token
 }
 
 /// The rsx! macro makes it easy for developers to write jsx-style markup in their components.
-///
-/// ## Complete Reference Guide:
-/// ```ignore
-#[doc = include_str!("../../../examples/rsx_usage.rs")]
-/// ```
 #[proc_macro]
 pub fn rsx(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
@@ -42,11 +37,6 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 /// The render! macro makes it easy for developers to write jsx-style markup in their components.
 ///
 /// The render macro automatically renders rsx - making it unhygenic.
-///
-/// ## Complete Reference Guide:
-/// ```ignore
-#[doc = include_str!("../../../examples/rsx_usage.rs")]
-/// ```
 #[proc_macro]
 pub fn render(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {

@@ -287,7 +287,10 @@ impl InnerInputState {
 
         fn prepare_mouse_data(mouse_data: &MouseData, layout: &Layout) -> MouseData {
             let Point { x, y } = layout.location;
-            let node_origin = ClientPoint::new(x.into(), y.into());
+            let node_origin = ClientPoint::new(
+                layout_to_screen_space(x).into(),
+                layout_to_screen_space(y).into(),
+            );
 
             let new_client_coordinates = (mouse_data.client_coordinates() - node_origin)
                 .to_point()

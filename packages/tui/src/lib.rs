@@ -1,5 +1,6 @@
 use anyhow::Result;
 use crossterm::{
+    cursor::{MoveTo, RestorePosition, SavePosition, Show},
     event::{DisableMouseCapture, EnableMouseCapture, Event as TermEvent, KeyCode, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -28,11 +29,13 @@ mod focus;
 mod hooks;
 mod layout;
 mod node;
+pub mod prelude;
 pub mod query;
 mod render;
 mod style;
 mod style_attributes;
 mod widget;
+mod widgets;
 
 pub use config::*;
 pub use hooks::*;
@@ -41,6 +44,10 @@ pub(crate) use node::*;
 // the layout space has a multiplier of 10 to minimize rounding errors
 pub(crate) fn screen_to_layout_space(screen: u16) -> f32 {
     screen as f32 * 10.0
+}
+
+pub(crate) fn unit_to_layout_space(screen: f32) -> f32 {
+    screen * 10.0
 }
 
 pub(crate) fn layout_to_screen_space(layout: f32) -> f32 {
@@ -136,7 +143,13 @@ fn render_vdom(
             let mut terminal = (!cfg.headless).then(|| {
                 enable_raw_mode().unwrap();
                 let mut stdout = std::io::stdout();
-                execute!(stdout, EnterAlternateScreen, EnableMouseCapture).unwrap();
+                execute!(
+                    stdout,
+                    EnterAlternateScreen,
+                    EnableMouseCapture,
+                    MoveTo(0, 1000)
+                )
+                .unwrap();
                 let backend = CrosstermBackend::new(io::stdout());
                 Terminal::new(backend).unwrap()
             });
@@ -181,6 +194,7 @@ fn render_vdom(
                         taffy.compute_layout(root_node, size).unwrap();
                     }
                     if let Some(terminal) = &mut terminal {
+                        execute!(terminal.backend_mut(), SavePosition).unwrap();
                         terminal.draw(|frame| {
                             let rdom = rdom.borrow();
                             let mut taffy = taffy.lock().expect("taffy lock poisoned");
@@ -189,6 +203,7 @@ fn render_vdom(
                             let root = &rdom[NodeId(0)];
                             render::render_vnode(frame, &taffy, &rdom, root, cfg, Point::ZERO);
                         })?;
+                        execute!(terminal.backend_mut(), RestorePosition, Show).unwrap();
                     } else {
                         let rdom = rdom.borrow();
                         resize(
