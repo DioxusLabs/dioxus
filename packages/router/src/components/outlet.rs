@@ -108,8 +108,8 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     cx.render(match content {
         Some(content) => {
             let X = content.0;
-            rsx! { X { } }
+            rsx!(X {})
         }
-        None => rsx! { div { } },
+        None => rsx!(()),
     })
 }
