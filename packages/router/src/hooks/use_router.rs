@@ -5,6 +5,7 @@ use dioxus_router_core::{
     routes::{ContentAtom, Segment},
     Navigator, RouterService, RouterState, RoutingCallback,
 };
+use log::error;
 
 use crate::{
     contexts::router::RouterContext,
@@ -29,9 +30,9 @@ use crate::{
 /// state, see the [`use_route`](super::use_route) hook. For more information about the
 /// [`Navigator`], see its own documentation and the [`use_navigate`](super::use_navigate) hook.
 ///
-// # Panic
-// - When used within a component, that is nested inside another component calling [`use_router`],
-//   but only in debug builds.
+/// # Panic
+/// - When used within a component, that is nested inside another component calling [`use_router`],
+///   but only in debug builds.
 ///
 /// # Example
 /// ```rust,no_run
@@ -71,7 +72,14 @@ pub fn use_router<'a>(
     Navigator<ScopeId>,
 ) {
     let (service, state, sender) = cx.use_hook(|| {
-        // todo: ensure no router context is found
+        #[allow(unreachable_code, unused_variables)]
+        if let Some(outer) = cx.consume_context::<RouterContext>() {
+            let msg = "components using `use_router` should not be nested within each other";
+            error!("{msg}, inner will be inactive and transparent");
+            #[cfg(debug_assertions)]
+            panic!("{}", msg);
+            return (None, outer.state, outer.sender);
+        }
 
         let cfg = cfg();
         let content = content();
