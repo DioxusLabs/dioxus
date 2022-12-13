@@ -1,6 +1,9 @@
 pub mod components {
     pub(crate) mod default_errors;
 
+    mod history_buttons;
+    pub use history_buttons::*;
+
     mod link;
     pub use link::*;
 
