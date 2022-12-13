@@ -126,6 +126,11 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                     if let Some(service) = svc {
                         log::trace!("Pushing route to {}", to);
                         service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
+
+                        #[cfg(feature = "web")]
+                        {
+                            web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
+                        }
                     } else {
                         log::error!(
                             "Attempted to create a Link to {} outside of a Router context", cx.props
