@@ -1,16 +1,15 @@
 use async_rwlock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::ScopeState};
 use dioxus_router_core::RouterState;
-use log::error;
 
-use crate::utils::use_router_internal::use_router_internal;
+use crate::{RouterError, utils::use_router_internal::use_router_internal};
 
 /// A hook that provides access to information about the current routing location.
 ///
 /// # Return values
-/// - [`None`], when the calling component is not nested within another component calling the
-///   [`use_router`] hook.
-/// - Otherwise [`Some`].
+/// - [`RouterError::NotInsideRouter`], when the calling component is not nested within another
+///   component calling the [`use_router`] hook.
+/// - Otherwise [`Ok`].
 ///
 /// # Important usage information
 /// Make sure to [`drop`] the returned [`RwLockReadGuard`] when done rendering. Otherwise the router
@@ -42,7 +41,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// }
 ///
 /// fn Content(cx: Scope) -> Element {
-///     let state = use_route(&cx).unwrap();
+///     let state = use_route(&cx)?;
 ///     let path = state.path.clone();
 ///
 ///     render! {
@@ -58,20 +57,20 @@ use crate::utils::use_router_internal::use_router_internal;
 ///
 /// [`use_router`]: super::use_router
 #[must_use]
-pub fn use_route<'a>(cx: &'a ScopeState) -> Option<RwLockReadGuard<'a, RouterState<Component>>> {
+pub fn use_route<'a>(
+    cx: &'a ScopeState,
+) -> Result<RwLockReadGuard<'a, RouterState<Component>>, RouterError> {
     match use_router_internal(cx) {
         Some(r) => loop {
             if let Some(s) = r.state.try_read() {
-                break Some(s);
+                break Ok(s);
             }
         },
+        #[allow(unreachable_code)]
         None => {
-            let msg = "`use_route` must have access to a parent router";
-            error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
-            panic!("{}", msg);
-            #[cfg(not(debug_assertions))]
-            None
+            panic!("`use_route` must have access to a parent router");
+            Err(RouterError::NotInsideRouter)
         }
     }
 }

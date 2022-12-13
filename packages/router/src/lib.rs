@@ -15,6 +15,10 @@ mod contexts {
     pub(crate) mod router;
 }
 
+#[forbid(missing_docs)]
+mod error;
+pub use error::RouterError;
+
 pub mod history {
     pub use dioxus_router_core::history::*;
 }

@@ -1,15 +1,14 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 use dioxus_router_core::Navigator;
-use log::error;
 
-use crate::utils::use_router_internal::use_router_internal;
+use crate::{RouterError, utils::use_router_internal::use_router_internal};
 
 /// A hook that allows for programmatic navigation.
 ///
 /// # Return values
-/// - [`None`], when the calling component is not nested within another component calling the
-///   [`use_router`] hook.
-/// - Otherwise [`Some`].
+/// - [`RouterError::NotInsideRouter`], when the calling component is not nested within another
+///   component calling the [`use_router`] hook.
+/// - Otherwise [`Ok`].
 ///
 /// # Panic
 /// - When the calling component is not nested within another component calling the [`use_router`]
@@ -36,7 +35,7 @@ use crate::utils::use_router_internal::use_router_internal;
 /// }
 ///
 /// fn Redirect(cx: Scope) -> Element {
-///     let nav = use_navigate(&cx).unwrap();
+///     let nav = use_navigate(&cx)?;
 ///     nav.push("/content");
 ///     render! { () }
 /// }
@@ -58,16 +57,14 @@ use crate::utils::use_router_internal::use_router_internal;
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Content</p>");
 /// ```
 #[must_use]
-pub fn use_navigate(cx: &ScopeState) -> Option<Navigator<ScopeId>> {
+pub fn use_navigate(cx: &ScopeState) -> Result<Navigator<ScopeId>, RouterError> {
     match use_router_internal(cx) {
-        Some(r) => Some(r.sender.clone().into()),
+        Some(r) => Ok(r.sender.clone().into()),
+        #[allow(unreachable_code)]
         None => {
-            let msg = "`use_navigate` must have access to a parent router";
-            error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
-            panic!("{}", msg);
-            #[cfg(not(debug_assertions))]
-            None
+            panic!("`use_navigate` must have access to a parent router");
+            Err(RouterError::NotInsideRouter)
         }
     }
 }
