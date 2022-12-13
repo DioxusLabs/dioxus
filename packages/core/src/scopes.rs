@@ -238,7 +238,6 @@ impl<'src> ScopeState {
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
         Arc::new(move |id| {
-            println!("Scheduling update for {:?}", id);
             chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
         })
     }

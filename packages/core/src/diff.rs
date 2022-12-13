@@ -228,7 +228,6 @@ impl<'b> VirtualDom {
         self.run_scope(scope_id);
         self.diff_scope(scope_id);
 
-        println!("diffed component scope {:?}", scope_id);
         self.dirty_scopes.remove(&DirtyScope {
             height: self.scopes[scope_id.0].height,
             id: scope_id,
@@ -273,14 +272,13 @@ impl<'b> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        self.replace(left, right)
-        // match matching_components(left, right) {
-        //     None => self.replace(left, right),
-        //     Some(components) => components
-        //         .into_iter()
-        //         .enumerate()
-        //         .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
-        // }
+        match matching_components(left, right) {
+            None => self.replace(left, right),
+            Some(components) => components
+                .into_iter()
+                .enumerate()
+                .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
+        }
     }
 
     /// Diff the two text nodes
