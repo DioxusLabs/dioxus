@@ -45,13 +45,13 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         router_root.register_total_route(route_context.total_route, cx.scope_id());
     });
 
-    log::trace!("Checking Route: {:?}", cx.props.to);
+    println!("Checking Route: {:?}", cx.props.to);
 
     if router_root.should_render(cx.scope_id()) {
-        log::trace!("Route should render: {:?}", cx.scope_id());
+        println!("Route should render: {:?}", cx.scope_id());
         cx.render(rsx!(&cx.props.children))
     } else {
-        log::trace!("Route should *not* render: {:?}", cx.scope_id());
+        println!("Route should *not* render: {:?}", cx.scope_id());
         cx.render(rsx!(()))
     }
 }

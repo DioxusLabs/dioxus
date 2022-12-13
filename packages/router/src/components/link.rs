@@ -120,8 +120,11 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             prevent_default: "{prevent_default}",
             target: format_args!("{}", if * new_tab { "_blank" } else { "" }),
             onclick: move |_| {
+                log::trace!("Clicked link to {}", to);
+
                 if !outerlink {
                     if let Some(service) = svc {
+                        log::trace!("Pushing route to {}", to);
                         service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
                     } else {
                         log::error!(

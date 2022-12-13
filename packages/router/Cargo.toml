@@ -36,6 +36,7 @@ thiserror = "1.0.30"
 futures-util = "0.3.21"
 serde = { version = "1", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
+simple_logger = "4.0.0"
 
 [features]
 default = ["query"]
@@ -50,6 +51,7 @@ wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
 dioxus-web = { path = "../web" }
+dioxus-desktop = { path = "../desktop" }
 
 [target.wasm32-unknown-unknown.dev-dependencies]
 dioxus-router = { path = ".", features = ["web"] }

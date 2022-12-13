@@ -280,6 +280,9 @@ impl VirtualDom {
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
         let height = self.scopes[id.0].height;
+
+        println!("marking scope {} dirty with height {}", id.0, height);
+
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
 
@@ -516,6 +519,9 @@ impl VirtualDom {
     pub async fn render_with_deadline(&mut self, deadline: impl Future<Output = ()>) -> Mutations {
         pin_mut!(deadline);
 
+        self.process_events();
+        println!("rendering with dirty scopes {:#?}", self.dirty_scopes);
+
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
@@ -541,6 +547,8 @@ impl VirtualDom {
             // We choose not to poll the deadline since we complete pretty quickly anyways
             if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
                 self.dirty_scopes.remove(&dirty);
+
+                println!("diffing scope {:?}", dirty);
 
                 // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
                 if self.is_scope_suspended(dirty.id) {
