@@ -1,3 +1,5 @@
+/// Components interacting with the router.
+#[deny(missing_docs)]
 pub mod components {
     pub(crate) mod default_errors;
 
