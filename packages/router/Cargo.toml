@@ -28,3 +28,4 @@ serde = ["dioxus-router-core/serde"]
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
 dioxus-desktop = { path = "../desktop" }
+dioxus-ssr = { path = "../ssr" }

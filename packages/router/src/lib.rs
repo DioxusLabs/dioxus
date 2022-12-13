@@ -15,6 +15,12 @@ mod contexts {
     pub(crate) mod router;
 }
 
+pub mod history {
+    pub use dioxus_router_core::history::*;
+}
+
+/// Hooks for interacting with the router in components.
+#[forbid(missing_docs)]
 pub mod hooks {
     mod use_navigate;
     pub use use_navigate::*;

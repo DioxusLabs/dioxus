@@ -5,6 +5,58 @@ use log::error;
 
 use crate::utils::use_router_internal::use_router_internal;
 
+/// A hook that provides access to information about the current routing location.
+///
+/// # Return values
+/// - [`None`], when the calling component is not nested within another component calling the
+///   [`use_router`] hook.
+/// - Otherwise [`Some`].
+///
+/// # Important usage information
+/// Make sure to [`drop`] the returned [`RwLockReadGuard`] when done rendering. Otherwise the router
+/// will be frozen.
+///
+/// # Panic
+/// - When the calling component is not nested within another component calling the [`use_router`]
+///   hook, but only in debug builds.
+///
+/// # Example
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # use dioxus_router::{history::*, prelude::*};
+/// fn App(cx: Scope) -> Element {
+///     use_router(
+///         &cx,
+///         &|| RouterConfiguration {
+///             synchronous: true, // asynchronicity not needed for doc test
+///             history: Box::new(MemoryHistory::with_initial_path("/some/path").unwrap()),
+///             ..Default::default()
+///         },
+///         &|| Segment::empty()
+///     );
+///
+///     render! {
+///         h1 { "App" }
+///         Content { }
+///     }
+/// }
+///
+/// fn Content(cx: Scope) -> Element {
+///     let state = use_route(&cx).unwrap();
+///     let path = state.path.clone();
+///
+///     render! {
+///         h2 { "Current Path" }
+///         p { "{path}" }
+///     }
+/// }
+/// #
+/// # let mut vdom = VirtualDom::new(App);
+/// # let _ = vdom.rebuild();
+/// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/some/path</p>")
+/// ```
+///
+/// [`use_router`]: super::use_router
 #[must_use]
 pub fn use_route<'a>(cx: &'a ScopeState) -> Option<RwLockReadGuard<'a, RouterState<Component>>> {
     match use_router_internal(cx) {
