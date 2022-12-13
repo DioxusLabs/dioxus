@@ -1,5 +1,8 @@
+#![doc = include_str!("../README.md")]
+// cannot use forbid, because props derive macro generates #[allow(missing_docs)]
+#![deny(missing_docs)]
+
 /// Components interacting with the router.
-#[deny(missing_docs)]
 pub mod components {
     pub(crate) mod default_errors;
 
@@ -17,16 +20,12 @@ mod contexts {
     pub(crate) mod router;
 }
 
-#[forbid(missing_docs)]
 mod error;
 pub use error::RouterError;
 
-pub mod history {
-    pub use dioxus_router_core::history::*;
-}
+pub use dioxus_router_core::history;
 
 /// Hooks for interacting with the router in components.
-#[forbid(missing_docs)]
 pub mod hooks {
     mod use_navigate;
     pub use use_navigate::*;
@@ -39,7 +38,6 @@ pub mod hooks {
 }
 
 /// A collection of useful items most applications might need.
-#[forbid(missing_docs)]
 pub mod prelude {
     pub use dioxus_router_core::prelude::*;
 

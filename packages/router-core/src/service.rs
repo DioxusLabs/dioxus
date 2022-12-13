@@ -111,7 +111,7 @@ where
     ///
     /// # Returns
     /// 1. The [`RouterService`].
-    /// 2. A [`Sender`] to send [`RouterMessage`]s to the [`RouterService`].
+    /// 2. An [`UnboundedSender`] to send [`RouterMessage`]s to the [`RouterService`].
     /// 3. Access to the [`RouterState`]. **DO NOT WRITE TO THIS!!!** Seriously, **READ ONLY!!!**
     #[allow(clippy::type_complexity)]
     pub fn new(

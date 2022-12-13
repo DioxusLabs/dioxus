@@ -27,15 +27,16 @@ use crate::{
 ///
 /// # Return values
 /// This hook returns the current router state and a navigator. For more information about the
-/// state, see the [`use_route`](super::use_route) hook. For more information about the
-/// [`Navigator`], see its own documentation and the [`use_navigate`](super::use_navigate) hook.
+/// state, see the [`use_route`](crate::hooks::use_route) hook. For more information about the
+/// [`Navigator`], see its own documentation and the [`use_navigate`](crate::hooks::use_navigate)
+/// hook.
 ///
 /// # Panic
 /// - When used within a component, that is nested inside another component calling [`use_router`],
 ///   but only in debug builds.
 ///
 /// # Example
-/// ```rust,no_run
+/// ```rust
 /// # use dioxus::prelude::*;
 /// # use dioxus_router::prelude::*;
 /// fn App(cx: Scope) -> Element {
@@ -129,7 +130,7 @@ pub fn use_router<'a>(
 /// Global configuration options for the router.
 ///
 /// This implements [`Default`], so you can use it like this:
-/// ```rust
+/// ```rust,no_run
 /// # use dioxus_router::prelude::RouterConfiguration;
 /// let cfg = RouterConfiguration {
 ///     synchronous: false,

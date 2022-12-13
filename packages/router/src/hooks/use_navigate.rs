@@ -10,6 +10,8 @@ use crate::{RouterError, utils::use_router_internal::use_router_internal};
 ///   component calling the [`use_router`] hook.
 /// - Otherwise [`Ok`].
 ///
+/// [`use_router`]: crate::hooks::use_router
+///
 /// # Panic
 /// - When the calling component is not nested within another component calling the [`use_router`]
 ///   hook, but only in debug builds.

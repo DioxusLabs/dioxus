@@ -51,15 +51,63 @@
 
 Dioxus Router is a first-party Router for all your Dioxus Apps. It provides a React-Router style interface that works anywhere: across the browser, SSR, and natively.
 
-```rust, ignore
-fn app() {
-    cx.render(rsx! {
-        Router {
-            Route { to: "/", Component {} },
-            Route { to: "/blog", Blog {} },
-            Route { to: "/blog/:id", BlogPost {} },
+```rust ,no_run
+use dioxus::prelude::*;
+use dioxus_router::prelude::*;
+
+fn App(cx: Scope) -> Element {
+    use_router(
+        &cx,
+        &|| Default::default(),
+        &|| Segment::content(comp(Index)).fixed(
+            "blog",
+            Route::content(comp(Blog)).nested(
+                Segment::content(comp(BlogList))
+                    .catch_all((comp(BlogPost), BlogPost))
+            )
+        )
+    );
+
+    render! {
+        Outlet { }
+    }
+}
+
+fn Index(cx: Scope) -> Element {
+    render! {
+        h1 { "Index" }
+        Link {
+            target: "/blog",
+            "Go to the blog"
         }
-    })
+    }
+}
+
+fn Blog(cx: Scope) -> Element {
+    render! {
+        h1 { "Blog" }
+        Outlet { }
+    }
+}
+
+fn BlogList(cx: Scope) -> Element {
+    render! {
+        h2 { "List of blog posts" }
+        Link {
+            target: "/blog/1",
+            "Blog post 1"
+        }
+        Link {
+            target: "/blog/1",
+            "Blog post 2"
+        }
+    }
+}
+
+fn BlogPost(cx: Scope) -> Element {
+    render! {
+        h2 { "Blog Post" }
+    }
 }
 ```
 

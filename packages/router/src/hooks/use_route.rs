@@ -2,7 +2,7 @@ use async_rwlock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::ScopeState};
 use dioxus_router_core::RouterState;
 
-use crate::{RouterError, utils::use_router_internal::use_router_internal};
+use crate::{utils::use_router_internal::use_router_internal, RouterError};
 
 /// A hook that provides access to information about the current routing location.
 ///
@@ -55,7 +55,7 @@ use crate::{RouterError, utils::use_router_internal::use_router_internal};
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><h2>Current Path</h2><p>/some/path</p>")
 /// ```
 ///
-/// [`use_router`]: super::use_router
+/// [`use_router`]: crate::hooks::use_router
 #[must_use]
 pub fn use_route<'a>(
     cx: &'a ScopeState,
