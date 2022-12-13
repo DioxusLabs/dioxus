@@ -62,7 +62,7 @@ fn contexts_drop() {
     _ = dom.render_immediate();
 }
 
-#[test]
+#[tokio::test]
 fn tasks_drop() {
     fn app(cx: Scope) -> Element {
         cx.spawn(async {
