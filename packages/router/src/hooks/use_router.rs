@@ -192,7 +192,7 @@ impl Default for RouterConfiguration {
             failure_external_navigation: comp(FailureExternalNavigation),
             failure_named_navigation: comp(FailureNamedNavigation),
             failure_redirection_limit: comp(FailureRedirectionLimit),
-            history: Box::new(MemoryHistory::default()),
+            history: Box::<MemoryHistory>::default(),
             on_update: None,
             synchronous: false,
         }

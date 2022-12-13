@@ -56,10 +56,7 @@ use crate::{utils::use_router_internal::use_router_internal, RouterError};
 /// ```
 ///
 /// [`use_router`]: crate::hooks::use_router
-#[must_use]
-pub fn use_route<'a>(
-    cx: &'a ScopeState,
-) -> Result<RwLockReadGuard<'a, RouterState<Component>>, RouterError> {
+pub fn use_route(cx: &ScopeState) -> Result<RwLockReadGuard<RouterState<Component>>, RouterError> {
     match use_router_internal(cx) {
         Some(r) => loop {
             if let Some(s) = r.state.try_read() {

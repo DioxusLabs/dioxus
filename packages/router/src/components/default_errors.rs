@@ -4,7 +4,7 @@ use dioxus_router_core::prelude::{named, FailureExternalNavigation as FENName, R
 
 #[allow(non_snake_case)]
 pub fn FailureExternalNavigation(cx: Scope) -> Element {
-    let state = use_route(&cx).expect(
+    let state = use_route(cx).expect(
         "`FailureExternalNavigation` can only be mounted by the router itself, \
             since it is not exposed",
     );

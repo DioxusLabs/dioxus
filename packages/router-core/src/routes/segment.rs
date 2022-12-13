@@ -189,7 +189,7 @@ impl<T: Clone> Segment<T> {
     pub fn gen_sitemap(&self) -> Vec<String> {
         let mut res = Vec::new();
         res.push(String::from("/"));
-        gen_sitemap(&self, "", &mut res);
+        gen_sitemap(self, "", &mut res);
         res
     }
 
@@ -213,7 +213,7 @@ impl<T: Clone> Segment<T> {
     pub fn gen_parameter_sitemap(&self, parameters: &BTreeMap<Name, Vec<String>>) -> Vec<String> {
         let mut res = Vec::new();
         res.push(String::from("/"));
-        gen_parameter_sitemap(&self, parameters, "", &mut res);
+        gen_parameter_sitemap(self, parameters, "", &mut res);
         res
     }
 }

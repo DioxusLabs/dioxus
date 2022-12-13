@@ -27,7 +27,7 @@ pub fn resolve_target(
                                 if !s.starts_with('?') {
                                     p += "?";
                                 }
-                                p += &s;
+                                p += s;
                             }
                             #[cfg(feature = "serde")]
                             Query::List(l) => {
@@ -44,8 +44,8 @@ pub fn resolve_target(
 
                     p
                 })
-                .map(|p| Either::Left(p))
-                .unwrap_or(Either::Right(name.clone())),
+                .map(Either::Left)
+                .unwrap_or_else(|| Either::Right(name.clone())),
         ),
         NavigationTarget::External(e) => Either::Right(e.to_string()),
     }

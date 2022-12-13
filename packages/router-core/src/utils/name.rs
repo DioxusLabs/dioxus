@@ -13,10 +13,10 @@ pub fn resolve_name(
     parameters: &HashMap<Name, String>,
 ) -> Option<String> {
     debug_assert!(
-        map.contains_key(&name),
+        map.contains_key(name),
         "named navigation to unknown name: {name}"
     );
-    let target = map.get(&name)?;
+    let target = map.get(name)?;
 
     let mut res = String::new();
     for t in target {

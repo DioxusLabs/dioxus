@@ -146,7 +146,7 @@ where
         (
             Self {
                 history,
-                names: names,
+                names,
                 routes,
                 receiver,
                 state: Arc::clone(&state),
@@ -444,7 +444,7 @@ where
                     false
                 } else {
                     (self.subscriber_update)(id.as_ref().clone());
-                    previous.push(id.clone());
+                    previous.push(id);
                     true
                 }
             } else {

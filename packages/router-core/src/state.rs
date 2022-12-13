@@ -65,7 +65,7 @@ impl<T: Clone> RouterState<T> {
 
     /// Get the `href` for the `target`.
     pub fn href(&self, target: &NavigationTarget) -> String {
-        match resolve_target(&self.name_map, &target) {
+        match resolve_target(&self.name_map, target) {
             Either::Left(Either::Left(i)) => match &self.prefix {
                 Some(p) => format!("{p}{i}"),
                 None => i,

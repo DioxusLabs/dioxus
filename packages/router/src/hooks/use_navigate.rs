@@ -58,7 +58,6 @@ use crate::{RouterError, utils::use_router_internal::use_router_internal};
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Content</p>");
 /// ```
-#[must_use]
 pub fn use_navigate(cx: &ScopeState) -> Result<Navigator<ScopeId>, RouterError> {
     match use_router_internal(cx) {
         Some(r) => Ok(r.sender.clone().into()),

@@ -114,7 +114,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal(&cx) {
+    let router = match use_router_internal(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {

@@ -15,7 +15,7 @@ use crate::contexts::router::RouterContext;
 /// - Otherwise [`Some`].
 ///
 /// [`use_router`]: crate::hooks::use_router
-pub(crate) fn use_router_internal<'a>(cx: &'a ScopeState) -> &'a mut Option<RouterContext> {
+pub(crate) fn use_router_internal(cx: &ScopeState) -> &mut Option<RouterContext> {
     let id = cx.use_hook(|| Arc::new(cx.scope_id()));
 
     cx.use_hook(|| {

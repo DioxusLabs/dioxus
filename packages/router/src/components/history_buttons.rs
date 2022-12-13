@@ -56,7 +56,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal(&cx) {
+    let router = match use_router_internal(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
@@ -131,7 +131,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
     let HistoryButtonProps { children } = cx.props;
 
     // hook up to router
-    let router = match use_router_internal(&cx) {
+    let router = match use_router_internal(cx) {
         Some(r) => r,
         #[allow(unreachable_code)]
         None => {
