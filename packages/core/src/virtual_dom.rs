@@ -520,7 +520,6 @@ impl VirtualDom {
         pin_mut!(deadline);
 
         self.process_events();
-        println!("rendering with dirty scopes {:#?}", self.dirty_scopes);
 
         loop {
             // first, unload any complete suspense trees
@@ -547,8 +546,6 @@ impl VirtualDom {
             // We choose not to poll the deadline since we complete pretty quickly anyways
             if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
                 self.dirty_scopes.remove(&dirty);
-
-                println!("diffing scope {:?}", dirty);
 
                 // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
                 if self.is_scope_suspended(dirty.id) {

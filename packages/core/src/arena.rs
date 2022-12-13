@@ -108,9 +108,10 @@ impl VirtualDom {
         });
 
         for root in node.root_ids {
-            let id = root.get().unwrap();
-            if id.0 != 0 {
-                self.try_reclaim(id);
+            if let Some(id) = root.get() {
+                if id.0 != 0 {
+                    self.try_reclaim(id);
+                }
             }
         }
     }
@@ -131,7 +132,9 @@ impl VirtualDom {
         node.dynamic_nodes.iter().for_each(|child| match child {
             // Only descend if the props are borrowed
             DynamicNode::Component(c) if !c.static_props => {
-                self.ensure_drop_safety(c.scope.get().unwrap());
+                if let Some(scope) = c.scope.get() {
+                    self.ensure_drop_safety(scope);
+                }
                 c.props.take();
             }
 

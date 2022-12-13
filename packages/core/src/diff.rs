@@ -113,7 +113,7 @@ impl<'b> VirtualDom {
         idx: usize,
     ) {
         match (left_node, right_node) {
-            (Text(left), Text(right)) => self.diff_vtext(left, right),
+            (Text(left), Text(right)) => self.diff_vtext(left, right, node),
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right),
             (Placeholder(left), Placeholder(right)) => right.id.set(left.id.get()),
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, node, idx),
@@ -174,6 +174,10 @@ impl<'b> VirtualDom {
         right_template: &'b VNode<'b>,
         idx: usize,
     ) {
+        if std::ptr::eq(left, right) {
+            return;
+        }
+
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
             let created = self.create_component_node(right_template, right, idx);
@@ -193,7 +197,16 @@ impl<'b> VirtualDom {
         }
 
         // Make sure the new vcomponent has the right scopeid associated to it
-        let scope_id = left.scope.get().unwrap();
+        let Some(scope_id) = left.scope.get() else {
+            return;
+        };
+        // let scope_id = left.scope.get().unwrap_or_else(|| {
+        //     panic!(
+        //         "A component should always have a scope associated to it. {:?}\n {:#?}",
+        //         right.name,
+        //         std::backtrace::Backtrace::force_capture()
+        //     )
+        // });
 
         right.scope.set(Some(scope_id));
 
@@ -260,21 +273,26 @@ impl<'b> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        match matching_components(left, right) {
-            None => self.replace(left, right),
-            Some(components) => components
-                .into_iter()
-                .enumerate()
-                .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
-        }
+        self.replace(left, right)
+        // match matching_components(left, right) {
+        //     None => self.replace(left, right),
+        //     Some(components) => components
+        //         .into_iter()
+        //         .enumerate()
+        //         .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
+        // }
     }
 
     /// Diff the two text nodes
     ///
     /// This just moves the ID of the old node over to the new node, and then sets the text of the new node if it's
     /// different.
-    fn diff_vtext(&mut self, left: &'b VText<'b>, right: &'b VText<'b>) {
-        let id = left.id.get().unwrap();
+    fn diff_vtext(&mut self, left: &'b VText<'b>, right: &'b VText<'b>, node: &'b VNode<'b>) {
+        let id = left
+            .id
+            .get()
+            .unwrap_or_else(|| self.next_element(node, &[0]));
+
         right.id.set(Some(id));
         if left.value != right.value {
             let value = unsafe { std::mem::transmute(right.value) };
@@ -327,11 +345,12 @@ impl<'b> VirtualDom {
 
             match dyn_node {
                 Component(comp) => {
-                    let scope = comp.scope.take().unwrap();
-                    match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                        RenderReturn::Sync(Ok(t)) => self.clean_up_node(t),
-                        _ => todo!("cannot handle nonstandard nodes"),
-                    };
+                    if let Some(scope) = comp.scope.take() {
+                        match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
+                            RenderReturn::Sync(Ok(t)) => self.clean_up_node(t),
+                            _ => todo!("cannot handle nonstandard nodes"),
+                        };
+                    }
                 }
                 Text(t) => {
                     if let Some(id) = t.id.take() {
