@@ -36,14 +36,19 @@ pub mod hooks {
     pub use use_route::*;
 }
 
+/// A collection of useful items most applications might need.
+#[forbid(missing_docs)]
 pub mod prelude {
     pub use dioxus_router_core::prelude::*;
 
     pub use crate::components::*;
     pub use crate::hooks::*;
 
-    use dioxus::core::Component;
-    pub fn comp(component: Component) -> ContentAtom<Component> {
+    /// Wrap a [`Component`](dioxus::core::Component) inside a [`ContentAtom`].
+    ///
+    /// This is purely a convenience function.
+    #[must_use]
+    pub fn comp(component: dioxus::core::Component) -> ContentAtom<dioxus::core::Component> {
         ContentAtom(component)
     }
 }
