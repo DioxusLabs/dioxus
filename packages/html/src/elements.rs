@@ -1,6 +1,6 @@
 #![allow(non_upper_case_globals)]
-
 use crate::{GlobalAttributes, SvgAttributes};
+use dioxus_rsx::HotReloadingContext;
 
 pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
@@ -41,6 +41,29 @@ macro_rules! impl_attribute {
     };
 }
 
+macro_rules! impl_attribute_match {
+    (
+        $(#[$attr_method:meta])*
+        $fil:ident: $vil:ident (DEFAULT),
+    ) => {
+        stringify!($fil) => Some((stringify!($fil), None))
+    };
+
+    (
+        $(#[$attr_method:meta])*
+        $fil:ident: $vil:ident ($name:literal),
+    ) => {
+        stringify!($fil) => Some(($name, None))
+    };
+
+    (
+        $(#[$attr_method:meta])*
+        $fil:ident: $vil:ident (in $ns:ident),
+    ) => {
+        stringify!($fil) => Some((stringify!(fil), Some(stringify!(ns))))
+    };
+}
+
 macro_rules! impl_element {
     (
         $(#[$attr:meta])*
@@ -54,7 +77,6 @@ macro_rules! impl_element {
         #[allow(non_camel_case_types)]
         $(#[$attr])*
         pub struct $name;
-
 
         impl $name {
             pub const TAG_NAME: &'static str = stringify!($name);
@@ -100,6 +122,78 @@ macro_rules! impl_element {
     }
 }
 
+macro_rules! impl_element_match {
+    (
+        $(#[$attr:meta])*
+        $name:ident None {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        if element == stringify!($name) {
+            return Some((stringify!($name), None));
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $name:ident $namespace:ident {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        if element == stringify!($name) {
+            return Some((stringify!($name), Some(stringify!($namespace))));
+        }
+    };
+}
+
+macro_rules! impl_element_match_attributes {
+    (
+        $(#[$attr:meta])*
+        $name:ident None {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        stringify!($name) => match attr{
+            $(
+                impl_attribute_match!(
+                    $(#[$attr_method])*
+                    $fil: $vil ($extra),
+                ),
+            )*
+            _ => None,
+        }
+    };
+
+    (
+        $(#[$attr:meta])*
+        $name:ident $namespace:tt {
+            $(
+                $(#[$attr_method:meta])*
+                $fil:ident: $vil:ident $extra:tt,
+            )*
+        }
+    ) => {
+        stringify!($name) => match attr{
+            $(
+                impl_attribute_match!(
+                    $(#[$attr_method])*
+                    $fil: $vil in $namespace $extra
+                ),
+            )*
+            _ => None,
+        }
+    }
+}
+
 macro_rules! builder_constructors {
     (
         $(
@@ -111,18 +205,54 @@ macro_rules! builder_constructors {
                 )*
             };
          )*
-    ) => {
-        $(
-            impl_element!(
-                $(#[$attr])*
-                $name $namespace {
-                    $(
-                        $(#[$attr_method])*
-                        $fil: $vil $extra,
-                    )*
+        ) => {
+        pub struct Html;
+
+        impl HotReloadingContext for Html {
+            fn map_attribute(element: &str, attr: &str) -> Option<(&'static str, Option<&'static str>)> {
+                match element {
+                    // $(
+                    //     impl_element_match_attributes!(
+                    //         $(#[$attr])*
+                    //         $name $namespace {
+                    //             $(
+                    //                 $(#[$attr_method])*
+                    //                 $fil: $vil $extra,
+                    //             )*
+                    //         }
+                    //     )
+                    // )*
+                    _ => None
                 }
-            );
-        )*
+            }
+
+            fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
+                $(
+                    impl_element_match!(
+                        $(#[$attr])*
+                        $name $namespace {
+                            $(
+                                $(#[$attr_method])*
+                                $fil: $vil $extra,
+                            )*
+                        }
+                    );
+                )*
+                unreachable!()
+            }
+        }
+
+        // $(
+        //     impl_element!(
+        //         $(#[$attr])*
+        //         $name $namespace {
+        //             $(
+        //                 $(#[$attr_method])*
+        //                 $fil: $vil $extra,
+        //             )*
+        //         }
+        //     );
+        // )*
     };
 }
 
