@@ -51,7 +51,9 @@ wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
 dioxus-web = { path = "../web" }
-dioxus-desktop = { path = "../desktop" }
+# dioxus-desktop = { path = "../desktop", optional = true }
+
+# not wasm
 
 [target.wasm32-unknown-unknown.dev-dependencies]
 dioxus-router = { path = ".", features = ["web"] }
