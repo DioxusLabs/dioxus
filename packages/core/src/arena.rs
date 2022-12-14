@@ -95,7 +95,11 @@ impl VirtualDom {
     fn drop_scope_inner(&mut self, node: &VNode) {
         node.clear_listeners();
         node.dynamic_nodes.iter().for_each(|node| match node {
-            DynamicNode::Component(c) => self.drop_scope(c.scope.get().unwrap()),
+            DynamicNode::Component(c) => {
+                if let Some(f) = c.scope.get() {
+                    self.drop_scope(f)
+                }
+            }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
