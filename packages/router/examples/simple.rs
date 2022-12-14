@@ -22,9 +22,9 @@ fn App(cx: Scope) -> Element {
     );
 
     render! {
-            h1 { "Simple Example App" }
-            Outlet { }
-            Link {
+        h1 { "Simple Example App" }
+        Outlet { }
+        Link {
             target: named::<RootIndex>(),
             "Go to root"
         }
