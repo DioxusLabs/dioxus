@@ -15,31 +15,40 @@ fn App(cx: Scope) -> Element {
             // history: Box::new(MemoryHistory::with_initial_path("/apple").unwrap()),
             ..Default::default()
         },
-        &|| Segment::content(comp(RootIndex)).fixed("apple", comp(Apple)),
+        &|| {
+            Segment::content(comp(Home))
+                .fixed("apple", comp(Apple))
+                .fixed("potato", Route::content(comp(Potato)).name::<PotatoName>())
+                .fixed("earth_apple", named::<PotatoName>())
+        },
     );
 
     render! {
-        h1 { "Simple Example App" }
-        nav {
+            h1 { "Simple Example App" }
+            Outlet { }
             Link {
-                target: named::<RootIndex>(),
-                "Go to root"
-            }
+            target: named::<RootIndex>(),
+            "Go to root"
         }
-        Outlet { }
     }
 }
 
-fn RootIndex(cx: Scope) -> Element {
+fn Home(cx: Scope) -> Element {
     render! {
         h2 { "Root Index" }
         ul {
-            li {
-                Link {
-                    target: "/apple",
-                    "Read about apples…"
-                }
-            }
+            li { Link {
+                target: "/apple",
+                "Read about apples…"
+            } }
+            li { Link {
+                target: named::<PotatoName>(),
+                "Read about potatoes…"
+            } }
+            li { Link {
+                target: "/earth_apple",
+                "Read about earth apples (literal translation of a german word for potato)…"
+            } }
         }
     }
 }
@@ -51,5 +60,13 @@ fn Apple(cx: Scope) -> Element {
             "An apple is a tasty fruit. It grows on trees and many varieties are either red or "
             "green."
         }
+    }
+}
+
+struct PotatoName;
+fn Potato(cx: Scope) -> Element {
+    render! {
+        h2 { "Potato" }
+        p { "The potato grows underground. There are many recipes involving potatoes." }
     }
 }
