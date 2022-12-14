@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: docs
     steps:
-      - uses: actions/checkout@v3
 
       # NOTE: Comment out when https://github.com/rust-lang/mdBook/pull/1306 is merged and released
       # - name: Setup mdBook
@@ -25,6 +24,7 @@ jobs:
       - name: Setup mdBook
         run: |
           cargo install mdbook --git https://github.com/Ruin0x11/mdBook.git --branch localization --rev e74fdb1
+      - uses: actions/checkout@v3
 
       - name: Build
         run: cd docs &&

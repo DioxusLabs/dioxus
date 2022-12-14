@@ -32,7 +32,6 @@ jobs:
     name: Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -41,6 +40,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
+      - uses: actions/checkout@v3
       - uses: actions-rs/cargo@v1
         with:
           command: check
@@ -51,7 +51,6 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -63,6 +62,7 @@ jobs:
       - uses: davidB/rust-cargo-make@v1
       - uses: browser-actions/setup-firefox@latest
       - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/checkout@v3
       - uses: actions-rs/cargo@v1
         with:
           command: make
@@ -73,7 +73,6 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -81,6 +80,7 @@ jobs:
           override: true
       - uses: Swatinem/rust-cache@v2
       - run: rustup component add rustfmt
+      - uses: actions/checkout@v3
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -91,7 +91,6 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
@@ -101,6 +100,7 @@ jobs:
       - run: sudo apt-get update
       - run: sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
       - run: rustup component add clippy
+      - uses: actions/checkout@v3
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
