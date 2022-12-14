@@ -2,7 +2,6 @@
 
 use dioxus::prelude::*;
 use dioxus_router::prelude::*;
-use dioxus_router_core::history::MemoryHistory;
 
 fn main() {
     dioxus_desktop::launch(App);
@@ -12,7 +11,6 @@ fn App(cx: Scope) -> Element {
     use_router(
         &cx,
         &|| RouterConfiguration {
-            // history: Box::new(MemoryHistory::with_initial_path("/apple").unwrap()),
             ..Default::default()
         },
         &|| {
