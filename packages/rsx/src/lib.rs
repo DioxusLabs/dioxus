@@ -147,7 +147,8 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 parent: None,
                 key: #key_tokens,
                 template: TEMPLATE,
-                root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([::dioxus::core::ElementId(0); #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
+                root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut _).as_slice_of_cells(),
+                // root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }

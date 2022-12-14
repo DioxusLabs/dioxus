@@ -46,7 +46,7 @@ pub struct VNode<'a> {
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
-    pub root_ids: &'a [Cell<ElementId>],
+    pub root_ids: &'a [Cell<Option<ElementId>>],
 
     /// The dynamic parts of the template
     pub dynamic_nodes: &'a [DynamicNode<'a>],
@@ -128,6 +128,18 @@ pub struct Template<'a> {
     pub attr_paths: &'a [&'a [u8]],
 }
 
+impl<'a> Template<'a> {
+    /// Is this template worth caching at all, since it's completely runtime?
+    ///
+    /// There's no point in saving templates that are completely dynamic, since they'll be recreated every time anyway.
+    pub fn is_completely_dynamic(&self) -> bool {
+        use TemplateNode::*;
+        self.roots
+            .iter()
+            .all(|root| matches!(root, Dynamic { .. } | DynamicText { .. }))
+    }
+}
+
 /// A statically known node in a layout.
 ///
 /// This can be created at compile time, saving the VirtualDom time when diffing the tree
@@ -201,7 +213,7 @@ pub enum DynamicNode<'a> {
     /// Used by suspense when a node isn't ready and by fragments that don't render anything
     ///
     /// In code, this is just an ElementId whose initial value is set to 0 upon creation
-    Placeholder(Cell<ElementId>),
+    Placeholder(VPlaceholder),
 
     /// A list of VNodes.
     ///
@@ -236,7 +248,7 @@ pub struct VComponent<'a> {
     /// It is possible that components get folded at comppile time, so these shouldn't be really used as a key
     pub render_fn: *const (),
 
-    pub(crate) props: Cell<Option<Box<dyn AnyProps<'a> + 'a>>>,
+    pub(crate) props: RefCell<Option<Box<dyn AnyProps<'a> + 'a>>>,
 }
 
 impl<'a> std::fmt::Debug for VComponent<'a> {
@@ -256,7 +268,14 @@ pub struct VText<'a> {
     pub value: &'a str,
 
     /// The ID of this node in the real DOM
-    pub id: Cell<ElementId>,
+    pub id: Cell<Option<ElementId>>,
+}
+
+/// A placeholder node, used by suspense and fragments
+#[derive(Debug, Default)]
+pub struct VPlaceholder {
+    /// The ID of this node in the real DOM
+    pub id: Cell<Option<ElementId>>,
 }
 
 /// An attribute of the TemplateNode, created at compile time

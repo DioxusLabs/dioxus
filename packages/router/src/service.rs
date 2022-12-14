@@ -180,6 +180,7 @@ impl RouterService {
         (self.regen_any_route)(self.router_id);
 
         for listener in self.onchange_listeners.borrow().iter() {
+            log::trace!("Regenerating scope {:?}", listener);
             (self.regen_any_route)(*listener);
         }
 

@@ -231,9 +231,6 @@ pub enum Mutation<'a> {
         name: &'a str,
 
         /// The ID of the node to attach the listener to.
-        scope: ScopeId,
-
-        /// The ID of the node to attach the listener to.
         id: ElementId,
     },
 

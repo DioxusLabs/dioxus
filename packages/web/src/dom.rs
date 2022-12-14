@@ -7,7 +7,7 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{Mutation, Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{ElementId, Mutation, Template, TemplateAttribute, TemplateNode};
 use dioxus_html::{event_bubbles, CompositionData, FormData};
 use dioxus_interpreter_js::{save_template, Channel};
 use futures_channel::mpsc;
@@ -25,8 +25,16 @@ pub struct WebsysDom {
     interpreter: Channel,
 }
 
+pub struct UiEvent {
+    pub name: String,
+    pub bubbles: bool,
+    pub element: ElementId,
+    pub data: Rc<dyn Any>,
+    pub event: Event,
+}
+
 impl WebsysDom {
-    pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<Event>) -> Self {
+    pub fn new(cfg: Config, event_channel: mpsc::UnboundedSender<UiEvent>) -> Self {
         // eventually, we just want to let the interpreter do all the work of decoding events into our event type
         // a match here in order to avoid some error during runtime browser test
         let document = load_document();
@@ -38,7 +46,28 @@ impl WebsysDom {
 
         let handler: Closure<dyn FnMut(&Event)> =
             Closure::wrap(Box::new(move |event: &web_sys::Event| {
-                let _ = event_channel.unbounded_send(event.clone());
+                let name = event.type_();
+                let element = walk_event_for_id(event);
+                let bubbles = dioxus_html::event_bubbles(name.as_str());
+                if let Some((element, target)) = element {
+                    if target
+                        .get_attribute("dioxus-prevent-default")
+                        .as_deref()
+                        .map(|f| f.trim_start_matches("on"))
+                        == Some(&name)
+                    {
+                        event.prevent_default();
+                    }
+
+                    let data = virtual_event_from_websys_event(event.clone(), target);
+                    let _ = event_channel.unbounded_send(UiEvent {
+                        name,
+                        bubbles,
+                        element,
+                        data,
+                        event: event.clone(),
+                    });
+                }
             }));
 
         dioxus_interpreter_js::initilize(root.unchecked_into(), handler.as_ref().unchecked_ref());
@@ -56,8 +85,6 @@ impl WebsysDom {
     }
 
     pub fn load_templates(&mut self, templates: &[Template]) {
-        log::debug!("Loading templates {:?}", templates);
-
         for template in templates {
             let mut roots = vec![];
 
@@ -309,4 +336,27 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         values,
         files: None,
     })
+}
+
+fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
+    use wasm_bindgen::JsCast;
+
+    let mut target = event
+        .target()
+        .expect("missing target")
+        .dyn_into::<web_sys::Element>()
+        .expect("not a valid element");
+
+    loop {
+        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
+            Some(Ok(id)) => return Some((ElementId(id), target)),
+            Some(Err(_)) => return None,
+
+            // walk the tree upwards until we actually find an event target
+            None => match target.parent_element() {
+                Some(parent) => target = parent,
+                None => return None,
+            },
+        }
+    }
 }
