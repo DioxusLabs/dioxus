@@ -237,7 +237,9 @@ impl<'src> ScopeState {
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
-        Arc::new(move |id| drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
+        Arc::new(move |id| {
+            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+        })
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -448,7 +450,7 @@ impl<'src> ScopeState {
             name: fn_name,
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
-            props: Cell::new(Some(extended)),
+            props: RefCell::new(Some(extended)),
             scope: Cell::new(None),
         })
     }
