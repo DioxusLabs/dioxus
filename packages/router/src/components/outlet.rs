@@ -90,8 +90,7 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
     let depth = cx.use_hook(|| {
         let mut context = cx.consume_context::<OutletData>().unwrap_or_default();
         let depth = depth
-            .or_else(|| context.depth(name))
-            .map(|d| d + 1)
+            .or_else(|| context.depth(name).map(|d| d + 1))
             .unwrap_or_default();
         context.set_depth(name, depth);
         cx.provide_context(context);
