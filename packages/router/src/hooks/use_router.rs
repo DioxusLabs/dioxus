@@ -188,16 +188,11 @@ pub struct RouterConfiguration {
 
 impl Default for RouterConfiguration {
     fn default() -> Self {
-        #[cfg(not(feature = "web"))]
-        let history = Box::<MemoryHistory>::default();
-        #[cfg(feature = "web")]
-        let history = Box::<crate::history::WebHistory>::default();
-
         Self {
             failure_external_navigation: comp(FailureExternalNavigation),
             failure_named_navigation: comp(FailureNamedNavigation),
             failure_redirection_limit: comp(FailureRedirectionLimit),
-            history: history,
+            history: Box::<MemoryHistory>::default(),
             on_update: None,
             synchronous: false,
         }

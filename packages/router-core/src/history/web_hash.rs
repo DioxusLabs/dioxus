@@ -1,10 +1,14 @@
-use gloo::{events::EventListener, utils::window};
+use std::sync::{Arc, Mutex};
+
+use gloo::{events::EventListener, render::AnimationFrame, utils::window};
 use log::error;
 use url::Url;
-use wasm_bindgen::JsValue;
-use web_sys::{History, Window};
+use web_sys::{History, ScrollRestoration, Window};
 
-use super::HistoryProvider;
+use super::{
+    web_scroll::{top_left, update_history, update_scroll},
+    HistoryProvider,
+};
 
 const INITIAL_URL: &str = "dioxus-router-core://initial_url.invalid/";
 
@@ -18,16 +22,50 @@ const INITIAL_URL: &str = "dioxus-router-core://initial_url.invalid/";
 ///
 /// [History API]: https://developer.mozilla.org/en-US/docs/Web/API/History_API
 pub struct WebHashHistory {
+    do_scroll_restoration: bool,
     history: History,
+    listener_navigation: Option<EventListener>,
+    #[allow(dead_code)]
+    listener_scroll: Option<EventListener>,
+    listener_animation_frame: Arc<Mutex<Option<AnimationFrame>>>,
     window: Window,
 }
 
-impl Default for WebHashHistory {
-    fn default() -> Self {
+impl WebHashHistory {
+    /// Create a new [`WebHashHistory`].
+    ///
+    /// If `do_scroll_restoration` is [`true`], [`WebHashHistory`] will take control of the history
+    /// state. It'll also set the browsers scroll restoration to `manual`.
+    pub fn new(do_scroll_restoration: bool) -> Self {
         let window = window();
+        let history = window.history().expect("`window` has access to `history`");
+
+        history
+            .set_scroll_restoration(ScrollRestoration::Manual)
+            .expect("`history` can set scroll restoration");
+
+        let listener_scroll = match do_scroll_restoration {
+            true => {
+                history
+                    .set_scroll_restoration(ScrollRestoration::Manual)
+                    .expect("`history` can set scroll restoration");
+                let w = window.clone();
+                let h = history.clone();
+                let document = w.document().expect("`window` has access to `document`");
+
+                Some(EventListener::new(&document, "scroll", move |_| {
+                    update_history(&w, &h);
+                }))
+            }
+            false => None,
+        };
 
         Self {
-            history: window.history().expect("window has history"),
+            do_scroll_restoration,
+            history,
+            listener_navigation: None,
+            listener_scroll,
+            listener_animation_frame: Default::default(),
             window,
         }
     }
@@ -115,11 +153,20 @@ impl HistoryProvider for WebHashHistory {
             None => return,
         };
 
-        if let Err(e) = self
-            .history
-            .push_state_with_url(&JsValue::NULL, "", Some(&hash))
-        {
-            error!("failed to push state: {e:?}");
+        let state = match self.do_scroll_restoration {
+            true => top_left(),
+            false => self.history.state().unwrap_or_default(),
+        };
+
+        let nav = self.history.push_state_with_url(&state, "", Some(&hash));
+
+        match nav {
+            Ok(_) => {
+                if self.do_scroll_restoration {
+                    self.window.scroll_to_with_x_and_y(0.0, 0.0)
+                }
+            }
+            Err(e) => error!("failed to push state: {e:?}"),
         }
     }
 
@@ -129,11 +176,20 @@ impl HistoryProvider for WebHashHistory {
             None => return,
         };
 
-        if let Err(e) = self
-            .history
-            .replace_state_with_url(&JsValue::NULL, "", Some(&hash))
-        {
-            error!("failed to replace state: {e:?}");
+        let state = match self.do_scroll_restoration {
+            true => top_left(),
+            false => self.history.state().unwrap_or_default(),
+        };
+
+        let nav = self.history.replace_state_with_url(&state, "", Some(&hash));
+
+        match nav {
+            Ok(_) => {
+                if self.do_scroll_restoration {
+                    self.window.scroll_to_with_x_and_y(0.0, 0.0)
+                }
+            }
+            Err(e) => error!("failed to replace state: {e:?}"),
         }
     }
 
@@ -148,6 +204,17 @@ impl HistoryProvider for WebHashHistory {
     }
 
     fn updater(&mut self, callback: std::sync::Arc<dyn Fn() + Send + Sync>) {
-        let listener = EventListener::new(&self.window, "popstate", move |_| (*callback)());
+        let w = self.window.clone();
+        let h = self.history.clone();
+        let s = self.listener_animation_frame.clone();
+        let d = self.do_scroll_restoration;
+
+        self.listener_navigation = Some(EventListener::new(&self.window, "popstate", move |_| {
+            (*callback)();
+            if d {
+                let mut s = s.lock().expect("unpoisoned scroll mutex");
+                *s = Some(update_scroll(&w, &h));
+            }
+        }));
     }
 }

@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 
 use dioxus::prelude::*;
-use dioxus_router::prelude::*;
+use dioxus_router::{history::MemoryHistory, prelude::*};
 
 fn main() {
     #[cfg(not(feature = "web"))]
@@ -13,8 +13,16 @@ fn main() {
 fn App(cx: Scope) -> Element {
     use_router(
         &cx,
-        &|| RouterConfiguration {
-            ..Default::default()
+        &|| {
+            #[cfg(not(feature = "web"))]
+            let history = MemoryHistory::default();
+            #[cfg(feature = "web")]
+            let history = dioxus_router::history::WebHistory::new(None, true);
+
+            RouterConfiguration {
+                history: Box::new(history),
+                ..Default::default()
+            }
         },
         &|| {
             Segment::content(comp(Home))

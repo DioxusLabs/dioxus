@@ -13,14 +13,15 @@ futures-util = "0.3.25"
 gloo = { version = "0.8.0", optional = true }
 log = "0.4.17"
 regex = { version = "1.6.0", optional = true }
-serde = { version = "1.0.147", optional = true }
+serde = { version = "1.0.147", optional = true, features = ["derive"] }
+serde-wasm-bindgen = { version = "0.4.5", optional = true }
 serde_urlencoded = { version = "0.7.1", optional = true }
 url = "2.3.1"
 urlencoding = "2.1.2"
 wasm-bindgen = { version = "0.2.83", optional = true }
-web-sys = { version = "0.3.60", optional = true }
+web-sys = { version = "0.3.60", optional = true, features = ["ScrollRestoration"]}
 
 [features]
 regex = ["dep:regex"]
 serde = ["dep:serde", "serde_urlencoded"]
-web = ["gloo", "wasm-bindgen", "web-sys"]
+web = ["gloo", "dep:serde", "serde-wasm-bindgen", "wasm-bindgen", "web-sys"]

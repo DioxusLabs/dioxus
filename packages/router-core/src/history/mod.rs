@@ -8,11 +8,6 @@
 
 use std::sync::Arc;
 
-#[cfg(feature = "web")]
-mod web_hash;
-#[cfg(feature = "web")]
-pub use web_hash::*;
-
 mod memory;
 pub use memory::*;
 
@@ -20,6 +15,14 @@ pub use memory::*;
 mod web;
 #[cfg(feature = "web")]
 pub use web::*;
+
+#[cfg(feature = "web")]
+mod web_hash;
+#[cfg(feature = "web")]
+pub use web_hash::*;
+
+#[cfg(feature = "web")]
+pub(crate) mod web_scroll;
 
 /// An integration with some kind of navigation history.
 ///
