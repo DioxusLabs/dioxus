@@ -133,7 +133,7 @@ impl<'b> VirtualDom {
             None => return,
         };
 
-        for idx in start..=end {
+        for idx in (start..=end).rev() {
             let m = self.create_dynamic_node(template, &template.dynamic_nodes[idx], idx);
             if m > 0 {
                 // The path is one shorter because the top node is the root
