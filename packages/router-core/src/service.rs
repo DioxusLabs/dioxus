@@ -169,6 +169,16 @@ where
     pub fn init(&mut self) {
         *self.sync_state_write_lock() = self
             .update_routing()
+            .left_and_then(|state| {
+                if let Some(cb) = &self.routing_callback {
+                    if let Some(nt) = cb(&state) {
+                        self.replace(nt);
+                        return self.update_routing();
+                    }
+                }
+
+                Either::Left(state)
+            })
             .map_right(|err| self.handle_navigation_failure(&self.sync_state_read_lock(), err))
             .either_into();
     }
@@ -226,7 +236,16 @@ where
     pub async fn run(&mut self) {
         // init (unlike function with same name this is async)
         {
-            *self.state.write().await = match self.update_routing() {
+            *self.state.write().await = match self.update_routing().left_and_then(|state| {
+                if let Some(cb) = &self.routing_callback {
+                    if let Some(nt) = cb(&state) {
+                        self.replace(nt);
+                        return self.update_routing();
+                    }
+                }
+
+                Either::Left(state)
+            }) {
                 Either::Left(state) => state,
                 Either::Right(err) => {
                     self.handle_navigation_failure(&*self.state.read().await, err)
@@ -925,12 +944,17 @@ mod tests {
             ContentAtom("redirect limit"),
         );
 
-        s.init();
         assert!(paths.lock().unwrap().is_empty());
+
+        s.init();
+        assert_eq!(*paths.lock().unwrap(), vec![String::from("/fixed")]);
 
         c.unbounded_send(RouterMessage::Update).unwrap();
         s.run_current();
-        assert_eq!(*paths.lock().unwrap(), vec![String::from("/fixed")]);
+        assert_eq!(
+            *paths.lock().unwrap(),
+            vec![String::from("/fixed"), String::from("/%F0%9F%8E%BA")]
+        );
 
         let state = s.state.try_read().unwrap();
         assert_eq!(state.content, vec![ContentAtom("🎺")])
