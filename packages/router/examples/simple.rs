@@ -4,7 +4,10 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn main() {
+    #[cfg(not(feature = "web"))]
     dioxus_desktop::launch(App);
+    #[cfg(feature = "web")]
+    dioxus_web::launch(App);
 }
 
 fn App(cx: Scope) -> Element {

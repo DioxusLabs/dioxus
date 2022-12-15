@@ -11,6 +11,11 @@ use std::sync::Arc;
 mod memory;
 pub use memory::*;
 
+#[cfg(feature = "web")]
+mod web;
+#[cfg(feature = "web")]
+pub use web::*;
+
 /// An integration with some kind of navigation history.
 ///
 /// Depending on your use case, your implementation may deviate from the described procedure. This

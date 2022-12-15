@@ -20,13 +20,18 @@ futures-util = "0.3.25"
 log = "0.4.17"
 thiserror = "1.0.37"
 
-# for wasm
-
 [features]
 regex = ["dioxus-router-core/regex"]
 serde = ["dioxus-router-core/serde"]
+web = ["dioxus-router-core/web"]
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
-dioxus-desktop = { path = "../desktop" }
 dioxus-ssr = { path = "../ssr" }
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+dioxus-desktop = { path = "../desktop" }
+
+[target.'cfg(target_family = "wasm")'.dev-dependencies]
+dioxus-router = { path = ".", features = ["web"] }
+dioxus-web = { path= "../web" }
