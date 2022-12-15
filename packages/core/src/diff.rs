@@ -355,7 +355,11 @@ impl<'b> VirtualDom {
                         self.reclaim(id)
                     }
                 }
-                Placeholder(t) => self.reclaim(t.id.take().unwrap()),
+                Placeholder(t) => {
+                    if let Some(id) = t.id.take() {
+                        self.reclaim(id)
+                    }
+                }
                 Fragment(nodes) => nodes.iter().for_each(|node| self.clean_up_node(node)),
             };
         }
