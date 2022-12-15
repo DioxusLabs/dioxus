@@ -31,9 +31,9 @@ pub struct WebHistory {
 impl WebHistory {
     /// Create a new [`WebHistory`] with a prefix.
     #[must_use]
-    pub fn with_prefix(prefix: String) -> Self {
+    pub fn with_prefix(prefix: impl Into<String>) -> Self {
         Self {
-            prefix: Some(prefix),
+            prefix: Some(prefix.into()),
             ..Default::default()
         }
     }
@@ -105,8 +105,8 @@ impl HistoryProvider for WebHistory {
     fn external(&mut self, url: String) -> bool {
         match self.window.location().set_href(&url) {
             Ok(_) => true,
-            Err(_) => {
-                error!("`WebHistory` failed to navigate to external target: {url}");
+            Err(e) => {
+                error!("failed to navigate to external url (`{url}): {e:?}");
                 false
             }
         }

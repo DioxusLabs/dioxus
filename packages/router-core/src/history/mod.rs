@@ -8,6 +8,11 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "web")]
+mod web_hash;
+#[cfg(feature = "web")]
+pub use web_hash::*;
+
 mod memory;
 pub use memory::*;
 
