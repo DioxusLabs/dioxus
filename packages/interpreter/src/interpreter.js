@@ -1,11 +1,3 @@
-export function main() {
-  let root = window.document.getElementById("main");
-  if (root != null) {
-    window.interpreter = new Interpreter(root);
-    window.ipc.postMessage(serializeIpcMessage("initialize"));
-  }
-}
-
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -60,7 +52,7 @@ class ListenerMap {
   }
 }
 
-export class Interpreter {
+class Interpreter {
   constructor(root) {
     this.root = root;
     this.listeners = new ListenerMap(root);
@@ -448,7 +440,7 @@ export class Interpreter {
   }
 }
 
-export function serialize_event(event) {
+function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":

@@ -1,20 +1,18 @@
-#![allow(dead_code)]
-
-pub static INTERPRETER: &str = include_str!("interpreter.js");
+use dioxus_interpreter_js::INTERPRETER_JS;
+static MAIN_JS: &str = include_str!("./main.js");
 
 pub fn interpreter_glue(url: &str) -> String {
     format!(
         r#"
 <script>
     var WS_ADDR = "{url}";
-    {INTERPRETER}
+    {INTERPRETER_JS}
+    {MAIN_JS}
     main();
 </script>
     "#
     )
 }
-
-pub(crate) mod events;
 
 pub mod adapters {
     #[cfg(feature = "warp")]
@@ -27,12 +25,11 @@ pub mod adapters {
     pub mod salvo_adapter;
 }
 
-use std::net::SocketAddr;
-
-use tokio_util::task::LocalPoolHandle;
-
 pub mod pool;
 pub use pool::*;
 
-#[derive(Debug, Clone, PartialEq, thiserror::Error)]
-pub enum LiveViewError {}
+#[derive(Debug, thiserror::Error)]
+pub enum LiveViewError {
+    #[error("Connection Failed")]
+    Warp(#[from] warp::Error),
+}

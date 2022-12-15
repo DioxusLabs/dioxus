@@ -29,6 +29,12 @@ pub struct HtmlEvent {
     pub data: EventData,
 }
 
+impl HtmlEvent {
+    pub fn bubbles(&self) -> bool {
+        event_bubbles(&self.name)
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(untagged)]
 pub enum EventData {

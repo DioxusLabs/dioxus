@@ -240,16 +240,16 @@ fn build_webview(
         // in release mode, we don't want to show the dev tool or reload menus
         webview = webview.with_initialization_script(
             r#"
-                        if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            e.preventDefault();
-                        }, false);
-                        } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            window.event.returnValue = false;
-                        });
-                        }
-                    "#,
+        if (document.addEventListener) {
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            }, false);
+        } else {
+            document.attachEvent('oncontextmenu', function() {
+                window.event.returnValue = false;
+            });
+        }
+    "#,
         )
     } else {
         // in debug, we are okay with the reload menu showing and dev tool

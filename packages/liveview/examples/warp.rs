@@ -29,20 +29,24 @@ async fn main() {
             r#"
             <!DOCTYPE html>
             <html>
-                <head> <title>Dioxus LiveView with Warp</title> </head>
-                <body> <div id="main"></div> {glue} </body>
+                <head> <title>Dioxus LiveView with Warp</title>  </head>
+                <body> <div id="main"></div> </body>
+                {glue}
             </html>
             "#,
-            glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws/app"))
+            glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws/"))
         ))
     });
 
-    let view = LiveView::new(addr);
+    let view = LiveView::new();
 
     let ws = warp::path("ws")
         .and(warp::ws())
         .and(warp::any().map(move || view.clone()))
-        .map(move |ws: Ws, view: LiveView| ws.on_upgrade(|ws| view.upgrade_warp(ws, app)));
+        .map(move |ws: Ws, view: LiveView| {
+            println!("Got a connection!");
+            ws.on_upgrade(|ws| view.upgrade_warp(ws, app))
+        });
 
     println!("Listening on http://{}", addr);
 

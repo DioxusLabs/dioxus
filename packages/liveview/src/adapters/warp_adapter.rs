@@ -1,19 +1,14 @@
-use std::{convert::Infallible, time::Duration};
-
-use crate::{
-    events::{self, IpcMessage},
-    LiveView, LiveViewError,
-};
+use crate::{LiveView, LiveViewError};
 use dioxus_core::prelude::*;
-use dioxus_html::a;
-use futures_util::{pin_mut, SinkExt, StreamExt};
-use tokio::sync::mpsc;
-use tokio_stream::wrappers::UnboundedReceiverStream;
-use tokio_util::task::LocalPoolHandle;
+use dioxus_html::HtmlEvent;
+use futures_util::{SinkExt, StreamExt};
+use std::time::Duration;
 use warp::ws::{Message, WebSocket};
 
 impl LiveView {
-    pub async fn upgrade_warp(self, ws: WebSocket, app: fn(Scope<()>) -> Element) {}
+    pub async fn upgrade_warp(self, ws: WebSocket, app: fn(Scope<()>) -> Element) {
+        self.upgrade_warp_with_props(ws, app, ()).await
+    }
 
     pub async fn upgrade_warp_with_props<T: Send + 'static>(
         self,
@@ -48,18 +43,24 @@ where
                 match evt {
                     Some(Ok(evt)) => {
                         if let Ok(evt) = evt.to_str() {
-                            let IpcMessage { name, element, bubbles, data } = serde_json::from_str(evt).unwrap();
+                            // desktop uses this wrapper struct thing
+                            #[derive(serde::Deserialize)]
+                            struct IpcMessage {
+                                params: HtmlEvent
+                            }
 
-                            vdom.handle_event(&name, data, element, bubbles);
+                            let event: IpcMessage = serde_json::from_str(evt).unwrap();
+                            let event = event.params;
+                            let bubbles = event.bubbles();
+                            vdom.handle_event(&event.name, event.data.into_any(), event.element, bubbles);
                         }
                     }
-                    Some(Err(e)) => {
+                    Some(Err(_e)) => {
                         // log this I guess?
                         // when would we get an error here?
                     }
-                    None => break,
+                    None => return Ok(()),
                 }
-
             }
         }
 
@@ -68,8 +69,6 @@ where
             .await;
 
         ws.send(Message::text(serde_json::to_string(&edits).unwrap()))
-            .await
-            .unwrap();
+            .await?;
     }
-    Ok(()) as Result<(), LiveViewError>
 }
