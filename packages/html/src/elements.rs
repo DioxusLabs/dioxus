@@ -43,24 +43,35 @@ macro_rules! impl_attribute {
 
 macro_rules! impl_attribute_match {
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (DEFAULT),
+        $attr:ident $fil:ident: $vil:ident (DEFAULT),
     ) => {
-        stringify!($fil) => Some((stringify!($fil), None))
+        if $attr == stringify!($fil) {
+            return Some((stringify!($fil), None));
+        }
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident ($name:literal),
+        $attr:ident $fil:ident: $vil:ident (volatile),
     ) => {
-        stringify!($fil) => Some(($name, None))
+        if $attr == stringify!($fil) {
+            return Some((stringify!($fil), None));
+        }
     };
 
     (
-        $(#[$attr_method:meta])*
-        $fil:ident: $vil:ident (in $ns:ident),
+        $attr:ident $fil:ident: $vil:ident ($name:literal),
     ) => {
-        stringify!($fil) => Some((stringify!(fil), Some(stringify!(ns))))
+        if $attr == stringify!($fil) {
+            return Some(($name, None));
+        }
+    };
+
+    (
+        $attr:ident $fil:ident: $vil:ident (in $ns:ident),
+    ) => {
+        if $attr == stringify!($fil) {
+            return Some((stringify!(fil), Some(stringify!(ns))));
+        }
     };
 }
 
@@ -124,29 +135,25 @@ macro_rules! impl_element {
 
 macro_rules! impl_element_match {
     (
-        $(#[$attr:meta])*
-        $name:ident None {
+        $el:ident $name:ident None {
             $(
-                $(#[$attr_method:meta])*
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
-        if element == stringify!($name) {
+        if $el == stringify!($name) {
             return Some((stringify!($name), None));
         }
     };
 
     (
-        $(#[$attr:meta])*
-        $name:ident $namespace:ident {
+        $el:ident $name:ident $namespace:tt {
             $(
-                $(#[$attr_method:meta])*
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
-        if element == stringify!($name) {
+        if $el == stringify!($name) {
             return Some((stringify!($name), Some(stringify!($namespace))));
         }
     };
@@ -154,42 +161,34 @@ macro_rules! impl_element_match {
 
 macro_rules! impl_element_match_attributes {
     (
-        $(#[$attr:meta])*
-        $name:ident None {
+        $el:ident $attr:ident $name:ident None {
             $(
-                $(#[$attr_method:meta])*
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
-        stringify!($name) => match attr{
+        if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $(#[$attr_method])*
-                    $fil: $vil ($extra),
-                ),
+                    $attr $fil: $vil ($extra),
+                );
             )*
-            _ => None,
         }
     };
 
     (
-        $(#[$attr:meta])*
-        $name:ident $namespace:tt {
+        $el:ident $attr:ident $name:ident $namespace:tt {
             $(
-                $(#[$attr_method:meta])*
                 $fil:ident: $vil:ident $extra:tt,
             )*
         }
     ) => {
-        stringify!($name) => match attr{
+        if $el == stringify!($name) {
             $(
                 impl_attribute_match!(
-                    $(#[$attr_method])*
-                    $fil: $vil in $namespace $extra
-                ),
+                    $attr $fil: $vil in $namespace $extra
+                );
             )*
-            _ => None,
         }
     }
 }
@@ -209,50 +208,44 @@ macro_rules! builder_constructors {
         pub struct Html;
 
         impl HotReloadingContext for Html {
-            fn map_attribute(element: &str, attr: &str) -> Option<(&'static str, Option<&'static str>)> {
-                match element {
-                    // $(
-                    //     impl_element_match_attributes!(
-                    //         $(#[$attr])*
-                    //         $name $namespace {
-                    //             $(
-                    //                 $(#[$attr_method])*
-                    //                 $fil: $vil $extra,
-                    //             )*
-                    //         }
-                    //     )
-                    // )*
-                    _ => None
-                }
-            }
-
-            fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
+            fn map_attribute(element: &str, attribute: &str) -> Option<(&'static str, Option<&'static str>)> {
                 $(
-                    impl_element_match!(
-                        $(#[$attr])*
-                        $name $namespace {
+                    impl_element_match_attributes!(
+                        element attribute $name $namespace {
                             $(
-                                $(#[$attr_method])*
                                 $fil: $vil $extra,
                             )*
                         }
                     );
                 )*
-                unreachable!()
+                None
+            }
+
+            fn map_element(element: &str) -> Option<(&'static str, Option<&'static str>)> {
+                $(
+                    impl_element_match!(
+                        element $name $namespace {
+                            $(
+                                $fil: $vil $extra,
+                            )*
+                        }
+                    );
+                )*
+                None
             }
         }
 
-        // $(
-        //     impl_element!(
-        //         $(#[$attr])*
-        //         $name $namespace {
-        //             $(
-        //                 $(#[$attr_method])*
-        //                 $fil: $vil $extra,
-        //             )*
-        //         }
-        //     );
-        // )*
+        $(
+            impl_element!(
+                $(#[$attr])*
+                $name $namespace {
+                    $(
+                        $(#[$attr_method])*
+                        $fil: $vil $extra,
+                    )*
+                }
+            );
+        )*
     };
 }
 
