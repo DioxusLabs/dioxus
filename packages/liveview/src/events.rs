@@ -11,15 +11,10 @@ use dioxus_html::events::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct IpcMessage {
-    pub method: String,
-    pub params: serde_json::Value,
-}
-
-pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
-    match serde_json::from_str(payload) {
-        Ok(message) => Some(message),
-        Err(_) => None,
-    }
+    pub name: String,
+    pub element: ElementId,
+    pub bubbles: bool,
+    pub data: serde_json::Value,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

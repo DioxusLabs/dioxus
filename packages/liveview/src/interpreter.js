@@ -4,7 +4,6 @@ function main() {
   if (root != null) {
     // create a new ipc
     window.ipc = new IPC(root);
-
     window.ipc.send(serializeIpcMessage("initialize"));
   }
 }

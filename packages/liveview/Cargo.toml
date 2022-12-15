@@ -39,6 +39,9 @@ tower = { version = "0.4.12", optional = true }
 
 # salvo
 salvo = { version = "0.32.0", optional = true, features = ["ws"] }
+thiserror = "1.0.37"
+uuid = { version = "1.2.2", features = ["v4"] }
+anyhow = "1.0.66"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -49,4 +52,4 @@ salvo = { version = "0.32.0", features = ["affix", "ws"] }
 tower = "0.4.12"
 
 [features]
-default = []
+default = ["warp"]

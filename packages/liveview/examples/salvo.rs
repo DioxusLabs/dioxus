@@ -8,7 +8,7 @@ async fn main() {
 
     use dioxus_core::{Element, LazyNodes, Scope};
     use dioxus_liveview as liveview;
-    use dioxus_liveview::Liveview;
+    use dioxus_liveview::LiveView;
     use salvo::extra::affix;
     use salvo::extra::ws::WsHandler;
     use salvo::prelude::*;

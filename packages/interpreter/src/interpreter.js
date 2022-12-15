@@ -435,9 +435,9 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.name,
-                mounted_dom_id: parseInt(realId),
-                contents: contents,
+                name: edit.name,
+                element: parseInt(realId),
+                data: contents,
               })
             );
           }
