@@ -57,6 +57,7 @@ mod utils {
 
 /// A collection of useful types most applications might need.
 pub mod prelude {
+    pub use crate::name::*;
     pub use crate::navigation::*;
     pub use crate::routes::*;
 
