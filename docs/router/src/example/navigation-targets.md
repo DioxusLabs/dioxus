@@ -25,7 +25,7 @@ If we need a link to an external page we can do it like this:
 # use dioxus_router::prelude::*;
 #
 fn GoToDioxus(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         Link {
             target: NavigationTarget::External("https://dioxuslabs.com".into()),
             "Explicit ExternalTarget target"
@@ -34,7 +34,7 @@ fn GoToDioxus(cx: Scope) -> Element {
             target: "https://dioxuslabs.com", // short form
             "Implicit ExternalTarget target"
         }
-    })
+    }
 }
 ```
 
@@ -105,7 +105,7 @@ Now we can change the targets of the links in our `BlogList` component.
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
 #
 fn BlogList(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Choose a post" }
         ul {
             li { Link {
@@ -119,7 +119,7 @@ fn BlogList(cx: Scope) -> Element {
                 "Read the second blog post"
             } }
         }
-    })
+    }
 }
 ```
 
@@ -142,14 +142,14 @@ We can change the link in our `NavBar` component to take advantage of that.
 # use dioxus_router::prelude::*;
 #
 fn NavBar(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         nav {
             ul {
                 li { Link { target: named::<RootIndex>(), "Home" } }
                 li { Link { target: "/blog", "Blog" } }
             }
         }
-    })
+    }
 }
 ```
 

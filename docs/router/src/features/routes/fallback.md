@@ -20,21 +20,21 @@ use dioxus_router::{history::MemoryHistory, prelude::*};
 # extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Index" }
-    })
+    }
 }
 
 fn Fallback(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Error 404 - Not Found" }
         p { "The page you asked for doesn't exist." }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/invalid").unwrap()),
@@ -45,9 +45,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -90,20 +90,20 @@ use dioxus_router::{history::MemoryHistory, prelude::*};
 # fn PrivacySettings(cx: Scope) -> Element { unimplemented!() }
 
 fn GlobalFallback(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Error 404 - Page Not Found" }
-    })
+    }
 }
 
 fn SettingsFallback(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Error 404 - Settings Not Found" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/settings/invalid").unwrap()),
@@ -122,9 +122,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

@@ -35,23 +35,23 @@ You can override it by setting the `failure_external_navigation` value of the
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 fn ExternalNavigationFallback(cx: Scope) -> Element {
-    let route = use_route(&cx).expect("is nested within a Router component");
+    let route = use_route(cx).expect("is nested within a Router component");
     let url = route
         .parameter::<FailureExternalNavigation>()
         .unwrap_or_default();
 
-    cx.render(rsx! {
+    render! {
         h1 { "External navigation failure!" }
         Link {
             target: url,
             "Go to external site"
         }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             failure_external_navigation: comp(ExternalNavigationFallback),
             ..Default::default()
@@ -59,9 +59,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty()
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 

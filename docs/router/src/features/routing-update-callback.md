@@ -32,7 +32,7 @@ use dioxus_router::prelude::*;
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             on_update: Some(Arc::new(|state| -> Option<NavigationTarget> {

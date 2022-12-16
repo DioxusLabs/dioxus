@@ -15,37 +15,37 @@ use dioxus_router::{history::MemoryHistory, prelude::*};
 # extern crate dioxus_ssr;
 
 fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Home" }
-    })
+    }
 }
 
 fn Fixed(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Fixed" }
         Outlet { }
-    })
+    }
 }
 
 fn Nested(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Nested" }
-    })
+    }
 }
 
 struct ParameterName;
 fn Parameter(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
     let param = route.parameter::<ParameterName>().unwrap_or_default();
 
-    cx.render(rsx! {
+    render! {
         h1 { "Parameter: {param}" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             history: Box::new(MemoryHistory::with_initial_path("/fixed/nested").unwrap()),
@@ -63,9 +63,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -92,16 +92,16 @@ our segment definition into its own function.
 #
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
         &prepare_routes
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 
 fn prepare_routes() -> Segment<Component> {

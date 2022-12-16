@@ -25,14 +25,14 @@ use dioxus_router::{history::MemoryHistory, prelude::*};
 # extern crate dioxus_ssr;
 
 fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Home Page" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/home").unwrap()),
@@ -49,9 +49,9 @@ fn App(cx: Scope) -> Element {
                 .fixed("start", "/") // short form
     });
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

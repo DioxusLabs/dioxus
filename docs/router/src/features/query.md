@@ -16,7 +16,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn SomeComponent(cx: Scope) -> Element {
-    let route = use_route(&cx).expect("nested in Router");
+    let route = use_route(cx).expect("nested in Router");
 
     let query = route.query.clone().unwrap();
 
@@ -40,7 +40,7 @@ When using [`Internal`] or [`External`] we have to append our query manually.
 # use dioxus_router::prelude::*;
 #
 fn SomeComponent(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         Link {
             target: NavigationTarget::Internal("/some/path?query=yes".into()),
             "Internal target"
@@ -49,7 +49,7 @@ fn SomeComponent(cx: Scope) -> Element {
             target: NavigationTarget::External("https://dioxuslab.com?query=yes".into()),
             "External target"
         }
-    })
+    }
 }
 ```
 
@@ -66,7 +66,7 @@ a function.
 # struct Target;
 #
 fn SomeComponent(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         Link {
             target: named::<Target>().query("query=yes"),
             "Query String"
@@ -75,7 +75,7 @@ fn SomeComponent(cx: Scope) -> Element {
             target: named::<Target>().query(vec![("query", "yes")]),
             "Query Vec"
         }
-    })
+    }
 }
 ```
 

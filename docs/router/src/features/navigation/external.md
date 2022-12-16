@@ -25,7 +25,7 @@ use dioxus_router::prelude::*;
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             ..Default::default()
@@ -33,7 +33,7 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty()
     );
 
-    cx.render(rsx! {
+    render! {
         // links need to be inside a router, even if they navigate to an
         // external page
         Link {
@@ -44,7 +44,7 @@ fn App(cx: Scope) -> Element {
             target: "https://dioxuslabs.com/", // short form
             "Go to the dioxus home page 2"
         }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

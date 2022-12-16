@@ -37,14 +37,14 @@ You can override it by setting the `failure_named_navigation` value of the
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 fn NamedNavigationFallback(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Named navigation failure!" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             failure_named_navigation: comp(NamedNavigationFallback),
             ..Default::default()
@@ -52,9 +52,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty()
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 

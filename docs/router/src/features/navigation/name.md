@@ -39,25 +39,25 @@ use dioxus_router::prelude::*;
 struct TargetName;
 
 fn Source(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         Link {
             // instead of InternalTarget we use NamedTarget (via the `named` fn)
             // we can use the returned value to add parameters or a query
             target: named::<TargetName>().query("query"),
             "Go to target"
         }
-    })
+    }
 }
 
 fn Target(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Target" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             ..Default::default()
@@ -71,9 +71,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -103,7 +103,7 @@ use dioxus_router::prelude::*;
 struct SomeName;
 
 fn Content(cx: Scope) -> Element {
-    let route = use_route(&cx).expect("needs to be in router");
+    let route = use_route(cx).expect("needs to be in router");
 
     if route.is_at(&named::<SomeName>(), false) {
         // do something

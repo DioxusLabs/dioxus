@@ -15,7 +15,7 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn Content(cx: Scope) -> Element {
-    let nav = use_navigate(&cx).expect("called inside a router");
+    let nav = use_navigate(cx).expect("called inside a router");
 
     // ...
     # unimplemented!()
@@ -40,7 +40,7 @@ We can use the [`Navigator`] to trigger four different kinds of navigation:
 # use dioxus_router::prelude::*;
 #
 fn Content(cx: Scope) -> Element {
-    let nav = use_navigate(&cx).expect("called inside a router");
+    let nav = use_navigate(cx).expect("called inside a router");
 
     // push
     nav.push("/target");

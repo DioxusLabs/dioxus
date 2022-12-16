@@ -33,14 +33,14 @@ use dioxus_router::prelude::*;
 struct Name;
 
 fn Greeting(cx: Scope) -> Element {
-    let route = use_route(&cx).expect("is nested within a Router component");
+    let route = use_route(cx).expect("is nested within a Router component");
     let name = route.parameter::<Name>()
         .map(|name| name.clone())
         .unwrap_or(String::from("world"));
 
-    cx.render(rsx! {
+    render! {
         p { "Hello, {name}!" }
-    })
+    }
 }
 ```
 
@@ -66,7 +66,7 @@ struct Name;
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
@@ -120,19 +120,19 @@ by the path, i.e. `//`.
 struct Name;
 
 fn Greeting(cx: Scope) -> Element {
-    let route = use_route(&cx).expect("is nested within a Router component");
+    let route = use_route(cx).expect("is nested within a Router component");
     let name = route.parameter::<Name>()
         .map(|name| name.clone())
         .unwrap_or(String::from("world"));
 
-    cx.render(rsx! {
+    render! {
         p { "Hello, {name}!" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     let routes = use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/Dioxus").unwrap()),
@@ -141,9 +141,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty().catch_all((comp(Greeting), Name { }))
     );
     // ...
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

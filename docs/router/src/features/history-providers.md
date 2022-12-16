@@ -24,7 +24,7 @@ use dioxus_router::{prelude::*, history::WebHashHistory};
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             history: Box::new(WebHashHistory::new(true)),
             ..Default::default()
@@ -32,9 +32,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty()
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 

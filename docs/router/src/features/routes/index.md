@@ -15,15 +15,15 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn Index(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Welcome to our test site!" }
-    })
+    }
 }
 
 fn Other(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         p { "some other content" }
-    })
+    }
 }
 ```
 
@@ -46,7 +46,7 @@ are active, when we don't specify a route.
 #
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
@@ -77,7 +77,7 @@ specified in the path. In the example, the path must be `/other`.
 #
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
@@ -100,20 +100,20 @@ use dioxus_router::{history::MemoryHistory, prelude::*};
 # extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Welcome to our test site!" }
-    })
+    }
 }
 
 fn Other(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         p { "some other content" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/other").unwrap()),
@@ -122,9 +122,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::content(comp(Index)).fixed("other", comp(Other))
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

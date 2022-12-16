@@ -24,7 +24,7 @@ use like this:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 fn SomeComponent(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         Link {
             target: NavigationTarget::Internal(String::from("/some/path")),
             "Link text"
@@ -33,18 +33,18 @@ fn SomeComponent(cx: Scope) -> Element {
             target: "/some/path", // short form
             "Other link text"
         }
-    })
+    }
 }
 ```
 
 The `target` in the example above is similar to the `href` of a regular anchor
 element. However, it tells the router more about what kind of navigation it
 should perform:
-- The example uses [`InternalTarget`]. We give it an arbitrary path that will be
+- The example uses [`Internal`]. We give it an arbitrary path that will be
   merged with the current URL.
-- [`NamedTarget`] allows us to navigate within our app using predefined names.
+- [`Named`] allows us to navigate within our app using predefined names.
   See the chapter about [named navigation](./name.md) for more details.
-- [`ExternalTarget`] allows us to navigate to URLs outside of our app. See the
+- [`External`] allows us to navigate to URLs outside of our app. See the
   chapter about [external navigation](./external.md) for more details.
 
 > The [`Link`] accepts several props that modify its behavior. See the API docs

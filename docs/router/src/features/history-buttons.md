@@ -22,14 +22,14 @@ use dioxus::prelude::*;
 use dioxus_router::prelude::*;
 
 fn HistoryNavigation(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         GoBackButton {
             "Back to the Past"
         }
         GoForwardButton {
             "Back to the Future" /* You see what I did there? 😉 */
         }
-    })
+    }
 }
 ```
 

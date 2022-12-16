@@ -48,28 +48,28 @@ the first one, and will in turn render our nested content.
 # use dioxus_router::prelude::*;
 #
 fn Settings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Settings" }
         Outlet { }
-    })
+    }
 }
 
 fn GeneralSettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "General Settings" }
-    })
+    }
 }
 
 fn PWSettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Password Settings" }
-    })
+    }
 }
 
 fn PrivacySettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Privacy Settings" }
-    })
+    }
 }
 ```
 
@@ -90,7 +90,7 @@ we'll use a method of [`Route`], so we might as well add this now.
 #
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
@@ -123,7 +123,7 @@ pass it to the [`Route`] on the root segment.
 #
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             ..Default::default()
         },
@@ -152,33 +152,33 @@ fn App(cx: Scope) -> Element {
 # extern crate dioxus_ssr;
 #
 fn Settings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Settings" }
         Outlet { }
-    })
+    }
 }
 
 fn GeneralSettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "General Settings" }
-    })
+    }
 }
 
 fn PWSettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Password Settings" }
-    })
+    }
 }
 
 fn PrivacySettings(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Privacy Settings" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/settings/privacy").unwrap()),
@@ -194,9 +194,9 @@ fn App(cx: Scope) -> Element {
         )
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

@@ -14,9 +14,9 @@ First we need an actual page to route to! Let's add a homepage component:
 # use dioxus::prelude::*;
 #
 fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Welcome to the Dioxus Blog!" }
-    })
+    }
 }
 ```
 
@@ -49,9 +49,9 @@ fn App(cx: Scope) -> Element {
         &|| Segment::content(comp(Home))
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 
@@ -74,10 +74,10 @@ First, we create a new `PageNotFound` component.
 # use dioxus::prelude::*;
 #
 fn PageNotFound(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Page not found" }
         p { "We are terribly sorry, but the page you requested doesn't exist." }
-    })
+    }
 }
 ```
 
@@ -101,9 +101,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 

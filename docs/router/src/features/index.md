@@ -24,7 +24,7 @@ fn App(cx: Scope) -> Element {
     // Here we add the router. All components inside `App` have access to its
     // functionality.
     let routes = use_router(
-        &cx,
+        cx,
         // The router can be configured with this parameter.
         &|| RouterConfiguration {
             # synchronous: true,
@@ -35,12 +35,12 @@ fn App(cx: Scope) -> Element {
         &|| Segment::empty()
     );
 
-    cx.render(rsx! {
+    render! {
         h1 { "Our sites title" }
 
         // The Outlet tells the Router where to render active content.
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

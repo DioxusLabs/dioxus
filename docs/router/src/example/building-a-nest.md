@@ -17,11 +17,11 @@ Let's create a new `NavBar` component:
 # use dioxus_router::prelude::*;
 #
 fn NavBar(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         nav {
             ul { }
         }
-    })
+    }
 }
 ```
 
@@ -40,7 +40,7 @@ more on other targets later) and an element. Let's add our links
 # use dioxus_router::prelude::*;
 #
 fn NavBar(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         nav {
             ul {
                 // new stuff starts here
@@ -55,7 +55,7 @@ fn NavBar(cx: Scope) -> Element {
                 // new stuff ends here
             }
         }
-    })
+    }
 }
 ```
 
@@ -81,10 +81,10 @@ fn App(cx: Scope) -> Element {
         &|| Segment::content(comp(Home)).fallback(comp(PageNotFound))
     );
 
-    cx.render(rsx! {
+    render! {
         NavBar { } // this is new
         Outlet { }
-    })
+    }
 }
 ```
 Now you should see a list of links near the top of your page. Click on one and
@@ -103,7 +103,7 @@ in that case.
 # use dioxus_router::prelude::*;
 #
 fn NavBar(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         nav {
             ul {
                 li { Link {
@@ -118,7 +118,7 @@ fn NavBar(cx: Scope) -> Element {
                 } }
             }
         }
-    })
+    }
 }
 ```
 
@@ -149,10 +149,10 @@ us to add a heading that tells the user they are on the blog.
 # use dioxus_router::prelude::*;
 #
 fn Blog(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Blog" }
         Outlet {}
-    })
+    }
 }
 ```
 
@@ -170,7 +170,7 @@ is selected:
 # use dioxus_router::prelude::*;
 #
 fn BlogList(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Choose a post" }
         ul {
             li { Link {
@@ -182,7 +182,7 @@ fn BlogList(cx: Scope) -> Element {
                 "Read the second blog post"
             } }
         }
-    })
+    }
 }
 ```
 
@@ -199,16 +199,16 @@ parameters:
 struct PostId;
 
 fn BlogPost(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
 
     let post_id = route.parameter::<PostId>();
     let post = post_id
         .map(|id| id.to_string())
         .unwrap_or(String::from("unknown"));
 
-    cx.render(rsx! {
+    render! {
         h2 { "Blog Post: {post}"}
-    })
+    }
 }
 ```
 
@@ -243,10 +243,10 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         NavBar { }
         Outlet { }
-    })
+    }
 }
 ```
 

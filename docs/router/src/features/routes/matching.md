@@ -30,7 +30,7 @@ use regex::Regex;
 struct Name;
 
 fn GreetingFemale(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
     let name = route.parameter::<Name>()
         .map(|name| {
             let mut name = name.to_string();
@@ -39,13 +39,13 @@ fn GreetingFemale(cx: Scope) -> Element {
         })
         .unwrap_or(String::from("Anonymous"));
 
-    cx.render(rsx! {
+    render! {
         p { "Hello Mrs. {name}" }
-    })
+    }
 }
 
 fn GreetingMale(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
     let name = route.parameter::<Name>()
         .map(|name| {
             let mut name = name.to_string();
@@ -54,32 +54,32 @@ fn GreetingMale(cx: Scope) -> Element {
         })
         .unwrap_or(String::from("Anonymous"));
 
-    cx.render(rsx! {
+    render! {
         p { "Hello Mr. {name}" }
-    })
+    }
 }
 
 fn GreetingWithoutGender(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
     let name = route.parameter::<Name>()
         .map(|name| name.to_string())
         .unwrap_or(String::from("Anonymous"));
 
-    cx.render(rsx! {
+    render! {
         p { "Hello {name}" }
-    })
+    }
 }
 
 fn GreetingKenobi(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         p { "Hello there." }
         p { "General Kenobi." }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/fAnna").unwrap()),
@@ -100,9 +100,9 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);

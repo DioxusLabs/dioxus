@@ -22,38 +22,38 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         NavBar {}
         Outlet {}
-    })
+    }
 }
 
 fn NavBar(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         nav {
             ul {
                 li { Link { target: named::<RootIndex>(), "Home" } }
                 li { Link { target: "/blog", "Blog" } }
             }
         }
-    })
+    }
 }
 
 fn Home(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Welcome to the Dioxus Blog!" }
-    })
+    }
 }
 
 fn Blog(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Blog" }
         Outlet {}
-    })
+    }
 }
 
 fn BlogList(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Choose a post" }
         ul {
             li { Link {
@@ -65,27 +65,27 @@ fn BlogList(cx: Scope) -> Element {
                 "Read the second blog post"
             } }
         }
-    })
+    }
 }
 
 struct PostId;
 struct BlogPostName;
 fn BlogPost(cx: Scope) -> Element {
-    let route = use_route(&cx).unwrap();
+    let route = use_route(cx).unwrap();
 
     let post_id = route.parameter::<PostId>();
     let post = post_id
         .map(|id| id.to_string())
         .unwrap_or(String::from("unknown"));
 
-    cx.render(rsx! {
+    render! {
         h2 { "Blog Post: {post}"}
-    })
+    }
 }
 
 fn PageNotFound(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Page not found" }
         p { "We are terribly sorry, but the page you requested doesn't exist." }
-    })
+    }
 }

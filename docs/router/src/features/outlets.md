@@ -12,14 +12,14 @@ the active routes content will be rendered within the [`Outlet`].
 # extern crate dioxus_ssr;
 
 fn Index(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Index" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             ..Default::default()
@@ -27,11 +27,11 @@ fn App(cx: Scope) -> Element {
         &|| Segment::content(comp(Index))
     );
 
-    cx.render(rsx! {
+    render! {
         header { "header" }
-        Outlet {}
+        Outlet { }
         footer { "footer" }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -84,21 +84,21 @@ put the side content.
 #
 
 fn Main(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         main { "Main Content" }
-    })
+    }
 }
 
 struct AsideName;
 fn Aside(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         aside { "Side Content" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             ..Default::default()
@@ -111,12 +111,12 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
             Outlet { }
             Outlet {
                 name: Name::of::<AsideName>()
             }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -152,21 +152,21 @@ easy to create an unterminated recursion. See below for an example of that.
 # extern crate dioxus_ssr;
 #
 fn RootContent(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Root" }
         Outlet { }
-    })
+    }
 }
 
 fn NestedContent(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h2 { "Nested" }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
     use_router(
-        &cx,
+        cx,
         &|| RouterConfiguration {
             # synchronous: true,
             # history: Box::new(MemoryHistory::with_initial_path("/root").unwrap()),
@@ -182,11 +182,11 @@ fn App(cx: Scope) -> Element {
         }
     );
 
-    cx.render(rsx! {
+    render! {
         Outlet {
             depth: 1
         }
-    })
+    }
 }
 #
 # let mut vdom = VirtualDom::new(App);
@@ -215,31 +215,31 @@ This code will create a crash due to an unterminated recursion using
 # use dioxus_router::prelude::*;
 #
 fn Content(cx: Scope) -> Element {
-    cx.render(rsx! {
+    render! {
         h1 { "Heyho!" }
         Outlet {
             depth: 0,
         }
-    })
+    }
 }
 
 fn App(cx: Scope) -> Element {
-    use_router(&cx, &Default::default, &|| Segment::content(comp(Content)));
+    use_router(cx, &Default::default, &|| Segment::content(comp(Content)));
 
-    cx.render(rsx! {
+    render! {
         Outlet { }
-    })
+    }
 }
 ```
 
-The [`Outlet`] directly within the [`Router`] has no parent [`Outlet`], so its
-depth will be `0`. When rendering for the path `/`, it therefore will render the
+The [`Outlet`] in the `App` component has no parent [`Outlet`], so its depth
+will be `0`. When rendering for the path `/`, it therefore will render the
 `Content` component.
 
-The `Content` component will render an `h1` and an [`Outlet`]. That [`Outlet`]
-would usually have a depth of `1`, since its a descendant of the [`Outlet`] in
-the [`Router`]. However, we override its depth to `0`, so it will render the
-`Content` component.
+The `Content` component will render an `h1` and an [`Outlet`]. That [`OUtlet`]
+would usually have a depth of `1`, since it is a descendant of the [`Outlet`] in
+the `App` component. However, we override its depth to `0`, so it will render
+the `Content` component.
 
 That means the `Content` component will recurse until someone (e.g. the OS) puts
 a stop to it.
