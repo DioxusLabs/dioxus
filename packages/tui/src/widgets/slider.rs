@@ -58,6 +58,7 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
             oninput.call(FormData {
                 value,
                 values: HashMap::new(),
+                files: None,
             });
         }
     };

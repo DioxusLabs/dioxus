@@ -1,55 +1,56 @@
+#![allow(dead_code)]
+
+pub(crate) mod events;
 pub mod adapters {
     #[cfg(feature = "warp")]
     pub mod warp_adapter;
-    #[cfg(feature = "warp")]
-    pub use warp_adapter::*;
 
     #[cfg(feature = "axum")]
     pub mod axum_adapter;
-    #[cfg(feature = "axum")]
-    pub use axum_adapter::*;
 
     #[cfg(feature = "salvo")]
     pub mod salvo_adapter;
-
-    #[cfg(feature = "salvo")]
-    pub use salvo_adapter::*;
 }
 
-pub use adapters::*;
+use std::net::SocketAddr;
 
-pub mod pool;
-use futures_util::{SinkExt, StreamExt};
-pub use pool::*;
+use tokio_util::task::LocalPoolHandle;
 
-pub trait WebsocketTx: SinkExt<String, Error = LiveViewError> {}
-impl<T> WebsocketTx for T where T: SinkExt<String, Error = LiveViewError> {}
-
-pub trait WebsocketRx: StreamExt<Item = Result<String, LiveViewError>> {}
-impl<T> WebsocketRx for T where T: StreamExt<Item = Result<String, LiveViewError>> {}
-
-#[derive(Debug, thiserror::Error)]
-pub enum LiveViewError {
-    #[error("warp error")]
-    SendingFailed,
+#[derive(Clone)]
+pub struct Liveview {
+    pool: LocalPoolHandle,
+    addr: String,
 }
 
-use dioxus_interpreter_js::INTERPRETER_JS;
-static MAIN_JS: &str = include_str!("./main.js");
+impl Liveview {
+    pub fn body(&self, header: &str) -> String {
+        format!(
+            r#"
+<!DOCTYPE html>
+<html>
+  <head>
+    {header}
+  </head>
+  <body>
+    <div id="main"></div>
+    <script>
+      var WS_ADDR = "ws://{addr}/app";
+      {interpreter}
+      main();
+    </script>
+  </body>
+</html>"#,
+            addr = self.addr,
+            interpreter = include_str!("../src/interpreter.js")
+        )
+    }
+}
 
-/// This script that gets injected into your app connects this page to the websocket endpoint
-///
-/// Once the endpoint is connected, it will send the initial state of the app, and then start
-/// processing user events and returning edits to the liveview instance
-pub fn interpreter_glue(url: &str) -> String {
-    format!(
-        r#"
-<script>
-    var WS_ADDR = "{url}";
-    {INTERPRETER_JS}
-    {MAIN_JS}
-    main();
-</script>
-    "#
-    )
+pub fn new(addr: impl Into<SocketAddr>) -> Liveview {
+    let addr: SocketAddr = addr.into();
+
+    Liveview {
+        pool: LocalPoolHandle::new(16),
+        addr: addr.to_string(),
+    }
 }

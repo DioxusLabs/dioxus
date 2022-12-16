@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Dioxus app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <div id="main"></div>
+    <script>
+      import("./index.js").then(function (module) {
+        module.main();
+      });
+    </script>
+  </body>
+</html>
