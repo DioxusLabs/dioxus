@@ -29,7 +29,7 @@ fn simple_test() {
                 Segment::content(comp(Home)).fixed(
                     "blog",
                     Route::empty().nested(
-                        Segment::content(comp(BlogList)).catch_all((comp(BlogPost, PostId {}))),
+                        Segment::content(comp(BlogList)).catch_all((comp(BlogPost), PostId {})),
                     ),
                 )
             },
