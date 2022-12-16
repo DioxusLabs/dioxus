@@ -12,9 +12,7 @@ fn test_memory_leak() {
     fn app(cx: Scope) -> Element {
         let val = cx.generation();
 
-        cx.spawn(async {
-            tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
-        });
+        cx.spawn(async {});
 
         if val == 2 || val == 4 {
             return cx.render(rsx!(()));

@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-
 //! A tour of the rsx! macro
 //! ------------------------
 //!
@@ -39,7 +38,7 @@
 //! - Accept a list of vnodes as children for a Fragment component
 //! - Allow keyed fragments in iterators
 //! - Allow top-level fragments
-//!
+
 fn main() {
     dioxus_desktop::launch(app);
 }

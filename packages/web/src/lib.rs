@@ -55,7 +55,7 @@
 
 pub use crate::cfg::Config;
 use crate::dom::virtual_event_from_websys_event;
-pub use crate::util::use_eval;
+pub use crate::util::{use_eval, EvalResult};
 use dioxus_core::{Element, ElementId, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 
@@ -195,7 +195,7 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
     // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
 
-    let mut work_loop = ric_raf::RafLoop::new();
+    let _work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::debug!("waiting for work");
@@ -222,16 +222,11 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible
         while let Some(evt) = res {
-            let name = evt.type_();
-            let element = walk_event_for_id(&evt);
-            let bubbles = dioxus_html::event_bubbles(name.as_str());
-            if let Some((element, target)) = element {
-                let data = virtual_event_from_websys_event(evt, target);
-                dom.handle_event(name.as_str(), data, element, bubbles);
-            }
+            dom.handle_event(evt.name.as_str(), evt.data, evt.element, evt.bubbles);
             res = rx.try_next().transpose().unwrap().ok();
         }
 
+        // Todo: This is currently disabled because it has a negative impact on responce times for events but it could be re-enabled for tasks
         // Jank free rendering
         //
         // 1. wait for the browser to give us "idle" time
@@ -240,39 +235,16 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
         // 4. Wait for the animation frame to patch the dom
 
         // wait for the mainthread to schedule us in
-        let deadline = work_loop.wait_for_idle_time().await;
+        // let deadline = work_loop.wait_for_idle_time().await;
 
         // run the virtualdom work phase until the frame deadline is reached
-        let edits = dom.render_with_deadline(deadline).await;
+        let edits = dom.render_immediate();
 
         // wait for the animation frame to fire so we can apply our changes
-        work_loop.wait_for_raf().await;
+        // work_loop.wait_for_raf().await;
 
         websys_dom.load_templates(&edits.templates);
         websys_dom.apply_edits(edits.edits);
-    }
-}
-
-fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {
-    use wasm_bindgen::JsCast;
-
-    let mut target = event
-        .target()
-        .expect("missing target")
-        .dyn_into::<web_sys::Element>()
-        .expect("not a valid element");
-
-    loop {
-        match target.get_attribute("data-dioxus-id").map(|f| f.parse()) {
-            Some(Ok(id)) => return Some((ElementId(id), target)),
-            Some(Err(_)) => return None,
-
-            // walk the tree upwards until we actually find an event target
-            None => match target.parent_element() {
-                Some(parent) => target = parent,
-                None => return None,
-            },
-        }
     }
 }
 

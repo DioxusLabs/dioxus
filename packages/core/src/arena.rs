@@ -34,14 +34,14 @@ impl ElementRef {
 
 impl VirtualDom {
     pub(crate) fn next_element(&mut self, template: &VNode, path: &'static [u8]) -> ElementId {
-        self.next(template, ElementPath::Deep(path))
+        self.next_reference(template, ElementPath::Deep(path))
     }
 
     pub(crate) fn next_root(&mut self, template: &VNode, path: usize) -> ElementId {
-        self.next(template, ElementPath::Root(path))
+        self.next_reference(template, ElementPath::Root(path))
     }
 
-    fn next(&mut self, template: &VNode, path: ElementPath) -> ElementId {
+    fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
 
@@ -95,22 +95,27 @@ impl VirtualDom {
     fn drop_scope_inner(&mut self, node: &VNode) {
         node.clear_listeners();
         node.dynamic_nodes.iter().for_each(|node| match node {
-            DynamicNode::Component(c) => self.drop_scope(c.scope.get().unwrap()),
+            DynamicNode::Component(c) => {
+                if let Some(f) = c.scope.get() {
+                    self.drop_scope(f)
+                }
+            }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
             DynamicNode::Placeholder(t) => {
-                self.try_reclaim(t.get());
+                self.try_reclaim(t.id.get().unwrap());
             }
             DynamicNode::Text(t) => {
-                self.try_reclaim(t.id.get());
+                self.try_reclaim(t.id.get().unwrap());
             }
         });
 
         for root in node.root_ids {
-            let id = root.get();
-            if id.0 != 0 {
-                self.try_reclaim(id);
+            if let Some(id) = root.get() {
+                if id.0 != 0 {
+                    self.try_reclaim(id);
+                }
             }
         }
     }
@@ -131,8 +136,10 @@ impl VirtualDom {
         node.dynamic_nodes.iter().for_each(|child| match child {
             // Only descend if the props are borrowed
             DynamicNode::Component(c) if !c.static_props => {
-                self.ensure_drop_safety(c.scope.get().unwrap());
-                c.props.set(None);
+                if let Some(scope) = c.scope.get() {
+                    self.ensure_drop_safety(scope);
+                }
+                c.props.take();
             }
 
             DynamicNode::Fragment(f) => f

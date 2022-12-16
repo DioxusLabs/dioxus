@@ -18,7 +18,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 bumpalo = { version = "3.6", features = ["collections", "boxed"] }
 
 # faster hashmaps
-fxhash = "0.2"
+rustc-hash = "1.1.0"
 
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
@@ -34,6 +34,9 @@ indexmap = "1.7"
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 anyhow = "1.0.66"
+
+smallbox = "0.8.1"
+log = "0.4.17"
 
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }

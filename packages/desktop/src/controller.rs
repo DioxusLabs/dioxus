@@ -1,10 +1,12 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
-use crate::events::{decode_event, EventMessage};
+use crate::events::IpcMessage;
 use dioxus_core::*;
+use dioxus_html::{Html, HtmlEvent};
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
+use serde_json::Value;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -19,11 +21,12 @@ use wry::{
 
 pub(super) struct DesktopController {
     pub(super) webviews: HashMap<WindowId, WebView>,
+    pub(super) eval_sender: tokio::sync::mpsc::UnboundedSender<Value>,
     pub(super) pending_edits: Arc<Mutex<Vec<String>>>,
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
     pub(super) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(super) event_tx: UnboundedSender<serde_json::Value>,
+    pub(super) event_tx: UnboundedSender<Html>,
     #[cfg(debug_assertions)]
     pub(super) templates_tx: UnboundedSender<Template<'static>>,
 
@@ -40,12 +43,13 @@ impl DesktopController {
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
-        let (event_tx, mut event_rx) = unbounded();
+        let (event_tx, mut event_rx) = unbounded::<HtmlEvent>();
         let (templates_tx, mut templates_rx) = unbounded();
         let proxy2 = proxy.clone();
 
         let pending_edits = edit_queue.clone();
         let desktop_context_proxy = proxy.clone();
+        let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel::<Value>();
 
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "tokio::spawn" onto multiple threads
@@ -57,7 +61,7 @@ impl DesktopController {
 
             runtime.block_on(async move {
                 let mut dom = VirtualDom::new_with_props(root, props)
-                    .with_root_context(DesktopContext::new(desktop_context_proxy));
+                    .with_root_context(DesktopContext::new(desktop_context_proxy, eval_reciever));
                 {
                     let edits = dom.rebuild();
                     let mut queue = edit_queue.lock().unwrap();
@@ -80,14 +84,8 @@ impl DesktopController {
                             dom.replace_template(template);
                         }
                         _ = dom.wait_for_work() => {}
-                        Some(json_value) = event_rx.next() => {
-                            if let Ok(value) = serde_json::from_value::<EventMessage>(json_value) {
-                                let name = value.event.clone();
-                                let el_id = ElementId(value.mounted_dom_id);
-                                if let Some(evt) = decode_event(value) {
-                                    dom.handle_event(&name,  evt, el_id,  dioxus_html::events::event_bubbles(&name));
-                                }
-                            }
+                        Some(value) = event_rx.next() => {
+                            dom.handle_event(&value.name,  value.data.into_any(), value.element,  dioxus_html::events::event_bubbles(&value.name));
                         }
                     }
 
@@ -103,6 +101,7 @@ impl DesktopController {
 
         Self {
             pending_edits,
+            eval_sender,
             webviews: HashMap::new(),
             is_ready: Arc::new(AtomicBool::new(false)),
             quit_app_on_close: true,

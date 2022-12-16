@@ -7,7 +7,7 @@ use dioxus_native_core::state::ChildDepState;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
-use crate::screen_to_layout_space;
+use crate::{screen_to_layout_space, unit_to_layout_space};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum PossiblyUninitalized<T> {
@@ -104,6 +104,59 @@ impl ChildDepState for TaffyLayout {
             for (l,) in children {
                 child_layout.push(l.node.unwrap());
             }
+
+            fn scale_dimention(d: Dimension) -> Dimension {
+                match d {
+                    Dimension::Points(p) => Dimension::Points(unit_to_layout_space(p)),
+                    Dimension::Percent(p) => Dimension::Percent(p),
+                    Dimension::Auto => Dimension::Auto,
+                    Dimension::Undefined => Dimension::Undefined,
+                }
+            }
+            let style = Style {
+                position: Rect {
+                    left: scale_dimention(style.position.left),
+                    right: scale_dimention(style.position.right),
+                    top: scale_dimention(style.position.top),
+                    bottom: scale_dimention(style.position.bottom),
+                },
+                margin: Rect {
+                    left: scale_dimention(style.margin.left),
+                    right: scale_dimention(style.margin.right),
+                    top: scale_dimention(style.margin.top),
+                    bottom: scale_dimention(style.margin.bottom),
+                },
+                padding: Rect {
+                    left: scale_dimention(style.padding.left),
+                    right: scale_dimention(style.padding.right),
+                    top: scale_dimention(style.padding.top),
+                    bottom: scale_dimention(style.padding.bottom),
+                },
+                border: Rect {
+                    left: scale_dimention(style.border.left),
+                    right: scale_dimention(style.border.right),
+                    top: scale_dimention(style.border.top),
+                    bottom: scale_dimention(style.border.bottom),
+                },
+                gap: Size {
+                    width: scale_dimention(style.gap.width),
+                    height: scale_dimention(style.gap.height),
+                },
+                flex_basis: scale_dimention(style.flex_basis),
+                size: Size {
+                    width: scale_dimention(style.size.width),
+                    height: scale_dimention(style.size.height),
+                },
+                min_size: Size {
+                    width: scale_dimention(style.min_size.width),
+                    height: scale_dimention(style.min_size.height),
+                },
+                max_size: Size {
+                    width: scale_dimention(style.max_size.width),
+                    height: scale_dimention(style.max_size.height),
+                },
+                ..style
+            };
 
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {

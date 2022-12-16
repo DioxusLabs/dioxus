@@ -10,10 +10,10 @@ use crate::{
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    collections::{HashMap, HashSet},
     fmt::Arguments,
     future::Future,
     rc::Rc,
@@ -82,10 +82,10 @@ pub struct ScopeState {
     pub(crate) hook_list: RefCell<Vec<*mut dyn Any>>,
     pub(crate) hook_idx: Cell<usize>,
 
-    pub(crate) shared_contexts: RefCell<HashMap<TypeId, Box<dyn Any>>>,
+    pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: HashSet<TaskId>,
+    pub(crate) spawned_tasks: FxHashSet<TaskId>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
@@ -237,7 +237,9 @@ impl<'src> ScopeState {
     /// This method should be used when you want to schedule an update for a component
     pub fn schedule_update_any(&self) -> Arc<dyn Fn(ScopeId) + Send + Sync> {
         let chan = self.tasks.sender.clone();
-        Arc::new(move |id| drop(chan.unbounded_send(SchedulerMsg::Immediate(id))))
+        Arc::new(move |id| {
+            chan.unbounded_send(SchedulerMsg::Immediate(id)).unwrap();
+        })
     }
 
     /// Mark this scope as dirty, and schedule a render for it.
@@ -448,7 +450,7 @@ impl<'src> ScopeState {
             name: fn_name,
             render_fn: component as *const (),
             static_props: P::IS_STATIC,
-            props: Cell::new(Some(extended)),
+            props: RefCell::new(Some(extended)),
             scope: Cell::new(None),
         })
     }

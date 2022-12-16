@@ -1,4 +1,4 @@
-use fxhash::FxHashSet;
+use rustc_hash::FxHashSet;
 
 use crate::{arena::ElementId, ScopeId, Template};
 
@@ -229,9 +229,6 @@ pub enum Mutation<'a> {
     NewEventListener {
         /// The name of the event to listen for.
         name: &'a str,
-
-        /// The ID of the node to attach the listener to.
-        scope: ScopeId,
 
         /// The ID of the node to attach the listener to.
         id: ElementId,

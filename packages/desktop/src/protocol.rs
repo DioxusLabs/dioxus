@@ -52,7 +52,14 @@ pub(super) fn desktop_handler(
     } else if trimmed == "index.js" {
         Response::builder()
             .header("Content-Type", "text/javascript")
-            .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
+            .body(
+                format!(
+                    "{} {}",
+                    dioxus_interpreter_js::INTERPRETER_JS,
+                    include_str!("./main.js")
+                )
+                .into_bytes(),
+            )
             .map_err(From::from)
     } else {
         let asset_root = asset_root
@@ -104,10 +111,10 @@ fn get_asset_root() -> Option<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         let bundle = core_foundation::bundle::CFBundle::main_bundle();
-        let bundle_path = dbg!(bundle.path()?);
-        let resources_path = dbg!(bundle.resources_path()?);
-        let absolute_resources_root = dbg!(bundle_path.join(resources_path));
-        let canonical_resources_root = dbg!(dunce::canonicalize(absolute_resources_root).ok()?);
+        let bundle_path = bundle.path()?;
+        let resources_path = bundle.resources_path()?;
+        let absolute_resources_root = bundle_path.join(resources_path);
+        let canonical_resources_root = dunce::canonicalize(absolute_resources_root).ok()?;
 
         return Some(canonical_resources_root);
     }

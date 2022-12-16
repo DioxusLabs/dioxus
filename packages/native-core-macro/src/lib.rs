@@ -306,8 +306,7 @@ impl Member {
                     + field.ty.to_token_stream().to_string().as_str())
                 .as_str(),
                 Span::call_site(),
-            )
-            .into(),
+            ),
             ident: field.ident.as_ref()?.clone(),
         })
     }

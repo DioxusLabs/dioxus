@@ -1,11 +1,3 @@
-export function main() {
-  let root = window.document.getElementById("main");
-  if (root != null) {
-    window.interpreter = new Interpreter(root);
-    window.ipc.postMessage(serializeIpcMessage("initialize"));
-  }
-}
-
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -60,7 +52,7 @@ class ListenerMap {
   }
 }
 
-export class Interpreter {
+class Interpreter {
   constructor(root) {
     this.root = root;
     this.listeners = new ListenerMap(root);
@@ -90,7 +82,8 @@ export class Interpreter {
     this.stack.pop();
   }
   AppendChildren(many) {
-    let root = this.stack[this.stack.length - (1 + many)];
+    // let root = this.nodes[id];
+    let root = this.stack[this.stack.length - 1 - many];
     let to_add = this.stack.splice(this.stack.length - many);
     for (let i = 0; i < many; i++) {
       root.appendChild(to_add[i]);
@@ -352,7 +345,10 @@ export class Interpreter {
         break;
       case "NewEventListener":
         // this handler is only provided on desktop implementations since this
-        // method is not used by the web implementation
+        // method is not used by the web implementationa
+
+        let bubbles = event_bubbles(edit.name);
+
         let handler = (event) => {
           let target = event.target;
           if (target != null) {
@@ -434,20 +430,21 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.name,
-                mounted_dom_id: parseInt(realId),
-                contents: contents,
+                name: edit.name,
+                element: parseInt(realId),
+                data: contents,
+                bubbles: bubbles,
               })
             );
           }
         };
-        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
+        this.NewEventListener(edit.name, edit.id, bubbles, handler);
         break;
     }
   }
 }
 
-export function serialize_event(event) {
+function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":

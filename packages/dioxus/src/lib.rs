@@ -1,5 +1,3 @@
-#![doc = include_str!("../../../notes/README.md")]
-
 pub use dioxus_core as core;
 
 #[cfg(feature = "hooks")]

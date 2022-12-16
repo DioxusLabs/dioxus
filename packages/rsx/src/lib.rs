@@ -217,7 +217,8 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
                 parent: None,
                 key: #key_tokens,
                 template: TEMPLATE,
-                root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([::dioxus::core::ElementId(0); #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
+                root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut _).as_slice_of_cells(),
+                // root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }
@@ -441,7 +442,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                 let el_name = &el.name;
                 let static_attrs = el.attributes.iter().map(|attr| match &attr.attr {
                     ElementAttr::AttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
+                        let value = value.to_static().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: dioxus_elements::#el_name::#name.0,
@@ -455,7 +456,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                     }
 
                     ElementAttr::CustomAttrText { name, value } if value.is_static() => {
-                        let value = value.source.as_ref().unwrap();
+                        let value = value.to_static().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
                                 name: #name,
@@ -503,7 +504,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
             }
 
             BodyNode::Text(text) if text.is_static() => {
-                let text = text.source.as_ref().unwrap();
+                let text = text.to_static().unwrap();
                 quote! { ::dioxus::core::TemplateNode::Text{ text: #text } }
             }
 

@@ -2,6 +2,11 @@ use std::rc::Rc;
 
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use serde::de::Error;
+use serde_json::Value;
+use std::future::Future;
+use std::future::IntoFuture;
+use std::pin::Pin;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
@@ -17,16 +22,6 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
     cx.use_hook(|| cx.consume_context::<DesktopContext>())
         .as_ref()
         .unwrap()
-}
-
-/// Get a closure that executes any JavaScript in the WebView context.
-pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String)> {
-    let desktop = use_window(cx);
-
-    &*cx.use_hook(|| {
-        let desktop = desktop.clone();
-        Rc::new(move |script| desktop.eval(script))
-    } as Rc<dyn Fn(String)>)
 }
 
 /// An imperative interface to the current window.
@@ -45,11 +40,18 @@ pub fn use_eval(cx: &ScopeState) -> &Rc<dyn Fn(String)> {
 pub struct DesktopContext {
     /// The wry/tao proxy to the current window
     pub proxy: ProxyType,
+    pub(super) eval_reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
 }
 
 impl DesktopContext {
-    pub(crate) fn new(proxy: ProxyType) -> Self {
-        Self { proxy }
+    pub(crate) fn new(
+        proxy: ProxyType,
+        eval_reciever: tokio::sync::mpsc::UnboundedReceiver<Value>,
+    ) -> Self {
+        Self {
+            proxy,
+            eval_reciever: Rc::new(tokio::sync::Mutex::new(eval_reciever)),
+        }
     }
 
     /// trigger the drag-window event
@@ -236,6 +238,18 @@ impl DesktopController {
             Resizable(state) => window.set_resizable(state),
             AlwaysOnTop(state) => window.set_always_on_top(state),
 
+            Eval(code) => {
+                let script = format!(
+                    r#"window.ipc.postMessage(JSON.stringify({{"method":"eval_result", params: (function(){{
+                        {}
+                    }})()}}));"#,
+                    code
+                );
+                if let Err(e) = webview.evaluate_script(&script) {
+                    // we can't panic this error.
+                    log::warn!("Eval script error: {e}");
+                }
+            }
             CursorVisible(state) => window.set_cursor_visible(state),
             CursorGrab(state) => {
                 let _ = window.set_cursor_grab(state);
@@ -257,13 +271,6 @@ impl DesktopController {
                 webview.open_devtools();
                 #[cfg(not(debug_assertions))]
                 log::warn!("Devtools are disabled in release builds");
-            }
-
-            Eval(code) => {
-                if let Err(e) = webview.evaluate_script(code.as_str()) {
-                    // we can't panic this error.
-                    log::warn!("Eval script error: {e}");
-                }
             }
 
             #[cfg(target_os = "ios")]
@@ -292,6 +299,39 @@ impl DesktopController {
                 }
             },
         }
+    }
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_eval<S: std::string::ToString>(cx: &ScopeState) -> &dyn Fn(S) -> EvalResult {
+    let desktop = use_window(cx).clone();
+    cx.use_hook(|| {
+        move |script| {
+            desktop.eval(script);
+            let recv = desktop.eval_reciever.clone();
+            EvalResult { reciever: recv }
+        }
+    })
+}
+
+/// A future that resolves to the result of a JavaScript evaluation.
+pub struct EvalResult {
+    reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>>,
+}
+
+impl IntoFuture for EvalResult {
+    type Output = Result<serde_json::Value, serde_json::Error>;
+
+    type IntoFuture = Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        Box::pin(async move {
+            let mut reciever = self.reciever.lock().await;
+            match reciever.recv().await {
+                Some(result) => Ok(result),
+                None => Err(serde_json::Error::custom("No result returned")),
+            }
+        }) as Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>
     }
 }
 

@@ -17,7 +17,8 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_eval, use_window, DesktopContext};
+pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
+use dioxus_html::HtmlEvent;
 use futures_channel::mpsc::UnboundedSender;
 pub use wry;
 pub use wry::application as tao;
@@ -145,6 +146,7 @@ impl DesktopController {
             event_loop,
             self.is_ready.clone(),
             self.proxy.clone(),
+            self.eval_sender.clone(),
             self.event_tx.clone(),
         );
 
@@ -157,7 +159,8 @@ fn build_webview(
     event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
     is_ready: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
-    event_tx: UnboundedSender<serde_json::Value>,
+    eval_sender: tokio::sync::mpsc::UnboundedSender<serde_json::Value>,
+    event_tx: UnboundedSender<HtmlEvent>,
 ) -> wry::webview::WebView {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
@@ -186,8 +189,14 @@ fn build_webview(
         .with_ipc_handler(move |_window: &Window, payload: String| {
             parse_ipc_message(&payload)
                 .map(|message| match message.method() {
+                    "eval_result" => {
+                        let result = message.params();
+                        eval_sender.send(result).unwrap();
+                    }
                     "user_event" => {
-                        _ = event_tx.unbounded_send(message.params());
+                        if let Ok(evt) = serde_json::from_value(message.params()) {
+                            _ = event_tx.unbounded_send(evt);
+                        }
                     }
                     "initialize" => {
                         is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -234,16 +243,16 @@ fn build_webview(
         // in release mode, we don't want to show the dev tool or reload menus
         webview = webview.with_initialization_script(
             r#"
-                        if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            e.preventDefault();
-                        }, false);
-                        } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            window.event.returnValue = false;
-                        });
-                        }
-                    "#,
+        if (document.addEventListener) {
+            document.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+            }, false);
+        } else {
+            document.attachEvent('oncontextmenu', function() {
+                window.event.returnValue = false;
+            });
+        }
+    "#,
         )
     } else {
         // in debug, we are okay with the reload menu showing and dev tool
