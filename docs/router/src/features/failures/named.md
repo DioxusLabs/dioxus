@@ -18,7 +18,7 @@ testing our application.
 
 ## Release
 When running a release build, the router can't just `panic`, as that would be a
-horrible user experience. Instead, it changes shows some fallback content.
+horrible user experience. Instead, it changes to show some fallback content.
 
 > You can detect if the router is in the named navigation failure handling state
 > by [checking](../navigation/name.md#check-if-a-name-is-present) if the

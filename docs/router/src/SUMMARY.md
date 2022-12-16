@@ -19,6 +19,7 @@
 - [Navigation Failures](./features/failures/index.md)
   - [Named Navigation Failure](./features/failures/named.md)
   - [External Navigation Failure](./features/failures/external.md)
+  - [Redirection Limit Failure](./features/failures/redirection-limit.md)
 - [History Providers](./features/history-providers.md)
 - [History Buttons](./features/history-buttons.md)
 - [Sitemap Generation](./features/sitemap-generation.md)
