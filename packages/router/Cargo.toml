@@ -23,6 +23,7 @@ thiserror = "1.0.37"
 [features]
 regex = ["dioxus-router-core/regex"]
 serde = ["dioxus-router-core/serde"]
+wasm_test = []
 web = ["dioxus-router-core/web"]
 
 [dev-dependencies]
@@ -35,3 +36,7 @@ dioxus-desktop = { path = "../desktop" }
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
 dioxus-router = { path = ".", features = ["web"] }
 dioxus-web = { path= "../web" }
+
+[target.'cfg(feature = "wasm_test")'.dev-dependencies]
+gloo = "0.8.0"
+wasm-bindgen-test = "0.3.33"
