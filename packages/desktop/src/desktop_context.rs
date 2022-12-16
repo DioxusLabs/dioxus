@@ -171,11 +171,6 @@ pub enum UserWindowEvent {
     DragWindow,
     FocusWindow,
 
-    /// Set a new Dioxus template for hot-reloading
-    ///
-    /// Is a no-op in release builds. Must fit the right format for templates
-    SetTemplate(String),
-
     Visible(bool),
     Minimize(bool),
     Maximize(bool),
@@ -223,7 +218,6 @@ impl DesktopController {
 
         match user_event {
             Initialize | EditsReady => self.try_load_ready_webviews(),
-            SetTemplate(template) => self.set_template(template),
             CloseWindow => *control_flow = ControlFlow::Exit,
             DragWindow => {
                 // if the drag_window has any errors, we don't do anything

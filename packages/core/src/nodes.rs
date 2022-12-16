@@ -102,7 +102,7 @@ impl<'a> VNode<'a> {
 ///
 /// For this to work properly, the [`Template::name`] *must* be unique across your entire project. This can be done via variety of
 /// ways, with the suggested approach being the unique code location (file, line, col, etc).
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
 pub struct Template<'a> {
     /// The name of the template. This must be unique across your entire program for template diffing to work properly
@@ -113,26 +113,47 @@ pub struct Template<'a> {
     /// The list of template nodes that make up the template
     ///
     /// Unlike react, calls to `rsx!` can have multiple roots. This list supports that paradigm.
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
     pub roots: &'a [TemplateNode<'a>],
 
     /// The paths of each node relative to the root of the template.
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
     pub node_paths: &'a [&'a [u8]],
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
+    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
     pub attr_paths: &'a [&'a [u8]],
+}
+
+#[cfg(feature = "serialize")]
+fn deserialize_leaky<'a, 'de, T: serde::Deserialize<'de>, D>(
+    deserializer: D,
+) -> Result<&'a [T], D::Error>
+where
+    T: serde::Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = Box::<[T]>::deserialize(deserializer)?;
+    Ok(&*Box::leak(deserialized))
 }
 
 /// A statically known node in a layout.
 ///
 /// This can be created at compile time, saving the VirtualDom time when diffing the tree
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize), serde(tag = "type"))]
+#[cfg_attr(
+    feature = "serialize",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(tag = "type")
+)]
 pub enum TemplateNode<'a> {
     /// An statically known element in the dom.
     ///
@@ -152,9 +173,11 @@ pub enum TemplateNode<'a> {
         /// A list of possibly dynamic attribues for this element
         ///
         /// An attribute on a DOM node, such as `id="my-thing"` or `href="https://example.com"`.
+        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
         attrs: &'a [TemplateAttribute<'a>],
 
         /// A list of template nodes that define another set of template nodes
+        #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
         children: &'a [TemplateNode<'a>],
     },
 
