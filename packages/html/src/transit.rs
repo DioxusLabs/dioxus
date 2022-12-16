@@ -115,7 +115,7 @@ fn test_back_and_forth() {
 }
     "#;
 
-    let p: HtmlEvent = serde_json::from_str(o).unwrap();
+    let _: HtmlEvent = serde_json::from_str(o).unwrap();
 }
 
 // pub fn decode_event(value: ) -> Option<Rc<dyn Any>> {

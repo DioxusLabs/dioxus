@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use dioxus_core::Event;
 
 use crate::MouseData;

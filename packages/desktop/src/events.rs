@@ -1,10 +1,6 @@
 //! Convert a serialized event to an event trigger
 
-use dioxus_html::events::*;
 use serde::{Deserialize, Serialize};
-use serde_json::from_value;
-use std::any::Any;
-use std::rc::Rc;
 
 #[derive(Deserialize, Serialize, Debug)]
 pub(crate) struct IpcMessage {
