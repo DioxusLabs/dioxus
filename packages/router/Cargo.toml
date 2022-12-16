@@ -34,9 +34,9 @@ dioxus-ssr = { path = "../ssr" }
 dioxus-desktop = { path = "../desktop" }
 
 [target.'cfg(target_family = "wasm")'.dev-dependencies]
+console_error_panic_hook = "0.1.7"
 dioxus-router = { path = ".", features = ["web"] }
 dioxus-web = { path= "../web" }
-
-[target.'cfg(feature = "wasm_test")'.dev-dependencies]
 gloo = "0.8.0"
 wasm-bindgen-test = "0.3.33"
+wasm-logger = "0.2.0"
