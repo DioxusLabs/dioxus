@@ -1,5 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_liveview::LiveView;
+use dioxus_liveview::adapters::warp_adapter::warp_socket;
+use dioxus_liveview::LiveViewPool;
 use std::net::SocketAddr;
 use warp::ws::Ws;
 use warp::Filter;
@@ -9,7 +10,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            "hello world! {num}"
+            "hello warp! {num}"
             button {
                 onclick: move |_| num += 1,
                 "Increment"
@@ -38,15 +39,14 @@ async fn main() {
         ))
     });
 
-    let view = LiveView::new();
+    let pool = LiveViewPool::new();
 
     let ws = warp::path("ws")
         .and(warp::ws())
-        .and(warp::any().map(move || view.clone()))
-        .map(move |ws: Ws, view: LiveView| {
-            println!("Got a connection!");
+        .and(warp::any().map(move || pool.clone()))
+        .map(move |ws: Ws, pool: LiveViewPool| {
             ws.on_upgrade(|ws| async move {
-                let _ = view.upgrade_warp(ws, app).await;
+                let _ = pool.launch(warp_socket(ws), app).await;
             })
         });
 

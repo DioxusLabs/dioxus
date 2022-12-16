@@ -1,13 +1,22 @@
 pub mod adapters {
     #[cfg(feature = "warp")]
     pub mod warp_adapter;
+    #[cfg(feature = "warp")]
+    pub use warp_adapter::*;
 
     #[cfg(feature = "axum")]
     pub mod axum_adapter;
+    #[cfg(feature = "axum")]
+    pub use axum_adapter::*;
 
     #[cfg(feature = "salvo")]
     pub mod salvo_adapter;
+
+    #[cfg(feature = "salvo")]
+    pub use salvo_adapter::*;
 }
+
+pub use adapters::*;
 
 pub mod pool;
 use futures_util::{SinkExt, StreamExt};
@@ -28,6 +37,10 @@ pub enum LiveViewError {
 use dioxus_interpreter_js::INTERPRETER_JS;
 static MAIN_JS: &str = include_str!("./main.js");
 
+/// This script that gets injected into your app connects this page to the websocket endpoint
+///
+/// Once the endpoint is connected, it will send the initial state of the app, and then start
+/// processing user events and returning edits to the liveview instance
 pub fn interpreter_glue(url: &str) -> String {
     format!(
         r#"

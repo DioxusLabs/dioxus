@@ -51,4 +51,16 @@ salvo = { version = "0.32.0", features = ["affix", "ws"] }
 tower = "0.4.12"
 
 [features]
-default = ["warp"]
+default = ["salvo"]
+
+[[example]]
+name = "axum"
+required-features = ["axum"]
+
+[[example]]
+name = "salvo"
+required-features = ["salvo"]
+
+[[example]]
+name = "warp"
+required-features = ["warp"]
