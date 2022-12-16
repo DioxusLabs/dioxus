@@ -95,6 +95,7 @@ fn test_back_and_forth() {
 {
   "element": 0,
   "name": "click",
+  "bubbles": true,
   "data": {
     "alt_key": false,
     "button": 0,
