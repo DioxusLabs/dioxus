@@ -2,7 +2,6 @@
   <h1>Dioxus Router</h1>
 </div>
 
-
 <div align="center">
   <!-- Crates version -->
   <a href="https://crates.io/crates/dioxus">
@@ -34,8 +33,6 @@
     <img src="https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square" alt="Discord Link" />
   </a>
 </div>
-
-
 
 <div align="center">
   <h3>
@@ -110,11 +107,3 @@ fn BlogPost(cx: Scope) -> Element {
     }
 }
 ```
-
-
-## Resources
-
-- See the mdbook
-- See the one-page brief
-- See the guide on the doc site
-- The crates.io API
