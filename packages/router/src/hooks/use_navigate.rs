@@ -1,7 +1,7 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 use dioxus_router_core::Navigator;
 
-use crate::{RouterError, utils::use_router_internal::use_router_internal};
+use crate::{utils::use_router_internal::use_router_internal, RouterError};
 
 /// A hook that allows for programmatic navigation.
 ///

@@ -26,8 +26,7 @@ pub(crate) fn update_history(window: &Window, history: &History) {
     }
 }
 
-pub(crate) fn update_scroll(window: &Window, history: &History) -> AnimationFrame
-{
+pub(crate) fn update_scroll(window: &Window, history: &History) -> AnimationFrame {
     let ScrollPosition { x, y } = history
         .state()
         .map(|state| serde_wasm_bindgen::from_value(state).unwrap_or_default())
