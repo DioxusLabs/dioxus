@@ -45,7 +45,9 @@ async fn main() {
         .and(warp::any().map(move || view.clone()))
         .map(move |ws: Ws, view: LiveView| {
             println!("Got a connection!");
-            ws.on_upgrade(|ws| view.upgrade_warp(ws, app))
+            ws.on_upgrade(|ws| async move {
+                let _ = view.upgrade_warp(ws, app).await;
+            })
         });
 
     println!("Listening on http://{}", addr);

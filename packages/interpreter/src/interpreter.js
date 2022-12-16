@@ -345,7 +345,10 @@ class Interpreter {
         break;
       case "NewEventListener":
         // this handler is only provided on desktop implementations since this
-        // method is not used by the web implementation
+        // method is not used by the web implementationa
+
+        let bubbles = event_bubbles(edit.name);
+
         let handler = (event) => {
           let target = event.target;
           if (target != null) {
@@ -430,11 +433,12 @@ class Interpreter {
                 name: edit.name,
                 element: parseInt(realId),
                 data: contents,
+                bubbles: bubbles,
               })
             );
           }
         };
-        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
+        this.NewEventListener(edit.name, edit.id, bubbles, handler);
         break;
     }
   }

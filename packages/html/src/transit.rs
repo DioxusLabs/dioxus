@@ -27,6 +27,7 @@ pub struct HtmlEvent {
     pub element: ElementId,
     pub name: String,
     pub data: EventData,
+    pub bubbles: bool,
 }
 
 impl HtmlEvent {
@@ -85,6 +86,7 @@ fn test_back_and_forth() {
         element: ElementId(0),
         data: EventData::Mouse(MouseData::default()),
         name: "click".to_string(),
+        bubbles: true,
     };
 
     println!("{}", serde_json::to_string_pretty(&data).unwrap());

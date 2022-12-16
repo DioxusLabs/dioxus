@@ -4,7 +4,7 @@ function main() {
   if (root != null) {
     // create a new ipc
     window.ipc = new IPC(root);
-    window.ipc.send(serializeIpcMessage("initialize"));
+    window.ipc.postMessage(serializeIpcMessage("initialize"));
   }
 }
 
@@ -24,6 +24,7 @@ class IPC {
     };
 
     this.ws.onmessage = (event) => {
+      console.log("Received message: ", event.data);
       let edits = JSON.parse(event.data);
       window.interpreter.handleEdits(edits);
     };

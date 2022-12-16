@@ -1,12 +1,14 @@
-use crate::{LiveView, LiveViewError};
+use crate::{liveview_eventloop, LiveView, LiveViewError};
 use dioxus_core::prelude::*;
-use dioxus_html::HtmlEvent;
 use futures_util::{SinkExt, StreamExt};
-use std::time::Duration;
 use warp::ws::{Message, WebSocket};
 
 impl LiveView {
-    pub async fn upgrade_warp(self, ws: WebSocket, app: fn(Scope<()>) -> Element) {
+    pub async fn upgrade_warp(
+        self,
+        ws: WebSocket,
+        app: fn(Scope<()>) -> Element,
+    ) -> Result<(), LiveViewError> {
         self.upgrade_warp_with_props(ws, app, ()).await
     }
 
@@ -15,60 +17,37 @@ impl LiveView {
         ws: WebSocket,
         app: fn(Scope<T>) -> Element,
         props: T,
-    ) {
-        self.pool
-            .spawn_pinned(move || liveview_eventloop(app, props, ws))
-            .await;
+    ) -> Result<(), LiveViewError> {
+        let (ws_tx, ws_rx) = ws.split();
+
+        let ws_tx = ws_tx
+            .with(transform_warp)
+            .sink_map_err(|_| LiveViewError::SendingFailed);
+
+        let ws_rx = ws_rx.map(transform_warp_rx);
+
+        match self
+            .pool
+            .spawn_pinned(move || liveview_eventloop(app, props, ws_tx, ws_rx))
+            .await
+        {
+            Ok(Ok(_)) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err(LiveViewError::SendingFailed),
+        }
     }
 }
 
-async fn liveview_eventloop<T>(
-    app: Component<T>,
-    props: T,
-    mut ws: WebSocket,
-) -> Result<(), LiveViewError>
-where
-    T: Send + 'static,
-{
-    let mut vdom = VirtualDom::new_with_props(app, props);
-    let edits = serde_json::to_string(&vdom.rebuild()).unwrap();
-    ws.send(Message::text(edits)).await.unwrap();
+fn transform_warp_rx(f: Result<Message, warp::Error>) -> Result<String, LiveViewError> {
+    // destructure the message into the buffer we got from warp
+    let msg = f.map_err(|_| LiveViewError::SendingFailed)?.into_bytes();
 
-    loop {
-        tokio::select! {
-            // poll any futures or suspense
-            _ = vdom.wait_for_work() => {}
+    // transform it back into a string, saving us the allocation
+    let msg = String::from_utf8(msg).map_err(|_| LiveViewError::SendingFailed)?;
 
-            evt = ws.next() => {
-                match evt {
-                    Some(Ok(evt)) => {
-                        if let Ok(evt) = evt.to_str() {
-                            // desktop uses this wrapper struct thing
-                            #[derive(serde::Deserialize)]
-                            struct IpcMessage {
-                                params: HtmlEvent
-                            }
+    Ok(msg)
+}
 
-                            let event: IpcMessage = serde_json::from_str(evt).unwrap();
-                            let event = event.params;
-                            let bubbles = event.bubbles();
-                            vdom.handle_event(&event.name, event.data.into_any(), event.element, bubbles);
-                        }
-                    }
-                    Some(Err(_e)) => {
-                        // log this I guess?
-                        // when would we get an error here?
-                    }
-                    None => return Ok(()),
-                }
-            }
-        }
-
-        let edits = vdom
-            .render_with_deadline(tokio::time::sleep(Duration::from_millis(10)))
-            .await;
-
-        ws.send(Message::text(serde_json::to_string(&edits).unwrap()))
-            .await?;
-    }
+async fn transform_warp(message: String) -> Result<Message, warp::Error> {
+    Ok(Message::text(message))
 }
