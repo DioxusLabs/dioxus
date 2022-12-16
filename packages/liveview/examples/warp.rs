@@ -1,56 +1,35 @@
-use dioxus::prelude::*;
-use dioxus_liveview::adapters::warp_adapter::warp_socket;
-use dioxus_liveview::LiveViewPool;
-use std::net::SocketAddr;
-use warp::ws::Ws;
-use warp::Filter;
+#[cfg(not(feature = "warp"))]
+fn main() {}
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
-
-    cx.render(rsx! {
-        div {
-            "hello warp! {num}"
-            button {
-                onclick: move |_| num += 1,
-                "Increment"
-            }
-        }
-    })
-}
-
+#[cfg(feature = "warp")]
 #[tokio::main]
 async fn main() {
+    use dioxus_core::{Element, LazyNodes, Scope};
+    use dioxus_liveview as liveview;
+    use warp::ws::Ws;
+    use warp::Filter;
+
+    fn app(cx: Scope) -> Element {
+        cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
+    }
+
     pretty_env_logger::init();
 
-    let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
+    let addr = ([127, 0, 0, 1], 3030);
 
-    let index = warp::path::end().map(move || {
-        warp::reply::html(format!(
-            r#"
-            <!DOCTYPE html>
-            <html>
-                <head> <title>Dioxus LiveView with Warp</title>  </head>
-                <body> <div id="main"></div> </body>
-                {glue}
-            </html>
-            "#,
-            glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws/"))
-        ))
-    });
+    // todo: compactify this routing under one liveview::app method
+    let view = liveview::new(addr);
+    let body = view.body("<title>Dioxus LiveView</title>");
 
-    let pool = LiveViewPool::new();
-
-    let ws = warp::path("ws")
-        .and(warp::ws())
-        .and(warp::any().map(move || pool.clone()))
-        .map(move |ws: Ws, pool: LiveViewPool| {
-            ws.on_upgrade(|ws| async move {
-                let _ = pool.launch(warp_socket(ws), app).await;
-            })
-        });
-
-    println!("Listening on http://{}", addr);
-
-    warp::serve(index.or(ws)).run(addr).await;
+    let routes = warp::path::end()
+        .map(move || warp::reply::html(body.clone()))
+        .or(warp::path("app")
+            .and(warp::ws())
+            .and(warp::any().map(move || view.clone()))
+            .map(|ws: Ws, view: liveview::Liveview| {
+                ws.on_upgrade(|socket| async move {
+                    view.upgrade_warp(socket, app).await;
+                })
+            }));
+    warp::serve(routes).run(addr).await;
 }

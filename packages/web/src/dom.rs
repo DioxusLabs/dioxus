@@ -331,7 +331,11 @@ fn read_input_to_data(target: Element) -> Rc<FormData> {
         }
     }
 
-    Rc::new(FormData { value, values })
+    Rc::new(FormData {
+        value,
+        values,
+        files: None,
+    })
 }
 
 fn walk_event_for_id(event: &web_sys::Event) -> Option<(ElementId, web_sys::Element)> {

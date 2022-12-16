@@ -39,10 +39,7 @@ features = [
     "ClipboardEvent",
 ]
 
-[dev-dependencies]
-serde_json = "*"
-
 [features]
-default = ["serialize"]
-serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
+default = []
+serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde"]
 wasm-bind = ["web-sys", "wasm-bindgen"]

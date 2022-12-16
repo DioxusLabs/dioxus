@@ -1,53 +1,32 @@
-use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
-use dioxus::prelude::*;
+#[cfg(not(feature = "axum"))]
+fn main() {}
 
-fn app(cx: Scope) -> Element {
-    let mut num = use_state(cx, || 0);
-
-    cx.render(rsx! {
-        div {
-            "hello axum! {num}"
-            button { onclick: move |_| num += 1, "Increment" }
-        }
-    })
-}
-
+#[cfg(feature = "axum")]
 #[tokio::main]
 async fn main() {
+    use axum::{extract::ws::WebSocketUpgrade, response::Html, routing::get, Router};
+    use dioxus_core::{Element, LazyNodes, Scope};
     pretty_env_logger::init();
+
+    fn app(cx: Scope) -> Element {
+        cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
+    }
 
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], 3030).into();
 
-    let view = dioxus_liveview::LiveViewPool::new();
+    let view = dioxus_liveview::new(addr);
+    let body = view.body("<title>Dioxus Liveview</title>");
 
     let app = Router::new()
+        .route("/", get(move || async { Html(body) }))
         .route(
-            "/",
-            get(move || async move {
-                Html(format!(
-                    r#"
-            <!DOCTYPE html>
-            <html>
-                <head> <title>Dioxus LiveView with Warp</title>  </head>
-                <body> <div id="main"></div> </body>
-                {glue}
-            </html>
-            "#,
-                    glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws"))
-                ))
-            }),
-        )
-        .route(
-            "/ws",
+            "/app",
             get(move |ws: WebSocketUpgrade| async move {
                 ws.on_upgrade(move |socket| async move {
-                    _ = view.launch(dioxus_liveview::axum_socket(socket), app).await;
+                    view.upgrade_axum(socket, app).await;
                 })
             }),
         );
-
-    println!("Listening on http://{}", addr);
-
     axum::Server::bind(&addr.to_string().parse().unwrap())
         .serve(app.into_make_service())
         .await

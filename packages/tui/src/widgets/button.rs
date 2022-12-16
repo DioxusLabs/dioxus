@@ -32,6 +32,7 @@ pub(crate) fn Button<'a>(cx: Scope<'a, ButtonProps>) -> Element<'a> {
             callback.call(FormData {
                 value: text.to_string(),
                 values: HashMap::new(),
+                files: None,
             });
         }
         state.set(new_state);
