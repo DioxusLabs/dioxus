@@ -26,7 +26,7 @@ pub(super) struct DesktopController {
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
     pub(super) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(super) event_tx: UnboundedSender<Html>,
+    pub(super) event_tx: UnboundedSender<HtmlEvent>,
     #[cfg(debug_assertions)]
     pub(super) templates_tx: UnboundedSender<Template<'static>>,
 
