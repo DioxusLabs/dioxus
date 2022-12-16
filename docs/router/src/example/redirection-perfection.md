@@ -21,25 +21,28 @@ All we need to do is update our route definition in our app component:
 # use dioxus_router::prelude::*;
 # fn Blog(cx: Scope) -> Element { unimplemented!() }
 # fn BlogList(cx: Scope) -> Element { unimplemented!() }
+# struct PostId;
+# struct BlogPostName;
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 # fn App(cx: Scope) -> Element {
-let routes = use_segment(&cx, || {
-    Segment::new()
-        .index(Home as Component)
-        .fixed(
-            "blog",
-            Route::new(Blog as Component).nested(
-                Segment::new().index(BlogList as Component).catch_all(
-                    ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost)
-                ),
-            ),
-        )
-        .fixed("myblog", "/blog") // this is new
-        .fallback(PageNotFound as Component)
-});
+use_router(
+    cx,
+    &|| RouterConfiguration::default(),
+    &|| {
+        Segment::content(comp(Home))
+            .fixed("blog", Route::content(comp(Blog)).nested(
+                Segment::content(comp(BlogList)).catch_all(
+                    ParameterRoute::content::<PostId>(comp(BlogPost))
+                        .name::<BlogPostName>()
+                )
+            ))
+            .fixed("myblog", "/blog") // this is new
+            .fallback(comp(PageNotFound))
+    }
+);
 # unimplemented!()
 # }
 ```

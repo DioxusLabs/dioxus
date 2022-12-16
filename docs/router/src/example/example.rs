@@ -6,27 +6,25 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
-    let routes = use_segment(&cx, || {
-        Segment::default()
-            .index(Home as Component)
-            .fixed(
-                "blog",
-                Route::new(Blog as Component).nested(
-                    Segment::default().index(BlogList as Component).catch_all(
-                        ParameterRoute::new("post_id", BlogPost as Component).name(BlogPost),
-                    ),
-                ),
-            )
-            .fixed("myblog", "/blog")
-            .fallback(PageNotFound as Component)
-    });
+    use_router(
+        cx,
+        &|| RouterConfiguration::default(),
+        &|| {
+            Segment::content(comp(Home))
+                .fixed("blog", Route::content(comp(Blog)).nested(
+                    Segment::content(comp(BlogList)).catch_all(
+                        ParameterRoute::content::<PostId>(comp(BlogPost))
+                            .name::<BlogPostName>()
+                    )
+                ))
+                .fixed("myblog", "/blog") // this is new
+                .fallback(comp(PageNotFound))
+        }
+    );
 
     cx.render(rsx! {
-        Router {
-            routes: routes.clone(),
-            NavBar {}
-            Outlet {}
-        }
+        NavBar {}
+        Outlet {}
     })
 }
 
@@ -34,7 +32,7 @@ fn NavBar(cx: Scope) -> Element {
     cx.render(rsx! {
         nav {
             ul {
-                li { Link { target: (RootIndex, []), "Home" } }
+                li { Link { target: named::<RootIndex>(), "Home" } }
                 li { Link { target: "/blog", "Blog" } }
             }
         }
@@ -59,21 +57,23 @@ fn BlogList(cx: Scope) -> Element {
         h2 { "Choose a post" }
         ul {
             li { Link {
-                target: (BlogPost, [("post_id", String::from("1"))]),
+                target: named::<BlogPostName>().parameter::<PostId>("1"),
                 "Read the first blog post"
             } }
             li { Link {
-                target: (BlogPost, [("post_id", String::from("2"))]),
+                target: named::<BlogPostName>().parameter::<PostId>("2"),
                 "Read the second blog post"
             } }
         }
     })
 }
 
+struct PostId;
+struct BlogPostName;
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).unwrap();
 
-    let post_id = route.parameters.get("post_id");
+    let post_id = route.parameter::<PostId>();
     let post = post_id
         .map(|id| id.to_string())
         .unwrap_or(String::from("unknown"));

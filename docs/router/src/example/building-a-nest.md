@@ -3,7 +3,7 @@ Not a bird's nest! A nest of routes!
 
 In this chapter we will begin to build the blog portion of our site which will
 include links, nested URLs, and URL parameters. We will also explore the use
-case of rendering components directly in the [`Router`].
+case of rendering components directly in the component calling [`use_router`].
 
 ## Site Navigation
 Our site visitors won't know all the available pages and blogs on our site so we
@@ -44,7 +44,10 @@ fn NavBar(cx: Scope) -> Element {
         nav {
             ul {
                 // new stuff starts here
-                li { Link { target: InternalTarget(String::from("/")), "Home" } }
+                li { Link {
+                    target: NavigationTarget::Internal(String::from("/")),
+                    "Home"
+                } }
                 li { Link {
                         target: "/blog", // short form
                         "Blog"
@@ -72,18 +75,15 @@ And finally, we add the navbar component in our app component:
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
 fn App(cx: Scope) -> Element {
-    let routes = use_segment(&cx, || {
-        Segment::new()
-            .index(Home as Component)
-            .fallback(PageNotFound as Component)
-    });
+    use_router(
+        cx,
+        &|| RouterConfiguration::default(),
+        &|| Segment::content(comp(Home)).fallback(comp(PageNotFound))
+    );
 
     cx.render(rsx! {
-        Router {
-            routes: routes.clone(),
-            NavBar { } // this is new
-            Outlet { }
-        }
+        NavBar { } // this is new
+        Outlet { }
     })
 }
 ```
@@ -107,7 +107,7 @@ fn NavBar(cx: Scope) -> Element {
         nav {
             ul {
                 li { Link {
-                    target: InternalTarget(String::from("/")),
+                    target: NavigationTarget::Internal(String::from("/")),
                     active_class: "active", // this is new
                     "Home"
                 } }
@@ -196,10 +196,12 @@ parameters:
 # extern crate dioxus_router;
 # use dioxus_router::prelude::*;
 #
+struct PostId;
+
 fn BlogPost(cx: Scope) -> Element {
     let route = use_route(&cx).unwrap();
 
-    let post_id = route.parameters.get("post_id");
+    let post_id = route.parameter::<PostId>();
     let post = post_id
         .map(|id| id.to_string())
         .unwrap_or(String::from("unknown"));
@@ -219,34 +221,31 @@ Finally, let's tell our router about those components.
 # use dioxus_router::prelude::*;
 # fn Blog(cx: Scope) -> Element { unimplemented!() }
 # fn BlogList(cx: Scope) -> Element { unimplemented!() }
+# struct PostId;
 # fn BlogPost(cx: Scope) -> Element { unimplemented!() }
 # fn Home(cx: Scope) -> Element { unimplemented!() }
 # fn NavBar(cx: Scope) -> Element { unimplemented!() }
 # fn PageNotFound(cx: Scope) -> Element { unimplemented!() }
 #
 fn App(cx: Scope) -> Element {
-    let routes = use_segment(&cx, || {
-        Segment::default()
-            .index(Home as Component)
-            // new stuff starts here
-            .fixed(
-                "blog",
-                Route::new(Blog as Component).nested(
-                    Segment::default()
-                        .index(BlogList as Component)
-                        .catch_all(("post_id", BlogPost as Component))
-                ),
-            )
-            // new stuff ends here
-            .fallback(PageNotFound as Component)
-    });
+    use_router(
+        cx,
+        &|| RouterConfiguration::default(),
+        &|| {
+            Segment::content(comp(Home))
+                // new stuff starts here
+                .fixed("blog", Route::content(comp(Blog)).nested(
+                    Segment::content(comp(BlogList))
+                        .catch_all((comp(BlogPost), PostId { }))
+                ))
+                // new stuff ends here
+            .fallback(comp(PageNotFound))
+        }
+    );
 
     cx.render(rsx! {
-        Router {
-            routes: routes.clone(),
-            NavBar { }
-            Outlet { }
-        }
+        NavBar { }
+        Outlet { }
     })
 }
 ```
@@ -260,4 +259,4 @@ we will go over how navigation targets (like the one we passed to our links)
 work.
 
 [`Link`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Link.html
-[`Router`]: https://docs.rs/dioxus-router/latest/dioxus_router/components/fn.Router.html
+[`use_router`]: https://docs.rs/dioxus-router/latest/dioxus_router/hooks/fn.use_router.html
