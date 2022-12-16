@@ -1,6 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
-use crate::events::{decode_event, EventMessage};
+use crate::events::IpcMessage;
 use dioxus_core::*;
+use dioxus_html::HtmlEvent;
 use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
@@ -25,7 +26,7 @@ pub(super) struct DesktopController {
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
     pub(super) proxy: EventLoopProxy<UserWindowEvent>,
-    pub(super) event_tx: UnboundedSender<serde_json::Value>,
+    pub(super) event_tx: UnboundedSender<HtmlEvent>,
 
     #[cfg(target_os = "ios")]
     pub(super) views: Vec<*mut Object>,
@@ -40,7 +41,7 @@ impl DesktopController {
         proxy: EventLoopProxy<UserWindowEvent>,
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
-        let (event_tx, mut event_rx) = unbounded();
+        let (event_tx, mut event_rx) = unbounded::<HtmlEvent>();
         let proxy2 = proxy.clone();
 
         let pending_edits = edit_queue.clone();
@@ -68,14 +69,8 @@ impl DesktopController {
                 loop {
                     tokio::select! {
                         _ = dom.wait_for_work() => {}
-                        Some(json_value) = event_rx.next() => {
-                            if let Ok(value) = serde_json::from_value::<EventMessage>(json_value) {
-                                let name = value.event.clone();
-                                let el_id = ElementId(value.mounted_dom_id);
-                                if let Some(evt) = decode_event(value) {
-                                    dom.handle_event(&name,  evt, el_id,  dioxus_html::events::event_bubbles(&name));
-                                }
-                            }
+                        Some(value) = event_rx.next() => {
+                            dom.handle_event(&value.name,  value.data.into_any(), value.element,  dioxus_html::events::event_bubbles(&value.name));
                         }
                     }
 

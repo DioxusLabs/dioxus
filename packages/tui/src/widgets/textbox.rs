@@ -95,7 +95,6 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                     input_handler.call(FormData{
                         value: text.clone(),
                         values: HashMap::new(),
-                        files: None
                     });
                 }
 

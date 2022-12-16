@@ -280,9 +280,6 @@ impl VirtualDom {
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
         let height = self.scopes[id.0].height;
-
-        println!("marking scope {} dirty with height {}", id.0, height);
-
         self.dirty_scopes.insert(DirtyScope { height, id });
     }
 

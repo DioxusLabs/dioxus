@@ -11,9 +11,8 @@ pub struct FormData {
     pub value: String,
 
     pub values: HashMap<String, String>,
-
-    #[cfg_attr(feature = "serialize", serde(skip))]
-    pub files: Option<Arc<dyn FileEngine>>,
+    // #[cfg_attr(feature = "serialize", serde(skip))]
+    // pub files: Option<Arc<dyn FileEngine>>,
 }
 
 impl Debug for FormData {
