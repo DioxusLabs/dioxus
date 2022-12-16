@@ -99,7 +99,6 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                     input_handler.call(FormData{
                         value: text.clone(),
                         values: HashMap::new(),
-                        files: None
                     });
                 }
 
