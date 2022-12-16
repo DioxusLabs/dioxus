@@ -1,6 +1,8 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
 use dioxus_desktop::{tao::dpi::LogicalSize, Config, WindowBuilder};
-use dioxus_router::{Link, Route, Router};
+use dioxus_router::prelude::*;
 
 fn main() {
     env_logger::init();
@@ -16,24 +18,43 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    cx.render(rsx! {
-        Router {
-            Route { to: "/", "Home" }
-            Route { to: "/games", "Games" }
-            Route { to: "/play", "Play" }
-            Route { to: "/settings", "Settings" }
+    use_router(cx, &|| RouterConfiguration::default(), &|| {
+        Segment::content(comp(Home))
+            .fixed("games", comp(Games))
+            .fixed("play", comp(Play))
+            .fixed("settings", comp(Settings))
+    });
 
-            p {
-                "----"
-            }
-            nav {
-                ul {
-                    Link { to: "/", li { "Home" } }
-                    Link { to: "/games", li { "Games" } }
-                    Link { to: "/play", li { "Play" } }
-                    Link { to: "/settings", li { "Settings" } }
-                }
+    render! {
+        Outlet { }
+
+        p {
+            "----"
+        }
+
+        nav {
+            ul {
+                li { Link { target: "/", "Home" } }
+                li { Link { target: "/games", "Games" } }
+                li { Link { target: "/play", "Play" } }
+                li { Link { target: "/settings", "Settings" } }
             }
         }
-    })
+    }
+}
+
+fn Home(cx: Scope) -> Element {
+    render!("Home")
+}
+
+fn Games(cx: Scope) -> Element {
+    render!("Games")
+}
+
+fn Play(cx: Scope) -> Element {
+    render!("Play")
+}
+
+fn Settings(cx: Scope) -> Element {
+    render!("Settings")
 }

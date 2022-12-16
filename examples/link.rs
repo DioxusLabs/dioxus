@@ -1,11 +1,17 @@
+#![allow(non_snake_case)]
+
 use dioxus::prelude::*;
-use dioxus_router::{Link, Route, Router};
+use dioxus_router::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
+    use_router(cx, &|| RouterConfiguration::default(), &|| {
+        Segment::content(comp(Home)).fixed("settings", comp(Settings))
+    });
+
     cx.render(rsx! (
         div {
             p {
@@ -21,15 +27,20 @@ fn app(cx: Scope) -> Element {
             }
         }
         div {
-            Router {
-                Route { to: "/", h1 { "Home" } },
-                Route { to: "/settings", h1 { "settings" } },
-                p { "----"}
-                ul {
-                    Link { to: "/", li { "Router link to home" } },
-                    Link { to: "/settings", li { "Router link to settings" } },
-                }
+            Outlet { }
+            p { "----"}
+            ul {
+                Link { target: "/", li { "Router link to home" } },
+                Link { target: "/settings", li { "Router link to settings" } },
             }
         }
     ))
+}
+
+fn Home(cx: Scope) -> Element {
+    render!(h1 { "Home" })
+}
+
+fn Settings(cx: Scope) -> Element {
+    render!(h1 { "Settings" })
 }
