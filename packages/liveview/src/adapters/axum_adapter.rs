@@ -21,4 +21,3 @@ fn transform_rx(message: Result<Message, axum::Error>) -> Result<String, LiveVie
 async fn transform_tx(message: String) -> Result<Message, axum::Error> {
     Ok(Message::Text(message))
 }
-
