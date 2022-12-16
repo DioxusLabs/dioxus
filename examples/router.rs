@@ -13,12 +13,12 @@ fn app(cx: Scope) -> Element {
             .fixed(
                 "users",
                 Route::empty()
-                    .nested(Segment::content(comp(UserList)).catch_all((comp(User), UserId { }))),
+                    .nested(Segment::content(comp(UserList)).catch_all((comp(User), UserId {}))),
             )
             .fixed(
                 "blog",
                 Route::empty().nested(
-                    Segment::content(comp(BlogList)).catch_all((comp(BlogPost), PostId { })),
+                    Segment::content(comp(BlogList)).catch_all((comp(BlogPost), PostId {})),
                 ),
             )
             .fallback(comp(E404))
