@@ -134,10 +134,7 @@ impl<'b> VirtualDom {
     ) {
         let (start, end) = match collect_dyn_node_range(dynamic_nodes, root_idx) {
             Some((a, b)) => (a, b),
-            None => {
-                println!("No dynamic nodes found for root {}", root_idx);
-                return;
-            }
+            None => return,
         };
 
         for idx in (start..=end).rev() {
