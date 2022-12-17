@@ -240,13 +240,14 @@ impl<'b> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        match matching_components(left, right) {
-            None => self.replace(left, [right]),
-            Some(components) => components
-                .into_iter()
-                .enumerate()
-                .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
-        }
+        self.replace(left, [right]);
+        // match matching_components(left, right) {
+        //     None => self.replace(left, [right]),
+        //     Some(components) => components
+        //         .into_iter()
+        //         .enumerate()
+        //         .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
+        // }
     }
 
     /// Diff the two text nodes
@@ -825,6 +826,8 @@ impl<'b> VirtualDom {
 
             *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
 
+            // make sure to wipe any of its props and listeners
+            self.ensure_drop_safety(scope);
             self.scopes.remove(scope.0);
         }
     }

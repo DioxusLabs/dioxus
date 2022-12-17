@@ -78,11 +78,19 @@ impl VirtualDom {
 
     // Drop a scope and all its children
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        self.ensure_drop_safety(id);
+
         if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
             if let RenderReturn::Sync(Ok(node)) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
+        if let Some(root) = unsafe { self.scopes[id.0].as_ref().previous_frame().try_load_node() } {
+            if let RenderReturn::Sync(Ok(node)) = unsafe { root.extend_lifetime_ref() } {
+                self.drop_scope_inner(node)
+            }
+        }
+
 
         self.scopes[id.0].props.take();
 
@@ -100,8 +108,9 @@ impl VirtualDom {
         node.dynamic_nodes.iter().for_each(|node| match node {
             DynamicNode::Component(c) => {
                 if let Some(f) = c.scope.get() {
-                    self.drop_scope(f)
+                    self.drop_scope(f);
                 }
+                c.props.take();
             }
             DynamicNode::Fragment(nodes) => {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))

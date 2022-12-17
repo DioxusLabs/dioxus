@@ -25,7 +25,8 @@ use crate::{innerlude::VNode, ScopeState};
 /// LazyNodes::new(|f| f.element("div", [], [], [] None))
 /// ```
 pub struct LazyNodes<'a, 'b> {
-    inner: SmallBox<dyn FnMut(&'a ScopeState) -> VNode<'a> + 'b, S16>,
+    inner: Box<dyn FnMut(&'a ScopeState) -> VNode<'a> + 'b>,
+    // inner: SmallBox<dyn FnMut(&'a ScopeState) -> VNode<'a> + 'b, S16>,
 }
 
 impl<'a, 'b> LazyNodes<'a, 'b> {
@@ -39,10 +40,14 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         let mut slot = Some(val);
 
         Self {
-            inner: smallbox!(move |f| {
+            inner: Box::new(move |f| {
                 let val = slot.take().expect("cannot call LazyNodes twice");
                 val(f)
             }),
+            // inner: smallbox!(move |f| {
+            //     let val = slot.take().expect("cannot call LazyNodes twice");
+            //     val(f)
+            // }),
         }
     }
 
