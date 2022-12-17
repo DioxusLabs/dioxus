@@ -32,8 +32,9 @@ impl VirtualDom {
             parent,
             id,
             height,
-            props: Some(props),
             name,
+            props: Some(props),
+            tasks: self.scheduler.clone(),
             placeholder: Default::default(),
             node_arena_1: BumpFrame::new(0),
             node_arena_2: BumpFrame::new(0),
@@ -43,7 +44,8 @@ impl VirtualDom {
             hook_list: Default::default(),
             hook_idx: Default::default(),
             shared_contexts: Default::default(),
-            tasks: self.scheduler.clone(),
+            borrowed_props: Default::default(),
+            listeners: Default::default(),
         }))
     }
 
@@ -75,7 +77,7 @@ impl VirtualDom {
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
-            let props = scope.props.as_ref().unwrap().as_ref();
+            let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = mem::transmute(props);
             props.render(scope).extend_lifetime()
         };

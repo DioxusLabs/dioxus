@@ -1,4 +1,7 @@
-use crate::{nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, DynamicNode, ScopeId};
+use crate::{
+    nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
+    ScopeId,
+};
 use bumpalo::boxed::Box as BumpBox;
 
 /// An Element's unique identifier.
@@ -122,31 +125,27 @@ impl VirtualDom {
 
     /// Descend through the tree, removing any borrowed props and listeners
     pub(crate) fn ensure_drop_safety(&self, scope: ScopeId) {
-        let node = unsafe { self.scopes[scope.0].previous_frame().try_load_node() };
+        let scope = &self.scopes[scope.0];
 
-        // And now we want to make sure the previous frame has dropped anything that borrows self
-        if let Some(RenderReturn::Sync(Ok(node))) = node {
-            self.ensure_drop_safety_inner(node);
-        }
-    }
-
-    fn ensure_drop_safety_inner(&self, node: &VNode) {
-        node.clear_listeners();
-
-        node.dynamic_nodes.iter().for_each(|child| match child {
-            // Only descend if the props are borrowed
-            DynamicNode::Component(c) if !c.static_props => {
-                if let Some(scope) = c.scope.get() {
-                    self.ensure_drop_safety(scope);
-                }
-                c.props.take();
+        // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
+        // run the hooks (which hold an &mut Reference)
+        // recursively call ensure_drop_safety on all children
+        let mut props = scope.borrowed_props.borrow_mut();
+        props.drain(..).for_each(|comp| {
+            let comp = unsafe { &*comp };
+            if let Some(scope_id) = comp.scope.get() {
+                self.ensure_drop_safety(scope_id);
             }
+            drop(comp.props.take());
+        });
 
-            DynamicNode::Fragment(f) => f
-                .iter()
-                .for_each(|node| self.ensure_drop_safety_inner(node)),
-
-            _ => {}
+        // Now that all the references are gone, we can safely drop our own references in our listeners.
+        let mut listeners = scope.listeners.borrow_mut();
+        listeners.drain(..).for_each(|listener| {
+            let listener = unsafe { &*listener };
+            if let AttributeValue::Listener(l) = &listener.value {
+                _ = l.take();
+            }
         });
     }
 }
