@@ -9,7 +9,6 @@ fn main() {
 
     let cfg = Config::new().with_window(
         WindowBuilder::new()
-            .with_title("Spinsense Client")
             .with_inner_size(LogicalSize::new(600, 1000))
             .with_resizable(false),
     );
@@ -26,18 +25,20 @@ fn app(cx: Scope) -> Element {
     });
 
     render! {
-        Outlet { }
+        div {
+            Outlet { }
 
-        p {
-            "----"
-        }
+            p {
+                "----"
+            }
 
-        nav {
-            ul {
-                li { Link { target: "/", "Home" } }
-                li { Link { target: "/games", "Games" } }
-                li { Link { target: "/play", "Play" } }
-                li { Link { target: "/settings", "Settings" } }
+            nav {
+                ul {
+                    li { Link { target: "/", "Home" } }
+                    li { Link { target: "/games", "Games" } }
+                    li { Link { target: "/play", "Play" } }
+                    li { Link { target: "/settings", "Settings" } }
+                }
             }
         }
     }

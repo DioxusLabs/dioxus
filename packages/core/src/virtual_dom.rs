@@ -279,11 +279,10 @@ impl VirtualDom {
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        let height = self.scopes[id.0].height;
-
-        println!("marking scope {} dirty with height {}", id.0, height);
-
-        self.dirty_scopes.insert(DirtyScope { height, id });
+        if let Some(scope) = self.scopes.get(id.0) {
+            let height = scope.height;
+            self.dirty_scopes.insert(DirtyScope { height, id });
+        }
     }
 
     /// Determine whether or not a scope is currently in a suspended state
@@ -546,6 +545,11 @@ impl VirtualDom {
             // We choose not to poll the deadline since we complete pretty quickly anyways
             if let Some(dirty) = self.dirty_scopes.iter().next().cloned() {
                 self.dirty_scopes.remove(&dirty);
+
+                // If the scope doesn't exist for whatever reason, then we should skip it
+                if !self.scopes.contains(dirty.id.0) {
+                    continue;
+                }
 
                 // if the scope is currently suspended, then we should skip it, ignoring any tasks calling for an update
                 if self.is_scope_suspended(dirty.id) {

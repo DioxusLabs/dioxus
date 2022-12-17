@@ -48,7 +48,7 @@ fn App(cx: Scope) -> Element {
             }}
         " }
 
-        h1 {"Dioxus CRM Example"}
+        h1 { "Dioxus CRM Example" }
 
         Outlet { }
     }

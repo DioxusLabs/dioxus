@@ -19,7 +19,11 @@ impl VirtualDom {
     /// queue
     pub(crate) fn handle_task_wakeup(&mut self, id: TaskId) {
         let mut tasks = self.scheduler.tasks.borrow_mut();
-        let task = &tasks[id.0];
+
+        let task = match tasks.get(id.0) {
+            Some(task) => task,
+            None => return,
+        };
 
         let waker = task.waker();
         let mut cx = Context::from_waker(&waker);

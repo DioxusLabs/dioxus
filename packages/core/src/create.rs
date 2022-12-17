@@ -1,3 +1,4 @@
+use crate::any_props::AnyProps;
 use crate::innerlude::{VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
@@ -43,7 +44,10 @@ impl<'b> VirtualDom {
             .iter()
             .enumerate()
             .map(|(idx, root)| match root {
-                DynamicText { id } | Dynamic { id } => self.write_dynamic_root(node, *id),
+                DynamicText { id } | Dynamic { id } => {
+                    nodes.next().unwrap();
+                    self.write_dynamic_root(node, *id)
+                }
                 Element { .. } => self.write_element_root(node, idx, &mut attrs, &mut nodes),
                 Text { .. } => self.write_static_text_root(node, idx),
             })
@@ -133,7 +137,7 @@ impl<'b> VirtualDom {
             None => return,
         };
 
-        for idx in start..=end {
+        for idx in (start..=end).rev() {
             let m = self.create_dynamic_node(template, &template.dynamic_nodes[idx], idx);
             if m > 0 {
                 // The path is one shorter because the top node is the root
@@ -170,12 +174,12 @@ impl<'b> VirtualDom {
         attribute.mounted_element.set(id);
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_name = unsafe { std::mem::transmute(attribute.name) };
+        let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
 
         match &attribute.value {
             AttributeValue::Text(value) => {
                 // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let unbounded_value = unsafe { std::mem::transmute(*value) };
+                let unbounded_value: &str = unsafe { std::mem::transmute(*value) };
 
                 self.mutations.push(SetAttribute {
                     name: unbounded_name,
@@ -334,7 +338,7 @@ impl<'b> VirtualDom {
     ) -> usize {
         let scope = match component.props.take() {
             Some(props) => {
-                let unbounded_props = unsafe { std::mem::transmute(props) };
+                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
                 let scope = self.new_scope(unbounded_props, component.name);
                 scope.id
             }
