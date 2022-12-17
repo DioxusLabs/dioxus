@@ -91,7 +91,6 @@ impl VirtualDom {
             }
         }
 
-
         self.scopes[id.0].props.take();
 
         let scope = &mut self.scopes[id.0];
