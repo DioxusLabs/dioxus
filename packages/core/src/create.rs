@@ -66,7 +66,7 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Fragment(_) => self.create_dynamic_node(template, node, idx),
-            node @ Component { .. } => dbg!(self.create_dynamic_node(template, node, idx)),
+            node @ Component { .. } => self.create_dynamic_node(template, node, idx),
             Placeholder(VPlaceholder { id }) => {
                 let id = self.set_slot(template, id, idx);
                 self.mutations.push(CreatePlaceholder { id });
