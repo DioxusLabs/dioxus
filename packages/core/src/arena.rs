@@ -152,7 +152,7 @@ impl VirtualDom {
         listeners.drain(..).for_each(|listener| {
             let listener = unsafe { &*listener };
             if let AttributeValue::Listener(l) = &listener.value {
-                _ = l.take();
+                _ = l.0.take();
             }
         });
     }
