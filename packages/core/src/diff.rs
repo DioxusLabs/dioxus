@@ -711,8 +711,11 @@ impl<'b> VirtualDom {
 
     fn replace(&mut self, left: &'b VNode<'b>, right: impl IntoIterator<Item = &'b VNode<'b>>) {
         let m = self.create_children(right);
+
         let id = self.find_last_element(left);
+
         self.mutations.push(Mutation::InsertAfter { id, m });
+
         self.remove_node(left, true);
     }
 
@@ -735,10 +738,7 @@ impl<'b> VirtualDom {
     /// Remove these nodes from the dom
     /// Wont generate mutations for the inner nodes
     fn remove_nodes(&mut self, nodes: &'b [VNode<'b>]) {
-        nodes
-            .iter()
-            .rev()
-            .for_each(|node| self.remove_node(node, true));
+        nodes.iter().for_each(|node| self.remove_node(node, true));
     }
 
     fn remove_node(&mut self, node: &'b VNode<'b>, gen_muts: bool) {
