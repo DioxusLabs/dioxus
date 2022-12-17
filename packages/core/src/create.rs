@@ -1,3 +1,4 @@
+use crate::any_props::AnyProps;
 use crate::innerlude::{VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
@@ -170,12 +171,12 @@ impl<'b> VirtualDom {
         attribute.mounted_element.set(id);
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_name = unsafe { std::mem::transmute(attribute.name) };
+        let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
 
         match &attribute.value {
             AttributeValue::Text(value) => {
                 // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let unbounded_value = unsafe { std::mem::transmute(*value) };
+                let unbounded_value: &str = unsafe { std::mem::transmute(*value) };
 
                 self.mutations.push(SetAttribute {
                     name: unbounded_name,
@@ -334,7 +335,7 @@ impl<'b> VirtualDom {
     ) -> usize {
         let scope = match component.props.take() {
             Some(props) => {
-                let unbounded_props = unsafe { std::mem::transmute(props) };
+                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
                 let scope = self.new_scope(unbounded_props, component.name);
                 scope.id
             }

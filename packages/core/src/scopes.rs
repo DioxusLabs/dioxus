@@ -87,6 +87,9 @@ pub struct ScopeState {
     pub(crate) tasks: Rc<Scheduler>,
     pub(crate) spawned_tasks: FxHashSet<TaskId>,
 
+    pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
+    pub(crate) listeners: RefCell<Vec<*const Attribute<'static>>>,
+
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
 }
@@ -369,7 +372,25 @@ impl<'src> ScopeState {
     /// }
     ///```
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
-        Ok(rsx.call(self))
+        let element = rsx.call(self);
+
+        let mut listeners = self.listeners.borrow_mut();
+        for attr in element.dynamic_attrs {
+            if let AttributeValue::Listener(_) = attr.value {
+                let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                listeners.push(unbounded);
+            }
+        }
+
+        let mut props = self.borrowed_props.borrow_mut();
+        for node in element.dynamic_nodes {
+            if let DynamicNode::Component(comp) = node {
+                let unbounded = unsafe { std::mem::transmute(comp as *const VComponent) };
+                props.push(unbounded);
+            }
+        }
+
+        Ok(element)
     }
 
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator
