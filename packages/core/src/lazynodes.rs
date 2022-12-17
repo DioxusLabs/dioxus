@@ -43,14 +43,14 @@ impl<'a, 'b> LazyNodes<'a, 'b> {
         let mut slot = Some(val);
 
         Self {
-            #[cfg(miri)]
-            inner: Box::new(move |f| {
+            #[cfg(not(miri))]
+            inner: smallbox!(move |f| {
                 let val = slot.take().expect("cannot call LazyNodes twice");
                 val(f)
             }),
 
-            #[cfg(not(miri))]
-            inner: smallbox!(move |f| {
+            #[cfg(miri)]
+            inner: Box::new(move |f| {
                 let val = slot.take().expect("cannot call LazyNodes twice");
                 val(f)
             }),
