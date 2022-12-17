@@ -44,7 +44,10 @@ impl<'b> VirtualDom {
             .iter()
             .enumerate()
             .map(|(idx, root)| match root {
-                DynamicText { id } | Dynamic { id } => self.write_dynamic_root(node, *id),
+                DynamicText { id } | Dynamic { id } => {
+                    nodes.next().unwrap();
+                    self.write_dynamic_root(node, *id)
+                }
                 Element { .. } => self.write_element_root(node, idx, &mut attrs, &mut nodes),
                 Text { .. } => self.write_static_text_root(node, idx),
             })
@@ -63,7 +66,7 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
             node @ Fragment(_) => self.create_dynamic_node(template, node, idx),
-            node @ Component { .. } => self.create_dynamic_node(template, node, idx),
+            node @ Component { .. } => dbg!(self.create_dynamic_node(template, node, idx)),
             Placeholder(VPlaceholder { id }) => {
                 let id = self.set_slot(template, id, idx);
                 self.mutations.push(CreatePlaceholder { id });
@@ -131,7 +134,10 @@ impl<'b> VirtualDom {
     ) {
         let (start, end) = match collect_dyn_node_range(dynamic_nodes, root_idx) {
             Some((a, b)) => (a, b),
-            None => return,
+            None => {
+                println!("No dynamic nodes found for root {}", root_idx);
+                return;
+            }
         };
 
         for idx in (start..=end).rev() {
