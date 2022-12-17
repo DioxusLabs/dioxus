@@ -47,8 +47,6 @@ jobs:
       # which causes failures for some of rustfmt's line-ending sensitive tests
       - name: disable git eol translation
         run: git config --global core.autocrlf false
-      - name: checkout
-        uses: actions/checkout@v3
 
         # Run build
       - name: Install Rustup using win.rustup.rs
@@ -65,6 +63,9 @@ jobs:
         run: echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
         if: matrix.target == 'x86_64-pc-windows-gnu' && matrix.channel == 'nightly'
         shell: bash
+
+      - name: checkout
+        uses: actions/checkout@v3
 
       - name: test
         run: |

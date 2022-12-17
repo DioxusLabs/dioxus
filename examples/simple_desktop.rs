@@ -1,10 +1,14 @@
-#![allow(non_snake_case)]
-
 use dioxus::prelude::*;
 use dioxus_router::*;
 
 fn main() {
-    dioxus_web::launch(app);
+    simple_logger::SimpleLogger::new()
+        .with_level(log::LevelFilter::Debug)
+        .with_module_level("dioxus_router", log::LevelFilter::Trace)
+        .with_module_level("dioxus", log::LevelFilter::Trace)
+        .init()
+        .unwrap();
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
@@ -16,7 +20,9 @@ fn app(cx: Scope) -> Element {
                 Link { to: "/blog", li { "blog" } }
                 Link { to: "/blog/tim", li { "tims' blog" } }
                 Link { to: "/blog/bill", li { "bills' blog" } }
-                Link { to: "/blog/james", li { "james amazing' blog" } }
+                Link { to: "/blog/james",
+                        li { "james amazing' blog" }
+                }
                 Link { to: "/apples", li { "go to apples" } }
             }
             Route { to: "/", Home {} }
@@ -29,10 +35,12 @@ fn app(cx: Scope) -> Element {
 }
 
 fn Home(cx: Scope) -> Element {
+    log::debug!("rendering home {:?}", cx.scope_id());
     cx.render(rsx! { h1 { "Home" } })
 }
 
 fn BlogList(cx: Scope) -> Element {
+    log::debug!("rendering blog list {:?}", cx.scope_id());
     cx.render(rsx! { div { "Blog List" } })
 }
 
@@ -41,7 +49,7 @@ fn BlogPost(cx: Scope) -> Element {
         return cx.render(rsx! { div { "No blog post id" } })
     };
 
-    log::trace!("rendering blog post {}", id);
+    log::debug!("rendering blog post {}", id);
 
     cx.render(rsx! {
         div {

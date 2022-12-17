@@ -40,7 +40,7 @@ fn dual_stream() {
                 id: ElementId(1),
                 ns: None,
             },
-            NewEventListener { name: "click", scope: ScopeId(0), id: ElementId(1) },
+            NewEventListener { name: "click", id: ElementId(1) },
             HydrateText { path: &[0, 0], value: "123", id: ElementId(2) },
             AppendChildren { id: ElementId(0), m: 1 },
         ]

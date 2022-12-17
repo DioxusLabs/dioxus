@@ -66,7 +66,7 @@ fn contexts_drop() {
 fn tasks_drop() {
     fn app(cx: Scope) -> Element {
         cx.spawn(async {
-            tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
+            // tokio::time::sleep(std::time::Duration::from_millis(100000)).await;
         });
 
         cx.render(rsx! {

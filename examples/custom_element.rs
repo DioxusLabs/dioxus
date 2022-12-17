@@ -16,6 +16,12 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
+    let g = cx.component(component, (), "component");
+    let c = cx.make_node(g);
+    cx.render(rsx! {
+        div { c }
+    })
+
     // let nf = NodeFactory::new(cx);
 
     // let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
@@ -27,6 +33,8 @@ fn app(cx: Scope) -> Element {
     // attrs.push(nf.attr("age", format_args!("47"), None, false));
 
     // Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
+}
 
+fn component(cx: Scope) -> Element {
     todo!()
 }

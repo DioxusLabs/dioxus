@@ -11,7 +11,7 @@ pub use input::*;
 
 pub(crate) fn get_root_id<T>(cx: Scope<T>) -> Option<ElementId> {
     if let RenderReturn::Sync(Ok(sync)) = cx.root_node() {
-        sync.root_ids.get(0).map(|id| id.get())
+        sync.root_ids.get(0).and_then(|id| id.get())
     } else {
         None
     }

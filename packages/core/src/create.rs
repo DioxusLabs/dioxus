@@ -1,13 +1,16 @@
-use std::cell::Cell;
-use std::rc::Rc;
-
-use crate::innerlude::{VComponent, VText};
+use crate::any_props::AnyProps;
+use crate::innerlude::{VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
 use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext};
+use std::cell::Cell;
+use std::iter::{Enumerate, Peekable};
+use std::rc::Rc;
+use std::slice;
+use TemplateNode::*;
 
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -17,181 +20,248 @@ impl<'b> VirtualDom {
         self.scope_stack.push(scope);
         let out = self.create(template);
         self.scope_stack.pop();
-
         out
     }
 
     /// Create this template and write its mutations
-    pub(crate) fn create(&mut self, template: &'b VNode<'b>) -> usize {
+    pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        if !self.templates.contains_key(&template.template.name) {
-            self.register_template(template);
+        if !self.templates.contains_key(&node.template.name) {
+            self.register_template(node);
         }
+
+        // we know that this will generate at least one mutation per node
+        self.mutations.edits.reserve(node.template.roots.len());
 
         // Walk the roots, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut dynamic_attrs = template.template.attr_paths.iter().enumerate().peekable();
-        let mut dynamic_nodes = template.template.node_paths.iter().enumerate().peekable();
+        let mut attrs = node.template.attr_paths.iter().enumerate().peekable();
+        let mut nodes = node.template.node_paths.iter().enumerate().peekable();
 
-        let cur_scope = self.scope_stack.last().copied().unwrap();
-
-        // we know that this will generate at least one mutation per node
-        self.mutations.edits.reserve(template.template.roots.len());
-
-        let mut on_stack = 0;
-        for (root_idx, root) in template.template.roots.iter().enumerate() {
-            // We might need to generate an ID for the root node
-            on_stack += match root {
-                TemplateNode::DynamicText { id } | TemplateNode::Dynamic { id } => {
-                    match &template.dynamic_nodes[*id] {
-                        // a dynamic text node doesn't replace a template node, instead we create it on the fly
-                        DynamicNode::Text(VText { id: slot, value }) => {
-                            let id = self.next_element(template, template.template.node_paths[*id]);
-                            slot.set(id);
-
-                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                            let unbounded_text = unsafe { std::mem::transmute(*value) };
-                            self.mutations.push(CreateTextNode {
-                                value: unbounded_text,
-                                id,
-                            });
-
-                            1
-                        }
-
-                        DynamicNode::Placeholder(slot) => {
-                            let id = self.next_element(template, template.template.node_paths[*id]);
-                            slot.set(id);
-                            self.mutations.push(CreatePlaceholder { id });
-                            1
-                        }
-
-                        DynamicNode::Fragment(_) | DynamicNode::Component { .. } => {
-                            self.create_dynamic_node(template, &template.dynamic_nodes[*id], *id)
-                        }
-                    }
+        node.template
+            .roots
+            .iter()
+            .enumerate()
+            .map(|(idx, root)| match root {
+                DynamicText { id } | Dynamic { id } => {
+                    nodes.next().unwrap();
+                    self.write_dynamic_root(node, *id)
                 }
+                Element { .. } => self.write_element_root(node, idx, &mut attrs, &mut nodes),
+                Text { .. } => self.write_static_text_root(node, idx),
+            })
+            .sum()
+    }
 
-                TemplateNode::Element { .. } | TemplateNode::Text { .. } => {
-                    let this_id = self.next_root(template, root_idx);
+    fn write_static_text_root(&mut self, node: &VNode, idx: usize) -> usize {
+        // Simply just load the template root, no modifications needed
+        self.load_template_root(node, idx);
 
-                    template.root_ids[root_idx].set(this_id);
-                    self.mutations.push(LoadTemplate {
-                        name: template.template.name,
-                        index: root_idx,
-                        id: this_id,
-                    });
+        // Text producs just one node on the stack
+        1
+    }
 
-                    // we're on top of a node that has a dynamic attribute for a descendant
-                    // Set that attribute now before the stack gets in a weird state
-                    while let Some((mut attr_id, path)) =
-                        dynamic_attrs.next_if(|(_, p)| p[0] == root_idx as u8)
-                    {
-                        // if attribute is on a root node, then we've already created the element
-                        // Else, it's deep in the template and we should create a new id for it
-                        let id = match path.len() {
-                            1 => this_id,
-                            _ => {
-                                let id = self
-                                    .next_element(template, template.template.attr_paths[attr_id]);
-                                self.mutations.push(Mutation::AssignId {
-                                    path: &path[1..],
-                                    id,
-                                });
-                                id
-                            }
-                        };
+    fn write_dynamic_root(&mut self, template: &'b VNode<'b>, idx: usize) -> usize {
+        use DynamicNode::*;
+        match &template.dynamic_nodes[idx] {
+            node @ Fragment(_) => self.create_dynamic_node(template, node, idx),
+            node @ Component { .. } => self.create_dynamic_node(template, node, idx),
+            Placeholder(VPlaceholder { id }) => {
+                let id = self.set_slot(template, id, idx);
+                self.mutations.push(CreatePlaceholder { id });
+                1
+            }
+            Text(VText { id, value }) => {
+                let id = self.set_slot(template, id, idx);
+                self.create_static_text(value, id);
+                1
+            }
+        }
+    }
 
-                        loop {
-                            let attribute = template.dynamic_attrs.get(attr_id).unwrap();
-                            attribute.mounted_element.set(id);
+    fn create_static_text(&mut self, value: &str, id: ElementId) {
+        // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        let unbounded_text: &str = unsafe { std::mem::transmute(value) };
+        self.mutations.push(CreateTextNode {
+            value: unbounded_text,
+            id,
+        });
+    }
 
-                            // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                            let unbounded_name: &str =
-                                unsafe { std::mem::transmute(attribute.name) };
+    /// We write all the descndent data for this element
+    ///
+    /// Elements can contain other nodes - and those nodes can be dynamic or static
+    ///
+    /// We want to make sure we write these nodes while on top of the root
+    fn write_element_root(
+        &mut self,
+        template: &'b VNode<'b>,
+        root_idx: usize,
+        dynamic_attrs: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
+        dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
+    ) -> usize {
+        // Load the template root and get the ID for the node on the stack
+        let root_on_stack = self.load_template_root(template, root_idx);
 
-                            match &attribute.value {
-                                AttributeValue::Listener(_) => {
-                                    self.mutations.push(NewEventListener {
-                                        // all listeners start with "on"
-                                        name: &unbounded_name[2..],
-                                        scope: cur_scope,
-                                        id,
-                                    })
-                                }
-                                _ => {
-                                    // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                                    let unbounded_value =
-                                        unsafe { std::mem::transmute(attribute.value.clone()) };
+        // Write all the attributes below this root
+        self.write_attrs_on_root(dynamic_attrs, root_idx, root_on_stack, template);
 
-                                    self.mutations.push(SetAttribute {
-                                        name: unbounded_name,
-                                        value: unbounded_value,
-                                        ns: attribute.namespace,
-                                        id,
-                                    })
-                                }
-                            }
+        // Load in all of the placeholder or dynamic content under this root too
+        self.load_placeholders(dynamic_nodes, root_idx, template);
 
-                            // Only push the dynamic attributes forward if they match the current path (same element)
-                            match dynamic_attrs.next_if(|(_, p)| *p == path) {
-                                Some((next_attr_id, _)) => attr_id = next_attr_id,
-                                None => break,
-                            }
-                        }
-                    }
+        1
+    }
 
-                    // We're on top of a node that has a dynamic child for a descendant
-                    // Skip any node that's a root
-                    let mut start = None;
-                    let mut end = None;
+    /// Load all of the placeholder nodes for descendents of this root node
+    ///
+    /// ```rust, ignore
+    /// rsx! {
+    ///     div {
+    ///         // This is a placeholder
+    ///         some_value,
+    ///
+    ///         // Load this too
+    ///         "{some_text}"
+    ///     }
+    /// }
+    /// ```
+    fn load_placeholders(
+        &mut self,
+        dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
+        root_idx: usize,
+        template: &'b VNode<'b>,
+    ) {
+        let (start, end) = match collect_dyn_node_range(dynamic_nodes, root_idx) {
+            Some((a, b)) => (a, b),
+            None => return,
+        };
 
-                    // Collect all the dynamic nodes below this root
-                    // We assign the start and end of the range of dynamic nodes since they area ordered in terms of tree path
-                    //
-                    // [0]
-                    // [1, 1]     <---|
-                    // [1, 1, 1]  <---| these are the range of dynamic nodes below root 1
-                    // [1, 1, 2]  <---|
-                    // [2]
-                    //
-                    // We collect each range and then create them and replace the placeholder in the template
-                    while let Some((idx, p)) =
-                        dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8)
-                    {
-                        if p.len() == 1 {
-                            continue;
-                        }
+        for idx in (start..=end).rev() {
+            let m = self.create_dynamic_node(template, &template.dynamic_nodes[idx], idx);
+            if m > 0 {
+                // The path is one shorter because the top node is the root
+                let path = &template.template.node_paths[idx][1..];
+                self.mutations.push(ReplacePlaceholder { m, path });
+            }
+        }
+    }
 
-                        if start.is_none() {
-                            start = Some(idx);
-                        }
+    fn write_attrs_on_root(
+        &mut self,
+        attrs: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
+        root_idx: usize,
+        root: ElementId,
+        node: &VNode,
+    ) {
+        while let Some((mut attr_id, path)) = attrs.next_if(|(_, p)| p[0] == root_idx as u8) {
+            let id = self.assign_static_node_as_dynamic(path, root, node, attr_id);
 
-                        end = Some(idx);
-                    }
+            loop {
+                self.write_attribute(&node.dynamic_attrs[attr_id], id);
 
-                    //
-                    if let (Some(start), Some(end)) = (start, end) {
-                        for idx in start..=end {
-                            let node = &template.dynamic_nodes[idx];
-                            let m = self.create_dynamic_node(template, node, idx);
-                            if m > 0 {
-                                self.mutations.push(ReplacePlaceholder {
-                                    m,
-                                    path: &template.template.node_paths[idx][1..],
-                                });
-                            }
-                        }
-                    }
-
-                    // elements create only one node :-)
-                    1
+                // Only push the dynamic attributes forward if they match the current path (same element)
+                match attrs.next_if(|(_, p)| *p == path) {
+                    Some((next_attr_id, _)) => attr_id = next_attr_id,
+                    None => break,
                 }
-            };
+            }
+        }
+    }
+
+    fn write_attribute(&mut self, attribute: &crate::Attribute, id: ElementId) {
+        // Make sure we set the attribute's associated id
+        attribute.mounted_element.set(id);
+
+        // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
+
+        // match &attribute.value {
+        //     AttributeValue::Text(value) => {
+        //         // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        //         let unbounded_value: &str = unsafe { std::mem::transmute(*value) };
+
+        //         self.mutations.push(SetAttribute {
+        //             name: unbounded_name,
+        //             value: unbounded_value,
+        //             ns: attribute.namespace,
+        //             id,
+        //         })
+        //     }
+        //     AttributeValue::Bool(value) => self.mutations.push(SetBoolAttribute {
+        //         name: unbounded_name,
+        //         value: *value,
+        //         id,
+        //     }),
+        //     AttributeValue::Listener(_) => {
+        //         self.mutations.push(NewEventListener {
+        //             // all listeners start with "on"
+        //             name: &unbounded_name[2..],
+        //             id,
+        //         })
+        //     }
+        //     _ => {
+
+        //     }
+        // AttributeValue::Float(_) => todo!(),
+        // AttributeValue::Int(_) => todo!(),
+        // AttributeValue::Any() => todo!(),
+        // AttributeValue::None => todo!(),
+        // }
+
+        // Safety: we promise not to re-alias this text later on after committing it to the mutation
+        let unbounded_value = unsafe { std::mem::transmute(attribute.value.clone()) };
+
+        self.mutations.push(SetAttribute {
+            name: unbounded_name,
+            value: unbounded_value,
+            ns: attribute.namespace,
+            id,
+        });
+    }
+
+    fn load_template_root(&mut self, template: &VNode, root_idx: usize) -> ElementId {
+        // Get an ID for this root since it's a real root
+        let this_id = self.next_root(template, root_idx);
+        template.root_ids[root_idx].set(Some(this_id));
+
+        self.mutations.push(LoadTemplate {
+            name: template.template.name,
+            index: root_idx,
+            id: this_id,
+        });
+
+        this_id
+    }
+
+    /// We have some dynamic attributes attached to a some node
+    ///
+    /// That node needs to be loaded at runtime, so we need to give it an ID
+    ///
+    /// If the node in question is on the stack, we just return that ID
+    ///
+    /// If the node is not on the stack, we create a new ID for it and assign it
+    fn assign_static_node_as_dynamic(
+        &mut self,
+        path: &'static [u8],
+        this_id: ElementId,
+        template: &VNode,
+        attr_id: usize,
+    ) -> ElementId {
+        if path.len() == 1 {
+            return this_id;
         }
 
-        on_stack
+        // if attribute is on a root node, then we've already created the element
+        // Else, it's deep in the template and we should create a new id for it
+        let id = self.next_element(template, template.template.attr_paths[attr_id]);
+
+        self.mutations.push(Mutation::AssignId {
+            path: &path[1..],
+            id,
+        });
+
+        id
     }
 
     /// Insert a new template into the VirtualDom's template registry
@@ -201,17 +271,9 @@ impl<'b> VirtualDom {
             .insert(template.template.name, template.template);
 
         // If it's all dynamic nodes, then we don't need to register it
-        // Quickly run through and see if it's all just dynamic nodes
-        if template.template.roots.iter().all(|root| {
-            matches!(
-                root,
-                TemplateNode::Dynamic { .. } | TemplateNode::DynamicText { .. }
-            )
-        }) {
-            return;
+        if !template.template.is_completely_dynamic() {
+            self.mutations.templates.push(template.template);
         }
-
-        self.mutations.templates.push(template.template);
     }
 
     pub(crate) fn create_dynamic_node(
@@ -239,7 +301,7 @@ impl<'b> VirtualDom {
         let new_id = self.next_element(template, template.template.node_paths[idx]);
 
         // Make sure the text node is assigned to the correct element
-        text.id.set(new_id);
+        text.id.set(Some(new_id));
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
         let value = unsafe { std::mem::transmute(text.value) };
@@ -257,7 +319,7 @@ impl<'b> VirtualDom {
 
     pub(crate) fn create_placeholder(
         &mut self,
-        slot: &Cell<ElementId>,
+        placeholder: &VPlaceholder,
         template: &'b VNode<'b>,
         idx: usize,
     ) -> usize {
@@ -265,7 +327,7 @@ impl<'b> VirtualDom {
         let id = self.next_element(template, template.template.node_paths[idx]);
 
         // Make sure the text node is assigned to the correct element
-        slot.set(id);
+        placeholder.id.set(Some(id));
 
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
@@ -287,15 +349,17 @@ impl<'b> VirtualDom {
         component: &'b VComponent<'b>,
         idx: usize,
     ) -> usize {
-        let props = component
-            .props
-            .take()
-            .expect("Props to always exist when a component is being created");
+        let scope = match component.props.take() {
+            Some(props) => {
+                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
+                let scope = self.new_scope(unbounded_props, component.name);
+                scope.id
+            }
 
-        let unbounded_props = unsafe { std::mem::transmute(props) };
+            // Component is coming back, it probably still exists, right?
+            None => component.scope.get().unwrap(),
+        };
 
-        let scope = self.new_scope(unbounded_props, component.name);
-        let scope = scope.id;
         component.scope.set(Some(scope));
 
         let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
@@ -385,4 +449,37 @@ impl<'b> VirtualDom {
 
         0
     }
+
+    fn set_slot(
+        &mut self,
+        template: &'b VNode<'b>,
+        slot: &'b Cell<Option<ElementId>>,
+        id: usize,
+    ) -> ElementId {
+        let id = self.next_element(template, template.template.node_paths[id]);
+        slot.set(Some(id));
+        id
+    }
+}
+
+fn collect_dyn_node_range(
+    dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&[u8]>>>,
+    root_idx: usize,
+) -> Option<(usize, usize)> {
+    let start = match dynamic_nodes.peek() {
+        Some((idx, p)) if p[0] == root_idx as u8 => *idx,
+        _ => return None,
+    };
+
+    let mut end = start;
+
+    while let Some((idx, p)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
+        if p.len() == 1 {
+            continue;
+        }
+
+        end = idx;
+    }
+
+    Some((start, end))
 }

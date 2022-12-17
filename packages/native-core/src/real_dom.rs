@@ -287,7 +287,7 @@ impl<S: State> RealDom<S> {
                     }
                     mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                 }
-                NewEventListener { name, scope: _, id } => {
+                NewEventListener { name, id } => {
                     let node_id = self.element_to_node_id(id);
                     let node = self.tree.get_mut(node_id).unwrap();
                     if let NodeType::Element { listeners, .. } = &mut node.node_data.node_type {

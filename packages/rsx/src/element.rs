@@ -45,7 +45,7 @@ impl Parse for Element {
 
                 content.parse::<Token![:]>()?;
 
-                if content.peek(LitStr) && content.peek2(Token![,]) {
+                if content.peek(LitStr) {
                     let value = content.parse()?;
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
@@ -53,7 +53,6 @@ impl Parse for Element {
                     });
                 } else {
                     let value = content.parse::<Expr>()?;
-
                     attributes.push(ElementAttrNamed {
                         el_name: el_name.clone(),
                         attr: ElementAttr::CustomAttrExpression { name, value },
