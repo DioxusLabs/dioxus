@@ -210,14 +210,27 @@ impl<'b> VirtualDom {
         // }
 
         // Safety: we promise not to re-alias this text later on after committing it to the mutation
-        let unbounded_value = unsafe { std::mem::transmute(attribute.value.clone()) };
 
-        self.mutations.push(SetAttribute {
-            name: unbounded_name,
-            value: unbounded_value,
-            ns: attribute.namespace,
-            id,
-        });
+        match &attribute.value {
+            AttributeValue::Listener(_) => {
+                self.mutations.push(NewEventListener {
+                    // all listeners start with "on"
+                    name: &unbounded_name[2..],
+                    id,
+                })
+            }
+            _ => {
+                // Safety: we promise not to re-alias this text later on after committing it to the mutation
+                let unbounded_value = unsafe { std::mem::transmute(attribute.value.clone()) };
+
+                self.mutations.push(SetAttribute {
+                    name: unbounded_name,
+                    value: unbounded_value,
+                    ns: attribute.namespace,
+                    id,
+                })
+            }
+        }
     }
 
     fn load_template_root(&mut self, template: &VNode, root_idx: usize) -> ElementId {
