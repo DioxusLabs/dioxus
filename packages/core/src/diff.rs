@@ -155,21 +155,22 @@ impl<'b> VirtualDom {
 
         // Replace components that have different render fns
         if left.render_fn != right.render_fn {
-            todo!()
-            // let created = self.create_component_node(right_template, right, idx);
-            // let head = unsafe {
-            //     self.scopes[left.scope.get().unwrap().0]
-            //         .root_node()
-            //         .extend_lifetime_ref()
-            // };
-            // let last = match head {
-            //     RenderReturn::Sync(Ok(node)) => self.find_last_element(node),
-            //     _ => todo!(),
-            // };
-            // self.mutations
-            //     .push(Mutation::ReplaceWith { id, m: created });
-            // self.drop_scope(left.scope.get().unwrap());
-            // return;
+            let created = self.create_component_node(right_template, right, idx);
+            let head = unsafe {
+                self.scopes[left.scope.get().unwrap().0]
+                    .root_node()
+                    .extend_lifetime_ref()
+            };
+            let last = match head {
+                RenderReturn::Sync(Ok(node)) => self.find_last_element(node),
+                _ => todo!(),
+            };
+            self.mutations.push(Mutation::InsertAfter {
+                id: last,
+                m: created,
+            });
+            self.remove_component_node(left, true);
+            return;
         }
 
         // Make sure the new vcomponent has the right scopeid associated to it
@@ -240,14 +241,13 @@ impl<'b> VirtualDom {
     /// }
     /// ```
     fn light_diff_templates(&mut self, left: &'b VNode<'b>, right: &'b VNode<'b>) {
-        self.replace(left, [right]);
-        // match matching_components(left, right) {
-        //     None => self.replace(left, [right]),
-        //     Some(components) => components
-        //         .into_iter()
-        //         .enumerate()
-        //         .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
-        // }
+        match matching_components(left, right) {
+            None => self.replace(left, [right]),
+            Some(components) => components
+                .into_iter()
+                .enumerate()
+                .for_each(|(idx, (l, r))| self.diff_vcomponent(l, r, right, idx)),
+        }
     }
 
     /// Diff the two text nodes
@@ -815,9 +815,6 @@ impl<'b> VirtualDom {
             };
 
             let props = self.scopes[scope.0].props.take();
-            // let props: Option<Box<dyn AnyProps>> = comp.props.take();
-
-            println!("taking props... {:?}", scope);
 
             self.dirty_scopes.remove(&DirtyScope {
                 height: self.scopes[scope.0].height,
