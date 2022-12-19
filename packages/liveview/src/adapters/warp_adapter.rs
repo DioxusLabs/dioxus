@@ -18,6 +18,7 @@ fn transform_rx(message: Result<Message, warp::Error>) -> Result<String, LiveVie
         .into_bytes();
 
     // transform it back into a string, saving us the allocation
+    // of a new buffer
     let msg = String::from_utf8(msg).map_err(|_| LiveViewError::SendingFailed)?;
 
     Ok(msg)
