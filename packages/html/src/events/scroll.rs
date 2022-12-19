@@ -2,7 +2,7 @@ use dioxus_core::Event;
 
 pub type ScrollEvent = Event<ScrollData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScrollData {}
 
 impl_event! {
