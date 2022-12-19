@@ -104,7 +104,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --workspace -- -D warnings
 
   # Coverage is disabled until we can fix it
   # coverage:
