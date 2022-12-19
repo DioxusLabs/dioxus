@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use dioxus_core::Event;
 
@@ -6,13 +6,20 @@ pub type FormEvent = Event<FormData>;
 
 /* DOMEvent:  Send + SyncTarget relatedTarget */
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, PartialEq, Default)]
+#[derive(Clone)]
 pub struct FormData {
     pub value: String,
 
     pub values: HashMap<String, String>,
-    // #[cfg_attr(feature = "serialize", serde(skip))]
-    // pub files: Option<Arc<dyn FileEngine>>,
+
+    #[cfg_attr(feature = "serialize", serde(skip))]
+    pub files: Option<Arc<dyn FileEngine>>,
+}
+
+impl PartialEq for FormData {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.values == other.values
+    }
 }
 
 impl Debug for FormData {
@@ -24,17 +31,17 @@ impl Debug for FormData {
     }
 }
 
-// #[async_trait::async_trait(?Send)]
-// pub trait FileEngine {
-//     // get a list of file names
-//     fn files(&self) -> Vec<String>;
+#[async_trait::async_trait(?Send)]
+pub trait FileEngine {
+    // get a list of file names
+    fn files(&self) -> Vec<String>;
 
-//     // read a file to bytes
-//     async fn read_file(&self, file: &str) -> Option<Vec<u8>>;
+    // read a file to bytes
+    async fn read_file(&self, file: &str) -> Option<Vec<u8>>;
 
-//     // read a file to string
-//     async fn read_file_to_string(&self, file: &str) -> Option<String>;
-// }
+    // read a file to string
+    async fn read_file_to_string(&self, file: &str) -> Option<String>;
+}
 
 impl_event! {
     FormData;
