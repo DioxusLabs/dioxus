@@ -64,7 +64,7 @@ impl<Ctx: HotReloadingContext> CallBody<Ctx> {
         &self,
         template: Option<CallBody<Ctx>>,
         location: &'static str,
-    ) -> Option<Template> {
+    ) -> Option<Template<'static>> {
         let mut renderer: TemplateRenderer<Ctx> = TemplateRenderer {
             roots: &self.roots,
             phantom: std::marker::PhantomData,
