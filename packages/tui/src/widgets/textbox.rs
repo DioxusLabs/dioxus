@@ -79,7 +79,7 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
         "solid"
     };
 
-    render! {
+    cx.render(rsx! {
         div{
             width: "{width}",
             height: "{height}",
@@ -103,7 +103,7 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 let Point{ x, y } = node.pos().unwrap();
 
                 let Pos { col, row } = cursor.read().start;
-                let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
+                let (x, y) = (col as u16 + x as u16 + u16::from(border != "none"), row as u16 + y as u16 + u16::from(border != "none"));
                 if let Ok(pos) = crossterm::cursor::position() {
                     if pos != (x, y){
                         execute!(stdout(), MoveTo(x, y)).unwrap();
@@ -145,7 +145,7 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
                 let Point{ x, y } = node.pos().unwrap();
 
                 let Pos { col, row } = cursor.read().start;
-                let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
+                let (x, y) = (col as u16 + x as u16 + u16::from(border != "none"), row as u16 + y as u16 + u16::from(border != "none"));
                 if let Ok(pos) = crossterm::cursor::position() {
                     if pos != (x, y){
                         execute!(stdout(), MoveTo(x, y)).unwrap();
@@ -178,5 +178,5 @@ pub(crate) fn TextBox<'a>(cx: Scope<'a, TextBoxProps>) -> Element<'a> {
 
             "{text_after_second_cursor}"
         }
-    }
+    })
 }
