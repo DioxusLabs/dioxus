@@ -164,6 +164,7 @@ fn build_webview(
     let custom_head = cfg.custom_head.clone();
     let resource_dir = cfg.resource_dir.clone();
     let index_file = cfg.custom_index.clone();
+    let root_name = cfg.root_name.clone();
 
     // We assume that if the icon is None in cfg, then the user just didnt set it
     if cfg.window.window.window_icon.is_none() {
@@ -220,6 +221,7 @@ fn build_webview(
                 resource_dir.clone(),
                 custom_head.clone(),
                 index_file.clone(),
+                &root_name,
             )
         })
         .with_file_drop_handler(move |window, evet| {
