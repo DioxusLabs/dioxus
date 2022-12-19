@@ -20,6 +20,8 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
 pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     use std::convert::TryInto;
 
+    use web_sys::console;
+
     let window = web_sys::window().unwrap();
 
     let protocol = if window.location().protocol().unwrap() == "https:" {
@@ -42,8 +44,10 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
             let text: Result<String, _> = text.try_into();
             if let Ok(string) = text {
-                if let Ok(template) = serde_json::from_str(Box::leak(string.into_boxed_str())) {
-                    _ = tx.unbounded_send(template);
+                console::log_1(&string.clone().into());
+                match serde_json::from_str(Box::leak(string.into_boxed_str())) {
+                    Ok(template) => _ = tx.unbounded_send(template),
+                    Err(e) => console::log_1(&e.to_string().into()),
                 }
             }
         }

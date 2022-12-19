@@ -458,6 +458,7 @@ impl VirtualDom {
     /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
     pub fn replace_template(&mut self, template: Template<'static>) {
         self.templates.insert(template.name, template);
+        panic!("{:?}", self.templates);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in &self.scopes {
             if let Some(RenderReturn::Sync(Ok(sync))) = scope.try_root_node() {

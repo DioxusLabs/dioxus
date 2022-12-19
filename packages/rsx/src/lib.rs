@@ -19,7 +19,7 @@ mod hot_reloading_context;
 mod ifmt;
 mod node;
 
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
 // Re-export the namespaces into each other
 pub use component::*;
@@ -181,6 +181,7 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
         };
 
         let spndbg = format!("{:?}", self.roots[0].span());
+        println!("spndbg: {}", spndbg);
         let root_col = spndbg[9..].split("..").next().unwrap();
 
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
@@ -226,7 +227,7 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default, Debug)]
 struct DynamicMapping {
     attribute_to_idx: HashMap<ElementAttr, Vec<usize>>,
     last_attribute_idx: usize,
@@ -240,7 +241,6 @@ impl DynamicMapping {
         for node in nodes {
             new.add_node(node);
         }
-        println!("{:#?}", new);
         new
     }
 

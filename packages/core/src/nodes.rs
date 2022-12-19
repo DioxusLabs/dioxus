@@ -108,6 +108,10 @@ pub struct Template<'a> {
     /// The name of the template. This must be unique across your entire program for template diffing to work properly
     ///
     /// If two templates have the same name, it's likely that Dioxus will panic when diffing.
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "deserialize_string_leaky")
+    )]
     pub name: &'a str,
 
     /// The list of template nodes that make up the template
@@ -120,15 +124,47 @@ pub struct Template<'a> {
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "deserialize_bytes_leaky")
+    )]
     pub node_paths: &'a [&'a [u8]],
 
     /// The paths of each dynamic attribute relative to the root of the template
     ///
     /// These will be one segment shorter than the path sent to the renderer since those paths are relative to the
     /// topmost element, not the `roots` field.
-    #[cfg_attr(feature = "serialize", serde(deserialize_with = "deserialize_leaky"))]
+    #[cfg_attr(
+        feature = "serialize",
+        serde(deserialize_with = "deserialize_bytes_leaky")
+    )]
     pub attr_paths: &'a [&'a [u8]],
+}
+
+#[cfg(feature = "serialize")]
+fn deserialize_string_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a str, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = String::deserialize(deserializer)?;
+    Ok(&*Box::leak(deserialized.into_boxed_str()))
+}
+
+#[cfg(feature = "serialize")]
+fn deserialize_bytes_leaky<'a, 'de, D>(deserializer: D) -> Result<&'a [&'a [u8]], D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::Deserialize;
+
+    let deserialized = Vec::<Vec<u8>>::deserialize(deserializer)?;
+    let deserialized = deserialized
+        .into_iter()
+        .map(|v| &*Box::leak(v.into_boxed_slice()))
+        .collect::<Vec<_>>();
+    Ok(&*Box::leak(deserialized.into_boxed_slice()))
 }
 
 #[cfg(feature = "serialize")]
