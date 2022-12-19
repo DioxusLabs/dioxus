@@ -115,10 +115,14 @@ impl VirtualDom {
                 nodes.iter().for_each(|node| self.drop_scope_inner(node))
             }
             DynamicNode::Placeholder(t) => {
-                self.try_reclaim(t.id.get().unwrap());
+                if let Some(id) = t.id.get() {
+                    self.try_reclaim(id);
+                }
             }
             DynamicNode::Text(t) => {
-                self.try_reclaim(t.id.get().unwrap());
+                if let Some(id) = t.id.get() {
+                    self.try_reclaim(id);
+                }
             }
         });
 

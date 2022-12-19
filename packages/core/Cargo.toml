@@ -41,6 +41,7 @@ log = "0.4.17"
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
 dioxus = { path = "../dioxus" }
+pretty_assertions = "1.3.0"
 
 [features]
 default = []
