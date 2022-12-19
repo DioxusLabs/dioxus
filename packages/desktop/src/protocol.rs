@@ -4,19 +4,25 @@ use wry::{
     Result,
 };
 
-const MODULE_LOADER: &str = r#"
+fn module_loader(root_name: &str) -> String {
+    format!(
+        "
 <script>
-    import("./index.js").then(function (module) {
-        module.main();
-    });
+    import(\"./index.js\").then(function (module) {{
+        module.main(\"{}\");
+    }});
 </script>
-"#;
+",
+        root_name
+    )
+}
 
 pub(super) fn desktop_handler(
     request: &Request<Vec<u8>>,
     asset_root: Option<PathBuf>,
     custom_head: Option<String>,
     custom_index: Option<String>,
+    root_name: &str,
 ) -> Result<Response<Vec<u8>>> {
     // Any content that uses the `dioxus://` scheme will be shuttled through this handler as a "special case".
     // For now, we only serve two pieces of content which get included as bytes into the final binary.
@@ -30,7 +36,7 @@ pub(super) fn desktop_handler(
         // we'll look for the closing </body> tag and insert our little module loader there.
         if let Some(custom_index) = custom_index {
             let rendered = custom_index
-                .replace("</body>", &format!("{}</body>", MODULE_LOADER))
+                .replace("</body>", &format!("{}</body>", module_loader(root_name)))
                 .into_bytes();
             Response::builder()
                 .header("Content-Type", "text/html")
@@ -42,7 +48,7 @@ pub(super) fn desktop_handler(
             if let Some(custom_head) = custom_head {
                 template = template.replace("<!-- CUSTOM HEAD -->", &custom_head);
             }
-            template = template.replace("<!-- MODULE LOADER -->", MODULE_LOADER);
+            template = template.replace("<!-- MODULE LOADER -->", &module_loader(root_name));
 
             Response::builder()
                 .header("Content-Type", "text/html")
