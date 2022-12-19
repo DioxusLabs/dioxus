@@ -46,6 +46,32 @@ impl LiveViewPool {
 }
 
 /// A LiveViewSocket is a Sink and Stream of Strings that Dioxus uses to communicate with the client
+///
+/// Most websockets from most HTTP frameworks can be converted into a LiveViewSocket using the appropriate adapter.
+///
+/// You can also convert your own socket into a LiveViewSocket by implementing this trait. This trait is an auto trait,
+/// meaning that as long as your type implements Stream and Sink, you can use it as a LiveViewSocket.
+///
+/// For example, the axum implementation is a really small transform:
+///
+/// ```rust, ignore
+/// pub fn axum_socket(ws: WebSocket) -> impl LiveViewSocket {
+///     ws.map(transform_rx)
+///         .with(transform_tx)
+///         .sink_map_err(|_| LiveViewError::SendingFailed)
+/// }
+///
+/// fn transform_rx(message: Result<Message, axum::Error>) -> Result<String, LiveViewError> {
+///     message
+///         .map_err(|_| LiveViewError::SendingFailed)?
+///         .into_text()
+///         .map_err(|_| LiveViewError::SendingFailed)
+/// }
+///
+/// async fn transform_tx(message: String) -> Result<Message, axum::Error> {
+///     Ok(Message::Text(message))
+/// }
+/// ```
 pub trait LiveViewSocket:
     SinkExt<String, Error = LiveViewError>
     + StreamExt<Item = Result<String, LiveViewError>>

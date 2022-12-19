@@ -1,7 +1,6 @@
 use dioxus::prelude::*;
 use dioxus_liveview::LiveViewPool;
-use salvo::extra::affix;
-use salvo::extra::ws::WsHandler;
+use salvo::affix;
 use salvo::prelude::*;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -58,13 +57,10 @@ async fn connect(
     res: &mut Response,
 ) -> Result<(), StatusError> {
     let view = depot.obtain::<Arc<LiveViewPool>>().unwrap().clone();
-    let fut = WsHandler::new().handle(req, res)?;
 
-    tokio::spawn(async move {
-        if let Some(ws) = fut.await {
+    WebSocketUpgrade::new()
+        .upgrade(req, res, |ws| async move {
             _ = view.launch(dioxus_liveview::salvo_socket(ws), app).await;
-        }
-    });
-
-    Ok(())
+        })
+        .await
 }
