@@ -9,6 +9,7 @@ use syn::{
 pub struct InlinePropsBody {
     pub attrs: Vec<Attribute>,
     pub vis: syn::Visibility,
+    pub maybe_async: Option<Token![async]>,
     pub fn_token: Token![fn],
     pub ident: Ident,
     pub cx_token: Box<Pat>,
@@ -25,6 +26,7 @@ pub struct InlinePropsBody {
 impl Parse for InlinePropsBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let attrs: Vec<Attribute> = input.call(Attribute::parse_outer)?;
+        let maybe_async: Option<Token![async]> = input.parse().ok();
         let vis: Visibility = input.parse()?;
 
         let fn_token = input.parse()?;
@@ -57,6 +59,7 @@ impl Parse for InlinePropsBody {
 
         Ok(Self {
             vis,
+            maybe_async,
             fn_token,
             ident,
             generics,
@@ -84,6 +87,7 @@ impl ToTokens for InlinePropsBody {
             block,
             cx_token,
             attrs,
+            maybe_async,
             ..
         } = self;
 
@@ -151,7 +155,7 @@ impl ToTokens for InlinePropsBody {
             }
 
             #(#attrs)*
-            #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output
+            #maybe_async #vis fn #ident #fn_generics (#cx_token: Scope<#scope_lifetime #struct_name #generics>) #output
             #where_clause
             {
                 let #struct_name { #(#field_names),* } = &cx.props;

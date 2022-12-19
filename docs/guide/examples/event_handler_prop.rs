@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use dioxus::events::MouseEvent;
 use dioxus::prelude::*;
 
 fn main() {

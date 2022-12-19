@@ -1,5 +1,5 @@
-export function main() {
-  let root = window.document.getElementById("main");
+export function main(rootname = "main") {
+  let root = window.document.getElementById(rootname);
   if (root != null) {
     window.interpreter = new Interpreter(root);
     window.ipc.postMessage(serializeIpcMessage("initialize"));
@@ -63,17 +63,21 @@ class ListenerMap {
 export class Interpreter {
   constructor(root) {
     this.root = root;
-    this.stack = [root];
     this.listeners = new ListenerMap(root);
-    this.handlers = {};
-    this.lastNodeWasText = false;
     this.nodes = [root];
+    this.stack = [root];
+    this.handlers = {};
+    this.templates = {};
+    this.lastNodeWasText = false;
   }
   top() {
     return this.stack[this.stack.length - 1];
   }
   pop() {
     return this.stack.pop();
+  }
+  MountToRoot() {
+    this.AppendChildren(this.stack.length - 1);
   }
   SetNode(id, node) {
     this.nodes[id] = node;
@@ -86,7 +90,8 @@ export class Interpreter {
     this.stack.pop();
   }
   AppendChildren(many) {
-    let root = this.stack[this.stack.length - (1 + many)];
+    // let root = this.nodes[id];
+    let root = this.stack[this.stack.length - 1 - many];
     let to_add = this.stack.splice(this.stack.length - many);
     for (let i = 0; i < many; i++) {
       root.appendChild(to_add[i]);
@@ -119,20 +124,13 @@ export class Interpreter {
       node.remove();
     }
   }
+  CreateRawText(text) {
+    this.stack.push(document.createTextNode(text));
+  }
   CreateTextNode(text, root) {
     const node = document.createTextNode(text);
     this.nodes[root] = node;
     this.stack.push(node);
-  }
-  CreateElement(tag, root) {
-    const el = document.createElement(tag);
-    this.nodes[root] = el;
-    this.stack.push(el);
-  }
-  CreateElementNs(tag, root, ns) {
-    let el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-    this.nodes[root] = el;
   }
   CreatePlaceholder(root) {
     let el = document.createElement("pre");
@@ -140,7 +138,7 @@ export class Interpreter {
     this.stack.push(el);
     this.nodes[root] = el;
   }
-  NewEventListener(event_name, root, handler, bubbles) {
+  NewEventListener(event_name, root, bubbles, handler) {
     const element = this.nodes[root];
     element.setAttribute("data-dioxus-id", `${root}`);
     this.listeners.create(event_name, element, handler, bubbles);
@@ -153,13 +151,19 @@ export class Interpreter {
   SetText(root, text) {
     this.nodes[root].textContent = text;
   }
-  SetAttribute(root, field, value, ns) {
+  SetAttribute(id, field, value, ns) {
+    const node = this.nodes[id];
+    this.SetAttributeInner(node, field, value, ns);
+  }
+  SetAttributeInner(node, field, value, ns) {
     const name = field;
-    const node = this.nodes[root];
     if (ns === "style") {
-      // @ts-ignore
+      // ????? why do we need to do this
+      if (node.style === undefined) {
+        node.style = {};
+      }
       node.style[name] = value;
-    } else if (ns != null || ns != undefined) {
+    } else if (ns != null && ns != undefined) {
       node.setAttributeNS(ns, name, value);
     } else {
       switch (name) {
@@ -207,51 +211,150 @@ export class Interpreter {
     }
   }
   handleEdits(edits) {
-    this.stack.push(this.root);
-    for (let edit of edits) {
+    for (let template of edits.templates) {
+      this.SaveTemplate(template);
+    }
+
+    for (let edit of edits.edits) {
       this.handleEdit(edit);
     }
   }
+
+  SaveTemplate(template) {
+    let roots = [];
+    for (let root of template.roots) {
+      roots.push(this.MakeTemplateNode(root));
+    }
+    this.templates[template.name] = roots;
+  }
+
+  MakeTemplateNode(node) {
+    console.log("making template node", node);
+    switch (node.type) {
+      case "Text":
+        return document.createTextNode(node.text);
+      case "Dynamic":
+        let dyn = document.createElement("pre");
+        dyn.hidden = true;
+        return dyn;
+      case "DynamicText":
+        return document.createTextNode("placeholder");
+      case "Element":
+        let el;
+
+        if (node.namespace != null) {
+          el = document.createElementNS(node.namespace, node.tag);
+        } else {
+          el = document.createElement(node.tag);
+        }
+
+        for (let attr of node.attrs) {
+          if (attr.type == "Static") {
+            this.SetAttributeInner(el, attr.name, attr.value, attr.namespace);
+          }
+        }
+
+        for (let child of node.children) {
+          el.appendChild(this.MakeTemplateNode(child));
+        }
+
+        return el;
+    }
+  }
+  AssignId(path, id) {
+    this.nodes[id] = this.LoadChild(path);
+  }
+  LoadChild(path) {
+    // iterate through each number and get that child
+    let node = this.stack[this.stack.length - 1];
+
+    for (let i = 0; i < path.length; i++) {
+      node = node.childNodes[path[i]];
+    }
+
+    return node;
+  }
+  HydrateText(path, value, id) {
+    let node = this.LoadChild(path);
+
+    if (node.nodeType == Node.TEXT_NODE) {
+      node.textContent = value;
+    } else {
+      // replace with a textnode
+      let text = document.createTextNode(value);
+      node.replaceWith(text);
+      node = text;
+    }
+
+    this.nodes[id] = node;
+  }
+  ReplacePlaceholder(path, m) {
+    let els = this.stack.splice(this.stack.length - m);
+    let node = this.LoadChild(path);
+    node.replaceWith(...els);
+  }
+  LoadTemplate(name, index, id) {
+    let node = this.templates[name][index].cloneNode(true);
+    this.nodes[id] = node;
+    this.stack.push(node);
+  }
   handleEdit(edit) {
     switch (edit.type) {
-      case "PushRoot":
-        this.PushRoot(edit.root);
-        break;
       case "AppendChildren":
-        this.AppendChildren(edit.many);
+        this.AppendChildren(edit.m);
         break;
-      case "ReplaceWith":
-        this.ReplaceWith(edit.root, edit.m);
-        break;
-      case "InsertAfter":
-        this.InsertAfter(edit.root, edit.n);
-        break;
-      case "InsertBefore":
-        this.InsertBefore(edit.root, edit.n);
-        break;
-      case "Remove":
-        this.Remove(edit.root);
-        break;
-      case "CreateTextNode":
-        this.CreateTextNode(edit.text, edit.root);
-        break;
-      case "CreateElement":
-        this.CreateElement(edit.tag, edit.root);
-        break;
-      case "CreateElementNs":
-        this.CreateElementNs(edit.tag, edit.root, edit.ns);
+      case "AssignId":
+        this.AssignId(edit.path, edit.id);
         break;
       case "CreatePlaceholder":
-        this.CreatePlaceholder(edit.root);
+        this.CreatePlaceholder(edit.id);
+        break;
+      case "CreateTextNode":
+        this.CreateTextNode(edit.value);
+        break;
+      case "HydrateText":
+        this.HydrateText(edit.path, edit.value, edit.id);
+        break;
+      case "LoadTemplate":
+        this.LoadTemplate(edit.name, edit.index, edit.id);
+        break;
+      case "PushRoot":
+        this.PushRoot(edit.id);
+        break;
+      case "ReplaceWith":
+        this.ReplaceWith(edit.id, edit.m);
+        break;
+      case "ReplacePlaceholder":
+        this.ReplacePlaceholder(edit.path, edit.m);
+        break;
+      case "InsertAfter":
+        this.InsertAfter(edit.id, edit.m);
+        break;
+      case "InsertBefore":
+        this.InsertBefore(edit.id, edit.m);
+        break;
+      case "Remove":
+        this.Remove(edit.id);
+        break;
+      case "SetText":
+        this.SetText(edit.id, edit.value);
+        break;
+      case "SetAttribute":
+        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
+        break;
+      case "SetBoolAttribute":
+        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
+        break;
+      case "RemoveAttribute":
+        this.RemoveAttribute(edit.id, edit.name, edit.ns);
         break;
       case "RemoveEventListener":
-        this.RemoveEventListener(edit.root, edit.event_name);
+        this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
-
           let target = event.target;
           if (target != null) {
             let realId = target.getAttribute(`data-dioxus-id`);
@@ -332,24 +435,14 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.event_name,
+                event: edit.name,
                 mounted_dom_id: parseInt(realId),
                 contents: contents,
               })
             );
           }
         };
-        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
-
-        break;
-      case "SetText":
-        this.SetText(edit.root, edit.text);
-        break;
-      case "SetAttribute":
-        this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
-        break;
-      case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name, edit.ns);
+        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
         break;
     }
   }
@@ -828,4 +921,6 @@ function event_bubbles(event) {
     case "toggle":
       return true;
   }
+
+  return true;
 }

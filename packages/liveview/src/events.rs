@@ -5,9 +5,9 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use dioxus_core::{ElementId, EventPriority, UserEvent};
-use dioxus_html::event_bubbles;
-use dioxus_html::on::*;
+use dioxus_core::ElementId;
+// use dioxus_html::event_bubbles;
+use dioxus_html::events::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct IpcMessage {
@@ -25,33 +25,33 @@ pub(crate) fn parse_ipc_message(payload: &str) -> Option<IpcMessage> {
 #[derive(serde::Serialize, serde::Deserialize)]
 struct ImEvent {
     event: String,
-    mounted_dom_id: u64,
+    mounted_dom_id: ElementId,
     contents: serde_json::Value,
 }
 
-pub fn trigger_from_serialized(val: serde_json::Value) -> UserEvent {
-    let ImEvent {
-        event,
-        mounted_dom_id,
-        contents,
-    } = serde_json::from_value(val).unwrap();
+pub fn trigger_from_serialized(_val: serde_json::Value) {
+    todo!()
+    // let ImEvent {
+    //     event,
+    //     mounted_dom_id,
+    //     contents,
+    // } = serde_json::from_value(val).unwrap();
 
-    let mounted_dom_id = Some(ElementId(mounted_dom_id as usize));
+    // let mounted_dom_id = Some(mounted_dom_id);
 
-    let name = event_name_from_type(&event);
-    let event = make_synthetic_event(&event, contents);
+    // let name = event_name_from_type(&event);
+    // let event = make_synthetic_event(&event, contents);
 
-    UserEvent {
-        name,
-        priority: EventPriority::Low,
-        scope_id: None,
-        element: mounted_dom_id,
-        data: event,
-        bubbles: event_bubbles(name),
-    }
+    // UserEvent {
+    //     name,
+    //     scope_id: None,
+    //     element: mounted_dom_id,
+    //     data: event,
+    //     bubbles: event_bubbles(name),
+    // }
 }
 
-fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any + Send + Sync> {
+fn make_synthetic_event(name: &str, val: serde_json::Value) -> Arc<dyn Any> {
     match name {
         "copy" | "cut" | "paste" => {
             //

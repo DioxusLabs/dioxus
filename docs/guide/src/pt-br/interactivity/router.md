@@ -18,7 +18,8 @@ Cada uma dessas cenas é independente – não queremos renderizar a página ini
 
 ```toml
 [dependencies]
-dioxus = { version = "0.2", features = ["desktop", "router"] }
+dioxus = { version = "*" }
+dioxus-router = { version = "*" }
 ```
 
 ## Usando o Roteador

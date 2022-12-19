@@ -7,7 +7,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let model = use_state(&cx, || String::from("asd"));
+    let model = use_state(cx, || String::from("asd"));
 
     println!("{}", model);
 

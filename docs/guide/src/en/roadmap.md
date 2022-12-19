@@ -50,7 +50,7 @@ Generally, here's the status of each platform:
 | 1st class global state    | ✅      | redux/recoil/mobx on top of context                                  |
 | Runs natively             | ✅      | runs as a portable binary w/o a runtime (Node)                       |
 | Subtree Memoization       | ✅      | skip diffing static element subtrees                                 |
-| High-efficiency templates | 🛠      | rsx! calls are translated to templates on the DOM's side             |
+| High-efficiency templates | ✅      | rsx! calls are translated to templates on the DOM's side             |
 | Compile-time correct      | ✅      | Throw errors on invalid template layouts                             |
 | Heuristic Engine          | ✅      | track component memory usage to minimize future allocations          |
 | Fine-grained reactivity   | 👀      | Skip diffing for fine-grain updates                                  |
@@ -66,7 +66,7 @@ These Features are planned for the future of Dioxus:
 ### Core
 - [x] Release of Dioxus Core
 - [x] Upgrade documentation to include more theory and be more comprehensive
-- [ ] Support for HTML-side templates for lightning-fast dom manipulation
+- [x] Support for HTML-side templates for lightning-fast dom manipulation
 - [ ] Support for multiple renderers for same virtualdom (subtrees)
 - [ ] Support for ThreadSafe (Send + Sync)
 - [ ] Support for Portals

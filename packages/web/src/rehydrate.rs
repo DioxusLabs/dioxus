@@ -1,6 +1,5 @@
 use crate::dom::WebsysDom;
 use dioxus_core::{VNode, VirtualDom};
-use dioxus_html::event_bubbles;
 use wasm_bindgen::JsCast;
 use web_sys::{Comment, Element, Node, Text};
 
@@ -30,14 +29,15 @@ impl WebsysDom {
 
         let mut last_node_was_text = false;
 
-        // Recursively rehydrate the dom from the VirtualDom
-        self.rehydrate_single(
-            &mut nodes,
-            &mut counter,
-            dom,
-            root_node,
-            &mut last_node_was_text,
-        )
+        todo!()
+        // // Recursively rehydrate the dom from the VirtualDom
+        // self.rehydrate_single(
+        //     &mut nodes,
+        //     &mut counter,
+        //     dom,
+        //     root_node,
+        //     &mut last_node_was_text,
+        // )
     }
 
     fn rehydrate_single(
@@ -108,9 +108,10 @@ impl WebsysDom {
                 }
 
                 for listener in vel.listeners {
+                    let id = listener.mounted_node.get().unwrap();
                     self.interpreter.NewEventListener(
                         listener.event,
-                        listener.mounted_node.get().unwrap().as_u64(),
+                        Some(id.as_u64()),
                         self.handler.as_ref().unchecked_ref(),
                         event_bubbles(listener.event),
                     );
@@ -163,8 +164,10 @@ impl WebsysDom {
             VNode::Component(el) => {
                 let scope = dom.get_scope(el.scope.get().unwrap()).unwrap();
                 let node = scope.root_node();
-                self.rehydrate_single(nodes, place, dom, node, last_node_was_text)?;
+                todo!()
+                // self.rehydrate_single(nodes, place, dom, node, last_node_was_text)?;
             }
+            VNode::TemplateRef(_) => todo!(),
         }
         Ok(())
     }

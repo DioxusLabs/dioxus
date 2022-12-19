@@ -194,7 +194,7 @@ mod field_info {
                 // children field is automatically defaulted to None
                 if name == "children" {
                     builder_attr.default =
-                        Some(syn::parse(quote!(Default::default()).into()).unwrap());
+                        Some(syn::parse(quote!(::dioxus::core::VNode::empty()).into()).unwrap());
                 }
 
                 // auto detect optional
@@ -781,7 +781,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let arg_type = if field.builder_attr.strip_option {
                 field.type_from_inside_option(false).ok_or_else(|| {
                     Error::new_spanned(
-                        &field_type,
+                        field_type,
                         "can't `strip_option` - field is not `Option<...>`",
                     )
                 })?

@@ -10,21 +10,31 @@ fn main() {
     let mut dom = VirtualDom::new(app);
     let _ = dom.rebuild();
 
-    let output = dioxus_ssr::render_vdom(&dom);
+    let output = dioxus_ssr::render(&dom);
 
     println!("{}", output);
 }
 
 fn app(cx: Scope) -> Element {
-    let nf = NodeFactory::new(&cx);
+    let g = cx.component(component, (), "component");
+    let c = cx.make_node(g);
+    cx.render(rsx! {
+        div { c }
+    })
 
-    let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
+    // let nf = NodeFactory::new(cx);
 
-    attrs.push(nf.attr("client-id", format_args!("abc123"), None, false));
+    // let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
 
-    attrs.push(nf.attr("name", format_args!("bob"), None, false));
+    // attrs.push(nf.attr("client-id", format_args!("abc123"), None, false));
 
-    attrs.push(nf.attr("age", format_args!("47"), None, false));
+    // attrs.push(nf.attr("name", format_args!("bob"), None, false));
 
-    Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
+    // attrs.push(nf.attr("age", format_args!("47"), None, false));
+
+    // Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
+}
+
+fn component(cx: Scope) -> Element {
+    todo!()
 }

@@ -1,4 +1,4 @@
-use crate::{ParsedRoute, RouteContext, RouterCore, RouterService};
+use crate::{ParsedRoute, RouteContext, RouterContext};
 use dioxus::core::{ScopeId, ScopeState};
 use std::{borrow::Cow, str::FromStr, sync::Arc};
 use url::Url;
@@ -7,11 +7,11 @@ use url::Url;
 /// context of a [`Router`]. If this function is called outside of a `Router`
 /// component it will panic.
 pub fn use_route(cx: &ScopeState) -> &UseRoute {
-    let handle = cx.use_hook(|| {
-        let router = cx
-            .consume_context::<RouterService>()
-            .expect("Cannot call use_route outside the scope of a Router component");
+    let router = cx
+        .consume_context::<RouterContext>()
+        .expect("Cannot call use_route outside the scope of a Router component");
 
+    let handle = cx.use_hook(|| {
         let route_context = cx.consume_context::<RouteContext>();
 
         router.subscribe_onchange(cx.scope_id());
@@ -115,7 +115,7 @@ impl UseRoute {
 // and reveal our cached version of UseRoute to the component.
 struct UseRouteListener {
     state: UseRoute,
-    router: Arc<RouterCore>,
+    router: RouterContext,
     scope: ScopeId,
 }
 

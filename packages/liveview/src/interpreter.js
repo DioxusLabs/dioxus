@@ -35,103 +35,207 @@ class IPC {
   }
 }
 
+class ListenerMap {
+  constructor(root) {
+    // bubbling events can listen at the root element
+    this.global = {};
+    // non bubbling events listen at the element the listener was created at
+    this.local = {};
+    this.root = root;
+  }
+
+  create(event_name, element, handler, bubbles) {
+    if (bubbles) {
+      if (this.global[event_name] === undefined) {
+        this.global[event_name] = {};
+        this.global[event_name].active = 1;
+        this.global[event_name].callback = handler;
+        this.root.addEventListener(event_name, handler);
+      } else {
+        this.global[event_name].active++;
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      if (!this.local[id]) {
+        this.local[id] = {};
+      }
+      this.local[id][event_name] = handler;
+      element.addEventListener(event_name, handler);
+    }
+  }
+
+  remove(element, event_name, bubbles) {
+    if (bubbles) {
+      this.global[event_name].active--;
+      if (this.global[event_name].active === 0) {
+        this.root.removeEventListener(event_name, this.global[event_name].callback);
+        delete this.global[event_name];
+      }
+    }
+    else {
+      const id = element.getAttribute("data-dioxus-id");
+      delete this.local[id][event_name];
+      if (this.local[id].length === 0) {
+        delete this.local[id];
+      }
+      element.removeEventListener(event_name, handler);
+    }
+  }
+}
+
 class Interpreter {
   constructor(root) {
     this.root = root;
-    this.stack = [root];
-    this.listeners = {};
+    this.lastNode = root;
+    this.listeners = new ListenerMap(root);
     this.handlers = {};
-    this.lastNodeWasText = false;
     this.nodes = [root];
+    this.parents = [];
   }
-  top() {
-    return this.stack[this.stack.length - 1];
-  }
-  pop() {
-    return this.stack.pop();
-  }
-  PushRoot(root) {
-    const node = this.nodes[root];
-    this.stack.push(node);
-  }
-  AppendChildren(many) {
-    let root = this.stack[this.stack.length - (1 + many)];
-    let to_add = this.stack.splice(this.stack.length - many);
-    for (let i = 0; i < many; i++) {
-      root.appendChild(to_add[i]);
+  checkAppendParent() {
+    if (this.parents.length > 0) {
+      const lastParent = this.parents[this.parents.length - 1];
+      lastParent[1]--;
+      if (lastParent[1] === 0) {
+        this.parents.pop();
+      }
+      lastParent[0].appendChild(this.lastNode);
     }
   }
-  ReplaceWith(root_id, m) {
-    let root = this.nodes[root_id];
-    let els = this.stack.splice(this.stack.length - m);
-    root.replaceWith(...els);
+  AppendChildren(root, children) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    for (let i = 0; i < children.length; i++) {
+      node.appendChild(this.nodes[children[i]]);
+    }
   }
-  InsertAfter(root, n) {
-    let old = this.nodes[root];
-    let new_nodes = this.stack.splice(this.stack.length - n);
-    old.after(...new_nodes);
+  ReplaceWith(root, nodes) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
+    node.replaceWith(...els);
   }
-  InsertBefore(root, n) {
-    let old = this.nodes[root];
-    let new_nodes = this.stack.splice(this.stack.length - n);
-    old.before(...new_nodes);
+  InsertAfter(root, nodes) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
+    node.after(...els);
+  }
+  InsertBefore(root, nodes) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    let els = [];
+    for (let i = 0; i < nodes.length; i++) {
+      els.push(this.nodes[nodes[i]])
+    }
+    node.before(...els);
   }
   Remove(root) {
-    let node = this.nodes[root];
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     if (node !== undefined) {
       node.remove();
     }
   }
   CreateTextNode(text, root) {
-    // todo: make it so the types are okay
-    const node = document.createTextNode(text);
-    this.nodes[root] = node;
-    this.stack.push(node);
+    this.lastNode = document.createTextNode(text);
+    this.checkAppendParent();
+    if (root != null) {
+      this.nodes[root] = this.lastNode;
+    }
   }
-  CreateElement(tag, root) {
-    const el = document.createElement(tag);
-    // el.setAttribute("data-dioxus-id", `${root}`);
-    this.nodes[root] = el;
-    this.stack.push(el);
+  CreateElement(tag, root, children) {
+    this.lastNode = document.createElement(tag);
+    this.checkAppendParent();
+    if (root != null) {
+      this.nodes[root] = this.lastNode;
+    }
+    if (children > 0) {
+      this.parents.push([this.lastNode, children]);
+    }
   }
-  CreateElementNs(tag, root, ns) {
-    let el = document.createElementNS(ns, tag);
-    this.stack.push(el);
-    this.nodes[root] = el;
+  CreateElementNs(tag, root, ns, children) {
+    this.lastNode = document.createElementNS(ns, tag);
+    this.checkAppendParent();
+    if (root != null) {
+      this.nodes[root] = this.lastNode;
+    }
+    if (children > 0) {
+      this.parents.push([this.lastNode, children]);
+    }
   }
   CreatePlaceholder(root) {
-    let el = document.createElement("pre");
-    el.hidden = true;
-    this.stack.push(el);
-    this.nodes[root] = el;
+    this.lastNode = document.createElement("pre");
+    this.lastNode.hidden = true;
+    this.checkAppendParent();
+    if (root != null) {
+      this.nodes[root] = this.lastNode;
+    }
   }
-  NewEventListener(event_name, root, handler) {
-    const element = this.nodes[root];
-    element.setAttribute("data-dioxus-id", `${root}`);
-    if (this.listeners[event_name] === undefined) {
-      this.listeners[event_name] = 0;
-      this.handlers[event_name] = handler;
-      this.root.addEventListener(event_name, handler);
+  NewEventListener(event_name, root, handler, bubbles) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
     } else {
-      this.listeners[event_name]++;
+      node = this.nodes[root];
     }
+    node.setAttribute("data-dioxus-id", `${root}`);
+    this.listeners.create(event_name, node, handler, bubbles);
   }
-  RemoveEventListener(root, event_name) {
-    const element = this.nodes[root];
-    element.removeAttribute(`data-dioxus-id`);
-    this.listeners[event_name]--;
-    if (this.listeners[event_name] === 0) {
-      this.root.removeEventListener(event_name, this.handlers[event_name]);
-      delete this.listeners[event_name];
-      delete this.handlers[event_name];
+  RemoveEventListener(root, event_name, bubbles) {
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
     }
+    node.removeAttribute(`data-dioxus-id`);
+    this.listeners.remove(node, event_name, bubbles);
   }
   SetText(root, text) {
-    this.nodes[root].textContent = text;
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    node.data = text;
   }
   SetAttribute(root, field, value, ns) {
     const name = field;
-    const node = this.nodes[root];
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
     if (ns === "style") {
       // @ts-ignore
       node.style[name] = value;
@@ -163,10 +267,19 @@ class Interpreter {
       }
     }
   }
-  RemoveAttribute(root, name) {
-    const node = this.nodes[root];
-
-    if (name === "value") {
+  RemoveAttribute(root, field, ns) {
+    const name = field;
+    let node;
+    if (root == null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[root];
+    }
+    if (ns == "style") {
+      node.style.removeProperty(name);
+    } else if (ns !== null || ns !== undefined) {
+      node.removeAttributeNS(ns, name);
+    } else if (name === "value") {
       node.value = "";
     } else if (name === "checked") {
       node.checked = false;
@@ -178,8 +291,44 @@ class Interpreter {
       node.removeAttribute(name);
     }
   }
+  CloneNode(old, new_id) {
+    let node;
+    if (old === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[old];
+    }
+    this.nodes[new_id] = node.cloneNode(true);
+  }
+  CloneNodeChildren(old, new_ids) {
+    let node;
+    if (old === null) {
+      node = this.lastNode;
+    } else {
+      node = this.nodes[old];
+    }
+    const old_node = node.cloneNode(true);
+    let i = 0;
+    for (let node = old_node.firstChild; i < new_ids.length; node = node.nextSibling) {
+      this.nodes[new_ids[i++]] = node;
+    }
+  }
+  FirstChild() {
+    this.lastNode = this.lastNode.firstChild;
+  }
+  NextSibling() {
+    this.lastNode = this.lastNode.nextSibling;
+  }
+  ParentNode() {
+    this.lastNode = this.lastNode.parentNode;
+  }
+  StoreWithId(id) {
+    this.nodes[id] = this.lastNode;
+  }
+  SetLastNode(root) {
+    this.lastNode = this.nodes[root];
+  }
   handleEdits(edits) {
-    this.stack.push(this.root);
     for (let edit of edits) {
       this.handleEdit(edit);
     }
@@ -190,16 +339,16 @@ class Interpreter {
         this.PushRoot(edit.root);
         break;
       case "AppendChildren":
-        this.AppendChildren(edit.many);
+        this.AppendChildren(edit.root, edit.children);
         break;
       case "ReplaceWith":
-        this.ReplaceWith(edit.root, edit.m);
+        this.ReplaceWith(edit.root, edit.nodes);
         break;
       case "InsertAfter":
-        this.InsertAfter(edit.root, edit.n);
+        this.InsertAfter(edit.root, edit.nodes);
         break;
       case "InsertBefore":
-        this.InsertBefore(edit.root, edit.n);
+        this.InsertBefore(edit.root, edit.nodes);
         break;
       case "Remove":
         this.Remove(edit.root);
@@ -208,10 +357,10 @@ class Interpreter {
         this.CreateTextNode(edit.text, edit.root);
         break;
       case "CreateElement":
-        this.CreateElement(edit.tag, edit.root);
+        this.CreateElement(edit.tag, edit.root, edit.children);
         break;
       case "CreateElementNs":
-        this.CreateElementNs(edit.tag, edit.root, edit.ns);
+        this.CreateElementNs(edit.tag, edit.root, edit.ns, edit.children);
         break;
       case "CreatePlaceholder":
         this.CreatePlaceholder(edit.root);
@@ -237,7 +386,7 @@ class Interpreter {
                   event.preventDefault();
                   const href = target.getAttribute("href");
                   if (href !== "" && href !== null && href !== undefined) {
-                    window.ipc.send(
+                    window.ipc.postMessage(
                       serializeIpcMessage("browser_open", { href })
                     );
                   }
@@ -245,7 +394,7 @@ class Interpreter {
               }
 
               // also prevent buttons from submitting
-              if (target.tagName === "BUTTON") {
+              if (target.tagName === "BUTTON" && event.type == "submit") {
                 event.preventDefault();
               }
             }
@@ -269,11 +418,15 @@ class Interpreter {
             if (shouldPreventDefault === `on${event.type}`) {
               event.preventDefault();
             }
+
             if (event.type === "submit") {
               event.preventDefault();
             }
 
-            if (target.tagName === "FORM") {
+            if (
+              target.tagName === "FORM" &&
+              (event.type === "submit" || event.type === "input")
+            ) {
               for (let x = 0; x < target.elements.length; x++) {
                 let element = target.elements[x];
                 let name = element.getAttribute("name");
@@ -281,6 +434,10 @@ class Interpreter {
                   if (element.getAttribute("type") === "checkbox") {
                     // @ts-ignore
                     contents.values[name] = element.checked ? "true" : "false";
+                  } else if (element.getAttribute("type") === "radio") {
+                    if (element.checked) {
+                      contents.values[name] = element.value;
+                    }
                   } else {
                     // @ts-ignore
                     contents.values[name] =
@@ -290,19 +447,21 @@ class Interpreter {
               }
             }
 
-            if (realId == null) {
+            if (realId === null) {
               return;
             }
+            realId = parseInt(realId);
             window.ipc.send(
               serializeIpcMessage("user_event", {
                 event: edit.event_name,
-                mounted_dom_id: parseInt(realId),
+                mounted_dom_id: realId,
                 contents: contents,
               })
             );
           }
         };
-        this.NewEventListener(edit.event_name, edit.root, handler);
+        this.NewEventListener(edit.event_name, edit.root, handler, event_bubbles(edit.event_name));
+
         break;
       case "SetText":
         this.SetText(edit.root, edit.text);
@@ -311,7 +470,28 @@ class Interpreter {
         this.SetAttribute(edit.root, edit.field, edit.value, edit.ns);
         break;
       case "RemoveAttribute":
-        this.RemoveAttribute(edit.root, edit.name);
+        this.RemoveAttribute(edit.root, edit.name, edit.ns);
+        break;
+      case "CloneNode":
+        this.CloneNode(edit.id, edit.new_id);
+        break;
+      case "CloneNodeChildren":
+        this.CloneNodeChildren(edit.id, edit.new_ids);
+        break;
+      case "FirstChild":
+        this.FirstChild();
+        break;
+      case "NextSibling":
+        this.NextSibling();
+        break;
+      case "ParentNode":
+        this.ParentNode();
+        break;
+      case "StoreWithId":
+        this.StoreWithId(BigInt(edit.id));
+        break;
+      case "SetLastNode":
+        this.SetLastNode(BigInt(edit.id));
         break;
     }
   }
@@ -346,6 +526,7 @@ function serialize_event(event) {
         location,
         repeat,
         which,
+        code,
       } = event;
       return {
         char_code: charCode,
@@ -358,6 +539,7 @@ function serialize_event(event) {
         location: location,
         repeat: repeat,
         which: which,
+        code,
       };
     }
     case "focus":
@@ -383,9 +565,11 @@ function serialize_event(event) {
     case "submit": {
       let target = event.target;
       let value = target.value ?? target.textContent;
+
       if (target.type === "checkbox") {
         value = target.checked ? "true" : "false";
       }
+
       return {
         value: value,
         values: {},
@@ -394,6 +578,7 @@ function serialize_event(event) {
     case "click":
     case "contextmenu":
     case "doubleclick":
+    case "dblclick":
     case "drag":
     case "dragend":
     case "dragenter":
@@ -613,3 +798,176 @@ const bool_attrs = {
   selected: true,
   truespeed: true,
 };
+
+function is_element_node(node) {
+  return node.nodeType == 1;
+}
+
+function event_bubbles(event) {
+  switch (event) {
+    case "copy":
+      return true;
+    case "cut":
+      return true;
+    case "paste":
+      return true;
+    case "compositionend":
+      return true;
+    case "compositionstart":
+      return true;
+    case "compositionupdate":
+      return true;
+    case "keydown":
+      return true;
+    case "keypress":
+      return true;
+    case "keyup":
+      return true;
+    case "focus":
+      return false;
+    case "focusout":
+      return true;
+    case "focusin":
+      return true;
+    case "blur":
+      return false;
+    case "change":
+      return true;
+    case "input":
+      return true;
+    case "invalid":
+      return true;
+    case "reset":
+      return true;
+    case "submit":
+      return true;
+    case "click":
+      return true;
+    case "contextmenu":
+      return true;
+    case "doubleclick":
+      return true;
+    case "dblclick":
+      return true;
+    case "drag":
+      return true;
+    case "dragend":
+      return true;
+    case "dragenter":
+      return false;
+    case "dragexit":
+      return false;
+    case "dragleave":
+      return true;
+    case "dragover":
+      return true;
+    case "dragstart":
+      return true;
+    case "drop":
+      return true;
+    case "mousedown":
+      return true;
+    case "mouseenter":
+      return false;
+    case "mouseleave":
+      return false;
+    case "mousemove":
+      return true;
+    case "mouseout":
+      return true;
+    case "scroll":
+      return false;
+    case "mouseover":
+      return true;
+    case "mouseup":
+      return true;
+    case "pointerdown":
+      return true;
+    case "pointermove":
+      return true;
+    case "pointerup":
+      return true;
+    case "pointercancel":
+      return true;
+    case "gotpointercapture":
+      return true;
+    case "lostpointercapture":
+      return true;
+    case "pointerenter":
+      return false;
+    case "pointerleave":
+      return false;
+    case "pointerover":
+      return true;
+    case "pointerout":
+      return true;
+    case "select":
+      return true;
+    case "touchcancel":
+      return true;
+    case "touchend":
+      return true;
+    case "touchmove":
+      return true;
+    case "touchstart":
+      return true;
+    case "wheel":
+      return true;
+    case "abort":
+      return false;
+    case "canplay":
+      return false;
+    case "canplaythrough":
+      return false;
+    case "durationchange":
+      return false;
+    case "emptied":
+      return false;
+    case "encrypted":
+      return true;
+    case "ended":
+      return false;
+    case "error":
+      return false;
+    case "loadeddata":
+      return false;
+    case "loadedmetadata":
+      return false;
+    case "loadstart":
+      return false;
+    case "pause":
+      return false;
+    case "play":
+      return false;
+    case "playing":
+      return false;
+    case "progress":
+      return false;
+    case "ratechange":
+      return false;
+    case "seeked":
+      return false;
+    case "seeking":
+      return false;
+    case "stalled":
+      return false;
+    case "suspend":
+      return false;
+    case "timeupdate":
+      return false;
+    case "volumechange":
+      return false;
+    case "waiting":
+      return false;
+    case "animationstart":
+      return true;
+    case "animationend":
+      return true;
+    case "animationiteration":
+      return true;
+    case "transitionend":
+      return true;
+    case "toggle":
+      return true;
+  }
+}

@@ -1,6 +1,8 @@
+#![allow(non_upper_case_globals)]
+
 use crate::{GlobalAttributes, SvgAttributes};
-use dioxus_core::*;
-use std::fmt::Arguments;
+
+pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
 
 macro_rules! builder_constructors {
     (
@@ -19,21 +21,17 @@ macro_rules! builder_constructors {
             $(#[$attr])*
             pub struct $name;
 
-            impl DioxusElement for $name {
-                const TAG_NAME: &'static str = stringify!($name);
-                const NAME_SPACE: Option<&'static str> = None;
+
+            impl $name {
+                pub const TAG_NAME: &'static str = stringify!($name);
+                pub const NAME_SPACE: Option<&'static str> = None;
+
+                $(
+                    pub const $fil: AttributeDiscription = (stringify!($fil), None, false);
+                )*
             }
 
             impl GlobalAttributes for $name {}
-
-            impl $name {
-                $(
-                    $(#[$attr_method])*
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, None, false)
-                    }
-                )*
-            }
         )*
     };
 
@@ -48,18 +46,14 @@ macro_rules! builder_constructors {
             $(#[$attr])*
             pub struct $name;
 
-            impl DioxusElement for $name {
-                const TAG_NAME: &'static str = stringify!($name);
-                const NAME_SPACE: Option<&'static str> = Some($namespace);
-            }
-
             impl SvgAttributes for $name {}
 
             impl $name {
+                pub const TAG_NAME: &'static str = stringify!($name);
+                pub const NAME_SPACE: Option<&'static str> = Some($namespace);
+
                 $(
-                    pub fn $fil<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-                        cx.attr(stringify!($fil), val, Some(stringify!($namespace)), false)
-                    }
+                    pub const $fil: AttributeDiscription = (stringify!($fil), Some(stringify!($namespace)), false)
                 )*
             }
         )*
@@ -499,7 +493,9 @@ builder_constructors! {
     /// Build a
     /// [`<time>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/time)
     /// element.
-    time {};
+    time {
+        datetime: Datetime,
+    };
 
     /// Build a
     /// [`<u>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/u)
@@ -1061,13 +1057,10 @@ impl input {
     /// - `time`
     /// - `url`
     /// - `week`
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
 
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    pub const r#type: AttributeDiscription = ("type", None, false);
+
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 
 /*
@@ -1077,41 +1070,29 @@ volatile attributes
 impl script {
     // r#async: Bool,
     // r#type: String, // TODO could be an enum
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
-    pub fn r#script<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("script", val, None, false)
-    }
+
+    pub const r#type: AttributeDiscription = ("type", None, false);
+
+    pub const r#script: AttributeDiscription = ("script", None, false);
 }
 
 impl button {
-    pub fn r#type<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("type", val, None, false)
-    }
+    pub const r#type: AttributeDiscription = ("type", None, false);
 }
 
 impl select {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 
 impl option {
-    pub fn selected<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("selected", val, None, true)
-    }
+    pub const selected: AttributeDiscription = ("selected", None, true);
 }
 
 impl textarea {
-    pub fn value<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("value", val, None, true)
-    }
+    pub const value: AttributeDiscription = ("value", None, true);
 }
 impl label {
-    pub fn r#for<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("for", val, None, false)
-    }
+    pub const r#for: AttributeDiscription = ("for", None, false);
 }
 
 builder_constructors! {

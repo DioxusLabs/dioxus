@@ -29,9 +29,7 @@ fn app(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div {
-            Child1 {
-                text: first
-            }
+            Child1 { text: first }
         }
     })
 }
@@ -59,9 +57,7 @@ struct C2Props<'a> {
 
 fn Child2<'a>(cx: Scope<'a, C2Props<'a>>) -> Element {
     cx.render(rsx! {
-        Child3 {
-            text: cx.props.text
-        }
+        Child3 { text: cx.props.text }
     })
 }
 

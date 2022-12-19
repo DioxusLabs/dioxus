@@ -1,33 +1,43 @@
-#![allow(non_snake_case)]
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+#![warn(missing_docs)]
 
-pub(crate) mod arbitrary_value;
-pub(crate) mod diff;
-pub(crate) mod events;
-pub(crate) mod lazynodes;
-pub(crate) mod mutations;
-pub(crate) mod nodes;
-pub(crate) mod properties;
-pub(crate) mod scopes;
-pub(crate) mod util;
-pub(crate) mod virtual_dom;
+mod any_props;
+mod arena;
+mod bump_frame;
+mod create;
+mod diff;
+mod dirty_scope;
+mod error_boundary;
+mod events;
+mod fragment;
+mod lazynodes;
+mod mutations;
+mod nodes;
+mod properties;
+mod scheduler;
+mod scope_arena;
+mod scopes;
+mod virtual_dom;
 
 pub(crate) mod innerlude {
-    pub use crate::arbitrary_value::*;
+    pub use crate::arena::*;
+    pub use crate::dirty_scope::*;
+    pub use crate::error_boundary::*;
     pub use crate::events::*;
+    pub use crate::fragment::*;
     pub use crate::lazynodes::*;
     pub use crate::mutations::*;
+    pub use crate::nodes::RenderReturn;
     pub use crate::nodes::*;
     pub use crate::properties::*;
+    pub use crate::scheduler::*;
     pub use crate::scopes::*;
-    pub use crate::util::*;
     pub use crate::virtual_dom::*;
 
-    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    /// An [`Element`] is a possibly-errored [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
-    /// Any [`None`] [`Element`] will automatically be coerced into a placeholder [`VNode`] with the [`VNode::Placeholder`] variant.
-    pub type Element<'a> = Option<VNode<'a>>;
+    /// An Errored [`Element`] will propagate the error to the nearest error boundary.
+    pub type Element<'a> = Result<VNode<'a>, anyhow::Error>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///
@@ -57,16 +67,13 @@ pub(crate) mod innerlude {
     /// )
     /// ```
     pub type Component<P = ()> = fn(Scope<P>) -> Element;
-
-    /// A list of attributes
-    pub type Attributes<'a> = Option<&'a [Attribute<'a>]>;
 }
 
 pub use crate::innerlude::{
-    AnyEvent, Attribute, AttributeValue, Component, DioxusElement, DomEdit, Element, ElementId,
-    ElementIdIterator, EventHandler, EventPriority, IntoVNode, LazyNodes, Listener, Mutations,
-    NodeFactory, Properties, SchedulerMsg, Scope, ScopeId, ScopeState, TaskId, UiEvent, UserEvent,
-    VComponent, VElement, VFragment, VNode, VPlaceholder, VText, VirtualDom,
+    fc_to_builder, Attribute, AttributeValue, Component, DynamicNode, Element, ElementId, Event,
+    Fragment, IntoDynNode, LazyNodes, Mutation, Mutations, Properties, RenderReturn, Scope,
+    ScopeId, ScopeState, Scoped, SuspenseContext, TaskId, Template, TemplateAttribute,
+    TemplateNode, VComponent, VNode, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types
@@ -74,8 +81,9 @@ pub use crate::innerlude::{
 /// This includes types like [`Scope`], [`Element`], and [`Component`].
 pub mod prelude {
     pub use crate::innerlude::{
-        fc_to_builder, Attributes, Component, DioxusElement, Element, EventHandler, Fragment,
-        LazyNodes, NodeFactory, Properties, Scope, ScopeId, ScopeState, VNode, VirtualDom,
+        fc_to_builder, Component, Element, Event, EventHandler, Fragment, LazyNodes, Properties,
+        Scope, ScopeId, ScopeState, Scoped, TaskId, Template, TemplateAttribute, TemplateNode,
+        VNode, VirtualDom,
     };
 }
 
@@ -83,37 +91,4 @@ pub mod exports {
     //! Important dependencies that are used by the rest of the library
     //! Feel free to just add the dependencies in your own Crates.toml
     pub use bumpalo;
-    pub use futures_channel;
-}
-
-/// Functions that wrap unsafe functionality to prevent us from misusing it at the callsite
-pub(crate) mod unsafe_utils {
-    use crate::VNode;
-
-    pub(crate) unsafe fn extend_vnode<'a, 'b>(node: &'a VNode<'a>) -> &'b VNode<'b> {
-        std::mem::transmute(node)
-    }
-}
-
-#[macro_export]
-/// A helper macro for using hooks in async environements.
-///
-/// # Usage
-///
-///
-/// ```ignore
-/// let (data) = use_ref(&cx, || {});
-///
-/// let handle_thing = move |_| {
-///     to_owned![data]
-///     cx.spawn(async move {
-///         // do stuff
-///     });
-/// }
-/// ```
-macro_rules! to_owned {
-    ($($es:ident),+) => {$(
-        #[allow(unused_mut)]
-        let mut $es = $es.to_owned();
-    )*}
 }

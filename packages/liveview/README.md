@@ -40,7 +40,7 @@ async fn order_shoes(mut req: WebsocketRequest) -> Response {
 }
 
 fn App(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
     cx.render(rsx!(
         button { onclick: move |_| count += 1, "Incr" }
         button { onclick: move |_| count -= 1, "Decr" }

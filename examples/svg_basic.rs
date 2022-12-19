@@ -67,6 +67,12 @@ fn app(cx: Scope) -> Element {
             stroke: "blue",
             stroke_width: "5",
         }
+        path {
+            d: "M9.00001 9C9 62 103.5 124 103.5 178",
+            stroke: "#3CC4DC",
+            "stroke-linecap": "square",
+            "stroke-width": "square",
+        }
     }))
 }
 

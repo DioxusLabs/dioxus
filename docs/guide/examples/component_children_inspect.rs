@@ -26,7 +26,7 @@ struct ClickableProps<'a> {
 // ANCHOR: Clickable
 fn Clickable<'a>(cx: Scope<'a, ClickableProps<'a>>) -> Element {
     match cx.props.children {
-        Some(VNode::Text(_)) => {
+        Ok(VNode { dynamic_nodes, .. }) => {
             todo!("render some stuff")
         }
         _ => {

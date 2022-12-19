@@ -12,19 +12,3 @@ Embora seja possível compartilhar o estado entre os componentes, isso só deve 
 
 - Mantenha o estado local para um componente, se possível
 - Ao compartilhar o estado por meio de adereços, passe apenas os dados específicos necessários
-
-## Bibliotecas Reutilizáveis
-
-Ao publicar uma biblioteca projetada para funcionar com o Dioxus, é altamente recomendável usar apenas o recurso principal na `crate` `dioxus`. Isso faz com que sua `crate` seja compilada mais rapidamente, mais estável e evita a inclusão de bibliotecas incompatíveis que podem fazer com que ela não seja compilada em plataformas não suportadas.
-
-❌ Não inclua dependências desnecessárias nas bibliotecas:
-
-```toml
-dioxus = { version = "...", features = ["web", "desktop", "full"]}
-```
-
-✅ Adicione apenas os recursos que você precisa:
-
-```toml
-dioxus = { version = "...", features = "core"}
-```

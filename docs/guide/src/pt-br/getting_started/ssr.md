@@ -38,7 +38,8 @@ cd app
 Adicione o Dioxus com o recurso `ssr`:
 
 ```shell
-cargo add dioxus --features ssr
+cargo add dioxus
+cargo add dioxus-ssr
 ```
 
 Em seguida, adicione todas as dependências do Axum. Isso será diferente se você estiver usando um Web Framework diferente
@@ -53,7 +54,8 @@ Suas dependências devem ficar mais ou menos assim:
 ```toml
 [dependencies]
 axum = "0.4.5"
-dioxus = { version = "*", features = ["ssr"] }
+dioxus = { version = "*" }
+dioxus-ssr = { version = "*" }
 tokio = { version = "1.15.0", features = ["full"] }
 ```
 
@@ -83,7 +85,7 @@ E, em seguida, adicione nosso _endpoint_. Podemos renderizar `rsx!` diretamente:
 
 ```rust
 async fn app_endpoint() -> Html<String> {
-    Html(dioxus::ssr::render_lazy(rsx! {
+    Html(dioxus_ssr::render_lazy(rsx! {
             h1 { "hello world!" }
     }))
 }
@@ -99,7 +101,7 @@ async fn app_endpoint() -> Html<String> {
     let mut app = VirtualDom::new(app);
     let _ = app.rebuild();
 
-    Html(dioxus::ssr::render_vdom(&app))
+    Html(dioxus_ssr::render_vdom(&app))
 }
 ```
 

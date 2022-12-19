@@ -23,7 +23,7 @@ use syn::{
     Token,
 };
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
@@ -54,6 +54,18 @@ impl Component {
         }
 
         Ok(())
+    }
+
+    pub fn key(&self) -> Option<&IfmtInput> {
+        match self
+            .fields
+            .iter()
+            .find(|f| f.name == "key")
+            .map(|f| &f.content)
+        {
+            Some(ContentField::Formatted(fmt)) => Some(fmt),
+            _ => None,
+        }
     }
 }
 
@@ -117,8 +129,6 @@ impl ToTokens for Component {
         let name = &self.name;
         let prop_gen_args = &self.prop_gen_args;
 
-        let mut has_key = None;
-
         let builder = match &self.manual_props {
             Some(manual_props) => {
                 let mut toks = quote! {
@@ -126,7 +136,7 @@ impl ToTokens for Component {
                 };
                 for field in &self.fields {
                     if field.name == "key" {
-                        has_key = Some(field);
+                        // skip keys
                     } else {
                         let name = &field.name;
                         let val = &field.content;
@@ -144,23 +154,25 @@ impl ToTokens for Component {
             }
             None => {
                 let mut toks = match prop_gen_args {
-                    Some(gen_args) => quote! { fc_to_builder #gen_args(#name) },
+                    Some(gen_args) => quote! { fc_to_builder(#name #gen_args) },
                     None => quote! { fc_to_builder(#name) },
                 };
                 for field in &self.fields {
                     match field.name.to_string().as_str() {
-                        "key" => {
-                            //
-                            has_key = Some(field);
-                        }
+                        "key" => {}
                         _ => toks.append_all(quote! {#field}),
                     }
                 }
 
                 if !self.children.is_empty() {
-                    let childs = &self.children;
+                    let renderer = TemplateRenderer {
+                        roots: &self.children,
+                    };
+
                     toks.append_all(quote! {
-                        .children(__cx.create_children([ #( #childs ),* ]))
+                        .children(
+                            Ok({ #renderer })
+                        )
                     });
                 }
 
@@ -171,21 +183,17 @@ impl ToTokens for Component {
             }
         };
 
-        let key_token = match has_key {
-            Some(field) => {
-                let inners = &field.content;
-                quote! { Some(format_args_f!(#inners)) }
-            }
-            None => quote! { None },
-        };
-
         let fn_name = self.name.segments.last().unwrap().ident.to_string();
+
+        let gen_name = match &self.prop_gen_args {
+            Some(gen) => quote! { #name #gen },
+            None => quote! { #name },
+        };
 
         tokens.append_all(quote! {
             __cx.component(
-                #name,
+                #gen_name,
                 #builder,
-                #key_token,
                 #fn_name
             )
         })
@@ -193,16 +201,16 @@ impl ToTokens for Component {
 }
 
 // the struct's fields info
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ComponentField {
     pub name: Ident,
     pub content: ContentField,
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum ContentField {
     ManExpr(Expr),
-    Formatted(LitStr),
+    Formatted(IfmtInput),
     OnHandlerRaw(Expr),
 }
 
@@ -211,7 +219,7 @@ impl ToTokens for ContentField {
         match self {
             ContentField::ManExpr(e) => e.to_tokens(tokens),
             ContentField::Formatted(s) => tokens.append_all(quote! {
-                __cx.raw_text(format_args_f!(#s)).0
+                __cx.raw_text(#s)
             }),
             ContentField::OnHandlerRaw(e) => tokens.append_all(quote! {
                 __cx.event_handler(#e)
@@ -231,7 +239,7 @@ impl Parse for ComponentField {
         }
 
         if name == "key" {
-            let content = ContentField::ManExpr(input.parse()?);
+            let content = ContentField::Formatted(input.parse()?);
             return Ok(Self { name, content });
         }
         if input.peek(LitStr) {
