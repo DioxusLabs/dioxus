@@ -43,7 +43,8 @@ cd demo
 Adicione o Dioxus como uma dependência com o recurso `web`:
 
 ```bash
-cargo add dioxus --features web
+cargo add dioxus
+cargo add dioxus-web
 ```
 
 Adicione um `index.html` para o `Trunk` usar. Certifique-se de que seu elemento "mount point" tenha um ID de "main":

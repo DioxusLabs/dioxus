@@ -13,12 +13,13 @@ TUI support is currently quite experimental. Even the project name will change. 
 ## Getting Set up
 
 
-Start by making a new package and adding our TUI feature.
+Start by making a new package and adding our TUI renderer.
 
 ```shell
 cargo new --bin demo
 cd demo
-cargo add dioxus --features tui
+cargo add dioxus
+cargo add dioxus-tui
 ```
 
 Then, edit your `main.rs` with the basic template.
@@ -42,5 +43,6 @@ Press "ctrl-c" to close the app. To switch from "ctrl-c" to  just "q" to quit yo
 ## Notes
 
 - Our TUI package uses flexbox for layout
+- Regular widgets will not work in the tui render, but the tui renderer has it's own widget components (see [the widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/tui_widgets.rs)).
 - 1px is one character lineheight. Your regular CSS px does not translate.
 - If your app panics, your terminal is wrecked. This will be fixed eventually.
