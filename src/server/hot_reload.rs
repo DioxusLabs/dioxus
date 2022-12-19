@@ -9,6 +9,7 @@ use std::{path::PathBuf, sync::Arc};
 use super::BuildManager;
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
+use dioxus_core::Template;
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
@@ -20,7 +21,7 @@ use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
 pub struct HotReloadState {
-    pub messages: broadcast::Sender<String>,
+    pub messages: broadcast::Sender<Template<'static>>,
     pub build_manager: Arc<BuildManager>,
     pub last_file_rebuild: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
@@ -171,14 +172,3 @@ pub async fn hot_reload_handler(
         hot_reload_handle.await.unwrap();
     })
 }
-
-// pub fn get_location(crate_path: &Path, path: &Path, ts: TokenStream) -> CodeLocation {
-//     let span = ts.span().start();
-//     let relative = path.strip_prefix(crate_path).unwrap();
-//     CodeLocation::Dynamic(Box::new(OwnedCodeLocation {
-//         file_path: relative.display().to_string(),
-//         crate_path: crate_path.display().to_string(),
-//         line: span.line as u32,
-//         column: span.column as u32 + 1,
-//     }))
-// }

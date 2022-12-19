@@ -8,7 +8,8 @@ use axum::{
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
-// use dioxus_rsx::try_parse_template;
+use dioxus_core::Template;
+use dioxus_rsx::CallBody;
 use notify::{RecommendedWatcher, Watcher};
 use syn::spanned::Spanned;
 
@@ -116,7 +117,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 let mut updated = false;
                 if let Ok(evt) = evt {
-                    let mut messages = Vec::new();
+                    let mut messages: Vec<Template<'static>> = Vec::new();
                     let mut needs_rebuild = false;
                     for path in evt.paths.clone() {
                         if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
@@ -138,55 +139,46 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                                         }
                                         DiffResult::RsxChanged(changed) => {
                                             log::info!("🪁 reloading rsx");
-                                            // for (old, new) in changed.into_iter() {
-                                            //     let hr = get_location(
-                                            //         &crate_dir,
-                                            //         &path.to_path_buf(),
-                                            //         old.to_token_stream(),
-                                            //     );
-                                            //     // get the original source code to preserve whitespace
-                                            //     let span = new.span();
-                                            //     let start = span.start();
-                                            //     let end = span.end();
-                                            //     let mut lines: Vec<_> = src
-                                            //         .lines()
-                                            //         .skip(start.line - 1)
-                                            //         .take(end.line - start.line + 1)
-                                            //         .collect();
-                                            //     if let Some(first) = lines.first_mut() {
-                                            //         *first = first.split_at(start.column).1;
-                                            //     }
-                                            //     if let Some(last) = lines.last_mut() {
-                                            //         // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                            //         if start.line == end.line {
-                                            //             *last = last
-                                            //                 .split_at(end.column - start.column)
-                                            //                 .0;
-                                            //         } else {
-                                            //             *last = last.split_at(end.column).0;
-                                            //         }
-                                            //     }
-                                            //     let rsx = lines.join("\n");
+                                            for (old, new) in changed.into_iter() {
+                                                let old_start = old.span().start();
 
-                                            //     let old_dyn_ctx = try_parse_template(
-                                            //         &format!("{}", old.tokens),
-                                            //         hr.to_owned(),
-                                            //         None,
-                                            //     )
-                                            //     .map(|(_, old_dyn_ctx)| old_dyn_ctx);
-                                            //     // if let Ok((template, _)) = try_parse_template(
-                                            //     //     &rsx,
-                                            //     //     hr.to_owned(),
-                                            //     //     old_dyn_ctx.ok(),
-                                            //     // ) {
-                                            //     //     messages.push(SetTemplateMsg(
-                                            //     //         TemplateId(hr),
-                                            //     //         template,
-                                            //     //     ));
-                                            //     // } else {
-                                            //     //     needs_rebuild = true;
-                                            //     // }
-                                            // }
+                                                if let (Ok(old_call_body), Ok(new_call_body)) = (
+                                                    syn::parse2::<CallBody>(old.tokens),
+                                                    syn::parse2::<CallBody>(new),
+                                                ) {
+                                                    let spndbg = format!(
+                                                        "{:?}",
+                                                        old_call_body.roots[0].span()
+                                                    );
+                                                    let root_col =
+                                                        spndbg[9..].split("..").next().unwrap();
+                                                    if let Ok(file) = path.strip_prefix(&crate_dir)
+                                                    {
+                                                        let line = old_start.line;
+                                                        let column = old_start.column;
+                                                        let location = file.display().to_string()
+                                                            + ":"
+                                                            + &line.to_string()
+                                                            + ":"
+                                                            + &column.to_string()
+                                                            + ":"
+                                                            + root_col;
+
+                                                        if let Some(template) = new_call_body
+                                                            .update_template(
+                                                                Some(old_call_body),
+                                                                Box::leak(
+                                                                    location.into_boxed_str(),
+                                                                ),
+                                                            )
+                                                        {
+                                                            messages.push(template);
+                                                        } else {
+                                                            needs_rebuild = true;
+                                                        }
+                                                    }
+                                                }
+                                            }
                                         }
                                     }
                                 }
