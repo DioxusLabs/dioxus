@@ -52,7 +52,8 @@ path = "gen/bin/desktop.rs"
 # clear all the dependencies
 [dependencies]
 mobile-entry-point = "0.1.0"
-dioxus = { version = "*", features = ["mobile"] }
+dioxus = { version = "*" }
+dioxus-desktop = { version = "*" }
 simple_logger = "*"
 ```
 
@@ -62,7 +63,7 @@ Edite seu `lib.rs`:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus::mobile::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
