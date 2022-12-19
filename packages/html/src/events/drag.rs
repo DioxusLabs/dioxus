@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use dioxus_core::Event;
 
 use crate::MouseData;
@@ -10,12 +8,11 @@ pub type DragEvent = Event<DragData>;
 /// placing a pointer device (such as a mouse) on the touch surface and then dragging the pointer to a new location
 /// (such as another DOM element). Applications are free to interpret a drag and drop interaction in an
 /// application-specific way.
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DragData {
     /// Inherit mouse data
     pub mouse: MouseData,
-
-    /// And then add the rest of the drag data
-    pub data: Box<dyn Any>,
 }
 
 impl_event! {

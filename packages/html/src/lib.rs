@@ -22,6 +22,12 @@ mod render_template;
 #[cfg(feature = "wasm-bind")]
 mod web_sys_bind;
 
+#[cfg(feature = "serialize")]
+mod transit;
+
+#[cfg(feature = "serialize")]
+pub use transit::*;
+
 pub use elements::*;
 pub use events::*;
 pub use global_attributes::*;

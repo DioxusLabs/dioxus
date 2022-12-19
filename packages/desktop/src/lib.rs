@@ -184,36 +184,40 @@ fn build_webview(
         .with_url("dioxus://index.html/")
         .unwrap()
         .with_ipc_handler(move |_window: &Window, payload: String| {
-            parse_ipc_message(&payload)
-                .map(|message| match message.method() {
-                    "eval_result" => {
-                        let result = message.params();
-                        eval_sender.send(result).unwrap();
-                    }
-                    "user_event" => {
-                        _ = event_tx.unbounded_send(message.params());
-                    }
-                    "initialize" => {
-                        is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
-                        let _ = proxy.send_event(UserWindowEvent::EditsReady);
-                    }
-                    "browser_open" => {
-                        let data = message.params();
-                        log::trace!("Open browser: {:?}", data);
-                        if let Some(temp) = data.as_object() {
-                            if temp.contains_key("href") {
-                                let url = temp.get("href").unwrap().as_str().unwrap();
-                                if let Err(e) = webbrowser::open(url) {
-                                    log::error!("Open Browser error: {:?}", e);
-                                }
+            let message = match parse_ipc_message(&payload) {
+                Some(message) => message,
+                None => {
+                    log::error!("Failed to parse IPC message: {}", payload);
+                    return;
+                }
+            };
+
+            match message.method() {
+                "eval_result" => {
+                    let result = message.params();
+                    eval_sender.send(result).unwrap();
+                }
+                "user_event" => {
+                    _ = event_tx.unbounded_send(message.params());
+                }
+                "initialize" => {
+                    is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
+                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
+                }
+                "browser_open" => {
+                    let data = message.params();
+                    log::trace!("Open browser: {:?}", data);
+                    if let Some(temp) = data.as_object() {
+                        if temp.contains_key("href") {
+                            let url = temp.get("href").unwrap().as_str().unwrap();
+                            if let Err(e) = webbrowser::open(url) {
+                                log::error!("Open Browser error: {:?}", e);
                             }
                         }
                     }
-                    _ => (),
-                })
-                .unwrap_or_else(|| {
-                    log::warn!("invalid IPC message received");
-                });
+                }
+                _ => (),
+            }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
             protocol::desktop_handler(

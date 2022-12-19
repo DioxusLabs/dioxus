@@ -2,7 +2,7 @@ use dioxus_core::Event;
 
 pub type PointerEvent = Event<PointerData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PointerData {
     // Mouse only
     pub alt_key: bool,

@@ -1,3 +1,4 @@
+use dioxus_interpreter_js::INTERPRETER_JS;
 use std::path::{Path, PathBuf};
 use wry::{
     http::{status::StatusCode, Request, Response},
@@ -6,13 +7,18 @@ use wry::{
 
 fn module_loader(root_name: &str) -> String {
     format!(
-        "
+        r#"
 <script>
-    import(\"./index.js\").then(function (module) {{
-        module.main(\"{}\");
-    }});
+    {INTERPRETER_JS}
+
+    let rootname = "{}";
+    let root = window.document.getElementById(rootname);
+    if (root != null) {{
+        window.interpreter = new Interpreter(root);
+        window.ipc.postMessage(serializeIpcMessage("initialize"));
+    }}
 </script>
-",
+"#,
         root_name
     )
 }
