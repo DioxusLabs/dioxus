@@ -34,10 +34,10 @@ pub(crate) mod innerlude {
     pub use crate::scopes::*;
     pub use crate::virtual_dom::*;
 
-    /// An [`Element`] is a possibly-errored [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
+    /// An [`Element`] is a possibly-none [`VNode`] created by calling `render` on [`Scope`] or [`ScopeState`].
     ///
     /// An Errored [`Element`] will propagate the error to the nearest error boundary.
-    pub type Element<'a> = Result<VNode<'a>, anyhow::Error>;
+    pub type Element<'a> = Option<VNode<'a>>;
 
     /// A [`Component`] is a function that takes a [`Scope`] and returns an [`Element`].
     ///

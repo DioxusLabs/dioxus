@@ -390,7 +390,7 @@ impl<'src> ScopeState {
             }
         }
 
-        Ok(element)
+        Some(element)
     }
 
     /// Create a dynamic text node using [`Arguments`] and the [`ScopeState`]'s internal [`Bump`] allocator

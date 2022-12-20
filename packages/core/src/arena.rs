@@ -81,12 +81,12 @@ impl VirtualDom {
         self.ensure_drop_safety(id);
 
         if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
-            if let RenderReturn::Sync(Ok(node)) = unsafe { root.extend_lifetime_ref() } {
+            if let RenderReturn::Sync(Some(node)) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
         if let Some(root) = unsafe { self.scopes[id.0].as_ref().previous_frame().try_load_node() } {
-            if let RenderReturn::Sync(Ok(node)) = unsafe { root.extend_lifetime_ref() } {
+            if let RenderReturn::Sync(Some(node)) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
