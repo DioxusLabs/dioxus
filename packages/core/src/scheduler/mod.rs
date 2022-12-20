@@ -8,7 +8,7 @@ mod waker;
 
 pub use suspense::*;
 pub use task::*;
-pub use waker::RcWake;
+pub use waker::ArcWake;
 
 /// The type of message that can be sent to the scheduler.
 ///
@@ -25,16 +25,16 @@ pub(crate) enum SchedulerMsg {
     SuspenseNotified(SuspenseId),
 }
 
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     /// Tasks created with cx.spawn
-    pub tasks: RefCell<Slab<Rc<LocalTask>>>,
+    pub tasks: RefCell<Slab<Arc<LocalTask>>>,
 
     /// Async components
-    pub leaves: RefCell<Slab<Rc<SuspenseLeaf>>>,
+    pub leaves: RefCell<Slab<Arc<SuspenseLeaf>>>,
 }
 
 impl Scheduler {

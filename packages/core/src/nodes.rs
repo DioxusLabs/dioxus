@@ -21,10 +21,24 @@ pub type TemplateId = &'static str;
 /// you might need to handle the case where there's no node immediately ready.
 pub enum RenderReturn<'a> {
     /// A currently-available element
-    Sync(Element<'a>),
+    Ready(VNode<'a>),
+
+    /// The component aborted rendering early. It might've thrown an error.
+    ///
+    /// In its place we've produced a placeholder to locate its spot in the dom when
+    /// it recovers.
+    ///
+    /// The old nodes are kept around
+    Aborted(VPlaceholder),
 
     /// An ongoing future that will resolve to a [`Element`]
     Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
+}
+
+impl<'a> Default for RenderReturn<'a> {
+    fn default() -> Self {
+        RenderReturn::Aborted(VPlaceholder::default())
+    }
 }
 
 /// A reference to a template along with any context needed to hydrate it
@@ -416,7 +430,10 @@ pub trait ComponentReturn<'a, A = ()> {
 
 impl<'a> ComponentReturn<'a> for Element<'a> {
     fn into_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
-        RenderReturn::Sync(self)
+        match self {
+            Some(node) => RenderReturn::Ready(node),
+            None => RenderReturn::Aborted(VPlaceholder::default()),
+        }
     }
 }
 

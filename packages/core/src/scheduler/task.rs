@@ -1,7 +1,8 @@
-use super::{waker::RcWake, Scheduler, SchedulerMsg};
+use super::{waker::ArcWake, Scheduler, SchedulerMsg};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
+use std::sync::Arc;
 use std::{pin::Pin, rc::Rc};
 
 /// A task's unique identifier.
@@ -35,7 +36,7 @@ impl Scheduler {
         let entry = tasks.vacant_entry();
         let task_id = TaskId(entry.key());
 
-        entry.insert(Rc::new(LocalTask {
+        entry.insert(Arc::new(LocalTask {
             id: task_id,
             tx: self.sender.clone(),
             task: RefCell::new(Box::pin(task)),
@@ -57,8 +58,8 @@ impl Scheduler {
     }
 }
 
-impl RcWake for LocalTask {
-    fn wake_by_ref(arc_self: &Rc<Self>) {
+impl ArcWake for LocalTask {
+    fn wake_by_ref(arc_self: &Arc<Self>) {
         _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id));

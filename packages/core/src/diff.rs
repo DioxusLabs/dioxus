@@ -30,29 +30,44 @@ impl<'b> VirtualDom {
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            use RenderReturn::{Async, Sync};
+            use RenderReturn::{Aborted, Async, Ready};
 
             match (old, new) {
-                (Sync(Some(l)), Sync(Some(r))) => self.diff_node(l, r),
+                // Normal pathway
+                (Ready(l), Ready(r)) => self.diff_node(l, r),
 
-                // Err cases
-                (Sync(Some(l)), Sync(None)) => self.diff_ok_to_err(l),
-                (Sync(None), Sync(Some(r))) => self.diff_err_to_ok(r),
-                (Sync(None), Sync(None)) => { /* nothing */ }
+                // Unwind the mutations if need be
+                (Ready(l), Aborted(p)) => self.diff_ok_to_err(l, p),
 
-                // Async
-                (Sync(Some(_l)), Async(_)) => todo!(),
-                (Sync(None), Async(_)) => todo!(),
-                (Async(_), Sync(Some(_r))) => todo!(),
-                (Async(_), Sync(None)) => { /* nothing */ }
-                (Async(_), Async(_)) => { /* nothing */ }
+                // Just move over the placeholder
+                (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
+
+                // Becomes async, do nothing while we ait
+                (Ready(nodes), Async(fut)) => todo!(),
+
+                // Placeholder becomes something
+                // We should also clear the error now
+                (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
+
+                (Aborted(_), Async(_)) => todo!("async should not resolve here"),
+                (Async(_), Ready(_)) => todo!("async should not resolve here"),
+                (Async(_), Aborted(_)) => todo!("async should not resolve here"),
+                (Async(_), Async(_)) => {
+                    // All suspense should resolve before we diff it again
+                    panic!("Should not roll from suspense to suspense.");
+                }
             };
         }
         self.scope_stack.pop();
     }
 
-    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>) {}
-    fn diff_err_to_ok(&mut self, _l: &'b VNode<'b>) {}
+    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _p: &'b VPlaceholder) {
+        todo!()
+    }
+
+    fn diff_err_to_ok(&mut self, _l: &'b VNode<'b>) {
+        todo!("Dioxus cannot currently recover a component after it has been errored. It must be removed from a parent");
+    }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         // If the templates are the same, we don't need to do anything, nor do we want to
@@ -118,7 +133,7 @@ impl<'b> VirtualDom {
             (Fragment(left), Fragment(right)) => self.diff_non_empty_fragment(left, right),
             (Placeholder(left), Placeholder(right)) => right.id.set(left.id.get()),
             (Component(left), Component(right)) => self.diff_vcomponent(left, right, node, idx),
-            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, right),
+            (Placeholder(left), Fragment(right)) => self.replace_placeholder(left, *right),
             (Fragment(left), Placeholder(right)) => self.node_to_placeholder(left, right),
             _ => todo!("This is an usual custom case for dynamic nodes. We don't know how to handle it yet."),
         };
@@ -679,7 +694,8 @@ impl<'b> VirtualDom {
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
                         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                            RenderReturn::Sync(Some(node)) => self.push_all_real_nodes(node),
+                            RenderReturn::Ready(node) => self.push_all_real_nodes(node),
+                            RenderReturn::Aborted(node) => todo!(),
                             _ => todo!(),
                         }
                     }
@@ -707,7 +723,11 @@ impl<'b> VirtualDom {
     }
 
     /// Simply replace a placeholder with a list of nodes
-    fn replace_placeholder(&mut self, l: &'b VPlaceholder, r: &'b [VNode<'b>]) {
+    fn replace_placeholder(
+        &mut self,
+        l: &'b VPlaceholder,
+        r: impl IntoIterator<Item = &'b VNode<'b>>,
+    ) {
         let m = self.create_children(r);
         let id = l.id.get().unwrap();
         self.mutations.push(Mutation::ReplaceWith { id, m });
@@ -856,7 +876,7 @@ impl<'b> VirtualDom {
         let scope = comp.scope.take().unwrap();
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-            RenderReturn::Sync(Some(t)) => {
+            RenderReturn::Ready(t) => {
                 println!("Removing component node sync {:?}", gen_muts);
                 self.remove_node(t, gen_muts)
             }
@@ -886,7 +906,7 @@ impl<'b> VirtualDom {
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                    RenderReturn::Sync(Some(t)) => self.find_first_element(t),
+                    RenderReturn::Ready(t) => self.find_first_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
@@ -902,7 +922,7 @@ impl<'b> VirtualDom {
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                    RenderReturn::Sync(Some(t)) => self.find_last_element(t),
+                    RenderReturn::Ready(t) => self.find_last_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
             }

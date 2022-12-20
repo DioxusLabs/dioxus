@@ -1,7 +1,8 @@
-use super::{waker::RcWake, SchedulerMsg};
+use super::{waker::ArcWake, SchedulerMsg};
 use crate::ElementId;
 use crate::{innerlude::Mutations, Element, ScopeId};
 use std::future::Future;
+use std::sync::Arc;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
@@ -42,8 +43,8 @@ pub(crate) struct SuspenseLeaf {
     pub(crate) task: *mut dyn Future<Output = Element<'static>>,
 }
 
-impl RcWake for SuspenseLeaf {
-    fn wake_by_ref(arc_self: &Rc<Self>) {
+impl ArcWake for SuspenseLeaf {
+    fn wake_by_ref(arc_self: &Arc<Self>) {
         arc_self.notified.set(true);
         _ = arc_self
             .tx
