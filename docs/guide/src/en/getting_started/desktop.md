@@ -1,4 +1,4 @@
-# Desktop Application
+# Desktop Overview
 
 Build a standalone native desktop app that looks and feels the same across operating systems.
 
@@ -16,6 +16,43 @@ The desktop is a powerful target for Dioxus, but is currently limited in capabil
 
 Dioxus Desktop is built off [Tauri](https://tauri.app/). Right now there aren't any Dioxus abstractions over keyboard shortcuts, menubar, handling, etc, so you'll want to leverage Tauri – mostly [Wry](http://github.com/tauri-apps/wry/) and [Tao](http://github.com/tauri-apps/tao)) directly.
 
+# Getting started
+
+## Platform-Specific Dependencies
+Dioxus desktop renders through a webview. Depending on your platform, you might need to install some dependancies.
+
+### Windows
+
+Windows Desktop apps depend on WebView2 – a library which should be installed in all modern Windows distributions. If you have Edge installed, then Dioxus will work fine. If you *don't* have Webview2, [then you can install it through Microsoft](https://developer.microsoft.com/en-us/microsoft-edge/webview2/). MS provides 3 options:
+
+1. A tiny "evergreen" *bootstrapper* which will fetch an installer from Microsoft's CDN
+2. A tiny *installer* which will fetch Webview2 from Microsoft's CDN
+3. A statically linked version of Webview2 in your final binary for offline users
+
+For development purposes, use Option 1.
+
+### Linux
+
+Webview Linux apps require WebkitGtk. When distributing, this can be part of your dependency tree in your `.rpm` or `.deb`. However, it's very likely that your users will already have WebkitGtk.
+
+```bash
+sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libappindicator3-dev
+```
+
+When using Debian/bullseye `libappindicator3-dev` is no longer available but replaced by `libayatana-appindicator3-dev`.
+
+```bash
+# on Debian/bullseye use:
+sudo apt install libwebkit2gtk-4.0-dev libgtk-3-dev libayatana-appindicator3-dev
+```
+
+If you run into issues, make sure you have all the basics installed, as outlined in the [Tauri docs](https://tauri.studio/v1/guides/getting-started/prerequisites#setting-up-linux).
+
+
+### MacOS
+
+Currently – everything for macOS is built right in! However, you might run into an issue if you're using nightly Rust due to some permissions issues in our Tao dependency (which have been resolved but not published).
+
 ## Creating a Project
 
 Create a new crate:
@@ -25,7 +62,7 @@ cargo new --bin demo
 cd demo
 ```
 
-Add Dioxus and the `desktop` renderer (this will edit `Cargo.toml`):
+Add Dioxus and the desktop renderer as dependancies (this will edit your `Cargo.toml`):
 
 ```shell
 cargo add dioxus

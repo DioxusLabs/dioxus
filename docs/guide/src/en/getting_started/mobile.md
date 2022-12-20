@@ -35,7 +35,7 @@ We're going to completely clear out the `dependencies` it generates for us, swap
 [package]
 name = "dioxus-ios-demo"
 version = "0.1.0"
-authors = ["Jonathan Kelley <jkelleyrtp@gmail.com>"]
+authors = []
 edition = "2018"
 
 

@@ -6,10 +6,7 @@
 
 # Setup
 Install [dioxus-cli](https://github.com/DioxusLabs/cli).
-Enable the hot-reload feature on dioxus:
-```toml
-dioxus = { version = "*", features = ["hot-reload"] }
-```
+Hot reloading is automatically enabled when using the web renderer on debug builds.
 
 # Usage
 1. run:
