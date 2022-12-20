@@ -1,4 +1,4 @@
-use dioxus::{events::*, prelude::*};
+use dioxus::{events::*, html::MouseEvent, prelude::*};
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -41,7 +41,7 @@ const RECT_STYLE: &str = r#"
     "#;
 
 fn app(cx: Scope) -> Element {
-    let events = use_ref(&cx, std::collections::VecDeque::new);
+    let events = use_ref(cx, std::collections::VecDeque::new);
 
     let log_event = move |event: Event| {
         let mut events = events.write();

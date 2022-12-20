@@ -13,13 +13,13 @@ fn simple_test() {
     fn main() {
         console_error_panic_hook::set_once();
         wasm_logger::init(wasm_logger::Config::new(log::Level::Debug));
-        dioxus_web::launch(APP);
+        dioxus_web::launch(app);
     }
 
-    static APP: Component = |cx| {
+    fn app(cx: Scope) -> Element {
         cx.render(rsx! {
             Router {
-                onchange: move |route: RouterService| log::trace!("route changed to {:?}", route.current_location()),
+                onchange: move |router: RouterContext| log::trace!("route changed to {:?}", router.current_location()),
                 active_class: "is-active",
                 Route { to: "/", Home {} }
                 Route { to: "blog"
@@ -28,7 +28,7 @@ fn simple_test() {
                 }
             }
         })
-    };
+    }
 
     fn Home(cx: Scope) -> Element {
         cx.render(rsx! {
@@ -47,12 +47,10 @@ fn simple_test() {
     }
 
     fn BlogPost(cx: Scope) -> Element {
-        let _id = use_route(&cx).parse_segment::<usize>("id")?;
+        let _id = use_route(cx).parse_segment::<usize>("id").unwrap();
 
         cx.render(rsx! {
-            div {
-
-            }
+            div { }
         })
     }
 

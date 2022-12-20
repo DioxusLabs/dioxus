@@ -44,7 +44,7 @@ From anywhere in our app, we can read our the value of our atom:
 
 ```rust, ignore
 fn NameCard(cx: Scope) -> Element {
-    let name = use_atom_state(&cx, NAME);
+    let name = use_read(cx, NAME);
     cx.render(rsx!{ h1 { "Hello, {name}"} })
 }
 ```
@@ -53,8 +53,7 @@ We can also set the value of our atom, also from anywhere in our app:
 
 ```rust, ignore
 fn NameCard(cx: Scope) -> Element {
-    let name = use_atom_state(&cx, NAME);
-
+    let set_name = use_set(cx, NAME);
     cx.render(rsx!{
         button {
             onclick: move |_| name.set("Fermi"),
@@ -78,7 +77,7 @@ fermi = { git = "https://github.com/dioxuslabs/dioxus" }
 ## Running examples
 
 The examples here use Dioxus Desktop to showcase their functionality. To run an example, use
-```
+```sh
 $ cargo run --example fermi
 ```
 

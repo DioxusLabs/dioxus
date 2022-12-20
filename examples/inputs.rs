@@ -2,7 +2,7 @@
 //!
 //! There is some conversion happening when input types are checkbox/radio/select/textarea etc.
 
-use dioxus::{events::FormEvent, prelude::*};
+use dioxus::prelude::*;
 
 fn main() {
     dioxus_desktop::launch(app);
@@ -28,7 +28,6 @@ const FIELDS: &[(&str, &str)] = &[
     ("text", ""),
     ("time", ""),
     ("url", ""),
-    //
     // less supported things
     ("hidden", ""),
     ("month", ""), // degrades to text most of the time, but works properly as "value'"
@@ -114,7 +113,7 @@ fn app(cx: Scope) -> Element {
                 }
             }
 
-            FIELDS.iter().map(|(field, value)| rsx!(
+            FIELDS.iter().map(|(field, value)| rsx! {
                 div {
                     input {
                         id: "{field}",
@@ -131,8 +130,7 @@ fn app(cx: Scope) -> Element {
                     }
                     br {}
                 }
-            ))
-
+            })
         }
     })
 }

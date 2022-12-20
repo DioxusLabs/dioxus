@@ -29,9 +29,9 @@
 - [ ] pub aspect_ratio: Number,
 */
 
-use dioxus_core::Attribute;
 use dioxus_native_core::{
     layout_attributes::parse_value,
+    node::OwnedAttributeView,
     node_ref::{AttributeMask, NodeMask, NodeView},
     state::ParentDepState,
 };
@@ -48,12 +48,12 @@ pub struct StyleModifier {
 
 impl ParentDepState for StyleModifier {
     type Ctx = ();
-    type DepState = Self;
+    type DepState = (Self,);
     // todo: seperate each attribute into it's own class
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(SORTED_STYLE_ATTRS)).with_element();
 
-    fn reduce(&mut self, node: NodeView, parent: Option<&Self::DepState>, _: &Self::Ctx) -> bool {
+    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, _: &Self::Ctx) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {
             new.core.fg = None;
@@ -79,14 +79,19 @@ impl ParentDepState for StyleModifier {
         }
 
         // gather up all the styles from the attribute list
-        for Attribute { name, value, .. } in node.attributes() {
-            if let Some(text) = value.as_text() {
-                apply_style_attributes(name, text, &mut new);
+        if let Some(attrs) = node.attributes() {
+            for OwnedAttributeView {
+                attribute, value, ..
+            } in attrs
+            {
+                if let Some(text) = value.as_text() {
+                    apply_style_attributes(&attribute.name, text, &mut new);
+                }
             }
         }
 
         // keep the text styling from the parent element
-        if let Some(parent) = parent {
+        if let Some((parent,)) = parent {
             let mut new_style = new.core.merge(parent.core);
             new_style.bg = new.core.bg;
             new.core = new_style;

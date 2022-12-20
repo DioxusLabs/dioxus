@@ -11,13 +11,13 @@ fn app(cx: Scope) -> Element {
             height: "100%",
             flex_direction: "column",
             background_color: "black",
-            // margin_right: "10px",
+            margin_right: "10px",
 
             div {
                 width: "70%",
                 height: "70%",
                 background_color: "green",
-                // margin_left: "4px",
+                margin_left: "4px",
 
                 div {
                     width: "100%",
@@ -34,10 +34,10 @@ fn app(cx: Scope) -> Element {
                     align_items: "center",
                     flex_direction: "column",
 
-                    // padding_top: "2px",
-                    // padding_bottom: "2px",
-                    // padding_left: "4px",
-                    // padding_right: "4px",
+                    padding_top: "2px",
+                    padding_bottom: "2px",
+                    padding_left: "4px",
+                    padding_right: "4px",
 
                     "[A]"
                     "[A]"

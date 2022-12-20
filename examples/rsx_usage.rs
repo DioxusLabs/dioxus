@@ -1,5 +1,4 @@
 #![allow(non_snake_case)]
-
 //! A tour of the rsx! macro
 //! ------------------------
 //!
@@ -39,7 +38,7 @@
 //! - Accept a list of vnodes as children for a Fragment component
 //! - Allow keyed fragments in iterators
 //! - Allow top-level fragments
-//!
+
 fn main() {
     dioxus_desktop::launch(app);
 }
@@ -165,13 +164,13 @@ fn app(cx: Scope) -> Element {
 
             // Can pass in props directly as an expression
             {
-                let props = TallerProps {a: "hello", children: Default::default()};
+                let props = TallerProps {a: "hello", children: cx.render(rsx!(()))};
                 rsx!(Taller { ..props })
             }
 
             // Spreading can also be overridden manually
             Taller {
-                ..TallerProps { a: "ballin!", children: Default::default() },
+                ..TallerProps { a: "ballin!", children: cx.render(rsx!(()) )},
                 a: "not ballin!"
             }
 
@@ -183,7 +182,7 @@ fn app(cx: Scope) -> Element {
 
             // Components can be generic too
             // This component takes i32 type to give you typed input
-            TypedInput::<TypedInputProps<i32>> {}
+            TypedInput::<i32> {}
 
             // Type inference can be used too
             TypedInput { initial: 10.0 }
@@ -200,7 +199,7 @@ fn app(cx: Scope) -> Element {
 
             // helper functions
             // Anything that implements IntoVnode can be dropped directly into Rsx
-            helper(&cx, "hello world!")
+            helper(cx, "hello world!")
 
             // Strings can be supplied directly
             String::from("Hello world!")

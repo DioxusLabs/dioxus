@@ -9,7 +9,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let contents = use_state(&cx, || {
+    let contents = use_state(cx, || {
         String::from("<script>alert(\"hello world\")</script>")
     });
 

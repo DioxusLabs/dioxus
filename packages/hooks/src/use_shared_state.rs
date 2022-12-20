@@ -60,7 +60,7 @@ impl<T> ProvidedStateInner<T> {
 ///
 ///
 ///
-pub fn use_context<T: 'static>(cx: &ScopeState) -> Option<UseSharedState<T>> {
+pub fn use_shared_state<T: 'static>(cx: &ScopeState) -> Option<UseSharedState<T>> {
     let state = cx.use_hook(|| {
         let scope_id = cx.scope_id();
         let root = cx.consume_context::<ProvidedState<T>>();
@@ -165,20 +165,14 @@ where
 }
 
 /// Provide some state for components down the hierarchy to consume without having to drill props.
-///
-///
-///
-///
-///
-///
-///
-pub fn use_context_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
+pub fn use_shared_state_provider<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) {
     cx.use_hook(|| {
         let state: ProvidedState<T> = Rc::new(RefCell::new(ProvidedStateInner {
             value: Rc::new(RefCell::new(f())),
             notify_any: cx.schedule_update_any(),
             consumers: HashSet::new(),
         }));
-        cx.provide_context(state)
+
+        cx.provide_context(state);
     });
 }

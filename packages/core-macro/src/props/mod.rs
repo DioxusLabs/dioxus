@@ -781,7 +781,7 @@ Finally, call `.build()` to create the instance of `{name}`.
             let arg_type = if field.builder_attr.strip_option {
                 field.type_from_inside_option(false).ok_or_else(|| {
                     Error::new_spanned(
-                        &field_type,
+                        field_type,
                         "can't `strip_option` - field is not `Option<...>`",
                     )
                 })?

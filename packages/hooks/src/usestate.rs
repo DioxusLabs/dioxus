@@ -19,7 +19,7 @@ use std::{
 ///
 /// ```ignore
 /// const Example: Component = |cx| {
-///     let count = use_state(&cx, || 0);
+///     let count = use_state(cx, || 0);
 ///
 ///     cx.render(rsx! {
 ///         div {
@@ -39,7 +39,7 @@ pub fn use_state<T: 'static>(
         let update_callback = cx.schedule_update();
         let slot = Rc::new(RefCell::new(current_val.clone()));
         let setter = Rc::new({
-            dioxus_core::to_owned![update_callback, slot];
+            to_owned![update_callback, slot];
             move |new| {
                 {
                     let mut slot = slot.borrow_mut();
@@ -92,7 +92,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(&cx, || 0);
+    ///     let count = use_state(cx, || 0);
     ///     cx.spawn({
     ///         let set_count = count.to_owned();
     ///         async move {
@@ -119,7 +119,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     rsx!{
     ///         Component {
@@ -144,7 +144,7 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     // to increment the value
     ///     value.modify(|v| v + 1);
@@ -185,7 +185,7 @@ impl<T: 'static> UseState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
@@ -207,7 +207,7 @@ impl<T: 'static> UseState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(&cx, || 0);
+    ///     let count = use_state(cx, || 0);
     ///     cx.spawn({
     ///         let count = count.to_owned();
     ///         async move {
@@ -237,7 +237,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(&cx, || 0);
+    /// let val = use_state(cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
     /// ```
@@ -269,7 +269,7 @@ impl<T: Clone> UseState<T> {
     /// # Examples
     ///
     /// ```rust, ignore
-    /// let val = use_state(&cx, || 0);
+    /// let val = use_state(cx, || 0);
     ///
     /// *val.make_mut() += 1;
     /// ```
@@ -448,7 +448,7 @@ impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for UseState<T> {
 fn api_makes_sense() {
     #[allow(unused)]
     fn app(cx: Scope) -> Element {
-        let val = use_state(&cx, || 0);
+        let val = use_state(cx, || 0);
 
         val.set(0);
         val.modify(|v| v + 1);
@@ -466,12 +466,14 @@ fn api_makes_sense() {
         }
 
         cx.spawn({
-            dioxus_core::to_owned![val];
+            to_owned![val];
             async move {
                 val.modify(|f| f + 1);
             }
         });
 
-        cx.render(LazyNodes::new(|f| f.static_text("asd")))
+        // cx.render(LazyNodes::new(|f| f.static_text("asd")))
+
+        todo!()
     }
 }

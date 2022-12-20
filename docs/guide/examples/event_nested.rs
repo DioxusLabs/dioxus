@@ -14,7 +14,7 @@ fn App(cx: Scope) -> Element {
             button {
                 onclick: move |event| {
                     // now, outer won't be triggered
-                    event.cancel_bubble();
+                    event.stop_propogation();
                 },
                 "inner"
             }

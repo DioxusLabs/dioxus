@@ -16,10 +16,10 @@ pub struct Client {
 }
 
 fn app(cx: Scope) -> Element {
-    let clients = use_ref(&cx, || vec![] as Vec<Client>);
-    let firstname = use_state(&cx, String::new);
-    let lastname = use_state(&cx, String::new);
-    let description = use_state(&cx, String::new);
+    let clients = use_ref(cx, || vec![] as Vec<Client>);
+    let firstname = use_state(cx, String::new);
+    let lastname = use_state(cx, String::new);
+    let description = use_state(cx, String::new);
 
     cx.render(rsx!(
         body {
@@ -30,7 +30,7 @@ fn app(cx: Scope) -> Element {
                 integrity: "sha384-Uu6IeWbM+gzNVXJcM9XV3SohHtmWE+3VGi496jvgX1jyvDTXfdK+rfZc8C1Aehk5",
                 crossorigin: "anonymous",
             }
-            h1 {"Dioxus CRM Example"}
+            h1 { "Dioxus CRM Example" }
             Router {
                 Route { to: "/",
                     div { class: "crm",
@@ -40,12 +40,12 @@ fn app(cx: Scope) -> Element {
                                 div { class: "client", style: "margin-bottom: 50px",
                                     p { "First Name: {client.first_name}" }
                                     p { "Last Name: {client.last_name}" }
-                                    p {"Description: {client.description}"}
+                                    p { "Description: {client.description}" }
                                 })
                             )
                         }
                         Link { to: "/new", class: "pure-button pure-button-primary", "Add New" }
-                        Link { to: "/new", class: "pure-button", "Settings" }
+                        Link { to: "/settings", class: "pure-button", "Settings" }
                     }
                 }
                 Route { to: "/new",

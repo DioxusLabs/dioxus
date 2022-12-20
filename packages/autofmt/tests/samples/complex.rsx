@@ -27,9 +27,7 @@ rsx! {
                 }
             })
         }
-        div { class: "px-4",
-            is_current.then(|| rsx!{ children })
-        }
+        div { class: "px-4", is_current.then(|| rsx!{ children }) }
     }
 
     // No nesting
@@ -47,4 +45,6 @@ rsx! {
             let blah = 120;
         }
     }
+
+    div { asdbascasdbasd, asbdasbdabsd, asbdabsdbasdbas }
 }

@@ -19,7 +19,7 @@ use std::{
 /// static COUNT: Atom<u32> = |_| 0;
 ///
 /// fn Example(cx: Scope) -> Element {
-///     let mut count = use_atom_state(&cx, COUNT);
+///     let mut count = use_atom_state(cx, COUNT);
 ///
 ///     cx.render(rsx! {
 ///         div {
@@ -74,7 +74,7 @@ impl<T: 'static> AtomState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(&cx, || 0);
+    ///     let count = use_state(cx, || 0);
     ///     cx.spawn({
     ///         let set_count = count.to_owned();
     ///         async move {
@@ -101,7 +101,7 @@ impl<T: 'static> AtomState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     rsx!{
     ///         Component {
@@ -128,7 +128,7 @@ impl<T: 'static> AtomState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     // to increment the value
     ///     value.modify(|v| v + 1);
@@ -168,7 +168,7 @@ impl<T: 'static> AtomState<T> {
     /// # use dioxus_core::prelude::*;
     /// # use dioxus_hooks::*;
     /// fn component(cx: Scope) -> Element {
-    ///     let value = use_state(&cx, || 0);
+    ///     let value = use_state(cx, || 0);
     ///
     ///     let as_rc = value.get();
     ///     assert_eq!(as_rc.as_ref(), &0);
@@ -190,7 +190,7 @@ impl<T: 'static> AtomState<T> {
     ///
     /// ```rust, ignore
     /// fn component(cx: Scope) -> Element {
-    ///     let count = use_state(&cx, || 0);
+    ///     let count = use_state(cx, || 0);
     ///     cx.spawn({
     ///         let count = count.to_owned();
     ///         async move {
@@ -220,7 +220,7 @@ impl<T: Clone> AtomState<T> {
     /// # Examples
     ///
     /// ```ignore
-    /// let val = use_state(&cx, || 0);
+    /// let val = use_state(cx, || 0);
     ///
     /// val.with_mut(|v| *v = 1);
     /// ```
@@ -243,7 +243,7 @@ impl<T: Clone> AtomState<T> {
     /// # Examples
     ///
     /// ```ignore
-    /// let val = use_state(&cx, || 0);
+    /// let val = use_state(cx, || 0);
     ///
     /// *val.make_mut() += 1;
     /// ```

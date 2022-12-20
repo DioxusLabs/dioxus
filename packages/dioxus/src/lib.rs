@@ -1,5 +1,3 @@
-#![doc = include_str!("../../../notes/README.md")]
-
 pub use dioxus_core as core;
 
 #[cfg(feature = "hooks")]
@@ -7,7 +5,7 @@ pub use dioxus_hooks as hooks;
 
 pub mod events {
     #[cfg(feature = "html")]
-    pub use dioxus_html::{on::*, KeyCode};
+    pub use dioxus_html::prelude::*;
 }
 
 #[cfg(feature = "html")]
@@ -26,17 +24,11 @@ pub mod prelude {
     pub use dioxus_core::prelude::*;
 
     #[cfg(feature = "macro")]
-    pub use dioxus_core_macro::{format_args_f, inline_props, rsx, Props};
+    pub use dioxus_core_macro::{format_args_f, inline_props, render, rsx, Props};
 
     #[cfg(feature = "html")]
     pub use dioxus_html as dioxus_elements;
 
     #[cfg(feature = "html")]
-    pub use dioxus_elements::{GlobalAttributes, SvgAttributes};
-
-    #[cfg(feature = "hot-reload")]
-    pub use dioxus_rsx_interpreter::{
-        captuered_context::{CapturedContext, FormattedArg, IfmtArgs},
-        get_line_num, resolve_scope, CodeLocation, RsxContext,
-    };
+    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
 }

@@ -101,7 +101,7 @@ fn example(cx: Scope) -> Element {
     // both of these are equivalent
     cx.render(rsx!("hello world"))
 
-    rsx!(cx, "hello world!")
+    render!("hello world!")
 }
 ```
 
@@ -233,9 +233,9 @@ use hooks to define state and modify it from within listeners.
 
 ```rust, ignore
 fn app(cx: Scope) -> Element {
-    let name = use_state(&cx, || "world");
+    let name = use_state(cx, || "world");
 
-    rsx!(cx, "hello {name}!")
+    render!("hello {name}!")
 }
 ```
 
@@ -280,7 +280,7 @@ fn main() {
 }
 
 fn App(cx: Scope) -> Element {
-    let count = use_state(&cx, || 0);
+    let count = use_state(cx, || 0);
 
     cx.render(rsx!(
         div { "Count: {count}" }

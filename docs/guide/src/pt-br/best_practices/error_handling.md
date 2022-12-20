@@ -53,14 +53,14 @@ A próxima "melhor" maneira de lidar com erros no Dioxus é combinar (`match`) o
 Para fazer isso, simplesmente temos um estado de erro embutido em nosso componente:
 
 ```rust
-let err = use_state(&cx, || None);
+let err = use_state(cx, || None);
 ```
 
 Sempre que realizarmos uma ação que gere um erro, definiremos esse estado de erro. Podemos então combinar o erro de várias maneiras (retorno antecipado, elemento de retorno etc.).
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let error = use_state(&cx, || None);
+    let error = use_state(cx, || None);
 
     cx.render(match *error {
         Some(error) => rsx!(
@@ -81,7 +81,7 @@ Se você estiver lidando com alguns componentes com um mínimo de aninhamento, b
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let error = use_state(&cx, || None);
+    let error = use_state(cx, || None);
 
     if let Some(error) = **error {
         return cx.render(rsx!{ "An error occured" });
@@ -120,7 +120,7 @@ Então, em nosso componente de nível superior, queremos tratar explicitamente o
 
 ```rust
 fn TopLevel(cx: Scope) -> Element {
-    let error = use_read(&cx, INPUT_ERROR);
+    let error = use_read(cx, INPUT_ERROR);
 
     match error {
         TooLong => return cx.render(rsx!{ "FAILED: Too long!" }),
@@ -134,7 +134,7 @@ Agora, sempre que um componente _downstream_ tiver um erro em suas ações, ele 
 
 ```rust
 fn Commandline(cx: Scope) -> Element {
-    let set_error = use_set(&cx, INPUT_ERROR);
+    let set_error = use_set(cx, INPUT_ERROR);
 
     cx.render(rsx!{
         input {

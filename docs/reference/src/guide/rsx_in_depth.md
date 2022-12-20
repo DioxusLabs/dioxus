@@ -53,14 +53,14 @@ Commas are entirely optional, but might be useful to delineate between elements 
 
 The `render` function provides an **extremely efficient** allocator for VNodes and text, so try not to use the `format!` macro in your components. Rust's default `ToString` methods pass through the global allocator, but all text in components is allocated inside a manually-managed Bump arena. To push you in the right direction, all text-based attributes take `std::fmt::Arguments` directly, so you'll want to reach for `format_args!` when the built-in `f-string` interpolation just doesn't cut it.
 
-### Ignoring `cx.render` with `rsx!(cx, ...)`
+### Ignoring `cx.render` with `render!(...)`
 
 Sometimes, writing `cx.render` is a hassle. The `rsx! macro will accept any token followed by a comma as the target to call "render" on:
 
 ```rust
 cx.render(rsx!( div {} ))
 // becomes
-rsx!(cx, div {})
+render!(div {})
 ```
 
 ### Conditional Rendering
@@ -70,9 +70,9 @@ Sometimes, you might not want to render an element given a condition. The rsx! m
 ```rust
 rsx!({
     if enabled {
-        rsx!(cx, div {"enabled"})
+        render!(div {"enabled"})
     } else {
-        rsx!(cx, li {"disabled"})
+        render!(li {"disabled"})
     }
 })
 ```
@@ -96,8 +96,8 @@ match case {
 
 // the nodes must be rendered first
 match case {
-    true => rsx!(cx, div {}),
-    false => rsx!(cx, div {})
+    true => render!(div {}),
+    false => render!(div {})
 }
 ```
 
@@ -121,10 +121,10 @@ Sometimes, it makes sense to render VNodes into a list:
 let mut items = vec![];
 
 for _ in 0..5 {
-    items.push(rsx!(cx, li {} ))
+    items.push(render!(li {} ))
 }
 
-rsx!(cx, {items} )
+render!({items} )
 ```
 
 #### Lists and Keys
@@ -137,7 +137,7 @@ In these cases, it is vitally important to specify a "key" alongside the element
 
 ```rust
 fn render_list(cx: Scope, items: HashMap<String, Todo>) -> DomTree {
-    rsx!(cx, ul {
+    render!(ul {
         {items.iter().map(|key, item| {
             li {
                 key: key,
@@ -209,9 +209,9 @@ cx.render(rsx!{
             // rsx! is lazy, and the underlying closures cannot have the same type
             // Rendering produces the VNode type
             {match rand::gen_range::<i32>(1..3) {
-                1 => rsx!(cx, h1 { "big" })
-                2 => rsx!(cx, h2 { "medium" })
-                _ => rsx!(cx, h3 { "small" })
+                1 => render!(h1 { "big" })
+                2 => render!(h2 { "medium" })
+                _ => render!(h3 { "small" })
             }}
 
             // Optionals

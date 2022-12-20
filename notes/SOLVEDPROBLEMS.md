@@ -406,8 +406,8 @@ enum Patch {
 ```
 
 ```rust
-let node_ref = use_node_ref(&cx);
-use_effect(&cx, || {
+let node_ref = use_node_ref(cx);
+use_effect(cx, || {
 
 }, []);
 div { ref: node_ref,

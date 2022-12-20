@@ -5,11 +5,12 @@ Build a mobile app with Dioxus!
 Example: [Todo App](https://github.com/DioxusLabs/example-projects/blob/master/ios_demo)
 
 ## Support
-Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with the platform's WebView, meaning that animations, transparency, and native widgets are not currently achievable.
+Mobile is currently the least-supported renderer target for Dioxus. Mobile apps are rendered with either the platform's WebView or experimentally through WGPU. WebView doesn't support animations, transparency, and native widgets.
 
-In addition, iOS is the only supported Mobile Platform. It is possible to get Dioxus running on Android and rendered with WebView, but the Rust windowing library that Dioxus uses – tao – does not currently support Android.
 
 Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
+
+This guide is primarily targetted for iOS apps, however, you can follow it while using the `android` guide in `cargo-mobile`.
 
 ## Getting Set up
 
@@ -51,7 +52,8 @@ path = "gen/bin/desktop.rs"
 # clear all the dependencies
 [dependencies]
 mobile-entry-point = "0.1.0"
-dioxus = { version = "*", features = ["mobile"] }
+dioxus = { version = "*"}
+dioxus-desktop = { version = "*" }
 simple_logger = "*"
 ```
 
@@ -61,7 +63,7 @@ Edit your `lib.rs`:
 use dioxus::prelude::*;
 
 fn main() {
-    dioxus_mobile::launch(app);
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

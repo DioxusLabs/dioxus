@@ -27,7 +27,7 @@ Dioxus is a recently-released library for building interactive user interfaces (
 
 ```rust
 fn app(cx: Scope) -> Element {
-    let mut count = use_state(&cx, || 0);
+    let mut count = use_state(cx, || 0);
 
     cx.render(rsx! {
         h1 { "Count: {count}" }
@@ -102,8 +102,8 @@ We're also using hooks to parse the URL parameters and segments so you can inter
 struct Query { name: String }
 
 fn BlogPost(cx: Scope) -> Element {
-    let post = use_route(&cx).segment("post")?;
-    let query = use_route(&cx).query::<Query>()?;
+    let post = use_route(cx).segment("post")?;
+    let query = use_route(cx).query::<Query>()?;
 
     cx.render(rsx!{
         "Viewing post {post}"
@@ -128,7 +128,7 @@ static TITLE: Atom<&str> = |_| "Hello";
 
 // Read the value from anywhere in the app, subscribing to any changes
 fn app(cx: Scope) -> Element {
-    let title = use_read(&cx, TITLE);
+    let title = use_read(cx, TITLE);
     cx.render(rsx!{
         h1 { "{title}" }
         Child {}
@@ -137,7 +137,7 @@ fn app(cx: Scope) -> Element {
 
 // Set the value from anywhere in the app
 fn Child(cx: Scope) -> Element {
-    let set_title = use_set(&cx, TITLE);
+    let set_title = use_set(cx, TITLE);
     cx.render(rsx!{
         button {
             onclick: move |_| set_title("goodbye"),
@@ -245,7 +245,7 @@ First, we upgraded the `use_future` hook. It now supports dependencies, which le
 
 ```rust
 fn RenderDog(cx: Scope, breed: String) -> Element {
-    let dog_request = use_future(&cx, (breed,), |(breed,)| async move {
+    let dog_request = use_future(cx, (breed,), |(breed,)| async move {
         reqwest::get(format!("https://dog.ceo/api/breed/{}/images/random", breed))
             .await
             .unwrap()
@@ -265,7 +265,7 @@ Additionally, we added better support for coroutines. You can now start, stop, r
 
 ```rust
 fn App(cx: Scope) -> Element {
-    let sync_task = use_coroutine(&cx, |rx| async move {
+    let sync_task = use_coroutine(cx, |rx| async move {
         connect_to_server().await;
         let state = MyState::new();
 
