@@ -79,7 +79,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let last_file_rebuild = Arc::new(Mutex::new(FileMap::new(config.crate_dir.clone())));
+    let file_map = Arc::new(Mutex::new(FileMap::new(config.crate_dir.clone())));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
         reload_tx: reload_tx.clone(),
@@ -88,7 +88,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
         build_manager: build_manager.clone(),
-        last_file_rebuild: last_file_rebuild.clone(),
+        file_map: file_map.clone(),
         watcher_config: config.clone(),
     });
 
@@ -96,8 +96,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
     });
-
-    let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
     let allow_watch_path = config
@@ -109,100 +107,50 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
+    let mut last_update_time = chrono::Local::now().timestamp();
+
     let mut watcher = RecommendedWatcher::new(
         move |evt: notify::Result<notify::Event>| {
             let config = watcher_config.clone();
+            // Give time for the change to take effect before reading the file
+            std::thread::sleep(std::time::Duration::from_millis(100));
             if chrono::Local::now().timestamp() > last_update_time {
-                // Give time for the change to take effect before reading the file
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                let mut updated = false;
                 if let Ok(evt) = evt {
+                    println!("{:?}", evt);
                     let mut messages: Vec<Template<'static>> = Vec::new();
-                    let mut needs_rebuild = false;
                     for path in evt.paths.clone() {
-                        if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
+                        if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                             continue;
                         }
                         let mut file = File::open(path.clone()).unwrap();
                         let mut src = String::new();
                         file.read_to_string(&mut src).expect("Unable to read file");
                         // find changes to the rsx in the file
-                        if let Ok(syntax) = syn::parse_file(&src) {
-                            let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
-                            if let Some(old_str) = last_file_rebuild.map.get(&path) {
-                                if let Ok(old) = syn::parse_file(&old_str) {
-                                    updated = true;
-                                    match find_rsx(&syntax, &old) {
-                                        DiffResult::CodeChanged => {
-                                            needs_rebuild = true;
-                                            last_file_rebuild.map.insert(path, src);
-                                        }
-                                        DiffResult::RsxChanged(changed) => {
-                                            log::info!("🪁 reloading rsx");
-                                            for (old, new) in changed.into_iter() {
-                                                let old_start = old.span().start();
+                        let mut map = file_map.lock().unwrap();
 
-                                                if let (Ok(old_call_body), Ok(new_call_body)) = (
-                                                    syn::parse2::<CallBody>(old.tokens),
-                                                    syn::parse2::<CallBody>(new),
-                                                ) {
-                                                    let spndbg = format!(
-                                                        "{:?}",
-                                                        old_call_body.roots[0].span()
-                                                    );
-                                                    let root_col =
-                                                        spndbg[9..].split("..").next().unwrap();
-                                                    if let Ok(file) = path.strip_prefix(&crate_dir)
-                                                    {
-                                                        let line = old_start.line;
-                                                        let column = old_start.column;
-                                                        let location = file.display().to_string()
-                                                            + ":"
-                                                            + &line.to_string()
-                                                            + ":"
-                                                            + &column.to_string()
-                                                            + ":"
-                                                            + root_col;
-
-                                                        if let Some(template) = new_call_body
-                                                            .update_template(
-                                                                Some(old_call_body),
-                                                                Box::leak(
-                                                                    location.into_boxed_str(),
-                                                                ),
-                                                            )
-                                                        {
-                                                            messages.push(template);
-                                                        } else {
-                                                            needs_rebuild = true;
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
+                        match update_rsx(&path, &crate_dir, src, &mut map) {
+                            UpdateResult::UpdatedRsx(msgs) => {
+                                println!("{msgs:#?}");
+                                messages.extend(msgs);
+                            }
+                            UpdateResult::NeedsRebuild => {
+                                match build_manager.rebuild() {
+                                    Ok(res) => {
+                                        print_console_info(
+                                            port,
+                                            &config,
+                                            PrettierOptions {
+                                                changed: evt.paths,
+                                                warnings: res.warnings,
+                                                elapsed_time: res.elapsed_time,
+                                            },
+                                        );
+                                    }
+                                    Err(err) => {
+                                        log::error!("{}", err);
                                     }
                                 }
-                            } else {
-                                // if this is a new file, rebuild the project
-                                *last_file_rebuild = FileMap::new(crate_dir.clone());
-                            }
-                        }
-                    }
-                    if needs_rebuild {
-                        match build_manager.rebuild() {
-                            Ok(res) => {
-                                print_console_info(
-                                    port,
-                                    &config,
-                                    PrettierOptions {
-                                        changed: evt.paths,
-                                        warnings: res.warnings,
-                                        elapsed_time: res.elapsed_time,
-                                    },
-                                );
-                            }
-                            Err(err) => {
-                                log::error!("{}", err);
+                                return;
                             }
                         }
                     }
@@ -210,9 +158,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                         let _ = hot_reload_tx.send(msg);
                     }
                 }
-                if updated {
-                    last_update_time = chrono::Local::now().timestamp();
-                }
+                last_update_time = chrono::Local::now().timestamp();
             }
         },
         notify::Config::default(),
@@ -274,7 +220,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                 Ok(response)
             },
         )
-        .service(ServeDir::new((&config.crate_dir).join(&dist_path)));
+        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
     let router = Router::new()
         .route("/_dioxus/ws", get(ws_handler))

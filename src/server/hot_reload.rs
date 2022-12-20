@@ -2,6 +2,7 @@ use axum::{
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
     response::IntoResponse,
 };
+use dioxus_rsx::CallBody;
 // use dioxus_rsx::try_parse_template;
 
 use std::{path::PathBuf, sync::Arc};
@@ -10,6 +11,7 @@ use super::BuildManager;
 pub use crate::hot_reload::{find_rsx, DiffResult};
 use crate::CrateConfig;
 use dioxus_core::Template;
+use dioxus_html::HtmlCtx;
 pub use proc_macro2::TokenStream;
 pub use std::collections::HashMap;
 pub use std::sync::Mutex;
@@ -20,45 +22,101 @@ pub use syn::__private::ToTokens;
 use syn::spanned::Spanned;
 use tokio::sync::broadcast;
 
+pub(crate) enum UpdateResult {
+    UpdatedRsx(Vec<Template<'static>>),
+    NeedsRebuild,
+}
+
+pub(crate) fn update_rsx(
+    path: &Path,
+    crate_dir: &Path,
+    src: String,
+    file_map: &mut FileMap,
+) -> UpdateResult {
+    if let Ok(syntax) = syn::parse_file(&src) {
+        if let Some((old_src, template_slot)) = file_map.map.get_mut(path) {
+            if let Ok(old) = syn::parse_file(old_src) {
+                match find_rsx(&syntax, &old) {
+                    DiffResult::CodeChanged => {
+                        file_map.map.insert(path.to_path_buf(), (src, None));
+                    }
+                    DiffResult::RsxChanged(changed) => {
+                        log::info!("🪁 reloading rsx");
+                        let mut messages: Vec<Template<'static>> = Vec::new();
+                        for (old, new) in changed.into_iter() {
+                            let old_start = old.span().start();
+
+                            if let (Ok(old_call_body), Ok(new_call_body)) = (
+                                syn::parse2::<CallBody<HtmlCtx>>(old.tokens),
+                                syn::parse2::<CallBody<HtmlCtx>>(new),
+                            ) {
+                                if let Ok(file) = path.strip_prefix(crate_dir) {
+                                    let line = old_start.line;
+                                    let column = old_start.column + 1;
+                                    let location = file.display().to_string()
+                                        + ":"
+                                        + &line.to_string()
+                                        + ":"
+                                        + &column.to_string();
+
+                                    if let Some(template) = new_call_body.update_template(
+                                        Some(old_call_body),
+                                        Box::leak(location.into_boxed_str()),
+                                    ) {
+                                        *template_slot = Some(template);
+                                        messages.push(template);
+                                    } else {
+                                        return UpdateResult::NeedsRebuild;
+                                    }
+                                }
+                            }
+                        }
+                        return UpdateResult::UpdatedRsx(messages);
+                    }
+                }
+            }
+        } else {
+            // if this is a new file, rebuild the project
+            *file_map = FileMap::new(crate_dir.to_path_buf());
+        }
+    }
+    UpdateResult::NeedsRebuild
+}
+
 pub struct HotReloadState {
     pub messages: broadcast::Sender<Template<'static>>,
     pub build_manager: Arc<BuildManager>,
-    pub last_file_rebuild: Arc<Mutex<FileMap>>,
+    pub file_map: Arc<Mutex<FileMap>>,
     pub watcher_config: CrateConfig,
 }
 
 pub struct FileMap {
-    pub map: HashMap<PathBuf, String>,
-    pub last_updated_time: std::time::SystemTime,
+    pub map: HashMap<PathBuf, (String, Option<Template<'static>>)>,
 }
 
 impl FileMap {
     pub fn new(path: PathBuf) -> Self {
         log::info!("🔮 Searching files for changes since last compile...");
-        fn find_rs_files(root: PathBuf) -> io::Result<HashMap<PathBuf, String>> {
+        fn find_rs_files(
+            root: PathBuf,
+        ) -> io::Result<HashMap<PathBuf, (String, Option<Template<'static>>)>> {
             let mut files = HashMap::new();
             if root.is_dir() {
-                for entry in fs::read_dir(root)? {
-                    if let Ok(entry) = entry {
-                        let path = entry.path();
-                        files.extend(find_rs_files(path)?);
-                    }
+                for entry in (fs::read_dir(root)?).flatten() {
+                    let path = entry.path();
+                    files.extend(find_rs_files(path)?);
                 }
-            } else {
-                if root.extension().map(|s| s.to_str()).flatten() == Some("rs") {
-                    if let Ok(mut file) = File::open(root.clone()) {
-                        let mut src = String::new();
-                        file.read_to_string(&mut src).expect("Unable to read file");
-                        files.insert(root, src);
-                    }
+            } else if root.extension().and_then(|s| s.to_str()) == Some("rs") {
+                if let Ok(mut file) = File::open(root.clone()) {
+                    let mut src = String::new();
+                    file.read_to_string(&mut src).expect("Unable to read file");
+                    files.insert(root, (src, None));
                 }
             }
             Ok(files)
         }
 
-        let last_updated_time = SystemTime::now();
         let result = Self {
-            last_updated_time,
             map: find_rs_files(path).unwrap(),
         };
         // log::info!("Files updated");
@@ -75,82 +133,28 @@ pub async fn hot_reload_handler(
         log::info!("🔥 Hot Reload WebSocket connected");
         {
             // update any rsx calls that changed before the websocket connected.
-            // let mut messages = Vec::new();
-
             {
                 log::info!("🔮 Finding updates since last compile...");
-                let handle = state.last_file_rebuild.lock().unwrap();
-                let update_time = handle.last_updated_time.clone();
-                for (k, v) in handle.map.iter() {
-                    let mut file = File::open(k).unwrap();
-                    if let Ok(md) = file.metadata() {
-                        if let Ok(time) = md.modified() {
-                            if time < update_time {
-                                continue;
-                            }
-                        }
-                    }
-                    let mut new_str = String::new();
-                    file.read_to_string(&mut new_str)
-                        .expect("Unable to read file");
-                    if let Ok(new_file) = syn::parse_file(&new_str) {
-                        if let Ok(old_file) = syn::parse_file(&v) {
-                            if let DiffResult::RsxChanged(changed) = find_rsx(&new_file, &old_file)
-                            {
-                                for (old, new) in changed.into_iter() {
-                                    // let hr = get_location(
-                                    //     &state.watcher_config.crate_dir,
-                                    //     k,
-                                    //     old.to_token_stream(),
-                                    // );
-                                    // get the original source code to preserve whitespace
-                                    let span = new.span();
-                                    let start = span.start();
-                                    let end = span.end();
-                                    let mut lines: Vec<_> = new_str
-                                        .lines()
-                                        .skip(start.line - 1)
-                                        .take(end.line - start.line + 1)
-                                        .collect();
-                                    if let Some(first) = lines.first_mut() {
-                                        *first = first.split_at(start.column).1;
-                                    }
-                                    if let Some(last) = lines.last_mut() {
-                                        // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                        if start.line == end.line {
-                                            *last = last.split_at(end.column - start.column).0;
-                                        } else {
-                                            *last = last.split_at(end.column).0;
-                                        }
-                                    }
-                                    let rsx = lines.join("\n");
-
-                                    // let old_dyn_ctx = try_parse_template(
-                                    //     &format!("{}", old.tokens),
-                                    //     hr.to_owned(),
-                                    //     None,
-                                    // )
-                                    // .map(|(_, old_dyn_ctx)| old_dyn_ctx);
-                                    // if let Ok((template, _)) =
-                                    //     try_parse_template(&rsx, hr.to_owned(), old_dyn_ctx.ok())
-                                    // {
-                                    //     // messages.push(SetTemplateMsg(TemplateId(hr), template));
-                                    // }
-                                }
-                            }
-                        }
+                let templates: Vec<_> = {
+                    state
+                        .file_map
+                        .lock()
+                        .unwrap()
+                        .map
+                        .values()
+                        .filter_map(|(_, template_slot)| *template_slot)
+                        .collect()
+                };
+                for template in templates {
+                    if socket
+                        .send(Message::Text(serde_json::to_string(&template).unwrap()))
+                        .await
+                        .is_err()
+                    {
+                        return;
                     }
                 }
             }
-            // for msg in messages {
-            //     if socket
-            //         .send(Message::Text(serde_json::to_string(&msg).unwrap()))
-            //         .await
-            //         .is_err()
-            //     {
-            //         return;
-            //     }
-            // }
             log::info!("finished");
         }
 
@@ -158,11 +162,13 @@ pub async fn hot_reload_handler(
         let hot_reload_handle = tokio::spawn(async move {
             loop {
                 if let Ok(rsx) = rx.recv().await {
+                    println!("sending");
                     if socket
                         .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
                         .await
                         .is_err()
                     {
+                        println!("error sending");
                         break;
                     };
                 }
