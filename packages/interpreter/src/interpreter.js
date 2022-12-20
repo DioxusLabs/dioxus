@@ -1,11 +1,3 @@
-export function main(rootname = "main") {
-  let root = window.document.getElementById(rootname);
-  if (root != null) {
-    window.interpreter = new Interpreter(root);
-    window.ipc.postMessage(serializeIpcMessage("initialize"));
-  }
-}
-
 class ListenerMap {
   constructor(root) {
     // bubbling events can listen at the root element
@@ -60,7 +52,7 @@ class ListenerMap {
   }
 }
 
-export class Interpreter {
+class Interpreter {
   constructor(root) {
     this.root = root;
     this.listeners = new ListenerMap(root);
@@ -352,6 +344,9 @@ export class Interpreter {
         this.RemoveEventListener(edit.id, edit.name);
         break;
       case "NewEventListener":
+
+        let bubbles = event_bubbles(edit.name);
+
         // this handler is only provided on desktop implementations since this
         // method is not used by the web implementation
         let handler = (event) => {
@@ -435,20 +430,21 @@ export class Interpreter {
             }
             window.ipc.postMessage(
               serializeIpcMessage("user_event", {
-                event: edit.name,
-                mounted_dom_id: parseInt(realId),
-                contents: contents,
+                name: edit.name,
+                element: parseInt(realId),
+                data: contents,
+                bubbles,
               })
             );
           }
         };
-        this.NewEventListener(edit.name, edit.id, event_bubbles(edit.name), handler);
+        this.NewEventListener(edit.name, edit.id, bubbles, handler);
         break;
     }
   }
 }
 
-export function serialize_event(event) {
+function serialize_event(event) {
   switch (event.type) {
     case "copy":
     case "cut":

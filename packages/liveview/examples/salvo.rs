@@ -1,55 +1,66 @@
-#[cfg(not(feature = "salvo"))]
-fn main() {}
+use dioxus::prelude::*;
+use dioxus_liveview::LiveViewPool;
+use salvo::affix;
+use salvo::prelude::*;
+use std::net::SocketAddr;
+use std::sync::Arc;
 
-#[cfg(feature = "salvo")]
+fn app(cx: Scope) -> Element {
+    let mut num = use_state(cx, || 0);
+
+    cx.render(rsx! {
+        div {
+            "hello salvo! {num}"
+            button { onclick: move |_| num += 1, "Increment" }
+        }
+    })
+}
+
 #[tokio::main]
 async fn main() {
-    use std::sync::Arc;
-
-    use dioxus_core::{Element, LazyNodes, Scope};
-    use dioxus_liveview as liveview;
-    use dioxus_liveview::Liveview;
-    use salvo::extra::affix;
-    use salvo::extra::ws::WsHandler;
-    use salvo::prelude::*;
-
-    fn app(cx: Scope) -> Element {
-        cx.render(LazyNodes::new(|f| f.text(format_args!("hello world!"))))
-    }
-
     pretty_env_logger::init();
 
-    let addr = ([127, 0, 0, 1], 3030);
+    let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
 
-    // todo: compactify this routing under one liveview::app method
-    let view = liveview::new(addr);
+    let view = LiveViewPool::new();
+
     let router = Router::new()
         .hoop(affix::inject(Arc::new(view)))
         .get(index)
-        .push(Router::with_path("app").get(connect));
+        .push(Router::with_path("ws").get(connect));
+
+    println!("Listening on http://{}", addr);
+
     Server::new(TcpListener::bind(addr)).serve(router).await;
+}
 
-    #[handler]
-    fn index(depot: &mut Depot, res: &mut Response) {
-        let view = depot.obtain::<Arc<Liveview>>().unwrap();
-        let body = view.body("<title>Dioxus LiveView</title>");
-        res.render(Text::Html(body));
-    }
+#[handler]
+fn index(_depot: &mut Depot, res: &mut Response) {
+    let addr: SocketAddr = ([127, 0, 0, 1], 3030).into();
+    res.render(Text::Html(format!(
+        r#"
+            <!DOCTYPE html>
+            <html>
+                <head> <title>Dioxus LiveView with Warp</title>  </head>
+                <body> <div id="main"></div> </body>
+                {glue}
+            </html>
+            "#,
+        glue = dioxus_liveview::interpreter_glue(&format!("ws://{addr}/ws"))
+    )));
+}
 
-    #[handler]
-    async fn connect(
-        req: &mut Request,
-        depot: &mut Depot,
-        res: &mut Response,
-    ) -> Result<(), StatusError> {
-        let view = depot.obtain::<Arc<Liveview>>().unwrap().clone();
-        let fut = WsHandler::new().handle(req, res)?;
-        let fut = async move {
-            if let Some(ws) = fut.await {
-                view.upgrade_salvo(ws, app).await;
-            }
-        };
-        tokio::task::spawn(fut);
-        Ok(())
-    }
+#[handler]
+async fn connect(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+) -> Result<(), StatusError> {
+    let view = depot.obtain::<Arc<LiveViewPool>>().unwrap().clone();
+
+    WebSocketUpgrade::new()
+        .upgrade(req, res, |ws| async move {
+            _ = view.launch(dioxus_liveview::salvo_socket(ws), app).await;
+        })
+        .await
 }
