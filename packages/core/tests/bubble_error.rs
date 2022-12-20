@@ -9,7 +9,7 @@ fn app(cx: Scope) -> Element {
         _ => unreachable!(),
     };
 
-    let value = raw.parse::<f32>().unwrap();
+    let value = raw.parse::<f32>().unwrap_or(123.123);
 
     cx.render(rsx! {
         div { "hello {value}" }
