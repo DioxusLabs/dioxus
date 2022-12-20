@@ -750,7 +750,7 @@ impl<'b> VirtualDom {
 
     fn remove_node(&mut self, node: &'b VNode<'b>, gen_muts: bool) {
         // Clean up the roots, assuming we need to generate mutations for these
-        for (idx, _) in node.template.roots.iter().enumerate() {
+        for (idx, _) in node.template.get().roots.iter().enumerate() {
             if let Some(dy) = node.dynamic_root(idx) {
                 self.remove_dynamic_node(dy, gen_muts);
             } else {
@@ -764,7 +764,7 @@ impl<'b> VirtualDom {
 
         for (idx, dyn_node) in node.dynamic_nodes.iter().enumerate() {
             // Roots are cleaned up automatically above
-            if node.template.node_paths[idx].len() == 1 {
+            if node.template.get().node_paths[idx].len() == 1 {
                 continue;
             }
 
@@ -775,7 +775,7 @@ impl<'b> VirtualDom {
         let mut id = None;
         for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry
-            if node.template.attr_paths[idx].len() == 1 {
+            if node.template.get().attr_paths[idx].len() == 1 {
                 continue;
             }
 

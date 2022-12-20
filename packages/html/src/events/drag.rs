@@ -13,7 +13,7 @@ pub struct DragData {
     pub mouse: MouseData,
 
     /// And then add the rest of the drag data
-    pub data: Box<dyn Any>,
+    pub data: Box<dyn std::any::Any>,
 }
 
 impl_event! {

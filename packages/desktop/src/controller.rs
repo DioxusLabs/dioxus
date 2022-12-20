@@ -1,8 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
-use dioxus_html::HtmlEvent;
-use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use crate::events::{decode_event, EventMessage};
 use dioxus_core::*;
+use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
