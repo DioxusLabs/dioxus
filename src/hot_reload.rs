@@ -424,8 +424,14 @@ fn find_rsx_expr(
             let new_mac = &new_expr.mac;
             let old_mac = &old_expr.mac;
             if new_mac.path.get_ident().map(|ident| ident.to_string()) == Some("rsx".to_string())
-                && old_mac.path.get_ident().map(|ident| ident.to_string())
-                    == Some("rsx".to_string())
+                && matches!(
+                    old_mac
+                        .path
+                        .get_ident()
+                        .map(|ident| ident.to_string())
+                        .as_deref(),
+                    Some("rsx" | "render")
+                )
             {
                 rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
                 false
