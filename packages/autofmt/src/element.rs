@@ -298,7 +298,7 @@ impl Buffer {
             }
             [BodyNode::RawExpr(ref expr)] => {
                 // TODO: let rawexprs to be inlined
-                get_expr_length(&expr.expr)
+                get_expr_length(expr)
             }
             [BodyNode::Element(ref el)] => {
                 let attr_len = self.is_short_attrs(&el.attributes);
@@ -309,10 +309,10 @@ impl Buffer {
 
                 if el.children.len() == 1 {
                     if let BodyNode::Text(ref text) = el.children[0] {
-                        if text.text.value().len() + el.name.to_string().len() + attr_len < 80 {
-                            return Some(
-                                text.text.value().len() + el.name.to_string().len() + attr_len,
-                            );
+                        let value = text.source.as_ref().unwrap().value();
+
+                        if value.len() + el.name.to_string().len() + attr_len < 80 {
+                            return Some(value.len() + el.name.to_string().len() + attr_len);
                         }
                     }
                 }
@@ -326,11 +326,15 @@ impl Buffer {
                 for item in items {
                     match item {
                         BodyNode::Component(_) | BodyNode::Element(_) => return None,
-                        BodyNode::Text(text) => total_count += text.text.value().len(),
-                        BodyNode::RawExpr(expr) => match get_expr_length(&expr.expr) {
+                        BodyNode::Text(text) => {
+                            total_count += text.source.as_ref().unwrap().value().len()
+                        }
+                        BodyNode::RawExpr(expr) => match get_expr_length(expr) {
                             Some(len) => total_count += len,
                             None => return None,
                         },
+                        BodyNode::ForLoop(_) => todo!(),
+                        BodyNode::IfChain(_) => todo!(),
                     }
                 }
 
