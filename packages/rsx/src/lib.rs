@@ -17,10 +17,7 @@ mod component;
 mod element;
 mod ifmt;
 mod node;
-mod raw_expr;
 mod template;
-mod text;
-mod whitespace;
 
 // Re-export the namespaces into each other
 pub use component::*;
