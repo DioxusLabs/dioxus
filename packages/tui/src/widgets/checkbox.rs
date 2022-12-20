@@ -56,6 +56,7 @@ pub(crate) fn CheckBox<'a>(cx: Scope<'a, CheckBoxProps>) -> Element<'a> {
                     "on".to_string()
                 },
                 values: HashMap::new(),
+                files: None,
             });
         }
         state.set(new_state);

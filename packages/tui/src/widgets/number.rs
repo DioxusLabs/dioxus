@@ -84,6 +84,7 @@ pub(crate) fn NumbericInput<'a>(cx: Scope<'a, NumbericInputProps>) -> Element<'a
             input_handler.call(FormData {
                 value: text,
                 values: HashMap::new(),
+                files: None,
             });
         }
     };

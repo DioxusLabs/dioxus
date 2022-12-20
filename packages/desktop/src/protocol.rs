@@ -52,14 +52,7 @@ pub(super) fn desktop_handler(
     } else if trimmed == "index.js" {
         Response::builder()
             .header("Content-Type", "text/javascript")
-            .body(
-                format!(
-                    "{} {}",
-                    dioxus_interpreter_js::INTERPRETER_JS,
-                    include_str!("./main.js")
-                )
-                .into_bytes(),
-            )
+            .body(dioxus_interpreter_js::INTERPRETER_JS.as_bytes().to_vec())
             .map_err(From::from)
     } else {
         let asset_root = asset_root
