@@ -42,7 +42,7 @@ pub struct VNode<'a> {
     pub parent: Option<ElementId>,
 
     /// The static nodes and static descriptor of the template
-    pub template: Template<'static>,
+    pub template: Cell<Template<'static>>,
 
     /// The IDs for the roots of this template - to be used when moving the template around and removing it from
     /// the actual Dom
@@ -64,12 +64,12 @@ impl<'a> VNode<'a> {
             root_ids: &[],
             dynamic_nodes: &[],
             dynamic_attrs: &[],
-            template: Template {
+            template: Cell::new(Template {
                 name: "dioxus-empty",
                 roots: &[],
                 node_paths: &[],
                 attr_paths: &[],
-            },
+            }),
         })
     }
 
@@ -77,7 +77,7 @@ impl<'a> VNode<'a> {
     ///
     /// Returns [`None`] if the root is actually a static node (Element/Text)
     pub fn dynamic_root(&self, idx: usize) -> Option<&'a DynamicNode<'a>> {
-        match &self.template.roots[idx] {
+        match &self.template.get().roots[idx] {
             TemplateNode::Element { .. } | TemplateNode::Text { text: _ } => None,
             TemplateNode::Dynamic { id } | TemplateNode::DynamicText { id } => {
                 Some(&self.dynamic_nodes[*id])
@@ -581,7 +581,7 @@ impl<'a> IntoDynNode<'a> for &'a VNode<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         DynamicNode::Fragment(_cx.bump().alloc([VNode {
             parent: self.parent,
-            template: self.template,
+            template: self.template.clone(),
             root_ids: self.root_ids,
             key: self.key,
             dynamic_nodes: self.dynamic_nodes,

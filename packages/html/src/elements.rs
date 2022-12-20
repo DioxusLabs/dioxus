@@ -205,9 +205,9 @@ macro_rules! builder_constructors {
             };
          )*
         ) => {
-        pub struct Html;
+        pub struct HtmlCtx;
 
-        impl HotReloadingContext for Html {
+        impl HotReloadingContext for HtmlCtx {
             fn map_attribute(element: &str, attribute: &str) -> Option<(&'static str, Option<&'static str>)> {
                 $(
                     impl_element_match_attributes!(

@@ -180,10 +180,6 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
             None => quote! { None },
         };
 
-        let spndbg = format!("{:?}", self.roots[0].span());
-        println!("spndbg: {}", spndbg);
-        let root_col = spndbg[9..].split("..").next().unwrap();
-
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);
@@ -207,8 +203,6 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
                     line!(),
                     ":",
                     column!(),
-                    ":",
-                    #root_col
                 ),
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],
@@ -217,7 +211,7 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
             ::dioxus::core::VNode {
                 parent: None,
                 key: #key_tokens,
-                template: TEMPLATE,
+                template: std::cell::Cell::new(TEMPLATE),
                 root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut _).as_slice_of_cells(),
                 // root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),

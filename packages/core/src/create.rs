@@ -4,7 +4,7 @@ use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
 use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
-use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext};
+use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext, Template};
 use std::cell::Cell;
 use std::iter::{Enumerate, Peekable};
 use std::rc::Rc;
@@ -26,19 +26,22 @@ impl<'b> VirtualDom {
     pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        if !self.templates.contains_key(&node.template.name) {
-            self.register_template(node);
+        if !self.templates.contains_key(&node.template.get().name) {
+            self.register_template(node.template.get());
         }
 
         // we know that this will generate at least one mutation per node
-        self.mutations.edits.reserve(node.template.roots.len());
+        self.mutations
+            .edits
+            .reserve(node.template.get().roots.len());
 
         // Walk the roots, creating nodes and assigning IDs
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut attrs = node.template.attr_paths.iter().enumerate().peekable();
-        let mut nodes = node.template.node_paths.iter().enumerate().peekable();
+        let mut attrs = node.template.get().attr_paths.iter().enumerate().peekable();
+        let mut nodes = node.template.get().node_paths.iter().enumerate().peekable();
 
         node.template
+            .get()
             .roots
             .iter()
             .enumerate()
@@ -137,7 +140,7 @@ impl<'b> VirtualDom {
             let m = self.create_dynamic_node(template, &template.dynamic_nodes[idx], idx);
             if m > 0 {
                 // The path is one shorter because the top node is the root
-                let path = &template.template.node_paths[idx][1..];
+                let path = &template.template.get().node_paths[idx][1..];
                 self.mutations.push(ReplacePlaceholder { m, path });
             }
         }
@@ -209,7 +212,7 @@ impl<'b> VirtualDom {
         template.root_ids[root_idx].set(Some(this_id));
 
         self.mutations.push(LoadTemplate {
-            name: template.template.name,
+            name: template.template.get().name,
             index: root_idx,
             id: this_id,
         });
@@ -237,7 +240,7 @@ impl<'b> VirtualDom {
 
         // if attribute is on a root node, then we've already created the element
         // Else, it's deep in the template and we should create a new id for it
-        let id = self.next_element(template, template.template.attr_paths[attr_id]);
+        let id = self.next_element(template, template.template.get().attr_paths[attr_id]);
 
         self.mutations.push(Mutation::AssignId {
             path: &path[1..],
@@ -248,14 +251,13 @@ impl<'b> VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
-    fn register_template(&mut self, template: &'b VNode<'b>) {
+    pub(crate) fn register_template(&mut self, template: Template<'static>) {
         // First, make sure we mark the template as seen, regardless if we process it
-        self.templates
-            .insert(template.template.name, template.template);
+        self.templates.insert(template.name, template);
 
         // If it's all dynamic nodes, then we don't need to register it
-        if !template.template.is_completely_dynamic() {
-            self.mutations.templates.push(template.template);
+        if !template.is_completely_dynamic() {
+            self.mutations.templates.push(template);
         }
     }
 
@@ -281,7 +283,7 @@ impl<'b> VirtualDom {
         idx: usize,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
-        let new_id = self.next_element(template, template.template.node_paths[idx]);
+        let new_id = self.next_element(template, template.template.get().node_paths[idx]);
 
         // Make sure the text node is assigned to the correct element
         text.id.set(Some(new_id));
@@ -292,7 +294,7 @@ impl<'b> VirtualDom {
         // Add the mutation to the list
         self.mutations.push(HydrateText {
             id: new_id,
-            path: &template.template.node_paths[idx][1..],
+            path: &template.template.get().node_paths[idx][1..],
             value,
         });
 
@@ -307,14 +309,14 @@ impl<'b> VirtualDom {
         idx: usize,
     ) -> usize {
         // Allocate a dynamic element reference for this text node
-        let id = self.next_element(template, template.template.node_paths[idx]);
+        let id = self.next_element(template, template.template.get().node_paths[idx]);
 
         // Make sure the text node is assigned to the correct element
         placeholder.id.set(Some(id));
 
         // Assign the ID to the existing node in the template
         self.mutations.push(AssignId {
-            path: &template.template.node_paths[idx][1..],
+            path: &template.template.get().node_paths[idx][1..],
             id,
         });
 
@@ -382,7 +384,7 @@ impl<'b> VirtualDom {
         };
 
         // Since this is a boundary, use its placeholder within the template as the placeholder for the suspense tree
-        let new_id = self.next_element(new, parent.template.node_paths[idx]);
+        let new_id = self.next_element(new, parent.template.get().node_paths[idx]);
 
         // Now connect everything to the boundary
         self.scopes[scope.0].placeholder.set(Some(new_id));
@@ -404,7 +406,7 @@ impl<'b> VirtualDom {
         // Now assign the placeholder in the DOM
         self.mutations.push(AssignId {
             id: new_id,
-            path: &parent.template.node_paths[idx][1..],
+            path: &parent.template.get().node_paths[idx][1..],
         });
 
         0
@@ -419,7 +421,7 @@ impl<'b> VirtualDom {
         idx: usize,
         scope: ScopeId,
     ) -> usize {
-        let new_id = self.next_element(template, template.template.node_paths[idx]);
+        let new_id = self.next_element(template, template.template.get().node_paths[idx]);
 
         // Set the placeholder of the scope
         self.scopes[scope.0].placeholder.set(Some(new_id));
@@ -427,7 +429,7 @@ impl<'b> VirtualDom {
         // Since the placeholder is already in the DOM, we don't create any new nodes
         self.mutations.push(AssignId {
             id: new_id,
-            path: &template.template.node_paths[idx][1..],
+            path: &template.template.get().node_paths[idx][1..],
         });
 
         0
@@ -439,7 +441,7 @@ impl<'b> VirtualDom {
         slot: &'b Cell<Option<ElementId>>,
         id: usize,
     ) -> ElementId {
-        let id = self.next_element(template, template.template.node_paths[id]);
+        let id = self.next_element(template, template.template.get().node_paths[id]);
         slot.set(Some(id));
         id
     }

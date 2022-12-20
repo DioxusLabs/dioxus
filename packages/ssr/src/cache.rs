@@ -36,13 +36,13 @@ impl StringCache {
 
         let mut cur_path = vec![];
 
-        for (root_idx, root) in template.template.roots.iter().enumerate() {
+        for (root_idx, root) in template.template.get().roots.iter().enumerate() {
             Self::recurse(root, &mut cur_path, root_idx, &mut chain)?;
         }
 
         Ok(Self {
             segments: chain.segments,
-            template: template.template,
+            template: template.template.get(),
         })
     }
 

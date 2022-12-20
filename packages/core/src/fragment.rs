@@ -31,7 +31,7 @@ pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
     Ok(VNode {
         key: children.key,
         parent: children.parent,
-        template: children.template,
+        template: children.template.clone(),
         root_ids: children.root_ids,
         dynamic_nodes: children.dynamic_nodes,
         dynamic_attrs: children.dynamic_attrs,

@@ -66,7 +66,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         let entry = self
             .template_cache
-            .entry(template.template.name)
+            .entry(template.template.get().name)
             .or_insert_with(|| Rc::new(StringCache::from_template(template).unwrap()))
             .clone();
 

@@ -352,10 +352,11 @@ impl VirtualDom {
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
             let template = unsafe { &*el_ref.template };
+            let node_template = template.template.get();
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
-                let this_path = template.template.attr_paths[idx];
+                let this_path = node_template.attr_paths[idx];
 
                 // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
                 // we should fix this so that we look for "onclick" instead of "click"
@@ -457,12 +458,11 @@ impl VirtualDom {
     ///
     /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
     pub fn replace_template(&mut self, template: Template<'static>) {
-        self.templates.insert(template.name, template);
-        panic!("{:?}", self.templates);
+        self.register_template(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in &self.scopes {
             if let Some(RenderReturn::Sync(Ok(sync))) = scope.try_root_node() {
-                if sync.template.name == template.name {
+                if sync.template.get().name == template.name {
                     let height = scope.height;
                     self.dirty_scopes.insert(DirtyScope {
                         height,
