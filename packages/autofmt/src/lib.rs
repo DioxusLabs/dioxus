@@ -124,7 +124,7 @@ pub fn apply_format(input: &str, block: FormattedBlock) -> String {
     let (left, _) = input.split_at(start);
     let (_, right) = input.split_at(end);
 
-    dbg!(&block.formatted);
+    // dbg!(&block.formatted);
 
     format!("{}{}{}", left, block.formatted, right)
 }

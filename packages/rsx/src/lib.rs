@@ -34,7 +34,7 @@ use syn::{
 };
 
 /// Fundametnally, every CallBody is a template
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
 

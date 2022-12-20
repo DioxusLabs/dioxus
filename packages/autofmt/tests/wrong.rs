@@ -14,3 +14,5 @@ macro_rules! twoway {
 twoway!("comments" => comments);
 
 twoway!("multi" => multi);
+
+twoway!("multiexpr" => multiexpr);
