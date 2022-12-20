@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use syn::{File, Macro};
+use syn::{File, Macro, __private::ToTokens};
 
 pub enum DiffResult {
     CodeChanged,
@@ -108,7 +108,12 @@ fn find_rsx_item(
                 || new_item.self_ty != old_item.self_ty
                 || new_item.brace_token != old_item.brace_token
         }
-        (syn::Item::Macro(new_item), syn::Item::Macro(old_item)) => old_item != new_item,
+        (syn::Item::Macro(new_item), syn::Item::Macro(old_item)) => {
+            find_rsx_macro(&new_item.mac, &old_item.mac, rsx_calls)
+                || new_item.attrs != old_item.attrs
+                || new_item.semi_token != old_item.semi_token
+                || new_item.ident != old_item.ident
+        }
         (syn::Item::Macro2(new_item), syn::Item::Macro2(old_item)) => old_item != new_item,
         (syn::Item::Mod(new_item), syn::Item::Mod(old_item)) => {
             match (&new_item.content, &old_item.content) {
@@ -158,7 +163,7 @@ fn find_rsx_item(
         (syn::Item::Union(new_item), syn::Item::Union(old_item)) => old_item != new_item,
         (syn::Item::Use(new_item), syn::Item::Use(old_item)) => old_item != new_item,
         (syn::Item::Verbatim(_), syn::Item::Verbatim(_)) => false,
-        _ => return true,
+        _ => true,
     }
 }
 
@@ -421,23 +426,8 @@ fn find_rsx_expr(
                 || new_expr.loop_token != old_expr.loop_token
         }
         (syn::Expr::Macro(new_expr), syn::Expr::Macro(old_expr)) => {
-            let new_mac = &new_expr.mac;
-            let old_mac = &old_expr.mac;
-            if new_mac.path.get_ident().map(|ident| ident.to_string()) == Some("rsx".to_string())
-                && matches!(
-                    old_mac
-                        .path
-                        .get_ident()
-                        .map(|ident| ident.to_string())
-                        .as_deref(),
-                    Some("rsx" | "render")
-                )
-            {
-                rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
-                false
-            } else {
-                new_expr != old_expr
-            }
+            find_rsx_macro(&new_expr.mac, &old_expr.mac, rsx_calls)
+                || new_expr.attrs != old_expr.attrs
         }
         (syn::Expr::Match(new_expr), syn::Expr::Match(old_expr)) => {
             if find_rsx_expr(&new_expr.expr, &old_expr.expr, rsx_calls) {
@@ -616,5 +606,32 @@ fn find_rsx_expr(
         }
         (syn::Expr::Verbatim(_), syn::Expr::Verbatim(_)) => false,
         _ => true,
+    }
+}
+
+fn find_rsx_macro(
+    new_mac: &syn::Macro,
+    old_mac: &syn::Macro,
+    rsx_calls: &mut Vec<(Macro, TokenStream)>,
+) -> bool {
+    if matches!(
+        new_mac
+            .path
+            .get_ident()
+            .map(|ident| ident.to_string())
+            .as_deref(),
+        Some("rsx" | "render")
+    ) && matches!(
+        old_mac
+            .path
+            .get_ident()
+            .map(|ident| ident.to_string())
+            .as_deref(),
+        Some("rsx" | "render")
+    ) {
+        rsx_calls.push((old_mac.clone(), new_mac.tokens.clone()));
+        false
+    } else {
+        new_mac != old_mac
     }
 }
