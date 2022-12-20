@@ -33,26 +33,26 @@ impl<'b> VirtualDom {
             use RenderReturn::{Async, Sync};
 
             match (old, new) {
-                (Sync(Ok(l)), Sync(Ok(r))) => self.diff_node(l, r),
+                (Sync(Some(l)), Sync(Some(r))) => self.diff_node(l, r),
 
                 // Err cases
-                (Sync(Ok(l)), Sync(Err(e))) => self.diff_ok_to_err(l, e),
-                (Sync(Err(e)), Sync(Ok(r))) => self.diff_err_to_ok(e, r),
-                (Sync(Err(_eo)), Sync(Err(_en))) => { /* nothing */ }
+                (Sync(Some(l)), Sync(None)) => self.diff_ok_to_err(l),
+                (Sync(None), Sync(Some(r))) => self.diff_err_to_ok(r),
+                (Sync(None), Sync(None)) => { /* nothing */ }
 
                 // Async
-                (Sync(Ok(_l)), Async(_)) => todo!(),
-                (Sync(Err(_e)), Async(_)) => todo!(),
-                (Async(_), Sync(Ok(_r))) => todo!(),
-                (Async(_), Sync(Err(_e))) => { /* nothing */ }
+                (Sync(Some(_l)), Async(_)) => todo!(),
+                (Sync(None), Async(_)) => todo!(),
+                (Async(_), Sync(Some(_r))) => todo!(),
+                (Async(_), Sync(None)) => { /* nothing */ }
                 (Async(_), Async(_)) => { /* nothing */ }
             };
         }
         self.scope_stack.pop();
     }
 
-    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _e: &anyhow::Error) {}
-    fn diff_err_to_ok(&mut self, _e: &anyhow::Error, _l: &'b VNode<'b>) {}
+    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>) {}
+    fn diff_err_to_ok(&mut self, _l: &'b VNode<'b>) {}
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         // If the templates are the same, we don't need to do anything, nor do we want to
@@ -679,7 +679,7 @@ impl<'b> VirtualDom {
                     Component(comp) => {
                         let scope = comp.scope.get().unwrap();
                         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                            RenderReturn::Sync(Ok(node)) => self.push_all_real_nodes(node),
+                            RenderReturn::Sync(Some(node)) => self.push_all_real_nodes(node),
                             _ => todo!(),
                         }
                     }
@@ -856,7 +856,7 @@ impl<'b> VirtualDom {
         let scope = comp.scope.take().unwrap();
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-            RenderReturn::Sync(Ok(t)) => {
+            RenderReturn::Sync(Some(t)) => {
                 println!("Removing component node sync {:?}", gen_muts);
                 self.remove_node(t, gen_muts)
             }
@@ -886,7 +886,7 @@ impl<'b> VirtualDom {
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                    RenderReturn::Sync(Ok(t)) => self.find_first_element(t),
+                    RenderReturn::Sync(Some(t)) => self.find_first_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
@@ -902,7 +902,7 @@ impl<'b> VirtualDom {
             Some(Component(comp)) => {
                 let scope = comp.scope.get().unwrap();
                 match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                    RenderReturn::Sync(Ok(t)) => self.find_last_element(t),
+                    RenderReturn::Sync(Some(t)) => self.find_last_element(t),
                     _ => todo!("cannot handle nonstandard nodes"),
                 }
             }
