@@ -11,9 +11,10 @@ fn main() {
 struct DarkMode(bool);
 // ANCHOR_END: DarkMode_struct
 
+#[rustfmt::skip]
 pub fn App(cx: Scope) -> Element {
     // ANCHOR: context_provider
-    use_shared_state_provider(cx, || DarkMode(false));
+use_shared_state_provider(cx, || DarkMode(false));
     // ANCHOR_END: context_provider
 
     let is_dark_mode = use_is_dark_mode(cx);
@@ -34,9 +35,10 @@ pub fn App(cx: Scope) -> Element {
     }))
 }
 
+#[rustfmt::skip]
 pub fn use_is_dark_mode(cx: &ScopeState) -> bool {
     // ANCHOR: use_context
-    let dark_mode_context = use_shared_state::<DarkMode>(cx);
+let dark_mode_context = use_shared_state::<DarkMode>(cx);
     // ANCHOR_END: use_context
 
     dark_mode_context
