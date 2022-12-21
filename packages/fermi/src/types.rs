@@ -7,7 +7,7 @@ use crate::{AtomBuilder, AtomRoot, Select};
 /// This trait lets Dioxus abstract over Atoms, AtomFamilies, AtomRefs, and Selectors.
 /// It is not very useful for your own code, but could be used to build new Atom primitives.
 pub trait Readable<V, B = ()> {
-    fn read(&self, root: AtomRoot) -> Option<V>;
+    fn read<'a>(&self, root: &'a AtomRoot) -> Option<&'a V>;
     fn init(&self) -> V;
     fn unique_id(&self) -> AtomId;
 }

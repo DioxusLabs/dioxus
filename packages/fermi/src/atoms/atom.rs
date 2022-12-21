@@ -3,8 +3,13 @@ use crate::{Atom, AtomId, AtomRoot, Readable, Writable};
 pub struct AtomBuilder;
 
 impl<V: 'static> Readable<V> for Atom<V> {
-    fn read(&self, _root: AtomRoot) -> Option<V> {
-        todo!()
+    fn read<'a>(&self, root: &'a AtomRoot) -> Option<&'a V> {
+        dbg!(self.unique_id());
+
+        let o = root.get_raw(self.unique_id()).downcast::<V>().unwrap();
+
+        // give this thing a lifetime, but nix the lifetime later
+        Some(root.arena.alloc(o))
     }
     fn init(&self) -> V {
         (*self)(AtomBuilder)

@@ -29,6 +29,8 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
         id: f.unique_id(),
     });
 
+    dbg!(inner.id);
+
     let value = inner.root.register(f, cx.scope_id());
 
     inner.value = Some(value);
@@ -59,11 +61,14 @@ pub fn use_selector<'a, V: PartialEq>(cx: &'a ScopeState, selector: fn(Select<'a
         }
     });
 
+    // todo!()
+
     if root.root.needs_update(root.id) {
         if root.root.needs_selector_updated(selector) {
             // Create the value on the fly and then store it in the main atom root
             let s = Select::new(&root.root);
             let v = selector(s);
+
             let boxed = Box::new(v);
             let ptr = Box::into_raw(boxed);
             root.val = Some(ptr as _);
@@ -74,9 +79,11 @@ pub fn use_selector<'a, V: PartialEq>(cx: &'a ScopeState, selector: fn(Select<'a
         }
     };
 
-    // gimme that pointer
-    let p: *mut () = root.val.unwrap() as _;
-    let r = p as *mut V;
+    // // gimme that pointer
+    // let p: *mut () = root.val.unwrap() as _;
+    // let r = p as *mut V;
 
-    unsafe { &*r }
+    // unsafe { &*r }
+
+    todo!("bong")
 }

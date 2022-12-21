@@ -1,5 +1,5 @@
 use crate::{AtomId, Readable, Select, Selection, Selector, SelectorId};
-use dioxus_core::{Element, Scope, ScopeId, ScopeState};
+use dioxus_core::{exports::bumpalo::Bump, Element, Scope, ScopeId, ScopeState};
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
@@ -7,6 +7,8 @@ use std::{
     rc::Rc,
     sync::Arc,
 };
+
+use dioxus_core::exports::bumpalo;
 
 pub fn AtomRoot(cx: Scope) -> Element {
     todo!()
@@ -16,6 +18,9 @@ pub struct AtomRoot {
     pub atoms: RefCell<HashMap<AtomId, Slot>>,
     pub update_any: Arc<dyn Fn(ScopeId)>,
     pub selections: RefCell<HashMap<SelectorId, Selection>>,
+
+    // an arena
+    pub arena: Bump,
 }
 
 pub struct Slot {
@@ -29,6 +34,7 @@ impl AtomRoot {
             update_any,
             atoms: RefCell::new(HashMap::new()),
             selections: RefCell::new(HashMap::new()),
+            arena: Bump::new(),
         }
     }
 
@@ -150,6 +156,10 @@ impl AtomRoot {
         }
     }
 
+    pub fn get_raw(&self, id: AtomId) -> Rc<dyn Any> {
+        self.atoms.borrow().get(&id).unwrap().value.clone()
+    }
+
     pub fn register_selector<V>(&self, selector: Selector<V>, id: ScopeId) {}
 
     pub fn needs_selector_updated<V>(&self, selector: Selector<V>) -> bool {
@@ -172,17 +182,17 @@ impl AtomRoot {
             val: value as *mut (),
         });
 
-        unsafe {
-            let old = selection.val as *const V;
-            let new = value as *const V;
+        // unsafe {
+        //     let old = selection.val as *const V;
+        //     let new = value as *const V;
 
-            let old = &*old;
-            let new = &*new;
+        //     let old = &*old;
+        //     let new = &*new;
 
-            // if old != new {
-            //     // update all dep selectors and components
-            // }
-        }
+        //     // if old != new {
+        //     //     // update all dep selectors and components
+        //     // }
+        // }
 
         selection.val = value as *mut ();
     }

@@ -15,9 +15,9 @@ impl<'a> Select<'a> {
         }
     }
 
-    pub fn get<O>(&self, f: impl Readable<O>) -> &'a O {
-        // self.root.register(f, scope);
-        todo!()
+    pub fn get<O: 'a>(&self, f: impl Readable<O>) -> &'a O {
+        let o = f.read(self.root);
+        o.unwrap()
     }
 
     pub fn select<O>(&self, f: fn(Select<'a>) -> O) -> &O {
@@ -30,7 +30,7 @@ impl<V, F> Readable<V, SelectorSpecialization> for F
 where
     F: Fn(Select) -> V,
 {
-    fn read(&self, _root: AtomRoot) -> Option<V> {
+    fn read<'a>(&self, _root: &'a AtomRoot) -> Option<&'a V> {
         todo!()
     }
     fn init(&self) -> V {
