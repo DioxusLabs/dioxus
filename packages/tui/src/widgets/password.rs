@@ -83,40 +83,44 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
         "solid"
     };
 
-    render! {
-        div{
+    let onkeydown = move |k: KeyboardEvent| {
+        if k.key() == Key::Enter {
+            return;
+        }
+        let mut text = text_ref.write();
+        cursor.write().handle_input(&k, &mut text, max_len);
+        if let Some(input_handler) = &cx.props.raw_oninput {
+            input_handler.call(FormData {
+                value: text.clone(),
+                values: HashMap::new(),
+                files: None,
+            });
+        }
+
+        let node = tui_query.get(get_root_id(cx).unwrap());
+        let Point { x, y } = node.pos().unwrap();
+
+        let Pos { col, row } = cursor.read().start;
+        let (x, y) = (
+            col as u16 + x as u16 + u16::from(border != "none"),
+            row as u16 + y as u16 + u16::from(border != "none"),
+        );
+        if let Ok(pos) = crossterm::cursor::position() {
+            if pos != (x, y) {
+                execute!(stdout(), MoveTo(x, y)).unwrap();
+            }
+        } else {
+            execute!(stdout(), MoveTo(x, y)).unwrap();
+        }
+    };
+
+    cx.render(rsx! {
+        div {
             width: "{width}",
             height: "{height}",
             border_style: "{border}",
 
-            onkeydown: move |k| {
-                if k.key()== Key::Enter {
-                    return;
-                }
-                let mut text = text_ref.write();
-                cursor.write().handle_input(&k, &mut text, max_len);
-                if let Some(input_handler) = &cx.props.raw_oninput{
-                    input_handler.call(FormData{
-                        value: text.clone(),
-                        values: HashMap::new(),
-                        files: None
-                    });
-                }
-
-                let node = tui_query.get(get_root_id(cx).unwrap());
-                let Point{ x, y } = node.pos().unwrap();
-
-                let Pos { col, row } = cursor.read().start;
-                let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
-                if let Ok(pos) = crossterm::cursor::position() {
-                    if pos != (x, y){
-                        execute!(stdout(), MoveTo(x, y)).unwrap();
-                    }
-                }
-                else{
-                    execute!(stdout(), MoveTo(x, y)).unwrap();
-                }
-            },
+            onkeydown: onkeydown,
 
             onmousemove: move |evt| {
                 if *dragging.get() {
@@ -133,6 +137,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                     }
                 }
             },
+
             onmousedown: move |evt| {
                 let offset = evt.data.element_coordinates();
                 let mut new = Pos::new(offset.x as usize, offset.y as usize);
@@ -149,7 +154,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                 let Point{ x, y } = node.pos().unwrap();
 
                 let Pos { col, row } = cursor.read().start;
-                let (x, y) = (col as u16 + x as u16 + if border == "none" {0} else {1}, row as u16 + y as u16 + if border == "none" {0} else {1});
+                let (x, y) = (col as u16 + x as u16 + u16::from(border != "none"), row as u16 + y as u16 + u16::from(border != "none"));
                 if let Ok(pos) = crossterm::cursor::position() {
                     if pos != (x, y){
                         execute!(stdout(), MoveTo(x, y)).unwrap();
@@ -182,5 +187,5 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
 
             "{text_after_second_cursor}"
         }
-    }
+    })
 }

@@ -51,7 +51,7 @@ impl Renderer {
     ) -> std::fmt::Result {
         // We should never ever run into async or errored nodes in SSR
         // Error boundaries and suspense boundaries will convert these to sync
-        if let RenderReturn::Sync(Ok(node)) = dom.get_scope(scope).unwrap().root_node() {
+        if let RenderReturn::Sync(Some(node)) = dom.get_scope(scope).unwrap().root_node() {
             self.render_template(buf, dom, node)?
         };
 
@@ -89,7 +89,7 @@ impl Renderer {
                             let scope = dom.get_scope(id).unwrap();
                             let node = scope.root_node();
                             match node {
-                                RenderReturn::Sync(Ok(node)) => {
+                                RenderReturn::Sync(Some(node)) => {
                                     self.render_template(buf, dom, node)?
                                 }
                                 _ => todo!(

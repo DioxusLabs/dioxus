@@ -6,7 +6,7 @@ use crate::geometry::{LinesVector, PagesVector, PixelsVector, WheelDelta};
 
 pub type WheelEvent = Event<WheelData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Default)]
 pub struct WheelData {
     #[deprecated(since = "0.3.0", note = "use delta() instead")]
     pub delta_mode: u32,

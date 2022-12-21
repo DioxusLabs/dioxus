@@ -16,6 +16,12 @@ pub struct FormData {
     pub files: Option<std::sync::Arc<dyn FileEngine>>,
 }
 
+impl PartialEq for FormData {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value && self.values == other.values
+    }
+}
+
 impl Debug for FormData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FormEvent")

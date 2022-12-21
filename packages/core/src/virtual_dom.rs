@@ -463,7 +463,7 @@ impl VirtualDom {
         self.register_template(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in &self.scopes {
-            if let Some(RenderReturn::Sync(Ok(sync))) = scope.try_root_node() {
+            if let Some(RenderReturn::Sync(Some(sync))) = scope.try_root_node() {
                 if sync.template.get().name == template.name {
                     let height = scope.height;
                     self.dirty_scopes.insert(DirtyScope {
@@ -498,7 +498,7 @@ impl VirtualDom {
     pub fn rebuild(&mut self) -> Mutations {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
-            RenderReturn::Sync(Ok(node)) => {
+            RenderReturn::Sync(Some(node)) => {
                 let m = self.create_scope(ScopeId(0), node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
@@ -506,7 +506,7 @@ impl VirtualDom {
                 });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
+            RenderReturn::Sync(None) => panic!("Cannot catch errors during rebuild"),
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 

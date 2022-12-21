@@ -20,6 +20,7 @@ euclid = "0.22.7"
 enumset = "1.0.11"
 keyboard-types = "0.6.2"
 async-trait = "0.1.58"
+serde-value = "0.7.0"
 
 [dependencies.web-sys]
 optional = true
@@ -40,7 +41,10 @@ features = [
     "ClipboardEvent",
 ]
 
+[dev-dependencies]
+serde_json = "*"
+
 [features]
-default = []
-serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde"]
+default = ["serialize"]
+serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
 wasm-bind = ["web-sys", "wasm-bindgen"]

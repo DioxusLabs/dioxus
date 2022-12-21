@@ -125,16 +125,26 @@ impl Buffer {
     }
 
     pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
-        for child in children {
-            // Exprs handle their own indenting/line breaks
-            if !matches!(child, BodyNode::RawExpr(_)) {
-                if self.current_span_is_primary(child.span()) {
-                    self.write_comments(child.span())?;
-                }
-                self.tabbed_line()?;
-            }
+        let last_child = children.len();
 
-            self.write_ident(child)?;
+        for (idx, child) in children.iter().enumerate() {
+            match child {
+                // check if the expr is a short
+                BodyNode::RawExpr { .. } => {
+                    self.tabbed_line()?;
+                    self.write_ident(child)?;
+                    if idx != last_child - 1 {
+                        write!(self.buf, ",")?;
+                    }
+                }
+                _ => {
+                    if self.current_span_is_primary(child.span()) {
+                        self.write_comments(child.span())?;
+                    }
+                    self.tabbed_line()?;
+                    self.write_ident(child)?;
+                }
+            }
         }
 
         Ok(())

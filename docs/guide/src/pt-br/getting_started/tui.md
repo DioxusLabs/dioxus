@@ -17,7 +17,8 @@ Comece criando um novo pacote e adicionando nosso recurso TUI.
 ```shell
 cargo new --bin demo
 cd demo
-cargo add dioxus --features tui
+cargo add dioxus
+cargo add dioxus-tui
 ```
 
 Em seguida, edite seu `main.rs` com o modelo básico.

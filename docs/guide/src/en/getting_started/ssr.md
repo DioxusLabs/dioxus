@@ -36,10 +36,11 @@ cargo new --bin demo
 cd app
 ```
 
-Add Dioxus with the `ssr` feature:
+Add Dioxus and the `ssr` renderer feature:
 
 ```shell
-cargo add dioxus --features ssr
+cargo add dioxus
+cargo add dioxus-ssr
 ```
 
 Next, add all the Axum dependencies. This will be different if you're using a different Web Framework
@@ -54,7 +55,8 @@ Your dependencies should look roughly like this:
 ```toml
 [dependencies]
 axum = "0.4.5"
-dioxus = { version = "*", features = ["ssr"] }
+dioxus = { version = "*" }
+dioxus-ssr = { version = "*" }
 tokio = { version = "1.15.0", features = ["full"] }
 ```
 

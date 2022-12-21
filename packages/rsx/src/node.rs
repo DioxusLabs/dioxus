@@ -31,7 +31,7 @@ pub enum BodyNode {
 
 impl BodyNode {
     pub fn is_litstr(&self) -> bool {
-        matches!(self, BodyNode::Text(_))
+        matches!(self, BodyNode::Text { .. })
     }
 
     pub fn span(&self) -> Span {

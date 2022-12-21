@@ -52,6 +52,6 @@ pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
         cx.render(rsx!(&cx.props.children))
     } else {
         log::debug!("Route should *not* render: {:?}", cx.scope_id());
-        cx.render(rsx!(()))
+        None
     }
 }

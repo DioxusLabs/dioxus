@@ -105,7 +105,7 @@ impl<Ctx: HotReloadingContext> ToTokens for CallBody<Ctx> {
 
         if self.inline_cx {
             out_tokens.append_all(quote! {
-                Ok({
+                Some({
                     let __cx = cx;
                     #body
                 })
@@ -609,6 +609,12 @@ fn create_template() {
 
 #[test]
 fn diff_template() {
+    use dioxus_core::Scope;
+    #[allow(unused, non_snake_case)]
+    fn Comp(_: Scope) -> dioxus_core::Element {
+        None
+    }
+
     let input = quote! {
         svg {
             width: 100,
@@ -621,6 +627,7 @@ fn diff_template() {
             (0..10).map(|i| rsx!{"{i}"}),
             (0..10).map(|i| rsx!{"{i}"}),
             (0..11).map(|i| rsx!{"{i}"}),
+            Comp{}
         }
     };
 
@@ -662,6 +669,7 @@ fn diff_template() {
             height: "100px",
             "height2": "100px",
             width: 100,
+            Comp{}
             (0..11).map(|i| rsx!{"{i}"}),
             (0..10).map(|i| rsx!{"{i}"}),
             (0..10).map(|i| rsx!{"{i}"}),
@@ -676,6 +684,7 @@ fn diff_template() {
     let template = call_body2
         .update_template(Some(call_body1), "testing")
         .unwrap();
+    dbg!(template);
 
     assert_eq!(
         template,
@@ -699,6 +708,7 @@ fn diff_template() {
                     TemplateAttribute::Dynamic { id: 0 },
                 ],
                 children: &[
+                    TemplateNode::Dynamic { id: 3 },
                     TemplateNode::Dynamic { id: 2 },
                     TemplateNode::Dynamic { id: 1 },
                     TemplateNode::Dynamic { id: 0 },

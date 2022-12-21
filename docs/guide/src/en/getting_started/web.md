@@ -38,10 +38,11 @@ cargo new --bin demo
 cd demo
 ```
 
-Add Dioxus as a dependency with the `web` feature:
+Add Dioxus as a dependency and add the web renderer:
 
 ```bash
-cargo add dioxus --features web
+cargo add dioxus
+cargo add dioxus-web
 ```
 
 Add an `index.html` for Trunk to use. Make sure your "mount point" element has an ID of "main":

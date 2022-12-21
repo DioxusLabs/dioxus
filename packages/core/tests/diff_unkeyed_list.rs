@@ -1,5 +1,6 @@
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn list_creates_one_by_one() {
@@ -125,7 +126,7 @@ fn removes_one_by_one() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            CreatePlaceholder { id: ElementId(3) },
+            CreatePlaceholder { id: ElementId(4) },
             ReplaceWith { id: ElementId(2), m: 1 }
         ]
     );
@@ -137,12 +138,12 @@ fn removes_one_by_one() {
         dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            HydrateText { path: &[0], value: "0", id: ElementId(4) },
+            HydrateText { path: &[0], value: "0", id: ElementId(3) },
             LoadTemplate { name: "template", index: 0, id: ElementId(5) },
             HydrateText { path: &[0], value: "1", id: ElementId(6) },
             LoadTemplate { name: "template", index: 0, id: ElementId(7) },
             HydrateText { path: &[0], value: "2", id: ElementId(8) },
-            ReplaceWith { id: ElementId(3), m: 3 }
+            ReplaceWith { id: ElementId(4), m: 3 }
         ]
     );
 }
@@ -264,9 +265,9 @@ fn removes_one_by_one_multiroot() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            Remove { id: ElementId(4) },
-            CreatePlaceholder { id: ElementId(5) },
-            ReplaceWith { id: ElementId(2), m: 1 }
+            CreatePlaceholder { id: ElementId(8) },
+            Remove { id: ElementId(2) },
+            ReplaceWith { id: ElementId(4), m: 1 }
         ]
     );
 }
@@ -357,11 +358,11 @@ fn remove_many() {
     assert_eq!(
         edits.edits,
         [
+            CreatePlaceholder { id: ElementId(11,) },
             Remove { id: ElementId(9,) },
             Remove { id: ElementId(7,) },
             Remove { id: ElementId(5,) },
             Remove { id: ElementId(1,) },
-            CreatePlaceholder { id: ElementId(3,) },
             ReplaceWith { id: ElementId(2,), m: 1 },
         ]
     );
@@ -372,8 +373,8 @@ fn remove_many() {
         edits.edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2,) },
-            HydrateText { path: &[0,], value: "hello 0", id: ElementId(1,) },
-            ReplaceWith { id: ElementId(3,), m: 1 },
+            HydrateText { path: &[0,], value: "hello 0", id: ElementId(3,) },
+            ReplaceWith { id: ElementId(11,), m: 1 },
         ]
     )
 }

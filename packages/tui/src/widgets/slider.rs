@@ -42,13 +42,12 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
         .and_then(|v| v.parse().ok())
         .unwrap_or(size / 10.0);
 
-    let current_value = if let Some(value) = value {
-        value
-    } else {
-        *value_state.get()
+    let current_value = match value {
+        Some(value) => value,
+        None => *value_state.get(),
     }
-    .max(min)
-    .min(max);
+    .clamp(min, max);
+
     let fst_width = 100.0 * (current_value - min) / size;
     let snd_width = 100.0 * (max - current_value) / size;
     assert!(fst_width + snd_width > 99.0 && fst_width + snd_width < 101.0);
@@ -63,7 +62,7 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
         }
     };
 
-    render! {
+    cx.render(rsx! {
         div{
             width: "{width}",
             height: "{height}",
@@ -72,11 +71,11 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
             onkeydown: move |event| {
                 match event.key() {
                     Key::ArrowLeft => {
-                        value_state.set((current_value - step).max(min).min(max));
+                        value_state.set((current_value - step).clamp(min, max));
                         update(value_state.current().to_string());
                     }
                     Key::ArrowRight => {
-                        value_state.set((current_value + step).max(min).min(max));
+                        value_state.set((current_value + step).clamp(min, max));
                         update(value_state.current().to_string());
                     }
                     _ => ()
@@ -104,5 +103,5 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                 background_color: "rgba(10,10,10,0.5)",
             }
         }
-    }
+    })
 }

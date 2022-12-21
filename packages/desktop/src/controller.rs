@@ -1,6 +1,6 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
-use crate::events::{decode_event, EventMessage};
 use dioxus_core::*;
+use dioxus_html::HtmlEvent;
 use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
@@ -54,6 +54,7 @@ impl DesktopController {
         std::thread::spawn(move || {
             // We create the runtime as multithreaded, so you can still "tokio::spawn" onto multiple threads
             // I'd personally not require tokio to be built-in to Dioxus-Desktop, but the DX is worse without it
+
             let runtime = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
@@ -85,12 +86,14 @@ impl DesktopController {
                         }
                         _ = dom.wait_for_work() => {}
                         Some(json_value) = event_rx.next() => {
-                            if let Ok(value) = serde_json::from_value::<EventMessage>(json_value) {
-                                let name = value.event.clone();
-                                let el_id = ElementId(value.mounted_dom_id);
-                                if let Some(evt) = decode_event(value) {
-                                    dom.handle_event(&name,  evt, el_id,  dioxus_html::events::event_bubbles(&name));
-                                }
+                            if let Ok(value) = serde_json::from_value::<HtmlEvent>(json_value) {
+                                let HtmlEvent {
+                                    name,
+                                    element,
+                                    bubbles,
+                                    data
+                                } = value;
+                                dom.handle_event(&name,  data.into_any(), element,  bubbles);
                             }
                         }
                     }
@@ -99,7 +102,10 @@ impl DesktopController {
                         .render_with_deadline(tokio::time::sleep(Duration::from_millis(16)))
                         .await;
 
-                    edit_queue.lock().unwrap().push(serde_json::to_string(&muts).unwrap());
+                    edit_queue
+                        .lock()
+                        .unwrap()
+                        .push(serde_json::to_string(&muts).unwrap());
                     let _ = proxy.send_event(UserWindowEvent::EditsReady);
                 }
             })

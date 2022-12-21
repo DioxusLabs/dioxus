@@ -174,7 +174,7 @@ impl ToTokens for Component {
 
                     toks.append_all(quote! {
                         .children(
-                            Ok({ #renderer })
+                            Some({ #renderer })
                         )
                     });
                 }

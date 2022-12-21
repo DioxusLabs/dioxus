@@ -27,8 +27,8 @@ use crate::innerlude::*;
 /// You want to use this free-function when your fragment needs a key and simply returning multiple nodes from rsx! won't cut it.
 #[allow(non_upper_case_globals, non_snake_case)]
 pub fn Fragment<'a>(cx: Scope<'a, FragmentProps<'a>>) -> Element {
-    let children = cx.props.0.as_ref().map_err(|e| anyhow::anyhow!("{}", e))?;
-    Ok(VNode {
+    let children = cx.props.0.as_ref()?;
+    Some(VNode {
         key: children.key,
         parent: children.parent,
         template: children.template.clone(),
@@ -95,7 +95,7 @@ impl<'a> Properties for FragmentProps<'a> {
     type Builder = FragmentBuilder<'a, false>;
     const IS_STATIC: bool = false;
     fn builder() -> Self::Builder {
-        FragmentBuilder(VNode::empty())
+        FragmentBuilder(None)
     }
     unsafe fn memoize(&self, _other: &Self) -> bool {
         false

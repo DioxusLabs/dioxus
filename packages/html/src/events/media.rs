@@ -2,7 +2,7 @@ use dioxus_core::Event;
 
 pub type MediaEvent = Event<MediaData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MediaData {}
 
 impl_event! [

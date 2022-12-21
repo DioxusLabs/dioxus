@@ -54,9 +54,8 @@
 //     - Do DOM work in the next requestAnimationFrame callback
 
 pub use crate::cfg::Config;
-use crate::dom::virtual_event_from_websys_event;
 pub use crate::util::{use_eval, EvalResult};
-use dioxus_core::{Element, ElementId, Scope, VirtualDom};
+use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
 use web_sys::console;
 
@@ -64,9 +63,12 @@ mod cache;
 mod cfg;
 mod dom;
 mod hot_reload;
-// mod rehydrate;
-mod ric_raf;
 mod util;
+
+// Currently disabled since it actually slows down immediate rendering
+// todo: only schedule non-immediate renders through ric/raf
+// mod ric_raf;
+// mod rehydrate;
 
 /// Launch the VirtualDOM given a root component and a configuration.
 ///
@@ -195,8 +197,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
-
-    let _work_loop = ric_raf::RafLoop::new();
 
     loop {
         log::debug!("waiting for work");

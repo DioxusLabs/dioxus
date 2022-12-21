@@ -47,5 +47,5 @@ pub fn Redirect<'a>(cx: Scope<'a, RedirectProps<'a>>) -> Element {
         router.replace_route(cx.props.to, None, None);
     }
 
-    cx.render(rsx!(()))
+    None
 }
