@@ -862,10 +862,7 @@ impl<'b> VirtualDom {
         let scope = comp.scope.take().unwrap();
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-            RenderReturn::Sync(Some(t)) => {
-                println!("Removing component node sync {:?}", gen_muts);
-                self.remove_node(t, gen_muts)
-            }
+            RenderReturn::Sync(Some(t)) => self.remove_node(t, gen_muts),
             _ => todo!("cannot handle nonstandard nodes"),
         };
 

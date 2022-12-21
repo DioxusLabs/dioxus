@@ -1,6 +1,5 @@
 //! Convert a serialized event to an event trigger
 
-use dioxus_html::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]

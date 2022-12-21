@@ -188,7 +188,6 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
         });
 
         // Render and release the mutable borrow on context
-        let num_roots = self.roots.len();
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
         let dyn_attr_printer = &context.dynamic_attributes;

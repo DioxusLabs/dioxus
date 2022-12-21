@@ -57,7 +57,6 @@ pub use crate::cfg::Config;
 pub use crate::util::{use_eval, EvalResult};
 use dioxus_core::{Element, Scope, VirtualDom};
 use futures_util::{pin_mut, FutureExt, StreamExt};
-use web_sys::console;
 
 mod cache;
 mod cfg;
@@ -210,7 +209,6 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
             futures_util::select! {
                 _ = work => (None, None),
                 new_template = hotreload_rx.next() => {
-                    console::log_1(&"hot reload".into());
                     (None, new_template)
                 }
                 evt = rx.next() => (evt, None)
