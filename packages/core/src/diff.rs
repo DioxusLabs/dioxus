@@ -108,11 +108,7 @@ impl<'b> VirtualDom {
             });
 
         // Make sure the roots get transferred over while we're here
-        left_template
-            .root_ids
-            .iter()
-            .zip(right_template.root_ids.iter())
-            .for_each(|(left, right)| right.set(left.get()));
+        right_template.root_ids.transfer(&left_template.root_ids);
     }
 
     fn diff_dynamic_node(
@@ -662,7 +658,7 @@ impl<'b> VirtualDom {
                     Some(node) => node,
                     None => {
                         self.mutations.push(Mutation::PushRoot {
-                            id: node.root_ids[idx].get().unwrap(),
+                            id: node.root_ids.get(idx).unwrap(),
                         });
                         return 1;
                     }
@@ -793,7 +789,7 @@ impl<'b> VirtualDom {
             if let Some(dy) = node.dynamic_root(idx) {
                 self.remove_dynamic_node(dy, gen_muts);
             } else {
-                let id = node.root_ids[idx].get().unwrap();
+                let id = node.root_ids.get(idx).unwrap();
                 if gen_muts {
                     self.mutations.push(Mutation::Remove { id });
                 }
@@ -889,7 +885,7 @@ impl<'b> VirtualDom {
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
         match node.dynamic_root(0) {
-            None => node.root_ids[0].get().unwrap(),
+            None => node.root_ids.get(0).unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_first_element(&t[0]),
             Some(Placeholder(t)) => t.id.get().unwrap(),
@@ -905,7 +901,7 @@ impl<'b> VirtualDom {
 
     fn find_last_element(&self, node: &'b VNode<'b>) -> ElementId {
         match node.dynamic_root(node.template.get().roots.len() - 1) {
-            None => node.root_ids.last().unwrap().get().unwrap(),
+            None => node.root_ids.last().unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_last_element(t.last().unwrap()),
             Some(Placeholder(t)) => t.id.get().unwrap(),
