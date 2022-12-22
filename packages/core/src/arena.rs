@@ -149,7 +149,9 @@ impl VirtualDom {
                 Some(child) if child != scope_id => self.ensure_drop_safety(child),
                 _ => (),
             }
-            drop(comp.props.take());
+            if let Ok(mut props) = comp.props.try_borrow_mut() {
+                *props = None;
+            }
         });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
