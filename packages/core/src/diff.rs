@@ -58,10 +58,11 @@ impl<'b> VirtualDom {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
         if let Some(template) = self.templates.get(right_template.template.get().name) {
-            let prev_template = right_template.template.get();
-            if *template != prev_template {
+            if *template != right_template.template.get() {
                 right_template.template.set(*template);
-                return self.replace(left_template, [right_template]);
+                if *template != left_template.template.get() {
+                    return self.replace(left_template, [right_template]);
+                }
             }
         }
 
@@ -803,7 +804,15 @@ impl<'b> VirtualDom {
         let mut id = None;
         for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry
-            if node.template.get().attr_paths[idx].len() == 1 {
+            let path_len = node
+                .template
+                .get()
+                .attr_paths
+                .get(idx)
+                .map(|path| path.len());
+            // if the path is 1 the attribute is in the root, so we don't need to clean it up
+            // if the path is 0, the attribute is a not attached at all, so we don't need to clean it up
+            if let Some(..=1) = path_len {
                 continue;
             }
 

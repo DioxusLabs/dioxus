@@ -255,7 +255,9 @@ impl<'b> VirtualDom {
         root: ElementId,
         node: &VNode,
     ) {
-        while let Some((mut attr_id, path)) = attrs.next_if(|(_, p)| p[0] == root_idx) {
+        while let Some((mut attr_id, path)) =
+            attrs.next_if(|(_, p)| p.first().copied() == Some(root_idx))
+        {
             let id = self.assign_static_node_as_dynamic(path, root, node, attr_id);
 
             loop {
