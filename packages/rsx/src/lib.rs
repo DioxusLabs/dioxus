@@ -374,13 +374,17 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                         | ElementAttr::CustomAttrText { .. }
                         | ElementAttr::CustomAttrExpression { .. }
                         | ElementAttr::EventTokens { .. } => {
-                            let ct = match mapping {
+                            let idx = match mapping {
                                 Some(mapping) => mapping.get_attribute_idx(&attr.attr)?,
                                 None => self.dynamic_attributes.len(),
                             };
                             self.dynamic_attributes.push(attr);
-                            self.attr_paths.push(self.current_path.clone());
-                            static_attrs.push(TemplateAttribute::Dynamic { id: ct })
+
+                            if self.attr_paths.len() <= idx {
+                                self.attr_paths.resize_with(idx + 1, Vec::new);
+                            }
+                            self.attr_paths[idx] = self.current_path.clone();
+                            static_attrs.push(TemplateAttribute::Dynamic { id: idx })
                         }
                     }
                 }
@@ -414,16 +418,20 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
             | BodyNode::ForLoop(_)
             | BodyNode::IfChain(_)
             | BodyNode::Component(_) => {
-                let ct = match mapping {
+                let idx = match mapping {
                     Some(mapping) => mapping.get_node_idx(root)?,
                     None => self.dynamic_nodes.len(),
                 };
                 self.dynamic_nodes.push(root);
-                self.node_paths.push(self.current_path.clone());
+
+                if self.node_paths.len() <= idx {
+                    self.node_paths.resize_with(idx + 1, Vec::new);
+                }
+                self.node_paths[idx] = self.current_path.clone();
 
                 Some(match root {
-                    BodyNode::Text(_) => TemplateNode::DynamicText { id: ct },
-                    _ => TemplateNode::Dynamic { id: ct },
+                    BodyNode::Text(_) => TemplateNode::DynamicText { id: idx },
+                    _ => TemplateNode::Dynamic { id: idx },
                 })
             }
         }

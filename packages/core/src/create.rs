@@ -7,10 +7,47 @@ use crate::nodes::{DynamicNode, TemplateNode};
 use crate::virtual_dom::VirtualDom;
 use crate::{AttributeValue, ElementId, RenderReturn, ScopeId, SuspenseContext, Template};
 use std::cell::Cell;
-use std::iter::{Enumerate, Peekable};
+use std::iter::Peekable;
 use std::rc::Rc;
-use std::slice;
 use TemplateNode::*;
+
+fn sort_bfs(paths: &[&'static [u8]]) -> Vec<(usize, &'static [u8])> {
+    let mut with_indecies = paths.iter().copied().enumerate().collect::<Vec<_>>();
+    with_indecies.sort_unstable_by(|(_, a), (_, b)| {
+        let mut a = a.iter();
+        let mut b = b.iter();
+        loop {
+            match (a.next(), b.next()) {
+                (Some(a), Some(b)) => {
+                    if a != b {
+                        return a.cmp(b);
+                    }
+                }
+                // The shorter path goes first
+                (Some(_), None) => return std::cmp::Ordering::Less,
+                (None, Some(_)) => return std::cmp::Ordering::Greater,
+                (None, None) => return std::cmp::Ordering::Equal,
+            }
+        }
+    });
+    with_indecies
+}
+
+#[test]
+fn sorting() {
+    let r: [(usize, &[u8]); 5] = [
+        (0, &[0, 1]),
+        (1, &[0, 2]),
+        (2, &[1, 0]),
+        (4, &[1, 1]),
+        (3, &[1, 2]),
+    ];
+    assert_eq!(
+        sort_bfs(&[&[0, 1,], &[0, 2,], &[1, 0,], &[1, 2,], &[1, 1,],]),
+        r
+    );
+    assert!(matches!(&[0], &[_, ..]))
+}
 
 impl<'b> VirtualDom {
     /// Create a new template [`VNode`] and write it to the [`Mutations`] buffer.
@@ -41,9 +78,47 @@ impl<'b> VirtualDom {
             .reserve(node.template.get().roots.len());
 
         // Walk the roots, creating nodes and assigning IDs
+        // nodes in an iterator of ((dynamic_node_index, sorted_index), path)
         // todo: adjust dynamic nodes to be in the order of roots and then leaves (ie BFS)
-        let mut attrs = node.template.get().attr_paths.iter().enumerate().peekable();
-        let mut nodes = node.template.get().node_paths.iter().enumerate().peekable();
+        #[cfg(not(debug_assertions))]
+        let (mut attrs, mut nodes) = (
+            node.template
+                .get()
+                .attr_paths
+                .iter()
+                .copied()
+                .enumerate()
+                .peekable(),
+            node.template
+                .get()
+                .node_paths
+                .iter()
+                .copied()
+                .enumerate()
+                .map(|(i, path)| ((i, i), path))
+                .peekable(),
+        );
+        // If this is a debug build, we need to check that the paths are in the correct order because hot reloading can cause scrambled states
+
+        #[cfg(debug_assertions)]
+        let (attrs_sorted, nodes_sorted) = {
+            (
+                sort_bfs(node.template.get().attr_paths),
+                sort_bfs(node.template.get().node_paths),
+            )
+        };
+        #[cfg(debug_assertions)]
+        let (mut attrs, mut nodes) = {
+            (
+                attrs_sorted.into_iter().peekable(),
+                nodes_sorted
+                    .iter()
+                    .copied()
+                    .enumerate()
+                    .map(|(i, (id, path))| ((id, i), path))
+                    .peekable(),
+            )
+        };
 
         node.template
             .get()
@@ -55,7 +130,14 @@ impl<'b> VirtualDom {
                     nodes.next().unwrap();
                     self.write_dynamic_root(node, *id)
                 }
-                Element { .. } => self.write_element_root(node, idx, &mut attrs, &mut nodes),
+                Element { .. } => {
+                    #[cfg(not(debug_assertions))]
+                    let id = self.write_element_root(node, idx, &mut attrs, &mut nodes, &[]);
+                    #[cfg(debug_assertions)]
+                    let id =
+                        self.write_element_root(node, idx, &mut attrs, &mut nodes, &nodes_sorted);
+                    id
+                }
                 Text { .. } => self.write_static_text_root(node, idx),
             })
             .sum()
@@ -72,8 +154,9 @@ impl<'b> VirtualDom {
     fn write_dynamic_root(&mut self, template: &'b VNode<'b>, idx: usize) -> usize {
         use DynamicNode::*;
         match &template.dynamic_nodes[idx] {
-            node @ Fragment(_) => self.create_dynamic_node(template, node, idx),
-            node @ Component { .. } => self.create_dynamic_node(template, node, idx),
+            node @ Component { .. } | node @ Fragment(_) => {
+                self.create_dynamic_node(template, node, idx)
+            }
             Placeholder(VPlaceholder { id }) => {
                 let id = self.set_slot(template, id, idx);
                 self.mutations.push(CreatePlaceholder { id });
@@ -105,17 +188,18 @@ impl<'b> VirtualDom {
         &mut self,
         template: &'b VNode<'b>,
         root_idx: usize,
-        dynamic_attrs: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
-        dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
+        dynamic_attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
+        dynamic_nodes: &[(usize, &'static [u8])],
     ) -> usize {
         // Load the template root and get the ID for the node on the stack
         let root_on_stack = self.load_template_root(template, root_idx);
 
         // Write all the attributes below this root
-        self.write_attrs_on_root(dynamic_attrs, root_idx, root_on_stack, template);
+        self.write_attrs_on_root(dynamic_attrs, root_idx as u8, root_on_stack, template);
 
         // Load in all of the placeholder or dynamic content under this root too
-        self.load_placeholders(dynamic_nodes, root_idx, template);
+        self.load_placeholders(dynamic_nodes_iter, dynamic_nodes, root_idx as u8, template);
 
         1
     }
@@ -133,18 +217,28 @@ impl<'b> VirtualDom {
     ///     }
     /// }
     /// ```
+    #[allow(unused)]
     fn load_placeholders(
         &mut self,
-        dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
-        root_idx: usize,
+        dynamic_nodes_iter: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
+        dynamic_nodes: &[(usize, &'static [u8])],
+        root_idx: u8,
         template: &'b VNode<'b>,
     ) {
-        let (start, end) = match collect_dyn_node_range(dynamic_nodes, root_idx) {
+        let (start, end) = match collect_dyn_node_range(dynamic_nodes_iter, root_idx) {
             Some((a, b)) => (a, b),
             None => return,
         };
 
-        for idx in (start..=end).rev() {
+        // If hot reloading is enabled, we need to map the sorted index to the original index of the dynamic node. If it is disabled, we can just use the sorted index
+        #[cfg(not(debug_assertions))]
+        let reversed_iter = (start..=end).rev();
+        #[cfg(debug_assertions)]
+        let reversed_iter = (start..=end)
+            .rev()
+            .map(|sorted_index| dynamic_nodes[sorted_index].0);
+
+        for idx in reversed_iter {
             let m = self.create_dynamic_node(template, &template.dynamic_nodes[idx], idx);
             if m > 0 {
                 // The path is one shorter because the top node is the root
@@ -156,12 +250,12 @@ impl<'b> VirtualDom {
 
     fn write_attrs_on_root(
         &mut self,
-        attrs: &mut Peekable<Enumerate<slice::Iter<&'static [u8]>>>,
-        root_idx: usize,
+        attrs: &mut Peekable<impl Iterator<Item = (usize, &'static [u8])>>,
+        root_idx: u8,
         root: ElementId,
         node: &VNode,
     ) {
-        while let Some((mut attr_id, path)) = attrs.next_if(|(_, p)| p[0] == root_idx as u8) {
+        while let Some((mut attr_id, path)) = attrs.next_if(|(_, p)| p[0] == root_idx) {
             let id = self.assign_static_node_as_dynamic(path, root, node, attr_id);
 
             loop {
@@ -456,17 +550,19 @@ impl<'b> VirtualDom {
 }
 
 fn collect_dyn_node_range(
-    dynamic_nodes: &mut Peekable<Enumerate<slice::Iter<&[u8]>>>,
-    root_idx: usize,
+    dynamic_nodes: &mut Peekable<impl Iterator<Item = ((usize, usize), &'static [u8])>>,
+    root_idx: u8,
 ) -> Option<(usize, usize)> {
     let start = match dynamic_nodes.peek() {
-        Some((idx, p)) if p[0] == root_idx as u8 => *idx,
+        Some(((_, idx), [first, ..])) if *first == root_idx => *idx,
         _ => return None,
     };
 
     let mut end = start;
 
-    while let Some((idx, p)) = dynamic_nodes.next_if(|(_, p)| p[0] == root_idx as u8) {
+    while let Some(((_, idx), p)) =
+        dynamic_nodes.next_if(|(_, p)| matches!(p, [idx, ..] if *idx == root_idx))
+    {
         if p.len() == 1 {
             continue;
         }
