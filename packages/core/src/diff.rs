@@ -62,11 +62,9 @@ impl<'b> VirtualDom {
             if let Some(map) = self.templates.get(path) {
                 let byte_index = byte_index.parse::<usize>().unwrap();
                 if let Some(&template) = map.get(&byte_index) {
-                    if template != right_template.template.get() {
-                        right_template.template.set(template);
-                        if template != left_template.template.get() {
-                            return self.replace(left_template, [right_template]);
-                        }
+                    right_template.template.set(template);
+                    if template != left_template.template.get() {
+                        return self.replace(left_template, [right_template]);
                     }
                 }
             }

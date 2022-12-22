@@ -478,7 +478,6 @@ impl VirtualDom {
                 }
             }
         }
-        assert!(!self.dirty_scopes.is_empty());
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.

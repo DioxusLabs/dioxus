@@ -62,6 +62,19 @@ impl<'b> VirtualDom {
 
     /// Create this template and write its mutations
     pub(crate) fn create(&mut self, node: &'b VNode<'b>) -> usize {
+        // check for a overriden template
+        #[cfg(debug_assertions)]
+        {
+            let (path, byte_index) = node.template.get().name.rsplit_once(':').unwrap();
+            if let Some(template) = self
+                .templates
+                .get(path)
+                .and_then(|map| map.get(&byte_index.parse().unwrap()))
+            {
+                node.template.set(*template);
+            }
+        }
+
         // Intialize the root nodes slice
         node.root_ids
             .intialize(vec![ElementId(0); node.template.get().roots.len()].into_boxed_slice());
@@ -369,10 +382,11 @@ impl<'b> VirtualDom {
             template.name = old_template.name;
             *old_template = template;
         } else {
-            panic!(
-                "Template {path} was not registered in\n{:#?}",
-                self.templates
-            );
+            // This is a template without any current instances
+            self.templates
+                .entry(path)
+                .or_default()
+                .insert(usize::MAX, template);
         }
 
         // If it's all dynamic nodes, then we don't need to register it
@@ -382,10 +396,23 @@ impl<'b> VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
-    pub(crate) fn register_template(&mut self, template: Template<'static>) {
+    pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
         // First, make sure we mark the template as seen, regardless if we process it
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
         let byte_index = byte_index.parse::<usize>().unwrap();
+
+        // if hot reloading is enabled, then we need to check for a template that has overriten this one
+        #[cfg(debug_assertions)]
+        if let Some(mut new_template) = self
+            .templates
+            .get_mut(path)
+            .and_then(|map| map.remove(&usize::MAX))
+        {
+            // the byte index of the hot reloaded template could be different
+            new_template.name = template.name;
+            template = new_template;
+        }
+
         self.templates
             .entry(path)
             .or_default()
