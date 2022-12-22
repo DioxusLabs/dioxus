@@ -57,14 +57,27 @@ pub(crate) fn update_rsx(
                                         + ":"
                                         + &line.to_string()
                                         + ":"
-                                        + &column.to_string();
+                                        + &column.to_string()
+                                        // the byte index doesn't matter, but dioxus needs it
+                                        + ":0";
 
                                     if let Some(template) = new_call_body.update_template(
                                         Some(old_call_body),
                                         Box::leak(location.into_boxed_str()),
                                     ) {
-                                        *template_slot = Some(template);
-                                        messages.push(template);
+                                        // dioxus cannot handle empty templates
+                                        if template.roots.is_empty() {
+                                            return UpdateResult::NeedsRebuild;
+                                        } else {
+                                            // if the template is the same, don't send it
+                                            if let Some(old_template) = template_slot {
+                                                if old_template == &template {
+                                                    continue;
+                                                }
+                                            }
+                                            *template_slot = Some(template);
+                                            messages.push(template);
+                                        }
                                     } else {
                                         return UpdateResult::NeedsRebuild;
                                     }
@@ -119,7 +132,6 @@ impl FileMap {
         let result = Self {
             map: find_rs_files(path).unwrap(),
         };
-        // log::info!("Files updated");
         result
     }
 }
@@ -159,22 +171,16 @@ pub async fn hot_reload_handler(
         }
 
         let mut rx = state.messages.subscribe();
-        let hot_reload_handle = tokio::spawn(async move {
-            loop {
-                if let Ok(rsx) = rx.recv().await {
-                    println!("sending");
-                    if socket
-                        .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
-                        .await
-                        .is_err()
-                    {
-                        println!("error sending");
-                        break;
-                    };
-                }
+        loop {
+            if let Ok(rsx) = rx.recv().await {
+                if socket
+                    .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
+                    .await
+                    .is_err()
+                {
+                    break;
+                };
             }
-        });
-
-        hot_reload_handle.await.unwrap();
+        }
     })
 }
