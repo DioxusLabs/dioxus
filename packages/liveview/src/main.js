@@ -13,7 +13,7 @@ class IPC {
     let ws = new WebSocket(WS_ADDR);
 
     ws.onopen = () => {
-      window.ipc.postMessage(serializeIpcMessage("initialize"));
+      ws.send(serializeIpcMessage("initialize"));
     };
 
     ws.onerror = (err) => {
