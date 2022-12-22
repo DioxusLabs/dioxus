@@ -114,7 +114,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
             std::thread::sleep(std::time::Duration::from_millis(100));
             if chrono::Local::now().timestamp() > last_update_time {
                 if let Ok(evt) = evt {
-                    println!("{:?}", evt);
                     let mut messages: Vec<Template<'static>> = Vec::new();
                     for path in evt.paths.clone() {
                         if path.extension().and_then(|p| p.to_str()) != Some("rs") {
@@ -128,7 +127,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 
                         match update_rsx(&path, &crate_dir, src, &mut map) {
                             UpdateResult::UpdatedRsx(msgs) => {
-                                println!("{msgs:#?}");
                                 messages.extend(msgs);
                             }
                             UpdateResult::NeedsRebuild => {
@@ -358,7 +356,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
                 Ok(response)
             },
         )
-        .service(ServeDir::new((&config.crate_dir).join(&dist_path)));
+        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
     let router = Router::new()
         .route("/_dioxus/ws", get(ws_handler))
