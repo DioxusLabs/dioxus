@@ -9,9 +9,7 @@ use axum::{
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
 use dioxus_core::Template;
-use dioxus_rsx::CallBody;
 use notify::{RecommendedWatcher, Watcher};
-use syn::spanned::Spanned;
 
 use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
 use tower::ServiceBuilder;

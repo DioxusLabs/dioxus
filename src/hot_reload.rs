@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use syn::{File, Macro, __private::ToTokens};
+use syn::{File, Macro};
 
 pub enum DiffResult {
     CodeChanged,
