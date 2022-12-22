@@ -840,10 +840,9 @@ impl<'b> VirtualDom {
                 .node_paths
                 .get(idx)
                 .map(|path| path.len());
-            match path_len {
-                Some(2..) => self.remove_dynamic_node(dyn_node, false),
-                // Roots are cleaned up automatically above and nodes with a empty path are placeholders
-                _ => continue,
+            // Roots are cleaned up automatically above and nodes with a empty path are placeholders
+            if let Some(2..) = path_len {
+                self.remove_dynamic_node(dyn_node, false)
             }
         }
     }
@@ -878,25 +877,28 @@ impl<'b> VirtualDom {
     }
 
     fn remove_component_node(&mut self, comp: &VComponent, gen_muts: bool) {
-        if let Some(scope) = comp.scope.take() {
-            match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-                RenderReturn::Sync(Some(t)) => self.remove_node(t, gen_muts),
-                _ => todo!("cannot handle nonstandard nodes"),
-            };
+        let scope = comp.scope.take().unwrap();
 
-            let props = self.scopes[scope.0].props.take();
+        match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
+            RenderReturn::Sync(Some(t)) => {
+                println!("Removing component node sync {:?}", gen_muts);
+                self.remove_node(t, gen_muts)
+            }
+            _ => todo!("cannot handle nonstandard nodes"),
+        };
 
-            self.dirty_scopes.remove(&DirtyScope {
-                height: self.scopes[scope.0].height,
-                id: scope,
-            });
+        let props = self.scopes[scope.0].props.take();
 
-            *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
+        self.dirty_scopes.remove(&DirtyScope {
+            height: self.scopes[scope.0].height,
+            id: scope,
+        });
 
-            // make sure to wipe any of its props and listeners
-            self.ensure_drop_safety(scope);
-            self.scopes.remove(scope.0);
-        }
+        *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
+
+        // make sure to wipe any of its props and listeners
+        self.ensure_drop_safety(scope);
+        self.scopes.remove(scope.0);
     }
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {

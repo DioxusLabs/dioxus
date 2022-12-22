@@ -134,8 +134,8 @@ impl VirtualDom {
     }
 
     /// Descend through the tree, removing any borrowed props and listeners
-    pub(crate) fn ensure_drop_safety(&self, scope: ScopeId) {
-        let scope = &self.scopes[scope.0];
+    pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
+        let scope = &self.scopes[scope_id.0];
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
@@ -143,10 +143,13 @@ impl VirtualDom {
         let mut props = scope.borrowed_props.borrow_mut();
         props.drain(..).for_each(|comp| {
             let comp = unsafe { &*comp };
-            if let Some(scope_id) = comp.scope.get() {
-                self.ensure_drop_safety(scope_id);
+            match comp.scope.get() {
+                Some(child) if child != scope_id => self.ensure_drop_safety(child),
+                _ => (),
             }
-            drop(comp.props.take());
+            if let Ok(mut props) = comp.props.try_borrow_mut() {
+                *props = None;
+            }
         });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.
