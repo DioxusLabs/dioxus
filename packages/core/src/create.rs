@@ -355,9 +355,41 @@ impl<'b> VirtualDom {
     }
 
     /// Insert a new template into the VirtualDom's template registry
+    pub(crate) fn register_template_first_byte_index(&mut self, mut template: Template<'static>) {
+        // First, make sure we mark the template as seen, regardless if we process it
+        let (path, _) = template.name.rsplit_once(':').unwrap();
+        if let Some((_, old_template)) = self
+            .templates
+            .entry(path)
+            .or_default()
+            .iter_mut()
+            .min_by_key(|(byte_index, _)| **byte_index)
+        {
+            // the byte index of the hot reloaded template could be different
+            template.name = old_template.name;
+            *old_template = template;
+        } else {
+            panic!(
+                "Template {path} was not registered in\n{:#?}",
+                self.templates
+            );
+        }
+
+        // If it's all dynamic nodes, then we don't need to register it
+        if !template.is_completely_dynamic() {
+            self.mutations.templates.push(template);
+        }
+    }
+
+    /// Insert a new template into the VirtualDom's template registry
     pub(crate) fn register_template(&mut self, template: Template<'static>) {
         // First, make sure we mark the template as seen, regardless if we process it
-        self.templates.insert(template.name, template);
+        let (path, byte_index) = template.name.rsplit_once(':').unwrap();
+        let byte_index = byte_index.parse::<usize>().unwrap();
+        self.templates
+            .entry(path)
+            .or_default()
+            .insert(byte_index, template);
 
         // If it's all dynamic nodes, then we don't need to register it
         if !template.is_completely_dynamic() {

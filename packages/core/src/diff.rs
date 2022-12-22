@@ -57,11 +57,17 @@ impl<'b> VirtualDom {
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
         // If hot reloading is enabled, we need to make sure we're using the latest template
         #[cfg(debug_assertions)]
-        if let Some(template) = self.templates.get(right_template.template.get().name) {
-            if *template != right_template.template.get() {
-                right_template.template.set(*template);
-                if *template != left_template.template.get() {
-                    return self.replace(left_template, [right_template]);
+        {
+            let (path, byte_index) = right_template.template.get().name.rsplit_once(':').unwrap();
+            if let Some(map) = self.templates.get(path) {
+                let byte_index = byte_index.parse::<usize>().unwrap();
+                if let Some(&template) = map.get(&byte_index) {
+                    if template != right_template.template.get() {
+                        right_template.template.set(template);
+                        if template != left_template.template.get() {
+                            return self.replace(left_template, [right_template]);
+                        }
+                    }
                 }
             }
         }

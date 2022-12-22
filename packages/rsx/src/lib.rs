@@ -187,6 +187,9 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
             out
         });
 
+        let spndbg = format!("{:?}", self.roots[0].span());
+        let root_col = spndbg[9..].split("..").next().unwrap();
+
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
         let node_printer = &context.dynamic_nodes;
@@ -202,6 +205,8 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
                     line!(),
                     ":",
                     column!(),
+                    ":",
+                    #root_col
                 ),
                 roots: &[ #roots ],
                 node_paths: &[ #(#node_paths),* ],

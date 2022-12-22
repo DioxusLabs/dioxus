@@ -142,7 +142,8 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 /// }
 /// ```
 pub struct VirtualDom {
-    pub(crate) templates: FxHashMap<TemplateId, Template<'static>>,
+    // Maps a template path to a map of byteindexes to templates
+    pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
     pub(crate) scopes: Slab<Box<ScopeState>>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
@@ -459,12 +460,16 @@ impl VirtualDom {
     /// This is the primitive that enables hot-reloading.
     ///
     /// The caller must ensure that the template refrences the same dynamic attributes and nodes as the original template.
+    ///
+    /// This will only replace the the parent template, not any nested templates.
     pub fn replace_template(&mut self, template: Template<'static>) {
-        self.register_template(template);
+        self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in &self.scopes {
             if let Some(RenderReturn::Sync(Some(sync))) = scope.try_root_node() {
-                if sync.template.get().name == template.name {
+                if sync.template.get().name.rsplit_once(':').unwrap().0
+                    == template.name.rsplit_once(':').unwrap().0
+                {
                     let height = scope.height;
                     self.dirty_scopes.insert(DirtyScope {
                         height,
@@ -473,6 +478,7 @@ impl VirtualDom {
                 }
             }
         }
+        assert!(!self.dirty_scopes.is_empty());
     }
 
     /// Performs a *full* rebuild of the virtual dom, returning every edit required to generate the actual dom from scratch.
