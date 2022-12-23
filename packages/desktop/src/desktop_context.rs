@@ -1,5 +1,6 @@
 use crate::controller::DesktopController;
 use dioxus_core::ScopeState;
+use wry::application::dpi::LogicalSize;
 use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::window::Fullscreen as WryFullscreen;
@@ -120,6 +121,11 @@ impl DesktopContext {
         let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
     }
 
+    /// modifies the inner size of the window
+    pub fn set_inner_size(&self, logical_size: LogicalSize<f64>) {
+        let _ = self.proxy.send_event(SetInnerSize(logical_size));
+    }
+
     /// launch print modal
     pub fn print(&self) {
         let _ = self.proxy.send_event(Print);
@@ -159,6 +165,7 @@ pub enum UserWindowEvent {
     SetDecorations(bool),
 
     SetZoomLevel(f64),
+    SetInnerSize(LogicalSize<f64>),
 
     Print,
     DevTool,
@@ -205,6 +212,7 @@ pub(super) fn handler(
         SetDecorations(state) => window.set_decorations(state),
 
         SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
+        SetInnerSize(logical_size) => window.set_inner_size(logical_size),
 
         Print => {
             if let Err(e) = webview.print() {
