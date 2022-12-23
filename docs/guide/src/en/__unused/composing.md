@@ -59,7 +59,7 @@ If we represented the reactive graph presented above in Dioxus, it would look ve
 // Declare a component that holds our datasources and calculates `g`
 fn RenderGraph(cx: Scope) -> Element {
     let seconds = use_datasource(SECONDS);
-    let constant = use_state(&cx, || 1);
+    let constant = use_state(cx, || 1);
 
     cx.render(rsx!(
         RenderG { seconds: seconds }

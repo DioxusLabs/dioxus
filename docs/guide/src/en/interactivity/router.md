@@ -19,7 +19,8 @@ This is where the router crates come in handy. To make sure we're using the rout
 
 ```toml
 [dependencies]
-dioxus = { version = "0.2", features = ["desktop", "router"] }
+dioxus = { version = "*" }
+dioxus-router = { version = "*" }
 ```
 
 

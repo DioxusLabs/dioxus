@@ -16,7 +16,7 @@ This is moderately efficient because the fields of the map are moved, but the da
 However, if you used similar approach with Dioxus:
 
 ```rust
-let (map, set_map) = use_state(&cx, || HashMap::new());
+let (map, set_map) = use_state(cx, || HashMap::new());
 set_map({
     let mut newmap = map.clone();
     newmap.set(key, value);

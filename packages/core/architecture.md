@@ -114,6 +114,11 @@ Some essential reading:
 - https://web.dev/rail/
 - https://indepth.dev/posts/1008/inside-fiber-in-depth-overview-of-the-new-reconciliation-algorithm-in-react
 
+# Templates
+
+If everything is a template, then we'll have the idea that the only children can b Templates
+
+
 # What's going on?
 
 Dioxus is a framework for "user experience" - not just "user interfaces." Part of the "experience" is keeping the UI

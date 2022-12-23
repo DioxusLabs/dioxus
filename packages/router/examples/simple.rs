@@ -16,6 +16,7 @@ fn app(cx: Scope) -> Element {
                 Link { to: "/blog", li { "blog" } }
                 Link { to: "/blog/tim", li { "tims' blog" } }
                 Link { to: "/blog/bill", li { "bills' blog" } }
+                Link { to: "/blog/james", li { "james amazing' blog" } }
                 Link { to: "/apples", li { "go to apples" } }
             }
             Route { to: "/", Home {} }
@@ -36,9 +37,16 @@ fn BlogList(cx: Scope) -> Element {
 }
 
 fn BlogPost(cx: Scope) -> Element {
-    let id = use_route(&cx).segment("id")?;
+    let Some(id) = use_route(cx).segment("id") else {
+        return cx.render(rsx! { div { "No blog post id" } })
+    };
 
     log::trace!("rendering blog post {}", id);
 
-    cx.render(rsx! { div { "{id:?}" } })
+    cx.render(rsx! {
+        div {
+            h3 { "blog post: {id:?}"  }
+            Link { to: "/blog/", "back to blog list" }
+        }
+    })
 }

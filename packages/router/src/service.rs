@@ -4,7 +4,7 @@
 use crate::cfg::RouterCfg;
 use dioxus::core::{ScopeId, ScopeState, VirtualDom};
 use std::any::Any;
-use std::sync::Weak;
+use std::rc::Weak;
 use std::{
     cell::{Cell, RefCell},
     collections::{HashMap, HashSet},
@@ -13,6 +13,9 @@ use std::{
     sync::Arc,
 };
 use url::Url;
+
+/// A clonable handle to the router
+pub type RouterContext = Rc<RouterService>;
 
 /// An abstraction over the platform's history API.
 ///
@@ -41,7 +44,7 @@ use url::Url;
 /// - On the web, this is a [`BrowserHistory`](https://docs.rs/gloo/0.3.0/gloo/history/struct.BrowserHistory.html).
 /// - On desktop, mobile, and SSR, this is just a Vec of Strings. Currently on
 ///   desktop, there is no way to tap into forward/back for the app unless explicitly set.
-pub struct RouterCore {
+pub struct RouterService {
     pub(crate) route_found: Cell<Option<ScopeId>>,
 
     pub(crate) stack: RefCell<Vec<Arc<ParsedRoute>>>,
@@ -61,9 +64,6 @@ pub struct RouterCore {
     pub(crate) cfg: RouterCfg,
 }
 
-/// A shared type for the RouterCore.
-pub type RouterService = Arc<RouterCore>;
-
 /// A route is a combination of window title, saved state, and a URL.
 #[derive(Debug, Clone)]
 pub struct ParsedRoute {
@@ -77,8 +77,8 @@ pub struct ParsedRoute {
     pub serialized_state: Option<String>,
 }
 
-impl RouterCore {
-    pub(crate) fn new(cx: &ScopeState, cfg: RouterCfg) -> Arc<Self> {
+impl RouterService {
+    pub(crate) fn new(cx: &ScopeState, cfg: RouterCfg) -> RouterContext {
         #[cfg(feature = "web")]
         let history = Box::new(web::new());
 
@@ -99,7 +99,7 @@ impl RouterCore {
             None => Arc::new(history.init_location()),
         };
 
-        let svc = Arc::new(Self {
+        let svc = Rc::new(Self {
             cfg,
             regen_any_route: cx.schedule_update_any(),
             router_id: cx.scope_id(),
@@ -111,7 +111,7 @@ impl RouterCore {
             history,
         });
 
-        svc.history.attach_listeners(Arc::downgrade(&svc));
+        svc.history.attach_listeners(Rc::downgrade(&svc));
 
         svc
     }
@@ -180,6 +180,7 @@ impl RouterCore {
         (self.regen_any_route)(self.router_id);
 
         for listener in self.onchange_listeners.borrow().iter() {
+            log::trace!("Regenerating scope {:?}", listener);
             (self.regen_any_route)(*listener);
         }
 
@@ -247,12 +248,9 @@ impl RouterCore {
 /// that owns the router.
 ///
 /// This might change in the future.
-pub fn get_router_from_vdom(
-    dom: &VirtualDom,
-    target_scope: Option<ScopeId>,
-) -> Option<Arc<RouterCore>> {
-    dom.get_scope(target_scope.unwrap_or(ScopeId(0)))
-        .and_then(|scope| scope.consume_context::<Arc<RouterCore>>())
+pub fn get_router_from_vdom(dom: &VirtualDom, target_scope: ScopeId) -> Option<RouterContext> {
+    dom.get_scope(target_scope)
+        .and_then(|scope| scope.consume_context::<RouterContext>())
 }
 
 fn clean_route(route: String) -> String {
@@ -319,7 +317,7 @@ pub(crate) trait RouterProvider {
     fn replace(&self, route: &ParsedRoute);
     fn native_location(&self) -> Box<dyn Any>;
     fn init_location(&self) -> ParsedRoute;
-    fn attach_listeners(&self, svc: Weak<RouterCore>);
+    fn attach_listeners(&self, svc: Weak<RouterService>);
 }
 
 #[cfg(not(feature = "web"))]
@@ -350,7 +348,7 @@ mod hash {
 
         fn replace(&self, _route: &ParsedRoute) {}
 
-        fn attach_listeners(&self, _svc: Weak<RouterCore>) {}
+        fn attach_listeners(&self, _svc: Weak<RouterService>) {}
     }
 }
 
@@ -418,7 +416,7 @@ mod web {
             }
         }
 
-        fn attach_listeners(&self, svc: std::sync::Weak<crate::RouterCore>) {
+        fn attach_listeners(&self, svc: std::rc::Weak<crate::RouterService>) {
             self._listener.set(Some(EventListener::new(
                 &web_sys::window().unwrap(),
                 "popstate",

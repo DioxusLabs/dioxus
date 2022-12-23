@@ -23,33 +23,25 @@ rustc-hash = "1.1.0"
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-# internall used
-log = { version = "0.4" }
-
 futures-util = { version = "0.3", default-features = false }
-
-smallvec = "1.6"
 
 slab = "0.4"
 
 futures-channel = "0.3.21"
 
-# used for noderefs
-once_cell = "1.8"
-
 indexmap = "1.7"
+
+smallbox = "0.8.1"
+log = "0.4.17"
 
 # Serialize the Edits for use in Webview/Liveview instances
 serde = { version = "1", features = ["derive"], optional = true }
 
-# todo: I want to get rid of this
-backtrace = "0.3"
-
-# allows cloing trait objects
-dyn-clone = "1.0.9"
+[dev-dependencies]
+tokio = { version = "*", features = ["full"] }
+dioxus = { path = "../dioxus" }
+pretty_assertions = "1.3.0"
 
 [features]
 default = []
 serialize = ["serde"]
-debug_vdom = []
-hot-reload = []

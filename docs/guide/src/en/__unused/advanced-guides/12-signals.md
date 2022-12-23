@@ -12,7 +12,7 @@ Your component today might look something like this:
 
 ```rust
 fn Comp(cx: Scope) -> DomTree {
-    let (title, set_title) = use_state(&cx, || "Title".to_string());
+    let (title, set_title) = use_state(cx, || "Title".to_string());
     cx.render(rsx!{
         input {
             value: title,
@@ -26,7 +26,7 @@ This component is fairly straightforward – the input updates its own value on 
 
 ```rust
 fn Comp(cx: Scope) -> DomTree {
-    let (title, set_title) = use_state(&cx, || "Title".to_string());
+    let (title, set_title) = use_state(cx, || "Title".to_string());
     cx.render(rsx!{
         div {
             input {
@@ -49,7 +49,7 @@ We can use signals to generate a two-way binding between data and the input box.
 
 ```rust
 fn Comp(cx: Scope) -> DomTree {
-    let mut title = use_signal(&cx, || String::from("Title"));
+    let mut title = use_signal(cx, || String::from("Title"));
     cx.render(rsx!(input { value: title }))
 }
 ```
@@ -58,8 +58,8 @@ For a slightly more interesting example, this component calculates the sum betwe
 
 ```rust
 fn Calculator(cx: Scope) -> DomTree {
-    let mut a = use_signal(&cx, || 0);
-    let mut b = use_signal(&cx, || 0);
+    let mut a = use_signal(cx, || 0);
+    let mut b = use_signal(cx, || 0);
     let mut c = a + b;
     rsx! {
         input { value: a }
@@ -72,8 +72,8 @@ fn Calculator(cx: Scope) -> DomTree {
 Do you notice how we can use built-in operations on signals? Under the hood, we actually create a new derived signal that depends on `a` and `b`. Whenever `a` or `b` update, then `c` will update. If we need to create a new derived signal that's more complex than a basic operation (`std::ops`) we can either chain signals together or combine them:
 
 ```rust
-let mut a = use_signal(&cx, || 0);
-let mut b = use_signal(&cx, || 0);
+let mut a = use_signal(cx, || 0);
+let mut b = use_signal(cx, || 0);
 
 // Chain signals together using the `with` method
 let c = a.with(b).map(|(a, b)| *a + *b);
@@ -84,7 +84,7 @@ let c = a.with(b).map(|(a, b)| *a + *b);
 If we ever need to get the value out of a signal, we can simply `deref` it.
 
 ```rust
-let mut a = use_signal(&cx, || 0);
+let mut a = use_signal(cx, || 0);
 let c = *a + *b;
 ```
 
@@ -97,7 +97,7 @@ Sometimes you want a signal to propagate across your app, either through far-awa
 ```rust
 const TITLE: Atom<String> = || "".to_string();
 const Provider: Component = |cx|{
-    let title = use_signal(&cx, &TITLE);
+    let title = use_signal(cx, &TITLE);
     render!(input { value: title })
 };
 ```
@@ -106,7 +106,7 @@ If we use the `TITLE` atom in another component, we can cause updates to flow be
 
 ```rust
 const Receiver: Component = |cx|{
-    let title = use_signal(&cx, &TITLE);
+    let title = use_signal(cx, &TITLE);
     log::info!("This will only be called once!");
     rsx!(cx,
         div {
@@ -133,7 +133,7 @@ Dioxus automatically understands how to use your signals when mixed with iterato
 ```rust
 const DICT: AtomFamily<String, String> = |_| {};
 const List: Component = |cx|{
-    let dict = use_signal(&cx, &DICT);
+    let dict = use_signal(cx, &DICT);
     cx.render(rsx!(
         ul {
             For { each: dict, map: |k, v| rsx!( li { "{v}" }) }

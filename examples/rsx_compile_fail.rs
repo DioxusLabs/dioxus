@@ -5,21 +5,22 @@ use dioxus::prelude::*;
 
 fn main() {
     let mut vdom = VirtualDom::new(example);
-    vdom.rebuild();
+    _ = vdom.rebuild();
 
-    let out = dioxus_ssr::render_vdom_cfg(&vdom, |c| c.newline(true).indent(true));
-    println!("{}", out);
+    let mut renderer = dioxus_ssr::Renderer::new();
+    renderer.pretty = true;
+    renderer.render(&vdom);
 }
 
 fn example(cx: Scope) -> Element {
-    let items = use_state(&cx, || {
+    let items = use_state(cx, || {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
         }]
     });
 
-    let things = use_ref(&cx, || {
+    let things = use_ref(cx, || {
         vec![Thing {
             a: "asd".to_string(),
             b: 10,
@@ -27,7 +28,7 @@ fn example(cx: Scope) -> Element {
     });
     let things_list = things.read();
 
-    let mything = use_ref(&cx, || Some(String::from("asd")));
+    let mything = use_ref(cx, || Some(String::from("asd")));
     let mything_read = mything.read();
 
     cx.render(rsx!(

@@ -20,30 +20,36 @@ serde = "1.0.136"
 serde_json = "1.0.79"
 thiserror = "1.0.30"
 log = "0.4.14"
-wry = { version = "0.20.2" }
+wry = { version = "0.23.4" }
 futures-channel = "0.3.21"
 tokio = { version = "1.16.1", features = [
     "sync",
     "rt-multi-thread",
     "rt",
     "time",
+    "macros",
 ], optional = true, default-features = false }
-webbrowser = "0.7.1"
-infer = "0.9.0"
+webbrowser = "0.8.0"
+infer = "0.11.0"
 dunce = "1.0.2"
 
-interprocess = { version = "1.1.1" }
+interprocess = { version = "1.1.1", optional = true}
+futures-util = "0.3.25"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc = "0.2.7"
+objc_id = "0.1.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.9.3"
 
 [features]
-default = ["tokio_runtime"]
+default = ["tokio_runtime", "hot-reload"]
 tokio_runtime = ["tokio"]
 fullscreen = ["wry/fullscreen"]
 transparent = ["wry/transparent"]
 tray = ["wry/tray"]
-hot-reload = ["dioxus-core/hot-reload"]
+hot-reload = ["interprocess"]
 
 [dev-dependencies]
 dioxus-core-macro = { path = "../core-macro" }

@@ -1,14 +1,13 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
-use dioxus_core::*;
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
+use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
-use dioxus_native_core::real_dom::OwnedAttributeView;
 use dioxus_native_core::state::ChildDepState;
-use dioxus_native_core::RealNodeId;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
+
+use crate::{screen_to_layout_space, unit_to_layout_space};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) enum PossiblyUninitalized<T> {
@@ -19,7 +18,7 @@ impl<T> PossiblyUninitalized<T> {
     pub fn unwrap(self) -> T {
         match self {
             Self::Initialized(i) => i,
-            _ => panic!(),
+            _ => panic!("uninitalized"),
         }
     }
     pub fn ok(self) -> Option<T> {
@@ -42,8 +41,8 @@ pub(crate) struct TaffyLayout {
 }
 
 impl ChildDepState for TaffyLayout {
-    type Ctx = Rc<RefCell<Taffy>>;
-    type DepState = Self;
+    type Ctx = Arc<Mutex<Taffy>>;
+    type DepState = (Self,);
     // use tag to force this to be called when a node is built
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS))
@@ -54,14 +53,14 @@ impl ChildDepState for TaffyLayout {
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        children: impl Iterator<Item = &'a Self::DepState>,
+        children: impl Iterator<Item = (&'a Self,)>,
         ctx: &Self::Ctx,
     ) -> bool
     where
         Self::DepState: 'a,
     {
         let mut changed = false;
-        let mut taffy = ctx.borrow_mut();
+        let mut taffy = ctx.lock().expect("poisoned taffy");
         let mut style = Style::default();
         if let Some(text) = node.text() {
             let char_len = text.chars().count();
@@ -69,10 +68,10 @@ impl ChildDepState for TaffyLayout {
             style = Style {
                 size: Size {
                     // characters are 1 point tall
-                    height: Dimension::Points(1.0),
+                    height: Dimension::Points(screen_to_layout_space(1)),
 
                     // text is as long as it is declared
-                    width: Dimension::Points(char_len as f32),
+                    width: Dimension::Points(screen_to_layout_space(char_len as u16)),
                 },
                 ..Default::default()
             };
@@ -81,7 +80,7 @@ impl ChildDepState for TaffyLayout {
                     taffy.set_style(n, style).unwrap();
                 }
             } else {
-                self.node = PossiblyUninitalized::Initialized(taffy.new_node(style, &[]).unwrap());
+                self.node = PossiblyUninitalized::Initialized(taffy.new_leaf(style).unwrap());
                 changed = true;
             }
         } else {
@@ -100,17 +99,64 @@ impl ChildDepState for TaffyLayout {
                 }
             }
 
-            // the root node fills the entire area
-            if node.id() == RealNodeId::ElementId(ElementId(0)) {
-                apply_layout_attributes("width", "100%", &mut style);
-                apply_layout_attributes("height", "100%", &mut style);
-            }
-
             // Set all direct nodes as our children
             let mut child_layout = vec![];
-            for l in children {
+            for (l,) in children {
                 child_layout.push(l.node.unwrap());
             }
+
+            fn scale_dimention(d: Dimension) -> Dimension {
+                match d {
+                    Dimension::Points(p) => Dimension::Points(unit_to_layout_space(p)),
+                    Dimension::Percent(p) => Dimension::Percent(p),
+                    Dimension::Auto => Dimension::Auto,
+                    Dimension::Undefined => Dimension::Undefined,
+                }
+            }
+            let style = Style {
+                position: Rect {
+                    left: scale_dimention(style.position.left),
+                    right: scale_dimention(style.position.right),
+                    top: scale_dimention(style.position.top),
+                    bottom: scale_dimention(style.position.bottom),
+                },
+                margin: Rect {
+                    left: scale_dimention(style.margin.left),
+                    right: scale_dimention(style.margin.right),
+                    top: scale_dimention(style.margin.top),
+                    bottom: scale_dimention(style.margin.bottom),
+                },
+                padding: Rect {
+                    left: scale_dimention(style.padding.left),
+                    right: scale_dimention(style.padding.right),
+                    top: scale_dimention(style.padding.top),
+                    bottom: scale_dimention(style.padding.bottom),
+                },
+                border: Rect {
+                    left: scale_dimention(style.border.left),
+                    right: scale_dimention(style.border.right),
+                    top: scale_dimention(style.border.top),
+                    bottom: scale_dimention(style.border.bottom),
+                },
+                gap: Size {
+                    width: scale_dimention(style.gap.width),
+                    height: scale_dimention(style.gap.height),
+                },
+                flex_basis: scale_dimention(style.flex_basis),
+                size: Size {
+                    width: scale_dimention(style.size.width),
+                    height: scale_dimention(style.size.height),
+                },
+                min_size: Size {
+                    width: scale_dimention(style.min_size.width),
+                    height: scale_dimention(style.min_size.height),
+                },
+                max_size: Size {
+                    width: scale_dimention(style.max_size.width),
+                    height: scale_dimention(style.max_size.height),
+                },
+                ..style
+            };
 
             if let PossiblyUninitalized::Initialized(n) = self.node {
                 if self.style != style {
@@ -121,7 +167,7 @@ impl ChildDepState for TaffyLayout {
                 }
             } else {
                 self.node = PossiblyUninitalized::Initialized(
-                    taffy.new_node(style, &child_layout).unwrap(),
+                    taffy.new_with_children(style, &child_layout).unwrap(),
                 );
                 changed = true;
             }

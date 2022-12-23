@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
-use dioxus_html::on::{FocusData, KeyboardData, MouseData, WheelData};
-use std::sync::Arc;
+use dioxus_html::{FocusData, KeyboardData, MouseData, WheelData};
+use std::rc::Rc;
 
 fn main() {
     dioxus_tui::launch(app);
@@ -8,26 +8,26 @@ fn main() {
 
 #[derive(Debug)]
 enum Event {
-    MouseMove(Arc<MouseData>),
-    MouseClick(Arc<MouseData>),
-    MouseDoubleClick(Arc<MouseData>),
-    MouseDown(Arc<MouseData>),
-    MouseUp(Arc<MouseData>),
+    MouseMove(Rc<MouseData>),
+    MouseClick(Rc<MouseData>),
+    MouseDoubleClick(Rc<MouseData>),
+    MouseDown(Rc<MouseData>),
+    MouseUp(Rc<MouseData>),
 
-    Wheel(Arc<WheelData>),
+    Wheel(Rc<WheelData>),
 
-    KeyDown(Arc<KeyboardData>),
-    KeyUp(Arc<KeyboardData>),
-    KeyPress(Arc<KeyboardData>),
+    KeyDown(Rc<KeyboardData>),
+    KeyUp(Rc<KeyboardData>),
+    KeyPress(Rc<KeyboardData>),
 
-    FocusIn(Arc<FocusData>),
-    FocusOut(Arc<FocusData>),
+    FocusIn(Rc<FocusData>),
+    FocusOut(Rc<FocusData>),
 }
 
 const MAX_EVENTS: usize = 8;
 
 fn app(cx: Scope) -> Element {
-    let events = use_ref(&cx, Vec::new);
+    let events = use_ref(cx, Vec::new);
 
     let events_lock = events.read();
     let first_index = events_lock.len().saturating_sub(MAX_EVENTS);
@@ -37,7 +37,7 @@ fn app(cx: Scope) -> Element {
         // todo: remove
         let mut trimmed = format!("{event:?}");
         trimmed.truncate(200);
-        cx.render(rsx!(p { "{trimmed}" }))
+        rsx!(p { "{trimmed}" })
     });
 
     let log_event = move |event: Event| {
@@ -57,20 +57,20 @@ fn app(cx: Scope) -> Element {
                 align_items: "center",
                 background_color: "hsl(248, 53%, 58%)",
 
-                onmousemove: move |event| log_event(Event::MouseMove(event.data)),
-                onclick: move |event| log_event(Event::MouseClick(event.data)),
-                ondblclick: move |event| log_event(Event::MouseDoubleClick(event.data)),
-                onmousedown: move |event| log_event(Event::MouseDown(event.data)),
-                onmouseup: move |event| log_event(Event::MouseUp(event.data)),
+                onmousemove: move |event| log_event(Event::MouseMove(event.inner().clone())),
+                onclick: move |event| log_event(Event::MouseClick(event.inner().clone())),
+                ondblclick: move |event| log_event(Event::MouseDoubleClick(event.inner().clone())),
+                onmousedown: move |event| log_event(Event::MouseDown(event.inner().clone())),
+                onmouseup: move |event| log_event(Event::MouseUp(event.inner().clone())),
 
-                onwheel: move |event| log_event(Event::Wheel(event.data)),
+                onwheel: move |event| log_event(Event::Wheel(event.inner().clone())),
 
-                onkeydown: move |event| log_event(Event::KeyDown(event.data)),
-                onkeyup: move |event| log_event(Event::KeyUp(event.data)),
-                onkeypress: move |event| log_event(Event::KeyPress(event.data)),
+                onkeydown: move |event| log_event(Event::KeyDown(event.inner().clone())),
+                onkeyup: move |event| log_event(Event::KeyUp(event.inner().clone())),
+                onkeypress: move |event| log_event(Event::KeyPress(event.inner().clone())),
 
-                onfocusin: move |event| log_event(Event::FocusIn(event.data)),
-                onfocusout: move |event| log_event(Event::FocusOut(event.data)),
+                onfocusin: move |event| log_event(Event::FocusIn(event.inner().clone())),
+                onfocusout: move |event| log_event(Event::FocusOut(event.inner().clone())),
 
                 "Hover, click, type or scroll to see the info down below"
             },

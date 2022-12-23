@@ -1,3 +1,4 @@
+use dioxus_native_core::tree::TreeView;
 use std::io::Stdout;
 use taffy::{
     geometry::Point,
@@ -7,10 +8,11 @@ use taffy::{
 use tui::{backend::CrosstermBackend, layout::Rect, style::Color};
 
 use crate::{
+    layout_to_screen_space,
     style::{RinkColor, RinkStyle},
     style_attributes::{BorderEdge, BorderStyle},
     widget::{RinkBuffer, RinkCell, RinkWidget, WidgetWithContext},
-    Config, Dom, Node,
+    Config, TuiDom, TuiNode,
 };
 
 const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
@@ -18,12 +20,12 @@ const RADIUS_MULTIPLIER: [f32; 2] = [1.0, 0.5];
 pub(crate) fn render_vnode(
     frame: &mut tui::Frame<CrosstermBackend<Stdout>>,
     layout: &Taffy,
-    rdom: &Dom,
-    node: &Node,
+    rdom: &TuiDom,
+    node: &TuiNode,
     cfg: Config,
     parent_location: Point<f32>,
 ) {
-    use dioxus_native_core::real_dom::NodeType;
+    use dioxus_native_core::node::NodeType;
 
     if let NodeType::Placeholder = &node.node_data.node_type {
         return;
@@ -35,8 +37,12 @@ pub(crate) fn render_vnode(
     location.x += parent_location.x;
     location.y += parent_location.y;
 
-    let Point { x, y } = location;
-    let Size { width, height } = size;
+    let Point { x: fx, y: fy } = location;
+    let x = layout_to_screen_space(fx).round() as u16;
+    let y = layout_to_screen_space(fy).round() as u16;
+    let Size { width, height } = *size;
+    let width = layout_to_screen_space(fx + width).round() as u16 - x;
+    let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
     match &node.node_data.node_type {
         NodeType::Text { text } => {
@@ -61,22 +67,22 @@ pub(crate) fn render_vnode(
                 text,
                 style: node.state.style.core,
             };
-            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
+            let area = Rect::new(x, y, width, height);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
                 frame.render_widget(WidgetWithContext::new(label, cfg), area);
             }
         }
-        NodeType::Element { children, .. } => {
-            let area = Rect::new(x as u16, y as u16, *width as u16, *height as u16);
+        NodeType::Element { .. } => {
+            let area = Rect::new(x, y, width, height);
 
             // the renderer will panic if a node is rendered out of range even if the size is zero
             if area.width > 0 && area.height > 0 {
                 frame.render_widget(WidgetWithContext::new(node, cfg), area);
             }
 
-            for c in children {
+            for c in rdom.children_ids(node.node_data.node_id).unwrap() {
                 render_vnode(frame, layout, rdom, &rdom[*c], cfg, location);
             }
         }
@@ -84,7 +90,7 @@ pub(crate) fn render_vnode(
     }
 }
 
-impl RinkWidget for &Node {
+impl RinkWidget for &TuiNode {
     fn render(self, area: Rect, mut buf: RinkBuffer<'_>) {
         use tui::symbols::line::*;
 

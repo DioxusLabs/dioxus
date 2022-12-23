@@ -14,13 +14,13 @@ use dioxus_desktop::Config;
 
 fn main() {
     let vdom = VirtualDom::new(app);
-    let content = dioxus_ssr::render_vdom_cfg(&vdom, |f| f.pre_render(true));
+    let content = dioxus_ssr::pre_render(&vdom);
 
     dioxus_desktop::launch_cfg(app, Config::new().with_prerendered(content));
 }
 
 fn app(cx: Scope) -> Element {
-    let val = use_state(&cx, || 0);
+    let val = use_state(cx, || 0);
 
     cx.render(rsx! {
         div {

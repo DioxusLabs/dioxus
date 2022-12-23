@@ -1,9 +1,9 @@
-use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
-use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
-use crate::on::{
+use crate::events::{
     AnimationData, CompositionData, KeyboardData, MouseData, PointerData, TouchData,
     TransitionData, WheelData,
 };
+use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
+use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
 use std::str::FromStr;

@@ -5,7 +5,7 @@ fn main() {
 }
 
 fn app(cx: Scope) -> Element {
-    let disabled = use_state(&cx, || false);
+    let disabled = use_state(cx, || false);
 
     cx.render(rsx! {
         div {

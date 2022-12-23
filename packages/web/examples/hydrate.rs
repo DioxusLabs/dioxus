@@ -48,7 +48,7 @@ fn main() {
     let mut dom = VirtualDom::new(app);
     let _ = dom.rebuild();
 
-    let pre = dioxus_ssr::pre_render_vdom(&dom);
+    let pre = dioxus_ssr::pre_render(&dom);
     log::trace!("{}", pre);
 
     // set the inner content of main to the pre-rendered content

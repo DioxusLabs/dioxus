@@ -32,7 +32,7 @@ pub struct RedirectProps<'a> {
 ///
 /// It will replace the current route rather than pushing the current one to the stack.
 pub fn Redirect<'a>(cx: Scope<'a, RedirectProps<'a>>) -> Element {
-    let router = use_router(&cx);
+    let router = use_router(cx);
 
     let immediate_redirect = cx.use_hook(|| {
         if let Some(from) = cx.props.from {
