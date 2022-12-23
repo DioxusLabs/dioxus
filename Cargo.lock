@@ -30,17 +30,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ahash"
-version = "0.7.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
-dependencies = [
- "getrandom 0.2.8",
- "once_cell",
- "version_check",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -711,6 +700,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.2.1"
+source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
 dependencies = [
  "bumpalo",
  "futures-channel",
@@ -727,10 +717,10 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.2.1"
+source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
 dependencies = [
  "async-trait",
  "dioxus-core",
- "dioxus-rsx",
  "enumset",
  "euclid",
  "keyboard-types",
@@ -742,9 +732,8 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.1"
+source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
 dependencies = [
- "dioxus-core",
- "internment",
  "proc-macro2",
  "quote",
  "serde",
@@ -1105,9 +1094,6 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
-dependencies = [
- "ahash",
-]
 
 [[package]]
 name = "headers"
@@ -1403,16 +1389,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "internment"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a798d7677f07d6f1e77be484ea8626ddb1566194de399f1206306820c406371"
-dependencies = [
- "hashbrown",
- "parking_lot",
 ]
 
 [[package]]
