@@ -21,8 +21,8 @@ Parse
 */
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
-    Element(Element),
-    Component(Component),
+    Element(ElementNode),
+    Component(ComponentNode),
     ForLoop(ForLoop),
     IfChain(ExprIf),
     Text(IfmtInput),
@@ -71,7 +71,7 @@ impl Parse for BodyNode {
                     && first_char.is_ascii_lowercase()
                     && !el_name.contains('_')
                 {
-                    return Ok(BodyNode::Element(stream.parse::<Element>()?));
+                    return Ok(BodyNode::Element(stream.parse::<ElementNode>()?));
                 }
             }
 
@@ -90,7 +90,7 @@ impl Parse for BodyNode {
             // Input::<InputProps<'_, i32> {}
             // crate::Input::<InputProps<'_, i32> {}
             if body_stream.peek(token::Brace) {
-                Component::validate_component_path(&path)?;
+                ComponentNode::validate_component_path(&path)?;
                 return Ok(BodyNode::Component(stream.parse()?));
             }
         }

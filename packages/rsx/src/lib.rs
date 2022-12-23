@@ -111,7 +111,11 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg[9..].split("..").next().unwrap();
+        let root_col = if spndbg.len() >= 9 {
+            spndbg[9..].split("..").next().unwrap()
+        } else {
+            ""
+        };
 
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
@@ -148,7 +152,6 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
                 key: #key_tokens,
                 template: TEMPLATE,
                 root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut _).as_slice_of_cells(),
-                // root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }
