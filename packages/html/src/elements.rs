@@ -1,6 +1,8 @@
 #![allow(non_upper_case_globals)]
+#[cfg(feature = "hot-reload-context")]
 use crate::{map_global_attributes, map_svg_attributes};
 use crate::{GlobalAttributes, SvgAttributes};
+#[cfg(feature = "hot-reload-context")]
 use dioxus_rsx::HotReloadingContext;
 
 pub type AttributeDiscription = (&'static str, Option<&'static str>, bool);
@@ -42,6 +44,7 @@ macro_rules! impl_attribute {
     };
 }
 
+#[cfg(feature = "hot-reload-context")]
 macro_rules! impl_attribute_match {
     (
         $attr:ident $fil:ident: $vil:ident (DEFAULT),
@@ -134,6 +137,7 @@ macro_rules! impl_element {
     }
 }
 
+#[cfg(feature = "hot-reload-context")]
 macro_rules! impl_element_match {
     (
         $el:ident $name:ident None {
@@ -160,6 +164,7 @@ macro_rules! impl_element_match {
     };
 }
 
+#[cfg(feature = "hot-reload-context")]
 macro_rules! impl_element_match_attributes {
     (
         $el:ident $attr:ident $name:ident None {
@@ -206,8 +211,10 @@ macro_rules! builder_constructors {
             };
          )*
         ) => {
+        #[cfg(feature = "hot-reload-context")]
         pub struct HtmlCtx;
 
+        #[cfg(feature = "hot-reload-context")]
         impl HotReloadingContext for HtmlCtx {
             fn map_attribute(element: &str, attribute: &str) -> Option<(&'static str, Option<&'static str>)> {
                 $(

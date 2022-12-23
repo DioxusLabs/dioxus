@@ -44,6 +44,7 @@ macro_rules! trait_method {
     };
 }
 
+#[cfg(feature = "hot-reload-context")]
 macro_rules! trait_method_mapping {
     (
         $matching:ident;
@@ -97,6 +98,7 @@ macro_rules! trait_methods {
             )*
         }
 
+        #[cfg(feature = "hot-reload-context")]
         pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
             $(
                 trait_method_mapping! {
