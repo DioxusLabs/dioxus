@@ -10,7 +10,7 @@ pub type MouseEvent = Event<MouseData>;
 
 /// A synthetic event that wraps a web-style [`MouseEvent`](https://developer.mozilla.org/en-US/docs/Web/API/MouseEvent)
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Default)]
+#[derive(Clone, Default, PartialEq)]
 /// Data associated with a mouse event
 ///
 /// Do not use the deprecated fields; they may change or become private in the future.

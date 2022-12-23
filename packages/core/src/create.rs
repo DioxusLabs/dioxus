@@ -354,8 +354,8 @@ impl<'b> VirtualDom {
         use RenderReturn::*;
 
         match return_nodes {
-            Sync(Ok(t)) => self.mount_component(scope, template, t, idx),
-            Sync(Err(_e)) => todo!("Propogate error upwards"),
+            Sync(Some(t)) => self.mount_component(scope, template, t, idx),
+            Sync(None) => todo!("Propogate error upwards"),
             Async(_) => self.mount_component_placeholder(template, idx, scope),
         }
     }

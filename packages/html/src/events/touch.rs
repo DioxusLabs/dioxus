@@ -2,7 +2,7 @@ use dioxus_core::Event;
 
 pub type TouchEvent = Event<TouchData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TouchData {
     pub alt_key: bool,
     pub ctrl_key: bool,

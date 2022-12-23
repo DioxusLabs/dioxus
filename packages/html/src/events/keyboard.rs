@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 pub type KeyboardEvent = Event<KeyboardData>;
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct KeyboardData {
     #[deprecated(
         since = "0.3.0",

@@ -16,10 +16,10 @@ members = [
     "packages/liveview",
     "packages/autofmt",
     "packages/rsx",
-    "docs/guide",
     "packages/tui",
     "packages/native-core",
     "packages/native-core-macro",
+    "docs/guide",
 ]
 
 # This is a "virtual package"

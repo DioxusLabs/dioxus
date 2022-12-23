@@ -12,18 +12,3 @@ While it is possible to share state between components, this should only be done
 
 - Keep state local to a component if possible
 - When sharing state through props, only pass down the specific data necessary
-
-## Reusable Libraries
-
-When publishing a library designed to work with Dioxus, we highly advise using only the core feature on the `dioxus` crate. This makes your crate compile faster, makes it more stable, and avoids bringing in incompatible libraries that might make it not compile on unsupported platforms.
-
-
-❌ Don't include unnecessary dependencies in libraries:
-```toml
-dioxus = { version = "...", features = ["web", "desktop", "full"]}
-```
-
-✅ Only add the features you need:
-```toml
-dioxus = { version = "...", features = "core"}
-```

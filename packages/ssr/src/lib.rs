@@ -23,7 +23,7 @@ pub fn render_lazy(f: LazyNodes<'_, '_>) -> String {
     fn lazy_app<'a>(cx: Scope<'a, RootProps<'static, 'static>>) -> Element<'a> {
         let lazy = cx.props.caller.take().unwrap();
         let lazy: LazyNodes = unsafe { std::mem::transmute(lazy) };
-        Ok(lazy.call(cx))
+        Some(lazy.call(cx))
     }
 
     let props: RootProps = unsafe {

@@ -46,7 +46,7 @@ fn attrs_cycle() {
     assert_eq!(
         dom.render_immediate().santize().edits,
         [
-            LoadTemplate { name: "template", index: 0, id: ElementId(3) },
+            LoadTemplate { name: "template", index: 0, id: ElementId(1) },
             ReplaceWith { id: ElementId(2), m: 1 }
         ]
     );
@@ -56,10 +56,10 @@ fn attrs_cycle() {
         dom.render_immediate().santize().edits,
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
-            AssignId { path: &[0], id: ElementId(1) },
-            SetAttribute { name: "class", value: "3", id: ElementId(1), ns: None },
-            SetAttribute { name: "id", value: "3", id: ElementId(1), ns: None },
-            ReplaceWith { id: ElementId(3), m: 1 }
+            AssignId { path: &[0], id: ElementId(3) },
+            SetAttribute { name: "class", value: "3", id: ElementId(3), ns: None },
+            SetAttribute { name: "id", value: "3", id: ElementId(3), ns: None },
+            ReplaceWith { id: ElementId(1), m: 1 }
         ]
     );
 

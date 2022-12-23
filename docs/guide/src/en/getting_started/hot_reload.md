@@ -8,7 +8,7 @@
 Install [dioxus-cli](https://github.com/DioxusLabs/cli).
 Enable the hot-reload feature on dioxus:
 ```toml
-dioxus = { version = "*", features = ["web", "hot-reload"] }
+dioxus = { version = "*", features = ["hot-reload"] }
 ```
 
 # Usage
