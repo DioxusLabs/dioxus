@@ -197,9 +197,11 @@ impl WebsysDom {
                 },
                 SetText { value, id } => i.set_text(id.0 as u32, value),
                 NewEventListener { name, id, .. } => {
-                    i.new_event_listener(name, id.0 as u32);
+                    i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
                 }
-                RemoveEventListener { name, id } => i.remove_event_listener(name, id.0 as u32),
+                RemoveEventListener { name, id } => {
+                    i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
+                }
                 Remove { id } => i.remove(id.0 as u32),
                 PushRoot { id } => i.push_root(id.0 as u32),
             }
