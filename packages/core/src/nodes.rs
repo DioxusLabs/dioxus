@@ -58,7 +58,7 @@ pub struct VNode<'a> {
 impl<'a> VNode<'a> {
     /// Create a template with no nodes that will be skipped over during diffing
     pub fn empty() -> Element<'a> {
-        Ok(VNode {
+        Some(VNode {
             key: None,
             parent: None,
             root_ids: &[],
@@ -602,16 +602,6 @@ impl<'a> IntoDynNode<'a> for DynamicNode<'a> {
     }
 }
 
-// An element that's an error is currently lost into the ether
-impl<'a> IntoDynNode<'a> for Element<'a> {
-    fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
-        match self {
-            Ok(val) => val.into_vnode(_cx),
-            _ => DynamicNode::default(),
-        }
-    }
-}
-
 impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self {
@@ -624,7 +614,7 @@ impl<'a, T: IntoDynNode<'a>> IntoDynNode<'a> for Option<T> {
 impl<'a> IntoDynNode<'a> for &Element<'a> {
     fn into_vnode(self, _cx: &'a ScopeState) -> DynamicNode<'a> {
         match self.as_ref() {
-            Ok(val) => val.clone().into_vnode(_cx),
+            Some(val) => val.clone().into_vnode(_cx),
             _ => DynamicNode::default(),
         }
     }
@@ -678,7 +668,7 @@ impl<'a> IntoTemplate<'a> for VNode<'a> {
 impl<'a> IntoTemplate<'a> for Element<'a> {
     fn into_template(self, _cx: &'a ScopeState) -> VNode<'a> {
         match self {
-            Ok(val) => val.into_template(_cx),
+            Some(val) => val.into_template(_cx),
             _ => VNode::empty().unwrap(),
         }
     }

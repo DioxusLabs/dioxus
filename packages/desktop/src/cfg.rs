@@ -21,6 +21,7 @@ pub struct Config {
     pub(crate) resource_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
     pub(crate) custom_index: Option<String>,
+    pub(crate) root_name: String,
 }
 
 type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
@@ -46,6 +47,7 @@ impl Config {
             resource_dir: None,
             custom_head: None,
             custom_index: None,
+            root_name: "main".to_string(),
         }
     }
 
@@ -124,6 +126,14 @@ impl Config {
     /// must include a body element!
     pub fn with_custom_index(mut self, index: String) -> Self {
         self.custom_index = Some(index);
+        self
+    }
+
+    /// Set the name of the element that Dioxus will use as the root.
+    ///
+    /// This is akint to calling React.render() on the element with the specified name.
+    pub fn with_root_name(mut self, name: impl Into<String>) -> Self {
+        self.root_name = name.into();
         self
     }
 }

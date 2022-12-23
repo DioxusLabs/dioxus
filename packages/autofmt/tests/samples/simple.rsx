@@ -1,9 +1,6 @@
 rsx! {
     div { "hello world!" }
-    div {
-        "hello world!"
-        "goodbye world!"
-    }
+    div { "hello world!", "goodbye world!" }
 
     // Simple div
     div { "hello world!" }
@@ -15,7 +12,16 @@ rsx! {
     div { div { "nested" } }
 
     // Nested two level
-    div { div { h1 { "highly nested" } } }
+    div {
+        div { h1 { "highly nested" } }
+    }
+
+    // Anti-Nested two level
+    div {
+        div {
+            div { h1 { "highly nested" } }
+        }
+    }
 
     // Compression
     h3 { class: "mb-2 text-xl font-bold", "Invite Member" }
@@ -30,7 +36,9 @@ rsx! {
     img { class: "mb-6 mx-auto h-24", src: "artemis-assets/images/friends.png", alt: "" }
 
     // One level compression
-    div { a { class: "py-2 px-3 bg-indigo-500 hover:bg-indigo-600 rounded text-xs text-white", href: "#", "Send invitation" } }
+    div {
+        a { class: "py-2 px-3 bg-indigo-500 hover:bg-indigo-600 rounded text-xs text-white", href: "#", "Send invitation" }
+    }
 
     // Components
     Component { ..Props {} }

@@ -3,7 +3,7 @@ use dioxus_core::Event;
 pub type AnimationEvent = Event<AnimationData>;
 
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct AnimationData {
     pub animation_name: String,
     pub pseudo_element: String,

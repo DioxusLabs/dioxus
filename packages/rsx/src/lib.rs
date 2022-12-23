@@ -34,7 +34,7 @@ use syn::{
 };
 
 /// Fundametnally, every CallBody is a template
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
 
@@ -70,7 +70,7 @@ impl ToTokens for CallBody {
 
         if self.inline_cx {
             out_tokens.append_all(quote! {
-                Ok({
+                Some({
                     let __cx = cx;
                     #body
                 })

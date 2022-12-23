@@ -31,16 +31,16 @@ futures-channel = "0.3.21"
 
 indexmap = "1.7"
 
-# Serialize the Edits for use in Webview/Liveview instances
-serde = { version = "1", features = ["derive"], optional = true }
-anyhow = "1.0.66"
-
 smallbox = "0.8.1"
 log = "0.4.17"
+
+# Serialize the Edits for use in Webview/Liveview instances
+serde = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tokio = { version = "*", features = ["full"] }
 dioxus = { path = "../dioxus" }
+pretty_assertions = "1.3.0"
 
 [features]
 default = []

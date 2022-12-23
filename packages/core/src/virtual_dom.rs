@@ -477,7 +477,7 @@ impl VirtualDom {
     pub fn rebuild(&mut self) -> Mutations {
         match unsafe { self.run_scope(ScopeId(0)).extend_lifetime_ref() } {
             // Rebuilding implies we append the created elements to the root
-            RenderReturn::Sync(Ok(node)) => {
+            RenderReturn::Sync(Some(node)) => {
                 let m = self.create_scope(ScopeId(0), node);
                 self.mutations.edits.push(Mutation::AppendChildren {
                     id: ElementId(0),
@@ -485,7 +485,7 @@ impl VirtualDom {
                 });
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
-            RenderReturn::Sync(Err(e)) => panic!("Cannot catch errors during rebuild {:?}", e),
+            RenderReturn::Sync(None) => panic!("Cannot catch errors during rebuild"),
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 

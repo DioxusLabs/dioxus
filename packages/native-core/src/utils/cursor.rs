@@ -200,7 +200,7 @@ impl Cursor {
                                 }
                                 change -= 1;
                             }
-                            c.move_col(change as i32, text);
+                            c.move_col(change, text);
                         },
                         data.modifiers().contains(Modifiers::SHIFT),
                     );

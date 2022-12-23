@@ -29,15 +29,9 @@ cd demo
 Adicione o Dioxus com o recurso `desktop` (isso irá editar o `Cargo.toml`):
 
 ```shell
-cargo add dioxus --features desktop
+cargo add dioxus
+cargo add dioxus-desktop
 ```
-
-> Se seu sistema não fornece a biblioteca `libappindicator3`, como Debian/bullseye, você pode habilitar a substituta `ayatana` com um _flag_ adicional:
->
-> ```shell
-> # On Debian/bullseye use:
-> cargo add dioxus --features desktop --features ayatana
-> ```
 
 Edite seu `main.rs`:
 
