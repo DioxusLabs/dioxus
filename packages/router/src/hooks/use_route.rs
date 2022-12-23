@@ -2,7 +2,7 @@ use async_rwlock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::ScopeState};
 use dioxus_router_core::RouterState;
 
-use crate::{utils::use_router_internal::use_router_internal};
+use crate::utils::use_router_internal::use_router_internal;
 
 /// A hook that provides access to information about the current routing location.
 ///
