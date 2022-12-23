@@ -114,11 +114,10 @@ impl<'a> ToTokens for TemplateRenderer<'a> {
         };
 
         let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = if spndbg.len() >= 9 {
-            spndbg[9..].split("..").next().unwrap()
-        } else {
-            ""
-        };
+        let root_col = spndbg
+            .rsplit_once("..")
+            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+            .unwrap_or_default();
 
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
