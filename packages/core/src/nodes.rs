@@ -104,6 +104,12 @@ impl BoxedCellSlice {
 
     pub fn transfer(&self, other: &Self) {
         unsafe {
+            *self.0.get() = (*other.0.get()).clone();
+        }
+    }
+
+    pub fn take_from(&self, other: &Self) {
+        unsafe {
             *self.0.get() = (*other.0.get()).take();
         }
     }
