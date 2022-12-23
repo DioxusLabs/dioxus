@@ -24,7 +24,7 @@ use syn::{
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct ComponentNode {
+pub struct Component {
     pub name: syn::Path,
     pub prop_gen_args: Option<AngleBracketedGenericArguments>,
     pub fields: Vec<ComponentField>,
@@ -32,7 +32,7 @@ pub struct ComponentNode {
     pub manual_props: Option<Expr>,
 }
 
-impl ComponentNode {
+impl Component {
     pub fn validate_component_path(path: &syn::Path) -> Result<()> {
         // ensure path segments doesn't have PathArguments, only the last
         // segment is allowed to have one.
@@ -69,10 +69,10 @@ impl ComponentNode {
     }
 }
 
-impl Parse for ComponentNode {
+impl Parse for Component {
     fn parse(stream: ParseStream) -> Result<Self> {
         let mut name = stream.parse::<syn::Path>()?;
-        ComponentNode::validate_component_path(&name)?;
+        Component::validate_component_path(&name)?;
 
         // extract the path arguments from the path into prop_gen_args
         let prop_gen_args = name.segments.last_mut().and_then(|seg| {
@@ -124,7 +124,7 @@ impl Parse for ComponentNode {
     }
 }
 
-impl ToTokens for ComponentNode {
+impl ToTokens for Component {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
         let prop_gen_args = &self.prop_gen_args;

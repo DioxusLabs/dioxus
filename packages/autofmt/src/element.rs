@@ -22,13 +22,13 @@ enum ShortOptimization {
 impl Buffer {
     pub fn write_element(
         &mut self,
-        ElementNode {
+        Element {
             name,
             key,
             attributes,
             children,
             _is_static,
-        }: &ElementNode,
+        }: &Element,
     ) -> Result {
         /*
             1. Write the tag

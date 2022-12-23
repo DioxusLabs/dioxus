@@ -11,7 +11,7 @@ use syn::{
 // Parse the VNode::Element type
 // =======================================
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub struct ElementNode {
+pub struct Element {
     pub name: Ident,
     pub key: Option<IfmtInput>,
     pub attributes: Vec<ElementAttrNamed>,
@@ -19,7 +19,7 @@ pub struct ElementNode {
     pub _is_static: bool,
 }
 
-impl Parse for ElementNode {
+impl Parse for Element {
     fn parse(stream: ParseStream) -> Result<Self> {
         let el_name = Ident::parse(stream)?;
 
@@ -157,7 +157,7 @@ impl Parse for ElementNode {
     }
 }
 
-impl ToTokens for ElementNode {
+impl ToTokens for Element {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         let name = &self.name;
         let children = &self.children;

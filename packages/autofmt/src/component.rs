@@ -22,13 +22,13 @@ enum ShortOptimization {
 impl Buffer {
     pub fn write_component(
         &mut self,
-        ComponentNode {
+        Component {
             name,
             fields,
             children,
             manual_props,
             prop_gen_args,
-        }: &ComponentNode,
+        }: &Component,
     ) -> Result {
         self.write_component_name(name, prop_gen_args)?;
 
