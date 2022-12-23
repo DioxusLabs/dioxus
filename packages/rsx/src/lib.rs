@@ -188,7 +188,14 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
         });
 
         let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg[9..].split("..").next().unwrap();
+        println!("spndbg: {}", spndbg);
+        let root_col = spndbg
+            .rsplit_once("..")
+            .unwrap()
+            .1
+            .split_once(')')
+            .unwrap()
+            .0;
 
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
