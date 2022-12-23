@@ -5,6 +5,7 @@
 use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
+use dioxus_core::AttributeValue;
 
 #[test]
 fn attrs_cycle() {
@@ -65,8 +66,18 @@ fn attrs_cycle() {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(2) },
             AssignId { path: &[0], id: ElementId(3) },
-            SetAttribute { name: "class", value: "3", id: ElementId(3), ns: None },
-            SetAttribute { name: "id", value: "3", id: ElementId(3), ns: None },
+            SetAttribute {
+                name: "class",
+                value: AttributeValue::Text("3"),
+                id: ElementId(3),
+                ns: None
+            },
+            SetAttribute {
+                name: "id",
+                value: AttributeValue::Text("3"),
+                id: ElementId(3),
+                ns: None
+            },
             ReplaceWith { id: ElementId(1), m: 1 }
         ]
     );
