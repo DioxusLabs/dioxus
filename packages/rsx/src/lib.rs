@@ -188,7 +188,6 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
         });
 
         let spndbg = format!("{:?}", self.roots[0].span());
-        println!("spndbg: {}", spndbg);
         let root_col = spndbg
             .rsplit_once("..")
             .unwrap()
@@ -741,7 +740,7 @@ fn diff_template() {
                     },
                 ],
             }],
-            node_paths: &[&[0, 0], &[0, 1], &[0, 2]],
+            node_paths: &[&[0, 3], &[0, 2], &[0, 1], &[0, 0]],
             attr_paths: &[&[0], &[0]]
         },
     )
