@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::ToTokens;
+use rsx::RenderCallBody;
 use syn::parse_macro_input;
 
 mod inlineprops;
@@ -41,10 +42,7 @@ pub fn rsx(s: TokenStream) -> TokenStream {
 pub fn render(s: TokenStream) -> TokenStream {
     match syn::parse::<rsx::CallBody>(s) {
         Err(err) => err.to_compile_error().into(),
-        Ok(mut body) => {
-            body.inline_cx = true;
-            body.into_token_stream().into()
-        }
+        Ok(body) => RenderCallBody(body).into_token_stream().into(),
     }
 }
 

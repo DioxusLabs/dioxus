@@ -37,9 +37,6 @@ use syn::{
 #[derive(Default, Debug)]
 pub struct CallBody {
     pub roots: Vec<BodyNode>,
-
-    // set this after
-    pub inline_cx: bool,
 }
 
 impl Parse for CallBody {
@@ -56,10 +53,7 @@ impl Parse for CallBody {
             roots.push(node);
         }
 
-        Ok(Self {
-            roots,
-            inline_cx: false,
-        })
+        Ok(Self { roots })
     }
 }
 
@@ -68,20 +62,29 @@ impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
         let body = TemplateRenderer { roots: &self.roots };
 
-        if self.inline_cx {
-            out_tokens.append_all(quote! {
-                Some({
-                    let __cx = cx;
-                    #body
-                })
+        out_tokens.append_all(quote! {
+            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+                #body
             })
-        } else {
-            out_tokens.append_all(quote! {
-                ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
-                    #body
-                })
+        })
+    }
+}
+
+#[derive(Default, Debug)]
+pub struct RenderCallBody(pub CallBody);
+
+impl ToTokens for RenderCallBody {
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        let body = TemplateRenderer {
+            roots: &self.0.roots,
+        };
+
+        out_tokens.append_all(quote! {
+            Some({
+                let __cx = cx;
+                #body
             })
-        }
+        })
     }
 }
 
