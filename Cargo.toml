@@ -72,10 +72,9 @@ mlua = { version = "0.8.1", features = [
     "macros",
 ] }
 ctrlc = "3.2.3"
-# dioxus-rsx = "0.0.1"
-dioxus-rsx = { path = "c:/users/Desktop/github/dioxus/packages/rsx" }
-dioxus-html = { path = "c:/users/Desktop/github/dioxus/packages/html" }
-dioxus-core = { path = "c:/users/Desktop/github/dioxus/packages/core", features = ["serialize"] }
+dioxus-rsx = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-html = { git = "https://github.com/dioxuslabs/dioxus" }
+dioxus-core = { git = "https://github.com/dioxuslabs/dioxus", features = ["serialize"] }
 
 [[bin]]
 path = "src/main.rs"
