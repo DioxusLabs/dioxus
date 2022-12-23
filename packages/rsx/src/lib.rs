@@ -15,7 +15,7 @@
 mod errors;
 mod component;
 mod element;
-mod hot_reloading_context;
+pub mod hot_reload;
 mod ifmt;
 mod node;
 
@@ -25,8 +25,8 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 pub use component::*;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
-use hot_reloading_context::Empty;
-pub use hot_reloading_context::HotReloadingContext;
+use hot_reload::Empty;
+pub use hot_reload::HotReloadingContext;
 pub use ifmt::*;
 use internment::Intern;
 pub use node::*;
