@@ -1,7 +1,7 @@
 use dioxus::prelude::{ScopeId, ScopeState};
 use dioxus_router_core::Navigator;
 
-use crate::{utils::use_router_internal::use_router_internal, RouterError};
+use crate::{utils::use_router_internal::use_router_internal};
 
 /// A hook that allows for programmatic navigation.
 ///
@@ -58,14 +58,14 @@ use crate::{utils::use_router_internal::use_router_internal, RouterError};
 /// # let _ = vdom.rebuild();
 /// # assert_eq!(dioxus_ssr::render(&vdom), "<h1>App</h1><p>Content</p>");
 /// ```
-pub fn use_navigate(cx: &ScopeState) -> Result<Navigator<ScopeId>, RouterError> {
+pub fn use_navigate(cx: &ScopeState) -> Option<Navigator<ScopeId>> {
     match use_router_internal(cx) {
-        Some(r) => Ok(r.sender.clone().into()),
-        #[allow(unreachable_code)]
+        Some(r) => Some(r.sender.clone().into()),
         None => {
             #[cfg(debug_assertions)]
             panic!("`use_navigate` must have access to a parent router");
-            Err(RouterError::NotInsideRouter)
+            #[allow(unreachable_code)]
+            None
         }
     }
 }

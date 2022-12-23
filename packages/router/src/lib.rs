@@ -20,9 +20,6 @@ mod contexts {
     pub(crate) mod router;
 }
 
-mod error;
-pub use error::RouterError;
-
 pub use dioxus_router_core::history;
 
 /// Hooks for interacting with the router in components.

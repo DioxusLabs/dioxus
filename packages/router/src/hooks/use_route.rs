@@ -2,7 +2,7 @@ use async_rwlock::RwLockReadGuard;
 use dioxus::{core::Component, prelude::ScopeState};
 use dioxus_router_core::RouterState;
 
-use crate::{utils::use_router_internal::use_router_internal, RouterError};
+use crate::{utils::use_router_internal::use_router_internal};
 
 /// A hook that provides access to information about the current routing location.
 ///
@@ -56,18 +56,18 @@ use crate::{utils::use_router_internal::use_router_internal, RouterError};
 /// ```
 ///
 /// [`use_router`]: crate::hooks::use_router
-pub fn use_route(cx: &ScopeState) -> Result<RwLockReadGuard<RouterState<Component>>, RouterError> {
+pub fn use_route(cx: &ScopeState) -> Option<RwLockReadGuard<RouterState<Component>>> {
     match use_router_internal(cx) {
         Some(r) => loop {
             if let Some(s) = r.state.try_read() {
-                break Ok(s);
+                break Some(s);
             }
         },
-        #[allow(unreachable_code)]
         None => {
             #[cfg(debug_assertions)]
             panic!("`use_route` must have access to a parent router");
-            Err(RouterError::NotInsideRouter)
+            #[allow(unreachable_code)]
+            None
         }
     }
 }

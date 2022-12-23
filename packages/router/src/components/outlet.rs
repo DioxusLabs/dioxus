@@ -77,7 +77,7 @@ pub fn Outlet(cx: Scope<OutletProps>) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            anyhow::bail!("{msg}");
+            return None;
         }
     };
     let state = loop {

@@ -122,7 +122,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            anyhow::bail!("{msg}");
+            return None;
         }
     };
     let state = loop {

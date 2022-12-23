@@ -64,7 +64,7 @@ pub fn GoBackButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            anyhow::bail!("{msg}");
+            return None;
         }
     };
     let state = loop {
@@ -139,7 +139,7 @@ pub fn GoForwardButton<'a>(cx: Scope<'a, HistoryButtonProps<'a>>) -> Element {
             error!("{msg}, will be inactive");
             #[cfg(debug_assertions)]
             panic!("{}", msg);
-            anyhow::bail!("{msg}");
+            return None;
         }
     };
     let state = loop {
