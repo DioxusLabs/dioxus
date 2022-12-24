@@ -139,8 +139,6 @@ impl VirtualDom {
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
         let scope = &self.scopes[scope_id.0];
 
-        log::debug!("Dropping props on scope {:?}", scope_id);
-
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
         // recursively call ensure_drop_safety on all children
@@ -153,8 +151,6 @@ impl VirtualDom {
             }
             if let Ok(mut props) = comp.props.try_borrow_mut() {
                 *props = None;
-            } else {
-                log::debug!("cannot drop props for comp {:?}", scope_id);
             }
         });
 
