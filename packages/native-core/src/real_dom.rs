@@ -174,7 +174,7 @@ impl<S: State> RealDom<S> {
             use dioxus_core::Mutation::*;
             match e {
                 AppendChildren { id, m } => {
-                    let children = self.stack.split_off(m);
+                    let children = self.stack.split_off(self.stack.len() - m);
                     let parent = self.element_to_node_id(id);
                     for child in children {
                         self.add_child(parent, child);
@@ -222,10 +222,10 @@ impl<S: State> RealDom<S> {
                     self.stack.push(clone_id);
                 }
                 ReplaceWith { id, m } => {
-                    let new_nodes = self.stack.split_off(m);
+                    let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
                     for new in new_nodes {
-                        self.tree.insert_after(old_node_id, new);
+                        self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
                     self.tree.remove(old_node_id);
@@ -234,21 +234,21 @@ impl<S: State> RealDom<S> {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.load_child(path);
                     for new in new_nodes {
-                        self.tree.insert_after(old_node_id, new);
+                        self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
                     self.tree.remove(old_node_id);
                 }
                 InsertAfter { id, m } => {
-                    let new_nodes = self.stack.split_off(m);
+                    let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
-                    for new in new_nodes {
+                    for new in new_nodes.into_iter().rev() {
                         self.tree.insert_after(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
                 }
                 InsertBefore { id, m } => {
-                    let new_nodes = self.stack.split_off(m);
+                    let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
                     for new in new_nodes {
                         self.tree.insert_before(old_node_id, new);
