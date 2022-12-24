@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 
 use super::*;
 
@@ -143,10 +142,7 @@ impl ToTokens for BodyNode {
                     pat, expr, body, ..
                 } = exp;
 
-                let renderer: TemplateRenderer = TemplateRenderer {
-                    roots: body,
-                    phantom: PhantomData,
-                };
+                let renderer: TemplateRenderer = TemplateRenderer { roots: body };
 
                 tokens.append_all(quote! {
                      __cx.make_node(

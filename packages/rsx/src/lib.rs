@@ -25,7 +25,6 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash};
 pub use component::*;
 use dioxus_core::{Template, TemplateAttribute, TemplateNode};
 pub use element::*;
-use hot_reload::Empty;
 pub use hot_reload::HotReloadingContext;
 pub use ifmt::*;
 use internment::Intern;
@@ -46,34 +45,26 @@ fn intern<T: Eq + Hash + Send + Sync + ?Sized + 'static>(s: impl Into<Intern<T>>
 
 /// Fundametnally, every CallBody is a template
 #[derive(Default, Debug)]
-pub struct CallBody<Ctx: HotReloadingContext = Empty> {
+pub struct CallBody {
     pub roots: Vec<BodyNode>,
-
-    // set this after
-    pub inline_cx: bool,
-
-    phantom: std::marker::PhantomData<Ctx>,
 }
 
-impl<Ctx: HotReloadingContext> CallBody<Ctx> {
+impl CallBody {
     /// This will try to create a new template from the current body and the previous body. This will return None if the rsx has some dynamic part that has changed.
     /// This function intentionally leaks memory to create a static template.
     /// Keeping the template static allows us to simplify the core of dioxus and leaking memory in dev mode is less of an issue.
     /// the previous_location is the location of the previous template at the time the template was originally compiled.
-    pub fn update_template(
+    pub fn update_template<Ctx: HotReloadingContext>(
         &self,
-        template: Option<CallBody<Ctx>>,
+        template: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template<'static>> {
-        let mut renderer: TemplateRenderer<Ctx> = TemplateRenderer {
-            roots: &self.roots,
-            phantom: std::marker::PhantomData,
-        };
-        renderer.update_template(template, location)
+        let mut renderer: TemplateRenderer = TemplateRenderer { roots: &self.roots };
+        renderer.update_template::<Ctx>(template, location)
     }
 }
 
-impl<Ctx: HotReloadingContext> Parse for CallBody<Ctx> {
+impl Parse for CallBody {
     fn parse(input: ParseStream) -> Result<Self> {
         let mut roots = Vec::new();
 
@@ -87,58 +78,59 @@ impl<Ctx: HotReloadingContext> Parse for CallBody<Ctx> {
             roots.push(node);
         }
 
-        Ok(Self {
-            roots,
-            inline_cx: false,
-            phantom: std::marker::PhantomData,
-        })
+        Ok(Self { roots })
     }
 }
 
 /// Serialize the same way, regardless of flavor
-impl<Ctx: HotReloadingContext> ToTokens for CallBody<Ctx> {
+impl ToTokens for CallBody {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let body: TemplateRenderer<Ctx> = TemplateRenderer {
-            roots: &self.roots,
-            phantom: std::marker::PhantomData,
-        };
+        let body = TemplateRenderer { roots: &self.roots };
 
-        if self.inline_cx {
-            out_tokens.append_all(quote! {
-                Some({
-                    let __cx = cx;
-                    #body
-                })
+        out_tokens.append_all(quote! {
+            ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
+                #body
             })
-        } else {
-            out_tokens.append_all(quote! {
-                ::dioxus::core::LazyNodes::new( move | __cx: &::dioxus::core::ScopeState| -> ::dioxus::core::VNode {
-                    #body
-                })
-            })
-        }
+        })
     }
 }
 
-pub struct TemplateRenderer<'a, Ctx: HotReloadingContext = Empty> {
-    pub roots: &'a [BodyNode],
-    phantom: std::marker::PhantomData<Ctx>,
+#[derive(Default, Debug)]
+pub struct RenderCallBody(pub CallBody);
+
+impl ToTokens for RenderCallBody {
+    fn to_tokens(&self, out_tokens: &mut TokenStream2) {
+        let body: TemplateRenderer = TemplateRenderer {
+            roots: &self.0.roots,
+        };
+
+        out_tokens.append_all(quote! {
+            Some({
+                let __cx = cx;
+                #body
+            })
+        })
+    }
 }
 
-impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
-    fn update_template(
+pub struct TemplateRenderer<'a> {
+    pub roots: &'a [BodyNode],
+}
+
+impl<'a> TemplateRenderer<'a> {
+    fn update_template<Ctx: HotReloadingContext>(
         &mut self,
-        previous_call: Option<CallBody<Ctx>>,
+        previous_call: Option<CallBody>,
         location: &'static str,
     ) -> Option<Template<'static>> {
         let mut mapping = previous_call.map(|call| DynamicMapping::from(call.roots));
 
-        let mut context: DynamicContext<Ctx> = DynamicContext::default();
+        let mut context = DynamicContext::default();
 
         let mut roots = Vec::new();
         for (idx, root) in self.roots.iter().enumerate() {
             context.current_path.push(idx as u8);
-            roots.push(context.update_node(root, &mut mapping)?);
+            roots.push(context.update_node::<Ctx>(root, &mut mapping)?);
             context.current_path.pop();
         }
 
@@ -165,9 +157,9 @@ impl<'a, Ctx: HotReloadingContext> TemplateRenderer<'a, Ctx> {
     }
 }
 
-impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
+impl<'a> ToTokens for TemplateRenderer<'a> {
     fn to_tokens(&self, out_tokens: &mut TokenStream2) {
-        let mut context: DynamicContext<Ctx> = DynamicContext::default();
+        let mut context = DynamicContext::default();
 
         let key = match self.roots.get(0) {
             Some(BodyNode::Element(el)) if self.roots.len() == 1 => el.key.clone(),
@@ -180,18 +172,18 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
             None => quote! { None },
         };
 
+        let spndbg = format!("{:?}", self.roots[0].span());
+        let root_col = spndbg
+            .rsplit_once("..")
+            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
+            .unwrap_or_default();
+
         let root_printer = self.roots.iter().enumerate().map(|(idx, root)| {
             context.current_path.push(idx as u8);
             let out = context.render_static_node(root);
             context.current_path.pop();
             out
         });
-
-        let spndbg = format!("{:?}", self.roots[0].span());
-        let root_col = spndbg
-            .rsplit_once("..")
-            .and_then(|(_, after)| after.split_once(')').map(|(before, _)| before))
-            .unwrap_or_default();
 
         // Render and release the mutable borrow on context
         let roots = quote! { #( #root_printer ),* };
@@ -220,7 +212,6 @@ impl<'a, Ctx: HotReloadingContext> ToTokens for TemplateRenderer<'a, Ctx> {
                 key: #key_tokens,
                 template: std::cell::Cell::new(TEMPLATE),
                 root_ids: Default::default(),
-                // root_ids: std::cell::Cell::from_mut( __cx.bump().alloc([None; #num_roots]) as &mut [::dioxus::core::ElementId]).as_slice_of_cells(),
                 dynamic_nodes: __cx.bump().alloc([ #( #node_printer ),* ]),
                 dynamic_attrs: __cx.bump().alloc([ #( #dyn_attr_printer ),* ]),
             }
@@ -318,32 +309,18 @@ impl DynamicMapping {
 
 // As we create the dynamic nodes, we want to keep track of them in a linear fashion
 // We'll use the size of the vecs to determine the index of the dynamic node in the final output
-pub struct DynamicContext<'a, Ctx: HotReloadingContext> {
+#[derive(Default, Debug)]
+pub struct DynamicContext<'a> {
     dynamic_nodes: Vec<&'a BodyNode>,
     dynamic_attributes: Vec<&'a ElementAttrNamed>,
     current_path: Vec<u8>,
 
     node_paths: Vec<Vec<u8>>,
     attr_paths: Vec<Vec<u8>>,
-
-    phantom: std::marker::PhantomData<Ctx>,
 }
 
-impl<'a, Ctx: HotReloadingContext> Default for DynamicContext<'a, Ctx> {
-    fn default() -> Self {
-        Self {
-            dynamic_nodes: Vec::new(),
-            dynamic_attributes: Vec::new(),
-            current_path: Vec::new(),
-            node_paths: Vec::new(),
-            attr_paths: Vec::new(),
-            phantom: std::marker::PhantomData,
-        }
-    }
-}
-
-impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
-    fn update_node(
+impl<'a> DynamicContext<'a> {
+    fn update_node<Ctx: HotReloadingContext>(
         &mut self,
         root: &'a BodyNode,
         mapping: &mut Option<DynamicMapping>,
@@ -400,7 +377,7 @@ impl<'a, Ctx: HotReloadingContext> DynamicContext<'a, Ctx> {
                 let mut children = Vec::new();
                 for (idx, root) in el.children.iter().enumerate() {
                     self.current_path.push(idx as u8);
-                    children.push(self.update_node(root, mapping)?);
+                    children.push(self.update_node::<Ctx>(root, mapping)?);
                     self.current_path.pop();
                 }
 
@@ -577,9 +554,9 @@ fn create_template() {
         }
     }
 
-    let call_body: CallBody<Mock> = syn::parse2(input).unwrap();
+    let call_body: CallBody = syn::parse2(input).unwrap();
 
-    let template = call_body.update_template(None, "testing").unwrap();
+    let template = call_body.update_template::<Mock>(None, "testing").unwrap();
 
     dbg!(template);
 
@@ -672,9 +649,9 @@ fn diff_template() {
         }
     }
 
-    let call_body1: CallBody<Mock> = syn::parse2(input).unwrap();
+    let call_body1: CallBody = syn::parse2(input).unwrap();
 
-    let template = call_body1.update_template(None, "testing").unwrap();
+    let template = call_body1.update_template::<Mock>(None, "testing").unwrap();
     dbg!(template);
 
     // scrambling the attributes should not cause a full rebuild
@@ -694,10 +671,10 @@ fn diff_template() {
         }
     };
 
-    let call_body2: CallBody<Mock> = syn::parse2(input).unwrap();
+    let call_body2: CallBody = syn::parse2(input).unwrap();
 
     let template = call_body2
-        .update_template(Some(call_body1), "testing")
+        .update_template::<Mock>(Some(call_body1), "testing")
         .unwrap();
     dbg!(template);
 

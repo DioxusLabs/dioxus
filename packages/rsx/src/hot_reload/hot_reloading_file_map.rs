@@ -69,8 +69,8 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                 let old_start = old.span().start();
 
                                 if let (Ok(old_call_body), Ok(new_call_body)) = (
-                                    syn::parse2::<CallBody<Ctx>>(old.tokens),
-                                    syn::parse2::<CallBody<Ctx>>(new),
+                                    syn::parse2::<CallBody>(old.tokens),
+                                    syn::parse2::<CallBody>(new),
                                 ) {
                                     if let Ok(file) = file_path.strip_prefix(crate_dir) {
                                         let line = old_start.line;
@@ -83,10 +83,12 @@ impl<Ctx: HotReloadingContext> FileMap<Ctx> {
                                         // the byte index doesn't matter, but dioxus needs it
                                         + ":0";
 
-                                        if let Some(template) = new_call_body.update_template(
-                                            Some(old_call_body),
-                                            Box::leak(location.into_boxed_str()),
-                                        ) {
+                                        if let Some(template) = new_call_body
+                                            .update_template::<Ctx>(
+                                                Some(old_call_body),
+                                                Box::leak(location.into_boxed_str()),
+                                            )
+                                        {
                                             // dioxus cannot handle empty templates
                                             if template.roots.is_empty() {
                                                 return UpdateResult::NeedsRebuild;

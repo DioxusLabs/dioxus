@@ -11,8 +11,6 @@
 //! - [ ] Keys
 //! - [ ] Properties spreading with with `..` syntax
 
-use std::marker::PhantomData;
-
 use super::*;
 
 use proc_macro2::TokenStream as TokenStream2;
@@ -169,7 +167,6 @@ impl ToTokens for Component {
                 if !self.children.is_empty() {
                     let renderer: TemplateRenderer = TemplateRenderer {
                         roots: &self.children,
-                        phantom: PhantomData,
                     };
 
                     toks.append_all(quote! {
