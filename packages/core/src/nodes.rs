@@ -27,8 +27,6 @@ pub enum RenderReturn<'a> {
     ///
     /// In its place we've produced a placeholder to locate its spot in the dom when
     /// it recovers.
-    ///
-    /// The old nodes are kept around
     Aborted(VPlaceholder),
 
     /// An ongoing future that will resolve to a [`Element`]

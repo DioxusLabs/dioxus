@@ -272,9 +272,9 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
-            Fragment(frag) => self.create_fragment(frag),
             Placeholder(frag) => self.create_placeholder(frag, template, idx),
             Component(component) => self.create_component_node(template, component, idx),
+            Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
         }
     }
 
@@ -326,43 +326,44 @@ impl<'b> VirtualDom {
         0
     }
 
-    pub(crate) fn create_fragment(&mut self, nodes: &'b [VNode<'b>]) -> usize {
-        nodes.iter().map(|child| self.create(child)).sum()
-    }
-
     pub(super) fn create_component_node(
         &mut self,
         template: &'b VNode<'b>,
         component: &'b VComponent<'b>,
         idx: usize,
     ) -> usize {
-        let scope = match component.props.take() {
-            Some(props) => {
-                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
-                let scope = self.new_scope(unbounded_props, component.name);
-                scope.id
-            }
-
-            // Component is coming back, it probably still exists, right?
-            None => component.scope.get().unwrap(),
-        };
-
-        component.scope.set(Some(scope));
-
-        let return_nodes = unsafe { self.run_scope(scope).extend_lifetime_ref() };
-
         use RenderReturn::*;
 
-        match return_nodes {
-            Ready(t) => self.mount_component(scope, template, t, idx),
-            Aborted(t) => {
-                self.mutations
-                    .push(Mutation::CreatePlaceholder { id: ElementId(999) });
+        // Load up a ScopeId for this vcomponent
+        let scope = self.load_scope_from_vcomponent(component);
 
-                1
-            }
+        match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
+            Ready(t) => self.mount_component(scope, template, t, idx),
+            Aborted(t) => self.mount_aborted(template, t),
             Async(_) => self.mount_component_placeholder(template, idx, scope),
         }
+    }
+
+    fn mount_aborted(&mut self, parent: &'b VNode<'b>, placeholder: &VPlaceholder) -> usize {
+        let id = self.next_element(parent, &[]);
+
+        self.mutations.push(Mutation::CreatePlaceholder { id });
+
+        placeholder.id.set(Some(id));
+
+        1
+    }
+
+    /// Load a scope from a vcomponent. If the props don't exist, that means the component is currently "live"
+    fn load_scope_from_vcomponent(&mut self, component: &VComponent) -> ScopeId {
+        component
+            .props
+            .take()
+            .map(|props| {
+                let unbounded_props: Box<dyn AnyProps> = unsafe { std::mem::transmute(props) };
+                self.new_scope(unbounded_props, component.name).id
+            })
+            .unwrap_or_else(|| component.scope.get().unwrap())
     }
 
     fn mount_component(

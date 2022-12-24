@@ -6,14 +6,22 @@ fn catches_panic() {
     let mut dom = VirtualDom::new(app);
 
     let a = dom.rebuild();
+
+    dbg!(a);
 }
 
 fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
-            PanicChild {}
+            h1 { "Title" }
+
+            NoneChild {}
         }
     })
+}
+
+fn NoneChild(cx: Scope) -> Element {
+    None
 }
 
 fn PanicChild(cx: Scope) -> Element {
