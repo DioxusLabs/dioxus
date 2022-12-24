@@ -337,6 +337,8 @@ impl<'b> VirtualDom {
         // Load up a ScopeId for this vcomponent
         let scope = self.load_scope_from_vcomponent(component);
 
+        component.scope.set(Some(scope));
+
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             Ready(t) => self.mount_component(scope, template, t, idx),
             Aborted(t) => self.mount_aborted(template, t),

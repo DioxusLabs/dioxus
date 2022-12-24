@@ -212,7 +212,11 @@ impl<'b> VirtualDom {
     ) {
         let m = self.create_component_node(right_template, right, idx);
 
+        let pre_edits = self.mutations.edits.len();
+
         self.remove_component_node(left, true);
+
+        assert!(self.mutations.edits.len() > pre_edits);
 
         // We want to optimize the replace case to use one less mutation if possible
         // Since mutations are done in reverse, the last node removed will be the first in the stack
@@ -873,7 +877,10 @@ impl<'b> VirtualDom {
     }
 
     fn remove_component_node(&mut self, comp: &VComponent, gen_muts: bool) {
-        let scope = comp.scope.take().unwrap();
+        let scope = comp
+            .scope
+            .take()
+            .expect("VComponents to always have a scope");
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => {
