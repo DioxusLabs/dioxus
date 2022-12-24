@@ -272,7 +272,7 @@ impl<'b> VirtualDom {
         use DynamicNode::*;
         match node {
             Text(text) => self.create_dynamic_text(template, text, idx),
-            Placeholder(frag) => self.create_placeholder(frag, template, idx),
+            Placeholder(place) => self.create_placeholder(place, template, idx),
             Component(component) => self.create_component_node(template, component, idx),
             Fragment(frag) => frag.iter().map(|child| self.create(child)).sum(),
         }
@@ -340,18 +340,8 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             Ready(t) => self.mount_component(scope, template, t, idx),
             Aborted(t) => self.mount_aborted(template, t),
-            Async(_) => self.mount_component_placeholder(template, idx, scope),
+            Async(_) => self.mount_async(template, idx, scope),
         }
-    }
-
-    fn mount_aborted(&mut self, parent: &'b VNode<'b>, placeholder: &VPlaceholder) -> usize {
-        let id = self.next_element(parent, &[]);
-
-        self.mutations.push(Mutation::CreatePlaceholder { id });
-
-        placeholder.id.set(Some(id));
-
-        1
     }
 
     /// Load a scope from a vcomponent. If the props don't exist, that means the component is currently "live"
@@ -420,15 +410,17 @@ impl<'b> VirtualDom {
         0
     }
 
+    fn mount_aborted(&mut self, parent: &'b VNode<'b>, placeholder: &VPlaceholder) -> usize {
+        let id = self.next_element(parent, &[]);
+        self.mutations.push(Mutation::CreatePlaceholder { id });
+        placeholder.id.set(Some(id));
+        1
+    }
+
     /// Take the rendered nodes from a component and handle them if they were async
     ///
     /// IE simply assign an ID to the placeholder
-    fn mount_component_placeholder(
-        &mut self,
-        template: &VNode,
-        idx: usize,
-        scope: ScopeId,
-    ) -> usize {
+    fn mount_async(&mut self, template: &VNode, idx: usize, scope: ScopeId) -> usize {
         let new_id = self.next_element(template, template.template.node_paths[idx]);
 
         // Set the placeholder of the scope

@@ -430,7 +430,7 @@ impl<'a> ComponentReturn<'a> for Element<'a> {
     fn into_return(self, _cx: &ScopeState) -> RenderReturn<'a> {
         match self {
             Some(node) => RenderReturn::Ready(node),
-            None => RenderReturn::Aborted(VPlaceholder::default()),
+            None => RenderReturn::default(),
         }
     }
 }

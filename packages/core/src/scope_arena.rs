@@ -13,7 +13,6 @@ use futures_util::FutureExt;
 use std::{
     mem,
     pin::Pin,
-    rc::Rc,
     sync::Arc,
     task::{Context, Poll},
 };
