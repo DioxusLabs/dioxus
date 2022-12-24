@@ -30,3 +30,8 @@ mod service;
 
 pub use routecontext::*;
 pub use service::*;
+
+#[derive(Debug)]
+pub enum Error {
+    NotFound,
+}

@@ -1,4 +1,4 @@
-use crate::{ParsedRoute, RouteContext, RouterContext};
+use crate::{Error as RouterError, ParsedRoute, RouteContext, RouterContext};
 use dioxus::core::{ScopeId, ScopeState};
 use std::{borrow::Cow, str::FromStr, sync::Arc};
 use url::Url;
@@ -106,6 +106,23 @@ impl UseRoute {
         T: FromStr,
     {
         self.segment(name).map(|value| value.parse::<T>())
+    }
+
+    /// Get the named parameter from the path, as defined in your router. The
+    /// value will be parsed into the type specified by `T` by calling
+    /// `value.parse::<T>()`. This method returns `None` if the named
+    /// parameter does not exist in the current path.
+    pub fn parse_segment_or_404<T>(&self, name: &str) -> Option<T>
+    where
+        T: FromStr,
+    {
+        match self.parse_segment(name) {
+            Some(Ok(val)) => Some(val),
+            _ => {
+                // todo: throw a 404
+                None
+            }
+        }
     }
 }
 

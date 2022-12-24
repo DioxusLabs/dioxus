@@ -67,7 +67,7 @@ impl ErrorBoundary {
 ///     })
 /// }
 /// ```
-pub trait Throw {
+pub trait Throw<S = ()>: Sized {
     /// The value that will be returned in if the given value is `Ok`.
     type Out;
 
@@ -94,6 +94,34 @@ pub trait Throw {
     /// }
     /// ```
     fn throw(self, cx: &ScopeState) -> Option<Self::Out>;
+
+    /// Returns an option that evalutes to None if there is an error, injecting the error to the nearest error boundary.
+    ///
+    /// If the value is `Ok`, then throw returns the value, not aborting the rendering preocess.
+    ///
+    /// The call stack is saved for this component and provided to the error boundary
+    ///
+    ///
+    /// Note that you can also manually throw errors using the throw method on `ScopeState` directly,
+    /// which is what this trait shells out to.
+    ///
+    ///
+    /// ```rust, ignore
+    ///
+    /// #[inline_props]
+    /// fn app(cx: Scope, count: String) -> Element {
+    ///     let id: i32 = count.parse().throw(cx)?;
+    ///
+    ///     cx.render(rsx! {
+    ///         div { "Count {}" }
+    ///     })
+    /// }
+    /// ```
+    fn throw_with<D: Debug + 'static>(
+        self,
+        cx: &ScopeState,
+        e: impl FnOnce() -> D,
+    ) -> Option<Self::Out>;
 }
 
 /// We call clone on any errors that can be owned out of a reference
@@ -105,6 +133,20 @@ impl<'a, T, O: Debug + 'static, E: ToOwned<Owned = O>> Throw for &'a Result<T, E
             Ok(t) => Some(t),
             Err(e) => {
                 cx.throw(e.to_owned());
+                None
+            }
+        }
+    }
+
+    fn throw_with<D: Debug + 'static>(
+        self,
+        cx: &ScopeState,
+        err: impl FnOnce() -> D,
+    ) -> Option<Self::Out> {
+        match self {
+            Ok(t) => Some(t),
+            Err(_e) => {
+                cx.throw(err());
                 None
             }
         }
@@ -124,6 +166,17 @@ impl<T, E: Debug + 'static> Throw for Result<T, E> {
             }
         }
     }
+
+    fn throw_with<D: Debug + 'static>(
+        self,
+        cx: &ScopeState,
+        error: impl FnOnce() -> D,
+    ) -> Option<Self::Out> {
+        self.ok().or_else(|| {
+            cx.throw(error());
+            None
+        })
+    }
 }
 
 /// Or just throw errors we know about
@@ -131,12 +184,20 @@ impl<T> Throw for Option<T> {
     type Out = T;
 
     fn throw(self, cx: &ScopeState) -> Option<T> {
-        match self {
-            Some(t) => Some(t),
-            None => {
-                cx.throw("None error.");
-                None
-            }
-        }
+        self.or_else(|| {
+            cx.throw("None error.");
+            None
+        })
+    }
+
+    fn throw_with<D: Debug + 'static>(
+        self,
+        cx: &ScopeState,
+        error: impl FnOnce() -> D,
+    ) -> Option<Self::Out> {
+        self.or_else(|| {
+            cx.throw(error());
+            None
+        })
     }
 }
