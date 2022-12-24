@@ -36,6 +36,7 @@ macro_rules! trait_method_mapping {
 macro_rules! trait_methods {
     (
         @base
+        $(#[$trait_attr:meta])*
         $trait:ident;
         $fn:ident;
         $(
@@ -43,6 +44,7 @@ macro_rules! trait_methods {
             $name:ident $(: $($arg:literal),*)*;
         )+
     ) => {
+        $(#[$trait_attr])*
         pub trait $trait {
             $(
                 $(#[$attr])*
@@ -1595,7 +1597,6 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
     prevent_default: "dioxus-prevent-default";
 
-
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accent-height>
     accent_height: "accent-height";
 
@@ -2342,4 +2343,5 @@ trait_methods! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
     zoomAndPan: "zoomAndPan";
+
 }
