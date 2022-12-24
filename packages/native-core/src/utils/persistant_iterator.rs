@@ -73,11 +73,11 @@ impl PersistantElementIter {
             .edits
             .iter()
             .filter_map(|m| {
-                // nodes within templates will never be removedns
-                if let Mutation::Remove { id } = m {
-                    Some(rdom.element_to_node_id(*id))
-                } else {
-                    None
+                // nodes within templates will never be removed
+                match m {
+                    Mutation::Remove { id } => Some(rdom.element_to_node_id(*id)),
+                    Mutation::ReplaceWith { id, .. } => Some(rdom.element_to_node_id(*id)),
+                    _ => None,
                 }
             })
             .collect();
@@ -358,12 +358,16 @@ fn persist_removes() {
     let mut rdom: RealDom<Empty> = RealDom::new();
 
     let build = vdom.rebuild();
+    println!("{:#?}", build);
     let _to_update = rdom.apply_mutations(build);
 
     // this will end on the node that is removed
     let mut iter1 = PersistantElementIter::new();
     // this will end on the after node that is removed
     let mut iter2 = PersistantElementIter::new();
+    // root
+    iter1.next(&rdom).id();
+    iter2.next(&rdom).id();
     // div
     iter1.next(&rdom).id();
     iter2.next(&rdom).id();
@@ -386,27 +390,24 @@ fn persist_removes() {
 
     vdom.mark_dirty(ScopeId(0));
     let update = vdom.render_immediate();
+    println!("{:#?}", update);
     iter1.prune(&update, &rdom);
     iter2.prune(&update, &rdom);
     let _to_update = rdom.apply_mutations(update);
 
-    let p_tag = "1".to_string();
+    let root_tag = "Root".to_string();
     let idx = iter1.next(&rdom).id();
+    dbg!(&rdom[idx].node_data.node_type);
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: p_tag, .. }
+        NodeType::Element { tag: root_tag, .. }
     ));
-    let text = "2".to_string();
-    let idx = iter1.next(&rdom).id();
-    assert!(matches!(
-        &rdom[idx].node_data.node_type,
-        NodeType::Text { text, .. }
-    ));
-    let div_tag = "div".to_string();
+
     let idx = iter2.next(&rdom).id();
+    dbg!(&rdom[idx].node_data.node_type);
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element { tag: root_tag, .. }
     ));
 }
 
