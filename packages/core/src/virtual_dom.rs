@@ -486,7 +486,7 @@ impl VirtualDom {
             }
             // If an error occurs, we should try to render the default error component and context where the error occured
             RenderReturn::Aborted(_placeholder) => panic!("Cannot catch errors during rebuild"),
-            RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
+            RenderReturn::Pending(_) => unreachable!("Root scope cannot be an async component"),
         }
 
         self.finalize()

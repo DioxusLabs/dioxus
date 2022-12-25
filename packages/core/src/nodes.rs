@@ -30,7 +30,7 @@ pub enum RenderReturn<'a> {
     Aborted(VPlaceholder),
 
     /// An ongoing future that will resolve to a [`Element`]
-    Async(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
+    Pending(BumpBox<'a, dyn Future<Output = Element<'a>> + 'a>),
 }
 
 impl<'a> Default for RenderReturn<'a> {
@@ -443,7 +443,7 @@ where
 {
     fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
         let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
-        RenderReturn::Async(unsafe { BumpBox::from_raw(f) })
+        RenderReturn::Pending(unsafe { BumpBox::from_raw(f) })
     }
 }
 

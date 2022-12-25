@@ -84,7 +84,7 @@ impl VirtualDom {
         };
 
         // immediately resolve futures that can be resolved
-        if let RenderReturn::Async(task) = &mut new_nodes {
+        if let RenderReturn::Pending(task) = &mut new_nodes {
             let mut leaves = self.scheduler.leaves.borrow_mut();
 
             let entry = leaves.vacant_entry();

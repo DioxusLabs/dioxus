@@ -342,7 +342,7 @@ impl<'b> VirtualDom {
         match unsafe { self.run_scope(scope).extend_lifetime_ref() } {
             Ready(t) => self.mount_component(scope, template, t, idx),
             Aborted(t) => self.mount_aborted(template, t),
-            Async(_) => self.mount_async(template, idx, scope),
+            Pending(_) => self.mount_async(template, idx, scope),
         }
     }
 

@@ -30,7 +30,7 @@ impl<'b> VirtualDom {
                 .try_load_node()
                 .expect("Call rebuild before diffing");
 
-            use RenderReturn::{Aborted, Async, Ready};
+            use RenderReturn::{Aborted, Pending, Ready};
 
             match (old, new) {
                 // Normal pathway
@@ -43,16 +43,16 @@ impl<'b> VirtualDom {
                 (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
 
                 // Becomes async, do nothing while we ait
-                (Ready(_nodes), Async(_fut)) => self.diff_ok_to_async(_nodes, scope),
+                (Ready(_nodes), Pending(_fut)) => self.diff_ok_to_async(_nodes, scope),
 
                 // Placeholder becomes something
                 // We should also clear the error now
                 (Aborted(l), Ready(r)) => self.replace_placeholder(l, [r]),
 
-                (Aborted(_), Async(_)) => todo!("async should not resolve here"),
-                (Async(_), Ready(_)) => todo!("async should not resolve here"),
-                (Async(_), Aborted(_)) => todo!("async should not resolve here"),
-                (Async(_), Async(_)) => {
+                (Aborted(_), Pending(_)) => todo!("async should not resolve here"),
+                (Pending(_), Ready(_)) => todo!("async should not resolve here"),
+                (Pending(_), Aborted(_)) => todo!("async should not resolve here"),
+                (Pending(_), Pending(_)) => {
                     // All suspense should resolve before we diff it again
                     panic!("Should not roll from suspense to suspense.");
                 }
