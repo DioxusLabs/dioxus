@@ -1,4 +1,4 @@
-use crate::{Error as RouterError, ParsedRoute, RouteContext, RouterContext};
+use crate::{ParsedRoute, RouteContext, RouterContext};
 use dioxus::core::{ScopeId, ScopeState};
 use std::{borrow::Cow, str::FromStr, sync::Arc};
 use url::Url;

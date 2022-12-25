@@ -43,7 +43,7 @@ impl<'b> VirtualDom {
                 (Aborted(l), Aborted(r)) => r.id.set(l.id.get()),
 
                 // Becomes async, do nothing while we ait
-                (Ready(nodes), Async(fut)) => todo!(),
+                (Ready(_nodes), Async(_fut)) => self.diff_ok_to_async(_nodes, scope),
 
                 // Placeholder becomes something
                 // We should also clear the error now
@@ -61,12 +61,12 @@ impl<'b> VirtualDom {
         self.scope_stack.pop();
     }
 
-    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _p: &'b VPlaceholder) {
-        todo!()
+    fn diff_ok_to_async(&mut self, _new: &'b VNode<'b>, _scope: ScopeId) {
+        //
     }
 
-    fn diff_err_to_ok(&mut self, _l: &'b VNode<'b>) {
-        todo!("Dioxus cannot currently recover a component after it has been errored. It must be removed from a parent");
+    fn diff_ok_to_err(&mut self, _l: &'b VNode<'b>, _p: &'b VPlaceholder) {
+        todo!()
     }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
@@ -699,7 +699,7 @@ impl<'b> VirtualDom {
                         let scope = comp.scope.get().unwrap();
                         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
                             RenderReturn::Ready(node) => self.push_all_real_nodes(node),
-                            RenderReturn::Aborted(node) => todo!(),
+                            RenderReturn::Aborted(_node) => todo!(),
                             _ => todo!(),
                         }
                     }
@@ -803,7 +803,7 @@ impl<'b> VirtualDom {
     }
 
     fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool) {
-        for (idx, _) in node.template.roots.iter().enumerate() {
+        for idx in 0..node.template.roots.len() {
             if let Some(dy) = node.dynamic_root(idx) {
                 self.remove_dynamic_node(dy, gen_muts);
             } else {
@@ -883,10 +883,7 @@ impl<'b> VirtualDom {
             .expect("VComponents to always have a scope");
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
-            RenderReturn::Ready(t) => {
-                println!("Removing component node sync {:?}", gen_muts);
-                self.remove_node(t, gen_muts)
-            }
+            RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
             _ => todo!("cannot handle nonstandard nodes"),
         };
 

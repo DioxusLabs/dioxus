@@ -8,7 +8,7 @@ use std::{
 /// A boundary that will capture any errors from child components
 pub struct ErrorBoundary {
     error: RefCell<Option<CapturedError>>,
-    id: ScopeId,
+    _id: ScopeId,
 }
 
 /// An instance of an error captured by a descendant component.
@@ -36,7 +36,7 @@ impl ErrorBoundary {
     pub fn new(id: ScopeId) -> Self {
         Self {
             error: RefCell::new(None),
-            id,
+            _id: id,
         }
     }
 

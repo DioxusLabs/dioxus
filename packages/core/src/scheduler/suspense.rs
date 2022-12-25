@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
-    rc::Rc,
 };
 
 /// An ID representing an ongoing suspended component

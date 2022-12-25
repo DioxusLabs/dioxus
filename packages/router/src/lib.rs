@@ -31,7 +31,11 @@ mod service;
 pub use routecontext::*;
 pub use service::*;
 
+/// An error specific to the Router
 #[derive(Debug)]
 pub enum Error {
+    /// The route was not found while trying to navigate to it.
+    ///
+    /// This will force the router to redirect to the 404 page.
     NotFound,
 }

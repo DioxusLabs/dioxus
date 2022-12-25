@@ -2,8 +2,8 @@ use super::{waker::ArcWake, Scheduler, SchedulerMsg};
 use crate::ScopeId;
 use std::cell::RefCell;
 use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
-use std::{pin::Pin, rc::Rc};
 
 /// A task's unique identifier.
 ///

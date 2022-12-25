@@ -1,7 +1,7 @@
 use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
-    innerlude::{DirtyScope, VPlaceholder},
+    innerlude::DirtyScope,
     innerlude::{SuspenseId, SuspenseLeaf},
     nodes::RenderReturn,
     scheduler::ArcWake,
