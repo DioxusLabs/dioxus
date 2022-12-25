@@ -53,6 +53,7 @@ impl Create {
             .arg(&self.template)
             .arg("--name")
             .arg(&self.name)
+            .arg("--force")
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .output()?;

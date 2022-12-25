@@ -7,7 +7,7 @@ async fn main() -> Result<()> {
     let args = Cli::parse();
     set_up_logging();
 
-    let dioxus_config = DioxusConfig::load()?;
+    let dioxus_config = DioxusConfig::load().unwrap_or(DioxusConfig::default());
 
     let plugin_state = PluginManager::init(dioxus_config.plugin);
 
