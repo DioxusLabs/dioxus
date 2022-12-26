@@ -161,7 +161,7 @@ impl Buffer {
         while let Some(attr) = attr_iter.next() {
             self.indent += 1;
             if !sameline {
-                self.write_comments(attr.attr.flart())?;
+                self.write_comments(attr.attr.start())?;
             }
             self.indent -= 1;
 
