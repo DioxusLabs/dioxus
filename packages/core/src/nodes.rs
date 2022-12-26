@@ -357,7 +357,7 @@ pub enum AttributeValue<'a> {
     Listener(ListenerCb<'a>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(AnyValueContainer),
+    Any(RefCell<Option<AnyValueContainer>>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -392,9 +392,9 @@ impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
     }
 }
 
-/// A boxed value that implements PartialEq and Any
 #[derive(Clone)]
 #[cfg(not(feature = "sync_attributes"))]
+/// A boxed value that implements PartialEq, and Any
 pub struct AnyValueContainer(pub std::rc::Rc<dyn AnyValue>);
 
 #[derive(Clone)]
@@ -732,6 +732,6 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
 
 impl<'a> IntoAttributeValue<'a> for AnyValueContainer {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
-        AttributeValue::Any(self)
+        AttributeValue::Any(RefCell::new(Some(self)))
     }
 }

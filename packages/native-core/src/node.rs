@@ -103,7 +103,7 @@ impl From<AttributeValue<'_>> for OwnedAttributeValue {
             AttributeValue::Float(float) => Self::Float(float),
             AttributeValue::Int(int) => Self::Int(int),
             AttributeValue::Bool(bool) => Self::Bool(bool),
-            AttributeValue::Any(any) => Self::Any(any),
+            AttributeValue::Any(any) => Self::Any(any.borrow().as_ref().unwrap().clone()),
             AttributeValue::None => Self::None,
             _ => Self::None,
         }

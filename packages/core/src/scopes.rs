@@ -88,7 +88,7 @@ pub struct ScopeState {
     pub(crate) spawned_tasks: FxHashSet<TaskId>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-    pub(crate) listeners: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
@@ -374,11 +374,15 @@ impl<'src> ScopeState {
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
-        let mut listeners = self.listeners.borrow_mut();
+        let mut listeners = self.attributes_to_drop.borrow_mut();
         for attr in element.dynamic_attrs {
-            if let AttributeValue::Listener(_) = attr.value {
-                let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                listeners.push(unbounded);
+            match attr.value {
+                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    listeners.push(unbounded);
+                }
+
+                _ => (),
             }
         }
 
