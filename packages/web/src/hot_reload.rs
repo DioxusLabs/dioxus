@@ -18,15 +18,15 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
 
 #[cfg(debug_assertions)]
 pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
-    use core::panic;
     use std::convert::TryInto;
+
+    use serde::Deserialize;
 
     let window = web_sys::window().unwrap();
 
-    let protocol = if window.location().protocol().unwrap() == "https:" {
-        "wss:"
-    } else {
-        "ws:"
+    let protocol = match window.location().protocol().unwrap() {
+        prot if prot == "https:" => "wss:",
+        _ => "ws:",
     };
 
     let url = format!(
@@ -43,10 +43,11 @@ pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
             let text: Result<String, _> = text.try_into();
             if let Ok(string) = text {
-                match serde_json::from_str(Box::leak(string.into_boxed_str())) {
-                    Ok(template) => _ = tx.unbounded_send(template),
-                    Err(e) => panic!("Failed to parse template: {}", e),
-                }
+                let val = serde_json::from_str::<serde_json::Value>(&string).unwrap();
+                // leak the value
+                let val: &'static serde_json::Value = Box::leak(Box::new(val));
+                let template: Template<'_> = Template::deserialize(val).unwrap();
+                tx.unbounded_send(template).unwrap();
             }
         }
     }) as Box<dyn FnMut(MessageEvent)>);

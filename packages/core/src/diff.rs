@@ -840,8 +840,11 @@ impl<'b> VirtualDom {
                 .map(|path| path.len());
             // if the path is 1 the attribute is in the root, so we don't need to clean it up
             // if the path is 0, the attribute is a not attached at all, so we don't need to clean it up
-            if let Some(..=1) = path_len {
-                continue;
+
+            if let Some(len) = path_len {
+                if (..=1).contains(&len) {
+                    continue;
+                }
             }
 
             let next_id = attr.mounted_element.get();
@@ -908,7 +911,13 @@ impl<'b> VirtualDom {
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
-            _ => todo!("cannot handle nonstandard nodes"),
+            RenderReturn::Aborted(t) => {
+                if let Some(id) = t.id.get() {
+                    self.try_reclaim(id);
+                }
+                return;
+            }
+            _ => todo!(),
         };
 
         let props = self.scopes[scope.0].props.take();
