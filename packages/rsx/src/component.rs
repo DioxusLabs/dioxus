@@ -165,7 +165,7 @@ impl ToTokens for Component {
                 }
 
                 if !self.children.is_empty() {
-                    let renderer = TemplateRenderer {
+                    let renderer: TemplateRenderer = TemplateRenderer {
                         roots: &self.children,
                     };
 

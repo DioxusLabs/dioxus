@@ -70,6 +70,21 @@ impl<'b> VirtualDom {
     }
 
     fn diff_node(&mut self, left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) {
+        // If hot reloading is enabled, we need to make sure we're using the latest template
+        #[cfg(debug_assertions)]
+        {
+            let (path, byte_index) = right_template.template.get().name.rsplit_once(':').unwrap();
+            if let Some(map) = self.templates.get(path) {
+                let byte_index = byte_index.parse::<usize>().unwrap();
+                if let Some(&template) = map.get(&byte_index) {
+                    right_template.template.set(template);
+                    if template != left_template.template.get() {
+                        return self.replace(left_template, [right_template]);
+                    }
+                }
+            }
+        }
+
         // If the templates are the same, we don't need to do anything, nor do we want to
         if templates_are_the_same(left_template, right_template) {
             return;
@@ -114,11 +129,7 @@ impl<'b> VirtualDom {
             });
 
         // Make sure the roots get transferred over while we're here
-        left_template
-            .root_ids
-            .iter()
-            .zip(right_template.root_ids.iter())
-            .for_each(|(left, right)| right.set(left.get()));
+        right_template.root_ids.transfer(&left_template.root_ids);
     }
 
     fn diff_dynamic_node(
@@ -663,6 +674,7 @@ impl<'b> VirtualDom {
     /// Push all the real nodes on the stack
     fn push_all_real_nodes(&mut self, node: &'b VNode<'b>) -> usize {
         node.template
+            .get()
             .roots
             .iter()
             .enumerate()
@@ -671,7 +683,7 @@ impl<'b> VirtualDom {
                     Some(node) => node,
                     None => {
                         self.mutations.push(Mutation::PushRoot {
-                            id: node.root_ids[idx].get().unwrap(),
+                            id: node.root_ids.get(idx).unwrap(),
                         });
                         return 1;
                     }
@@ -803,11 +815,11 @@ impl<'b> VirtualDom {
     }
 
     fn reclaim_roots(&mut self, node: &VNode, gen_muts: bool) {
-        for idx in 0..node.template.roots.len() {
+        for (idx, _) in node.template.get().roots.iter().enumerate() {
             if let Some(dy) = node.dynamic_root(idx) {
                 self.remove_dynamic_node(dy, gen_muts);
             } else {
-                let id = node.root_ids[idx].get().unwrap();
+                let id = node.root_ids.get(idx).unwrap();
                 if gen_muts {
                     self.mutations.push(Mutation::Remove { id });
                 }
@@ -820,7 +832,15 @@ impl<'b> VirtualDom {
         let mut id = None;
         for (idx, attr) in node.dynamic_attrs.iter().enumerate() {
             // We'll clean up the root nodes either way, so don't worry
-            if node.template.attr_paths[idx].len() == 1 {
+            let path_len = node
+                .template
+                .get()
+                .attr_paths
+                .get(idx)
+                .map(|path| path.len());
+            // if the path is 1 the attribute is in the root, so we don't need to clean it up
+            // if the path is 0, the attribute is a not attached at all, so we don't need to clean it up
+            if let Some(..=1) = path_len {
                 continue;
             }
 
@@ -838,12 +858,16 @@ impl<'b> VirtualDom {
 
     fn remove_nested_dyn_nodes(&mut self, node: &VNode) {
         for (idx, dyn_node) in node.dynamic_nodes.iter().enumerate() {
-            // Roots are cleaned up automatically above
-            if node.template.node_paths[idx].len() == 1 {
-                continue;
+            let path_len = node
+                .template
+                .get()
+                .node_paths
+                .get(idx)
+                .map(|path| path.len());
+            // Roots are cleaned up automatically above and nodes with a empty path are placeholders
+            if let Some(2..) = path_len {
+                self.remove_dynamic_node(dyn_node, false)
             }
-
-            self.remove_dynamic_node(dyn_node, false);
         }
     }
 
@@ -903,7 +927,7 @@ impl<'b> VirtualDom {
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
         match node.dynamic_root(0) {
-            None => node.root_ids[0].get().unwrap(),
+            None => node.root_ids.get(0).unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_first_element(&t[0]),
             Some(Placeholder(t)) => t.id.get().unwrap(),
@@ -918,8 +942,8 @@ impl<'b> VirtualDom {
     }
 
     fn find_last_element(&self, node: &'b VNode<'b>) -> ElementId {
-        match node.dynamic_root(node.template.roots.len() - 1) {
-            None => node.root_ids.last().unwrap().get().unwrap(),
+        match node.dynamic_root(node.template.get().roots.len() - 1) {
+            None => node.root_ids.last().unwrap(),
             Some(Text(t)) => t.id.get().unwrap(),
             Some(Fragment(t)) => self.find_last_element(t.last().unwrap()),
             Some(Placeholder(t)) => t.id.get().unwrap(),
@@ -941,27 +965,30 @@ impl<'b> VirtualDom {
 /// We use the pointer of the dynamic_node list in this case
 fn templates_are_the_same<'b>(left_template: &'b VNode<'b>, right_template: &'b VNode<'b>) -> bool {
     std::ptr::eq(left_template, right_template)
-        || std::ptr::eq(left_template.dynamic_nodes, right_template.dynamic_nodes)
 }
 
 fn templates_are_different(left_template: &VNode, right_template: &VNode) -> bool {
-    !std::ptr::eq(left_template.template.name, right_template.template.name)
-        && left_template.template.name != right_template.template.name
+    let left_template_name = left_template.template.get().name;
+    let right_template_name = right_template.template.get().name;
+    // we want to re-create the node if the template name is different by pointer even if the value is the same so that we can detect when hot reloading changes the template
+    !std::ptr::eq(left_template_name, right_template_name)
 }
 
 fn matching_components<'a>(
     left: &'a VNode<'a>,
     right: &'a VNode<'a>,
 ) -> Option<Vec<(&'a VComponent<'a>, &'a VComponent<'a>)>> {
-    if left.template.roots.len() != right.template.roots.len() {
+    let left_template = left.template.get();
+    let right_template = right.template.get();
+    if left_template.roots.len() != right_template.roots.len() {
         return None;
     }
 
     // run through the components, ensuring they're the same
-    left.template
+    left_template
         .roots
         .iter()
-        .zip(right.template.roots.iter())
+        .zip(right_template.roots.iter())
         .map(|(l, r)| {
             let (l, r) = match (l, r) {
                 (TemplateNode::Dynamic { id: l }, TemplateNode::Dynamic { id: r }) => (l, r),
@@ -986,11 +1013,12 @@ fn matching_components<'a>(
 ///  - for appending children we can use AppendChildren
 #[allow(dead_code)]
 fn is_dyn_node_only_child(node: &VNode, idx: usize) -> bool {
-    let path = node.template.node_paths[idx];
+    let template = node.template.get();
+    let path = template.node_paths[idx];
 
     // use a loop to index every static node's children until the path has run out
     // only break if the last path index is a dynamic node
-    let mut static_node = &node.template.roots[path[0] as usize];
+    let mut static_node = &template.roots[path[0] as usize];
 
     for i in 1..path.len() - 1 {
         match static_node {

@@ -126,11 +126,9 @@ impl VirtualDom {
             }
         });
 
-        for root in node.root_ids {
-            if let Some(id) = root.get() {
-                if id.0 != 0 {
-                    self.try_reclaim(id);
-                }
+        for id in &node.root_ids {
+            if id.0 != 0 {
+                self.try_reclaim(id);
             }
         }
     }

@@ -12,6 +12,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.2.1" }
+dioxus-rsx = { path = "../rsx", optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_repr = { version = "0.1", optional = true }
 wasm-bindgen = { version = "0.2.79", optional = true }
@@ -47,3 +48,4 @@ serde_json = "*"
 default = ["serialize"]
 serialize = ["serde", "serde_repr", "euclid/serde", "keyboard-types/serde", "dioxus-core/serialize"]
 wasm-bind = ["web-sys", "wasm-bindgen"]
+hot-reload-context = ["dioxus-rsx"]

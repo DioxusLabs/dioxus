@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use dioxus_core::VirtualDom;
+use dioxus_core::Template;
 
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use std::io::{BufRead, BufReader};
@@ -13,7 +13,7 @@ fn handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalS
         .ok()
 }
 
-pub(crate) fn init(_dom: &VirtualDom) {
+pub(crate) fn init(proxy: futures_channel::mpsc::UnboundedSender<Template<'static>>) {
     let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
         Arc::new(Mutex::new(None));
 
@@ -36,11 +36,9 @@ pub(crate) fn init(_dom: &VirtualDom) {
                 let mut buf = String::new();
                 match conn.read_line(&mut buf) {
                     Ok(_) => {
-                        todo!()
-                        // let msg: SetTemplateMsg = serde_json::from_str(&buf).unwrap();
-                        // channel
-                        //     .start_send(SchedulerMsg::SetTemplate(Box::new(msg)))
-                        //     .unwrap();
+                        let msg: Template<'static> =
+                            serde_json::from_str(Box::leak(buf.into_boxed_str())).unwrap();
+                        proxy.unbounded_send(msg).unwrap();
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {
