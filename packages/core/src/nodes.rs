@@ -500,11 +500,11 @@ pub trait AnyValue: Sync + Send + 'static {
 #[cfg(feature = "sync_attributes")]
 impl<T: Any + PartialEq + Send + Sync + 'static> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.type_id() != other.type_id() {
+        if let Some(other) = other.as_any().downcast_ref() {
+            self == other
+        } else {
             return false;
         }
-
-        self == unsafe { &*(other as *const _ as *const T) }
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -525,11 +525,11 @@ pub trait AnyValue: 'static {
 #[cfg(not(feature = "sync_attributes"))]
 impl<T: Any + PartialEq + 'static> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.type_id() != other.type_id() {
+        if let Some(other) = other.as_any().downcast_ref() {
+            self == other
+        } else {
             return false;
         }
-
-        self == unsafe { &*(other as *const _ as *const T) }
     }
 
     fn as_any(&self) -> &dyn Any {
