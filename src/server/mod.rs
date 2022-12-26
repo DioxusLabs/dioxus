@@ -1,3 +1,4 @@
+use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConfig, Result};
 use axum::{
     body::{Full, HttpBody},
     extract::{ws::Message, Extension, TypedHeader, WebSocketUpgrade},
@@ -8,19 +9,19 @@ use axum::{
 };
 use cargo_metadata::diagnostic::Diagnostic;
 use colored::Colorize;
-// use dioxus_rsx::try_parse_template;
+use dioxus_core::Template;
+use dioxus_html::HtmlCtx;
+use dioxus_rsx::hot_reload::*;
 use notify::{RecommendedWatcher, Watcher};
-use syn::spanned::Spanned;
-
-use std::{net::UdpSocket, path::PathBuf, process::Command, sync::Arc};
+use std::{
+    net::UdpSocket,
+    path::PathBuf,
+    process::Command,
+    sync::{Arc, Mutex},
+};
+use tokio::sync::broadcast;
 use tower::ServiceBuilder;
 use tower_http::services::fs::{ServeDir, ServeFileSystemResponseBody};
-
-use crate::{builder, plugin::PluginManager, serve::Serve, BuildResult, CrateConfig, Result};
-use tokio::sync::broadcast;
-
-mod hot_reload;
-use hot_reload::*;
 
 pub struct BuildManager {
     config: CrateConfig,
@@ -68,6 +69,62 @@ pub async fn startup(port: u16, config: CrateConfig) -> Result<()> {
     Ok(())
 }
 
+pub struct HotReloadState {
+    pub messages: broadcast::Sender<Template<'static>>,
+    pub build_manager: Arc<BuildManager>,
+    pub file_map: Arc<Mutex<FileMap<HtmlCtx>>>,
+    pub watcher_config: CrateConfig,
+}
+
+pub async fn hot_reload_handler(
+    ws: WebSocketUpgrade,
+    _: Option<TypedHeader<headers::UserAgent>>,
+    Extension(state): Extension<Arc<HotReloadState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|mut socket| async move {
+        log::info!("🔥 Hot Reload WebSocket connected");
+        {
+            // update any rsx calls that changed before the websocket connected.
+            {
+                log::info!("🔮 Finding updates since last compile...");
+                let templates: Vec<_> = {
+                    state
+                        .file_map
+                        .lock()
+                        .unwrap()
+                        .map
+                        .values()
+                        .filter_map(|(_, template_slot)| *template_slot)
+                        .collect()
+                };
+                for template in templates {
+                    if socket
+                        .send(Message::Text(serde_json::to_string(&template).unwrap()))
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
+            log::info!("finished");
+        }
+
+        let mut rx = state.messages.subscribe();
+        loop {
+            if let Ok(rsx) = rx.recv().await {
+                if socket
+                    .send(Message::Text(serde_json::to_string(&rsx).unwrap()))
+                    .await
+                    .is_err()
+                {
+                    break;
+                };
+            }
+        }
+    })
+}
+
 #[allow(unused_assignments)]
 pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let first_build_result = crate::builder::build(&config, false)?;
@@ -78,7 +135,9 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
 
     let dist_path = config.out_dir.clone();
     let (reload_tx, _) = broadcast::channel(100);
-    let last_file_rebuild = Arc::new(Mutex::new(FileMap::new(config.crate_dir.clone())));
+    let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(
+        config.crate_dir.clone(),
+    )));
     let build_manager = Arc::new(BuildManager {
         config: config.clone(),
         reload_tx: reload_tx.clone(),
@@ -87,7 +146,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let hot_reload_state = Arc::new(HotReloadState {
         messages: hot_reload_tx.clone(),
         build_manager: build_manager.clone(),
-        last_file_rebuild: last_file_rebuild.clone(),
+        file_map: file_map.clone(),
         watcher_config: config.clone(),
     });
 
@@ -95,8 +154,6 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
     let ws_reload_state = Arc::new(WsReloadState {
         update: reload_tx.clone(),
     });
-
-    let mut last_update_time = chrono::Local::now().timestamp();
 
     // file watcher: check file change
     let allow_watch_path = config
@@ -108,109 +165,45 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
         .unwrap_or_else(|| vec![PathBuf::from("src")]);
 
     let watcher_config = config.clone();
+    let mut last_update_time = chrono::Local::now().timestamp();
+
     let mut watcher = RecommendedWatcher::new(
         move |evt: notify::Result<notify::Event>| {
             let config = watcher_config.clone();
+            // Give time for the change to take effect before reading the file
+            std::thread::sleep(std::time::Duration::from_millis(100));
             if chrono::Local::now().timestamp() > last_update_time {
-                // Give time for the change to take effect before reading the file
-                std::thread::sleep(std::time::Duration::from_millis(100));
-                let mut updated = false;
                 if let Ok(evt) = evt {
-                    let mut messages = Vec::new();
-                    let mut needs_rebuild = false;
+                    let mut messages: Vec<Template<'static>> = Vec::new();
                     for path in evt.paths.clone() {
-                        if path.extension().map(|p| p.to_str()).flatten() != Some("rs") {
+                        if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                             continue;
                         }
-                        let mut file = File::open(path.clone()).unwrap();
-                        let mut src = String::new();
-                        file.read_to_string(&mut src).expect("Unable to read file");
                         // find changes to the rsx in the file
-                        if let Ok(syntax) = syn::parse_file(&src) {
-                            let mut last_file_rebuild = last_file_rebuild.lock().unwrap();
-                            if let Some(old_str) = last_file_rebuild.map.get(&path) {
-                                if let Ok(old) = syn::parse_file(&old_str) {
-                                    updated = true;
-                                    match find_rsx(&syntax, &old) {
-                                        DiffResult::CodeChanged => {
-                                            needs_rebuild = true;
-                                            last_file_rebuild.map.insert(path, src);
-                                        }
-                                        DiffResult::RsxChanged(changed) => {
-                                            log::info!("🪁 reloading rsx");
-                                            // for (old, new) in changed.into_iter() {
-                                            //     let hr = get_location(
-                                            //         &crate_dir,
-                                            //         &path.to_path_buf(),
-                                            //         old.to_token_stream(),
-                                            //     );
-                                            //     // get the original source code to preserve whitespace
-                                            //     let span = new.span();
-                                            //     let start = span.start();
-                                            //     let end = span.end();
-                                            //     let mut lines: Vec<_> = src
-                                            //         .lines()
-                                            //         .skip(start.line - 1)
-                                            //         .take(end.line - start.line + 1)
-                                            //         .collect();
-                                            //     if let Some(first) = lines.first_mut() {
-                                            //         *first = first.split_at(start.column).1;
-                                            //     }
-                                            //     if let Some(last) = lines.last_mut() {
-                                            //         // if there is only one line the start index of last line will be the start of the rsx!, not the start of the line
-                                            //         if start.line == end.line {
-                                            //             *last = last
-                                            //                 .split_at(end.column - start.column)
-                                            //                 .0;
-                                            //         } else {
-                                            //             *last = last.split_at(end.column).0;
-                                            //         }
-                                            //     }
-                                            //     let rsx = lines.join("\n");
+                        let mut map = file_map.lock().unwrap();
 
-                                            //     let old_dyn_ctx = try_parse_template(
-                                            //         &format!("{}", old.tokens),
-                                            //         hr.to_owned(),
-                                            //         None,
-                                            //     )
-                                            //     .map(|(_, old_dyn_ctx)| old_dyn_ctx);
-                                            //     // if let Ok((template, _)) = try_parse_template(
-                                            //     //     &rsx,
-                                            //     //     hr.to_owned(),
-                                            //     //     old_dyn_ctx.ok(),
-                                            //     // ) {
-                                            //     //     messages.push(SetTemplateMsg(
-                                            //     //         TemplateId(hr),
-                                            //     //         template,
-                                            //     //     ));
-                                            //     // } else {
-                                            //     //     needs_rebuild = true;
-                                            //     // }
-                                            // }
-                                        }
+                        match map.update_rsx(&path, &crate_dir) {
+                            UpdateResult::UpdatedRsx(msgs) => {
+                                messages.extend(msgs);
+                            }
+                            UpdateResult::NeedsRebuild => {
+                                match build_manager.rebuild() {
+                                    Ok(res) => {
+                                        print_console_info(
+                                            port,
+                                            &config,
+                                            PrettierOptions {
+                                                changed: evt.paths,
+                                                warnings: res.warnings,
+                                                elapsed_time: res.elapsed_time,
+                                            },
+                                        );
+                                    }
+                                    Err(err) => {
+                                        log::error!("{}", err);
                                     }
                                 }
-                            } else {
-                                // if this is a new file, rebuild the project
-                                *last_file_rebuild = FileMap::new(crate_dir.clone());
-                            }
-                        }
-                    }
-                    if needs_rebuild {
-                        match build_manager.rebuild() {
-                            Ok(res) => {
-                                print_console_info(
-                                    port,
-                                    &config,
-                                    PrettierOptions {
-                                        changed: evt.paths,
-                                        warnings: res.warnings,
-                                        elapsed_time: res.elapsed_time,
-                                    },
-                                );
-                            }
-                            Err(err) => {
-                                log::error!("{}", err);
+                                return;
                             }
                         }
                     }
@@ -218,9 +211,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                         let _ = hot_reload_tx.send(msg);
                     }
                 }
-                if updated {
-                    last_update_time = chrono::Local::now().timestamp();
-                }
+                last_update_time = chrono::Local::now().timestamp();
             }
         },
         notify::Config::default(),
@@ -282,7 +273,7 @@ pub async fn startup_hot_reload(port: u16, config: CrateConfig) -> Result<()> {
                 Ok(response)
             },
         )
-        .service(ServeDir::new((&config.crate_dir).join(&dist_path)));
+        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
     let router = Router::new()
         .route("/_dioxus/ws", get(ws_handler))
@@ -422,7 +413,7 @@ pub async fn startup_default(port: u16, config: CrateConfig) -> Result<()> {
                 Ok(response)
             },
         )
-        .service(ServeDir::new((&config.crate_dir).join(&dist_path)));
+        .service(ServeDir::new(config.crate_dir.join(&dist_path)));
 
     let router = Router::new()
         .route("/_dioxus/ws", get(ws_handler))
