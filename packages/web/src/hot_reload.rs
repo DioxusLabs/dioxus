@@ -2,12 +2,13 @@
 
 use futures_channel::mpsc::UnboundedReceiver;
 
+use dioxus_core::Template;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, WebSocket};
 
 #[cfg(not(debug_assertions))]
-pub(crate) fn init() -> UnboundedReceiver<String> {
+pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     let (tx, rx) = futures_channel::mpsc::unbounded();
 
     std::mem::forget(tx);
@@ -16,7 +17,8 @@ pub(crate) fn init() -> UnboundedReceiver<String> {
 }
 
 #[cfg(debug_assertions)]
-pub(crate) fn init() -> UnboundedReceiver<String> {
+pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
+    use core::panic;
     use std::convert::TryInto;
 
     let window = web_sys::window().unwrap();
@@ -39,8 +41,12 @@ pub(crate) fn init() -> UnboundedReceiver<String> {
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-            if let Ok(val) = text.try_into() {
-                _ = tx.unbounded_send(val);
+            let text: Result<String, _> = text.try_into();
+            if let Ok(string) = text {
+                match serde_json::from_str(Box::leak(string.into_boxed_str())) {
+                    Ok(template) => _ = tx.unbounded_send(template),
+                    Err(e) => panic!("Failed to parse template: {}", e),
+                }
             }
         }
     }) as Box<dyn FnMut(MessageEvent)>);
