@@ -43,8 +43,7 @@ impl Translate {
             }
             (None, None) => {
                 if atty::is(atty::Stream::Stdin) {
-                    log::error!("No input file, source, or stdin to translate from.");
-                    exit(0);
+                    return custom_error!("No input file, source, or stdin to translate from.");
                 }
 
                 let mut buffer = String::new();

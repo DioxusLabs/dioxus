@@ -6,6 +6,13 @@ use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
     pub web: WebConfig,
+
+    #[serde(default = "default_plugin")]
+    pub plugin: toml::Value,
+}
+
+fn default_plugin() -> toml::Value {
+    toml::Value::Boolean(true)
 }
 
 impl DioxusConfig {
@@ -22,7 +29,7 @@ impl DioxusConfig {
         dioxus_conf_file.read_to_string(&mut meta_str)?;
 
         toml::from_str::<DioxusConfig>(&meta_str)
-            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+        .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
     }
 }
 
@@ -34,21 +41,23 @@ impl Default for DioxusConfig {
                 default_platform: "web".to_string(),
                 out_dir: Some(PathBuf::from("dist")),
                 asset_dir: Some(PathBuf::from("public")),
+
                 tools: None,
+
                 sub_package: None,
             },
             web: WebConfig {
-                app: WebAppConfing {
+                app: WebAppConfig {
                     title: Some("dioxus | ⛺".into()),
                     base_path: None,
                 },
-                watcher: WebWatcherConfing {
+                watcher: WebWatcherConfig {
                     watch_path: Some(vec![PathBuf::from("src")]),
                     reload_html: Some(false),
                     index_on_404: Some(true),
                 },
-                resource: WebResourceConfing {
-                    dev: WebDevResourceConfing {
+                resource: WebResourceConfig {
+                    dev: WebDevResourceConfig {
                         style: Some(vec![]),
                         script: Some(vec![]),
                     },
@@ -56,6 +65,7 @@ impl Default for DioxusConfig {
                     script: Some(vec![]),
                 },
             },
+            plugin: toml::Value::Table(toml::map::Map::new()),
         }
     }
 }
@@ -66,39 +76,41 @@ pub struct ApplicationConfig {
     pub default_platform: String,
     pub out_dir: Option<PathBuf>,
     pub asset_dir: Option<PathBuf>,
+
     pub tools: Option<HashMap<String, toml::Value>>,
+
     pub sub_package: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WebConfig {
-    pub app: WebAppConfing,
-    pub watcher: WebWatcherConfing,
-    pub resource: WebResourceConfing,
+    pub app: WebAppConfig,
+    pub watcher: WebWatcherConfig,
+    pub resource: WebResourceConfig,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebAppConfing {
+pub struct WebAppConfig {
     pub title: Option<String>,
     pub base_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebWatcherConfing {
+pub struct WebWatcherConfig {
     pub watch_path: Option<Vec<PathBuf>>,
     pub reload_html: Option<bool>,
     pub index_on_404: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebResourceConfing {
-    pub dev: WebDevResourceConfing,
+pub struct WebResourceConfig {
+    pub dev: WebDevResourceConfig,
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WebDevResourceConfing {
+pub struct WebDevResourceConfig {
     pub style: Option<Vec<PathBuf>>,
     pub script: Option<Vec<PathBuf>>,
 }
@@ -114,6 +126,10 @@ pub struct CrateConfig {
     pub executable: ExecutableType,
     pub dioxus_config: DioxusConfig,
     pub release: bool,
+    pub hot_reload: bool,
+    pub verbose: bool,
+    pub custom_profile: Option<String>,
+    pub features: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -162,6 +178,10 @@ impl CrateConfig {
         let executable = ExecutableType::Binary(output_filename);
 
         let release = false;
+        let hot_reload = false;
+        let verbose = false;
+        let custom_profile = None;
+        let features = None;
 
         Ok(Self {
             out_dir,
@@ -173,6 +193,10 @@ impl CrateConfig {
             executable,
             release,
             dioxus_config,
+            hot_reload,
+            custom_profile,
+            features,
+            verbose,
         })
     }
 
@@ -186,19 +210,23 @@ impl CrateConfig {
         self
     }
 
-    // pub fn with_build_options(&mut self, options: &BuildOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = options.outdir.clone().into();
-    // }
+    pub fn with_hot_reload(&mut self, hot_reload: bool) -> &mut Self {
+        self.hot_reload = hot_reload;
+        self
+    }
 
-    // pub fn with_develop_options(&mut self, options: &DevelopOptions) {
-    //     if let Some(name) = &options.example {
-    //         self.as_example(name.clone());
-    //     }
-    //     self.release = options.release;
-    //     self.out_dir = tempfile::Builder::new().tempdir().expect("").into_path();
-    // }
+    pub fn with_verbose(&mut self, verbose: bool) -> &mut Self {
+        self.verbose = verbose;
+        self
+    }
+
+    pub fn set_profile(&mut self, profile: String) -> &mut Self {
+        self.custom_profile = Some(profile);
+        self
+    }
+
+    pub fn set_features(&mut self, features: Vec<String>) -> &mut Self {
+        self.features = Some(features);
+        self
+    }
 }

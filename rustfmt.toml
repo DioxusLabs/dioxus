@@ -1,5 +1,5 @@
 version = "Two"
-edition = "2018"
+edition = "2021"
 
 imports_granularity = "Crate"
 #use_small_heuristics = "Max"

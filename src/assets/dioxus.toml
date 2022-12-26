@@ -17,7 +17,9 @@ asset_dir = "public"
 [web.app]
 
 # HTML title tag content
-title = "dioxus | ⛺"
+title = "Dioxus | An elegant GUI library for Rust"
+
+index_on_404 = true
 
 [web.watcher]
 
@@ -38,8 +40,8 @@ script = []
 # serve: [dev-server] only
 script = []
 
-[application.tools]
+[application.plugins]
 
-# use binaryen.wasm-opt for output Wasm file
-# binaryen just will trigger in `web` platform
-binaryen = { wasm_opt = [".PROJECT_OUT"] }
+available = true
+
+required = []

@@ -1,3 +1,5 @@
+use crate::plugin::PluginManager;
+
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
@@ -14,9 +16,14 @@ impl Build {
 
         // change the release state.
         crate_config.with_release(self.build.release);
+        crate_config.with_verbose(self.build.verbose);
 
         if self.build.example.is_some() {
             crate_config.as_example(self.build.example.unwrap());
+        }
+
+        if self.build.profile.is_some() {
+            crate_config.set_profile(self.build.profile.unwrap());
         }
 
         let platform = self.build.platform.unwrap_or_else(|| {
@@ -27,15 +34,17 @@ impl Build {
                 .clone()
         });
 
+        let _ = PluginManager::on_build_start(&crate_config, &platform);
+
         match platform.as_str() {
             "web" => {
-                crate::builder::build(&crate_config)?;
+                crate::builder::build(&crate_config, false)?;
             }
             "desktop" => {
                 crate::builder::build_desktop(&crate_config, false)?;
             }
             _ => {
-                return custom_error!("Unsoppurt platform target.");
+                return custom_error!("Unsupported platform target.");
             }
         }
 
@@ -55,6 +64,8 @@ impl Build {
                 .join("index.html"),
         )?;
         file.write_all(temp.as_bytes())?;
+
+        let _ = PluginManager::on_build_finish(&crate_config, &platform);
 
         Ok(())
     }

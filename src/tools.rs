@@ -1,6 +1,7 @@
 use std::{
     fs::{create_dir_all, File},
-    path::PathBuf,
+    io::{Read, Write},
+    path::{Path, PathBuf},
     process::Command,
 };
 
@@ -13,11 +14,13 @@ use tokio::io::AsyncWriteExt;
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tool {
     Binaryen,
+    Sass,
+    Tailwind,
 }
 
-pub fn tool_list() -> Vec<&'static str> {
-    vec!["binaryen"]
-}
+// pub fn tool_list() -> Vec<&'static str> {
+//     vec!["binaryen", "sass", "tailwindcss"]
+// }
 
 pub fn app_path() -> PathBuf {
     let data_local = dirs::data_local_dir().unwrap();
@@ -37,6 +40,16 @@ pub fn temp_path() -> PathBuf {
     temp_path
 }
 
+pub fn clone_repo(dir: &Path, url: &str) -> anyhow::Result<()> {
+    let target_dir = dir.parent().unwrap();
+    let dir_name = dir.file_name().unwrap();
+
+    let mut cmd = Command::new("git");
+    let cmd = cmd.current_dir(target_dir);
+    let _res = cmd.arg("clone").arg(url).arg(dir_name).output()?;
+    Ok(())
+}
+
 pub fn tools_path() -> PathBuf {
     let app_path = app_path();
     let temp_path = app_path.join("tools");
@@ -52,6 +65,8 @@ impl Tool {
     pub fn from_str(name: &str) -> Option<Self> {
         match name {
             "binaryen" => Some(Self::Binaryen),
+            "sass" => Some(Self::Sass),
+            "tailwindcss" => Some(Self::Tailwind),
             _ => None,
         }
     }
@@ -60,6 +75,8 @@ impl Tool {
     pub fn name(&self) -> &str {
         match self {
             Self::Binaryen => "binaryen",
+            Self::Sass => "sass",
+            Self::Tailwind => "tailwindcss",
         }
     }
 
@@ -67,6 +84,8 @@ impl Tool {
     pub fn bin_path(&self) -> &str {
         match self {
             Self::Binaryen => "bin",
+            Self::Sass => ".",
+            Self::Tailwind => ".",
         }
     }
 
@@ -84,6 +103,37 @@ impl Tool {
                     panic!("unsupported platformm");
                 }
             }
+            Self::Sass => {
+                if cfg!(target_os = "windows") {
+                    "windows"
+                } else if cfg!(target_os = "macos") {
+                    "macos"
+                } else if cfg!(target_os = "linux") {
+                    "linux"
+                } else {
+                    panic!("unsupported platformm");
+                }
+            }
+            Self::Tailwind => {
+                if cfg!(target_os = "windows") {
+                    "windows"
+                } else if cfg!(target_os = "macos") {
+                    "macos"
+                } else if cfg!(target_os = "linux") {
+                    "linux"
+                } else {
+                    panic!("unsupported platformm");
+                }
+            }
+        }
+    }
+
+    /// get tool version
+    pub fn tool_version(&self) -> &str {
+        match self {
+            Self::Binaryen => "version_105",
+            Self::Sass => "1.51.0",
+            Self::Tailwind => "v3.1.6",
         }
     }
 
@@ -92,8 +142,29 @@ impl Tool {
         match self {
             Self::Binaryen => {
                 format!(
-                    "https://github.com/WebAssembly/binaryen/releases/download/version_105/binaryen-version_105-x86_64-{target}.tar.gz",
+                    "https://github.com/WebAssembly/binaryen/releases/download/{version}/binaryen-{version}-x86_64-{target}.tar.gz",
+                    version = self.tool_version(),
                     target = self.target_platform()
+                )
+            }
+            Self::Sass => {
+                format!(
+                    "https://github.com/sass/dart-sass/releases/download/{version}/dart-sass-{version}-{target}-x64.{extension}",
+                    version = self.tool_version(),
+                    target = self.target_platform(),
+                    extension = self.extension()
+                )
+            }
+            Self::Tailwind => {
+                let windows_extension = match self.target_platform() {
+                    "windows" => ".exe",
+                    _ => "",
+                };
+                format!(
+                    "https://github.com/tailwindlabs/tailwindcss/releases/download/{version}/tailwindcss-{target}-x64{optional_ext}",
+                    version = self.tool_version(),
+                    target = self.target_platform(),
+                    optional_ext = windows_extension
                 )
             }
         }
@@ -103,6 +174,14 @@ impl Tool {
     pub fn extension(&self) -> &str {
         match self {
             Self::Binaryen => "tar.gz",
+            Self::Sass => {
+                if cfg!(target_os = "windows") {
+                    "zip"
+                } else {
+                    "tar.gz"
+                }
+            }
+            Self::Tailwind => "bin",
         }
     }
 
@@ -131,7 +210,7 @@ impl Tool {
             let chunk = chunk_res.context("error reading chunk from download")?;
             let _ = file.write(chunk.as_ref()).await;
         }
-
+        // log::info!("temp file path: {:?}", temp_out);
         Ok(temp_out)
     }
 
@@ -140,10 +219,10 @@ impl Tool {
         let temp_path = self.temp_out_path();
         let tool_path = tools_path();
 
-        let dir_name = if self == &Tool::Binaryen {
-            "binaryen-version_105"
-        } else {
-            ""
+        let dir_name = match self {
+            Self::Binaryen => format!("binaryen-{}", self.tool_version()),
+            Self::Sass => "dart-sass".to_string(),
+            Self::Tailwind => self.name().to_string(),
         };
 
         if self.extension() == "tar.gz" {
@@ -151,8 +230,42 @@ impl Tool {
             let tar = GzDecoder::new(tar_gz);
             let mut archive = Archive::new(tar);
             archive.unpack(&tool_path)?;
-            // println!("{:?} -> {:?}", tool_path.join(dir_name), tool_path.join(self.name()));
             std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
+        } else if self.extension() == "zip" {
+            // decompress the `zip` file
+            extract_zip(&temp_path, &tool_path)?;
+            std::fs::rename(tool_path.join(dir_name), tool_path.join(self.name()))?;
+        } else if self.extension() == "bin" {
+            let bin_path = match self.target_platform() {
+                "windows" => tool_path.join(&dir_name).join(self.name()).join(".exe"),
+                _ => tool_path.join(&dir_name).join(self.name()),
+            };
+            // Manualy creating tool directory because we directly download the binary via Github
+            std::fs::create_dir(tool_path.join(dir_name))?;
+
+            let mut final_file = std::fs::File::create(&bin_path)?;
+            let mut temp_file = File::open(&temp_path)?;
+            let mut content = Vec::new();
+
+            temp_file.read_to_end(&mut content)?;
+            final_file.write_all(&content)?;
+
+            if self.target_platform() == "linux" {
+                // This code does not update permissions idk why
+                /*let mut perms = final_file.metadata()?.permissions();
+                perms.set_mode(0o744);*/
+
+                // Adding to the binary execution rights with "chmod"
+                let mut command = Command::new("chmod");
+
+                let _ = command
+                    .args(vec!["+x", bin_path.to_str().unwrap()])
+                    .stdout(std::process::Stdio::inherit())
+                    .stderr(std::process::Stdio::inherit())
+                    .output()?;
+            }
+
+            std::fs::remove_file(&temp_path)?;
         }
 
         Ok(())
@@ -163,6 +276,20 @@ impl Tool {
 
         let command_file = match self {
             Tool::Binaryen => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.exe", command)
+                } else {
+                    command.to_string()
+                }
+            }
+            Tool::Sass => {
+                if cfg!(target_os = "windows") {
+                    format!("{}.bat", command)
+                } else {
+                    command.to_string()
+                }
+            }
+            Tool::Tailwind => {
                 if cfg!(target_os = "windows") {
                     format!("{}.exe", command)
                 } else {
@@ -184,4 +311,33 @@ impl Tool {
             .output()?;
         Ok(output.stdout)
     }
+}
+
+pub fn extract_zip(file: &Path, target: &Path) -> anyhow::Result<()> {
+    let zip_file = std::fs::File::open(&file)?;
+    let mut zip = zip::ZipArchive::new(zip_file)?;
+
+    if !target.exists() {
+        let _ = std::fs::create_dir_all(target)?;
+    }
+
+    for i in 0..zip.len() {
+        let mut file = zip.by_index(i)?;
+        if file.is_dir() {
+            // dir
+            let target = target.join(Path::new(&file.name().replace('\\', "")));
+            let _ = std::fs::create_dir_all(target)?;
+        } else {
+            // file
+            let file_path = target.join(Path::new(file.name()));
+            let mut target_file = if !file_path.exists() {
+                std::fs::File::create(file_path)?
+            } else {
+                std::fs::File::open(file_path)?
+            };
+            let _num = std::io::copy(&mut file, &mut target_file)?;
+        }
+    }
+
+    Ok(())
 }

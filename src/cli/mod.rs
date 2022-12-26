@@ -4,8 +4,8 @@ pub mod cfg;
 pub mod clean;
 pub mod config;
 pub mod create;
+pub mod plugin;
 pub mod serve;
-pub mod tool;
 pub mod translate;
 pub mod version;
 
@@ -24,12 +24,12 @@ use std::{
     fs::{remove_dir_all, File},
     io::{Read, Write},
     path::PathBuf,
-    process::{exit, Command, Stdio},
+    process::{Command, Stdio},
 };
 
-/// Build, bundle, & ship your Dioxus app.
+/// Build, Bundle & Ship Dioxus Apps.
 #[derive(Parser)]
-#[clap(name = "dioxus")]
+#[clap(name = "dioxus", version)]
 pub struct Cli {
     #[clap(subcommand)]
     pub action: Commands,
@@ -37,10 +37,6 @@ pub struct Cli {
     /// Enable verbose logging.
     #[clap(short)]
     pub v: bool,
-    // // note: dioxus is still roughly compatible with trunk
-    // /// Path to the Trunk config file [default: Trunk.toml]
-    // #[clap(long, parse(from_os_str), env = "TRUNK_CONFIG")]
-    // pub config: Option<PathBuf>,
 }
 
 #[derive(Parser)]
@@ -72,7 +68,22 @@ pub enum Commands {
     #[clap(subcommand)]
     Config(config::Config),
 
-    /// Install  & Manage tools for Dioxus-cli.
+    /// Manage plugins for dioxus cli
     #[clap(subcommand)]
-    Tool(tool::Tool),
+    Plugin(plugin::Plugin),
+}
+
+impl Commands {
+    pub fn to_string(&self) -> String {
+        match self {
+            Commands::Build(_) => "build",
+            Commands::Translate(_) => "translate",
+            Commands::Serve(_) => "sevre",
+            Commands::Create(_) => "create",
+            Commands::Clean(_) => "clean",
+            Commands::Config(_) => "config",
+            Commands::Plugin(_) => "plugin",
+        }
+        .to_string()
+    }
 }

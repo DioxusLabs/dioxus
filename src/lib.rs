@@ -1,3 +1,5 @@
+pub const DIOXUS_CLI_VERSION: &str = "0.1.5";
+
 pub mod builder;
 pub mod server;
 pub mod tools;
@@ -18,3 +20,5 @@ pub use error::*;
 
 pub mod logging;
 pub use logging::*;
+
+pub mod plugin;

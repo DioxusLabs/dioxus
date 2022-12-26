@@ -1,5 +1,6 @@
 use super::*;
 use std::{
+    fs::create_dir_all,
     io::Write,
     path::PathBuf,
     process::{Command, Stdio},
@@ -18,10 +19,16 @@ impl Serve {
         let mut crate_config = crate::CrateConfig::new()?;
 
         // change the relase state.
+        crate_config.with_hot_reload(self.serve.hot_reload);
         crate_config.with_release(self.serve.release);
+        crate_config.with_verbose(self.serve.verbose);
 
         if self.serve.example.is_some() {
             crate_config.as_example(self.serve.example.unwrap());
+        }
+
+        if self.serve.profile.is_some() {
+            crate_config.set_profile(self.serve.profile.unwrap());
         }
 
         let platform = self.serve.platform.unwrap_or_else(|| {
@@ -32,38 +39,32 @@ impl Serve {
                 .clone()
         });
 
-        match platform.as_str() {
-            "web" => {
-                crate::builder::build(&crate_config)?;
-            }
-            "desktop" => {
-                crate::builder::build_desktop(&crate_config, true)?;
+        if platform.as_str() == "desktop" {
+            crate::builder::build_desktop(&crate_config, true)?;
 
-                match &crate_config.executable {
-                    crate::ExecutableType::Binary(name)
-                    | crate::ExecutableType::Lib(name)
-                    | crate::ExecutableType::Example(name) => {
-                        let mut file = crate_config.out_dir.join(name);
-                        if cfg!(windows) {
-                            file.set_extension("exe");
-                        }
-                        Command::new(crate_config.out_dir.join(file).to_str().unwrap())
-                            .stdout(Stdio::inherit())
-                            .output()?;
+            match &crate_config.executable {
+                crate::ExecutableType::Binary(name)
+                | crate::ExecutableType::Lib(name)
+                | crate::ExecutableType::Example(name) => {
+                    let mut file = crate_config.out_dir.join(name);
+                    if cfg!(windows) {
+                        file.set_extension("exe");
                     }
+                    Command::new(file.to_str().unwrap())
+                        .stdout(Stdio::inherit())
+                        .output()?;
                 }
-                return Ok(());
             }
-            _ => {
-                return custom_error!("Unsoppurt platform target.");
-            }
+            return Ok(());
+        } else if platform != "web" {
+            return custom_error!("Unsupported platform target.");
         }
 
         // generate dev-index page
         Serve::regen_dev_page(&crate_config)?;
 
         // start the develop server
-        server::startup(crate_config.clone()).await?;
+        server::startup(self.serve.port, crate_config.clone()).await?;
 
         Ok(())
     }
@@ -71,19 +72,19 @@ impl Serve {
     pub fn regen_dev_page(crate_config: &CrateConfig) -> Result<()> {
         let serve_html = gen_page(&crate_config.dioxus_config, true);
 
-        let mut file = std::fs::File::create(
+        let dist_path = crate_config.crate_dir.join(
             crate_config
-                .crate_dir
-                .join(
-                    crate_config
-                        .dioxus_config
-                        .application
-                        .out_dir
-                        .clone()
-                        .unwrap_or_else(|| PathBuf::from("dist")),
-                )
-                .join("index.html"),
-        )?;
+                .dioxus_config
+                .application
+                .out_dir
+                .clone()
+                .unwrap_or_else(|| PathBuf::from("dist")),
+        );
+        if !dist_path.is_dir() {
+            create_dir_all(&dist_path)?;
+        }
+        let index_path = dist_path.join("index.html");
+        let mut file = std::fs::File::create(index_path)?;
         file.write_all(serve_html.as_bytes())?;
 
         Ok(())
