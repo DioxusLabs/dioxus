@@ -466,7 +466,7 @@ impl VirtualDom {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
         for (_, scope) in &self.scopes {
-            if let Some(RenderReturn::Sync(Some(sync))) = scope.try_root_node() {
+            if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
                 {
