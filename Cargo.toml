@@ -74,8 +74,13 @@ mlua = { version = "0.8.1", features = [
 ctrlc = "3.2.3"
 # dioxus-rsx = "0.0.1"
 dioxus-rsx = { git = "https://github.com/DioxusLabs/dioxus" }
-dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = ["hot-reload-context"] }
-dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = ["serialize"] }
+dioxus-html = { git = "https://github.com/DioxusLabs/dioxus", features = [
+    "hot-reload-context",
+] }
+dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
+    "serialize",
+] }
+dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
 
 [[bin]]
 path = "src/main.rs"

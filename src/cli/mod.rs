@@ -1,11 +1,13 @@
+pub mod autoformat;
 pub mod build;
 pub mod cfg;
 pub mod clean;
 pub mod config;
 pub mod create;
-pub mod serve;
 pub mod plugin;
+pub mod serve;
 pub mod translate;
+pub mod version;
 
 use crate::{
     cfg::{ConfigOptsBuild, ConfigOptsServe},
@@ -41,19 +43,33 @@ pub struct Cli {
 pub enum Commands {
     /// Build the Rust WASM app and all of its assets.
     Build(build::Build),
+
     /// Translate some source file into Dioxus code.
     Translate(translate::Translate),
+
     /// Build, watch & serve the Rust WASM app and all of its assets.
     Serve(serve::Serve),
+
     /// Init a new project for Dioxus.
     Create(create::Create),
+
     /// Clean output artifacts.
     Clean(clean::Clean),
+
+    /// Print the version of this extension
+    #[clap(name = "version")]
+    Version(version::Version),
+
+    /// Format some rsx
+    #[clap(name = "fmt")]
+    Autoformat(autoformat::Autoformat),
+
     /// Dioxus config file controls.
     #[clap(subcommand)]
     Config(config::Config),
-    #[clap(subcommand)]
+
     /// Manage plugins for dioxus cli
+    #[clap(subcommand)]
     Plugin(plugin::Plugin),
 }
 
@@ -67,6 +83,9 @@ impl Commands {
             Commands::Clean(_) => "clean",
             Commands::Config(_) => "config",
             Commands::Plugin(_) => "plugin",
-        }.to_string()
+            Commands::Version(_) => "version",
+            Commands::Autoformat(_) => "fmt",
+        }
+        .to_string()
     }
 }
