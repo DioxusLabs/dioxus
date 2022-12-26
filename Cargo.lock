@@ -30,6 +30,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcb51a0695d8f838b1ee009b3fbf66bda078cd64590202a864a8f3e8c4315c47"
+dependencies = [
+ "getrandom 0.2.8",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -650,6 +661,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dioxus-autofmt"
+version = "0.0.0"
+source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
+dependencies = [
+ "dioxus-rsx",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn",
+ "triple_accel",
+]
+
+[[package]]
 name = "dioxus-cli"
 version = "0.3.0"
 dependencies = [
@@ -664,6 +689,7 @@ dependencies = [
  "colored 2.0.0",
  "convert_case",
  "ctrlc",
+ "dioxus-autofmt",
  "dioxus-core",
  "dioxus-html",
  "dioxus-rsx",
@@ -700,7 +726,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.2.1"
-source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
+source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
 dependencies = [
  "bumpalo",
  "futures-channel",
@@ -717,10 +743,11 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.2.1"
-source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
+source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
 dependencies = [
  "async-trait",
  "dioxus-core",
+ "dioxus-rsx",
  "enumset",
  "euclid",
  "keyboard-types",
@@ -732,8 +759,10 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.1"
-source = "git+https://github.com/dioxuslabs/dioxus#3824f386f7118999be739e92ac4f320f88979e06"
+source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
 dependencies = [
+ "dioxus-core",
+ "internment",
  "proc-macro2",
  "quote",
  "serde",
@@ -1094,6 +1123,9 @@ name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
+dependencies = [
+ "ahash",
+]
 
 [[package]]
 name = "headers"
@@ -1389,6 +1421,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a5bbe824c507c5da5956355e86a746d82e0e1464f65d862cc5e71da70e94b2c"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "internment"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a798d7677f07d6f1e77be484ea8626ddb1566194de399f1206306820c406371"
+dependencies = [
+ "hashbrown",
+ "parking_lot",
 ]
 
 [[package]]
@@ -1985,6 +2027,15 @@ name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
+
+[[package]]
+name = "prettyplease"
+version = "0.1.15"
+source = "git+https://github.com/DioxusLabs/prettyplease-macro-fmt.git#05cc781b2997966fc2f2ff3409a5433e9d4f559f"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "proc-macro-error"
@@ -2836,6 +2887,12 @@ checksum = "24eb03ba0eab1fd845050058ce5e616558e8f8d8fca633e6b163fe25c797213a"
 dependencies = [
  "once_cell",
 ]
+
+[[package]]
+name = "triple_accel"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22048bc95dfb2ffd05b1ff9a756290a009224b60b2f0e7525faeee7603851e63"
 
 [[package]]
 name = "trust-dns-proto"
