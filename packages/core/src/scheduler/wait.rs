@@ -10,7 +10,7 @@ use crate::{
     ScopeId, TaskId, VNode, VirtualDom,
 };
 
-use super::{waker::RcWake, SuspenseId};
+use super::{waker::ArcWake, SuspenseId};
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler
@@ -67,18 +67,21 @@ impl VirtualDom {
         // we should attach them to that component and then render its children
         // continue rendering the tree until we hit yet another suspended component
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
-            // safety: we're not going to modify the suspense context but we don't want to make a clone of it
             let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
             let scope = &mut self.scopes[scope_id.0];
             let arena = scope.current_frame();
 
-            let ret = arena.bump.alloc(RenderReturn::Sync(new_nodes));
+            let ret = arena.bump.alloc(match new_nodes {
+                Some(new) => RenderReturn::Ready(new),
+                None => RenderReturn::default(),
+            });
+
             arena.node.set(ret);
 
             fiber.waiting_on.borrow_mut().remove(&id);
 
-            if let RenderReturn::Sync(Some(template)) = ret {
+            if let RenderReturn::Ready(template) = ret {
                 let mutations_ref = &mut fiber.mutations.borrow_mut();
                 let mutations = &mut **mutations_ref;
                 let template: &VNode = unsafe { std::mem::transmute(template) };
