@@ -48,7 +48,20 @@ impl<'a> Mutations<'a> {
 
     /// Push a new mutation into the dom_edits list
     pub(crate) fn push(&mut self, mutation: Mutation<'static>) {
-        unsafe { self.edits.push(std::mem::transmute(mutation)) }
+        self.edits.push(mutation.downcast_lifetime())
+    }
+}
+
+impl Mutations<'static> {
+    pub(crate) fn take<'a>(&mut self) -> Mutations<'a> {
+        Mutations::<'a> {
+            subtree: self.subtree,
+            dirty_scopes: self.dirty_scopes.drain().collect(),
+            templates: self.templates.split_off(0),
+            // Safety: this downcasts the lifetime from 'static to 'a
+            // This is safe because 'static outlives 'a
+            edits: unsafe { std::mem::transmute(self.edits.split_off(0)) },
+        }
     }
 }
 
@@ -243,4 +256,10 @@ pub enum Mutation<'a> {
         /// The ID of the root node to push.
         id: ElementId,
     },
+}
+
+impl Mutation<'static> {
+    pub(crate) fn downcast_lifetime<'a>(self) -> Mutation<'a> {
+        unsafe { std::mem::transmute(self) }
+    }
 }

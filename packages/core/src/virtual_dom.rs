@@ -489,7 +489,7 @@ impl VirtualDom {
             RenderReturn::Async(_) => unreachable!("Root scope cannot be an async component"),
         }
 
-        unsafe { std::mem::transmute(self.finalize()) }
+        self.finalize()
     }
 
     /// Render whatever the VirtualDom has ready as fast as possible without requiring an executor to progress
@@ -594,7 +594,7 @@ impl VirtualDom {
 
             // If there's no pending suspense, then we have no reason to wait for anything
             if self.scheduler.leaves.borrow().is_empty() {
-                return unsafe { std::mem::transmute(self.finalize()) };
+                return self.finalize();
             }
 
             // Poll the suspense leaves in the meantime
@@ -608,17 +608,14 @@ impl VirtualDom {
             if let Either::Left((_, _)) = select(&mut deadline, pinned).await {
                 // release the borrowed
                 drop(work);
-                return unsafe { std::mem::transmute(self.finalize()) };
+                return self.finalize();
             }
         }
     }
 
     /// Swap the current mutations with a new
-    fn finalize(&mut self) -> Mutations<'static> {
-        // todo: make this a routine
-        let mut out = Mutations::default();
-        std::mem::swap(&mut self.mutations, &mut out);
-        out
+    fn finalize<'a>(&'a mut self) -> Mutations<'a> {
+        self.mutations.take()
     }
 }
 

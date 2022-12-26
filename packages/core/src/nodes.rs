@@ -8,6 +8,7 @@ use std::{
     cell::{Cell, RefCell},
     fmt::Arguments,
     future::Future,
+    ops::Deref,
 };
 
 pub type TemplateId = &'static str;
@@ -416,26 +417,14 @@ impl AnyValueContainer {
         return Self(std::rc::Rc::new(value));
     }
 
-    /// Returns a reference to the inner value without checking the type.
-    ///
-    /// # Safety
-    /// The caller must ensure that the type of the inner value is `T`.
-    pub unsafe fn downcast_ref_unchecked<T: Any>(&self) -> &T {
-        unsafe { &*(self.0.as_ref() as *const _ as *const T) }
-    }
-
     /// Returns a reference to the inner value.
     pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        if self.0.our_typeid() == TypeId::of::<T>() {
-            Some(unsafe { self.downcast_ref_unchecked() })
-        } else {
-            None
-        }
+        self.0.deref().as_any().downcast_ref()
     }
 
-    /// Checks if the inner value is of type `T`.
+    /// Checks if the type of the inner value is 'T'.
     pub fn is<T: Any>(&self) -> bool {
-        self.0.our_typeid() == TypeId::of::<T>()
+        self.0.deref().as_any().is::<T>()
     }
 }
 
@@ -446,9 +435,6 @@ fn test_any_value_rc() {
     assert_eq!(a.downcast_ref::<i64>(), None);
     assert!(a.is::<i32>());
     assert!(!a.is::<i64>());
-    unsafe {
-        assert_eq!(a.downcast_ref_unchecked::<i32>(), &1i32);
-    }
 }
 
 #[cfg(feature = "serialize")]
@@ -503,45 +489,51 @@ impl<'a> PartialEq for AttributeValue<'a> {
 // The sync_attributes flag restricts any valuse to be sync and send.
 #[doc(hidden)]
 #[cfg(feature = "sync_attributes")]
-pub trait AnyValue: Sync + Send {
+pub trait AnyValue: Sync + Send + 'static {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-    fn our_typeid(&self) -> TypeId;
+    fn as_any(&self) -> &dyn Any;
+    fn type_id(&self) -> TypeId {
+        self.as_any().type_id()
+    }
 }
 
 #[cfg(feature = "sync_attributes")]
-impl<T: Any + PartialEq + Send + Sync> AnyValue for T {
+impl<T: Any + PartialEq + Send + Sync + 'static> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.our_typeid() != other.our_typeid() {
+        if self.type_id() != other.type_id() {
             return false;
         }
 
         self == unsafe { &*(other as *const _ as *const T) }
     }
 
-    fn our_typeid(&self) -> TypeId {
-        self.type_id()
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
 #[doc(hidden)]
 #[cfg(not(feature = "sync_attributes"))]
-pub trait AnyValue {
+pub trait AnyValue: 'static {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-    fn our_typeid(&self) -> TypeId;
+    fn as_any(&self) -> &dyn Any;
+    fn type_id(&self) -> TypeId {
+        self.as_any().type_id()
+    }
 }
 
 #[cfg(not(feature = "sync_attributes"))]
-impl<T: Any + PartialEq> AnyValue for T {
+impl<T: Any + PartialEq + 'static> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if self.our_typeid() != other.our_typeid() {
+        if self.type_id() != other.type_id() {
             return false;
         }
 
         self == unsafe { &*(other as *const _ as *const T) }
     }
 
-    fn our_typeid(&self) -> TypeId {
-        self.type_id()
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
