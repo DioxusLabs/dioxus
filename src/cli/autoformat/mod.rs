@@ -1,3 +1,5 @@
+use std::process::exit;
+
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
@@ -61,16 +63,14 @@ rsx! {
     dbg!(out);
 }
 
-/*
-parse the whole doc
-find all the comment blocks
-
-
-
-
-
-
-
-
-
-*/
+// parse the whole doc
+// find all the comment blocks
+//
+//
+//
+//
+//
+//
+//
+//
+//

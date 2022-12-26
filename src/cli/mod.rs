@@ -83,6 +83,8 @@ impl Commands {
             Commands::Clean(_) => "clean",
             Commands::Config(_) => "config",
             Commands::Plugin(_) => "plugin",
+            Commands::Version(_) => "version",
+            Commands::Autoformat(_) => "fmt",
         }
         .to_string()
     }
