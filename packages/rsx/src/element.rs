@@ -66,6 +66,7 @@ impl Parse for Element {
                 if content.parse::<Token![,]>().is_err() {
                     missing_trailing_comma!(ident.span());
                 }
+
                 continue;
             }
 
@@ -264,7 +265,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::CustomAttrText { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #name,
                         #value,
                         None,
                         false
@@ -274,7 +275,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::CustomAttrExpression { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        #name,
                         #value,
                         None,
                         false
