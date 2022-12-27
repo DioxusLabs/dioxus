@@ -6,9 +6,9 @@ Often, multiple components need to access the same state. Depending on your need
 
 One approach to share state between components is to "lift" it up to the nearest common ancestor. This means putting the `use_state` hook in a parent component, and passing the needed values down as props.
 
-For example, suppose we want to build a meme editor. We want to have an input to edit the meme caption, but also a preview of the meme with the caption. Logically, the meme and the input are 2 separate components, but they need access to the same state (the current caption).
+Suppose we want to build a meme editor. We want to have an input to edit the meme caption, but also a preview of the meme with the caption. Logically, the meme and the input are 2 separate components, but they need access to the same state (the current caption).
 
-> Of course, in this simple example, we could write everything in one component – but it is better to split everything out in smaller components to make the code more reusable and easier to maintain (this is even more important for larger, complex apps).
+> Of course, in this simple example, we could write everything in one component – but it is better to split everything out in smaller components to make the code more reusable, maintainable, and performant (this is even more important for larger, complex apps).
 
 We start with a `Meme` component, responsible for rendering a meme with a given caption:
 ```rust
@@ -57,7 +57,7 @@ As a result, any child component of `App` (direct or not), can access the `DarkM
 {{#include ../../../examples/meme_editor_dark_mode.rs:use_context}}
 ```
 
-> `use_context` returns `Option<UseSharedState<DarkMode>>` here. If the context has been provided, the value is `Some(UseSharedState)`, which you can call `.read` or `.write` on, similarly to `UseRef`. Otherwise, the value is `None`.
+> `use_context` returns `Option<UseSharedState<DarkMode>>` here. If the context has been provided, the value is `Some(UseSharedState<DarkMode>)`, which you can call `.read` or `.write` on, similarly to `UseRef`. Otherwise, the value is `None`.
 
 For example, here's how we would implement the dark mode toggle, which both reads the context (to determine what color it should render) and writes to it (to toggle dark mode):
 ```rust

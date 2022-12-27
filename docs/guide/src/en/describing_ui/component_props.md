@@ -9,7 +9,7 @@ Component props are a single struct annotated with `#[derive(Props)]`. For a com
 There are 2 flavors of Props structs:
 - Owned props:
   - Don't have an associated lifetime
-  - Implement `PartialEq`, allowing for memoization (if the props don't change, Dioxus won't re-render the component)
+  - Implement `PartialEq`, allow for memoization (if the props don't change, Dioxus won't re-render the component)
 - Borrowed props:
   - [Borrow](https://doc.rust-lang.org/beta/rust-by-example/scope/borrow.html) from a parent component
   - Cannot be memoized due to lifetime constraints
@@ -47,6 +47,7 @@ We can then use the component like this:
 ```
 ![Screenshot: TitleCard component](./images/component_borrowed_props_screenshot.png)
 
+Borrowed props can be very useful, but they do not allow for memorization so they will *always* rerun when the parent scope is rerendered. Because of this Borrowed Props should be reserved for components that are cheap to rerun or places where cloning data is an issue. Using Borrowed Props everywhere will result in large parts of your app rerunning every interaction.
 
 ## Prop Options
 

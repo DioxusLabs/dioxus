@@ -32,7 +32,7 @@ if you_are_happy && you_know_it {
 
     // ANCHOR: closure
 // ❌ don't call hooks inside closures!
-// We can't guarantee that the closure, if used, will be called at the same time every time
+// We can't guarantee that the closure, if used, will be called in the same order every time
 let _a = || {
     let b = use_state(cx, || 0);
     b.get()

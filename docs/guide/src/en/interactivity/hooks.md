@@ -21,7 +21,7 @@ For example, you might have seen the counter example, in which state (a number) 
 
 Every time the component's state changes, it re-renders, and the component function is called, so you can describe what you want the new UI to look like. You don't have to worry about "changing" anything – just describe what you want in terms of the state, and Dioxus will take care of the rest!
 
-> `use_state` returns your value wrapped in a smart pointer of type [`UseState`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseState.html). This is why you can both read the value and update it, even within a handler.
+> `use_state` returns your value wrapped in a smart pointer of type [`UseState`](https://docs.rs/dioxus/latest/dioxus/prelude/struct.UseState.html). This is why you can both read the value and update it, even within an event handler.
 
 You can use multiple hooks in the same component if you want:
 
@@ -40,13 +40,13 @@ But how can Dioxus differentiate between multiple hooks in the same component? A
 {{#include ../../../examples/hooks_counter_two_state.rs:use_state_calls}}
 ```
 
-This is only possible because the two hooks are always called in the same order, so Dioxus knows which is which. So the order you call hooks matters, which is why you must follow certain rules when using hooks:
+This is only possible because the two hooks are always called in the same order, so Dioxus knows which is which. Because the order you call hooks matters, you must follow certain rules when using hooks:
 
 1. Hooks may be only used in components or other hooks (we'll get to that later)
 2. On every call to the component function
    1. The same hooks must be called
    2. In the same order
-3. Hooks name's must start with `use_` so you don't accidentally confuse them with regular functions
+3. Hooks name's should start with `use_` so you don't accidentally confuse them with regular functions
 
 These rules mean that there are certain things you can't do with hooks:
 
@@ -79,5 +79,5 @@ Here's a simple example that keeps a list of events in a `use_ref`. We can acqui
 {{#include ../../../examples/hooks_use_ref.rs:component}}
 ```
 
-> The return values of `use_state` and `use_ref`, (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
+> The return values of `use_state` and `use_ref` (`UseState` and `UseRef`, respectively) are in some ways similar to [`Cell`](https://doc.rust-lang.org/std/cell/) and [`RefCell`](https://doc.rust-lang.org/std/cell/struct.RefCell.html) – they provide interior mutability. However, these Dioxus wrappers also ensure that the component gets re-rendered whenever you change the state.
 

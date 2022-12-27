@@ -25,9 +25,13 @@ Clicked! Event: UiEvent { bubble_state: Cell { value: true }, data: MouseData { 
 
 To learn what the different event types for html provide, read the [events module docs](https://docs.rs/dioxus-html/latest/dioxus_html/events/index.html).
 
-### Stopping propagation
+### Event propagation
 
-When you have e.g. a `button` inside a `div`, any click on the `button` is also a click on the `div`. For this reason, Dioxus propagates the click event: first, it is triggered on the target element, then on parent elements. If you want to prevent this behavior, you can call `stop_propogation()` on the event:
+Some events will trigger first on the element the event originated at upward. For example, for a click event on a `button` inside a `div` would first trigger the button's event listener then the div's event listener.
+
+> For more information about event propigation see [the mdn docs on event bubling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
+
+If you want to prevent this behavior, you can call `stop_propogation()` on the event:
 
 ```rust
 {{#include ../../../examples/event_nested.rs:rsx}}
@@ -45,7 +49,7 @@ In some instances, might want to avoid this default behavior. For this, you can 
 
 Any event handlers will still be called.
 
-> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior.
+> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior based on the data in the event.
 
 ## Handler Props
 
