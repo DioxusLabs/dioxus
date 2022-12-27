@@ -89,7 +89,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, |c| c);
 /// }
 ///
 /// struct AppProps {
