@@ -65,7 +65,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     let count = use_state(cx, || 0);
     let counts = use_ref(cx, || vec![0; size * size]);
 
-    let ctx: &TuiContext = cx.consume_context().unwrap();
+    let ctx: TuiContext = cx.consume_context().unwrap();
     if *count.get() + 1 >= (size * size) {
         ctx.quit();
     } else {
