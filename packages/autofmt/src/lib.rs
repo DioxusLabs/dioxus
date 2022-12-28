@@ -102,7 +102,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
 pub fn write_block_out(body: CallBody) -> Option<String> {
     let mut buf = Buffer {
-        src: vec![],
+        src: vec!["".to_string()],
         indent: 0,
         ..Buffer::default()
     };

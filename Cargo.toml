@@ -18,49 +18,49 @@ members = [
     "packages/tui",
     "packages/native-core",
     "packages/native-core-macro",
+    "packages/rsx-rosetta",
     "docs/guide",
-    "packages/html-to-rsx"
 ]
 
-# This is a "virtual package"
-# It is not meant to be published, but is used so "cargo run --example XYZ" works properly
-[package]
-name = "dioxus-examples"
-version = "0.0.0"
-authors = ["Jonathan Kelley"]
-edition = "2021"
-description = "Top level crate for the Dioxus repository"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/DioxusLabs/dioxus/"
-homepage = "https://dioxuslabs.com"
-documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.60.0"
-publish = false
+# # This is a "virtual package"
+# # It is not meant to be published, but is used so "cargo run --example XYZ" works properly
+# [package]
+# name = "dioxus-examples"
+# version = "0.0.0"
+# authors = ["Jonathan Kelley"]
+# edition = "2021"
+# description = "Top level crate for the Dioxus repository"
+# license = "MIT OR Apache-2.0"
+# repository = "https://github.com/DioxusLabs/dioxus/"
+# homepage = "https://dioxuslabs.com"
+# documentation = "https://dioxuslabs.com"
+# keywords = ["dom", "ui", "gui", "react", "wasm"]
+# rust-version = "1.60.0"
+# publish = false
 
-[dev-dependencies]
-dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop" }
-dioxus-ssr = { path = "./packages/ssr" }
-dioxus-router = { path = "./packages/router" }
-fermi = { path = "./packages/fermi" }
-futures-util = "0.3.21"
-log = "0.4.14"
-num-format = "0.4.0"
-separator = "0.4.1"
-serde = { version = "1.0.136", features = ["derive"] }
-im-rc = "15.0.0"
-anyhow = "1.0.53"
-serde_json = "1.0.79"
-rand = { version = "0.8.4", features = ["small_rng"] }
-tokio = { version = "1.16.1", features = ["full"] }
-reqwest = { version = "0.11.9", features = ["json"] }
-fern = { version = "0.6.0", features = ["colored"] }
-thiserror = "1.0.30"
-env_logger = "0.9.0"
-simple_logger = "4.0.0"
+# [dev-dependencies]
+# dioxus = { path = "./packages/dioxus" }
+# dioxus-desktop = { path = "./packages/desktop" }
+# dioxus-ssr = { path = "./packages/ssr" }
+# dioxus-router = { path = "./packages/router" }
+# fermi = { path = "./packages/fermi" }
+# futures-util = "0.3.21"
+# log = "0.4.14"
+# num-format = "0.4.0"
+# separator = "0.4.1"
+# serde = { version = "1.0.136", features = ["derive"] }
+# im-rc = "15.0.0"
+# anyhow = "1.0.53"
+# serde_json = "1.0.79"
+# rand = { version = "0.8.4", features = ["small_rng"] }
+# tokio = { version = "1.16.1", features = ["full"] }
+# reqwest = { version = "0.11.9", features = ["json"] }
+# fern = { version = "0.6.0", features = ["colored"] }
+# thiserror = "1.0.30"
+# env_logger = "0.9.0"
+# simple_logger = "4.0.0"
 
-[profile.release]
-opt-level = 3
-lto = true
-debug = true
+# [profile.release]
+# opt-level = 3
+# lto = true
+# debug = true
