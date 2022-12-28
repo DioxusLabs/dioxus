@@ -1,5 +1,3 @@
-use crate::comments::UserComment;
-
 use super::*;
 
 use proc_macro2::{Span, TokenStream as TokenStream2};

@@ -13,7 +13,6 @@
 
 #[macro_use]
 mod errors;
-mod comments;
 mod component;
 mod element;
 pub mod hot_reload;
