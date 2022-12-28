@@ -38,7 +38,6 @@ pub enum BodyNode {
     IfChain(ExprIf),
     Text(IfmtInput),
     RawExpr(Expr),
-    Comment(UserComment),
 }
 
 impl BodyNode {
@@ -54,7 +53,6 @@ impl BodyNode {
             BodyNode::RawExpr(exp) => exp.span(),
             BodyNode::ForLoop(fl) => fl.for_token.span(),
             BodyNode::IfChain(f) => f.if_token.span(),
-            BodyNode::Comment(c) => c.span,
         }
     }
 }
@@ -143,7 +141,6 @@ impl Parse for BodyNode {
 impl ToTokens for BodyNode {
     fn to_tokens(&self, tokens: &mut TokenStream2) {
         match &self {
-            BodyNode::Comment(_) => {}
             BodyNode::Element(el) => el.to_tokens(tokens),
             BodyNode::Component(comp) => comp.to_tokens(tokens),
             BodyNode::Text(txt) => tokens.append_all(quote! {

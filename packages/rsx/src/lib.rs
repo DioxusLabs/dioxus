@@ -297,8 +297,6 @@ impl DynamicMapping {
 
             BodyNode::Text(text) if text.is_static() => {}
 
-            BodyNode::Comment(_) => {}
-
             BodyNode::RawExpr(_)
             | BodyNode::Text(_)
             | BodyNode::ForLoop(_)
