@@ -19,6 +19,7 @@ members = [
     "packages/native-core",
     "packages/native-core-macro",
     "docs/guide",
+    "packages/html-to-rsx"
 ]
 
 # This is a "virtual package"

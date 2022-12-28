@@ -13,6 +13,7 @@
 
 #[macro_use]
 mod errors;
+mod comments;
 mod component;
 mod element;
 pub mod hot_reload;
@@ -295,6 +296,8 @@ impl DynamicMapping {
             }
 
             BodyNode::Text(text) if text.is_static() => {}
+
+            BodyNode::Comment(_) => {}
 
             BodyNode::RawExpr(_)
             | BodyNode::Text(_)
