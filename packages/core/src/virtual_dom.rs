@@ -640,7 +640,7 @@ impl VirtualDom {
     }
 
     /// Swap the current mutations with a new
-    fn finalize<'a>(&'a mut self) -> Mutations<'a> {
+    fn finalize(&mut self) -> Mutations {
         self.mutations.take()
     }
 }

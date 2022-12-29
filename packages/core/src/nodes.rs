@@ -673,7 +673,7 @@ impl<T: Any + PartialEq + Send + Sync + 'static> AnyValue for T {
         if let Some(other) = other.as_any().downcast_ref() {
             self == other
         } else {
-            return false;
+            false
         }
     }
 
@@ -698,7 +698,7 @@ impl<T: Any + PartialEq + 'static> AnyValue for T {
         if let Some(other) = other.as_any().downcast_ref() {
             self == other
         } else {
-            return false;
+            false
         }
     }
 
