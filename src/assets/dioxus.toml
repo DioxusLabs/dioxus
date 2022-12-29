@@ -19,9 +19,9 @@ asset_dir = "public"
 # HTML title tag content
 title = "Dioxus | An elegant GUI library for Rust"
 
-index_on_404 = true
-
 [web.watcher]
+
+index_on_404 = true
 
 watch_path = ["src"]
 
