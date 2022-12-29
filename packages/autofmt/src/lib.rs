@@ -118,7 +118,7 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 }
 
 pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
+    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?;
 
     let mut buf = Buffer {
         src: block.lines().map(|f| f.to_string()).collect(),

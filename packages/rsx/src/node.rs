@@ -16,17 +16,6 @@ Parse
 -> component()
 -> "text {with_args}"
 -> (0..10).map(|f| rsx!("asd")),  // <--- notice the comma - must be a complete expr
--> // some comment here (no support for slash asterisk comments - those get deleted completely)
-
-
-
-div {
-    // Comment
-    div { // a comment here because it shares the line
-
-    }
-}
-
 */
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub enum BodyNode {
