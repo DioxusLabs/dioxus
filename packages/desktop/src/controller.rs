@@ -1,7 +1,7 @@
 use crate::desktop_context::{DesktopContext, UserWindowEvent};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
-use futures_channel::mpsc::{unbounded, UnboundedSender};
+use futures_channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures_util::StreamExt;
 #[cfg(target_os = "ios")]
 use objc::runtime::Object;
@@ -25,7 +25,10 @@ pub(super) struct DesktopController {
     pub(super) quit_app_on_close: bool,
     pub(super) is_ready: Arc<AtomicBool>,
     pub(super) proxy: EventLoopProxy<UserWindowEvent>,
+
     pub(super) event_tx: UnboundedSender<serde_json::Value>,
+    #[cfg(debug_assertions)]
+    pub(super) templates_tx: UnboundedSender<Template<'static>>,
 
     #[cfg(target_os = "ios")]
     pub(super) views: Vec<*mut Object>,
@@ -41,6 +44,7 @@ impl DesktopController {
     ) -> Self {
         let edit_queue = Arc::new(Mutex::new(Vec::new()));
         let (event_tx, mut event_rx) = unbounded();
+        let (templates_tx, mut templates_rx) = unbounded();
         let proxy2 = proxy.clone();
 
         let pending_edits = edit_queue.clone();
@@ -68,6 +72,18 @@ impl DesktopController {
 
                 loop {
                     tokio::select! {
+                        template = {
+                            #[allow(unused)]
+                            fn maybe_future<'a>(templates_rx: &'a mut UnboundedReceiver<Template<'static>>) -> impl Future<Output = dioxus_core::Template<'static>> + 'a {
+                                #[cfg(debug_assertions)]
+                                return templates_rx.select_next_some();
+                                #[cfg(not(debug_assertions))]
+                                return std::future::pending();
+                            }
+                            maybe_future(&mut templates_rx)
+                        } => {
+                            dom.replace_template(template);
+                        }
                         _ = dom.wait_for_work() => {}
                         Some(json_value) = event_rx.next() => {
                             if let Ok(value) = serde_json::from_value::<HtmlEvent>(json_value) {
@@ -103,6 +119,8 @@ impl DesktopController {
             quit_app_on_close: true,
             proxy: proxy2,
             event_tx,
+            #[cfg(debug_assertions)]
+            templates_tx,
             #[cfg(target_os = "ios")]
             views: vec![],
         }
@@ -132,9 +150,5 @@ impl DesktopController {
                     .unwrap();
             }
         }
-    }
-
-    pub(crate) fn set_template(&self, _serialized_template: String) {
-        todo!("hot reloading currently WIP")
     }
 }

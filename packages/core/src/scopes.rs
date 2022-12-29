@@ -4,7 +4,7 @@ use crate::{
     arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    innerlude::{ListenerCb, Scheduler, SchedulerMsg},
+    innerlude::{ErrorBoundary, ListenerCb, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
@@ -14,7 +14,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
-    fmt::Arguments,
+    fmt::{Arguments, Debug},
     future::Future,
     rc::Rc,
     sync::Arc,
@@ -511,6 +511,19 @@ impl<'src> ScopeState {
         };
 
         AttributeValue::Listener(ListenerCb(RefCell::new(Some(boxed))))
+    }
+
+    /// Inject an error into the nearest error boundary and quit rendering
+    ///
+    /// The error doesn't need to implement Error or any specific traits since the boundary
+    /// itself will downcast the error into a trait object.
+    pub fn throw(&self, error: impl Debug + 'static) -> Option<()> {
+        if let Some(cx) = self.consume_context::<Rc<ErrorBoundary>>() {
+            cx.insert_error(self.scope_id(), Box::new(error));
+        }
+
+        // Always return none during a throw
+        None
     }
 
     /// Store a value between renders. The foundational hook for all other hooks.

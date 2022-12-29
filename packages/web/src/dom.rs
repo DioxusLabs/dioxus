@@ -121,12 +121,10 @@ impl WebsysDom {
                     } = attr
                     {
                         match namespace {
-                            Some(ns) if *ns == "style" => el
-                                .dyn_ref::<HtmlElement>()
-                                .unwrap()
-                                .style()
-                                .set_property(name, value)
-                                .unwrap(),
+                            Some(ns) if *ns == "style" => {
+                                el.dyn_ref::<HtmlElement>()
+                                    .map(|f| f.style().set_property(name, value));
+                            }
                             Some(ns) => el.set_attribute_ns(Some(ns), name, value).unwrap(),
                             None => el.set_attribute(name, value).unwrap(),
                         }

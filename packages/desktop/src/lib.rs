@@ -89,7 +89,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_cfg(app, AppProps { name: "asd" }, |c| c);
+///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, |c| c);
 /// }
 ///
 /// struct AppProps {
@@ -105,6 +105,9 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::with_user_event();
     let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+
+    #[cfg(debug_assertions)]
+    hot_reload::init(desktop.templates_tx.clone());
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;

@@ -4,7 +4,7 @@ use crate::{
     innerlude::DirtyScope,
     innerlude::{SuspenseId, SuspenseLeaf},
     nodes::RenderReturn,
-    scheduler::RcWake,
+    scheduler::ArcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
 };
@@ -13,7 +13,7 @@ use futures_util::FutureExt;
 use std::{
     mem,
     pin::Pin,
-    rc::Rc,
+    sync::Arc,
     task::{Context, Poll},
 };
 
@@ -79,17 +79,18 @@ impl VirtualDom {
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
             let props: &dyn AnyProps = scope.props.as_ref().unwrap().as_ref();
             let props: &dyn AnyProps = mem::transmute(props);
+
             props.render(scope).extend_lifetime()
         };
 
         // immediately resolve futures that can be resolved
-        if let RenderReturn::Async(task) = &mut new_nodes {
+        if let RenderReturn::Pending(task) = &mut new_nodes {
             let mut leaves = self.scheduler.leaves.borrow_mut();
 
             let entry = leaves.vacant_entry();
             let suspense_id = SuspenseId(entry.key());
 
-            let leaf = Rc::new(SuspenseLeaf {
+            let leaf = Arc::new(SuspenseLeaf {
                 scope_id,
                 task: task.as_mut(),
                 id: suspense_id,
@@ -108,7 +109,11 @@ impl VirtualDom {
                 match pinned.poll_unpin(&mut cx) {
                     // If nodes are produced, then set it and we can break
                     Poll::Ready(nodes) => {
-                        new_nodes = RenderReturn::Sync(nodes);
+                        new_nodes = match nodes {
+                            Some(nodes) => RenderReturn::Ready(nodes),
+                            None => RenderReturn::default(),
+                        };
+
                         break;
                     }
 
@@ -150,6 +155,6 @@ impl VirtualDom {
         });
 
         // rebind the lifetime now that its stored internally
-        unsafe { mem::transmute(allocated) }
+        unsafe { allocated.extend_lifetime_ref() }
     }
 }

@@ -13,6 +13,8 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
 proc-macro2 = { version = "1.0", features = ["span-locations"] }
+dioxus-core = { path = "../core" }
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = { version = "1.0" }
 serde = { version = "1.0", features = ["derive"] }
+internment = "0.7.0"

@@ -55,6 +55,9 @@ pub struct LinkProps<'a> {
 
     /// Pass children into the `<a>` element
     pub children: Element<'a>,
+
+    /// The onclick event handler.
+    pub onclick: Option<EventHandler<'a, MouseEvent>>,
 }
 
 /// A component that renders a link to a route.
@@ -119,7 +122,7 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             title: format_args!("{}", title.unwrap_or("")),
             prevent_default: "{prevent_default}",
             target: format_args!("{}", if * new_tab { "_blank" } else { "" }),
-            onclick: move |_| {
+            onclick: move |evt| {
                 log::trace!("Clicked link to {}", to);
 
                 if !outerlink {
@@ -137,6 +140,10 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
                             .to,
                         );
                     }
+                }
+
+                if let Some(onclick) = cx.props.onclick.as_ref() {
+                    onclick.call(evt);
                 }
             },
             children

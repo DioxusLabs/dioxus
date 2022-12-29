@@ -2,12 +2,43 @@
 
 use crate::AttributeDiscription;
 
+#[cfg(feature = "hot-reload-context")]
+macro_rules! trait_method_mapping {
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some((stringify!($name), None));
+        }
+    };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident: $lit:literal;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some(($lit, None));
+        }
+    };
+    (
+        $matching:ident;
+        $(#[$attr:meta])*
+        $name:ident: $lit:literal, $ns:literal;
+    ) => {
+        if $matching == stringify!($name) {
+            return Some(($lit, Some($ns)));
+        }
+    };
+}
+
 macro_rules! trait_methods {
     (
         @base
-
         $(#[$trait_attr:meta])*
         $trait:ident;
+        $fn:ident;
         $(
             $(#[$attr:meta])*
             $name:ident $(: $($arg:literal),*)*;
@@ -19,6 +50,17 @@ macro_rules! trait_methods {
                 $(#[$attr])*
                 const $name: AttributeDiscription = trait_methods! { $name $(: $($arg),*)*; };
             )*
+        }
+
+        #[cfg(feature = "hot-reload-context")]
+        pub(crate) fn $fn(attr: &str) -> Option<(&'static str, Option<&'static str>)> {
+            $(
+                trait_method_mapping! {
+                    attr;
+                    $name$(: $($arg),*)*;
+                }
+            )*
+            None
         }
     };
 
@@ -36,6 +78,7 @@ trait_methods! {
     @base
 
     GlobalAttributes;
+    map_global_attributes;
 
     /// Prevent the default action for this element.
     ///
@@ -1545,15 +1588,14 @@ trait_methods! {
 
 trait_methods! {
     @base
-
     SvgAttributes;
+    map_svg_attributes;
 
     /// Prevent the default action for this element.
     ///
     /// For more information, see the MDN docs:
     /// <https://developer.mozilla.org/en-US/docs/Web/API/Event/preventDefault>
     prevent_default: "dioxus-prevent-default";
-
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/accent-height>
     accent_height: "accent-height";

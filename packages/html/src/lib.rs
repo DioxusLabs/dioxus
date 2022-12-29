@@ -14,6 +14,8 @@
 //! Currently, we don't validate for structures, but do validate attributes.
 
 mod elements;
+#[cfg(feature = "hot-reload-context")]
+pub use elements::HtmlCtx;
 pub mod events;
 pub mod geometry;
 mod global_attributes;

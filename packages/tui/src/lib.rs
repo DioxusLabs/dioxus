@@ -75,7 +75,11 @@ pub fn launch(app: Component<()>) {
 }
 
 pub fn launch_cfg(app: Component<()>, cfg: Config) {
-    let mut dom = VirtualDom::new(app);
+    launch_cfg_with_props(app, (), cfg);
+}
+
+pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props, cfg: Config) {
+    let mut dom = VirtualDom::new_with_props(app, props);
 
     let (handler, state, register_event) = RinkInputHandler::new();
 
