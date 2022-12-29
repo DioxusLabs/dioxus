@@ -1,8 +1,10 @@
 use convert_case::{Case, Casing};
-use dioxus_rsx::{BodyNode, CallBody, Element, ElementAttr, ElementAttrNamed, IfmtInput};
+use dioxus_rsx::{
+    BodyNode, CallBody, Component, Element, ElementAttr, ElementAttrNamed, IfmtInput,
+};
 pub use html_parser::{Dom, Node};
 use proc_macro2::{Ident, Span};
-use syn::LitStr;
+use syn::{punctuated::Punctuated, LitStr};
 
 /// Convert an HTML DOM tree into an RSX CallBody
 pub fn rsx_from_html(dom: &Dom) -> CallBody {
@@ -76,6 +78,47 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
 
         // We ignore comments
         Node::Comment(_) => None,
+    }
+}
+
+/// Pull out all the svgs from the body and replace them with components
+pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
+    for child in children {
+        match child {
+            BodyNode::Component(comp) => collect_svgs(&mut comp.children, out),
+
+            BodyNode::Element(el) if el.name == "svg" => {
+                // we want to replace this instance with a component
+                let mut segments = Punctuated::new();
+
+                segments.push(Ident::new("icons", Span::call_site()).into());
+
+                let new_name: Ident = Ident::new(&format!("icon_{}", out.len()), Span::call_site());
+
+                segments.push(new_name.clone().into());
+
+                // Replace this instance with a component
+                let mut new_comp = BodyNode::Component(Component {
+                    name: syn::Path {
+                        leading_colon: None,
+                        segments,
+                    },
+                    prop_gen_args: None,
+                    fields: vec![],
+                    children: vec![],
+                    manual_props: None,
+                });
+
+                std::mem::swap(child, &mut new_comp);
+
+                // And push the original svg into the svg list
+                out.push(new_comp);
+            }
+
+            BodyNode::Element(el) => collect_svgs(&mut el.children, out),
+
+            _ => {}
+        }
     }
 }
 
