@@ -37,7 +37,6 @@ impl UserData for PluginCommander {
         methods.add_function(
             "exec",
             |_, args: (Vec<String>, StdioFromString, StdioFromString)| {
-                
                 let cmd = args.0;
                 let stdout = args.1;
                 let stderr = args.2;

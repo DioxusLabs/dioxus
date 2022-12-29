@@ -13,10 +13,9 @@ use crate::{
 };
 
 use self::{
-    interface::PluginInfo,
     interface::{
         command::PluginCommander, dirs::PluginDirs, fs::PluginFileSystem, log::PluginLogger,
-        network::PluginNetwork, os::PluginOS, path::PluginPath,
+        network::PluginNetwork, os::PluginOS, path::PluginPath, PluginInfo,
     },
     types::PluginConfig,
 };
@@ -143,7 +142,9 @@ impl PluginManager {
                                             }
                                         }
                                         Ok(false) => {
-                                            log::warn!("Plugin init function result is `false`, init failed.");
+                                            log::warn!(
+                                                "Plugin init function result is `false`, init failed."
+                                            );
                                         }
                                         Err(e) => {
                                             log::warn!("Plugin init failed: {e}");

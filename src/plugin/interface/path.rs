@@ -12,7 +12,7 @@ impl UserData for PluginPath {
                 path = path.join(i);
             }
             Ok(path.to_str().unwrap().to_string())
-        });    
+        });
 
         // parent function
         methods.add_function("parent", |_, path: String| {
