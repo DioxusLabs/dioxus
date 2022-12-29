@@ -1,5 +1,57 @@
-# Dioxus-Desktop
+# Dioxus Desktop (webview)
 
-Because the host VirtualDOM is running in its own native process, native applications can unlock their full potential. Dioxus-Desktop is designed to be a 100% rust alternative to ElectronJS without the memory overhead or bloat of ElectronJS apps.
 
-By bridging the native process, desktop apps can access full multithreading power, peripheral support, hardware access, and native filesystem controls without the hassle of web technologies. Our goal with this desktop crate is to make it easy to ship both a web and native application, and quickly see large performance boosts without having to re-write the whole stack. As the dioxus ecosystem grows, we hope to see 3rd parties providing wrappers for storage, offline mode, etc that supports both web and native technologies.
+[![Crates.io][crates-badge]][crates-url]
+[![MIT licensed][mit-badge]][mit-url]
+[![Build Status][actions-badge]][actions-url]
+[![Discord chat][discord-badge]][discord-url]
+
+[crates-badge]: https://img.shields.io/crates/v/dioxus-desktop.svg
+[crates-url]: https://crates.io/crates/dioxus-desktop
+
+[mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
+[mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
+
+[actions-badge]: https://github.com/dioxuslabs/dioxus/actions/workflows/main.yml/badge.svg
+[actions-url]: https://github.com/dioxuslabs/dioxus/actions?query=workflow%3ACI+branch%3Amaster
+
+[discord-badge]: https://img.shields.io/discord/899851952891002890.svg?logo=discord&style=flat-square
+[discord-url]: https://discord.gg/XgGxMSkvUM
+
+[Website](https://dioxuslabs.com) |
+[Guides](https://dioxuslabs.com/guide/) |
+[API Docs](https://docs.rs/dioxus-desktop/latest/dioxus-desktop) |
+[Chat](https://discord.gg/XgGxMSkvUM)
+
+
+## Overview
+
+`dioxus-desktop` provides a webview-based desktop renderer for the Dioxus VirtualDom.
+
+This requires that webview is installed on the target system. WebView is installed by default on macOS and iOS devices, but might not come preinstalled on Windows or Linux devices. To fix these issues, follow the [instructions in the guide](guide-url).
+
+[guide-url]: https://dioxuslabs.com/guide/setup.html#platform-specific-dependencies
+
+
+
+## Features
+
+- Simple, one-line launch for desktop apps
+- Dioxus virtualdom running on a native thread
+- Full HTML/CSS support via `wry` and `tao`
+- Exposed `window` and `Proxy` types from tao for direct window manipulation
+- Helpful hooks for
+
+## Contributing
+
+- Report issues on our [issue tracker](https://github.com/dioxuslabs/dioxus/issues).
+- Join the discord and ask questions!
+
+## License
+This project is licensed under the [MIT license].
+
+[mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
+
+Unless you explicitly state otherwise, any contribution intentionally submitted
+for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+terms or conditions.

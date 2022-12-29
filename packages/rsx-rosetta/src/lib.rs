@@ -81,7 +81,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     }
 }
 
-/// Pull out all the svgs from the body and replace them with components
+/// Pull out all the svgs from the body and replace them with components of the same name
 pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
     for child in children {
         match child {

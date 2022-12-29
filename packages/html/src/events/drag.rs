@@ -9,7 +9,7 @@ pub type DragEvent = Event<DragData>;
 /// (such as another DOM element). Applications are free to interpret a drag and drop interaction in an
 /// application-specific way.
 #[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DragData {
     /// Inherit mouse data
     pub mouse: MouseData,
