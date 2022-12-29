@@ -8,8 +8,7 @@ pub fn convert_from_html(dom: Dom) -> CallBody {
         roots: dom
             .children
             .into_iter()
-            .map(|f| create_body_node_from_node(f))
-            .filter_map(|f| f)
+            .filter_map(create_body_node_from_node)
             .collect(),
     }
 }
@@ -37,7 +36,7 @@ fn create_body_node_from_node(node: Node) -> Option<BodyNode> {
                     ElementAttrNamed {
                         attr: ElementAttr::AttrText {
                             name: ident,
-                            value: ifmt_from_text(value.unwrap_or("false".to_string())),
+                            value: ifmt_from_text(value.unwrap_or_else(|| "false".to_string())),
                         },
                         el_name: el_name.clone(),
                     }
@@ -68,8 +67,7 @@ fn create_body_node_from_node(node: Node) -> Option<BodyNode> {
             let children = el
                 .children
                 .into_iter()
-                .map(|f| create_body_node_from_node(f))
-                .filter_map(|f| f)
+                .filter_map(create_body_node_from_node)
                 .collect();
 
             Some(BodyNode::Element(Element {

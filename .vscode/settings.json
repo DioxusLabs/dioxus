@@ -2,5 +2,6 @@
   "editor.formatOnSave": true,
   "[toml]": {
     "editor.formatOnSave": false
-  }
+  },
+  "rust-analyzer.checkOnSave.allTargets": false,
 }
