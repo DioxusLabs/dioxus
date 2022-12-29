@@ -7,15 +7,14 @@ use syn::LitStr;
 /// Convert an HTML DOM tree into an RSX CallBody
 pub fn rsx_from_html(dom: &Dom) -> CallBody {
     CallBody {
-        roots: dom
-            .children
-            .iter()
-            .filter_map(create_body_node_from_node)
-            .collect(),
+        roots: dom.children.iter().filter_map(rsx_node_from_html).collect(),
     }
 }
 
-fn create_body_node_from_node(node: &Node) -> Option<BodyNode> {
+/// Convert an HTML Node into an RSX BodyNode
+///
+/// If the node is a comment, it will be ignored since RSX doesn't support comments
+pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
     match node {
         Node::Text(text) => Some(BodyNode::Text(ifmt_from_text(text))),
         Node::Element(el) => {
@@ -64,11 +63,7 @@ fn create_body_node_from_node(node: &Node) -> Option<BodyNode> {
                 });
             }
 
-            let children = el
-                .children
-                .iter()
-                .filter_map(create_body_node_from_node)
-                .collect();
+            let children = el.children.iter().filter_map(rsx_node_from_html).collect();
 
             Some(BodyNode::Element(Element {
                 name: el_name,
