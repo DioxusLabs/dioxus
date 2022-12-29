@@ -1,6 +1,6 @@
 /*
-- [ ] pub display: Display,
-- [x] pub position_type: PositionType,  --> kinda, taffy doesnt support everything
+- [ ] pub display: Display, ----> taffy doesnt support all display types
+- [x] pub position_type: PositionType,  --> taffy doesnt support everything
 - [x] pub direction: Direction,
 
 - [x] pub flex_direction: FlexDirection,
@@ -9,7 +9,7 @@
 - [x] pub flex_shrink: f32,
 - [x] pub flex_basis: Dimension,
 
-- [x] pub overflow: Overflow, ---> kinda implemented... taffy doesnt have support for directional overflow
+- [x] pub overflow: Overflow, ---> taffy doesnt have support for directional overflow
 
 - [x] pub align_items: AlignItems,
 - [x] pub align_self: AlignSelf,
@@ -22,19 +22,21 @@
 - [x] pub position: Rect<Dimension>,
 - [x] pub border: Rect<Dimension>,
 
-- [ ] pub size: Size<Dimension>, ----> ??? seems to only be relevant for input?
+- [ ] pub size: Size<Dimension>, ----> seems to only be relevant for input?
 - [ ] pub min_size: Size<Dimension>,
 - [ ] pub max_size: Size<Dimension>,
 
-- [ ] pub aspect_ratio: Number,
+- [ ] pub aspect_ratio: Number, ----> parsing is done, but taffy doesnt support it
 */
 
 use lightningcss::{
     properties::{align::GapValue, border::BorderSideWidth, Property, PropertyId},
     stylesheet::ParserOptions,
+    traits::Parse,
     values::{
         length::{Length, LengthPercentageOrAuto, LengthValue},
         percentage::DimensionPercentage,
+        ratio::Ratio,
     },
 };
 use taffy::{
@@ -326,6 +328,12 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                 style.size.height = convert_size(height);
             }
             _ => (),
+        }
+        // currently not implemented in lightningcss
+        if name == "aspect-ratio" {
+            if let Ok(ratio) = Ratio::parse_string(value) {
+                style.aspect_ratio = Some(ratio.0 / ratio.1);
+            }
         }
     }
 }
