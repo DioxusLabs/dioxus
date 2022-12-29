@@ -1,12 +1,12 @@
-# Dioxus-web
+# Dioxus Native Core Macro
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
 
-[crates-badge]: https://img.shields.io/crates/v/rsx-rosetta.svg
-[crates-url]: https://crates.io/crates/rsx-rosetta
+[crates-badge]: https://img.shields.io/crates/v/dioxus-native-core-macro.svg
+[crates-url]: https://crates.io/crates/dioxus-native-core-macro
 
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
@@ -19,16 +19,14 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/rsx-rosetta/latest/rsx-rosetta) |
+[API Docs](https://docs.rs/dioxus-native-core-macro/latest/dioxus-native-core-macro) |
 [Chat](https://discord.gg/XgGxMSkvUM)
+
 
 ## Overview
 
-Run Dioxus in the browser using WebAssembly.
+`dioxus-native-core-macro` provides a handful of macros used by native-core for native renderers like TUI, Blitz, and Freya to derive their own state.
 
-- Relies on sledgehammer and websys to modify the dom
-- Supports instant hotreloading via the Dioxus CLI
-- Around 60k gzipped
 
 ## Contributing
 
@@ -43,4 +41,3 @@ This project is licensed under the [MIT license].
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
 terms or conditions.
-
