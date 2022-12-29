@@ -16,7 +16,7 @@ fn main() {
 
     let dom = Dom::parse(html).unwrap();
 
-    let body = rsx_rosetta::convert_from_html(dom);
+    let body = rsx_rosetta::rsx_from_html(dom);
 
     let out = dioxus_autofmt::write_block_out(body).unwrap();
 
