@@ -4,8 +4,9 @@
 
 use dioxus::prelude::*;
 
-fn main() {
-    dioxus_desktop::launch(app);
+#[tokio::main]
+async fn main() {
+    dioxus_desktop::launch(app).await;
 }
 
 fn app(cx: Scope) -> Element {

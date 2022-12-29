@@ -175,6 +175,8 @@ pub enum UserWindowEvent {
     EditsReady,
     Initialize,
 
+    Poll,
+
     CloseWindow,
     DragWindow,
     FocusWindow,
@@ -226,7 +228,9 @@ impl DesktopController {
         let window = webview.window();
 
         match user_event {
-            Initialize | EditsReady => self.try_load_ready_webviews(),
+            Initialize | EditsReady => {
+                // self.try_load_ready_webviews();
+            }
             CloseWindow => *control_flow = ControlFlow::Exit,
             DragWindow => {
                 // if the drag_window has any errors, we don't do anything
@@ -267,6 +271,10 @@ impl DesktopController {
 
             SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
             SetInnerSize(logical_size) => window.set_inner_size(logical_size),
+
+            Poll => {
+                // todo
+            }
 
             Print => {
                 if let Err(e) = webview.print() {

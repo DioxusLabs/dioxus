@@ -13,12 +13,20 @@ mod protocol;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 
+use futures_util::task::ArcWake;
+use serde_json::Value;
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::task::Waker;
 
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
 use futures_channel::mpsc::UnboundedSender;
+use futures_util::future::poll_fn;
+use futures_util::{pin_mut, FutureExt};
 pub use wry;
 pub use wry::application as tao;
 
@@ -33,6 +41,8 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+use wry::application::event_loop::EventLoopProxy;
+use wry::application::platform::run_return::EventLoopExtRunReturn;
 use wry::webview::WebViewBuilder;
 
 /// Launch the WebView and run the event loop.
@@ -52,8 +62,8 @@ use wry::webview::WebViewBuilder;
 ///     })
 /// }
 /// ```
-pub fn launch(root: Component) {
-    launch_with_props(root, (), Config::default())
+pub async fn launch(root: Component) {
+    launch_with_props(root, (), Config::default()).await
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -75,11 +85,13 @@ pub fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub fn launch_cfg(root: Component, config_builder: Config) {
-    launch_with_props(root, (), config_builder)
+pub async fn launch_cfg(root: Component, config_builder: Config) {
+    launch_with_props(root, (), config_builder).await
 }
 
 /// Launch the WebView and run the event loop, with configuration and root props.
+///
+/// THIS WILL BLOCK THE CURRENT THREAD
 ///
 /// This function will start a multithreaded Tokio runtime as well the WebView event loop.
 ///
@@ -102,28 +114,92 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
-    let event_loop = EventLoop::with_user_event();
-    let mut desktop = DesktopController::new_on_tokio(root, props, event_loop.create_proxy());
+pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
+    let mut event_loop = EventLoop::with_user_event();
 
-    #[cfg(debug_assertions)]
-    hot_reload::init(desktop.templates_tx.clone());
+    let is_ready = Arc::new(AtomicBool::new(false));
+    let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
+
+    let mut dom = VirtualDom::new_with_props(root, props).with_root_context(DesktopContext::new(
+        event_loop.create_proxy(),
+        eval_reciever,
+    ));
+
+    let proxy = event_loop.create_proxy();
+
+    let waker = futures_util::task::waker(Arc::new(DomHandle {
+        proxy: proxy.clone(),
+    }));
+
+    let mut events = Rc::new(RefCell::new(vec![]));
+    let mut webviews = HashMap::new();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => desktop.start(&mut cfg, event_loop),
+            Event::NewEvents(StartCause::Init) => {
+                let window = build_webview(
+                    &mut cfg,
+                    event_loop,
+                    is_ready.clone(),
+                    proxy.clone(),
+                    eval_sender.clone(),
+                    events.clone(),
+                );
 
-            Event::WindowEvent {
-                event, window_id, ..
-            } => match event {
+                webviews.insert(window.window().id(), window);
+
+                // desktop.start(&mut cfg, event_loop);
+            }
+
+            Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Destroyed { .. } => desktop.close_window(window_id, control_flow),
+                WindowEvent::Destroyed { .. } => {
+                    // desktop.close_window(window_id, control_flow);
+                }
                 _ => {}
             },
 
-            Event::UserEvent(user_event) => desktop.handle_event(user_event, control_flow),
+            Event::UserEvent(user_event) => {
+                println!("user event: {:?}", user_event);
+
+                match user_event {
+                    UserWindowEvent::Poll => {
+                        let mut cx = std::task::Context::from_waker(&waker);
+
+                        let render = {
+                            let fut = dom.wait_for_work();
+                            pin_mut!(fut);
+                            matches!(fut.poll_unpin(&mut cx), std::task::Poll::Ready(_))
+                        };
+
+                        if render {
+                            let edits = dom.render_immediate();
+
+                            // apply the edits
+                        }
+                    }
+
+                    UserWindowEvent::EditsReady => {
+                        let edits = dom.rebuild();
+
+                        let (_id, view) = webviews.iter_mut().next().unwrap();
+
+                        let serialized = serde_json::to_string(&edits).unwrap();
+
+                        view.evaluate_script(&format!(
+                            "window.interpreter.handleEdits({})",
+                            serialized
+                        ))
+                        .unwrap();
+                    }
+
+                    other => {
+                        // desktop.handle_event(user_event, control_flow);
+                    }
+                }
+            }
             Event::MainEventsCleared => {}
             Event::Resumed => {}
             Event::Suspended => {}
@@ -134,22 +210,13 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
     })
 }
 
-impl DesktopController {
-    fn start(
-        &mut self,
-        cfg: &mut Config,
-        event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    ) {
-        let webview = build_webview(
-            cfg,
-            event_loop,
-            self.is_ready.clone(),
-            self.proxy.clone(),
-            self.eval_sender.clone(),
-            self.event_tx.clone(),
-        );
+struct DomHandle {
+    proxy: EventLoopProxy<UserWindowEvent>,
+}
 
-        self.webviews.insert(webview.window().id(), webview);
+impl ArcWake for DomHandle {
+    fn wake_by_ref(arc_self: &Arc<Self>) {
+        arc_self.proxy.send_event(UserWindowEvent::Poll).unwrap();
     }
 }
 
@@ -159,7 +226,7 @@ fn build_webview(
     is_ready: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
     eval_sender: tokio::sync::mpsc::UnboundedSender<serde_json::Value>,
-    event_tx: UnboundedSender<serde_json::Value>,
+    event_tx: Rc<RefCell<Vec<Value>>>,
 ) -> wry::webview::WebView {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
@@ -201,7 +268,8 @@ fn build_webview(
                     eval_sender.send(result).unwrap();
                 }
                 "user_event" => {
-                    _ = event_tx.unbounded_send(message.params());
+                    _ = event_tx.borrow_mut().push(message.params());
+                    let _ = proxy.send_event(UserWindowEvent::Poll);
                 }
                 "initialize" => {
                     is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
