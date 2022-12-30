@@ -1,4 +1,4 @@
-name: CI
+name: Miri Tests
 
 on:
   push:
@@ -25,10 +25,24 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
-            host_target: i686-pc-windows-msvc
+          - os: ubuntu-latest
+            host_target: x86_64-unknown-linux-gnu
+          # - os: macos-latest
+          #   host_target: x86_64-apple-darwin
+          # - os: windows-latest
+          #   host_target: i686-pc-windows-msvc
+          # - os: windows-latest
+          #   host_target: i686-pc-windows-msvc
+          # - os: windows-latest
+          #   host_target: i686-pc-windows-msvc
+          # - os: windows-latest
+          #   host_target: i686-pc-windows-msvc
     steps:
       - uses: actions/checkout@v3
+
+      - name: Set the tag GC interval to 1 on linux
+        if: runner.os == 'Linux'
+        run: echo "MIRIFLAGS=-Zmiri-tag-gc=1" >> $GITHUB_ENV
 
       # Cache the global cargo directory, but NOT the local `target` directory which
       # we cannot reuse anyway when the nightly changes (and it grows quite large
@@ -70,3 +84,4 @@ jobs:
       - name: Test
         run: |
           MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks" cargo +nightly miri test --package dioxus-core --test miri_stress  -- --exact --nocapture
+          MIRIFLAGS="-Zmiri-disable-isolation -Zmiri-ignore-leaks" cargo +nightly miri test --package dioxus-native-core --test miri_native  -- --exact --nocapture
