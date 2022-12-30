@@ -1,6 +1,5 @@
 use std::rc::Rc;
 
-use crate::events::parse_ipc_message;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
@@ -41,7 +40,7 @@ pub fn build(
         .unwrap()
         .with_ipc_handler(move |_window: &Window, payload: String| {
             // defer the event to the main thread
-            if let Some(message) = parse_ipc_message(&payload) {
+            if let Ok(message) = serde_json::from_str(&payload) {
                 _ = proxy.send_event(UserWindowEvent::Ipc(message));
             }
         })
