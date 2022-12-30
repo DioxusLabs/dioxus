@@ -29,6 +29,7 @@
 - [ ] pub aspect_ratio: Number, ----> parsing is done, but taffy doesnt support it
 */
 
+use lightningcss::properties::{align, display, flex, position, size};
 use lightningcss::{
     properties::{align::GapValue, border::BorderSideWidth, Property, PropertyId},
     stylesheet::ParserOptions,
@@ -51,39 +52,21 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
     {
         match property {
             Property::Display(display) => match display {
-                lightningcss::properties::display::Display::Keyword(_) => todo!(),
-                lightningcss::properties::display::Display::Pair(pair) => {
-                    match pair.outside {
-                        lightningcss::properties::display::DisplayOutside::Block => {
-                            style.display = Display::None
-                        }
-                        lightningcss::properties::display::DisplayOutside::Inline => todo!(),
-                        lightningcss::properties::display::DisplayOutside::RunIn => todo!(),
-                    }
-                    match pair.inside {
-                        lightningcss::properties::display::DisplayInside::Flow => todo!(),
-                        lightningcss::properties::display::DisplayInside::FlowRoot => todo!(),
-                        lightningcss::properties::display::DisplayInside::Table => todo!(),
-                        lightningcss::properties::display::DisplayInside::Flex(_) => {
-                            style.display = Display::Flex
-                        }
-                        lightningcss::properties::display::DisplayInside::Box(_) => todo!(),
-                        lightningcss::properties::display::DisplayInside::Grid => todo!(),
-                        lightningcss::properties::display::DisplayInside::Ruby => todo!(),
+                display::Display::Keyword(display::DisplayKeyword::None) => {
+                    style.display = Display::None
+                }
+                display::Display::Pair(pair) => {
+                    if let display::DisplayInside::Flex(_) = pair.inside {
+                        style.display = Display::Flex
                     }
                 }
+                _ => (),
             },
             Property::Position(position) => {
                 style.position_type = match position {
-                    lightningcss::properties::position::Position::Static => todo!(),
-                    lightningcss::properties::position::Position::Relative => {
-                        PositionType::Relative
-                    }
-                    lightningcss::properties::position::Position::Absolute => {
-                        PositionType::Absolute
-                    }
-                    lightningcss::properties::position::Position::Sticky(_) => todo!(),
-                    lightningcss::properties::position::Position::Fixed => todo!(),
+                    position::Position::Relative => PositionType::Relative,
+                    position::Position::Absolute => PositionType::Absolute,
+                    _ => return,
                 }
             }
             Property::Top(top) => style.position.top = convert_length_percentage_or_auto(top),
@@ -93,6 +76,12 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
             Property::Left(left) => style.position.left = convert_length_percentage_or_auto(left),
             Property::Right(right) => {
                 style.position.right = convert_length_percentage_or_auto(right)
+            }
+            Property::Inset(inset) => {
+                style.position.top = convert_length_percentage_or_auto(inset.top);
+                style.position.bottom = convert_length_percentage_or_auto(inset.bottom);
+                style.position.left = convert_length_percentage_or_auto(inset.left);
+                style.position.right = convert_length_percentage_or_auto(inset.right);
             }
             Property::BorderTopWidth(width) => {
                 style.border.top = convert_border_side_width(width);
@@ -134,18 +123,18 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
             Property::FlexDirection(flex_direction, _) => {
                 use FlexDirection::*;
                 style.flex_direction = match flex_direction {
-                    lightningcss::properties::flex::FlexDirection::Row => Row,
-                    lightningcss::properties::flex::FlexDirection::RowReverse => RowReverse,
-                    lightningcss::properties::flex::FlexDirection::Column => Column,
-                    lightningcss::properties::flex::FlexDirection::ColumnReverse => ColumnReverse,
+                    flex::FlexDirection::Row => Row,
+                    flex::FlexDirection::RowReverse => RowReverse,
+                    flex::FlexDirection::Column => Column,
+                    flex::FlexDirection::ColumnReverse => ColumnReverse,
                 }
             }
             Property::FlexWrap(wrap, _) => {
                 use FlexWrap::*;
                 style.flex_wrap = match wrap {
-                    lightningcss::properties::flex::FlexWrap::NoWrap => NoWrap,
-                    lightningcss::properties::flex::FlexWrap::Wrap => Wrap,
-                    lightningcss::properties::flex::FlexWrap::WrapReverse => WrapReverse,
+                    flex::FlexWrap::NoWrap => NoWrap,
+                    flex::FlexWrap::Wrap => Wrap,
+                    flex::FlexWrap::WrapReverse => WrapReverse,
                 }
             }
             Property::FlexGrow(grow, _) => {
@@ -165,108 +154,75 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
             Property::AlignContent(align, _) => {
                 use AlignContent::*;
                 style.align_content = match align {
-                    lightningcss::properties::align::AlignContent::Normal => todo!(),
-                    lightningcss::properties::align::AlignContent::BaselinePosition(_) => {
-                        todo!()
-                    }
-                    lightningcss::properties::align::AlignContent::ContentDistribution(
-                        distribution,
-                    ) => match distribution {
-                        lightningcss::properties::align::ContentDistribution::SpaceBetween => {
-                            SpaceBetween
-                        }
-                        lightningcss::properties::align::ContentDistribution::SpaceAround => {
-                            SpaceAround
-                        }
-                        lightningcss::properties::align::ContentDistribution::SpaceEvenly => {
-                            SpaceEvenly
-                        }
-                        lightningcss::properties::align::ContentDistribution::Stretch => Stretch,
+                    align::AlignContent::ContentDistribution(distribution) => match distribution {
+                        align::ContentDistribution::SpaceBetween => SpaceBetween,
+                        align::ContentDistribution::SpaceAround => SpaceAround,
+                        align::ContentDistribution::SpaceEvenly => SpaceEvenly,
+                        align::ContentDistribution::Stretch => Stretch,
                     },
-                    lightningcss::properties::align::AlignContent::ContentPosition(_, position) => {
-                        match position {
-                            lightningcss::properties::align::ContentPosition::Center => Center,
-                            lightningcss::properties::align::ContentPosition::Start => todo!(),
-                            lightningcss::properties::align::ContentPosition::End => todo!(),
-                            lightningcss::properties::align::ContentPosition::FlexStart => {
-                                FlexStart
-                            }
-                            lightningcss::properties::align::ContentPosition::FlexEnd => FlexEnd,
+                    align::AlignContent::ContentPosition(_, position) => match position {
+                        align::ContentPosition::Center => Center,
+                        align::ContentPosition::Start | align::ContentPosition::FlexStart => {
+                            FlexStart
                         }
-                    }
+                        align::ContentPosition::End | align::ContentPosition::FlexEnd => FlexEnd,
+                    },
+                    _ => return,
                 };
             }
             Property::JustifyContent(justify, _) => {
                 use JustifyContent::*;
                 style.justify_content = match justify {
-                    lightningcss::properties::align::JustifyContent::Normal => todo!(),
-                    lightningcss::properties::align::JustifyContent::ContentDistribution(
-                        distribution,
-                    ) => match distribution {
-                        lightningcss::properties::align::ContentDistribution::SpaceBetween => {
-                            SpaceBetween
+                    align::JustifyContent::ContentDistribution(distribution) => {
+                        match distribution {
+                            align::ContentDistribution::SpaceBetween => SpaceBetween,
+                            align::ContentDistribution::SpaceAround => SpaceAround,
+                            align::ContentDistribution::SpaceEvenly => SpaceEvenly,
+                            _ => return,
                         }
-                        lightningcss::properties::align::ContentDistribution::SpaceAround => {
-                            SpaceAround
+                    }
+                    align::JustifyContent::ContentPosition(_, position) => match position {
+                        align::ContentPosition::Center => Center,
+                        // start ignores -reverse flex-direction but there is no way to specify that in Taffy
+                        align::ContentPosition::Start | align::ContentPosition::FlexStart => {
+                            FlexStart
                         }
-                        lightningcss::properties::align::ContentDistribution::SpaceEvenly => {
-                            SpaceEvenly
-                        }
-                        lightningcss::properties::align::ContentDistribution::Stretch => todo!(),
+                        // end ignores -reverse flex-direction but there is no way to specify that in Taffy
+                        align::ContentPosition::End | align::ContentPosition::FlexEnd => FlexEnd,
                     },
-                    lightningcss::properties::align::JustifyContent::ContentPosition(
-                        _,
-                        position,
-                    ) => match position {
-                        lightningcss::properties::align::ContentPosition::Center => Center,
-                        lightningcss::properties::align::ContentPosition::Start => todo!(),
-                        lightningcss::properties::align::ContentPosition::End => todo!(),
-                        lightningcss::properties::align::ContentPosition::FlexStart => FlexStart,
-                        lightningcss::properties::align::ContentPosition::FlexEnd => FlexEnd,
-                    },
-                    lightningcss::properties::align::JustifyContent::Left(_) => todo!(),
-                    lightningcss::properties::align::JustifyContent::Right(_) => todo!(),
+                    _ => return,
                 };
             }
             Property::AlignSelf(align, _) => {
                 use AlignSelf::*;
                 style.align_self = match align {
-                    lightningcss::properties::align::AlignSelf::Auto => Auto,
-                    lightningcss::properties::align::AlignSelf::Normal => todo!(),
-                    lightningcss::properties::align::AlignSelf::Stretch => Stretch,
-                    lightningcss::properties::align::AlignSelf::BaselinePosition(_) => Baseline,
-                    lightningcss::properties::align::AlignSelf::SelfPosition(
-                        _overflow,
-                        position,
-                    ) => match position {
-                        lightningcss::properties::align::SelfPosition::Center => Center,
-                        lightningcss::properties::align::SelfPosition::Start => todo!(),
-                        lightningcss::properties::align::SelfPosition::End => todo!(),
-                        lightningcss::properties::align::SelfPosition::SelfStart => todo!(),
-                        lightningcss::properties::align::SelfPosition::SelfEnd => todo!(),
-                        lightningcss::properties::align::SelfPosition::FlexStart => FlexStart,
-                        lightningcss::properties::align::SelfPosition::FlexEnd => FlexEnd,
+                    align::AlignSelf::Auto => Auto,
+                    align::AlignSelf::Stretch => Stretch,
+                    align::AlignSelf::BaselinePosition(_) => Baseline,
+                    align::AlignSelf::SelfPosition(_overflow, position) => match position {
+                        align::SelfPosition::Center => Center,
+                        align::SelfPosition::Start
+                        | align::SelfPosition::SelfStart
+                        | align::SelfPosition::FlexStart => FlexStart,
+                        align::SelfPosition::End
+                        | align::SelfPosition::SelfEnd
+                        | align::SelfPosition::FlexEnd => FlexEnd,
                     },
+                    _ => return,
                 };
             }
             Property::AlignItems(align, _) => {
                 use AlignItems::*;
                 style.align_items = match align {
-                    lightningcss::properties::align::AlignItems::Normal => todo!(),
-                    lightningcss::properties::align::AlignItems::BaselinePosition(_) => Baseline,
-                    lightningcss::properties::align::AlignItems::Stretch => Stretch,
-                    lightningcss::properties::align::AlignItems::SelfPosition(
-                        _overflow,
-                        position,
-                    ) => match position {
-                        lightningcss::properties::align::SelfPosition::Center => Center,
-                        lightningcss::properties::align::SelfPosition::Start => todo!(),
-                        lightningcss::properties::align::SelfPosition::End => todo!(),
-                        lightningcss::properties::align::SelfPosition::SelfStart => todo!(),
-                        lightningcss::properties::align::SelfPosition::SelfEnd => todo!(),
-                        lightningcss::properties::align::SelfPosition::FlexStart => FlexStart,
-                        lightningcss::properties::align::SelfPosition::FlexEnd => FlexEnd,
+                    align::AlignItems::BaselinePosition(_) => Baseline,
+                    align::AlignItems::Stretch => Stretch,
+                    align::AlignItems::SelfPosition(_overflow, position) => match position {
+                        align::SelfPosition::Center => Center,
+                        align::SelfPosition::FlexStart => FlexStart,
+                        align::SelfPosition::FlexEnd => FlexEnd,
+                        _ => return,
                     },
+                    _ => return,
                 };
             }
             Property::RowGap(row_gap) => {
@@ -345,7 +301,7 @@ fn convert_length_value(length_value: LengthValue) -> Dimension {
     }
 }
 
-fn convert_dimention_percentage(
+fn convert_dimension_percentage(
     dimension_percentage: DimensionPercentage<LengthValue>,
 ) -> Dimension {
     match dimension_percentage {
@@ -361,7 +317,7 @@ fn convert_length_percentage_or_auto(
     match length_percentage_or_auto {
         LengthPercentageOrAuto::Auto => Dimension::Auto,
         LengthPercentageOrAuto::LengthPercentage(percentage) => {
-            convert_dimention_percentage(percentage)
+            convert_dimension_percentage(percentage)
         }
     }
 }
@@ -378,23 +334,16 @@ fn convert_border_side_width(border_side_width: BorderSideWidth) -> Dimension {
 
 fn convert_gap_value(gap_value: GapValue) -> Dimension {
     match gap_value {
-        GapValue::LengthPercentage(dim) => convert_dimention_percentage(dim),
+        GapValue::LengthPercentage(dim) => convert_dimension_percentage(dim),
         GapValue::Normal => Dimension::Auto,
     }
 }
 
-fn convert_size(size: lightningcss::properties::size::Size) -> Dimension {
+fn convert_size(size: size::Size) -> Dimension {
     match size {
-        lightningcss::properties::size::Size::Auto => Dimension::Auto,
-        lightningcss::properties::size::Size::LengthPercentage(length) => {
-            convert_dimention_percentage(length)
-        }
-        lightningcss::properties::size::Size::MinContent(_) => todo!(),
-        lightningcss::properties::size::Size::MaxContent(_) => todo!(),
-        lightningcss::properties::size::Size::FitContent(_) => todo!(),
-        lightningcss::properties::size::Size::FitContentFunction(_) => todo!(),
-        lightningcss::properties::size::Size::Stretch(_) => todo!(),
-        lightningcss::properties::size::Size::Contain => todo!(),
+        size::Size::Auto => Dimension::Auto,
+        size::Size::LengthPercentage(length) => convert_dimension_percentage(length),
+        _ => todo!(),
     }
 }
 
