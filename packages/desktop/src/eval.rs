@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::use_window;
@@ -10,7 +9,13 @@ use std::pin::Pin;
 
 /// A future that resolves to the result of a JavaScript evaluation.
 pub struct EvalResult {
-    pub(crate) reciever: Rc<RefCell<tokio::sync::mpsc::UnboundedReceiver<serde_json::Value>>>,
+    pub(crate) broadcast: tokio::sync::broadcast::Sender<serde_json::Value>,
+}
+
+impl EvalResult {
+    pub(crate) fn new(sender: tokio::sync::broadcast::Sender<serde_json::Value>) -> Self {
+        Self { broadcast: sender }
+    }
 }
 
 impl IntoFuture for EvalResult {
@@ -20,10 +25,10 @@ impl IntoFuture for EvalResult {
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
-            let mut reciever = self.reciever.borrow_mut();
+            let mut reciever = self.broadcast.subscribe();
             match reciever.recv().await {
-                Some(result) => Ok(result),
-                None => Err(serde_json::Error::custom("No result returned")),
+                Ok(result) => Ok(result),
+                Err(_) => Err(serde_json::Error::custom("No result returned")),
             }
         }) as Pin<Box<dyn Future<Output = Result<serde_json::Value, serde_json::Error>>>>
     }

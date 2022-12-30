@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::eval::EvalResult;
@@ -42,10 +41,7 @@ pub struct DesktopContext {
     pub proxy: ProxyType,
 
     /// The receiver for eval results since eval is async
-    pub(super) eval_sender: tokio::sync::mpsc::UnboundedSender<Value>,
-
-    /// The receiver for eval results since eval is async
-    pub(super) eval_reciever: Rc<RefCell<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
+    pub(super) eval: tokio::sync::broadcast::Sender<Value>,
 
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
@@ -62,14 +58,10 @@ impl std::ops::Deref for DesktopContext {
 
 impl DesktopContext {
     pub(crate) fn new(webview: Rc<WebView>, proxy: ProxyType) -> Self {
-        let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
-
         Self {
             webview,
             proxy,
-            eval_reciever: Rc::new(RefCell::new(eval_reciever)),
-            eval_sender,
-
+            eval: tokio::sync::broadcast::channel(8).0,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -156,9 +148,7 @@ impl DesktopContext {
             log::warn!("Eval script error: {e}");
         }
 
-        EvalResult {
-            reciever: self.eval_reciever.clone(),
-        }
+        EvalResult::new(self.eval.clone())
     }
 
     /// Push an objc view to the window

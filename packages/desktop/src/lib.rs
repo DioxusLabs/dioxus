@@ -183,7 +183,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Conf
                 dom.base_scope()
                     .consume_context::<DesktopContext>()
                     .unwrap()
-                    .eval_sender
+                    .eval
                     .send(msg.params())
                     .unwrap();
             }
