@@ -118,6 +118,11 @@ impl DesktopContext {
         }
     }
 
+    /// Set the zoom level of the webview
+    pub fn set_zoom_level(&self, level: f64) {
+        self.webview.zoom(level);
+    }
+
     /// opens DevTool window
     pub fn devtool(&self) {
         #[cfg(debug_assertions)]
