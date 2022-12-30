@@ -10,7 +10,7 @@ use crate::{
     ScopeId, TaskId, VNode, VirtualDom,
 };
 
-use super::{waker::ArcWake, SuspenseId};
+use super::SuspenseId;
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler
@@ -22,11 +22,11 @@ impl VirtualDom {
 
         let task = match tasks.get(id.0) {
             Some(task) => task,
+            // The task was removed from the scheduler, so we can just ignore it
             None => return,
         };
 
-        let waker = task.waker();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(&task.waker);
 
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
@@ -45,19 +45,13 @@ impl VirtualDom {
     }
 
     pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
-        let leaf = self
-            .scheduler
-            .leaves
-            .borrow_mut()
-            .get(id.0)
-            .unwrap()
-            .clone();
+        let leaves = self.scheduler.leaves.borrow_mut();
+        let leaf = leaves.get(id.0).unwrap();
 
         let scope_id = leaf.scope_id;
 
         // todo: cache the waker
-        let waker = leaf.waker();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(&leaf.waker);
 
         // Safety: the future is always pinned to the bump arena
         let mut pinned = unsafe { std::pin::Pin::new_unchecked(&mut *leaf.task) };
@@ -91,6 +85,9 @@ impl VirtualDom {
 
                 let place_holder_id = scope.placeholder.get().unwrap();
                 self.scope_stack.push(scope_id);
+
+                drop(leaves);
+
                 let created = self.create(template);
                 self.scope_stack.pop();
                 mutations.push(Mutation::ReplaceWith {

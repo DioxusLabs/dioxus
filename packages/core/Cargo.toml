@@ -23,7 +23,7 @@ rustc-hash = "1.1.0"
 # Used in diffing
 longest-increasing-subsequence = "0.1.0"
 
-futures-util = { version = "0.3", default-features = false }
+futures-util = { version = "0.3", default-features = false, features = ["alloc"]}
 
 slab = "0.4"
 
