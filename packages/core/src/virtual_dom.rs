@@ -438,17 +438,6 @@ impl VirtualDom {
                             }
 
                             some_msg = self.rx.next().await
-
-                            // let res = (&mut *self.scheduler.tasks.borrow_mut()).next().await;
-
-                            // if res.is_none() {
-                            //     // If we have no tasks, then we should wait for a message
-                            //     if let Some(msg) = self.rx.next().await {
-                            //         some_msg = Some(msg);
-                            //     } else {
-                            //         return;
-                            //     }
-                            // }
                         }
                     }
                 }
