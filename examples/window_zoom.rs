@@ -14,9 +14,9 @@ fn app(cx: Scope) -> Element {
             r#type: "number",
             value: "{level}",
             oninput: |e| {
-                let num = e.value.parse::<f64>().unwrap_or(1.0);
-                level.set(num);
-                window.webview.zoom(num);
+                let new_zoom = e.value.parse::<f64>().unwrap_or(1.0);
+                level.set(new_zoom);
+                window.webview.zoom(new_zoom);
             }
         }
     })
