@@ -72,8 +72,6 @@ pub struct LocalTaskHandle {
 
 impl ArcWake for LocalTaskHandle {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        println!("waking task: {:?} {:p}", arc_self.id, arc_self);
-
         arc_self
             .tx
             .unbounded_send(SchedulerMsg::TaskNotified(arc_self.id))

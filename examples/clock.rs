@@ -3,16 +3,15 @@
 //! The example from the README.md.
 
 use dioxus::prelude::*;
-use futures_util::Future;
 
 fn main() {
     dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
-    let mut count = use_ref(cx, || 0);
+    let count = use_ref(cx, || 0);
 
-    let mut ct = count.to_owned();
+    let ct = count.to_owned();
     use_coroutine(cx, |_: UnboundedReceiver<()>| async move {
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -25,7 +24,7 @@ fn app(cx: Scope) -> Element {
         }
     });
 
-    let mut count = count.read();
+    let count = count.read();
 
     cx.render(rsx! {
         div { "High-Five counter: {count}" }
