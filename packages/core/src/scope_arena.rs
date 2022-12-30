@@ -92,17 +92,14 @@ impl VirtualDom {
             let leaf = SuspenseLeaf {
                 scope_id,
                 task: task.as_mut(),
-                id: suspense_id,
-                tx: self.scheduler.sender.clone(),
                 notified: Default::default(),
-                waker: Arc::new(SuspenseHandle {
+                waker: futures_util::task::waker(Arc::new(SuspenseHandle {
                     id: suspense_id,
                     tx: self.scheduler.sender.clone(),
-                }),
+                })),
             };
 
-            let waker = futures_util::task::waker(leaf.waker.clone());
-            let mut cx = Context::from_waker(&waker);
+            let mut cx = Context::from_waker(&leaf.waker);
 
             // safety: the task is already pinned in the bump arena
             let mut pinned = unsafe { Pin::new_unchecked(task.as_mut()) };

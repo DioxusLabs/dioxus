@@ -5,6 +5,7 @@ use crate::ElementId;
 use crate::{innerlude::Mutations, Element, ScopeId};
 use std::future::Future;
 use std::sync::Arc;
+use std::task::Waker;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
@@ -37,12 +38,10 @@ impl SuspenseContext {
 }
 
 pub(crate) struct SuspenseLeaf {
-    pub(crate) id: SuspenseId,
     pub(crate) scope_id: ScopeId,
-    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub(crate) notified: Cell<bool>,
     pub(crate) task: *mut dyn Future<Output = Element<'static>>,
-    pub(crate) waker: Arc<SuspenseHandle>,
+    pub(crate) waker: Waker,
 }
 
 pub struct SuspenseHandle {

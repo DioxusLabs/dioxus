@@ -1,5 +1,4 @@
 use crate::ScopeId;
-use futures_util::stream::FuturesUnordered;
 use slab::Slab;
 
 mod suspense;
@@ -24,13 +23,13 @@ pub(crate) enum SchedulerMsg {
     SuspenseNotified(SuspenseId),
 }
 
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc};
 
 pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     /// Tasks created with cx.spawn
-    pub tasks: RefCell<FuturesUnordered<LocalTask>>,
+    pub tasks: RefCell<Slab<LocalTask>>,
 
     /// Async components
     pub leaves: RefCell<Slab<SuspenseLeaf>>,
@@ -40,7 +39,7 @@ impl Scheduler {
     pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Scheduler {
             sender,
-            tasks: RefCell::new(FuturesUnordered::new()),
+            tasks: RefCell::new(Slab::new()),
             leaves: RefCell::new(Slab::new()),
         })
     }
