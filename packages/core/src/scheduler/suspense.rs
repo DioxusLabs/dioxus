@@ -1,8 +1,11 @@
-use super::{waker::ArcWake, SchedulerMsg};
+use futures_util::task::ArcWake;
+
+use super::SchedulerMsg;
 use crate::ElementId;
 use crate::{innerlude::Mutations, Element, ScopeId};
 use std::future::Future;
 use std::sync::Arc;
+use std::task::Waker;
 use std::{
     cell::{Cell, RefCell},
     collections::HashSet,
@@ -35,16 +38,19 @@ impl SuspenseContext {
 }
 
 pub(crate) struct SuspenseLeaf {
-    pub(crate) id: SuspenseId,
     pub(crate) scope_id: ScopeId,
-    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
     pub(crate) notified: Cell<bool>,
     pub(crate) task: *mut dyn Future<Output = Element<'static>>,
+    pub(crate) waker: Waker,
 }
 
-impl ArcWake for SuspenseLeaf {
+pub struct SuspenseHandle {
+    pub(crate) id: SuspenseId,
+    pub(crate) tx: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
+}
+
+impl ArcWake for SuspenseHandle {
     fn wake_by_ref(arc_self: &Arc<Self>) {
-        arc_self.notified.set(true);
         _ = arc_self
             .tx
             .unbounded_send(SchedulerMsg::SuspenseNotified(arc_self.id));
