@@ -29,9 +29,6 @@ pub(super) struct DesktopController {
     pub(super) event_tx: UnboundedSender<serde_json::Value>,
     #[cfg(debug_assertions)]
     pub(super) templates_tx: UnboundedSender<Template<'static>>,
-
-    #[cfg(target_os = "ios")]
-    pub(super) views: Vec<*mut Object>,
 }
 
 impl DesktopController {

@@ -13,28 +13,27 @@ mod protocol;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 
+mod eval;
+mod waker;
+mod webview;
+
 pub use cfg::Config;
 use desktop_context::UserWindowEvent;
-pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
+pub use desktop_context::{use_window, DesktopContext};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
-use events::parse_ipc_message;
-use futures_util::task::ArcWake;
 use futures_util::{pin_mut, FutureExt};
 use std::collections::HashMap;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::task::Waker;
 pub use tao::dpi::{LogicalSize, PhysicalSize};
 pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window,
 };
 pub use wry;
 pub use wry::application as tao;
-use wry::application::event_loop::EventLoopProxy;
-use wry::webview::WebViewBuilder;
 
 /// Launch the WebView and run the event loop.
 ///
@@ -82,9 +81,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 
 /// Launch the WebView and run the event loop, with configuration and root props.
 ///
-/// THIS WILL BLOCK THE CURRENT THREAD
-///
-/// This function will start a multithreaded Tokio runtime as well the WebView event loop.
+/// This function will start a multithreaded Tokio runtime as well the WebView event loop. This will block the current thread.
 ///
 /// You can configure the WebView window with a configuration closure
 ///
@@ -106,25 +103,27 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 /// ```
 pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
-    let event_loop = EventLoop::with_user_event();
-
     let mut dom = VirtualDom::new_with_props(root, props);
+
+    let event_loop = EventLoop::with_user_event();
 
     let proxy = event_loop.create_proxy();
 
-    let mut webviews = HashMap::new();
-
-    // todo: make this configurable
+    // We start the tokio runtime *on this thread*
+    // Any future we poll later will use this runtime to spawn tasks and for IO
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .unwrap();
 
-    // We want to poll the virtualdom and the event loop at the same time
-    // So the waker will be connected to both
-    let waker = futures_util::task::waker(Arc::new(DomHandle {
-        proxy: proxy.clone(),
-    }));
+    // We enter the runtime but we poll futures manually, circumventing the per-task runtime budget
+    let _guard = rt.enter();
+
+    // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+    let waker = waker::tao_waker(&proxy);
+
+    // We only have one webview right now, but we'll have more later
+    let mut webviews = HashMap::new();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -132,11 +131,10 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
         match window_event {
             Event::NewEvents(StartCause::Init) => {
                 let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
-                let window = Rc::new(build_webview(&mut cfg, event_loop, proxy.clone()));
+                let window = Rc::new(webview::build(&mut cfg, event_loop, proxy.clone()));
                 let ctx = DesktopContext::new(window.clone(), proxy.clone(), eval_reciever);
                 dom.base_scope().provide_context(ctx);
                 webviews.insert(window.window().id(), window.clone());
-
                 proxy.send_event(UserWindowEvent::Poll).unwrap();
             }
 
@@ -156,200 +154,55 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                 _ => {}
             },
 
-            Event::UserEvent(user_event) => {
-                match user_event {
-                    UserWindowEvent::UserEvent(json_value) => {
-                        if let Ok(value) = serde_json::from_value::<HtmlEvent>(json_value) {
-                            let HtmlEvent {
-                                name,
-                                element,
-                                bubbles,
-                                data,
-                            } = value;
-
-                            dom.handle_event(&name, data.into_any(), element, bubbles);
-
-                            let edits = dom.render_immediate();
-
-                            let serialized = serde_json::to_string(&edits).unwrap();
-
-                            let (_id, view) = webviews.iter_mut().next().unwrap();
-
-                            view.evaluate_script(&format!(
-                                "window.interpreter.handleEdits({})",
-                                serialized
-                            ))
-                            .unwrap();
-                        }
-                    }
-
-                    UserWindowEvent::Poll => {
-                        let mut cx = std::task::Context::from_waker(&waker);
-
-                        // using this will reset the budget for the task that we're blocking the main thread with
-                        let _guard = rt.enter();
-
-                        loop {
-                            {
-                                let fut = dom.wait_for_work();
-                                pin_mut!(fut);
-
-                                match fut.poll_unpin(&mut cx) {
-                                    std::task::Poll::Ready(_) => {}
-                                    std::task::Poll::Pending => break,
-                                }
-                            }
-
-                            let edits = dom.render_immediate();
-
-                            // apply the edits
-                            let serialized = serde_json::to_string(&edits).unwrap();
-
-                            let (_id, view) = webviews.iter_mut().next().unwrap();
-
-                            view.evaluate_script(&format!(
-                                "window.interpreter.handleEdits({})",
-                                serialized
-                            ))
-                            .unwrap();
-                        }
-                    }
-
-                    UserWindowEvent::Initialize => {
-                        let edits = dom.rebuild();
-
-                        let (_id, view) = webviews.iter_mut().next().unwrap();
-
-                        let serialized = serde_json::to_string(&edits).unwrap();
-
-                        view.evaluate_script(&format!(
-                            "window.interpreter.handleEdits({})",
-                            serialized
-                        ))
-                        .unwrap();
-                    }
-
-                    other => {
-                        // desktop.handle_event(user_event, control_flow);
-                    }
-                }
+            Event::UserEvent(UserWindowEvent::Initialize) => {
+                send_edits(dom.rebuild(), &mut webviews);
             }
 
-            _ => {}
+            Event::UserEvent(UserWindowEvent::CloseWindow) => *control_flow = ControlFlow::Exit,
+
+            Event::UserEvent(UserWindowEvent::EvalResult(_)) => todo!(),
+
+            Event::UserEvent(UserWindowEvent::UserEvent(json_value)) => {
+                let evt = match serde_json::from_value::<HtmlEvent>(json_value) {
+                    Ok(value) => value,
+                    Err(_) => return,
+                };
+
+                dom.handle_event(&evt.name, evt.data.into_any(), evt.element, evt.bubbles);
+
+                send_edits(dom.render_immediate(), &mut webviews);
+            }
+
+            Event::UserEvent(UserWindowEvent::Poll) => {
+                poll_vdom(&waker, &mut dom, &mut webviews);
+            }
+
+            _ => todo!(),
         }
     })
 }
 
-struct DomHandle {
-    proxy: EventLoopProxy<UserWindowEvent>,
-}
+type Webviews = HashMap<tao::window::WindowId, Rc<wry::webview::WebView>>;
 
-impl ArcWake for DomHandle {
-    fn wake_by_ref(arc_self: &Arc<Self>) {
-        arc_self.proxy.send_event(UserWindowEvent::Poll).unwrap();
-    }
-}
+fn poll_vdom(waker: &Waker, dom: &mut VirtualDom, webviews: &mut Webviews) {
+    let mut cx = std::task::Context::from_waker(waker);
+    loop {
+        {
+            let fut = dom.wait_for_work();
+            pin_mut!(fut);
 
-fn build_webview(
-    cfg: &mut Config,
-    event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
-) -> wry::webview::WebView {
-    let builder = cfg.window.clone();
-    let window = builder.build(event_loop).unwrap();
-    let file_handler = cfg.file_drop_handler.take();
-    let custom_head = cfg.custom_head.clone();
-    let resource_dir = cfg.resource_dir.clone();
-    let index_file = cfg.custom_index.clone();
-    let root_name = cfg.root_name.clone();
-
-    // We assume that if the icon is None in cfg, then the user just didnt set it
-    if cfg.window.window.window_icon.is_none() {
-        window.set_window_icon(Some(
-            tao::window::Icon::from_rgba(
-                include_bytes!("./assets/default_icon.bin").to_vec(),
-                460,
-                460,
-            )
-            .expect("image parse failed"),
-        ));
-    }
-
-    let mut webview = WebViewBuilder::new(window)
-        .unwrap()
-        .with_transparent(cfg.window.window.transparent)
-        .with_url("dioxus://index.html/")
-        .unwrap()
-        .with_ipc_handler(move |_window: &Window, payload: String| {
-            let message = match parse_ipc_message(&payload) {
-                Some(message) => message,
-                None => {
-                    log::error!("Failed to parse IPC message: {}", payload);
-                    return;
-                }
-            };
-
-            match message.method() {
-                "eval_result" => {
-                    let _ = proxy.send_event(UserWindowEvent::EvalResult(message.params()));
-                }
-                "user_event" => {
-                    let _ = proxy.send_event(UserWindowEvent::UserEvent(message.params()));
-                }
-                "initialize" => {
-                    let _ = proxy.send_event(UserWindowEvent::Initialize);
-                }
-                "browser_open" => match message.params().as_object() {
-                    Some(temp) if temp.contains_key("href") => {
-                        let open = webbrowser::open(temp["href"].as_str().unwrap());
-                        if let Err(e) = open {
-                            log::error!("Open Browser error: {:?}", e);
-                        }
-                    }
-                    _ => (),
-                },
-                _ => (),
+            match fut.poll_unpin(&mut cx) {
+                std::task::Poll::Ready(_) => {}
+                std::task::Poll::Pending => break,
             }
-        })
-        .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(
-                r,
-                resource_dir.clone(),
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-            )
-        })
-        .with_file_drop_handler(move |window, evet| {
-            file_handler
-                .as_ref()
-                .map(|handler| handler(window, evet))
-                .unwrap_or_default()
-        });
+        }
 
-    for (name, handler) in cfg.protocols.drain(..) {
-        webview = webview.with_custom_protocol(name, handler)
+        send_edits(dom.render_immediate(), webviews);
     }
+}
 
-    if cfg.disable_context_menu {
-        // in release mode, we don't want to show the dev tool or reload menus
-        webview = webview.with_initialization_script(
-            r#"
-                        if (document.addEventListener) {
-                        document.addEventListener('contextmenu', function(e) {
-                            e.preventDefault();
-                        }, false);
-                        } else {
-                        document.attachEvent('oncontextmenu', function() {
-                            window.event.returnValue = false;
-                        });
-                        }
-                    "#,
-        )
-    } else {
-        // in debug, we are okay with the reload menu showing and dev tool
-        webview = webview.with_devtools(true);
-    }
-
-    webview.build().unwrap()
+fn send_edits(edits: Mutations, webviews: &mut Webviews) {
+    let serialized = serde_json::to_string(&edits).unwrap();
+    let (_id, view) = webviews.iter_mut().next().unwrap();
+    _ = view.evaluate_script(&format!("window.interpreter.handleEdits({})", serialized));
 }
