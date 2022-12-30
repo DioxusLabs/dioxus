@@ -225,8 +225,6 @@ pub struct ChildNodeIteratorMut<'a, T, Tr: TreeView<T> + 'a> {
     node_type: PhantomData<T>,
 }
 
-unsafe impl<'a, T, Tr: TreeView<T> + 'a> Sync for ChildNodeIteratorMut<'a, T, Tr> {}
-
 impl<'a, T, Tr: TreeView<T>> ChildNodeIteratorMut<'a, T, Tr> {
     fn tree_mut(&mut self) -> &'a mut Tr {
         unsafe { &mut *self.tree }
