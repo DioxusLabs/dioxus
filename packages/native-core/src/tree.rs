@@ -111,15 +111,7 @@ pub trait TreeView<T>: Sized {
 
     fn parent_mut(&mut self, id: NodeId) -> Option<&mut T>;
 
-    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
-        let mut_ptr: *mut Self = self;
-        unsafe {
-            // Safety: No node has itself as a parent.
-            (*mut_ptr)
-                .get_mut(id)
-                .map(|node| (node, (*mut_ptr).parent_mut(id)))
-        }
-    }
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)>;
 
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
 
@@ -340,6 +332,16 @@ impl<T> TreeView<T> for Tree<T> {
     fn size(&self) -> usize {
         self.nodes.len()
     }
+
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
+        if let Some(parent_id) = self.parent_id(id) {
+            self.nodes
+                .get2_mut(id.0, parent_id.0)
+                .map(|(node, parent)| (&mut node.value, Some(&mut parent.value)))
+        } else {
+            self.nodes.get_mut(id.0).map(|node| (&mut node.value, None))
+        }
+    }
 }
 
 impl<T> TreeLike<T> for Tree<T> {
@@ -547,6 +549,15 @@ where
     fn size(&self) -> usize {
         self.tree.size()
     }
+
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T2, Option<&mut T2>)> {
+        self.tree.node_parent_mut(id).map(|(node, parent)| {
+            (
+                (self.map_mut)(node),
+                parent.map(|parent| (self.map_mut)(parent)),
+            )
+        })
+    }
 }
 
 /// A view into a tree that can be shared between multiple threads. Nodes are locked invividually.
@@ -674,6 +685,14 @@ impl<'a, T, Tr: TreeView<T>> TreeView<T> for SharedView<'a, T, Tr> {
 
     fn size(&self) -> usize {
         unsafe { (*self.tree.get()).size() }
+    }
+
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
+        let parent_id = self.parent_id(id)?;
+        self.lock_node(parent_id);
+        let return_value = self.with_node(id, |t| t.node_parent_mut(id));
+        self.unlock_node(parent_id);
+        return_value
     }
 }
 
