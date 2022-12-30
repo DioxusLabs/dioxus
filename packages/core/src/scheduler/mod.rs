@@ -1,14 +1,13 @@
 use crate::ScopeId;
+use futures_util::stream::FuturesUnordered;
 use slab::Slab;
 
 mod suspense;
 mod task;
 mod wait;
-mod waker;
 
 pub use suspense::*;
 pub use task::*;
-pub use waker::ArcWake;
 
 /// The type of message that can be sent to the scheduler.
 ///
@@ -31,17 +30,17 @@ pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     /// Tasks created with cx.spawn
-    pub tasks: RefCell<Slab<Arc<LocalTask>>>,
+    pub tasks: RefCell<FuturesUnordered<LocalTask>>,
 
     /// Async components
-    pub leaves: RefCell<Slab<Arc<SuspenseLeaf>>>,
+    pub leaves: RefCell<Slab<SuspenseLeaf>>,
 }
 
 impl Scheduler {
     pub fn new(sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>) -> Rc<Self> {
         Rc::new(Scheduler {
             sender,
-            tasks: RefCell::new(Slab::new()),
+            tasks: RefCell::new(FuturesUnordered::new()),
             leaves: RefCell::new(Slab::new()),
         })
     }

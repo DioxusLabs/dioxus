@@ -13,6 +13,8 @@ use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
 use wry::application::platform::ios::WindowExtIOS;
 use wry::application::window::Fullscreen as WryFullscreen;
+use wry::application::window::Window;
+use wry::webview::WebView;
 
 use UserWindowEvent::*;
 
@@ -40,16 +42,32 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
 #[derive(Clone)]
 pub struct DesktopContext {
     /// The wry/tao proxy to the current window
+    pub webview: Rc<WebView>,
+
+    /// The proxy to the event loop
     pub proxy: ProxyType,
+
+    /// The receiver for eval results since eval is async
     pub(super) eval_reciever: Rc<tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
+}
+
+/// A smart pointer to the current window.
+impl std::ops::Deref for DesktopContext {
+    type Target = Window;
+
+    fn deref(&self) -> &Self::Target {
+        &self.webview.window()
+    }
 }
 
 impl DesktopContext {
     pub(crate) fn new(
+        webview: Rc<WebView>,
         proxy: ProxyType,
         eval_reciever: tokio::sync::mpsc::UnboundedReceiver<Value>,
     ) -> Self {
         Self {
+            webview,
             proxy,
             eval_reciever: Rc::new(tokio::sync::Mutex::new(eval_reciever)),
         }
@@ -66,25 +84,9 @@ impl DesktopContext {
     pub fn drag(&self) {
         let _ = self.proxy.send_event(DragWindow);
     }
-
-    /// set window minimize state
-    pub fn set_minimized(&self, minimized: bool) {
-        let _ = self.proxy.send_event(Minimize(minimized));
-    }
-
-    /// set window maximize state
-    pub fn set_maximized(&self, maximized: bool) {
-        let _ = self.proxy.send_event(Maximize(maximized));
-    }
-
     /// toggle window maximize state
     pub fn toggle_maximized(&self) {
         let _ = self.proxy.send_event(MaximizeToggle);
-    }
-
-    /// set window visible or not
-    pub fn set_visible(&self, visible: bool) {
-        let _ = self.proxy.send_event(Visible(visible));
     }
 
     /// close window
@@ -92,54 +94,9 @@ impl DesktopContext {
         let _ = self.proxy.send_event(CloseWindow);
     }
 
-    /// set window to focus
-    pub fn focus(&self) {
-        let _ = self.proxy.send_event(FocusWindow);
-    }
-
     /// change window to fullscreen
     pub fn set_fullscreen(&self, fullscreen: bool) {
         let _ = self.proxy.send_event(Fullscreen(fullscreen));
-    }
-
-    /// set resizable state
-    pub fn set_resizable(&self, resizable: bool) {
-        let _ = self.proxy.send_event(Resizable(resizable));
-    }
-
-    /// set the window always on top
-    pub fn set_always_on_top(&self, top: bool) {
-        let _ = self.proxy.send_event(AlwaysOnTop(top));
-    }
-
-    /// set cursor visible or not
-    pub fn set_cursor_visible(&self, visible: bool) {
-        let _ = self.proxy.send_event(CursorVisible(visible));
-    }
-
-    /// set cursor grab
-    pub fn set_cursor_grab(&self, grab: bool) {
-        let _ = self.proxy.send_event(CursorGrab(grab));
-    }
-
-    /// set window title
-    pub fn set_title(&self, title: &str) {
-        let _ = self.proxy.send_event(SetTitle(String::from(title)));
-    }
-
-    /// change window to borderless
-    pub fn set_decorations(&self, decoration: bool) {
-        let _ = self.proxy.send_event(SetDecorations(decoration));
-    }
-
-    /// set window zoom level
-    pub fn set_zoom_level(&self, scale_factor: f64) {
-        let _ = self.proxy.send_event(SetZoomLevel(scale_factor));
-    }
-
-    /// modifies the inner size of the window
-    pub fn set_inner_size(&self, logical_size: LogicalSize<f64>) {
-        let _ = self.proxy.send_event(SetInnerSize(logical_size));
     }
 
     /// launch print modal
@@ -177,31 +134,20 @@ pub enum UserWindowEvent {
 
     Poll,
 
+    UserEvent(serde_json::Value),
+
     CloseWindow,
     DragWindow,
-    FocusWindow,
 
-    Visible(bool),
-    Minimize(bool),
-    Maximize(bool),
     MaximizeToggle,
-    Resizable(bool),
-    AlwaysOnTop(bool),
+
     Fullscreen(bool),
-
-    CursorVisible(bool),
-    CursorGrab(bool),
-
-    SetTitle(String),
-    SetDecorations(bool),
-
-    SetZoomLevel(f64),
-    SetInnerSize(LogicalSize<f64>),
 
     Print,
     DevTool,
 
     Eval(String),
+    EvalResult(serde_json::Value),
 
     #[cfg(target_os = "ios")]
     PushView(objc_id::ShareId<objc::runtime::Object>),
@@ -236,18 +182,17 @@ impl DesktopController {
                 // if the drag_window has any errors, we don't do anything
                 window.fullscreen().is_none().then(|| window.drag_window());
             }
-            Visible(state) => window.set_visible(state),
-            Minimize(state) => window.set_minimized(state),
-            Maximize(state) => window.set_maximized(state),
+
             MaximizeToggle => window.set_maximized(!window.is_maximized()),
             Fullscreen(state) => {
                 if let Some(handle) = window.current_monitor() {
                     window.set_fullscreen(state.then_some(WryFullscreen::Borderless(Some(handle))));
                 }
             }
-            FocusWindow => window.set_focus(),
-            Resizable(state) => window.set_resizable(state),
-            AlwaysOnTop(state) => window.set_always_on_top(state),
+
+            UserEvent(event) => {
+                //
+            }
 
             Eval(code) => {
                 let script = format!(
@@ -261,16 +206,10 @@ impl DesktopController {
                     log::warn!("Eval script error: {e}");
                 }
             }
-            CursorVisible(state) => window.set_cursor_visible(state),
-            CursorGrab(state) => {
-                let _ = window.set_cursor_grab(state);
+
+            EvalResult(result) => {
+                // todo
             }
-
-            SetTitle(content) => window.set_title(&content),
-            SetDecorations(state) => window.set_decorations(state),
-
-            SetZoomLevel(scale_factor) => webview.zoom(scale_factor),
-            SetInnerSize(logical_size) => window.set_inner_size(logical_size),
 
             Poll => {
                 // todo

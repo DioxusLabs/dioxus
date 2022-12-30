@@ -13,6 +13,7 @@ mod protocol;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 
+use dioxus_html::{a, HtmlEvent};
 use futures_util::task::ArcWake;
 use serde_json::Value;
 use std::cell::RefCell;
@@ -115,23 +116,18 @@ pub async fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 /// ```
 pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
-    let mut event_loop = EventLoop::with_user_event();
+    let event_loop = EventLoop::with_user_event();
 
-    let is_ready = Arc::new(AtomicBool::new(false));
-    let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
-
-    let mut dom = VirtualDom::new_with_props(root, props).with_root_context(DesktopContext::new(
-        event_loop.create_proxy(),
-        eval_reciever,
-    ));
+    let mut dom = VirtualDom::new_with_props(root, props);
 
     let proxy = event_loop.create_proxy();
 
+    // We want to poll the virtualdom and the event loop at the same time
+    // So the waker will be connected to both
     let waker = futures_util::task::waker(Arc::new(DomHandle {
         proxy: proxy.clone(),
     }));
 
-    let mut events = Rc::new(RefCell::new(vec![]));
     let mut webviews = HashMap::new();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
@@ -139,19 +135,20 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
 
         match window_event {
             Event::NewEvents(StartCause::Init) => {
-                let window = build_webview(
-                    &mut cfg,
-                    event_loop,
-                    is_ready.clone(),
-                    proxy.clone(),
-                    eval_sender.clone(),
-                    events.clone(),
-                );
+                let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
+                let window = Rc::new(build_webview(&mut cfg, event_loop, proxy.clone()));
+                let ctx = DesktopContext::new(window.clone(), proxy.clone(), eval_reciever);
+                dom.base_scope().provide_context(ctx);
+                webviews.insert(window.window().id(), window.clone());
 
-                webviews.insert(window.window().id(), window);
-
-                // desktop.start(&mut cfg, event_loop);
+                proxy.send_event(UserWindowEvent::Poll).unwrap();
             }
+
+            Event::MainEventsCleared => {}
+            Event::Resumed => {}
+            Event::Suspended => {}
+            Event::LoopDestroyed => {}
+            Event::RedrawRequested(_id) => {}
 
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
@@ -165,19 +162,65 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
                 println!("user event: {:?}", user_event);
 
                 match user_event {
+                    UserWindowEvent::UserEvent(json_value) => {
+                        if let Ok(value) = serde_json::from_value::<HtmlEvent>(json_value) {
+                            let HtmlEvent {
+                                name,
+                                element,
+                                bubbles,
+                                data,
+                            } = value;
+
+                            dom.handle_event(&name, data.into_any(), element, bubbles);
+
+                            let edits = dom.render_immediate();
+
+                            let serialized = serde_json::to_string(&edits).unwrap();
+
+                            let (_id, view) = webviews.iter_mut().next().unwrap();
+
+                            view.evaluate_script(&format!(
+                                "window.interpreter.handleEdits({})",
+                                serialized
+                            ))
+                            .unwrap();
+                        }
+                    }
+
                     UserWindowEvent::Poll => {
                         let mut cx = std::task::Context::from_waker(&waker);
 
-                        let render = {
-                            let fut = dom.wait_for_work();
-                            pin_mut!(fut);
-                            matches!(fut.poll_unpin(&mut cx), std::task::Poll::Ready(_))
-                        };
+                        println!("polling..");
 
-                        if render {
+                        loop {
+                            {
+                                println!("wait for next work");
+
+                                let fut = dom.wait_for_work();
+                                pin_mut!(fut);
+
+                                match fut.poll_unpin(&mut cx) {
+                                    std::task::Poll::Ready(_) => {
+                                        println!("work ready");
+                                    }
+                                    std::task::Poll::Pending => break,
+                                }
+                            }
+
+                            println!("rendering..");
+
                             let edits = dom.render_immediate();
 
                             // apply the edits
+                            let serialized = serde_json::to_string(&edits).unwrap();
+
+                            let (_id, view) = webviews.iter_mut().next().unwrap();
+
+                            view.evaluate_script(&format!(
+                                "window.interpreter.handleEdits({})",
+                                serialized
+                            ))
+                            .unwrap();
                         }
                     }
 
@@ -200,11 +243,7 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
                     }
                 }
             }
-            Event::MainEventsCleared => {}
-            Event::Resumed => {}
-            Event::Suspended => {}
-            Event::LoopDestroyed => {}
-            Event::RedrawRequested(_id) => {}
+
             _ => {}
         }
     })
@@ -223,10 +262,7 @@ impl ArcWake for DomHandle {
 fn build_webview(
     cfg: &mut Config,
     event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    is_ready: Arc<AtomicBool>,
     proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
-    eval_sender: tokio::sync::mpsc::UnboundedSender<serde_json::Value>,
-    event_tx: Rc<RefCell<Vec<Value>>>,
 ) -> wry::webview::WebView {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
@@ -264,29 +300,23 @@ fn build_webview(
 
             match message.method() {
                 "eval_result" => {
-                    let result = message.params();
-                    eval_sender.send(result).unwrap();
+                    let _ = proxy.send_event(UserWindowEvent::EvalResult(message.params()));
                 }
                 "user_event" => {
-                    _ = event_tx.borrow_mut().push(message.params());
-                    let _ = proxy.send_event(UserWindowEvent::Poll);
+                    let _ = proxy.send_event(UserWindowEvent::UserEvent(message.params()));
                 }
                 "initialize" => {
-                    is_ready.store(true, std::sync::atomic::Ordering::Relaxed);
                     let _ = proxy.send_event(UserWindowEvent::EditsReady);
                 }
-                "browser_open" => {
-                    let data = message.params();
-                    log::trace!("Open browser: {:?}", data);
-                    if let Some(temp) = data.as_object() {
-                        if temp.contains_key("href") {
-                            let url = temp.get("href").unwrap().as_str().unwrap();
-                            if let Err(e) = webbrowser::open(url) {
-                                log::error!("Open Browser error: {:?}", e);
-                            }
+                "browser_open" => match message.params().as_object() {
+                    Some(temp) if temp.contains_key("href") => {
+                        let open = webbrowser::open(temp["href"].as_str().unwrap());
+                        if let Err(e) = open {
+                            log::error!("Open Browser error: {:?}", e);
                         }
                     }
-                }
+                    _ => (),
+                },
                 _ => (),
             }
         })

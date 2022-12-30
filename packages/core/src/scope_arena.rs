@@ -2,9 +2,8 @@ use crate::{
     any_props::AnyProps,
     bump_frame::BumpFrame,
     innerlude::DirtyScope,
-    innerlude::{SuspenseId, SuspenseLeaf},
+    innerlude::{SuspenseHandle, SuspenseId, SuspenseLeaf},
     nodes::RenderReturn,
-    scheduler::ArcWake,
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
 };
@@ -90,15 +89,19 @@ impl VirtualDom {
             let entry = leaves.vacant_entry();
             let suspense_id = SuspenseId(entry.key());
 
-            let leaf = Arc::new(SuspenseLeaf {
+            let leaf = SuspenseLeaf {
                 scope_id,
                 task: task.as_mut(),
                 id: suspense_id,
                 tx: self.scheduler.sender.clone(),
                 notified: Default::default(),
-            });
+                waker: Arc::new(SuspenseHandle {
+                    id: suspense_id,
+                    tx: self.scheduler.sender.clone(),
+                }),
+            };
 
-            let waker = leaf.waker();
+            let waker = futures_util::task::waker(leaf.waker.clone());
             let mut cx = Context::from_waker(&waker);
 
             // safety: the task is already pinned in the bump arena

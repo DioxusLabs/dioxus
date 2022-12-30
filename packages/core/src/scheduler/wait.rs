@@ -1,3 +1,4 @@
+use futures_util::task::ArcWake;
 use futures_util::FutureExt;
 use std::{
     rc::Rc,
@@ -10,7 +11,7 @@ use crate::{
     ScopeId, TaskId, VNode, VirtualDom,
 };
 
-use super::{waker::ArcWake, SuspenseId};
+use super::SuspenseId;
 
 impl VirtualDom {
     /// Handle notifications by tasks inside the scheduler
@@ -20,22 +21,27 @@ impl VirtualDom {
     pub(crate) fn handle_task_wakeup(&mut self, id: TaskId) {
         let mut tasks = self.scheduler.tasks.borrow_mut();
 
-        let task = match tasks.get(id.0) {
-            Some(task) => task,
-            None => return,
-        };
+        // let task = match tasks.get(id.0) {
+        //     Some(task) => task,
+        //     None => {
+        //         // The task was removed from the scheduler, so we can just ignore it
+        //         return;
+        //     }
+        // };
 
-        let waker = task.waker();
-        let mut cx = Context::from_waker(&waker);
+        // let mut cx = Context::from_waker(&task.waker);
 
-        // If the task completes...
-        if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
-            // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.scopes[task.scope.0].spawned_tasks.remove(&id);
+        // // If the task completes...
+        // println!("polling task");
+        // if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
+        //     // Remove it from the scope so we dont try to double drop it when the scope dropes
+        //     self.scopes[task.scope.0].spawned_tasks.remove(&id);
 
-            // Remove it from the scheduler
-            tasks.remove(id.0);
-        }
+        //     // Remove it from the scheduler
+        //     tasks.remove(id.0);
+        // } else {
+        //     println!("task not ready yet, but we gave it a handle to the waker");
+        // }
     }
 
     pub(crate) fn acquire_suspense_boundary(&self, id: ScopeId) -> Rc<SuspenseContext> {
@@ -45,69 +51,69 @@ impl VirtualDom {
     }
 
     pub(crate) fn handle_suspense_wakeup(&mut self, id: SuspenseId) {
-        let leaf = self
-            .scheduler
-            .leaves
-            .borrow_mut()
-            .get(id.0)
-            .unwrap()
-            .clone();
+        // let leaf = self
+        //     .scheduler
+        //     .leaves
+        //     .borrow_mut()
+        //     .get(id.0)
+        //     .unwrap()
+        //     .clone();
 
-        let scope_id = leaf.scope_id;
+        // let scope_id = leaf.scope_id;
 
-        // todo: cache the waker
-        let waker = leaf.waker();
-        let mut cx = Context::from_waker(&waker);
+        // // todo: cache the waker
+        // let waker = leaf.waker();
+        // let mut cx = Context::from_waker(&waker);
 
-        // Safety: the future is always pinned to the bump arena
-        let mut pinned = unsafe { std::pin::Pin::new_unchecked(&mut *leaf.task) };
-        let as_pinned_mut = &mut pinned;
+        // // Safety: the future is always pinned to the bump arena
+        // let mut pinned = unsafe { std::pin::Pin::new_unchecked(&mut *leaf.task) };
+        // let as_pinned_mut = &mut pinned;
 
-        // the component finished rendering and gave us nodes
-        // we should attach them to that component and then render its children
-        // continue rendering the tree until we hit yet another suspended component
-        if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
-            let fiber = self.acquire_suspense_boundary(leaf.scope_id);
+        // // the component finished rendering and gave us nodes
+        // // we should attach them to that component and then render its children
+        // // continue rendering the tree until we hit yet another suspended component
+        // if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
+        //     let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
-            let scope = &mut self.scopes[scope_id.0];
-            let arena = scope.current_frame();
+        //     let scope = &mut self.scopes[scope_id.0];
+        //     let arena = scope.current_frame();
 
-            let ret = arena.bump.alloc(match new_nodes {
-                Some(new) => RenderReturn::Ready(new),
-                None => RenderReturn::default(),
-            });
+        //     let ret = arena.bump.alloc(match new_nodes {
+        //         Some(new) => RenderReturn::Ready(new),
+        //         None => RenderReturn::default(),
+        //     });
 
-            arena.node.set(ret);
+        //     arena.node.set(ret);
 
-            fiber.waiting_on.borrow_mut().remove(&id);
+        //     fiber.waiting_on.borrow_mut().remove(&id);
 
-            if let RenderReturn::Ready(template) = ret {
-                let mutations_ref = &mut fiber.mutations.borrow_mut();
-                let mutations = &mut **mutations_ref;
-                let template: &VNode = unsafe { std::mem::transmute(template) };
-                let mutations: &mut Mutations = unsafe { std::mem::transmute(mutations) };
+        //     if let RenderReturn::Ready(template) = ret {
+        //         let mutations_ref = &mut fiber.mutations.borrow_mut();
+        //         let mutations = &mut **mutations_ref;
+        //         let template: &VNode = unsafe { std::mem::transmute(template) };
+        //         let mutations: &mut Mutations = unsafe { std::mem::transmute(mutations) };
 
-                std::mem::swap(&mut self.mutations, mutations);
+        //         std::mem::swap(&mut self.mutations, mutations);
 
-                let place_holder_id = scope.placeholder.get().unwrap();
-                self.scope_stack.push(scope_id);
-                let created = self.create(template);
-                self.scope_stack.pop();
-                mutations.push(Mutation::ReplaceWith {
-                    id: place_holder_id,
-                    m: created,
-                });
+        //         let place_holder_id = scope.placeholder.get().unwrap();
+        //         self.scope_stack.push(scope_id);
+        //         let created = self.create(template);
+        //         self.scope_stack.pop();
+        //         mutations.push(Mutation::ReplaceWith {
+        //             id: place_holder_id,
+        //             m: created,
+        //         });
 
-                for leaf in self.collected_leaves.drain(..) {
-                    fiber.waiting_on.borrow_mut().insert(leaf);
-                }
+        //         for leaf in self.collected_leaves.drain(..) {
+        //             fiber.waiting_on.borrow_mut().insert(leaf);
+        //         }
 
-                std::mem::swap(&mut self.mutations, mutations);
+        //         std::mem::swap(&mut self.mutations, mutations);
 
-                if fiber.waiting_on.borrow().is_empty() {
-                    self.finished_fibers.push(fiber.id);
-                }
-            }
-        }
+        //         if fiber.waiting_on.borrow().is_empty() {
+        //             self.finished_fibers.push(fiber.id);
+        //         }
+        //     }
+        // }
     }
 }

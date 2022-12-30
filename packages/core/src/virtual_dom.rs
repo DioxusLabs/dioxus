@@ -13,10 +13,21 @@ use crate::{
     scopes::{ScopeId, ScopeState},
     AttributeValue, Element, Event, Scope, SuspenseContext,
 };
-use futures_util::{pin_mut, StreamExt};
+use futures_util::{
+    pin_mut,
+    stream::{futures_unordered, FuturesUnordered},
+    StreamExt,
+};
 use rustc_hash::FxHashMap;
 use slab::Slab;
-use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future::Future, rc::Rc};
+use std::{
+    any::Any,
+    borrow::BorrowMut,
+    cell::Cell,
+    collections::{BTreeSet, HashSet},
+    future::Future,
+    rc::Rc,
+};
 
 /// A virtual node system that progresses user events and diffs UI trees.
 ///
@@ -420,7 +431,7 @@ impl VirtualDom {
         loop {
             match some_msg.take() {
                 // If a bunch of messages are ready in a sequence, try to pop them off synchronously
-                Some(msg) => match msg {
+                Some(msg) => match dbg!(msg) {
                     SchedulerMsg::Immediate(id) => self.mark_dirty(id),
                     SchedulerMsg::TaskNotified(task) => self.handle_task_wakeup(task),
                     SchedulerMsg::SuspenseNotified(id) => self.handle_suspense_wakeup(id),
@@ -430,14 +441,20 @@ impl VirtualDom {
                 None => {
                     match self.rx.try_next() {
                         Ok(Some(val)) => some_msg = Some(val),
-                        Ok(None) => return,
+                        Ok(None) => panic!("Scheduler channel closed"),
                         Err(_) => {
                             // If we have any dirty scopes, or finished fiber trees then we should exit
                             if !self.dirty_scopes.is_empty() || !self.finished_fibers.is_empty() {
                                 return;
                             }
 
-                            some_msg = self.rx.next().await
+                            println!("Waiting for next message...");
+                            let mut tasks = self.scheduler.tasks.borrow_mut();
+
+                            let takss = &mut *tasks;
+
+                            use futures_util::StreamExt;
+                            takss.next().await;
                         }
                     }
                 }
