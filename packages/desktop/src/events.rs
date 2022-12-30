@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
-pub(crate) struct IpcMessage {
+#[derive(Deserialize, Serialize, Debug)]
+pub struct IpcMessage {
     method: String,
     params: serde_json::Value,
 }

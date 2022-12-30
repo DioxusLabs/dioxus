@@ -4,24 +4,23 @@
 #![deny(missing_docs)]
 
 mod cfg;
-mod controller;
 mod desktop_context;
 mod escape;
+mod eval;
 mod events;
 mod protocol;
+mod waker;
+mod webview;
 
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
-
-mod eval;
-mod waker;
-mod webview;
 
 pub use cfg::Config;
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_window, DesktopContext};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
+pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -89,7 +88,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// use dioxus::prelude::*;
 ///
 /// fn main() {
-///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, |c| c);
+///     dioxus_desktop::launch_with_props(app, AppProps { name: "asd" }, Config::default());
 /// }
 ///
 /// struct AppProps {
@@ -102,7 +101,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
+pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Config) {
     let mut dom = VirtualDom::new_with_props(root, props);
 
     let event_loop = EventLoop::with_user_event();
@@ -123,47 +122,46 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
     let waker = waker::tao_waker(&proxy);
 
     // We only have one webview right now, but we'll have more later
+    // Store them in a hashmap so we can remove them when they're closed
     let mut webviews = HashMap::new();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match window_event {
-            Event::NewEvents(StartCause::Init) => {
-                let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
-                let window = Rc::new(webview::build(&mut cfg, event_loop, proxy.clone()));
-                let ctx = DesktopContext::new(window.clone(), proxy.clone(), eval_reciever);
-                dom.base_scope().provide_context(ctx);
-                webviews.insert(window.window().id(), window.clone());
-                proxy.send_event(UserWindowEvent::Poll).unwrap();
-            }
+            Event::UserEvent(UserWindowEvent::CloseWindow) => *control_flow = ControlFlow::Exit,
 
-            Event::MainEventsCleared => {}
-            Event::Resumed => {}
-            Event::Suspended => {}
-            Event::LoopDestroyed => {}
-            Event::RedrawRequested(_id) => {}
-
-            Event::NewEvents(cause) => {}
-
-            Event::WindowEvent { event, .. } => match event {
+            Event::WindowEvent {
+                event, window_id, ..
+            } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Destroyed { .. } => {
-                    // desktop.close_window(window_id, control_flow);
+                    webviews.remove(&window_id);
+
+                    if webviews.is_empty() {
+                        *control_flow = ControlFlow::Exit;
+                    }
                 }
                 _ => {}
             },
 
-            Event::UserEvent(UserWindowEvent::Initialize) => {
-                send_edits(dom.rebuild(), &mut webviews);
+            Event::NewEvents(StartCause::Init) => {
+                let window = webview::build(&mut cfg, event_loop, proxy.clone());
+
+                dom.base_scope()
+                    .provide_context(DesktopContext::new(window.clone(), proxy.clone()));
+
+                webviews.insert(window.window().id(), window);
+
+                _ = proxy.send_event(UserWindowEvent::Poll);
             }
 
-            Event::UserEvent(UserWindowEvent::CloseWindow) => *control_flow = ControlFlow::Exit,
+            Event::UserEvent(UserWindowEvent::Poll) => {
+                poll_vdom(&waker, &mut dom, &mut webviews);
+            }
 
-            Event::UserEvent(UserWindowEvent::EvalResult(_)) => todo!(),
-
-            Event::UserEvent(UserWindowEvent::UserEvent(json_value)) => {
-                let evt = match serde_json::from_value::<HtmlEvent>(json_value) {
+            Event::UserEvent(UserWindowEvent::Ipc(msg)) if msg.method() == "user_event" => {
+                let evt = match serde_json::from_value::<HtmlEvent>(msg.params()) {
                     Ok(value) => value,
                     Err(_) => return,
                 };
@@ -173,19 +171,49 @@ pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cf
                 send_edits(dom.render_immediate(), &mut webviews);
             }
 
-            Event::UserEvent(UserWindowEvent::Poll) => {
-                poll_vdom(&waker, &mut dom, &mut webviews);
+            Event::UserEvent(UserWindowEvent::Ipc(msg)) if msg.method() == "initialize" => {
+                send_edits(dom.rebuild(), &mut webviews);
             }
 
-            _ => todo!(),
+            // When the webview chirps back with the result of the eval, we send it to the active receiver
+            //
+            // This currently doesn't perform any targeting to the callsite, so if you eval multiple times at once,
+            // you might the wrong result. This should be fixed
+            Event::UserEvent(UserWindowEvent::Ipc(msg)) if msg.method() == "eval_result" => {
+                dom.base_scope()
+                    .consume_context::<DesktopContext>()
+                    .unwrap()
+                    .eval_sender
+                    .send(msg.params())
+                    .unwrap();
+            }
+
+            Event::UserEvent(UserWindowEvent::Ipc(msg)) if msg.method() == "browser_open" => {
+                if let Some(temp) = msg.params().as_object() {
+                    if temp.contains_key("href") {
+                        let open = webbrowser::open(temp["href"].as_str().unwrap());
+                        if let Err(e) = open {
+                            log::error!("Open Browser error: {:?}", e);
+                        }
+                    }
+                }
+            }
+
+            _ => {}
         }
     })
 }
 
 type Webviews = HashMap<tao::window::WindowId, Rc<wry::webview::WebView>>;
 
+/// Poll the virtualdom until it's pending
+///
+/// The waker we give it is connected to the event loop, so it will wake up the event loop when it's ready to be polled again
+///
+/// All IO is done on the tokio runtime we started earlier
 fn poll_vdom(waker: &Waker, dom: &mut VirtualDom, webviews: &mut Webviews) {
     let mut cx = std::task::Context::from_waker(waker);
+
     loop {
         {
             let fut = dom.wait_for_work();
@@ -201,8 +229,12 @@ fn poll_vdom(waker: &Waker, dom: &mut VirtualDom, webviews: &mut Webviews) {
     }
 }
 
+/// Send a list of mutations to the webview
 fn send_edits(edits: Mutations, webviews: &mut Webviews) {
     let serialized = serde_json::to_string(&edits).unwrap();
+
     let (_id, view) = webviews.iter_mut().next().unwrap();
+
+    // todo: use SSE and binary data to send the edits with lower overhead
     _ = view.evaluate_script(&format!("window.interpreter.handleEdits({})", serialized));
 }

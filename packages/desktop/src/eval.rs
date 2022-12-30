@@ -1,22 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::controller::DesktopController;
 use crate::use_window;
 use dioxus_core::ScopeState;
 use serde::de::Error;
-use serde_json::Value;
 use std::future::Future;
 use std::future::IntoFuture;
 use std::pin::Pin;
-use wry::application::dpi::LogicalSize;
-use wry::application::event_loop::ControlFlow;
-use wry::application::event_loop::EventLoopProxy;
-#[cfg(target_os = "ios")]
-use wry::application::platform::ios::WindowExtIOS;
-use wry::application::window::Fullscreen as WryFullscreen;
-use wry::application::window::Window;
-use wry::webview::WebView;
 
 /// A future that resolves to the result of a JavaScript evaluation.
 pub struct EvalResult {

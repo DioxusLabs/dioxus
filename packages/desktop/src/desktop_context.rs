@@ -1,11 +1,10 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::controller::DesktopController;
 use crate::eval::EvalResult;
+use crate::events::IpcMessage;
 use dioxus_core::ScopeState;
 use serde_json::Value;
-use wry::application::event_loop::ControlFlow;
 use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
 use wry::application::platform::ios::WindowExtIOS;
@@ -43,10 +42,13 @@ pub struct DesktopContext {
     pub proxy: ProxyType,
 
     /// The receiver for eval results since eval is async
+    pub(super) eval_sender: tokio::sync::mpsc::UnboundedSender<Value>,
+
+    /// The receiver for eval results since eval is async
     pub(super) eval_reciever: Rc<RefCell<tokio::sync::mpsc::UnboundedReceiver<Value>>>,
 
     #[cfg(target_os = "ios")]
-    pub(crate) views: Rc<RefCell<Vec<Vec<*mut Object>>>>,
+    pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
 
 /// A smart pointer to the current window.
@@ -59,15 +61,17 @@ impl std::ops::Deref for DesktopContext {
 }
 
 impl DesktopContext {
-    pub(crate) fn new(
-        webview: Rc<WebView>,
-        proxy: ProxyType,
-        eval_reciever: tokio::sync::mpsc::UnboundedReceiver<Value>,
-    ) -> Self {
+    pub(crate) fn new(webview: Rc<WebView>, proxy: ProxyType) -> Self {
+        let (eval_sender, eval_reciever) = tokio::sync::mpsc::unbounded_channel();
+
         Self {
             webview,
             proxy,
             eval_reciever: Rc::new(RefCell::new(eval_reciever)),
+            eval_sender,
+
+            #[cfg(target_os = "ios")]
+            views: Default::default(),
         }
     }
 
@@ -155,6 +159,8 @@ impl DesktopContext {
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
+        let window = self.webview.window();
+
         unsafe {
             use objc::runtime::Object;
             use objc::*;
@@ -173,6 +179,8 @@ impl DesktopContext {
     /// Pop an objc view from the window
     #[cfg(target_os = "ios")]
     pub fn pop_view(&self) {
+        let window = self.webview.window();
+
         unsafe {
             use objc::runtime::Object;
             use objc::*;
@@ -187,15 +195,11 @@ impl DesktopContext {
 
 #[derive(Debug)]
 pub enum UserWindowEvent {
-    Initialize,
-
     Poll,
 
-    UserEvent(serde_json::Value),
+    Ipc(IpcMessage),
 
     CloseWindow,
-
-    EvalResult(serde_json::Value),
 }
 
 #[cfg(target_os = "ios")]

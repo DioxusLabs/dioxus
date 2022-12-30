@@ -1,8 +1,7 @@
+use crate::desktop_context::UserWindowEvent;
 use futures_util::task::ArcWake;
 use std::sync::Arc;
 use wry::application::event_loop::EventLoopProxy;
-
-use crate::desktop_context::UserWindowEvent;
 
 /// Create a waker that will send a poll event to the event loop.
 ///
@@ -12,9 +11,14 @@ use crate::desktop_context::UserWindowEvent;
 pub fn tao_waker(proxy: &EventLoopProxy<UserWindowEvent>) -> std::task::Waker {
     struct DomHandle(EventLoopProxy<UserWindowEvent>);
 
+    // this should be implemented by most platforms, but ios is missing this until
+    // https://github.com/tauri-apps/wry/issues/830 is resolved
+    unsafe impl Send for DomHandle {}
+    unsafe impl Sync for DomHandle {}
+
     impl ArcWake for DomHandle {
         fn wake_by_ref(arc_self: &Arc<Self>) {
-            arc_self.0.send_event(UserWindowEvent::Poll).unwrap();
+            _ = arc_self.0.send_event(UserWindowEvent::Poll);
         }
     }
 

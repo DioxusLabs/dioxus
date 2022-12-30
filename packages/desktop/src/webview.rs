@@ -1,16 +1,19 @@
+use std::rc::Rc;
+
 use crate::events::parse_ipc_message;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
+use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use wry;
 pub use wry::application as tao;
 use wry::application::window::Window;
-use wry::webview::WebViewBuilder;
+use wry::webview::{WebView, WebViewBuilder};
 
 pub fn build(
     cfg: &mut Config,
-    event_loop: &tao::event_loop::EventLoopWindowTarget<UserWindowEvent>,
-    proxy: tao::event_loop::EventLoopProxy<UserWindowEvent>,
-) -> wry::webview::WebView {
+    event_loop: &EventLoopWindowTarget<UserWindowEvent>,
+    proxy: EventLoopProxy<UserWindowEvent>,
+) -> Rc<WebView> {
     let builder = cfg.window.clone();
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
@@ -37,34 +40,9 @@ pub fn build(
         .with_url("dioxus://index.html/")
         .unwrap()
         .with_ipc_handler(move |_window: &Window, payload: String| {
-            let message = match parse_ipc_message(&payload) {
-                Some(message) => message,
-                None => {
-                    log::error!("Failed to parse IPC message: {}", payload);
-                    return;
-                }
-            };
-
-            match message.method() {
-                "eval_result" => {
-                    let _ = proxy.send_event(UserWindowEvent::EvalResult(message.params()));
-                }
-                "user_event" => {
-                    let _ = proxy.send_event(UserWindowEvent::UserEvent(message.params()));
-                }
-                "initialize" => {
-                    let _ = proxy.send_event(UserWindowEvent::Initialize);
-                }
-                "browser_open" => match message.params().as_object() {
-                    Some(temp) if temp.contains_key("href") => {
-                        let open = webbrowser::open(temp["href"].as_str().unwrap());
-                        if let Err(e) = open {
-                            log::error!("Open Browser error: {:?}", e);
-                        }
-                    }
-                    _ => (),
-                },
-                _ => (),
+            // defer the event to the main thread
+            if let Some(message) = parse_ipc_message(&payload) {
+                _ = proxy.send_event(UserWindowEvent::Ipc(message));
             }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
@@ -107,5 +85,5 @@ pub fn build(
         webview = webview.with_devtools(true);
     }
 
-    webview.build().unwrap()
+    Rc::new(webview.build().unwrap())
 }
