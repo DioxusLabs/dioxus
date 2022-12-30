@@ -3,9 +3,8 @@
 use dioxus::prelude::*;
 use dioxus_elements::input_data::keyboard_types::Key;
 
-#[tokio::main]
-async fn main() {
-    dioxus_desktop::launch(app).await;
+fn main() {
+    dioxus_desktop::launch(app);
 }
 
 #[derive(PartialEq, Eq)]

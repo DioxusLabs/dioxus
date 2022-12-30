@@ -82,7 +82,7 @@ impl DesktopContext {
     /// onmousedown: move |_| { desktop.drag_window(); }
     /// ```
     pub fn drag(&self) {
-        let _ = self.proxy.send_event(DragWindow);
+        let _ = self.webview.window().drag_window();
     }
     /// toggle window maximize state
     pub fn toggle_maximized(&self) {
@@ -129,7 +129,6 @@ impl DesktopContext {
 
 #[derive(Debug)]
 pub enum UserWindowEvent {
-    EditsReady,
     Initialize,
 
     Poll,
@@ -174,7 +173,7 @@ impl DesktopController {
         let window = webview.window();
 
         match user_event {
-            Initialize | EditsReady => {
+            EditsReady => {
                 // self.try_load_ready_webviews();
             }
             CloseWindow => *control_flow = ControlFlow::Exit,

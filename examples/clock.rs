@@ -5,16 +5,8 @@
 use dioxus::prelude::*;
 use futures_util::Future;
 
-#[tokio::main]
-async fn main() {
-    let mut dom = VirtualDom::new(app);
-    dom.rebuild();
-
-    loop {
-        dom.wait_for_work().await;
-    }
-
-    // dioxus_desktop::launch(app).await;
+fn main() {
+    dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {

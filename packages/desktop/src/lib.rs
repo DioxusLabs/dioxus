@@ -13,28 +13,17 @@ mod protocol;
 #[cfg(all(feature = "hot-reload", debug_assertions))]
 mod hot_reload;
 
-use dioxus_html::{a, HtmlEvent};
-use futures_util::task::ArcWake;
-use serde_json::Value;
-use std::cell::RefCell;
-use std::collections::HashMap;
-use std::rc::Rc;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
-use std::task::Waker;
-
+pub use cfg::Config;
 use desktop_context::UserWindowEvent;
 pub use desktop_context::{use_eval, use_window, DesktopContext, EvalResult};
-use futures_channel::mpsc::UnboundedSender;
-use futures_util::future::poll_fn;
-use futures_util::{pin_mut, FutureExt};
-pub use wry;
-pub use wry::application as tao;
-
-pub use cfg::Config;
-use controller::DesktopController;
 use dioxus_core::*;
+use dioxus_html::HtmlEvent;
 use events::parse_ipc_message;
+use futures_util::task::ArcWake;
+use futures_util::{pin_mut, FutureExt};
+use std::collections::HashMap;
+use std::rc::Rc;
+use std::sync::Arc;
 pub use tao::dpi::{LogicalSize, PhysicalSize};
 pub use tao::window::WindowBuilder;
 use tao::{
@@ -42,8 +31,9 @@ use tao::{
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
+pub use wry;
+pub use wry::application as tao;
 use wry::application::event_loop::EventLoopProxy;
-use wry::application::platform::run_return::EventLoopExtRunReturn;
 use wry::webview::WebViewBuilder;
 
 /// Launch the WebView and run the event loop.
@@ -63,8 +53,8 @@ use wry::webview::WebViewBuilder;
 ///     })
 /// }
 /// ```
-pub async fn launch(root: Component) {
-    launch_with_props(root, (), Config::default()).await
+pub fn launch(root: Component) {
+    launch_with_props(root, (), Config::default())
 }
 
 /// Launch the WebView and run the event loop, with configuration.
@@ -86,8 +76,8 @@ pub async fn launch(root: Component) {
 ///     })
 /// }
 /// ```
-pub async fn launch_cfg(root: Component, config_builder: Config) {
-    launch_with_props(root, (), config_builder).await
+pub fn launch_cfg(root: Component, config_builder: Config) {
+    launch_with_props(root, (), config_builder)
 }
 
 /// Launch the WebView and run the event loop, with configuration and root props.
@@ -115,20 +105,26 @@ pub async fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
+pub fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::with_user_event();
 
     let mut dom = VirtualDom::new_with_props(root, props);
 
     let proxy = event_loop.create_proxy();
 
+    let mut webviews = HashMap::new();
+
+    // todo: make this configurable
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+
     // We want to poll the virtualdom and the event loop at the same time
     // So the waker will be connected to both
     let waker = futures_util::task::waker(Arc::new(DomHandle {
         proxy: proxy.clone(),
     }));
-
-    let mut webviews = HashMap::new();
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
@@ -150,6 +146,8 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
             Event::LoopDestroyed => {}
             Event::RedrawRequested(_id) => {}
 
+            Event::NewEvents(cause) => {}
+
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
                 WindowEvent::Destroyed { .. } => {
@@ -159,8 +157,6 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
             },
 
             Event::UserEvent(user_event) => {
-                println!("user event: {:?}", user_event);
-
                 match user_event {
                     UserWindowEvent::UserEvent(json_value) => {
                         if let Ok(value) = serde_json::from_value::<HtmlEvent>(json_value) {
@@ -190,24 +186,19 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
                     UserWindowEvent::Poll => {
                         let mut cx = std::task::Context::from_waker(&waker);
 
-                        println!("polling..");
+                        // using this will reset the budget for the task that we're blocking the main thread with
+                        let _guard = rt.enter();
 
                         loop {
                             {
-                                println!("wait for next work");
-
                                 let fut = dom.wait_for_work();
                                 pin_mut!(fut);
 
                                 match fut.poll_unpin(&mut cx) {
-                                    std::task::Poll::Ready(_) => {
-                                        println!("work ready");
-                                    }
+                                    std::task::Poll::Ready(_) => {}
                                     std::task::Poll::Pending => break,
                                 }
                             }
-
-                            println!("rendering..");
 
                             let edits = dom.render_immediate();
 
@@ -224,7 +215,7 @@ pub async fn launch_with_props<P: 'static + Send>(root: Component<P>, props: P, 
                         }
                     }
 
-                    UserWindowEvent::EditsReady => {
+                    UserWindowEvent::Initialize => {
                         let edits = dom.rebuild();
 
                         let (_id, view) = webviews.iter_mut().next().unwrap();
@@ -306,7 +297,7 @@ fn build_webview(
                     let _ = proxy.send_event(UserWindowEvent::UserEvent(message.params()));
                 }
                 "initialize" => {
-                    let _ = proxy.send_event(UserWindowEvent::EditsReady);
+                    let _ = proxy.send_event(UserWindowEvent::Initialize);
                 }
                 "browser_open" => match message.params().as_object() {
                     Some(temp) if temp.contains_key("href") => {
