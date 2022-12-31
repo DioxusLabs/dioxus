@@ -77,7 +77,7 @@ impl DesktopContext {
     }
 
     /// Create a new window using the props and window builder
-    pub fn new_window<T: 'static>(&self, dom: VirtualDom, cfg: Config) {
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) {
         self.pending_windows.borrow_mut().push((dom, cfg));
         self.proxy
             .send_event(UserWindowEvent(EventData::NewWindow, self.id()))

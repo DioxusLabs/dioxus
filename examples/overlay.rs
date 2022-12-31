@@ -15,7 +15,7 @@ fn app(cx: Scope) -> Element {
                     let dom = VirtualDom::new(app);
                     window.new_window(dom, Default::default());
                 },
-                "New Window"
+                "Open overlay"
             }
         }
     })
@@ -23,6 +23,12 @@ fn app(cx: Scope) -> Element {
 
 fn popup(cx: Scope) -> Element {
     cx.render(rsx! {
-        div { "This is a popup!" }
+        div {
+            width: "200px",
+            height: "200px",
+            background: "white",
+            border: "1px solid black",
+            "This is a popup!"
+        }
     })
 }
