@@ -40,7 +40,7 @@ publish = false
 
 [dev-dependencies]
 dioxus = { path = "./packages/dioxus" }
-dioxus-desktop = { path = "./packages/desktop" }
+dioxus-desktop = { path = "./packages/desktop", features = ["transparent"] }
 dioxus-ssr = { path = "./packages/ssr" }
 dioxus-router = { path = "./packages/router" }
 fermi = { path = "./packages/fermi" }

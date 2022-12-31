@@ -1,14 +1,18 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
+use crate::Config;
 use dioxus_core::ScopeState;
+use dioxus_core::VirtualDom;
 use serde_json::Value;
 use wry::application::event_loop::EventLoopProxy;
 #[cfg(target_os = "ios")]
 use wry::application::platform::ios::WindowExtIOS;
 use wry::application::window::Fullscreen as WryFullscreen;
 use wry::application::window::Window;
+use wry::application::window::WindowId;
 use wry::webview::WebView;
 
 pub type ProxyType = EventLoopProxy<UserWindowEvent>;
@@ -19,6 +23,8 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
         .as_ref()
         .unwrap()
 }
+
+pub type WebviewQueue = Rc<RefCell<Vec<(VirtualDom, crate::cfg::Config)>>>;
 
 /// An imperative interface to the current window.
 ///
@@ -43,6 +49,8 @@ pub struct DesktopContext {
     /// The receiver for eval results since eval is async
     pub(super) eval: tokio::sync::broadcast::Sender<Value>,
 
+    pub(super) pending_windows: WebviewQueue,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -57,14 +65,23 @@ impl std::ops::Deref for DesktopContext {
 }
 
 impl DesktopContext {
-    pub(crate) fn new(webview: Rc<WebView>, proxy: ProxyType) -> Self {
+    pub(crate) fn new(webview: Rc<WebView>, proxy: ProxyType, webviews: WebviewQueue) -> Self {
         Self {
             webview,
             proxy,
             eval: tokio::sync::broadcast::channel(8).0,
+            pending_windows: webviews,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
+    }
+
+    /// Create a new window using the props and window builder
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) {
+        self.pending_windows.borrow_mut().push((dom, cfg));
+        self.proxy
+            .send_event(UserWindowEvent(EventData::NewWindow, self.id()))
+            .unwrap();
     }
 
     /// trigger the drag-window event
@@ -79,7 +96,9 @@ impl DesktopContext {
         let window = self.webview.window();
 
         // if the drag_window has any errors, we don't do anything
-        window.fullscreen().is_none().then(|| window.drag_window());
+        if window.fullscreen().is_none() {
+            window.drag_window().unwrap();
+        }
     }
 
     /// Toggle whether the window is maximized or not
@@ -91,7 +110,9 @@ impl DesktopContext {
 
     /// close window
     pub fn close(&self) {
-        let _ = self.proxy.send_event(UserWindowEvent::CloseWindow);
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
     }
 
     /// change window to fullscreen
@@ -189,10 +210,15 @@ impl DesktopContext {
 }
 
 #[derive(Debug)]
-pub enum UserWindowEvent {
+pub struct UserWindowEvent(pub EventData, pub WindowId);
+
+#[derive(Debug)]
+pub enum EventData {
     Poll,
 
     Ipc(IpcMessage),
+
+    NewWindow,
 
     CloseWindow,
 }

@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::desktop_context::EventData;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
@@ -38,10 +39,10 @@ pub fn build(
         .with_transparent(cfg.window.window.transparent)
         .with_url("dioxus://index.html/")
         .unwrap()
-        .with_ipc_handler(move |_window: &Window, payload: String| {
+        .with_ipc_handler(move |window: &Window, payload: String| {
             // defer the event to the main thread
             if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy.send_event(UserWindowEvent::Ipc(message));
+                _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
