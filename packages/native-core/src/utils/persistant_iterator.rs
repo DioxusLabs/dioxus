@@ -1,4 +1,11 @@
-use crate::{node::NodeType, real_dom::RealDom, state::State, tree::TreeView, NodeId, RealNodeId};
+use crate::{
+    node::NodeType,
+    passes::{AnyMapLike, TypeErasedPass},
+    real_dom::RealDom,
+    state::State,
+    tree::TreeView,
+    NodeId, RealNodeId,
+};
 use dioxus_core::{Mutation, Mutations};
 use std::fmt::Debug;
 
@@ -67,7 +74,7 @@ impl PersistantElementIter {
 
     /// remove stale element refreneces
     /// returns true if the focused element is removed
-    pub fn prune<S: State>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) -> bool {
+    pub fn prune<S: State + Send>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) -> bool {
         let mut changed = false;
         let ids_removed: Vec<_> = mutations
             .edits
@@ -124,7 +131,7 @@ impl PersistantElementIter {
     }
 
     /// get the next element
-    pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
+    pub fn next<S: State + Send>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         if self.stack.is_empty() {
             let id = NodeId(0);
             let new = (id, NodePosition::AtNode);
@@ -160,9 +167,9 @@ impl PersistantElementIter {
     }
 
     /// get the previous element
-    pub fn prev<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
+    pub fn prev<S: State + Send>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         // recursively add the last child element to the stack
-        fn push_back<S: State>(
+        fn push_back<S: State + Send>(
             stack: &mut smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
             new_node: RealNodeId,
             rdom: &RealDom<S>,
@@ -228,10 +235,19 @@ impl PersistantElementIter {
 
 #[derive(Default, Clone, Debug)]
 struct Empty {}
-impl State for Empty {
-    const PASSES: &'static [crate::AnyPass<crate::node::Node<Self>>] = &[];
+impl AnyMapLike for Empty {
+    fn get<T: std::any::Any>(&self) -> Option<&T> {
+        None
+    }
 
-    const MASKS: &'static [crate::NodeMask] = &[];
+    fn get_mut<T: std::any::Any>(&mut self) -> Option<&mut T> {
+        None
+    }
+}
+impl State for Empty {
+    fn create_passes() -> Box<[TypeErasedPass<Self>]> {
+        Box::new([])
+    }
 }
 
 #[test]

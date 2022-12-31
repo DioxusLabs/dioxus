@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut, Index, IndexMut};
 
 use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
 use crate::node_ref::{AttributeMask, NodeMask};
-use crate::passes::DirtyNodeStates;
+use crate::passes::{resolve_passes, DirtyNodeStates, TypeErasedPass};
 use crate::state::State;
 use crate::tree::{NodeId, Tree, TreeLike, TreeView};
 use crate::{FxDashSet, RealNodeId, SendAnyMap};
@@ -25,8 +25,7 @@ fn mark_dirty(
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
 /// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
-#[derive(Debug)]
-pub struct RealDom<S: State> {
+pub struct RealDom<S: State + Send> {
     pub tree: Tree<Node<S>>,
     /// a map from element id to real node id
     node_id_mapping: Vec<Option<RealNodeId>>,
@@ -34,15 +33,29 @@ pub struct RealDom<S: State> {
     stack: Vec<RealNodeId>,
     templates: FxHashMap<String, Vec<RealNodeId>>,
     root_initialized: bool,
+    pub(crate) passes: Box<[TypeErasedPass<S>]>,
 }
 
-impl<S: State> Default for RealDom<S> {
+impl<S: State + Send + Debug> Debug for RealDom<S> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RealDom")
+            .field("tree", &self.tree)
+            .field("node_id_mapping", &self.node_id_mapping)
+            .field("nodes_listening", &self.nodes_listening)
+            .field("stack", &self.stack)
+            .field("templates", &self.templates)
+            .field("root_initialized", &self.root_initialized)
+            .finish()
+    }
+}
+
+impl<S: State + Send> Default for RealDom<S> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: State> RealDom<S> {
+impl<S: State + Send> RealDom<S> {
     pub fn new() -> RealDom<S> {
         let mut root = Node::new(NodeType::Element {
             tag: "Root".to_string(),
@@ -55,6 +68,8 @@ impl<S: State> RealDom<S> {
         let root_id = tree.root();
         tree.get_mut(root_id).unwrap().node_data.node_id = root_id;
 
+        let passes = S::create_passes();
+
         RealDom {
             tree,
             node_id_mapping: vec![Some(root_id)],
@@ -62,6 +77,7 @@ impl<S: State> RealDom<S> {
             stack: vec![root_id],
             templates: FxHashMap::default(),
             root_initialized: false,
+            passes,
         }
     }
 
@@ -346,9 +362,9 @@ impl<S: State> RealDom<S> {
         for (&n, mask) in &nodes_updated {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
             if self.tree.contains(n) {
-                for (m, p) in S::MASKS.iter().zip(S::PASSES.iter()) {
-                    if mask.overlaps(m) {
-                        dirty_nodes.insert(p.pass_id(), n);
+                for pass in &*self.passes {
+                    if mask.overlaps(&pass.mask) {
+                        dirty_nodes.insert(pass.this_type_id, n);
                     }
                 }
             }
@@ -363,7 +379,9 @@ impl<S: State> RealDom<S> {
         nodes_updated: DirtyNodeStates,
         ctx: SendAnyMap,
     ) -> FxDashSet<RealNodeId> {
-        S::update(nodes_updated, &mut self.tree, ctx)
+        let tree = &mut self.tree;
+        let passes = &self.passes;
+        resolve_passes(tree, nodes_updated, passes, ctx)
     }
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
@@ -415,7 +433,7 @@ impl<S: State> RealDom<S> {
     }
 }
 
-impl<S: State> Deref for RealDom<S> {
+impl<S: State + Send> Deref for RealDom<S> {
     type Target = Tree<Node<S>>;
 
     fn deref(&self) -> &Self::Target {
@@ -423,13 +441,13 @@ impl<S: State> Deref for RealDom<S> {
     }
 }
 
-impl<S: State> DerefMut for RealDom<S> {
+impl<S: State + Send> DerefMut for RealDom<S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.tree
     }
 }
 
-impl<S: State> Index<ElementId> for RealDom<S> {
+impl<S: State + Send> Index<ElementId> for RealDom<S> {
     type Output = Node<S>;
 
     fn index(&self, id: ElementId) -> &Self::Output {
@@ -437,7 +455,7 @@ impl<S: State> Index<ElementId> for RealDom<S> {
     }
 }
 
-impl<S: State> Index<RealNodeId> for RealDom<S> {
+impl<S: State + Send> Index<RealNodeId> for RealDom<S> {
     type Output = Node<S>;
 
     fn index(&self, idx: RealNodeId) -> &Self::Output {
@@ -445,13 +463,13 @@ impl<S: State> Index<RealNodeId> for RealDom<S> {
     }
 }
 
-impl<S: State> IndexMut<ElementId> for RealDom<S> {
+impl<S: State + Send> IndexMut<ElementId> for RealDom<S> {
     fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
         self.tree.get_mut(self.element_to_node_id(id)).unwrap()
     }
 }
 
-impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
+impl<S: State + Send> IndexMut<RealNodeId> for RealDom<S> {
     fn index_mut(&mut self, idx: RealNodeId) -> &mut Self::Output {
         self.tree.get_mut(idx).unwrap()
     }

@@ -121,6 +121,19 @@ pub trait TreeView<T>: Sized {
         }
     }
 
+    fn node_parent_children_mut(
+        &mut self,
+        id: NodeId,
+    ) -> Option<(&mut T, Option<&mut T>, Option<Self::IteratorMut<'_>>)> {
+        let mut_ptr: *mut Self = self;
+        unsafe {
+            // Safety: No node has itself as a parent or child.
+            (*mut_ptr)
+                .get_mut(id)
+                .map(|node| (node, (*mut_ptr).parent_mut(id), (*mut_ptr).children_mut(id)))
+        }
+    }
+
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
 
     fn height(&self, id: NodeId) -> Option<u16>;
@@ -824,6 +837,7 @@ fn map() {
             Self { value }
         }
     }
+
     let mut tree = Tree::new(Value::new(1));
     let parent = tree.root();
     let child = tree.create_node(Value::new(0));

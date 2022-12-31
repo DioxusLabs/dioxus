@@ -1,16 +1,14 @@
 use std::hash::BuildHasherDefault;
 
 pub use node_ref::NodeMask;
-pub use passes::{
-    AnyPass, DownwardPass, MemberMask, NodePass, Pass, PassId, PassReturn, UpwardPass,
-};
+pub use passes::Pass;
 use rustc_hash::FxHasher;
 pub use tree::NodeId;
 
 pub mod layout_attributes;
 pub mod node;
 pub mod node_ref;
-pub mod passes;
+mod passes;
 pub mod real_dom;
 pub mod state;
 pub mod tree;

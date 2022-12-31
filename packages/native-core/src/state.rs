@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 use crate::node::Node;
 use crate::node_ref::{NodeMask, NodeView};
-use crate::passes::{resolve_passes, AnyPass, DirtyNodeStates};
-use crate::tree::TreeView;
+use crate::passes::{resolve_passes, AnyMapLike, DirtyNodeStates, Pass, TypeErasedPass};
+use crate::tree::{Tree, TreeView};
 use crate::{FxDashSet, RealNodeId, SendAnyMap};
 
 /// Join two sorted iterators
@@ -210,21 +210,9 @@ pub trait NodeDepState {
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
-pub trait State: Default + Clone + 'static {
+pub trait State: Default + Clone + AnyMapLike + 'static {
     #[doc(hidden)]
-    const PASSES: &'static [AnyPass<Node<Self>>];
-    #[doc(hidden)]
-    const MASKS: &'static [NodeMask];
-
-    #[doc(hidden)]
-    fn update<T: TreeView<Node<Self>>>(
-        dirty: DirtyNodeStates,
-        tree: &mut T,
-        ctx: SendAnyMap,
-    ) -> FxDashSet<RealNodeId> {
-        let passes = Self::PASSES.iter().collect();
-        resolve_passes(tree, dirty, passes, ctx)
-    }
+    fn create_passes() -> Box<[TypeErasedPass<Self>]>;
 }
 
 impl ChildDepState for () {
