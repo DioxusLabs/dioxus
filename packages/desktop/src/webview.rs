@@ -18,7 +18,6 @@ pub fn build(
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
-    let resource_dir = cfg.resource_dir.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
 
@@ -46,13 +45,7 @@ pub fn build(
             }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(
-                r,
-                resource_dir.clone(),
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-            )
+            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler
