@@ -96,7 +96,9 @@ impl DesktopContext {
         let window = self.webview.window();
 
         // if the drag_window has any errors, we don't do anything
-        window.fullscreen().is_none().then(|| window.drag_window());
+        if window.fullscreen().is_none() {
+            window.drag_window().unwrap();
+        }
     }
 
     /// Toggle whether the window is maximized or not
