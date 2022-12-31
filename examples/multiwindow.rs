@@ -12,7 +12,8 @@ fn app(cx: Scope) -> Element {
         div {
             button {
                 onclick: move |_| {
-                    window.new_window(popup, (), Default::default());
+                    let dom = VirtualDom::new_with_props(app, props);
+                    window.new_window(dom, Default::default());
                 },
                 "New Window"
             }

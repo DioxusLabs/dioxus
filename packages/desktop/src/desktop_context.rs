@@ -4,7 +4,6 @@ use std::rc::Rc;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::Config;
-use dioxus_core::Component;
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 use serde_json::Value;
@@ -78,8 +77,7 @@ impl DesktopContext {
     }
 
     /// Create a new window using the props and window builder
-    pub fn new_window<T: 'static>(&self, app: Component<T>, props: T, cfg: Config) {
-        let dom = VirtualDom::new_with_props(app, props);
+    pub fn new_window<T: 'static>(&self, dom: VirtualDom, cfg: Config) {
         self.pending_windows.borrow_mut().push((dom, cfg));
         self.proxy
             .send_event(UserWindowEvent(EventData::NewWindow, self.id()))
