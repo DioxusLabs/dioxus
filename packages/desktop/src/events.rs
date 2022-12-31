@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct IpcMessage {
     method: String,
     params: serde_json::Value,

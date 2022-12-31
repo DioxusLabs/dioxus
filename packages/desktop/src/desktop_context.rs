@@ -1,13 +1,17 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::rc::Weak;
 
+use crate::create_new_window;
 use crate::eval::EvalResult;
 use crate::events::IpcMessage;
 use crate::Config;
+use crate::WebviewHandler;
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 use serde_json::Value;
 use wry::application::event_loop::EventLoopProxy;
+use wry::application::event_loop::EventLoopWindowTarget;
 #[cfg(target_os = "ios")]
 use wry::application::platform::ios::WindowExtIOS;
 use wry::application::window::Fullscreen as WryFullscreen;
@@ -24,7 +28,7 @@ pub fn use_window(cx: &ScopeState) -> &DesktopContext {
         .unwrap()
 }
 
-pub type WebviewQueue = Rc<RefCell<Vec<(VirtualDom, crate::cfg::Config)>>>;
+pub(crate) type WebviewQueue = Rc<RefCell<Vec<WebviewHandler>>>;
 
 /// An imperative interface to the current window.
 ///
@@ -51,6 +55,8 @@ pub struct DesktopContext {
 
     pub(super) pending_windows: WebviewQueue,
 
+    pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -65,10 +71,16 @@ impl std::ops::Deref for DesktopContext {
 }
 
 impl DesktopContext {
-    pub(crate) fn new(webview: Rc<WebView>, proxy: ProxyType, webviews: WebviewQueue) -> Self {
+    pub(crate) fn new(
+        webview: Rc<WebView>,
+        proxy: ProxyType,
+        event_loop: EventLoopWindowTarget<UserWindowEvent>,
+        webviews: WebviewQueue,
+    ) -> Self {
         Self {
             webview,
             proxy,
+            event_loop,
             eval: tokio::sync::broadcast::channel(8).0,
             pending_windows: webviews,
             #[cfg(target_os = "ios")]
@@ -77,11 +89,36 @@ impl DesktopContext {
     }
 
     /// Create a new window using the props and window builder
-    pub fn new_window(&self, dom: VirtualDom, cfg: Config) {
-        self.pending_windows.borrow_mut().push((dom, cfg));
+    ///
+    /// Returns the webview handle for the new window.
+    ///
+    /// You can use this to control other windows from the current window.
+    ///
+    /// Be careful to not create a cycle of windows, or you might leak memory.
+    pub fn new_window(&self, dom: VirtualDom, cfg: Config) -> Weak<WebView> {
+        let window = create_new_window(
+            cfg,
+            &self.event_loop,
+            &self.proxy,
+            dom,
+            &self.pending_windows,
+        );
+
+        let id = window.webview.window().id();
+
         self.proxy
-            .send_event(UserWindowEvent(EventData::NewWindow, self.id()))
+            .send_event(UserWindowEvent(EventData::NewWindow, id))
             .unwrap();
+
+        self.proxy
+            .send_event(UserWindowEvent(EventData::Poll, id))
+            .unwrap();
+
+        let webview = window.webview.clone();
+
+        self.pending_windows.borrow_mut().push(window);
+
+        Rc::downgrade(&webview)
     }
 
     /// trigger the drag-window event
@@ -113,6 +150,13 @@ impl DesktopContext {
         let _ = self
             .proxy
             .send_event(UserWindowEvent(EventData::CloseWindow, self.id()));
+    }
+
+    /// close window
+    pub fn close_window(&self, id: WindowId) {
+        let _ = self
+            .proxy
+            .send_event(UserWindowEvent(EventData::CloseWindow, id));
     }
 
     /// change window to fullscreen
@@ -209,10 +253,10 @@ impl DesktopContext {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UserWindowEvent(pub EventData, pub WindowId);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum EventData {
     Poll,
 

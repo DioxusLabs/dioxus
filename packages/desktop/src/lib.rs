@@ -17,16 +17,16 @@ mod hot_reload;
 
 pub use cfg::Config;
 pub use desktop_context::{use_window, DesktopContext};
-use desktop_context::{EventData, UserWindowEvent};
+use desktop_context::{EventData, UserWindowEvent, WebviewQueue};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
 pub use eval::{use_eval, EvalResult};
 use futures_util::{pin_mut, FutureExt};
-use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::task::Waker;
 pub use tao::dpi::{LogicalSize, PhysicalSize};
+use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
 pub use tao::window::WindowBuilder;
 use tao::{
     event::{Event, StartCause, WindowEvent},
@@ -105,8 +105,6 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 /// }
 /// ```
 pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
-    let mut _dom = VirtualDom::new_with_props(root, props);
-
     let event_loop = EventLoop::<UserWindowEvent>::with_user_event();
 
     let proxy = event_loop.create_proxy();
@@ -125,9 +123,18 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
     // Store them in a hashmap so we can remove them when they're closed
     let mut webviews = HashMap::<WindowId, WebviewHandler>::new();
 
-    let queue = Rc::new(RefCell::new(vec![(_dom, cfg)]));
+    let queue = WebviewQueue::default();
 
-    event_loop.run(move |window_event, event_loop, control_flow| {
+    // By default, we'll create a new window when the app starts
+    queue.borrow_mut().push(create_new_window(
+        cfg,
+        &event_loop,
+        &proxy,
+        VirtualDom::new_with_props(root, props),
+        &queue,
+    ));
+
+    event_loop.run(move |window_event, _event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
         match window_event {
@@ -153,28 +160,9 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
             Event::NewEvents(StartCause::Init)
             | Event::UserEvent(UserWindowEvent(EventData::NewWindow, _)) => {
-                for (dom, mut cfg) in queue.borrow_mut().drain(..) {
-                    let webview = webview::build(&mut cfg, event_loop, proxy.clone());
-
-                    dom.base_scope().provide_context(DesktopContext::new(
-                        webview.clone(),
-                        proxy.clone(),
-                        queue.clone(),
-                    ));
-
-                    let id = webview.window().id();
-
-                    // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
-                    let waker = waker::tao_waker(&proxy, id);
-
-                    let handler = WebviewHandler {
-                        webview,
-                        waker,
-                        dom,
-                    };
-
+                for handler in queue.borrow_mut().drain(..) {
+                    let id = handler.webview.window().id();
                     webviews.insert(id, handler);
-
                     _ = proxy.send_event(UserWindowEvent(EventData::Poll, id));
                 }
             }
@@ -244,6 +232,32 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             _ => {}
         }
     })
+}
+
+fn create_new_window(
+    mut cfg: Config,
+    event_loop: &EventLoopWindowTarget<UserWindowEvent>,
+    proxy: &EventLoopProxy<UserWindowEvent>,
+    dom: VirtualDom,
+    queue: &WebviewQueue,
+) -> WebviewHandler {
+    let webview = webview::build(&mut cfg, event_loop, proxy.clone());
+
+    dom.base_scope().provide_context(DesktopContext::new(
+        webview.clone(),
+        proxy.clone(),
+        event_loop.clone(),
+        queue.clone(),
+    ));
+
+    let id = webview.window().id();
+
+    // We want to poll the virtualdom and the event loop at the same time, so the waker will be connected to both
+    WebviewHandler {
+        webview,
+        dom,
+        waker: waker::tao_waker(proxy, id),
+    }
 }
 
 struct WebviewHandler {
