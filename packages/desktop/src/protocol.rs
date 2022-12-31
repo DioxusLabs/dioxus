@@ -59,7 +59,7 @@ pub(super) fn desktop_handler(
     }
 
     // Else, try to serve a file from the filesystem.
-    let path = PathBuf::from(request.uri().path().trim_start_matches("/"));
+    let path = PathBuf::from(request.uri().path().trim_start_matches('/'));
 
     // If the path is relative, we'll try to serve it from the assets directory.
     let mut asset = get_asset_root()
@@ -117,12 +117,12 @@ fn get_asset_root() -> Option<PathBuf> {
 }
 
 /// Get the mime type from a path-like string
-fn get_mime_from_path(trimmed: &PathBuf) -> Result<&'static str> {
+fn get_mime_from_path(trimmed: &Path) -> Result<&'static str> {
     if trimmed.ends_with(".svg") {
         return Ok("image/svg+xml");
     }
 
-    let res = match infer::get_from_path(trimmed.clone())?.map(|f| f.mime_type()) {
+    let res = match infer::get_from_path(trimmed)?.map(|f| f.mime_type()) {
         Some(t) if t == "text/plain" => get_mime_by_ext(trimmed),
         Some(f) => f,
         None => get_mime_by_ext(trimmed),
@@ -132,7 +132,7 @@ fn get_mime_from_path(trimmed: &PathBuf) -> Result<&'static str> {
 }
 
 /// Get the mime type from a URI using its extension
-fn get_mime_by_ext(trimmed: &PathBuf) -> &'static str {
+fn get_mime_by_ext(trimmed: &Path) -> &'static str {
     match trimmed.extension().and_then(|e| e.to_str()) {
         Some("bin") => "application/octet-stream",
         Some("css") => "text/css",
