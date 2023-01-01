@@ -2,12 +2,13 @@
 
 use futures_channel::mpsc::UnboundedReceiver;
 
+use dioxus_core::Template;
 use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys::{MessageEvent, WebSocket};
 
 #[cfg(not(debug_assertions))]
-pub(crate) fn init() -> UnboundedReceiver<String> {
+pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     let (tx, rx) = futures_channel::mpsc::unbounded();
 
     std::mem::forget(tx);
@@ -16,15 +17,16 @@ pub(crate) fn init() -> UnboundedReceiver<String> {
 }
 
 #[cfg(debug_assertions)]
-pub(crate) fn init() -> UnboundedReceiver<String> {
+pub(crate) fn init() -> UnboundedReceiver<Template<'static>> {
     use std::convert::TryInto;
+
+    use serde::Deserialize;
 
     let window = web_sys::window().unwrap();
 
-    let protocol = if window.location().protocol().unwrap() == "https:" {
-        "wss:"
-    } else {
-        "ws:"
+    let protocol = match window.location().protocol().unwrap() {
+        prot if prot == "https:" => "wss:",
+        _ => "ws:",
     };
 
     let url = format!(
@@ -39,8 +41,13 @@ pub(crate) fn init() -> UnboundedReceiver<String> {
     // change the rsx when new data is received
     let cl = Closure::wrap(Box::new(move |e: MessageEvent| {
         if let Ok(text) = e.data().dyn_into::<js_sys::JsString>() {
-            if let Ok(val) = text.try_into() {
-                _ = tx.unbounded_send(val);
+            let text: Result<String, _> = text.try_into();
+            if let Ok(string) = text {
+                let val = serde_json::from_str::<serde_json::Value>(&string).unwrap();
+                // leak the value
+                let val: &'static serde_json::Value = Box::leak(Box::new(val));
+                let template: Template<'_> = Template::deserialize(val).unwrap();
+                tx.unbounded_send(template).unwrap();
             }
         }
     }) as Box<dyn FnMut(MessageEvent)>);

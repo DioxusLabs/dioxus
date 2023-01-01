@@ -8,7 +8,8 @@ fn app(cx: Scope) -> Element {
     cx.render(rsx! {
         div {
             "This should show an image:"
-            img { src: "examples/assets/logo.png", }
+            img { src: "examples/assets/logo.png" }
+            img { src: "/Users/jonkelley/Desktop/blitz.png" }
         }
     })
 }

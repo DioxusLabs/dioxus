@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{marker::PhantomData, panic::AssertUnwindSafe};
 
 use crate::{
     innerlude::Scoped,
@@ -62,12 +62,19 @@ where
     }
 
     fn render(&'a self, cx: &'a ScopeState) -> RenderReturn<'a> {
-        let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
-            props: &self.props,
-            scope: cx,
-        });
+        let res = std::panic::catch_unwind(AssertUnwindSafe(move || {
+            // Call the render function directly
+            let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
+                props: &self.props,
+                scope: cx,
+            });
 
-        // Call the render function directly
-        (self.render_fn)(scope).into_return(cx)
+            (self.render_fn)(scope).into_return(cx)
+        }));
+
+        match res {
+            Ok(e) => e,
+            Err(_) => RenderReturn::default(),
+        }
     }
 }

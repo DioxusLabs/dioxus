@@ -51,33 +51,6 @@ let _ = dom.rebuild();
 let content = dioxus_ssr::render_vdom(&dom);
 ```
 
-## Configuring output
-It's possible to configure the output of the generated HTML.
-
-```rust, ignore
-let content = dioxus_ssr::render_vdom(&dom, |config| config.pretty(true).prerender(true));
-```
-
-## Usage as a writer
-
-We provide the basic `SsrFormatter` object that implements `Display`, so you can integrate SSR into an existing string, or write directly to a file.
-
-```rust, ignore
-use std::fmt::{Error, Write};
-
-let mut buf = String::new();
-
-let dom = VirtualDom::new(app);
-let _ = dom.rebuild();
-
-let args = dioxus_ssr::formatter(dom, |config| config);
-buf.write_fmt!(format_args!("{}", args));
-```
-
-## Configuration
-
-
-
 
 
 
@@ -95,7 +68,7 @@ To enable pre-rendering, simply configure the `SsrConfig` with pre-rendering ena
 ```rust, ignore
 let dom = VirtualDom::new(App);
 
-let text = dioxus_ssr::render_vdom(App, |cfg| cfg.pre_render(true));
+let text = dioxus_ssr::render_vdom(App, Config { pre_render: true, ..Default::default() });
 ```
 
 ## Usage in server-side rendering

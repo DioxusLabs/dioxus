@@ -202,18 +202,22 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
         // if virtualdom has nothing, wait for it to have something before requesting idle time
         // if there is work then this future resolves immediately.
-        let mut res = {
+        let (mut res, template) = {
             let work = dom.wait_for_work().fuse();
             pin_mut!(work);
 
             futures_util::select! {
-                _ = work => None,
-                _new_template = hotreload_rx.next() => {
-                    todo!("Implement hot reload");
+                _ = work => (None, None),
+                new_template = hotreload_rx.next() => {
+                    (None, new_template)
                 }
-                evt = rx.next() => evt
+                evt = rx.next() => (evt, None)
             }
         };
+
+        if let Some(template) = template {
+            dom.replace_template(template);
+        }
 
         // Dequeue all of the events from the channel in send order
         // todo: we should re-order these if possible

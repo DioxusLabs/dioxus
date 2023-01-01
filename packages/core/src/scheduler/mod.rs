@@ -4,11 +4,9 @@ use slab::Slab;
 mod suspense;
 mod task;
 mod wait;
-mod waker;
 
 pub use suspense::*;
 pub use task::*;
-pub use waker::RcWake;
 
 /// The type of message that can be sent to the scheduler.
 ///
@@ -31,10 +29,10 @@ pub(crate) struct Scheduler {
     pub sender: futures_channel::mpsc::UnboundedSender<SchedulerMsg>,
 
     /// Tasks created with cx.spawn
-    pub tasks: RefCell<Slab<Rc<LocalTask>>>,
+    pub tasks: RefCell<Slab<LocalTask>>,
 
     /// Async components
-    pub leaves: RefCell<Slab<Rc<SuspenseLeaf>>>,
+    pub leaves: RefCell<Slab<SuspenseLeaf>>,
 }
 
 impl Scheduler {

@@ -81,12 +81,12 @@ impl VirtualDom {
         self.ensure_drop_safety(id);
 
         if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
-            if let RenderReturn::Sync(Some(node)) = unsafe { root.extend_lifetime_ref() } {
+            if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
         if let Some(root) = unsafe { self.scopes[id.0].as_ref().previous_frame().try_load_node() } {
-            if let RenderReturn::Sync(Some(node)) = unsafe { root.extend_lifetime_ref() } {
+            if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                 self.drop_scope_inner(node)
             }
         }
@@ -126,18 +126,16 @@ impl VirtualDom {
             }
         });
 
-        for root in node.root_ids {
-            if let Some(id) = root.get() {
-                if id.0 != 0 {
-                    self.try_reclaim(id);
-                }
+        for id in &node.root_ids {
+            if id.0 != 0 {
+                self.try_reclaim(id);
             }
         }
     }
 
     /// Descend through the tree, removing any borrowed props and listeners
-    pub(crate) fn ensure_drop_safety(&self, scope: ScopeId) {
-        let scope = &self.scopes[scope.0];
+    pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
+        let scope = &self.scopes[scope_id.0];
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)
@@ -145,10 +143,13 @@ impl VirtualDom {
         let mut props = scope.borrowed_props.borrow_mut();
         props.drain(..).for_each(|comp| {
             let comp = unsafe { &*comp };
-            if let Some(scope_id) = comp.scope.get() {
-                self.ensure_drop_safety(scope_id);
+            match comp.scope.get() {
+                Some(child) if child != scope_id => self.ensure_drop_safety(child),
+                _ => (),
             }
-            drop(comp.props.take());
+            if let Ok(mut props) = comp.props.try_borrow_mut() {
+                *props = None;
+            }
         });
 
         // Now that all the references are gone, we can safely drop our own references in our listeners.

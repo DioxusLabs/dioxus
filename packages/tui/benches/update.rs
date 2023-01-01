@@ -10,22 +10,14 @@ fn tui_update(c: &mut Criterion) {
     let mut group = c.benchmark_group("Update boxes");
 
     // We can also use loops to define multiple benchmarks, even over multiple dimensions.
-    for size in 1..=8u32 {
+    for size in 1..=8usize {
         let parameter_string = format!("{}", (3 * size).pow(2));
         group.bench_with_input(
             BenchmarkId::new("size", parameter_string),
             &size,
             |b, size| {
-                b.iter(|| match size {
-                    1 => dioxus_tui::launch_cfg(app3, Config::default().with_headless()),
-                    2 => dioxus_tui::launch_cfg(app6, Config::default().with_headless()),
-                    3 => dioxus_tui::launch_cfg(app9, Config::default().with_headless()),
-                    4 => dioxus_tui::launch_cfg(app12, Config::default().with_headless()),
-                    5 => dioxus_tui::launch_cfg(app15, Config::default().with_headless()),
-                    6 => dioxus_tui::launch_cfg(app18, Config::default().with_headless()),
-                    7 => dioxus_tui::launch_cfg(app21, Config::default().with_headless()),
-                    8 => dioxus_tui::launch_cfg(app24, Config::default().with_headless()),
-                    _ => (),
+                b.iter(|| {
+                    dioxus_tui::launch_cfg_with_props(app, *size, Config::default().with_headless())
                 })
             },
         );
@@ -73,7 +65,7 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     let count = use_state(cx, || 0);
     let counts = use_ref(cx, || vec![0; size * size]);
 
-    let ctx: &TuiContext = cx.consume_context().unwrap();
+    let ctx: TuiContext = cx.consume_context().unwrap();
     if *count.get() + 1 >= (size * size) {
         ctx.quit();
     } else {
@@ -123,97 +115,13 @@ fn Grid(cx: Scope<GridProps>) -> Element {
     }
 }
 
-fn app3(cx: Scope) -> Element {
+fn app(cx: Scope<usize>) -> Element {
     cx.render(rsx! {
         div{
             width: "100%",
             height: "100%",
             Grid{
-                size: 3,
-            }
-        }
-    })
-}
-
-fn app6(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 6,
-            }
-        }
-    })
-}
-
-fn app9(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 9,
-            }
-        }
-    })
-}
-
-fn app12(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 12,
-            }
-        }
-    })
-}
-
-fn app15(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 15,
-            }
-        }
-    })
-}
-
-fn app18(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 18,
-            }
-        }
-    })
-}
-
-fn app21(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 21,
-            }
-        }
-    })
-}
-
-fn app24(cx: Scope) -> Element {
-    cx.render(rsx! {
-        div{
-            width: "100%",
-            height: "100%",
-            Grid{
-                size: 24,
+                size: *cx.props,
             }
         }
     })

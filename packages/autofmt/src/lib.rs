@@ -1,3 +1,5 @@
+use dioxus_rsx::CallBody;
+
 use crate::buffer::*;
 use crate::util::*;
 
@@ -31,6 +33,11 @@ pub struct FormattedBlock {
 /// Format a file into a list of `FormattedBlock`s to be applied by an IDE for autoformatting.
 ///
 /// This function expects a complete file, not just a block of code. To format individual rsx! blocks, use fmt_block instead.
+///
+/// The point here is to provide precise modifications of a source file so an accompanying IDE tool can map these changes
+/// back to the file precisely.
+///
+/// Nested blocks of RSX will be handled automatically
 pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
     let mut formatted_blocks = Vec::new();
     let mut last_bracket_end = 0;
@@ -93,14 +100,31 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
     formatted_blocks
 }
 
+pub fn write_block_out(body: CallBody) -> Option<String> {
+    let mut buf = Buffer {
+        src: vec!["".to_string()],
+        indent: 0,
+        ..Buffer::default()
+    };
+
+    // Oneliner optimization
+    if buf.is_short_children(&body.roots).is_some() {
+        buf.write_ident(&body.roots[0]).unwrap();
+    } else {
+        buf.write_body_indented(&body.roots).unwrap();
+    }
+
+    buf.consume()
+}
+
 pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
+    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?;
+
     let mut buf = Buffer {
         src: block.lines().map(|f| f.to_string()).collect(),
         indent: indent_level,
         ..Buffer::default()
     };
-
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
     // Oneliner optimization
     if buf.is_short_children(&body.roots).is_some() {
