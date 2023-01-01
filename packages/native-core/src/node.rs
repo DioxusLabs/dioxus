@@ -21,23 +21,24 @@ pub struct NodeData {
     pub node_type: NodeType,
 }
 
+#[derive(Debug, Clone)]
+pub struct ElementNode {
+    pub tag: String,
+    pub namespace: Option<String>,
+    pub attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
+    pub listeners: FxHashSet<String>,
+}
+
 /// A type of node with data specific to the node type. The types are a subset of the [VNode] types.
 #[derive(Debug, Clone)]
 pub enum NodeType {
-    Text {
-        text: String,
-    },
-    Element {
-        tag: String,
-        namespace: Option<String>,
-        attributes: FxHashMap<OwnedAttributeDiscription, OwnedAttributeValue>,
-        listeners: FxHashSet<String>,
-    },
+    Text(String),
+    Element(ElementNode),
     Placeholder,
 }
 
 impl<S: State> Node<S> {
-    pub(crate) fn new(node_type: NodeType) -> Self {
+    pub fn new(node_type: NodeType) -> Self {
         Node {
             state: S::default(),
             node_data: NodeData {

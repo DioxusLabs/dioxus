@@ -1,10 +1,7 @@
-use std::cmp::Ordering;
-
-use crate::node::Node;
 use crate::node_ref::{NodeMask, NodeView};
-use crate::passes::{resolve_passes, AnyMapLike, DirtyNodeStates, Pass, TypeErasedPass};
-use crate::tree::{Tree, TreeView};
-use crate::{FxDashSet, RealNodeId, SendAnyMap};
+use crate::passes::{AnyMapLike, TypeErasedPass};
+use std::any::TypeId;
+use std::cmp::Ordering;
 
 /// Join two sorted iterators
 pub(crate) fn union_ordered_iter<'a>(
@@ -213,6 +210,16 @@ pub trait NodeDepState {
 pub trait State: Default + Clone + AnyMapLike + 'static {
     #[doc(hidden)]
     fn create_passes() -> Box<[TypeErasedPass<Self>]>;
+
+    #[doc(hidden)]
+    fn clone_or_default(&self) -> Self {
+        self.clone()
+    }
+
+    #[doc(hidden)]
+    fn non_clone_nodes() -> Option<Box<[TypeId]>> {
+        None
+    }
 }
 
 impl ChildDepState for () {

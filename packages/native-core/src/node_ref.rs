@@ -1,9 +1,9 @@
 use dioxus_core::ElementId;
 
 use crate::{
-    node::{NodeData, NodeType, OwnedAttributeView},
+    node::{ElementNode, NodeData, NodeType, OwnedAttributeView},
     state::union_ordered_iter,
-    RealNodeId,
+    NodeId,
 };
 
 /// A view into a [VNode] with limited access.
@@ -28,7 +28,7 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get the node id of the node
-    pub fn node_id(&self) -> RealNodeId {
+    pub fn node_id(&self) -> NodeId {
         self.inner.node_id
     }
 
@@ -37,7 +37,7 @@ impl<'a> NodeView<'a> {
         self.mask
             .tag
             .then_some(match &self.inner.node_type {
-                NodeType::Element { tag, .. } => Some(&**tag),
+                NodeType::Element(ElementNode { tag, .. }) => Some(&**tag),
                 _ => None,
             })
             .flatten()
@@ -48,7 +48,7 @@ impl<'a> NodeView<'a> {
         self.mask
             .namespace
             .then_some(match &self.inner.node_type {
-                NodeType::Element { namespace, .. } => namespace.as_deref(),
+                NodeType::Element(ElementNode { namespace, .. }) => namespace.as_deref(),
                 _ => None,
             })
             .flatten()
@@ -57,7 +57,7 @@ impl<'a> NodeView<'a> {
     /// Get any attributes that are enabled in the mask
     pub fn attributes<'b>(&'b self) -> Option<impl Iterator<Item = OwnedAttributeView<'a>> + 'b> {
         match &self.inner.node_type {
-            NodeType::Element { attributes, .. } => Some(
+            NodeType::Element(ElementNode { attributes, .. }) => Some(
                 attributes
                     .iter()
                     .filter(move |(attr, _)| self.mask.attritutes.contains_attribute(&attr.name))
@@ -75,7 +75,7 @@ impl<'a> NodeView<'a> {
         self.mask
             .text
             .then_some(match &self.inner.node_type {
-                NodeType::Text { text } => Some(&**text),
+                NodeType::Text(text) => Some(&**text),
                 _ => None,
             })
             .flatten()
@@ -85,7 +85,9 @@ impl<'a> NodeView<'a> {
     pub fn listeners(&self) -> Option<impl Iterator<Item = &'a str> + '_> {
         if self.mask.listeners {
             match &self.inner.node_type {
-                NodeType::Element { listeners, .. } => Some(listeners.iter().map(|l| &**l)),
+                NodeType::Element(ElementNode { listeners, .. }) => {
+                    Some(listeners.iter().map(|l| &**l))
+                }
                 _ => None,
             }
         } else {
@@ -238,6 +240,28 @@ impl NodeMask {
         .with_element()
         .with_listeners();
 
+    pub fn from_node(node: &NodeType) -> Self {
+        match node {
+            NodeType::Text { .. } => Self::new().with_text(),
+            NodeType::Element(ElementNode {
+                tag: _,
+                namespace: _,
+                attributes,
+                listeners,
+            }) => {
+                let mut mask = Self::new_with_attrs(AttributeMask::Dynamic(
+                    attributes.keys().map(|key| key.name.clone()).collect(),
+                ))
+                .with_element();
+                if !listeners.is_empty() {
+                    mask = mask.with_listeners();
+                }
+                mask
+            }
+            NodeType::Placeholder => Self::new().with_element(),
+        }
+    }
+
     /// Check if two masks overlap
     pub fn overlaps(&self, other: &Self) -> bool {
         (self.tag && other.tag)
@@ -280,10 +304,20 @@ impl NodeMask {
         self
     }
 
+    /// Set the mask to view the tag
+    pub fn set_tag(&mut self) {
+        self.tag = true;
+    }
+
     /// Allow the mask to view the namespace
     pub const fn with_namespace(mut self) -> Self {
         self.namespace = true;
         self
+    }
+
+    /// Set the mask to view the namespace
+    pub fn set_namespace(&mut self) {
+        self.namespace = true;
     }
 
     /// Allow the mask to view the namespace and tag
@@ -297,9 +331,24 @@ impl NodeMask {
         self
     }
 
+    /// Set the mask to view the text
+    pub fn set_text(&mut self) {
+        self.text = true;
+    }
+
     /// Allow the mask to view the listeners
     pub const fn with_listeners(mut self) -> Self {
         self.listeners = true;
         self
+    }
+
+    /// Set the mask to view the listeners
+    pub fn set_listeners(&mut self) {
+        self.listeners = true;
+    }
+
+    /// Allow the mask to view the given attributes
+    pub fn add_attributes(&mut self, attributes: AttributeMask) {
+        self.attritutes = self.attritutes.union(&attributes);
     }
 }

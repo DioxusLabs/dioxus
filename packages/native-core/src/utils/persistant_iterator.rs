@@ -1,10 +1,10 @@
 use crate::{
-    node::NodeType,
+    node::{ElementNode, NodeType},
     passes::{AnyMapLike, TypeErasedPass},
     real_dom::RealDom,
     state::State,
     tree::TreeView,
-    NodeId, RealNodeId,
+    NodeId,
 };
 use dioxus_core::{Mutation, Mutations};
 use std::fmt::Debug;
@@ -12,12 +12,12 @@ use std::fmt::Debug;
 #[derive(Debug)]
 pub enum ElementProduced {
     /// The iterator produced an element by progressing to the next node in a depth first order.
-    Progressed(RealNodeId),
+    Progressed(NodeId),
     /// The iterator reached the end of the tree and looped back to the root
-    Looped(RealNodeId),
+    Looped(NodeId),
 }
 impl ElementProduced {
-    pub fn id(&self) -> RealNodeId {
+    pub fn id(&self) -> NodeId {
         match self {
             ElementProduced::Progressed(id) => *id,
             ElementProduced::Looped(id) => *id,
@@ -56,7 +56,7 @@ impl NodePosition {
 /// The iterator loops around when it reaches the end or the beginning.
 pub struct PersistantElementIter {
     // stack of elements and fragments
-    stack: smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
+    stack: smallvec::SmallVec<[(NodeId, NodePosition); 5]>,
 }
 
 impl Default for PersistantElementIter {
@@ -141,7 +141,7 @@ impl PersistantElementIter {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
             match &node.node_data.node_type {
-                NodeType::Element { .. } => {
+                NodeType::Element(ElementNode { .. }) => {
                     let children = rdom.tree.children_ids(*last).unwrap();
                     *old_child_idx = old_child_idx.map(|i| i + 1);
                     // if we have children, go to the next child
@@ -151,7 +151,8 @@ impl PersistantElementIter {
                         self.next(rdom)
                     } else {
                         let id = children[child_idx];
-                        if let NodeType::Element { .. } = &rdom[id].node_data.node_type {
+                        if let NodeType::Element(ElementNode { .. }) = &rdom[id].node_data.node_type
+                        {
                             self.stack.push((id, NodePosition::AtNode));
                         }
                         ElementProduced::Progressed(id)
@@ -170,12 +171,12 @@ impl PersistantElementIter {
     pub fn prev<S: State + Send>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
         // recursively add the last child element to the stack
         fn push_back<S: State + Send>(
-            stack: &mut smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
-            new_node: RealNodeId,
+            stack: &mut smallvec::SmallVec<[(NodeId, NodePosition); 5]>,
+            new_node: NodeId,
             rdom: &RealDom<S>,
-        ) -> RealNodeId {
+        ) -> NodeId {
             match &rdom[new_node].node_data.node_type {
-                NodeType::Element { .. } => {
+                NodeType::Element(ElementNode { .. }) => {
                     let children = rdom.tree.children_ids(new_node).unwrap();
                     if children.is_empty() {
                         new_node
@@ -194,7 +195,7 @@ impl PersistantElementIter {
             let (last, old_child_idx) = self.stack.last_mut().unwrap();
             let node = &rdom[*last];
             match &node.node_data.node_type {
-                NodeType::Element { .. } => {
+                NodeType::Element(ElementNode { .. }) => {
                     let children = rdom.tree.children_ids(*last).unwrap();
                     // if we have children, go to the next child
                     if let NodePosition::InChild(0) = old_child_idx {
@@ -228,7 +229,7 @@ impl PersistantElementIter {
         }
     }
 
-    fn pop(&mut self) -> RealNodeId {
+    fn pop(&mut self) -> NodeId {
         self.stack.pop().unwrap().0
     }
 }
@@ -280,68 +281,68 @@ fn traverse() {
     let div_tag = "div".to_string();
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     let text1 = "hello".to_string();
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text1, .. }
+        NodeType::Text(text1)
     ));
     let p_tag = "p".to_string();
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: p_tag, .. }
+        NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     let text2 = "world".to_string();
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text2, .. }
+        NodeType::Text(text2)
     ));
     let text3 = "hello world".to_string();
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text3, .. }
+        NodeType::Text(text3)
     ));
     assert!(matches!(
         &rdom[iter.next(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
 
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text3, .. }
+        NodeType::Text(text3)
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text2, .. }
+        NodeType::Text(text2)
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: p_tag, .. }
+        NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text1, .. }
+        NodeType::Text(text1)
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Element { tag: div_tag, .. }
+        NodeType::Element(ElementNode { tag: div_tag, .. })
     ));
     assert!(matches!(
         &rdom[iter.prev(&rdom).id()].node_data.node_type,
-        NodeType::Text { text: text3, .. }
+        NodeType::Text(text3)
     ));
 }
 
@@ -416,14 +417,14 @@ fn persist_removes() {
     dbg!(&rdom[idx].node_data.node_type);
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: root_tag, .. }
+        NodeType::Element(ElementNode { tag: root_tag, .. })
     ));
 
     let idx = iter2.next(&rdom).id();
     dbg!(&rdom[idx].node_data.node_type);
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: root_tag, .. }
+        NodeType::Element(ElementNode { tag: root_tag, .. })
     ));
 }
 
@@ -479,7 +480,7 @@ fn persist_instertions_before() {
     let idx = iter.next(&rdom).id();
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: p_tag, .. }
+        NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
 }
 
@@ -534,12 +535,12 @@ fn persist_instertions_after() {
     let idx = iter.next(&rdom).id();
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Element { tag: p_tag, .. }
+        NodeType::Element(ElementNode { tag: p_tag, .. })
     ));
     let text = "hello world".to_string();
     let idx = iter.next(&rdom).id();
     assert!(matches!(
         &rdom[idx].node_data.node_type,
-        NodeType::Text { text, .. }
+        NodeType::Text(text)
     ));
 }

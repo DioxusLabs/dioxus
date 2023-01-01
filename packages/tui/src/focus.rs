@@ -3,7 +3,7 @@ use crate::{node::PreventDefault, TuiDom};
 use dioxus_native_core::{
     tree::TreeView,
     utils::{ElementProduced, PersistantElementIter},
-    RealNodeId,
+    NodeId,
 };
 use dioxus_native_core_macro::sorted_str_slice;
 
@@ -120,7 +120,7 @@ const FOCUS_ATTRIBUTES: &[&str] = &sorted_str_slice!(["tabindex"]);
 #[derive(Default)]
 pub(crate) struct FocusState {
     pub(crate) focus_iter: PersistantElementIter,
-    pub(crate) last_focused_id: Option<RealNodeId>,
+    pub(crate) last_focused_id: Option<NodeId>,
     pub(crate) focus_level: FocusLevel,
     pub(crate) dirty: bool,
 }
@@ -236,11 +236,7 @@ impl FocusState {
     }
 
     pub(crate) fn prune(&mut self, mutations: &dioxus_core::Mutations, rdom: &TuiDom) {
-        fn remove_children(
-            to_prune: &mut [&mut Option<RealNodeId>],
-            rdom: &TuiDom,
-            removed: RealNodeId,
-        ) {
+        fn remove_children(to_prune: &mut [&mut Option<NodeId>], rdom: &TuiDom, removed: NodeId) {
             for opt in to_prune.iter_mut() {
                 if let Some(id) = opt {
                     if *id == removed {
@@ -274,7 +270,7 @@ impl FocusState {
         }
     }
 
-    pub(crate) fn set_focus(&mut self, rdom: &mut TuiDom, id: RealNodeId) {
+    pub(crate) fn set_focus(&mut self, rdom: &mut TuiDom, id: NodeId) {
         if let Some(old) = self.last_focused_id.replace(id) {
             rdom[old].state.focused = false;
         }

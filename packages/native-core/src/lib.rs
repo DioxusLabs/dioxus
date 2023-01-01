@@ -14,8 +14,6 @@ pub mod state;
 pub mod tree;
 pub mod utils;
 
-/// A id for a node that lives in the real dom.
-pub type RealNodeId = NodeId;
 pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
 pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
@@ -25,11 +23,11 @@ pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
 #[doc(hidden)]
 pub struct HeightOrdering {
     pub height: u16,
-    pub id: RealNodeId,
+    pub id: NodeId,
 }
 
 impl HeightOrdering {
-    pub fn new(height: u16, id: RealNodeId) -> Self {
+    pub fn new(height: u16, id: NodeId) -> Self {
         HeightOrdering { height, id }
     }
 }
