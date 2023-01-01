@@ -1,22 +1,20 @@
 use crate::focus::Focus;
 use crate::layout::TaffyLayout;
 use crate::style_attributes::StyleModifier;
-use dioxus_native_core::{real_dom::RealDom, state::*};
-use dioxus_native_core_macro::{sorted_str_slice, State};
+use dioxus_native_core::{real_dom::RealDom, Dependancy, Pass};
+use dioxus_native_core_macro::{sorted_str_slice, AnyMapLike, State};
 
 pub(crate) type TuiDom = RealDom<NodeState>;
 pub(crate) type TuiNode = dioxus_native_core::node::Node<NodeState>;
 
-#[derive(Debug, Clone, State, Default)]
+#[derive(Debug, Clone, State, AnyMapLike, Default)]
 pub(crate) struct NodeState {
-    #[child_dep_state(layout, Mutex<Stretch>)]
+    #[skip_clone]
     pub layout: TaffyLayout,
-    #[parent_dep_state(style)]
     pub style: StyleModifier,
-    #[node_dep_state()]
     pub prevent_default: PreventDefault,
-    #[node_dep_state()]
     pub focus: Focus,
+    #[skip]
     pub focused: bool,
 }
 
@@ -45,8 +43,11 @@ impl Default for PreventDefault {
     }
 }
 
-impl NodeDepState for PreventDefault {
-    type DepState = ();
+impl Pass for PreventDefault {
+    type ParentDependencies = ();
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
     type Ctx = ();
 
     const NODE_MASK: dioxus_native_core::node_ref::NodeMask =
@@ -57,13 +58,17 @@ impl NodeDepState for PreventDefault {
         )
         .with_listeners();
 
-    fn reduce(
+    fn pass<'a>(
         &mut self,
-        node: dioxus_native_core::node_ref::NodeView,
-        _sibling: (),
-        _ctx: &Self::Ctx,
+        node_view: dioxus_native_core::node_ref::NodeView,
+        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        children: Option<
+            impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
+        >,
+        context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
     ) -> bool {
-        let new = match node.attributes().and_then(|mut attrs| {
+        let new = match node_view.attributes().and_then(|mut attrs| {
             attrs
                 .find(|a| a.attribute.name == "dioxus-prevent-default")
                 .and_then(|a| a.value.as_text())

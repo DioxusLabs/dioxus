@@ -426,13 +426,12 @@ impl<S: State + Send> RealDom<S> {
             node_data: node.node_data.clone(),
         };
         let new_id = self.create_node(new_node, false);
-        if let Some(passes) = S::non_clone_nodes() {
-            for pass_id in &*passes {
-                self.passes_updated
-                    .entry(node_id)
-                    .or_default()
-                    .insert(*pass_id);
-            }
+        let passes = S::non_clone_members();
+        for pass_id in &*passes {
+            self.passes_updated
+                .entry(node_id)
+                .or_default()
+                .insert(*pass_id);
         }
 
         let self_ptr = self as *mut Self;

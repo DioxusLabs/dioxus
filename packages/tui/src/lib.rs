@@ -113,10 +113,10 @@ pub fn launch_cfg_with_props<Props: 'static>(app: Component<Props>, props: Props
     {
         let mut rdom = rdom.borrow_mut();
         let mutations = dom.rebuild();
-        let (to_update, _) = rdom.apply_mutations(mutations);
+        rdom.apply_mutations(mutations);
         let mut any_map = SendAnyMap::new();
         any_map.insert(taffy.clone());
-        let _to_rerender = rdom.update_state(to_update, any_map);
+        let _ = rdom.update_state(any_map);
     }
 
     render_vdom(
@@ -271,11 +271,12 @@ fn render_vdom(
                     let mutations = vdom.render_immediate();
                     handler.prune(&mutations, &rdom);
                     // updates the dom's nodes
-                    let (to_update, dirty) = rdom.apply_mutations(mutations);
+                    rdom.apply_mutations(mutations);
                     // update the style and layout
                     let mut any_map = SendAnyMap::new();
                     any_map.insert(taffy.clone());
-                    to_rerender = rdom.update_state(to_update, any_map);
+                    let (new_to_rerender, dirty) = rdom.update_state(any_map);
+                    to_rerender = new_to_rerender;
                     for (id, mask) in dirty {
                         if mask.overlaps(&NodeMask::new().with_text()) {
                             to_rerender.insert(id);

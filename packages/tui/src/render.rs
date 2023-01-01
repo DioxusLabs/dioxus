@@ -45,7 +45,7 @@ pub(crate) fn render_vnode(
     let height = layout_to_screen_space(fy + height).round() as u16 - y;
 
     match &node.node_data.node_type {
-        NodeType::Text { text } => {
+        NodeType::Text(text) => {
             #[derive(Default)]
             struct Label<'a> {
                 text: &'a str,

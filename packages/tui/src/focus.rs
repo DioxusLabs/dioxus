@@ -3,16 +3,13 @@ use crate::{node::PreventDefault, TuiDom};
 use dioxus_native_core::{
     tree::TreeView,
     utils::{ElementProduced, PersistantElementIter},
-    NodeId,
+    NodeId, Pass,
 };
 use dioxus_native_core_macro::sorted_str_slice;
 
 use std::{cmp::Ordering, num::NonZeroU16};
 
-use dioxus_native_core::{
-    node_ref::{AttributeMask, NodeMask, NodeView},
-    state::NodeDepState,
-};
+use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum FocusLevel {
@@ -64,15 +61,33 @@ pub(crate) struct Focus {
     pub level: FocusLevel,
 }
 
-impl NodeDepState for Focus {
-    type DepState = ();
+impl Pass for Focus {
     type Ctx = ();
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
 
-    fn reduce(&mut self, node: NodeView<'_>, _sibling: (), _: &Self::Ctx) -> bool {
+    type ParentDependencies = ();
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
+    fn pass<'a>(
+        &mut self,
+        node_view: NodeView,
+        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        parent: Option<
+            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        >,
+        children: Option<
+            impl Iterator<
+                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
+                    'a,
+                >,
+            >,
+        >,
+        context: <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+    ) -> bool {
         let new = Focus {
-            level: if let Some(a) = node
+            level: if let Some(a) = node_view
                 .attributes()
                 .and_then(|mut a| a.find(|a| a.attribute.name == "tabindex"))
             {
@@ -91,7 +106,7 @@ impl NodeDepState for Focus {
                 } else {
                     FocusLevel::Unfocusable
                 }
-            } else if node
+            } else if node_view
                 .listeners()
                 .and_then(|mut listeners| {
                     listeners

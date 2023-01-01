@@ -1,5 +1,4 @@
 use anymap::AnyMap;
-use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
@@ -22,7 +21,7 @@ pub trait Pass: Any {
     type NodeDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
     type Ctx: Dependancy;
-    const MASK: NodeMask;
+    const NODE_MASK: NodeMask;
 
     fn pass<'a>(
         &mut self,
@@ -70,7 +69,7 @@ pub trait Pass: Any {
             this_type_id: TypeId::of::<Self>(),
             combined_dependancy_type_ids: Self::all_dependanices().into_iter().collect(),
             dependants: FxHashSet::default(),
-            mask: Self::MASK,
+            mask: Self::NODE_MASK,
             pass_direction: Self::pass_direction(),
             pass: Box::new(
                 |node_id: NodeId, any_map: &mut Tree<Node<T>>, context: &SendAnyMap| {
@@ -100,7 +99,7 @@ pub trait Pass: Any {
                     let context = Self::Ctx::borrow_elements_from(context)
                         .expect("tried to get a pass that does not exist");
                     myself.pass(
-                        NodeView::new(&current_node.node_data, Self::MASK),
+                        NodeView::new(&current_node.node_data, Self::NODE_MASK),
                         node,
                         parent,
                         children,
@@ -350,16 +349,6 @@ pub struct DirtyNodeStates {
 }
 
 impl DirtyNodeStates {
-    pub fn new(starting_nodes: FxHashMap<NodeId, FxHashSet<TypeId>>) -> Self {
-        let this = Self::default();
-        for (node, nodes) in starting_nodes {
-            for pass_id in nodes {
-                this.insert(pass_id, node);
-            }
-        }
-        this
-    }
-
     pub fn insert(&self, pass_id: TypeId, node_id: NodeId) {
         if let Some(mut dirty) = self.dirty.get_mut(&node_id) {
             dirty.insert(pass_id);

@@ -33,7 +33,7 @@ use dioxus_native_core::{
     layout_attributes::parse_value,
     node::OwnedAttributeView,
     node_ref::{AttributeMask, NodeMask, NodeView},
-    state::ParentDepState,
+    Pass,
 };
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
@@ -46,22 +46,40 @@ pub struct StyleModifier {
     pub modifier: TuiModifier,
 }
 
-impl ParentDepState for StyleModifier {
+impl Pass for StyleModifier {
     type Ctx = ();
-    type DepState = (Self,);
+    type ParentDependencies = (Self,);
+    type ChildDependencies = ();
+    type NodeDependencies = ();
+
     // todo: seperate each attribute into it's own class
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(SORTED_STYLE_ATTRS)).with_element();
 
-    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, _: &Self::Ctx) -> bool {
+    fn pass<'a>(
+        &mut self,
+        node_view: NodeView,
+        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        parent: Option<
+            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        >,
+        children: Option<
+            impl Iterator<
+                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
+                    'a,
+                >,
+            >,
+        >,
+        context: <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+    ) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {
             new.core.fg = None;
         }
 
         // handle text modifier elements
-        if node.namespace().is_none() {
-            if let Some(tag) = node.tag() {
+        if node_view.namespace().is_none() {
+            if let Some(tag) = node_view.tag() {
                 match tag {
                     "b" => apply_style_attributes("font-weight", "bold", &mut new),
                     "strong" => apply_style_attributes("font-weight", "bold", &mut new),
@@ -79,7 +97,7 @@ impl ParentDepState for StyleModifier {
         }
 
         // gather up all the styles from the attribute list
-        if let Some(attrs) = node.attributes() {
+        if let Some(attrs) = node_view.attributes() {
             for OwnedAttributeView {
                 attribute, value, ..
             } in attrs

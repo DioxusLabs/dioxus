@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
-use dioxus_native_core::state::ChildDepState;
+use dioxus_native_core::Pass;
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
@@ -40,29 +40,35 @@ pub(crate) struct TaffyLayout {
     pub node: PossiblyUninitalized<Node>,
 }
 
-impl ChildDepState for TaffyLayout {
-    type Ctx = Arc<Mutex<Taffy>>;
-    type DepState = (Self,);
-    // use tag to force this to be called when a node is built
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS))
-            .with_text()
-            .with_tag();
+impl Pass for TaffyLayout {
+    type Ctx = (Arc<Mutex<Taffy>>,);
+    type ChildDependencies = (Self,);
+    type ParentDependencies = ();
+    type NodeDependencies = ();
 
-    /// Setup the layout
-    fn reduce<'a>(
+    const NODE_MASK: NodeMask =
+        NodeMask::new_with_attrs(AttributeMask::Static(SORTED_LAYOUT_ATTRS)).with_text();
+
+    fn pass<'a>(
         &mut self,
-        node: NodeView,
-        children: impl Iterator<Item = (&'a Self,)>,
-        ctx: &Self::Ctx,
-    ) -> bool
-    where
-        Self::DepState: 'a,
-    {
+        node_view: NodeView,
+        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        parent: Option<
+            <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        >,
+        children: Option<
+            impl Iterator<
+                Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
+                    'a,
+                >,
+            >,
+        >,
+        (taffy,): <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+    ) -> bool {
         let mut changed = false;
-        let mut taffy = ctx.lock().expect("poisoned taffy");
+        let mut taffy = taffy.lock().expect("poisoned taffy");
         let mut style = Style::default();
-        if let Some(text) = node.text() {
+        if let Some(text) = node_view.text() {
             let char_len = text.chars().count();
 
             style = Style {
@@ -85,7 +91,7 @@ impl ChildDepState for TaffyLayout {
             }
         } else {
             // gather up all the styles from the attribute list
-            if let Some(attributes) = node.attributes() {
+            if let Some(attributes) = node_view.attributes() {
                 for OwnedAttributeView {
                     attribute, value, ..
                 } in attributes
@@ -101,8 +107,10 @@ impl ChildDepState for TaffyLayout {
 
             // Set all direct nodes as our children
             let mut child_layout = vec![];
-            for (l,) in children {
-                child_layout.push(l.node.unwrap());
+            if let Some(children) = children {
+                for (l,) in children {
+                    child_layout.push(l.node.unwrap());
+                }
             }
 
             fn scale_dimention(d: Dimension) -> Dimension {
