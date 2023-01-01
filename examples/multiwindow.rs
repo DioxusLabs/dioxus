@@ -12,7 +12,7 @@ fn app(cx: Scope) -> Element {
         div {
             button {
                 onclick: move |_| {
-                    let dom = VirtualDom::new(app);
+                    let dom = VirtualDom::new(popup);
                     window.new_window(dom, Default::default());
                 },
                 "New Window"
