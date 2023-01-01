@@ -12,22 +12,22 @@ Dioxus integrates very well with the [Rust-Analyzer LSP plugin](https://rust-ana
 
 Head over to [https://rust-lang.org](http://rust-lang.org) and install the Rust compiler.
 
-We strongly recommend going through the [official Rust book](https://doc.rust-lang.org/book/ch01-00-getting-started.html) _completely_. However, our hope is that a Dioxus app can serve as a great first Rust project. With Dioxus, you'll learn about:
+We strongly recommend going through the [official Rust book](https://doc.rust-lang.org/book/ch01-00-getting-started.html) _completely_. However, we hope that a Dioxus app can serve as a great first Rust project. With Dioxus, you'll learn about:
 
 - Error handling
 - Structs, Functions, Enums
 - Closures
 - Macros
 
-We've put a lot of care into making Dioxus syntax familiar and easy to understand, so you won't need deep knowledge on async, lifetimes, or smart pointers until you really start building complex Dioxus apps.
+We've put a lot of care into making Dioxus syntax familiar and easy to understand, so you won't need deep knowledge of async, lifetimes, or smart pointers until you start building complex Dioxus apps.
 
 
 ## Setup Guides
 
-Dioxus supports multiple platforms. Choose the platform you want to target below to get platform specific setup instructions:
+Dioxus supports multiple platforms. Choose the platform you want to target below to get platform-specific setup instructions:
 
 - [Web](web.md): runs in the browser through WebAssembly
 - [Server Side Rendering](ssr.md): renders to HTML text on the server
-- [Desktop](desktop.md): runs in a webview on desktop
-- [Mobile](mobile.md): runs in a webview on mobile
-- [Terminal UI](tui.md): renders text based graphics in the terminal
+- [Desktop](desktop.md): runs in a web view on desktop
+- [Mobile](mobile.md): runs in a web view on mobile
+- [Terminal UI](tui.md): renders text-based graphics in the terminal

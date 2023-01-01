@@ -38,7 +38,7 @@ cargo new --bin demo
 cd demo
 ```
 
-Add Dioxus and the web renderer as a dependencies (this will edit your `Cargo.toml`):
+Add Dioxus and the web renderer as dependencies (this will edit your `Cargo.toml`):
 
 ```bash
 cargo add dioxus

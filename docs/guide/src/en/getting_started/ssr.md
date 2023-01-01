@@ -24,7 +24,7 @@ cargo new --bin demo
 cd app
 ```
 
-Add Dioxus and the ssr renderer as dependancies:
+Add Dioxus and the ssr renderer as dependencies:
 
 ```shell
 cargo add dioxus

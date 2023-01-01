@@ -10,7 +10,7 @@ Mobile is currently the least-supported renderer target for Dioxus. Mobile apps 
 
 Mobile support is currently best suited for CRUD-style apps, ideally for internal teams who need to develop quickly but don't care much about animations or native widgets.
 
-This guide is primarily targetted for iOS apps, however, you can follow it while using the `android` guide in `cargo-mobile`.
+This guide is primarily targeted at iOS apps, however, you can follow it while using the `android` guide in `cargo-mobile`.
 
 ## Getting Set up
 

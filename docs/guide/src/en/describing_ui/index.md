@@ -1,8 +1,8 @@
 # Describing the UI
 
-Dioxus is a *declarative* framework. This means that instead of telling Dioxus what to do (e.g. to "create an element" or "set color to red") we simply *declare* what we want the UI to look like using RSX.
+Dioxus is a *declarative* framework. This means that instead of telling Dioxus what to do (e.g. to "create an element" or "set the color to red") we simply *declare* what we want the UI to look like using RSX.
 
-You have already seen a simple example or RSX syntax in the "hello world" application:
+You have already seen a simple example of RSX syntax in the "hello world" application:
 
 ```rust
 {{#include ../../../examples/hello_world_desktop.rs:component}}
@@ -24,7 +24,7 @@ RSX is very similar to HTML in that it describes elements with attributes and ch
 
 ### Attributes
 
-Attributes (and [listeners](../interactivity/index.md)) modify the behavior or appearence of the element they are attached to. They are specified inside the `{}` brackets, using the `name: value` syntax. You can provide the value as a literal in the RSX:
+Attributes (and [listeners](../interactivity/index.md)) modify the behavior or appearance of the element they are attached to. They are specified inside the `{}` brackets, using the `name: value` syntax. You can provide the value as a literal in the RSX:
 ```rust
 {{#include ../../../examples/rsx_overview.rs:attributes}}
 ```
@@ -65,7 +65,7 @@ Similarly to how you can [format](https://doc.rust-lang.org/rust-by-example/hell
 
 ### Children
 
-To add children to an element, put them inside the `{}` brackets after all attribute and listeners in the element. They can be other elements, text, or [components](components.md). For example, you could have an `ol` (ordered list) element, containing 3 `li` (list item) elements, each of which contains some text:
+To add children to an element, put them inside the `{}` brackets after all attributes and listeners in the element. They can be other elements, text, or [components](components.md). For example, you could have an `ol` (ordered list) element, containing 3 `li` (list item) elements, each of which contains some text:
 
 ```rust
 {{#include ../../../examples/rsx_overview.rs:children}}
