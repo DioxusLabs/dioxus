@@ -499,7 +499,7 @@ impl<'src> ScopeState {
             BumpBox::from_raw(self.bump().alloc(move |event: Event<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
                     callback(Event {
-                        propogates: event.propogates,
+                        propagates: event.propagates,
                         data,
                     })
                 }

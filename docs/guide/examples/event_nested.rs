@@ -14,7 +14,7 @@ fn App(cx: Scope) -> Element {
             button {
                 onclick: move |event| {
                     // now, outer won't be triggered
-                    event.stop_propogation();
+                    event.stop_propagation();
                 },
                 "inner"
             }
