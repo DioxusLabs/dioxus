@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use dioxus_native_core::layout_attributes::apply_layout_attributes;
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
-use dioxus_native_core::Pass;
+use dioxus_native_core::{Pass, SendAnyMap};
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
 
@@ -14,6 +14,7 @@ pub(crate) enum PossiblyUninitalized<T> {
     Uninitalized,
     Initialized(T),
 }
+
 impl<T> PossiblyUninitalized<T> {
     pub fn unwrap(self) -> T {
         match self {
@@ -41,7 +42,6 @@ pub(crate) struct TaffyLayout {
 }
 
 impl Pass for TaffyLayout {
-    type Ctx = (Arc<Mutex<Taffy>>,);
     type ChildDependencies = (Self,);
     type ParentDependencies = ();
     type NodeDependencies = ();
@@ -52,8 +52,8 @@ impl Pass for TaffyLayout {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        parent: Option<
+        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        _: Option<
             <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
         >,
         children: Option<
@@ -63,9 +63,11 @@ impl Pass for TaffyLayout {
                 >,
             >,
         >,
-        (taffy,): <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        ctx: &SendAnyMap,
     ) -> bool {
+        println!("running layout pass on node: \n{:#?}", node_view);
         let mut changed = false;
+        let taffy: &Arc<Mutex<Taffy>> = ctx.get().unwrap();
         let mut taffy = taffy.lock().expect("poisoned taffy");
         let mut style = Style::default();
         if let Some(text) = node_view.text() {

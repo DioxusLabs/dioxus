@@ -3,7 +3,7 @@ use crate::{node::PreventDefault, TuiDom};
 use dioxus_native_core::{
     tree::TreeView,
     utils::{ElementProduced, PersistantElementIter},
-    NodeId, Pass,
+    NodeId, Pass, SendAnyMap,
 };
 use dioxus_native_core_macro::sorted_str_slice;
 
@@ -62,7 +62,6 @@ pub(crate) struct Focus {
 }
 
 impl Pass for Focus {
-    type Ctx = ();
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(FOCUS_ATTRIBUTES)).with_listeners();
 
@@ -73,18 +72,18 @@ impl Pass for Focus {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
-        parent: Option<
+        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        _: Option<
             <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
         >,
-        children: Option<
+        _: Option<
             impl Iterator<
                 Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
                     'a,
                 >,
             >,
         >,
-        context: <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        _: &SendAnyMap,
     ) -> bool {
         let new = Focus {
             level: if let Some(a) = node_view

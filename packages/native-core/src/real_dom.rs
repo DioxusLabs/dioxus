@@ -1,6 +1,5 @@
 use dioxus_core::{ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::any::TypeId;
 use std::fmt::Debug;
 use std::ops::{Index, IndexMut};
 
@@ -25,9 +24,10 @@ pub struct RealDom<S: State + Send> {
     templates: FxHashMap<String, Vec<NodeId>>,
     pub(crate) passes: Box<[TypeErasedPass<S>]>,
     pub(crate) nodes_updated: FxHashMap<NodeId, NodeMask>,
-    passes_updated: FxHashMap<NodeId, FxHashSet<TypeId>>,
+    passes_updated: DirtyNodeStates,
     parent_changed_nodes: FxHashSet<NodeId>,
     child_changed_nodes: FxHashSet<NodeId>,
+    nodes_created: FxHashSet<NodeId>,
 }
 
 impl<S: State + Send + Debug> Debug for RealDom<S> {
@@ -75,6 +75,14 @@ impl<S: State + Send> RealDom<S> {
                 }
             }
         }
+
+        for pass in passes.iter_mut() {
+            println!("{:?}: {:?}", pass.this_type_id, pass.dependants);
+            println!("{:?}", pass.child_dependant);
+            println!("{:?}", pass.parent_dependant);
+            println!("{:?}", pass.pass_direction);
+        }
+
         let mut nodes_updated = FxHashMap::default();
         let root_id = NodeId(0);
         nodes_updated.insert(root_id, NodeMask::ALL);
@@ -87,9 +95,10 @@ impl<S: State + Send> RealDom<S> {
             templates: FxHashMap::default(),
             passes,
             nodes_updated,
-            passes_updated: FxHashMap::default(),
+            passes_updated: DirtyNodeStates::default(),
             parent_changed_nodes: FxHashSet::default(),
             child_changed_nodes: FxHashSet::default(),
+            nodes_created: FxHashSet::default(),
         }
     }
 
@@ -140,7 +149,7 @@ impl<S: State + Send> RealDom<S> {
         let node = self.tree.get_mut(node_id).unwrap();
         node.node_data.node_id = node_id;
         if mark_dirty {
-            self.nodes_updated.insert(node_id, NodeMask::ALL);
+            self.nodes_created.insert(node_id);
         }
         node_id
     }
@@ -370,22 +379,50 @@ impl<S: State + Send> RealDom<S> {
         &mut self,
         ctx: SendAnyMap,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
-        let tree = &mut self.tree;
         let passes = &self.passes;
-        let dirty_nodes = DirtyNodeStates::default();
+        let dirty_nodes = std::mem::take(&mut self.passes_updated);
         let nodes_updated = std::mem::take(&mut self.nodes_updated);
-        for (&n, mask) in &nodes_updated {
+        for (&node, mask) in &nodes_updated {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(n) {
+            if self.tree.contains(node) {
                 for pass in &*self.passes {
                     if mask.overlaps(&pass.mask) {
-                        dirty_nodes.insert(pass.this_type_id, n);
+                        dirty_nodes.insert(pass.this_type_id, node);
                     }
                 }
             }
         }
+        for node in std::mem::take(&mut self.child_changed_nodes) {
+            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
+            if self.tree.contains(node) {
+                for pass in &*self.passes {
+                    if pass.child_dependant {
+                        dirty_nodes.insert(pass.this_type_id, node);
+                    }
+                }
+            }
+        }
+        for node in std::mem::take(&mut self.parent_changed_nodes) {
+            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
+            if self.tree.contains(node) {
+                for pass in &*self.passes {
+                    if pass.parent_dependant {
+                        dirty_nodes.insert(pass.this_type_id, node);
+                    }
+                }
+            }
+        }
+        for node in std::mem::take(&mut self.nodes_created) {
+            // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
+            if self.tree.contains(node) {
+                for pass in &*self.passes {
+                    dirty_nodes.insert(pass.this_type_id, node);
+                }
+            }
+        }
 
-        todo!("incorporate other update members");
+        let tree = &mut self.tree;
+
         (
             resolve_passes(tree, dirty_nodes, passes, ctx),
             nodes_updated,
@@ -428,10 +465,7 @@ impl<S: State + Send> RealDom<S> {
         let new_id = self.create_node(new_node, false);
         let passes = S::non_clone_members();
         for pass_id in &*passes {
-            self.passes_updated
-                .entry(node_id)
-                .or_default()
-                .insert(*pass_id);
+            self.passes_updated.insert(*pass_id, node_id);
         }
 
         let self_ptr = self as *mut Self;

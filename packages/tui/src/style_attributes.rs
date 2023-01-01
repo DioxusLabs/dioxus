@@ -33,7 +33,7 @@ use dioxus_native_core::{
     layout_attributes::parse_value,
     node::OwnedAttributeView,
     node_ref::{AttributeMask, NodeMask, NodeView},
-    Pass,
+    Pass, SendAnyMap,
 };
 use dioxus_native_core_macro::sorted_str_slice;
 use taffy::prelude::*;
@@ -47,7 +47,6 @@ pub struct StyleModifier {
 }
 
 impl Pass for StyleModifier {
-    type Ctx = ();
     type ParentDependencies = (Self,);
     type ChildDependencies = ();
     type NodeDependencies = ();
@@ -59,18 +58,18 @@ impl Pass for StyleModifier {
     fn pass<'a>(
         &mut self,
         node_view: NodeView,
-        node: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        _: <Self::NodeDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
         parent: Option<
             <Self::ParentDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
         >,
-        children: Option<
+        _: Option<
             impl Iterator<
                 Item = <Self::ChildDependencies as dioxus_native_core::Dependancy>::ElementBorrowed<
                     'a,
                 >,
             >,
         >,
-        context: <Self::Ctx as dioxus_native_core::Dependancy>::ElementBorrowed<'a>,
+        _: &SendAnyMap,
     ) -> bool {
         let mut new = StyleModifier::default();
         if parent.is_some() {

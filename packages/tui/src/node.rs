@@ -1,7 +1,7 @@
 use crate::focus::Focus;
 use crate::layout::TaffyLayout;
 use crate::style_attributes::StyleModifier;
-use dioxus_native_core::{real_dom::RealDom, Dependancy, Pass};
+use dioxus_native_core::{real_dom::RealDom, Dependancy, Pass, SendAnyMap};
 use dioxus_native_core_macro::{sorted_str_slice, AnyMapLike, State};
 
 pub(crate) type TuiDom = RealDom<NodeState>;
@@ -48,8 +48,6 @@ impl Pass for PreventDefault {
     type ChildDependencies = ();
     type NodeDependencies = ();
 
-    type Ctx = ();
-
     const NODE_MASK: dioxus_native_core::node_ref::NodeMask =
         dioxus_native_core::node_ref::NodeMask::new_with_attrs(
             dioxus_native_core::node_ref::AttributeMask::Static(&sorted_str_slice!([
@@ -66,7 +64,7 @@ impl Pass for PreventDefault {
         children: Option<
             impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         >,
-        context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
+        context: &SendAnyMap,
     ) -> bool {
         let new = match node_view.attributes().and_then(|mut attrs| {
             attrs

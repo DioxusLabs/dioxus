@@ -19,8 +19,6 @@ pub trait Pass: Any {
     type ChildDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
     type NodeDependencies: Dependancy;
-    /// This is a tuple of (T: Any, ..)
-    type Ctx: Dependancy;
     const NODE_MASK: NodeMask;
 
     fn pass<'a>(
@@ -31,22 +29,22 @@ pub trait Pass: Any {
         children: Option<
             impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         >,
-        context: <Self::Ctx as Dependancy>::ElementBorrowed<'a>,
+        context: &SendAnyMap,
     ) -> bool;
 
-    fn is_valid(&self) -> bool {
+    fn validate() {
         // no type can be a child and parent dependency
         for type_id in Self::parent_type_ids() {
             for type_id2 in Self::child_type_ids() {
                 if type_id == type_id2 {
-                    return false;
+                    panic!("type cannot be both a parent and child dependency");
                 }
             }
         }
         // this type should not be a node dependency
         for type_id in Self::node_type_ids() {
             if type_id == TypeId::of::<Self>() {
-                return false;
+                panic!("The current type cannot be a node dependency");
             }
         }
         // no states have the same type id
@@ -56,18 +54,20 @@ pub trait Pass: Any {
             .len()
             != Self::all_dependanices().len()
         {
-            return false;
+            panic!("all states must have unique type ids");
         }
-        true
     }
 
     fn to_type_erased<T: AnyMapLike + State>() -> TypeErasedPass<T>
     where
         Self: Sized,
     {
+        Self::validate();
         TypeErasedPass {
             this_type_id: TypeId::of::<Self>(),
             combined_dependancy_type_ids: Self::all_dependanices().into_iter().collect(),
+            parent_dependant: !Self::parent_type_ids().is_empty(),
+            child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
             mask: Self::NODE_MASK,
             pass_direction: Self::pass_direction(),
@@ -96,8 +96,6 @@ pub trait Pass: Any {
                             .get_mut()
                             .expect("tried to get a pass that does not exist")
                     };
-                    let context = Self::Ctx::borrow_elements_from(context)
-                        .expect("tried to get a pass that does not exist");
                     myself.pass(
                         NodeView::new(&current_node.node_data, Self::NODE_MASK),
                         node,
@@ -149,11 +147,13 @@ pub trait Pass: Any {
 
 pub struct TypeErasedPass<T: AnyMapLike + State> {
     pub(crate) this_type_id: TypeId,
+    pub(crate) parent_dependant: bool,
+    pub(crate) child_dependant: bool,
     pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
     pass: PassCallback<T>,
-    pass_direction: PassDirection,
+    pub(crate) pass_direction: PassDirection,
 }
 
 impl<T: AnyMapLike + State> TypeErasedPass<T> {
@@ -183,6 +183,7 @@ impl<T: AnyMapLike + State> TypeErasedPass<T> {
             }
             PassDirection::ChildToParent => {
                 while let Some(id) = dirty.pop_back() {
+                    println!("running pass {:?} on {:?}", self.this_type_id, id);
                     if (self.pass)(id, tree, ctx) {
                         nodes_updated.insert(id);
                         if let Some(id) = tree.parent_id(id) {
@@ -210,6 +211,7 @@ impl<T: AnyMapLike + State> TypeErasedPass<T> {
     }
 }
 
+#[derive(Debug)]
 pub enum PassDirection {
     ParentToChild,
     ChildToParent,
@@ -248,7 +250,6 @@ pub trait Dependancy {
     where
         Self: 'a;
 
-    fn borrow_elements(&self) -> Self::ElementBorrowed<'_>;
     fn borrow_elements_from<T: AnyMapLike>(map: &T) -> Option<Self::ElementBorrowed<'_>>;
     fn type_ids() -> Vec<TypeId>;
 }
@@ -257,12 +258,6 @@ macro_rules! impl_dependancy {
     ($($t:ident),*) => {
         impl< $($t: Any),* > Dependancy for ($($t,)*) {
             type ElementBorrowed<'a> = ($(&'a $t,)*) where Self: 'a;
-
-            #[allow(clippy::unused_unit, non_snake_case)]
-            fn borrow_elements<'a>(&'a self) -> Self::ElementBorrowed<'a> {
-                let ($($t,)*) = self;
-                ($($t,)*)
-            }
 
             #[allow(unused_variables, clippy::unused_unit, non_snake_case)]
             fn borrow_elements_from<T: AnyMapLike>(map: &T) -> Option<Self::ElementBorrowed<'_>> {
@@ -391,15 +386,13 @@ pub fn resolve_passes<T: AnyMapLike + State + Send>(
                 let pass = &passes[passes_idx];
                 let pass_id = pass.this_type_id;
                 // check if the pass is ready to be run
-                if pass
-                    .combined_dependancy_type_ids
-                    .iter()
-                    .all(|d| resolved_passes.contains(d) || *d == pass_id)
-                {
+                if pass.combined_dependancy_type_ids.iter().all(|d| {
+                    (resolved_passes.contains(d) || *d == pass_id) && !currently_in_use.contains(d)
+                }) {
                     pass_indexes_remaining.remove(i);
                     resolving.push(pass_id);
                     currently_in_use.insert(pass.this_type_id);
-                    // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
+                    // this is safe because each pass only has mutable access to the member associated with this_type_id and we have verified that the pass does not overlap with any other pass currently running
                     let tree_unbounded_mut = unsafe { &mut *(tree as *mut _) };
                     let dirty_states = dirty_states.clone();
                     let nodes_updated = nodes_updated.clone();
