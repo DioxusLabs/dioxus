@@ -1,26 +1,23 @@
 # Router
 
-In many of your apps, you'll want to have different "scenes". For a webpage, these scenes might be the different webpages with their own content.
+In many of your apps, you'll want to have different "scenes". For a webpage, these scenes might be the different webpages with their own content. For a desktop app, these scenes might be different views in your app.
 
-You could write your own scene management solution – quite simply too. However, to save you the effort, Dioxus supports a first-party solution for scene management called Dioxus Router.
+To unify these platforms, Dioxus provides a first-party solution for scene management called Dioxus Router.
 
 
 ## What is it?
 
-For an app like the Dioxus landing page (https://dioxuslabs.com), we want to have different pages. A quick sketch of an app would be something like:
+For an app like the Dioxus landing page (https://dioxuslabs.com), we want to have several different scenes:
 
 - Homepage
 - Blog
-- Example showcase
 
 Each of these scenes is independent – we don't want to render both the homepage and blog at the same time.
 
-This is where the router crates come in handy. To make sure we're using the router, simply add the `"router"` feature to your dioxus dependency.
+The Dioxus router makes it easy to create these scenes. To make sure we're using the router, add the `dioxus-router` package to your `Cargo.toml`.
 
-```toml
-[dependencies]
-dioxus = { version = "*" }
-dioxus-router = { version = "*" }
+```shell
+cargo add dioxus-router
 ```
 
 
@@ -30,8 +27,11 @@ Unlike other routers in the Rust ecosystem, our router is built declaratively. T
 
 ```rust
 rsx!{
+    // All of our routes will be rendered inside this Router component
     Router {
+        // if the current location is "/home", render the Home component
         Route { to: "/home", Home {} }
+        // if the current location is "/blog", render the Blog component
         Route { to: "/blog", Blog {} }
     }
 }
@@ -48,6 +48,7 @@ rsx!{
     Router {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
+        //  if the current location doesn't match any of the above routes, render the NotFound component
         Route { to: "", NotFound {} }
     }
 }
@@ -61,6 +62,7 @@ rsx!{
     Router {
         Route { to: "/home", Home {} }
         Route { to: "/blog", Blog {} }
+        //  if the current location doesn't match any of the above routes, redirect to "/home"
         Redirect { from: "", to: "/home" }
     }
 }
@@ -82,6 +84,4 @@ rsx!{
 
 ## More reading
 
-This page is just meant to be a very brief overview of the router to show you that there's a powerful solution already built for a very common problem. For more information about the router, definitely check out its book or check out some of the examples.
-
-The router has its own documentation! [Available here](https://dioxuslabs.com/router/guide/).
+This page is just a very brief overview of the router. For more information, check out [the router book](https://dioxuslabs.com/router/guide/) or some of [the router examples](https://github.com/DioxusLabs/dioxus/blob/master/examples/router.rs).
