@@ -217,7 +217,7 @@ pub trait State: Default + Clone + 'static {
     const MASKS: &'static [NodeMask];
 
     #[doc(hidden)]
-    fn update<T: TreeView<Node<Self>> + Sync>(
+    fn update<T: TreeView<Node<Self>> + Sync + Send>(
         dirty: DirtyNodeStates,
         tree: &mut T,
         ctx: SendAnyMap,

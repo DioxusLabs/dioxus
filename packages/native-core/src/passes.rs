@@ -310,11 +310,7 @@ impl<T> AnyPass<T> {
     }
 }
 
-struct RawPointer<T>(*mut T);
-unsafe impl<T> Send for RawPointer<T> {}
-unsafe impl<T> Sync for RawPointer<T> {}
-
-pub fn resolve_passes<T, Tr: TreeView<T> + Sync>(
+pub fn resolve_passes<T, Tr: TreeView<T> + Sync + Send>(
     tree: &mut Tr,
     dirty_nodes: DirtyNodeStates,
     mut passes: Vec<&AnyPass<T>>,
@@ -342,19 +338,21 @@ pub fn resolve_passes<T, Tr: TreeView<T> + Sync>(
                     let pass = passes.remove(i);
                     resolving.push(pass_id);
                     currently_borrowed |= pass_mask;
-                    let tree_mut = tree as *mut _;
-                    let raw_ptr = RawPointer(tree_mut);
+                    let tree_mut_unbounded = unsafe { &mut *(tree as *mut _ as *mut Tr) };
                     let dirty_states = dirty_states.clone();
                     let nodes_updated = nodes_updated.clone();
                     let ctx = ctx.clone();
-                    s.spawn(move || unsafe {
-                        // let tree_mut: &mut Tr = &mut *raw_ptr.0;
-                        let raw = raw_ptr;
+                    s.spawn(move || {
                         // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
-                        let tree_mut: &mut Tr = &mut *raw.0;
                         let mut dirty = DirtyNodes::default();
-                        dirty_states.all_dirty(pass_id, &mut dirty, tree_mut);
-                        pass.resolve(tree_mut, dirty, &dirty_states, &nodes_updated, &ctx);
+                        dirty_states.all_dirty(pass_id, &mut dirty, tree_mut_unbounded);
+                        pass.resolve(
+                            tree_mut_unbounded,
+                            dirty,
+                            &dirty_states,
+                            &nodes_updated,
+                            &ctx,
+                        );
                     });
                 } else {
                     i += 1;

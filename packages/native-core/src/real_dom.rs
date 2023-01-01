@@ -398,7 +398,7 @@ impl<S: State> RealDom<S> {
 
 impl<S: State + Sync> RealDom<S>
 where
-    Tree<Node<S>>: Sync,
+    Tree<Node<S>>: Sync + Send,
 {
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     /// This will resolve the state in parallel
