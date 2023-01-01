@@ -183,7 +183,6 @@ impl<T: AnyMapLike + State> TypeErasedPass<T> {
             }
             PassDirection::ChildToParent => {
                 while let Some(id) = dirty.pop_back() {
-                    println!("running pass {:?} on {:?}", self.this_type_id, id);
                     if (self.pass)(id, tree, ctx) {
                         nodes_updated.insert(id);
                         if let Some(id) = tree.parent_id(id) {

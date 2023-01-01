@@ -76,13 +76,6 @@ impl<S: State + Send> RealDom<S> {
             }
         }
 
-        for pass in passes.iter_mut() {
-            println!("{:?}: {:?}", pass.this_type_id, pass.dependants);
-            println!("{:?}", pass.child_dependant);
-            println!("{:?}", pass.parent_dependant);
-            println!("{:?}", pass.pass_direction);
-        }
-
         let mut nodes_updated = FxHashMap::default();
         let root_id = NodeId(0);
         nodes_updated.insert(root_id, NodeMask::ALL);
@@ -462,11 +455,7 @@ impl<S: State + Send> RealDom<S> {
             state: node.state.clone_or_default(),
             node_data: node.node_data.clone(),
         };
-        let new_id = self.create_node(new_node, false);
-        let passes = S::non_clone_members();
-        for pass_id in &*passes {
-            self.passes_updated.insert(*pass_id, node_id);
-        }
+        let new_id = self.create_node(new_node, true);
 
         let self_ptr = self as *mut Self;
         for child in self.tree.children_ids(node_id).unwrap() {
@@ -532,10 +521,9 @@ impl<S: State + Send> TreeView<Node<S>> for RealDom<S> {
 
 impl<S: State + Send> TreeLike<Node<S>> for RealDom<S> {
     fn create_node(&mut self, node: Node<S>) -> NodeId {
-        let mask = NodeMask::ALL;
         let id = self.tree.create_node(node);
         self.tree.get_mut(id).unwrap().node_data.node_id = id;
-        self.mark_dirty(id, mask);
+        self.nodes_created.insert(id);
         id
     }
 

@@ -65,7 +65,6 @@ impl Pass for TaffyLayout {
         >,
         ctx: &SendAnyMap,
     ) -> bool {
-        println!("running layout pass on node: \n{:#?}", node_view);
         let mut changed = false;
         let taffy: &Arc<Mutex<Taffy>> = ctx.get().unwrap();
         let mut taffy = taffy.lock().expect("poisoned taffy");
