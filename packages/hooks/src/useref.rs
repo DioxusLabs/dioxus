@@ -170,7 +170,7 @@ impl<T> UseRef<T> {
 
     /// Set the curernt value to `new_value`. This will mark the component as "dirty"
     ///
-    /// This change will propogate immediately, so any other contexts that are
+    /// This change will propagate immediately, so any other contexts that are
     /// using this RefCell will also be affected. If called during an async context,
     /// the component will not be re-rendered until the next `.await` call.
     pub fn set(&self, new: T) {

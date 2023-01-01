@@ -23,7 +23,7 @@ use std::{
 pub struct Event<T: 'static + ?Sized> {
     /// The data associated with this event
     pub data: Rc<T>,
-    pub(crate) propogates: Rc<Cell<bool>>,
+    pub(crate) propagates: Rc<Cell<bool>>,
 }
 
 impl<T> Event<T> {
@@ -40,9 +40,9 @@ impl<T> Event<T> {
     ///     }
     /// }
     /// ```
-    #[deprecated = "use stop_propogation instead"]
+    #[deprecated = "use stop_propagation instead"]
     pub fn cancel_bubble(&self) {
-        self.propogates.set(false);
+        self.propagates.set(false);
     }
 
     /// Prevent this event from continuing to bubble up the tree to parent elements.
@@ -58,8 +58,8 @@ impl<T> Event<T> {
     ///     }
     /// }
     /// ```
-    pub fn stop_propogation(&self) {
-        self.propogates.set(false);
+    pub fn stop_propagation(&self) {
+        self.propagates.set(false);
     }
 
     /// Get a reference to the inner data from this event
@@ -84,7 +84,7 @@ impl<T> Event<T> {
 impl<T: ?Sized> Clone for Event<T> {
     fn clone(&self) -> Self {
         Self {
-            propogates: self.propogates.clone(),
+            propagates: self.propagates.clone(),
             data: self.data.clone(),
         }
     }
@@ -100,7 +100,7 @@ impl<T> std::ops::Deref for Event<T> {
 impl<T: std::fmt::Debug> std::fmt::Debug for Event<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("UiEvent")
-            .field("bubble_state", &self.propogates)
+            .field("bubble_state", &self.propagates)
             .field("data", &self.data)
             .finish()
     }

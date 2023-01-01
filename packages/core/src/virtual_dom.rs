@@ -347,7 +347,7 @@ impl VirtualDom {
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
         let uievent = Event {
-            propogates: Rc::new(Cell::new(bubbles)),
+            propagates: Rc::new(Cell::new(bubbles)),
             data,
         };
 
@@ -388,7 +388,7 @@ impl VirtualDom {
                         cb(uievent.clone());
                     }
 
-                    if !uievent.propogates.get() {
+                    if !uievent.propagates.get() {
                         return;
                     }
                 }
