@@ -33,25 +33,28 @@ fn app(cx: Scope) -> Element {
 }
 
 // #[inline_props]
+#[derive(Props)]
+struct ChildProps<'a> {
+    onclick: EventHandler<'a, &'a String>,
+}
 
-fn Child<'a, 'b>(cx: Scoped<'a, 'b, ()>, onclick: &'a EventHandler<'a, &'a String>) -> Element<'a> {
+fn Child<'a>(cx: Scope<'a, ChildProps<'a>>) -> Element<'a> {
     let name = cx.use_hook(|| "asdasd".to_string());
-
-    onclick.call(&name);
 
     spawn_local(cx, async move {
         loop {
+            cx.props.onclick.call(name);
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             println!("Hello, world! from the bottom level future {name}");
         }
     });
 
-    cx.scope.render(rsx! {
+    cx.render(rsx! {
         div {
             "Hello, world!"
             button {
                 onclick: move |_| {
-                    onclick.call(&name);
+                    cx.props.onclick.call(&name);
                 },
                 "Click to spawn future"
             }
@@ -59,6 +62,6 @@ fn Child<'a, 'b>(cx: Scoped<'a, 'b, ()>, onclick: &'a EventHandler<'a, &'a Strin
     })
 }
 
-pub fn spawn_local<'a, 'b>(cx: Scoped<'a, 'b, ()>, fut: impl Future<Output = ()> + 'b) {
+pub fn spawn_local<'a>(cx: &'a ScopeState, fut: impl Future<Output = ()> + 'a) {
     // self.tasks.spawn_local(self.id, fut);
 }
