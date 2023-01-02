@@ -1,4 +1,5 @@
 use std::{
+    cell::{Ref, RefMut},
     fmt::Display,
     marker::PhantomData,
     ops::{Add, Div, Mul, Sub},
@@ -17,17 +18,29 @@ pub fn use_init_signal_rt(cx: &ScopeState) {
 }
 
 pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<T> {
-    *cx.use_hook(|| {
+    cx.use_hook(|| {
         let rt: &'static SignalRt = cx.consume_context().unwrap();
         let id = rt.init(f());
         rt.subscribe(id, cx.scope_id());
 
-        Signal {
-            rt,
-            id,
-            t: PhantomData,
+        struct SignalHook<T> {
+            signal: Signal<T>,
+        }
+        impl<T> Drop for SignalHook<T> {
+            fn drop(&mut self) {
+                self.signal.rt.remove(self.signal.id);
+            }
+        }
+
+        SignalHook {
+            signal: Signal {
+                id,
+                rt,
+                t: PhantomData,
+            },
         }
     })
+    .signal
 }
 
 pub struct Signal<T> {
@@ -37,16 +50,21 @@ pub struct Signal<T> {
 }
 
 impl<T: 'static> Signal<T> {
+    pub fn read(&self) -> Ref<T> {
+        self.rt.read(self.id)
+    }
+
+    pub fn write(&self) -> RefMut<T> {
+        self.rt.write(self.id)
+    }
+
     pub fn set(&mut self, value: T) {
         self.rt.set(self.id, value);
     }
 
-    pub fn map<U>(&self, _f: impl FnOnce(T) -> U) -> Signal<U> {
-        todo!()
-    }
-
-    pub fn update<O>(&self, _f: impl FnOnce(&mut T) -> O) {
-        todo!()
+    pub fn update<O>(&self, _f: impl FnOnce(&mut T) -> O) -> O {
+        let mut write = self.write();
+        _f(&mut *write)
     }
 }
 

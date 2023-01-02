@@ -59,11 +59,29 @@ impl SignalRt {
         }
     }
 
+    pub fn remove(&self, id: usize) {
+        self.signals.borrow_mut().remove(id);
+    }
+
     pub fn with<T: 'static, O>(&self, id: usize, f: impl FnOnce(&T) -> O) -> O {
         let signals = self.signals.borrow();
         let inner = &signals[id];
         let inner = inner.value.downcast_ref::<T>().unwrap();
         f(&*inner)
+    }
+
+    pub(crate) fn read<T: 'static>(&self, id: usize) -> std::cell::Ref<T> {
+        let signals = self.signals.borrow();
+        std::cell::Ref::map(signals, |signals| {
+            signals[id].value.downcast_ref::<T>().unwrap()
+        })
+    }
+
+    pub(crate) fn write<T: 'static>(&self, id: usize) -> std::cell::RefMut<T> {
+        let mut signals = self.signals.borrow_mut();
+        std::cell::RefMut::map(signals, |signals| {
+            signals[id].value.downcast_mut::<T>().unwrap()
+        })
     }
 }
 
