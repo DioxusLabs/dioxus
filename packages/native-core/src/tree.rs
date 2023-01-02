@@ -158,6 +158,7 @@ pub trait TreeViewMut<T>: Sized + TreeView<T> {
 
     fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)>;
 
+    #[allow(clippy::type_complexity)]
     fn node_parent_children_mut(
         &mut self,
         id: NodeId,
