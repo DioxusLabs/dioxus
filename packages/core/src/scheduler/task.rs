@@ -57,6 +57,50 @@ impl Scheduler {
         task_id
     }
 
+    /// Start a new future on the same thread as the rest of the VirtualDom.
+    ///
+    /// This future will not contribute to suspense resolving, so you should primarily use this for reacting to changes
+    /// and long running tasks.
+    ///
+    /// Whenever the component that owns this future is dropped, the future will be dropped as well.
+    ///
+    /// Spawning a future onto the root scope will cause it to be dropped when the root component is dropped - which
+    /// will only occur when the VirtuaalDom itself has been dropped.
+    pub fn spawn_local<'a>(&self, scope: ScopeId, task: impl Future<Output = ()> + 'a) -> TaskId {
+        let mut tasks = self
+            .tasks
+            .try_borrow_mut()
+            .expect("Don't call spawn_local inside a future spawned by spawn_local!");
+
+        let entry = tasks.vacant_entry();
+        let task_id = TaskId(entry.key());
+
+        let task = Box::pin(task);
+        let task = unsafe {
+            std::mem::transmute::<
+                Pin<Box<dyn Future<Output = ()> + 'a>>,
+                Pin<Box<dyn Future<Output = ()> + 'static>>,
+            >(task)
+        };
+
+        let task = LocalTask {
+            task: RefCell::new(task),
+            scope,
+            waker: futures_util::task::waker(Arc::new(LocalTaskHandle {
+                id: task_id,
+                tx: self.sender.clone(),
+            })),
+        };
+
+        entry.insert(task);
+
+        self.sender
+            .unbounded_send(SchedulerMsg::TaskNotified(task_id))
+            .expect("Scheduler should exist");
+
+        task_id
+    }
+
     /// Drop the future with the given TaskId
     ///
     /// This does nto abort the task, so you'll want to wrap it in an aborthandle if that's important to you
