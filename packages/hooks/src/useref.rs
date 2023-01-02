@@ -118,10 +118,11 @@ pub fn use_ref<T: 'static>(cx: &ScopeState, initialize_refcell: impl FnOnce() ->
         gen: 0,
     });
 
-    if hook.dirty.get() {
-        hook.gen += 1;
-        hook.dirty.set(false);
-    }
+    todo!();
+    // if hook.dirty.get() {
+    //     hook.gen += 1;
+    //     hook.dirty.set(false);
+    // }
 
     hook
 }

@@ -42,34 +42,35 @@ where
 
     *state.waker.borrow_mut() = None;
 
-    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
-        // We don't need regen anymore
-        state.needs_regen.set(false);
+    todo!();
+    // if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen.get() {
+    //     // We don't need regen anymore
+    //     state.needs_regen.set(false);
 
-        // Create the new future
-        let fut = future(dependencies.out());
+    //     // Create the new future
+    //     let fut = future(dependencies.out());
 
-        // Clone in our cells
-        let values = state.values.clone();
-        let schedule_update = state.update.clone();
-        let waker = state.waker.clone();
+    //     // Clone in our cells
+    //     let values = state.values.clone();
+    //     let schedule_update = state.update.clone();
+    //     let waker = state.waker.clone();
 
-        // Cancel the current future
-        if let Some(current) = state.task.take() {
-            cx.remove_future(current);
-        }
+    //     // Cancel the current future
+    //     if let Some(current) = state.task.take() {
+    //         cx.remove_future(current);
+    //     }
 
-        state.task.set(Some(cx.push_future(async move {
-            let res = fut.await;
-            values.borrow_mut().push(Box::leak(Box::new(res)));
+    //     state.task.set(Some(cx.push_future(async move {
+    //         let res = fut.await;
+    //         values.borrow_mut().push(Box::leak(Box::new(res)));
 
-            // if there's a waker, we dont re-render the component. Instead we just progress that future
-            match waker.borrow().as_ref() {
-                Some(waker) => waker.wake_by_ref(),
-                None => schedule_update(),
-            }
-        })));
-    }
+    //         // if there's a waker, we dont re-render the component. Instead we just progress that future
+    //         match waker.borrow().as_ref() {
+    //             Some(waker) => waker.wake_by_ref(),
+    //             None => schedule_update(),
+    //         }
+    //     })));
+    // }
 
     state
 }

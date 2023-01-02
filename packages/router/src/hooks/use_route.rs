@@ -26,7 +26,8 @@ pub fn use_route(cx: &ScopeState) -> &UseRoute {
         }
     });
 
-    handle.state.route = handle.router.current_location();
+    todo!();
+    // handle.state.route = handle.router.current_location();
 
     &handle.state
 }

@@ -25,8 +25,8 @@ pub struct RouteProps<'a> {
 /// )
 /// ```
 pub fn Route<'a>(cx: Scope<'a, RouteProps<'a>>) -> Element {
-    let router_root = use_context::<RouterContext>(cx).unwrap();
-    let root_context = use_context::<RouteContext>(cx);
+    let router_root = use_context::<RouterContext>(&cx).unwrap();
+    let root_context = use_context::<RouteContext>(&cx);
 
     cx.use_hook(|| {
         // create a bigger, better, longer route if one above us exists

@@ -31,6 +31,7 @@ pub fn use_read_rc<V: 'static>(cx: &ScopeState, f: impl Readable<V>) -> &Rc<V> {
 
     let value = inner.root.register(f, cx.scope_id());
 
-    inner.value = Some(value);
+    todo!();
+    // inner.value = Some(value);
     inner.value.as_ref().unwrap()
 }

@@ -40,7 +40,8 @@ pub fn use_atom_state<T: 'static>(cx: &ScopeState, f: impl Writable<T>) -> &Atom
         id: f.unique_id(),
     });
 
-    inner.value = Some(inner.root.register(f, cx.scope_id()));
+    todo!();
+    // inner.value = Some(inner.root.register(f, cx.scope_id()));
 
     inner
 }

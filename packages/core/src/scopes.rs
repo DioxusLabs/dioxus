@@ -16,6 +16,7 @@ use std::{
     cell::{Cell, RefCell},
     fmt::{Arguments, Debug},
     future::Future,
+    marker::PhantomData,
     rc::Rc,
     sync::Arc,
 };
@@ -28,7 +29,7 @@ use std::{
 ///
 /// The [`Scope`] handle specifically exists to provide a stable reference to these items for the lifetime of the
 /// component render.
-pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
+pub type Scope<'a, T = ()> = &'a Scoped<'a, 'a, T>;
 
 // This ScopedType exists because we want to limit the amount of monomorphization that occurs when making inner
 // state type generic over props. When the state is generic, it causes every method to be monomorphized for every
@@ -37,7 +38,7 @@ pub type Scope<'a, T = ()> = &'a Scoped<'a, T>;
 //
 /// A wrapper around a component's [`ScopeState`] and properties. The [`ScopeState`] provides the majority of methods
 /// for the VirtualDom and component state.
-pub struct Scoped<'a, T = ()> {
+pub struct Scoped<'a, 'b: 'a, T = ()> {
     /// The component's state and handle to the scheduler.
     ///
     /// Stores things like the custom bump arena, spawn functions, hooks, and the scheduler.
@@ -45,9 +46,34 @@ pub struct Scoped<'a, T = ()> {
 
     /// The component's properties.
     pub props: &'a T,
+
+    // invariant_lifetime: PhantomData<&'b ()>,
+    pub _p: PhantomData<&'b InvariantLifetime<'a>>,
 }
 
-impl<'a, T> std::ops::Deref for Scoped<'a, T> {
+/// A wrapper type around a lifetime that forces the lifetime to be invariant.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct InvariantLifetime<'id>(PhantomData<&'id mut &'id ()>);
+
+impl<'a, 'b: 'a, T> Scoped<'a, 'b, T> {
+    pub fn spawn_local(self, f: impl Future<Output = ()> + 'b) -> Self {
+        todo!()
+    }
+}
+
+impl<'a, 'b: 'a, T> Clone for Scoped<'a, 'b, T> {
+    fn clone(&self) -> Self {
+        Self {
+            scope: self.scope,
+            props: self.props,
+            _p: PhantomData,
+        }
+    }
+}
+
+impl<'a, 'b: 'a, T> Copy for Scoped<'a, 'b, T> {}
+
+impl<'a, 'b: 'a, T> std::ops::Deref for Scoped<'a, 'b, T> {
     type Target = &'a ScopeState;
     fn deref(&self) -> &Self::Target {
         &self.scope
@@ -331,8 +357,9 @@ impl<'src> ScopeState {
     }
 
     /// Spawns the future but does not return the [`TaskId`]
-    pub fn spawn(&self, fut: impl Future<Output = ()> + 'static) {
-        self.push_future(fut);
+    pub fn spawn(&self, fut: impl Future<Output = ()> + 'src) {
+        todo!()
+        // self.push_future(fut);
     }
 
     /// Spawn a future that Dioxus won't clean up when this component is unmounted
@@ -539,7 +566,7 @@ impl<'src> ScopeState {
     /// }
     /// ```
     #[allow(clippy::mut_from_ref)]
-    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
+    pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &State {
         let cur_hook = self.hook_idx.get();
         let mut hook_list = self.hook_list.borrow_mut();
 

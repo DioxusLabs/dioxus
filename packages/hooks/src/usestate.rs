@@ -64,7 +64,8 @@ pub fn use_state<T: 'static>(
         }
     });
 
-    hook.current_val = hook.slot.borrow().clone();
+    todo!();
+    // hook.current_val = hook.slot.borrow().clone();
 
     hook
 }

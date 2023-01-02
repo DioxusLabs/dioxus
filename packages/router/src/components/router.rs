@@ -41,7 +41,7 @@ pub struct RouterProps<'a> {
 pub fn Router<'a>(cx: Scope<'a, RouterProps<'a>>) -> Element {
     let svc = cx.use_hook(|| {
         cx.provide_context(RouterService::new(
-            cx,
+            &cx,
             RouterCfg {
                 base_url: cx.props.base_url.map(|s| s.to_string()),
                 active_class: cx.props.active_class.map(|s| s.to_string()),

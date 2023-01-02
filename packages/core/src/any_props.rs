@@ -67,7 +67,13 @@ where
             let scope: &mut Scoped<P> = cx.bump().alloc(Scoped {
                 props: &self.props,
                 scope: cx,
+                _p: PhantomData,
             });
+            // let scope: Scoped<P> = Scoped {
+            //     props: &self.props,
+            //     scope: cx,
+            //     _p: PhantomData,
+            // };
 
             (self.render_fn)(scope).into_return(cx)
         }));

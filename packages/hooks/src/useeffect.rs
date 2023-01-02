@@ -40,17 +40,18 @@ where
         dependencies: Vec::new(),
     });
 
-    if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen {
-        // We don't need regen anymore
-        state.needs_regen = false;
+    todo!()
+    // if dependencies.clone().apply(&mut state.dependencies) || state.needs_regen {
+    //     // We don't need regen anymore
+    //     state.needs_regen = false;
 
-        // Create the new future
-        let fut = future(dependencies.out());
+    //     // Create the new future
+    //     let fut = future(dependencies.out());
 
-        state.task.set(Some(cx.push_future(async move {
-            fut.await;
-        })));
-    }
+    //     state.task.set(Some(cx.push_future(async move {
+    //         fut.await;
+    //     })));
+    // }
 }
 
 #[cfg(test)]
