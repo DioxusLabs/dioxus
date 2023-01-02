@@ -87,7 +87,7 @@ pub trait ChildDepState {
     /// Resolve the state current node's state from the state of the children, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a>,
         children: impl Iterator<Item = <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool
@@ -149,7 +149,7 @@ pub trait ParentDepState {
     /// Resolve the state current node's state from the state of the parent node, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a>,
         parent: Option<<Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool;
@@ -203,7 +203,7 @@ pub trait NodeDepState {
     /// Resolve the state current node's state from the state of the sibling states, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a>,
         node_state: <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>,
         ctx: &Self::Ctx,
     ) -> bool;
@@ -240,7 +240,7 @@ pub trait State: Default + Clone + 'static {
 impl ChildDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce<'a>(&mut self, _: NodeView, _: impl Iterator<Item = ()>, _: &Self::Ctx) -> bool
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _: impl Iterator<Item = ()>, _: &Self::Ctx) -> bool
     where
         Self::DepState: 'a,
     {
@@ -251,7 +251,7 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce<'a>(&mut self, _: NodeView, _: Option<()>, _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _: Option<()>, _: &Self::Ctx) -> bool {
         false
     }
 }
@@ -259,7 +259,7 @@ impl ParentDepState for () {
 impl NodeDepState for () {
     type DepState = ();
     type Ctx = ();
-    fn reduce(&mut self, _: NodeView, _sibling: (), _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _sibling: (), _: &Self::Ctx) -> bool {
         false
     }
 }
