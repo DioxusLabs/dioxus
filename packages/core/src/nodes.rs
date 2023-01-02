@@ -6,9 +6,8 @@ use bumpalo::Bump;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell, UnsafeCell},
-    fmt::Arguments,
+    fmt::{Arguments, Debug},
     future::Future,
-    ops::Deref,
 };
 
 pub type TemplateId = &'static str;
@@ -200,7 +199,7 @@ impl<'a> VNode<'a> {
     pub(crate) fn clear_listeners(&self) {
         for attr in self.dynamic_attrs {
             if let AttributeValue::Listener(l) = &attr.value {
-                l.0.borrow_mut().take();
+                l.borrow_mut().take();
             }
         }
     }
@@ -507,9 +506,6 @@ pub struct Attribute<'a> {
 ///
 /// These are built-in to be faster during the diffing process. To use a custom value, use the [`AttributeValue::Any`]
 /// variant.
-#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serialize", serde(untagged))]
-#[derive(Clone)]
 pub enum AttributeValue<'a> {
     /// Text attribute
     Text(&'a str),
@@ -524,107 +520,105 @@ pub enum AttributeValue<'a> {
     Bool(bool),
 
     /// A listener, like "onclick"
-    Listener(ListenerCb<'a>),
+    Listener(RefCell<Option<ListenerCb<'a>>>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(RefCell<Option<AnyValueContainer>>),
+    Any(BumpBox<'a, dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
 }
 
-pub type ListenerCbInner<'a> = RefCell<Option<BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>>>;
-pub struct ListenerCb<'a>(pub ListenerCbInner<'a>);
+pub type ListenerCb<'a> = BumpBox<'a, dyn FnMut(Event<dyn Any>) + 'a>;
 
-impl Clone for ListenerCb<'_> {
-    fn clone(&self) -> Self {
-        panic!("ListenerCb cannot be cloned")
+/// Any of the built-in values that the Dioxus VirtualDom supports as dynamic attributes on elements that are borrowed
+///
+/// These varients are used to communicate what the value of an attribute is that needs to be updated
+#[cfg_attr(feature = "serialize", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serialize", serde(untagged))]
+pub enum BorrowedAttributeValue<'a> {
+    /// Text attribute
+    Text(&'a str),
+
+    /// A float
+    Float(f64),
+
+    /// Signed integer
+    Int(i64),
+
+    /// Boolean
+    Bool(bool),
+
+    /// An arbitrary value that implements PartialEq and is static
+    #[cfg_attr(
+        feature = "serialize",
+        serde(
+            deserialize_with = "deserialize_any_value",
+            serialize_with = "serialize_any_value"
+        )
+    )]
+    Any(&'a dyn AnyValue),
+
+    /// A "none" value, resulting in the removal of an attribute from the dom
+    None,
+}
+
+impl<'a> From<&'a AttributeValue<'a>> for BorrowedAttributeValue<'a> {
+    fn from(value: &'a AttributeValue<'a>) -> Self {
+        match value {
+            AttributeValue::Text(value) => BorrowedAttributeValue::Text(value),
+            AttributeValue::Float(value) => BorrowedAttributeValue::Float(*value),
+            AttributeValue::Int(value) => BorrowedAttributeValue::Int(*value),
+            AttributeValue::Bool(value) => BorrowedAttributeValue::Bool(*value),
+            AttributeValue::Listener(_) => {
+                panic!("A listener cannot be turned into a borrowed value")
+            }
+            AttributeValue::Any(value) => BorrowedAttributeValue::Any(&**value),
+            AttributeValue::None => BorrowedAttributeValue::None,
+        }
     }
 }
 
-#[cfg(feature = "serialize")]
-impl<'a> serde::Serialize for ListenerCb<'a> {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        panic!("ListenerCb cannot be serialized")
+impl Debug for BorrowedAttributeValue<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Text(arg0) => f.debug_tuple("Text").field(arg0).finish(),
+            Self::Float(arg0) => f.debug_tuple("Float").field(arg0).finish(),
+            Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
+            Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
+            Self::Any(_) => f.debug_tuple("Any").field(&"...").finish(),
+            Self::None => write!(f, "None"),
+        }
     }
 }
 
-#[cfg(feature = "serialize")]
-impl<'de, 'a> serde::Deserialize<'de> for ListenerCb<'a> {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        panic!("ListenerCb cannot be deserialized")
-    }
-}
-
-#[derive(Clone)]
-#[cfg(not(feature = "sync_attributes"))]
-/// A boxed value that implements PartialEq, and Any
-pub struct AnyValueContainer(pub std::rc::Rc<dyn AnyValue>);
-
-#[derive(Clone)]
-#[cfg(feature = "sync_attributes")]
-/// A boxed value that implements PartialEq, Any, Sync, and Send
-pub struct AnyValueContainer(pub std::sync::Arc<dyn AnyValue>);
-
-impl PartialEq for AnyValueContainer {
+impl PartialEq for BorrowedAttributeValue<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.0.any_cmp(other.0.as_ref())
-    }
-}
-
-impl AnyValueContainer {
-    /// Create a new AnyValueContainer containing the specified data.
-    pub fn new<T: AnyValue + 'static>(value: T) -> Self {
-        #[cfg(feature = "sync_attributes")]
-        return Self(std::sync::Arc::new(value));
-        #[cfg(not(feature = "sync_attributes"))]
-        return Self(std::rc::Rc::new(value));
-    }
-
-    /// Returns a reference to the inner value.
-    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        self.0.deref().as_any().downcast_ref()
-    }
-
-    /// Checks if the type of the inner value is 'T'.
-    pub fn is<T: Any>(&self) -> bool {
-        self.0.deref().as_any().is::<T>()
-    }
-}
-
-#[test]
-fn test_any_value_rc() {
-    let a = AnyValueContainer::new(1i32);
-    assert_eq!(a.downcast_ref::<i32>(), Some(&1i32));
-    assert_eq!(a.downcast_ref::<i64>(), None);
-    assert!(a.is::<i32>());
-    assert!(!a.is::<i64>());
-}
-
-#[cfg(feature = "serialize")]
-impl serde::Serialize for AnyValueContainer {
-    fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        panic!("AnyValueBox cannot be serialized")
+        match (self, other) {
+            (Self::Text(l0), Self::Text(r0)) => l0 == r0,
+            (Self::Float(l0), Self::Float(r0)) => l0 == r0,
+            (Self::Int(l0), Self::Int(r0)) => l0 == r0,
+            (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
+            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(&**r0),
+            _ => core::mem::discriminant(self) == core::mem::discriminant(other),
+        }
     }
 }
 
 #[cfg(feature = "serialize")]
-impl<'de> serde::Deserialize<'de> for AnyValueContainer {
-    fn deserialize<D>(_: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        panic!("AnyValueBox cannot be deserialized")
-    }
+fn serialize_any_value<S>(_: &&dyn AnyValue, _: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    panic!("Any cannot be serialized")
+}
+
+#[cfg(feature = "serialize")]
+fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<&'a dyn AnyValue, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    panic!("Any cannot be deserialized")
 }
 
 impl<'a> std::fmt::Debug for AttributeValue<'a> {
@@ -649,41 +643,13 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => l0 == r0,
+            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(&**r0),
             _ => false,
         }
     }
 }
 
-// Some renderers need attributes to be sync and send. The rest of the attributes are already sync and send, but there is no way to force Any values to be sync and send on the renderer side.
-// The sync_attributes flag restricts any valuse to be sync and send.
 #[doc(hidden)]
-#[cfg(feature = "sync_attributes")]
-pub trait AnyValue: Sync + Send + 'static {
-    fn any_cmp(&self, other: &dyn AnyValue) -> bool;
-    fn as_any(&self) -> &dyn Any;
-    fn type_id(&self) -> TypeId {
-        self.as_any().type_id()
-    }
-}
-
-#[cfg(feature = "sync_attributes")]
-impl<T: Any + PartialEq + Send + Sync + 'static> AnyValue for T {
-    fn any_cmp(&self, other: &dyn AnyValue) -> bool {
-        if let Some(other) = other.as_any().downcast_ref() {
-            self == other
-        } else {
-            false
-        }
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
-#[doc(hidden)]
-#[cfg(not(feature = "sync_attributes"))]
 pub trait AnyValue: 'static {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool;
     fn as_any(&self) -> &dyn Any;
@@ -692,7 +658,6 @@ pub trait AnyValue: 'static {
     }
 }
 
-#[cfg(not(feature = "sync_attributes"))]
 impl<T: Any + PartialEq + 'static> AnyValue for T {
     fn any_cmp(&self, other: &dyn AnyValue) -> bool {
         if let Some(other) = other.as_any().downcast_ref() {
@@ -903,8 +868,8 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
     }
 }
 
-impl<'a> IntoAttributeValue<'a> for AnyValueContainer {
+impl<'a> IntoAttributeValue<'a> for BumpBox<'a, dyn AnyValue> {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
-        AttributeValue::Any(RefCell::new(Some(self)))
+        AttributeValue::Any(self)
     }
 }

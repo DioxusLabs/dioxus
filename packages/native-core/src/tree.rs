@@ -305,7 +305,6 @@ impl<T> TreeView<T> for Tree<T> {
     fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Self::IteratorMut<'_>)> {
         // Safety: No node will appear as a child twice
         if let Some(children_ids) = self.children_ids(id) {
-            println!("parent_child_mut: {:?}\n{:?}", id, children_ids);
             debug_assert!(!children_ids.iter().any(|child_id| *child_id == id));
             let mut borrowed = unsafe {
                 let as_vec = children_ids.to_vec();

@@ -5,7 +5,7 @@
 use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::AttributeValue;
+use dioxus_core::{AttributeValue, BorrowedAttributeValue};
 
 #[test]
 fn attrs_cycle() {
@@ -42,11 +42,16 @@ fn attrs_cycle() {
             AssignId { path: &[0,], id: ElementId(3,) },
             SetAttribute {
                 name: "class",
-                value: "1".into_value(&bump),
+                value: (&*bump.alloc("1".into_value(&bump))).into(),
                 id: ElementId(3,),
                 ns: None
             },
-            SetAttribute { name: "id", value: "1".into_value(&bump), id: ElementId(3,), ns: None },
+            SetAttribute {
+                name: "id",
+                value: (&*bump.alloc("1".into_value(&bump))).into(),
+                id: ElementId(3,),
+                ns: None
+            },
             ReplaceWith { id: ElementId(1,), m: 1 },
         ]
     );
@@ -68,13 +73,13 @@ fn attrs_cycle() {
             AssignId { path: &[0], id: ElementId(3) },
             SetAttribute {
                 name: "class",
-                value: AttributeValue::Text("3"),
+                value: BorrowedAttributeValue::Text("3"),
                 id: ElementId(3),
                 ns: None
             },
             SetAttribute {
                 name: "id",
-                value: AttributeValue::Text("3"),
+                value: BorrowedAttributeValue::Text("3"),
                 id: ElementId(3),
                 ns: None
             },

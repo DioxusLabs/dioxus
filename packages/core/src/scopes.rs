@@ -4,7 +4,7 @@ use crate::{
     arena::ElementId,
     bump_frame::BumpFrame,
     innerlude::{DynamicNode, EventHandler, VComponent, VText},
-    innerlude::{ErrorBoundary, ListenerCb, Scheduler, SchedulerMsg},
+    innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
     Attribute, AttributeValue, Element, Event, Properties, TaskId,
@@ -510,7 +510,7 @@ impl<'src> ScopeState {
             }))
         };
 
-        AttributeValue::Listener(ListenerCb(RefCell::new(Some(boxed))))
+        AttributeValue::Listener(RefCell::new(Some(boxed)))
     }
 
     /// Inject an error into the nearest error boundary and quit rendering

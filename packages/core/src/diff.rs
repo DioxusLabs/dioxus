@@ -1,7 +1,7 @@
 use crate::{
     any_props::AnyProps,
     arena::ElementId,
-    innerlude::{DirtyScope, VComponent, VPlaceholder, VText},
+    innerlude::{BorrowedAttributeValue, DirtyScope, VComponent, VPlaceholder, VText},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{DynamicNode, VNode},
@@ -150,10 +150,10 @@ impl<'b> VirtualDom {
         };
     }
 
-    fn update_attribute(&mut self, right_attr: &Attribute, left_attr: &Attribute) {
-        // todo: add more types of attribute values
+    fn update_attribute(&mut self, right_attr: &'b Attribute<'b>, left_attr: &'b Attribute) {
         let name = unsafe { std::mem::transmute(left_attr.name) };
-        let value = unsafe { std::mem::transmute(right_attr.value.clone()) };
+        let value: BorrowedAttributeValue<'b> = (&right_attr.value).into();
+        let value = unsafe { std::mem::transmute(value) };
         self.mutations.push(Mutation::SetAttribute {
             id: left_attr.mounted_element.get(),
             ns: right_attr.namespace,

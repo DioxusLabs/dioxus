@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::node::Node;
+use crate::node::{FromAnyValue, Node};
 use crate::node_ref::{NodeMask, NodeView};
 use crate::passes::{resolve_passes, resolve_passes_single_threaded, AnyPass, DirtyNodeStates};
 use crate::tree::TreeView;
@@ -76,7 +76,7 @@ pub(crate) fn union_ordered_iter<'a>(
 ///     }
 /// }
 /// ```
-pub trait ChildDepState {
+pub trait ChildDepState<V: FromAnyValue = ()> {
     /// The context is passed to the [ChildDepState::reduce] when it is resolved.
     type Ctx;
     /// A state from each child node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
@@ -87,7 +87,7 @@ pub trait ChildDepState {
     /// Resolve the state current node's state from the state of the children, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView<'a>,
+        node: NodeView<'a, V>,
         children: impl Iterator<Item = <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool
@@ -138,7 +138,7 @@ pub trait ChildDepState {
 ///     }
 /// }
 /// ```
-pub trait ParentDepState {
+pub trait ParentDepState<V: FromAnyValue = ()> {
     /// The context is passed to the [ParentDepState::reduce] when it is resolved.
     type Ctx;
     /// A state from from the parent node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
@@ -149,7 +149,7 @@ pub trait ParentDepState {
     /// Resolve the state current node's state from the state of the parent node, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView<'a>,
+        node: NodeView<'a, V>,
         parent: Option<<Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool;
@@ -193,7 +193,7 @@ pub trait ParentDepState {
 ///     }
 /// }
 /// ```
-pub trait NodeDepState {
+pub trait NodeDepState<V: FromAnyValue = ()> {
     /// Depstate must be a tuple containing any number of borrowed elements that are either [ChildDepState], [ParentDepState] or [NodeDepState].
     type DepState: ElementBorrowable;
     /// The state passed to [NodeDepState::reduce] when it is resolved.
@@ -203,7 +203,7 @@ pub trait NodeDepState {
     /// Resolve the state current node's state from the state of the sibling states, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView<'a>,
+        node: NodeView<'a, V>,
         node_state: <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>,
         ctx: &Self::Ctx,
     ) -> bool;

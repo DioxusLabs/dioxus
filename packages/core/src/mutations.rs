@@ -1,6 +1,6 @@
 use rustc_hash::FxHashSet;
 
-use crate::{arena::ElementId, AttributeValue, ScopeId, Template};
+use crate::{arena::ElementId, innerlude::BorrowedAttributeValue, ScopeId, Template};
 
 /// A container for all the relevant steps to modify the Real DOM
 ///
@@ -208,7 +208,7 @@ pub enum Mutation<'a> {
         name: &'a str,
 
         /// The value of the attribute.
-        value: AttributeValue<'a>,
+        value: BorrowedAttributeValue<'a>,
 
         /// The ID of the node to set the attribute of.
         id: ElementId,

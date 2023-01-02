@@ -1,5 +1,5 @@
 use crate::any_props::AnyProps;
-use crate::innerlude::{VComponent, VPlaceholder, VText};
+use crate::innerlude::{BorrowedAttributeValue, VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -285,7 +285,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn write_attribute(&mut self, attribute: &crate::Attribute, id: ElementId) {
+    fn write_attribute(&mut self, attribute: &'b crate::Attribute<'b>, id: ElementId) {
         // Make sure we set the attribute's associated id
         attribute.mounted_element.set(id);
 
@@ -302,7 +302,8 @@ impl<'b> VirtualDom {
             }
             _ => {
                 // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let unbounded_value = unsafe { std::mem::transmute(attribute.value.clone()) };
+                let value: BorrowedAttributeValue<'b> = (&attribute.value).into();
+                let unbounded_value = unsafe { std::mem::transmute(value) };
 
                 self.mutations.push(SetAttribute {
                     name: unbounded_name,

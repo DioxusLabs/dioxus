@@ -384,7 +384,7 @@ impl VirtualDom {
             // We check the bubble state between each call to see if the event has been stopped from bubbling
             for listener in listeners.drain(..).rev() {
                 if let AttributeValue::Listener(listener) = listener {
-                    if let Some(cb) = listener.0.borrow_mut().as_deref_mut() {
+                    if let Some(cb) = listener.borrow_mut().as_deref_mut() {
                         cb(uievent.clone());
                     }
 
