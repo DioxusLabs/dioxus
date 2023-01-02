@@ -1,7 +1,6 @@
 use core::panic;
 use parking_lot::lock_api::RawMutex as _;
 use parking_lot::{RawMutex, RwLock};
-use slab::Slab;
 use std::cell::UnsafeCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
@@ -93,17 +92,7 @@ pub trait TreeView<T>: Sized {
 
     fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>>;
 
-    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Self::IteratorMut<'_>)> {
-        let mut_ptr: *mut Self = self;
-        unsafe {
-            // Safety: No node has itself as a child.
-            (*mut_ptr).get_mut(id).and_then(|parent| {
-                (*mut_ptr)
-                    .children_mut(id)
-                    .map(|children| (parent, children))
-            })
-        }
-    }
+    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Self::IteratorMut<'_>)>;
 
     fn children_ids(&self, id: NodeId) -> Option<&[NodeId]>;
 
@@ -116,14 +105,6 @@ pub trait TreeView<T>: Sized {
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
 
     fn height(&self, id: NodeId) -> Option<u16>;
-
-    fn map<T2, F: Fn(&T) -> &T2, FMut: Fn(&mut T) -> &mut T2>(
-        &mut self,
-        map: F,
-        map_mut: FMut,
-    ) -> TreeMap<T, T2, Self, F, FMut> {
-        TreeMap::new(self, map, map_mut)
-    }
 
     fn size(&self) -> usize;
 
@@ -200,56 +181,39 @@ pub trait TreeLike<T>: TreeView<T> {
     fn insert_after(&mut self, id: NodeId, new: NodeId);
 }
 
-pub struct ChildNodeIterator<'a, T, Tr: TreeView<T>> {
-    tree: &'a Tr,
-    children_ids: &'a [NodeId],
+pub struct ChildNodeIterator<'a, T> {
+    nodes: &'a Slab<Node<T>>,
+    children_ids: Vec<NodeId>,
     index: usize,
     node_type: PhantomData<T>,
 }
 
-impl<'a, T: 'a, Tr: TreeView<T>> Iterator for ChildNodeIterator<'a, T, Tr> {
+impl<'a, T: 'a> Iterator for ChildNodeIterator<'a, T> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.children_ids.get(self.index).map(|id| {
             self.index += 1;
-            self.tree.get_unchecked(*id)
+            &self.nodes.get(id.0).unwrap().value
         })
     }
 }
 
-pub struct ChildNodeIteratorMut<'a, T, Tr: TreeView<T> + 'a> {
-    tree: *mut Tr,
-    children_ids: &'a [NodeId],
-    index: usize,
-    node_type: PhantomData<T>,
+pub struct ChildNodeIteratorMut<'a, T> {
+    nodes: Vec<&'a mut Node<T>>,
 }
 
-impl<'a, T, Tr: TreeView<T>> ChildNodeIteratorMut<'a, T, Tr> {
-    fn tree_mut(&mut self) -> &'a mut Tr {
-        unsafe { &mut *self.tree }
-    }
-}
-
-impl<'a, T: 'a, Tr: TreeView<T>> Iterator for ChildNodeIteratorMut<'a, T, Tr> {
+impl<'a, T: 'a> Iterator for ChildNodeIteratorMut<'a, T> {
     type Item = &'a mut T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let owned = self.children_ids.get(self.index).copied();
-        match owned {
-            Some(id) => {
-                self.index += 1;
-
-                Some(self.tree_mut().get_mut_unchecked(id))
-            }
-            None => None,
-        }
+        self.nodes.pop().map(|node| &mut node.value)
     }
 }
 
 impl<T> TreeView<T> for Tree<T> {
-    type Iterator<'a> = ChildNodeIterator<'a, T, Tree<T>> where T: 'a;
-    type IteratorMut<'a> = ChildNodeIteratorMut<'a, T, Tree<T>> where T: 'a;
+    type Iterator<'a> = ChildNodeIterator<'a, T> where T: 'a;
+    type IteratorMut<'a> = ChildNodeIteratorMut<'a, T> where T: 'a;
 
     fn root(&self) -> NodeId {
         self.root
@@ -265,24 +229,26 @@ impl<T> TreeView<T> for Tree<T> {
 
     fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
         self.children_ids(id).map(|children_ids| ChildNodeIterator {
-            tree: self,
-            children_ids,
+            nodes: &self.nodes,
+            children_ids: children_ids.to_vec(),
             index: 0,
             node_type: PhantomData,
         })
     }
 
     fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>> {
-        let raw_ptr = self as *mut Self;
-        unsafe {
-            // Safety: No node will appear as a child twice
-            self.children_ids(id)
-                .map(|children_ids| ChildNodeIteratorMut {
-                    tree: &mut *raw_ptr,
-                    children_ids,
-                    index: 0,
-                    node_type: PhantomData,
-                })
+        // Safety: No node has itself as a parent.
+        if let Some(children_ids) = self.children_ids(id) {
+            let children_ids = children_ids.to_vec();
+            Some(ChildNodeIteratorMut {
+                nodes: unsafe {
+                    self.nodes
+                        .get_many_mut_unchecked(children_ids.into_iter().rev().map(|id| id.0))
+                        .unwrap()
+                },
+            })
+        } else {
+            None
         }
     }
 
@@ -338,6 +304,30 @@ impl<T> TreeView<T> for Tree<T> {
                 .map(|(node, parent)| (&mut node.value, Some(&mut parent.value)))
         } else {
             self.nodes.get_mut(id.0).map(|node| (&mut node.value, None))
+        }
+    }
+
+    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Self::IteratorMut<'_>)> {
+        // Safety: No node will appear as a child twice
+        if let Some(children_ids) = self.children_ids(id) {
+            println!("parent_child_mut: {:?}\n{:?}", id, children_ids);
+            debug_assert!(!children_ids.iter().any(|child_id| *child_id == id));
+            let mut borrowed = unsafe {
+                self.nodes
+                    .get_many_mut_unchecked(
+                        children_ids
+                            .to_vec()
+                            .into_iter()
+                            .rev()
+                            .map(|id| id.0)
+                            .chain(std::iter::once(id.0)),
+                    )
+                    .unwrap()
+            };
+            let node = &mut borrowed.pop().unwrap().value;
+            Some((node, ChildNodeIteratorMut { nodes: borrowed }))
+        } else {
+            None
         }
     }
 }
@@ -435,129 +425,6 @@ impl<T> TreeLike<T> for Tree<T> {
         self.set_height(new, height);
     }
 }
-
-pub struct TreeMap<'a, T1, T2, Tr, F, FMut>
-where
-    Tr: TreeView<T1>,
-    F: Fn(&T1) -> &T2,
-    FMut: Fn(&mut T1) -> &mut T2,
-{
-    tree: &'a mut Tr,
-    map: F,
-    map_mut: FMut,
-    in_node_type: PhantomData<T1>,
-    out_node_type: PhantomData<T2>,
-}
-
-impl<'a, T1, T2, Tr, F, FMut> TreeMap<'a, T1, T2, Tr, F, FMut>
-where
-    Tr: TreeView<T1>,
-    F: Fn(&T1) -> &T2,
-    FMut: Fn(&mut T1) -> &mut T2,
-{
-    pub fn new(tree: &'a mut Tr, map: F, map_mut: FMut) -> Self {
-        TreeMap {
-            tree,
-            map,
-            map_mut,
-            in_node_type: PhantomData,
-            out_node_type: PhantomData,
-        }
-    }
-}
-
-impl<'a, T1, T2, Tr, F, FMut> TreeView<T2> for TreeMap<'a, T1, T2, Tr, F, FMut>
-where
-    Tr: TreeView<T1>,
-    F: Fn(&T1) -> &T2,
-    FMut: Fn(&mut T1) -> &mut T2,
-{
-    type Iterator<'b> = ChildNodeIterator<'b, T2, TreeMap<'a, T1, T2, Tr, F, FMut>>
-    where
-        T2: 'b,
-        Self:'b;
-    type IteratorMut<'b> = ChildNodeIteratorMut<'b, T2, TreeMap<'a, T1, T2, Tr, F, FMut>>
-    where
-        T2: 'b,
-        Self:'b;
-
-    fn root(&self) -> NodeId {
-        self.tree.root()
-    }
-
-    fn get(&self, id: NodeId) -> Option<&T2> {
-        self.tree.get(id).map(|node| (self.map)(node))
-    }
-
-    fn get_mut(&mut self, id: NodeId) -> Option<&mut T2> {
-        self.tree.get_mut(id).map(|node| (self.map_mut)(node))
-    }
-
-    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
-        self.children_ids(id).map(|children_ids| ChildNodeIterator {
-            tree: self,
-            children_ids,
-            index: 0,
-            node_type: PhantomData,
-        })
-    }
-
-    fn children_mut(&mut self, id: NodeId) -> Option<Self::IteratorMut<'_>> {
-        let raw_ptr = self as *mut Self;
-        unsafe {
-            // Safety: No node can be a child twice.
-            self.children_ids(id)
-                .map(|children_ids| ChildNodeIteratorMut {
-                    tree: &mut *raw_ptr,
-                    children_ids,
-                    index: 0,
-                    node_type: PhantomData,
-                })
-        }
-    }
-
-    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
-        self.tree.children_ids(id)
-    }
-
-    fn parent(&self, id: NodeId) -> Option<&T2> {
-        self.tree.parent(id).map(|node| (self.map)(node))
-    }
-
-    fn parent_mut(&mut self, id: NodeId) -> Option<&mut T2> {
-        self.tree.parent_mut(id).map(|node| (self.map_mut)(node))
-    }
-
-    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        self.tree.parent_id(id)
-    }
-
-    fn height(&self, id: NodeId) -> Option<u16> {
-        self.tree.height(id)
-    }
-
-    fn get_unchecked(&self, id: NodeId) -> &T2 {
-        (self.map)(self.tree.get_unchecked(id))
-    }
-
-    fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T2 {
-        (self.map_mut)(self.tree.get_mut_unchecked(id))
-    }
-
-    fn size(&self) -> usize {
-        self.tree.size()
-    }
-
-    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T2, Option<&mut T2>)> {
-        self.tree.node_parent_mut(id).map(|(node, parent)| {
-            (
-                (self.map_mut)(node),
-                parent.map(|parent| (self.map_mut)(parent)),
-            )
-        })
-    }
-}
-
 #[test]
 fn creation() {
     let mut tree = Tree::new(1);
@@ -667,59 +534,6 @@ fn deletion() {
 }
 
 #[test]
-fn shared_view() {
-    use std::thread;
-    let mut tree = Tree::new(1);
-    let parent = tree.root();
-    let child = tree.create_node(0);
-    tree.add_child(parent, child);
-
-    let shared = SharedView::new(&mut tree);
-
-    thread::scope(|s| {
-        let (mut shared1, mut shared2, mut shared3) =
-            (shared.clone(), shared.clone(), shared.clone());
-        s.spawn(move || {
-            assert_eq!(*shared1.get_mut(parent).unwrap(), 1);
-            assert_eq!(*shared1.get_mut(child).unwrap(), 0);
-        });
-        s.spawn(move || {
-            assert_eq!(*shared2.get_mut(child).unwrap(), 0);
-            assert_eq!(*shared2.get_mut(parent).unwrap(), 1);
-        });
-        s.spawn(move || {
-            assert_eq!(*shared3.get_mut(parent).unwrap(), 1);
-            assert_eq!(*shared3.get_mut(child).unwrap(), 0);
-        });
-    });
-}
-
-#[test]
-fn map() {
-    #[derive(Debug, PartialEq)]
-    struct Value {
-        value: i32,
-    }
-    impl Value {
-        fn new(value: i32) -> Self {
-            Self { value }
-        }
-    }
-    let mut tree = Tree::new(Value::new(1));
-    let parent = tree.root();
-    let child = tree.create_node(Value::new(0));
-    tree.add_child(parent, child);
-
-    let mut mapped = tree.map(|x| &x.value, |x| &mut x.value);
-
-    *mapped.get_mut(child).unwrap() = 1;
-    *mapped.get_mut(parent).unwrap() = 2;
-
-    assert_eq!(*tree.get(parent).unwrap(), Value::new(2));
-    assert_eq!(*tree.get(child).unwrap(), Value::new(1));
-}
-
-#[test]
 fn traverse_depth_first() {
     let mut tree = Tree::new(0);
     let parent = tree.root();
@@ -737,4 +551,125 @@ fn traverse_depth_first() {
         assert_eq!(*node, node_count);
         node_count += 1;
     });
+}
+
+#[test]
+fn get_node_children_mut() {
+    let mut tree = Tree::new(0);
+    let parent = tree.root();
+    let child1 = tree.create_node(1);
+    tree.add_child(parent, child1);
+    let child2 = tree.create_node(2);
+    tree.add_child(parent, child2);
+    let child3 = tree.create_node(3);
+    tree.add_child(parent, child3);
+
+    let (parent, children) = tree.parent_child_mut(parent).unwrap();
+    for (i, child) in children.enumerate() {
+        assert_eq!(*child, i + 1);
+    }
+    println!("Parent: {:#?}", parent);
+}
+
+#[test]
+fn get_many_mut_unchecked() {
+    let mut slab = Slab::new();
+    let parent = slab.insert(0);
+    let child = slab.insert(1);
+    let grandchild = slab.insert(2);
+
+    let all =
+        unsafe { slab.get_many_mut_unchecked([parent, child, grandchild].into_iter()) }.unwrap();
+    println!("All: {:#?}", all);
+}
+
+#[derive(Debug)]
+struct Slab<T> {
+    data: Vec<Option<T>>,
+    free: VecDeque<usize>,
+}
+
+impl<T> Default for Slab<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> Slab<T> {
+    fn new() -> Self {
+        Self {
+            data: Vec::new(),
+            free: VecDeque::new(),
+        }
+    }
+
+    fn get(&self, id: usize) -> Option<&T> {
+        self.data.get(id).and_then(|x| x.as_ref())
+    }
+
+    unsafe fn get_unchecked(&self, id: usize) -> &T {
+        self.data.get_unchecked(id).as_ref().unwrap()
+    }
+
+    fn get_mut(&mut self, id: usize) -> Option<&mut T> {
+        self.data.get_mut(id).and_then(|x| x.as_mut())
+    }
+
+    unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut T {
+        self.data.get_unchecked_mut(id).as_mut().unwrap()
+    }
+
+    fn get2_mut(&mut self, id1: usize, id2: usize) -> Option<(&mut T, &mut T)> {
+        assert!(id1 != id2);
+        let ptr = self.data.as_mut_ptr();
+        let first = unsafe { &mut *ptr.add(id1) };
+        let second = unsafe { &mut *ptr.add(id2) };
+        if let (Some(first), Some(second)) = (first, second) {
+            Some((first, second))
+        } else {
+            None
+        }
+    }
+
+    unsafe fn get_many_mut_unchecked(
+        &mut self,
+        ids: impl Iterator<Item = usize>,
+    ) -> Option<Vec<&mut T>> {
+        let ptr = self.data.as_mut_ptr();
+        let mut result = Vec::new();
+        for id in ids {
+            let item = unsafe { &mut *ptr.add(id) };
+            if let Some(item) = item {
+                result.push(item);
+            } else {
+                return None;
+            }
+        }
+        Some(result)
+    }
+
+    fn insert(&mut self, value: T) -> usize {
+        if let Some(id) = self.free.pop_front() {
+            self.data[id] = Some(value);
+            id
+        } else {
+            self.data.push(Some(value));
+            self.data.len() - 1
+        }
+    }
+
+    fn try_remove(&mut self, id: usize) -> Option<T> {
+        self.data.get_mut(id).and_then(|x| {
+            self.free.push_back(id);
+            x.take()
+        })
+    }
+
+    fn remove(&mut self, id: usize) -> T {
+        self.try_remove(id).unwrap()
+    }
+
+    fn len(&self) -> usize {
+        self.data.len() - self.free.len()
+    }
 }

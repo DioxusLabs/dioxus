@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::hash::BuildHasherDefault;
 
 pub use node_ref::NodeMask;
@@ -20,7 +21,7 @@ pub mod utils;
 pub type RealNodeId = NodeId;
 pub type FxDashMap<K, V> = dashmap::DashMap<K, V, BuildHasherDefault<FxHasher>>;
 pub type FxDashSet<K> = dashmap::DashSet<K, BuildHasherDefault<FxHasher>>;
-pub type SendAnyMap = anymap::Map<dyn anymap::any::Any + Send + Sync + 'static>;
+pub type SendAnyMap = anymap::Map<dyn Any + Send + Sync + 'static>;
 
 /// Used in derived state macros
 #[derive(Eq, PartialEq)]

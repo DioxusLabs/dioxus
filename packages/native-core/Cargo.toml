@@ -18,7 +18,7 @@ dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
 taffy = "0.2.1"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
-anymap = "0.12.1"
+anymap = "1.0.0-beta.2"
 slab = "0.4"
 parking_lot = "0.12.1"
 crossbeam-deque = "0.8.2"

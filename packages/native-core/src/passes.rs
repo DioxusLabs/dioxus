@@ -313,57 +313,58 @@ impl<T> AnyPass<T> {
 pub fn resolve_passes<T, Tr: TreeView<T> + Sync + Send>(
     tree: &mut Tr,
     dirty_nodes: DirtyNodeStates,
-    mut passes: Vec<&AnyPass<T>>,
+    passes: Vec<&AnyPass<T>>,
     ctx: SendAnyMap,
 ) -> FxDashSet<NodeId> {
-    let dirty_states = Arc::new(dirty_nodes);
-    let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
-    let mut resolving = Vec::new();
-    let nodes_updated = Arc::new(FxDashSet::default());
-    let ctx = Arc::new(ctx);
-    while !passes.is_empty() {
-        let mut currently_borrowed = MemberMask::default();
-        std::thread::scope(|s| {
-            let mut i = 0;
-            while i < passes.len() {
-                let pass = &passes[i];
-                let pass_id = pass.pass_id();
-                let pass_mask = pass.mask();
-                if pass
-                    .dependancies()
-                    .iter()
-                    .all(|d| resolved_passes.contains(d) || *d == pass_id)
-                    && !pass_mask.overlaps(currently_borrowed)
-                {
-                    let pass = passes.remove(i);
-                    resolving.push(pass_id);
-                    currently_borrowed |= pass_mask;
-                    let tree_mut_unbounded = unsafe { &mut *(tree as *mut _ as *mut Tr) };
-                    let dirty_states = dirty_states.clone();
-                    let nodes_updated = nodes_updated.clone();
-                    let ctx = ctx.clone();
-                    s.spawn(move || {
-                        // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
-                        let mut dirty = DirtyNodes::default();
-                        dirty_states.all_dirty(pass_id, &mut dirty, tree_mut_unbounded);
-                        pass.resolve(
-                            tree_mut_unbounded,
-                            dirty,
-                            &dirty_states,
-                            &nodes_updated,
-                            &ctx,
-                        );
-                    });
-                } else {
-                    i += 1;
-                }
-            }
-            // all passes are resolved at the end of the scope
-        });
-        resolved_passes.extend(resolving.iter().copied());
-        resolving.clear()
-    }
-    std::sync::Arc::try_unwrap(nodes_updated).unwrap()
+    resolve_passes_single_threaded(tree, dirty_nodes, passes, ctx)
+    // let dirty_states = Arc::new(dirty_nodes);
+    // let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
+    // let mut resolving = Vec::new();
+    // let nodes_updated = Arc::new(FxDashSet::default());
+    // let ctx = Arc::new(ctx);
+    // while !passes.is_empty() {
+    //     let mut currently_borrowed = MemberMask::default();
+    //     std::thread::scope(|s| {
+    //         let mut i = 0;
+    //         while i < passes.len() {
+    //             let pass = &passes[i];
+    //             let pass_id = pass.pass_id();
+    //             let pass_mask = pass.mask();
+    //             if pass
+    //                 .dependancies()
+    //                 .iter()
+    //                 .all(|d| resolved_passes.contains(d) || *d == pass_id)
+    //                 && !pass_mask.overlaps(currently_borrowed)
+    //             {
+    //                 let pass = passes.remove(i);
+    //                 resolving.push(pass_id);
+    //                 currently_borrowed |= pass_mask;
+    //                 let dirty_states = dirty_states.clone();
+    //                 let nodes_updated = nodes_updated.clone();
+    //                 let ctx = ctx.clone();
+    //                 let mut dirty = DirtyNodes::default();
+    //                 // dirty_states.all_dirty(pass_id, &mut dirty, tree);
+    //                 // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
+    //                 let tree_mut_unbounded = unsafe { &mut *(tree as *mut Tr) };
+    //                 s.spawn(move || {
+    //                     pass.resolve(
+    //                         tree_mut_unbounded,
+    //                         dirty,
+    //                         &dirty_states,
+    //                         &nodes_updated,
+    //                         &ctx,
+    //                     );
+    //                 });
+    //             } else {
+    //                 i += 1;
+    //             }
+    //         }
+    //         // all passes are resolved at the end of the scope
+    //     });
+    //     resolved_passes.extend(resolving.iter().copied());
+    //     resolving.clear()
+    // }
+    // std::sync::Arc::try_unwrap(nodes_updated).unwrap()
 }
 
 pub fn resolve_passes_single_threaded<T, Tr: TreeView<T>>(
