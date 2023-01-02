@@ -1,10 +1,5 @@
-use core::panic;
-use parking_lot::lock_api::RawMutex as _;
-use parking_lot::{RawMutex, RwLock};
-use std::cell::UnsafeCell;
 use std::collections::VecDeque;
 use std::marker::PhantomData;
-use std::sync::Arc;
 
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct NodeId(pub usize);
@@ -313,10 +308,10 @@ impl<T> TreeView<T> for Tree<T> {
             println!("parent_child_mut: {:?}\n{:?}", id, children_ids);
             debug_assert!(!children_ids.iter().any(|child_id| *child_id == id));
             let mut borrowed = unsafe {
+                let as_vec = children_ids.to_vec();
                 self.nodes
                     .get_many_mut_unchecked(
-                        children_ids
-                            .to_vec()
+                        as_vec
                             .into_iter()
                             .rev()
                             .map(|id| id.0)
