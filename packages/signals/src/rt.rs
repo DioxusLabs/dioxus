@@ -4,6 +4,7 @@ use dioxus_core::ScopeId;
 use slab::Slab;
 
 thread_local! {
+    // we cannot drop these since any future might be using them
     static RUNTIMES: RefCell<Vec<&'static SignalRt>> = RefCell::new(Vec::new());
 }
 
@@ -31,15 +32,16 @@ pub fn reclam_rt(_rt: &'static SignalRt) {
 }
 
 pub struct SignalRt {
-    signals: RefCell<Slab<Inner>>,
-    update_any: Arc<dyn Fn(ScopeId)>,
+    pub(crate) signals: RefCell<Slab<Inner>>,
+    pub(crate) update_any: Arc<dyn Fn(ScopeId)>,
 }
 
 impl SignalRt {
-    pub fn init<T: 'static>(&self, val: T) -> usize {
+    pub fn init<T: 'static>(&'static self, val: T) -> usize {
         self.signals.borrow_mut().insert(Inner {
             value: Box::new(val),
             subscribers: Vec::new(),
+            getter: None,
         })
     }
 
@@ -73,7 +75,7 @@ impl SignalRt {
         let signals = self.signals.borrow();
         let inner = &signals[id];
         let inner = inner.value.downcast_ref::<T>().unwrap();
-        f(&*inner)
+        f(inner)
     }
 
     pub(crate) fn read<T: 'static>(&self, id: usize) -> std::cell::Ref<T> {
@@ -89,9 +91,31 @@ impl SignalRt {
             signals[id].value.downcast_mut::<T>().unwrap()
         })
     }
+
+    pub(crate) fn getter<T: 'static + Clone>(&self, id: usize) -> &dyn Fn() -> T {
+        let mut signals = self.signals.borrow_mut();
+        let inner = &mut signals[id];
+        let r = inner.getter.as_mut();
+
+        if r.is_none() {
+            let rt = self;
+            let r = move || rt.get::<T>(id);
+            let getter: Box<dyn Fn() -> T> = Box::new(r);
+            let getter: Box<dyn Fn()> = unsafe { std::mem::transmute(getter) };
+
+            inner.getter = Some(getter);
+        }
+
+        let r = inner.getter.as_ref().unwrap();
+
+        unsafe { std::mem::transmute::<&dyn Fn(), &dyn Fn() -> T>(r) }
+    }
 }
 
-struct Inner {
-    value: Box<dyn Any>,
-    subscribers: Vec<ScopeId>,
+pub(crate) struct Inner {
+    pub value: Box<dyn Any>,
+    pub subscribers: Vec<ScopeId>,
+
+    // todo: this has a soundness hole in it that you might not run into
+    pub getter: Option<Box<dyn Fn()>>,
 }

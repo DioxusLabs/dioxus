@@ -26,6 +26,7 @@ pub fn use_signal<T: 'static>(cx: &ScopeState, f: impl FnOnce() -> T) -> Signal<
         struct SignalHook<T> {
             signal: Signal<T>,
         }
+
         impl<T> Drop for SignalHook<T> {
             fn drop(&mut self) {
                 self.signal.rt.remove(self.signal.id);
@@ -62,6 +63,11 @@ impl<T: 'static> Signal<T> {
         self.rt.set(self.id, value);
     }
 
+    pub fn with<O>(&self, f: impl FnOnce(&T) -> O) -> O {
+        let write = self.read();
+        f(&*write)
+    }
+
     pub fn update<O>(&self, _f: impl FnOnce(&mut T) -> O) -> O {
         let mut write = self.write();
         _f(&mut *write)
@@ -74,13 +80,13 @@ impl<T: Clone + 'static> Signal<T> {
     }
 }
 
-// impl<T> std::ops::Deref for Signal<T> {
-//     type Target = dyn Fn() -> T;
+impl<T: Clone + 'static> std::ops::Deref for Signal<T> {
+    type Target = dyn Fn() -> T;
 
-//     fn deref(&self) -> &Self::Target {
-//         todo!()
-//     }
-// }
+    fn deref(&self) -> &Self::Target {
+        self.rt.getter(self.id)
+    }
+}
 
 impl<T> std::clone::Clone for Signal<T> {
     fn clone(&self) -> Self {
@@ -123,27 +129,3 @@ impl<T: Div<Output = T> + Copy + 'static> std::ops::DivAssign<T> for Signal<T> {
         self.set(self.get() / rhs);
     }
 }
-
-// impl<T: Add<Output = T> + Copy> std::ops::AddAssign<T> for Signal<T> {
-//     fn add_assign(&mut self, rhs: T) {
-//         self.set((*self.current()) + rhs);
-//     }
-// }
-
-// impl<T: Sub<Output = T> + Copy> std::ops::SubAssign<T> for Signal<T> {
-//     fn sub_assign(&mut self, rhs: T) {
-//         self.set((*self.current()) - rhs);
-//     }
-// }
-
-// impl<T: Mul<Output = T> + Copy> std::ops::MulAssign<T> for Signal<T> {
-//     fn mul_assign(&mut self, rhs: T) {
-//         self.set((*self.current()) * rhs);
-//     }
-// }
-
-// impl<T: Div<Output = T> + Copy> std::ops::DivAssign<T> for Signal<T> {
-//     fn div_assign(&mut self, rhs: T) {
-//         self.set((*self.current()) / rhs);
-//     }
-// }

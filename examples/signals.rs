@@ -14,7 +14,7 @@ fn app(cx: Scope) -> Element {
     use_future!(cx, || async move {
         loop {
             count += 1;
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(400)).await;
         }
     });
 
@@ -22,5 +22,9 @@ fn app(cx: Scope) -> Element {
         h1 { "High-Five counter: {count}" }
         button { onclick: move |_| count += 1, "Up high!" }
         button { onclick: move |_| count -= 1, "Down low!" }
+
+        if count() > 5 {
+            rsx!{ h2 { "High five!" } }
+        }
     })
 }
