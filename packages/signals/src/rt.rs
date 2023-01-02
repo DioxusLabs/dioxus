@@ -1,27 +1,33 @@
-use std::{
-    any::Any,
-    cell::RefCell,
-    rc::Rc,
-    sync::{Arc, Mutex},
-};
+use std::{any::Any, cell::RefCell, sync::Arc};
 
 use dioxus_core::ScopeId;
 use slab::Slab;
+
+thread_local! {
+    static RUNTIMES: RefCell<Vec<&'static SignalRt>> = RefCell::new(Vec::new());
+}
 
 /// Provide the runtime for signals
 ///
 /// This will reuse dead runtimes
 pub fn claim_rt(update_any: Arc<dyn Fn(ScopeId)>) -> &'static SignalRt {
-    Box::leak(Box::new(SignalRt {
-        signals: RefCell::new(Slab::new()),
-        update_any,
-    }))
+    RUNTIMES.with(|runtimes| {
+        if let Some(rt) = runtimes.borrow_mut().pop() {
+            return rt;
+        }
+
+        Box::leak(Box::new(SignalRt {
+            signals: RefCell::new(Slab::new()),
+            update_any,
+        }))
+    })
 }
 
-pub fn reclam_rt(rt: usize) {}
-
-struct GlobalRt {
-    signals: Slab<Inner>,
+/// Push this runtime into the global runtime list
+pub fn reclam_rt(_rt: &'static SignalRt) {
+    RUNTIMES.with(|runtimes| {
+        runtimes.borrow_mut().push(_rt);
+    });
 }
 
 pub struct SignalRt {
@@ -78,7 +84,7 @@ impl SignalRt {
     }
 
     pub(crate) fn write<T: 'static>(&self, id: usize) -> std::cell::RefMut<T> {
-        let mut signals = self.signals.borrow_mut();
+        let signals = self.signals.borrow_mut();
         std::cell::RefMut::map(signals, |signals| {
             signals[id].value.downcast_mut::<T>().unwrap()
         })
