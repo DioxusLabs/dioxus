@@ -1,5 +1,4 @@
 use crate::passes::{AnyMapLike, TypeErasedPass};
-use std::any::TypeId;
 use std::cmp::Ordering;
 
 /// Join two sorted iterators
@@ -41,14 +40,4 @@ pub(crate) fn union_ordered_iter<'a>(
 pub trait State: Default + Clone + AnyMapLike + 'static {
     #[doc(hidden)]
     fn create_passes() -> Box<[TypeErasedPass<Self>]>;
-
-    #[doc(hidden)]
-    fn clone_or_default(&self) -> Self {
-        self.clone()
-    }
-
-    #[doc(hidden)]
-    fn non_clone_members() -> Box<[TypeId]> {
-        Box::new([])
-    }
 }

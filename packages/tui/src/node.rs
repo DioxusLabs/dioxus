@@ -9,7 +9,6 @@ pub(crate) type TuiNode = dioxus_native_core::node::Node<NodeState>;
 
 #[derive(Debug, Clone, State, AnyMapLike, Default)]
 pub(crate) struct NodeState {
-    #[skip_clone]
     pub layout: TaffyLayout,
     pub style: StyleModifier,
     pub prevent_default: PreventDefault,
@@ -59,12 +58,12 @@ impl Pass for PreventDefault {
     fn pass<'a>(
         &mut self,
         node_view: dioxus_native_core::node_ref::NodeView,
-        node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
-        parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<
+        _: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
+        _: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
+        _: Option<
             impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
         >,
-        context: &SendAnyMap,
+        _: &SendAnyMap,
     ) -> bool {
         let new = match node_view.attributes().and_then(|mut attrs| {
             attrs

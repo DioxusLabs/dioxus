@@ -452,7 +452,7 @@ impl<S: State + Send> RealDom<S> {
     fn clone_node(&mut self, node_id: NodeId) -> NodeId {
         let node = self.tree.get(node_id).unwrap();
         let new_node = Node {
-            state: node.state.clone_or_default(),
+            state: node.state.clone(),
             node_data: node.node_data.clone(),
         };
         let new_id = self.create_node(new_node, true);

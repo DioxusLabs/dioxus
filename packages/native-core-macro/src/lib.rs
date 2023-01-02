@@ -35,35 +35,6 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
         _ => unimplemented!(),
     };
 
-    let clone_or_default = fields.iter().map(|field| {
-        let field_name = field.ident.as_ref().unwrap();
-        let skip_clone = field
-            .attrs
-            .iter()
-            .any(|attr| attr.path.is_ident("skip_clone"));
-        if skip_clone {
-            quote! {
-                Default::default()
-            }
-        } else {
-            quote! {
-                self.#field_name.clone()
-            }
-        }
-    });
-
-    let non_clone_types = fields
-        .iter()
-        .filter(|field| {
-            field
-                .attrs
-                .iter()
-                .any(|attr| attr.path.is_ident("skip_clone"))
-        })
-        .map(|field| &field.ty);
-
-    let names = fields.iter().map(|field| field.ident.as_ref().unwrap());
-
     let types = fields
         .iter()
         .filter(|field| !field.attrs.iter().any(|attr| attr.path.is_ident("skip")))
@@ -75,22 +46,6 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
                 Box::new([
                     #(
                         <#types as dioxus_native_core::Pass>::to_type_erased()
-                    ),*
-                ])
-            }
-
-            fn clone_or_default(&self) -> Self {
-                Self {
-                    #(
-                        #names: #clone_or_default
-                    ),*
-                }
-            }
-
-            fn non_clone_members() -> Box<[std::any::TypeId]> {
-                Box::new([
-                    #(
-                        std::any::TypeId::of::<#non_clone_types>()
                     ),*
                 ])
             }
