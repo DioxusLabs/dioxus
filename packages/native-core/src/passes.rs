@@ -317,6 +317,7 @@ pub fn resolve_passes<T, Tr: TreeView<T> + Sync + Send>(
     ctx: SendAnyMap,
 ) -> FxDashSet<NodeId> {
     resolve_passes_single_threaded(tree, dirty_nodes, passes, ctx)
+    // TODO: multithreadeding has some safety issues currently that need to be resolved before it can be used
     // let dirty_states = Arc::new(dirty_nodes);
     // let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
     // let mut resolving = Vec::new();
