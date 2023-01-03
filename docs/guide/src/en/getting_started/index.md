@@ -28,6 +28,7 @@ Dioxus supports multiple platforms. Choose the platform you want to target below
 
 - [Web](web.md): runs in the browser through WebAssembly
 - [Server Side Rendering](ssr.md): renders to HTML text on the server
+- [Liveview](liveview.md): runs on the server, renders in the browser using WebSockets
 - [Desktop](desktop.md): runs in a web view on desktop
 - [Mobile](mobile.md): runs in a web view on mobile
 - [Terminal UI](tui.md): renders text-based graphics in the terminal
