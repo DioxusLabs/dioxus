@@ -210,14 +210,14 @@ pub trait NodeDepState<V: FromAnyValue = ()> {
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
-pub trait State: Default + Clone + 'static {
+pub trait State<V: FromAnyValue + 'static>: Default + Clone + 'static {
     #[doc(hidden)]
-    const PASSES: &'static [AnyPass<Node<Self>>];
+    const PASSES: &'static [AnyPass<Node<Self, V>>];
     #[doc(hidden)]
     const MASKS: &'static [NodeMask];
 
     #[doc(hidden)]
-    fn update<T: TreeView<Node<Self>> + Sync + Send>(
+    fn update<T: TreeView<Node<Self, V>> + Sync + Send>(
         dirty: DirtyNodeStates,
         tree: &mut T,
         ctx: SendAnyMap,
@@ -227,7 +227,7 @@ pub trait State: Default + Clone + 'static {
     }
 
     #[doc(hidden)]
-    fn update_single_threaded<T: TreeView<Node<Self>>>(
+    fn update_single_threaded<T: TreeView<Node<Self, V>>>(
         dirty: DirtyNodeStates,
         tree: &mut T,
         ctx: SendAnyMap,

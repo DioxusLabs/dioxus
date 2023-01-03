@@ -3,7 +3,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
+use crate::node::{FromAnyValue, Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::passes::DirtyNodeStates;
 use crate::state::State;
@@ -25,9 +25,12 @@ fn mark_dirty(
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
 /// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
+///
+/// # Custom values
+/// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the varients.
 #[derive(Debug)]
-pub struct RealDom<S: State> {
-    pub tree: Tree<Node<S>>,
+pub struct RealDom<S: State<V>, V: FromAnyValue + 'static = ()> {
+    pub tree: Tree<Node<S, V>>,
     /// a map from element id to real node id
     node_id_mapping: Vec<Option<RealNodeId>>,
     nodes_listening: FxHashMap<String, FxHashSet<RealNodeId>>,
@@ -36,14 +39,14 @@ pub struct RealDom<S: State> {
     root_initialized: bool,
 }
 
-impl<S: State> Default for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> Default for RealDom<S, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: State> RealDom<S> {
-    pub fn new() -> RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
+    pub fn new() -> RealDom<S, V> {
         let mut root = Node::new(NodeType::Element {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
@@ -91,7 +94,7 @@ impl<S: State> RealDom<S> {
         current
     }
 
-    fn create_node(&mut self, node: Node<S>) -> RealNodeId {
+    fn create_node(&mut self, node: Node<S, V>) -> RealNodeId {
         let node_id = self.tree.create_node(node);
         let node = self.tree.get_mut(node_id).unwrap();
         node.node_data.node_id = node_id;
@@ -362,7 +365,7 @@ impl<S: State> RealDom<S> {
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
     /// This can be useful to avoid creating duplicate events.
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
+    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S, V>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
             listening.sort_by(|n1, n2| {
@@ -409,9 +412,9 @@ impl<S: State> RealDom<S> {
     }
 }
 
-impl<S: State + Sync> RealDom<S>
+impl<S: State<V> + Sync, V: FromAnyValue> RealDom<S, V>
 where
-    Tree<Node<S>>: Sync + Send,
+    Tree<Node<S, V>>: Sync + Send,
 {
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     /// This will resolve the state in parallel
@@ -424,43 +427,43 @@ where
     }
 }
 
-impl<S: State> Deref for RealDom<S> {
-    type Target = Tree<Node<S>>;
+impl<S: State<V>, V: FromAnyValue> Deref for RealDom<S, V> {
+    type Target = Tree<Node<S, V>>;
 
     fn deref(&self) -> &Self::Target {
         &self.tree
     }
 }
 
-impl<S: State> DerefMut for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> DerefMut for RealDom<S, V> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.tree
     }
 }
 
-impl<S: State> Index<ElementId> for RealDom<S> {
-    type Output = Node<S>;
+impl<S: State<V>, V: FromAnyValue> Index<ElementId> for RealDom<S, V> {
+    type Output = Node<S, V>;
 
     fn index(&self, id: ElementId) -> &Self::Output {
         self.tree.get(self.element_to_node_id(id)).unwrap()
     }
 }
 
-impl<S: State> Index<RealNodeId> for RealDom<S> {
-    type Output = Node<S>;
+impl<S: State<V>, V: FromAnyValue> Index<RealNodeId> for RealDom<S, V> {
+    type Output = Node<S, V>;
 
     fn index(&self, idx: RealNodeId) -> &Self::Output {
         self.tree.get(idx).unwrap()
     }
 }
 
-impl<S: State> IndexMut<ElementId> for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> IndexMut<ElementId> for RealDom<S, V> {
     fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
         self.tree.get_mut(self.element_to_node_id(id)).unwrap()
     }
 }
 
-impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> IndexMut<RealNodeId> for RealDom<S, V> {
     fn index_mut(&mut self, idx: RealNodeId) -> &mut Self::Output {
         self.tree.get_mut(idx).unwrap()
     }

@@ -1,4 +1,10 @@
-use crate::{node::NodeType, real_dom::RealDom, state::State, tree::TreeView, NodeId, RealNodeId};
+use crate::{
+    node::{FromAnyValue, NodeType},
+    real_dom::RealDom,
+    state::State,
+    tree::TreeView,
+    NodeId, RealNodeId,
+};
 use dioxus_core::{Mutation, Mutations};
 use std::fmt::Debug;
 
@@ -67,7 +73,11 @@ impl PersistantElementIter {
 
     /// remove stale element refreneces
     /// returns true if the focused element is removed
-    pub fn prune<S: State>(&mut self, mutations: &Mutations, rdom: &RealDom<S>) -> bool {
+    pub fn prune<S: State<V>, V: FromAnyValue>(
+        &mut self,
+        mutations: &Mutations,
+        rdom: &RealDom<S, V>,
+    ) -> bool {
         let mut changed = false;
         let ids_removed: Vec<_> = mutations
             .edits
@@ -124,7 +134,7 @@ impl PersistantElementIter {
     }
 
     /// get the next element
-    pub fn next<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
+    pub fn next<S: State<V>, V: FromAnyValue>(&mut self, rdom: &RealDom<S, V>) -> ElementProduced {
         if self.stack.is_empty() {
             let id = NodeId(0);
             let new = (id, NodePosition::AtNode);
@@ -160,12 +170,12 @@ impl PersistantElementIter {
     }
 
     /// get the previous element
-    pub fn prev<S: State>(&mut self, rdom: &RealDom<S>) -> ElementProduced {
+    pub fn prev<S: State<V>, V: FromAnyValue>(&mut self, rdom: &RealDom<S, V>) -> ElementProduced {
         // recursively add the last child element to the stack
-        fn push_back<S: State>(
+        fn push_back<S: State<V>, V: FromAnyValue>(
             stack: &mut smallvec::SmallVec<[(RealNodeId, NodePosition); 5]>,
             new_node: RealNodeId,
-            rdom: &RealDom<S>,
+            rdom: &RealDom<S, V>,
         ) -> RealNodeId {
             match &rdom[new_node].node_data.node_type {
                 NodeType::Element { .. } => {
@@ -228,7 +238,7 @@ impl PersistantElementIter {
 
 #[derive(Default, Clone, Debug)]
 struct Empty {}
-impl State for Empty {
+impl State<()> for Empty {
     const PASSES: &'static [crate::AnyPass<crate::node::Node<Self, ()>>] = &[];
 
     const MASKS: &'static [crate::NodeMask] = &[];
