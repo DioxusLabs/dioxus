@@ -1,4 +1,4 @@
-use dioxus_core::{ElementId, Mutations, TemplateNode};
+use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
@@ -264,19 +264,32 @@ impl<S: State> RealDom<S> {
                     let node_id = self.element_to_node_id(id);
                     let node = self.tree.get_mut(node_id).unwrap();
                     if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
-                        attributes.insert(
-                            OwnedAttributeDiscription {
+                        if let BorrowedAttributeValue::None = &value {
+                            attributes.remove(&OwnedAttributeDiscription {
                                 name: name.to_string(),
                                 namespace: ns.map(|s| s.to_string()),
                                 volatile: false,
-                            },
-                            OwnedAttributeValue::from(value),
-                        );
-                        mark_dirty(
-                            node_id,
-                            NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            &mut nodes_updated,
-                        );
+                            });
+                            mark_dirty(
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                                &mut nodes_updated,
+                            );
+                        } else {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: name.to_string(),
+                                    namespace: ns.map(|s| s.to_string()),
+                                    volatile: false,
+                                },
+                                OwnedAttributeValue::from(value),
+                            );
+                            mark_dirty(
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                                &mut nodes_updated,
+                            );
+                        }
                     }
                 }
                 SetText { value, id } => {
