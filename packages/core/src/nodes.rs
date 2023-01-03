@@ -5,7 +5,7 @@ use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
 use std::{
     any::{Any, TypeId},
-    cell::{self, Cell, RefCell, UnsafeCell},
+    cell::{Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
 };
@@ -611,7 +611,7 @@ impl PartialEq for BorrowedAttributeValue<'_> {
 }
 
 #[cfg(feature = "serialize")]
-fn serialize_any_value<S>(_: &cell::Ref<'_, dyn AnyValue>, _: S) -> Result<S::Ok, S::Error>
+fn serialize_any_value<S>(_: &std::cell::Ref<'_, dyn AnyValue>, _: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -619,7 +619,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<cell::Ref<'a, dyn AnyValue>, D::Error>
+fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<std::cell::Ref<'a, dyn AnyValue>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -886,5 +886,14 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
 impl<'a> IntoAttributeValue<'a> for BumpBox<'a, dyn AnyValue> {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Any(RefCell::new(Some(self)))
+    }
+}
+
+impl<'a, T: IntoAttributeValue<'a>> IntoAttributeValue<'a> for Option<T> {
+    fn into_value(self, bump: &'a Bump) -> AttributeValue<'a> {
+        match self {
+            Some(val) => val.into_value(bump),
+            None => AttributeValue::None,
+        }
     }
 }
