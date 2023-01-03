@@ -66,8 +66,9 @@ jobs:
 
       - name: checkout
         uses: actions/checkout@v3
-        fetch-depth: 1
-        path: C:/dioxus.git
+        with:
+          path: C:/dioxus.git
+          fetch-depth: 1
 
       #  we need to use the C drive as the working directory
 
