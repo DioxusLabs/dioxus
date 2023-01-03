@@ -24,6 +24,9 @@ parking_lot = "0.12.1"
 crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
 
+# for parsing attributes
+lightningcss = "1.0.0-alpha.38"
+
 [dev-dependencies]
 rand = "0.8.5"
 dioxus = { path = "../dioxus", version = "^0.2.1" }
