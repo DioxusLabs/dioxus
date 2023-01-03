@@ -246,8 +246,8 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr(
                         dioxus_elements::#el_name::#name.0,
                         #value,
-                        None,
-                        false
+                        dioxus_elements::#el_name::#name.1,
+                        dioxus_elements::#el_name::#name.2
                     )
                 }
             }
@@ -256,8 +256,8 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr(
                         dioxus_elements::#el_name::#name.0,
                         #value,
-                        None,
-                        false
+                        dioxus_elements::#el_name::#name.1,
+                        dioxus_elements::#el_name::#name.2
                     )
                 }
             }
