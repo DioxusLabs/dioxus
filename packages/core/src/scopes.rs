@@ -7,7 +7,7 @@ use crate::{
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
-    Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -511,6 +511,17 @@ impl<'src> ScopeState {
         };
 
         AttributeValue::Listener(RefCell::new(Some(boxed)))
+    }
+
+    /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
+    pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue<'src> {
+        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
+        // This is the suggested way to build a bumpbox
+        //
+        // In theory, we could just use regular boxes
+        let boxed: BumpBox<'src, dyn AnyValue> =
+            unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
+        AttributeValue::Any(RefCell::new(Some(boxed)))
     }
 
     /// Inject an error into the nearest error boundary and quit rendering

@@ -111,7 +111,7 @@ impl<V: FromAnyValue> From<BorrowedAttributeValue<'_>> for OwnedAttributeValue<V
             BorrowedAttributeValue::Float(float) => Self::Float(float),
             BorrowedAttributeValue::Int(int) => Self::Int(int),
             BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
-            BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(any)),
+            BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(&*any)),
             BorrowedAttributeValue::None => Self::None,
         }
     }

@@ -160,8 +160,8 @@ impl VirtualDom {
                 AttributeValue::Listener(l) => {
                     _ = l.take();
                 }
-                AttributeValue::Any(_) => {
-                    todo!()
+                AttributeValue::Any(a) => {
+                    _ = a.take();
                 }
                 _ => (),
             }

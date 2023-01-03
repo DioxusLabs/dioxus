@@ -5,7 +5,7 @@ use bumpalo::boxed::Box as BumpBox;
 use bumpalo::Bump;
 use std::{
     any::{Any, TypeId},
-    cell::{Cell, RefCell, UnsafeCell},
+    cell::{self, Cell, RefCell, UnsafeCell},
     fmt::{Arguments, Debug},
     future::Future,
 };
@@ -523,7 +523,7 @@ pub enum AttributeValue<'a> {
     Listener(RefCell<Option<ListenerCb<'a>>>),
 
     /// An arbitrary value that implements PartialEq and is static
-    Any(BumpBox<'a, dyn AnyValue>),
+    Any(RefCell<Option<BumpBox<'a, dyn AnyValue>>>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -557,7 +557,7 @@ pub enum BorrowedAttributeValue<'a> {
             serialize_with = "serialize_any_value"
         )
     )]
-    Any(&'a dyn AnyValue),
+    Any(std::cell::Ref<'a, dyn AnyValue>),
 
     /// A "none" value, resulting in the removal of an attribute from the dom
     None,
@@ -573,7 +573,12 @@ impl<'a> From<&'a AttributeValue<'a>> for BorrowedAttributeValue<'a> {
             AttributeValue::Listener(_) => {
                 panic!("A listener cannot be turned into a borrowed value")
             }
-            AttributeValue::Any(value) => BorrowedAttributeValue::Any(&**value),
+            AttributeValue::Any(value) => {
+                let value = value.borrow();
+                BorrowedAttributeValue::Any(std::cell::Ref::map(value, |value| {
+                    &**value.as_ref().unwrap()
+                }))
+            }
             AttributeValue::None => BorrowedAttributeValue::None,
         }
     }
@@ -606,7 +611,7 @@ impl PartialEq for BorrowedAttributeValue<'_> {
 }
 
 #[cfg(feature = "serialize")]
-fn serialize_any_value<S>(_: &&dyn AnyValue, _: S) -> Result<S::Ok, S::Error>
+fn serialize_any_value<S>(_: &cell::Ref<'_, dyn AnyValue>, _: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -614,7 +619,7 @@ where
 }
 
 #[cfg(feature = "serialize")]
-fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<&'a dyn AnyValue, D::Error>
+fn deserialize_any_value<'de, 'a, D>(_: D) -> Result<cell::Ref<'a, dyn AnyValue>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -643,7 +648,11 @@ impl<'a> PartialEq for AttributeValue<'a> {
             (Self::Int(l0), Self::Int(r0)) => l0 == r0,
             (Self::Bool(l0), Self::Bool(r0)) => l0 == r0,
             (Self::Listener(_), Self::Listener(_)) => true,
-            (Self::Any(l0), Self::Any(r0)) => l0.any_cmp(&**r0),
+            (Self::Any(l0), Self::Any(r0)) => {
+                let l0 = l0.borrow();
+                let r0 = r0.borrow();
+                l0.as_ref().unwrap().any_cmp(&**r0.as_ref().unwrap())
+            }
             _ => false,
         }
     }
@@ -835,6 +844,12 @@ pub trait IntoAttributeValue<'a> {
     fn into_value(self, bump: &'a Bump) -> AttributeValue<'a>;
 }
 
+impl<'a> IntoAttributeValue<'a> for AttributeValue<'a> {
+    fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
+        self
+    }
+}
+
 impl<'a> IntoAttributeValue<'a> for &'a str {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
         AttributeValue::Text(self)
@@ -870,6 +885,6 @@ impl<'a> IntoAttributeValue<'a> for Arguments<'_> {
 
 impl<'a> IntoAttributeValue<'a> for BumpBox<'a, dyn AnyValue> {
     fn into_value(self, _: &'a Bump) -> AttributeValue<'a> {
-        AttributeValue::Any(self)
+        AttributeValue::Any(RefCell::new(Some(self)))
     }
 }
