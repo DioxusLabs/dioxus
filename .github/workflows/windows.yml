@@ -64,18 +64,18 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-gnu' && matrix.channel == 'nightly'
         shell: bash
 
-      - name: checkout
-        uses: actions/checkout@v3
-        with:
-          path: C:/dioxus.git
-          fetch-depth: 1
+      # - name: checkout
+      #   uses: actions/checkout@v3
+      #   with:
+      #     path: C:/dioxus.git
+      #     fetch-depth: 1
 
       #  we need to use the C drive as the working directory
 
-      # - name: Checkout
-      #   run: |
-      #     mkdir C:/dioxus.git
-      #     git clone https://github.com/dioxuslabs/dioxus.git C:/dioxus.git --depth 1
+      - name: Checkout
+        run: |
+          mkdir C:/dioxus.git
+          git clone https://github.com/dioxuslabs/dioxus.git C:/dioxus.git --depth 1
 
       - name: test
         working-directory: C:/dioxus.git
