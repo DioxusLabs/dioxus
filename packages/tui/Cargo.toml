@@ -27,7 +27,7 @@ futures = "0.3.19"
 taffy = "0.2.1"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
-anymap = "0.12.1"
+anymap = "1.0.0-beta.2"
 futures-channel = "0.3.25"
 
 [dev-dependencies]

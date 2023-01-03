@@ -229,7 +229,7 @@ impl PersistantElementIter {
 #[derive(Default, Clone, Debug)]
 struct Empty {}
 impl State for Empty {
-    const PASSES: &'static [crate::AnyPass<crate::node::Node<Self>>] = &[];
+    const PASSES: &'static [crate::AnyPass<crate::node::Node<Self, ()>>] = &[];
 
     const MASKS: &'static [crate::NodeMask] = &[];
 }

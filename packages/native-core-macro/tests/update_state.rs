@@ -43,7 +43,6 @@ impl ParentDepState for ParentDepCallCounter {
     const NODE_MASK: NodeMask = NodeMask::ALL;
     fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         self.0 += 1;
-        println!("ParentDepCallCounter::reduce on {:?}\n{}", _node, self.0);
         true
     }
 }

@@ -393,7 +393,8 @@ impl<'a> StateMember<'a> {
 
         let ty = &self.mem.ty;
         let unit_type = &self.mem.unit_type;
-        let node_view = quote!(dioxus_native_core::node_ref::NodeView::new(unsafe{&*{&node.node_data as *const _}}, #ty::NODE_MASK));
+        let node_view =
+            quote!(dioxus_native_core::node_ref::NodeView::new(&node.node_data, #ty::NODE_MASK));
         let dep_idents = self.dep_mems.iter().map(|m| &m.ident);
         let impl_specific = match self.dep_kind {
             DependencyKind::Node => {
