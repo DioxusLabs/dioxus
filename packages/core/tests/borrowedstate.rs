@@ -18,7 +18,7 @@ fn test_borrowed_state() {
             ReplacePlaceholder { path: &[0,], m: 1 },
             AppendChildren { m: 1, id: ElementId(0) },
         ]
-    )
+    );
 }
 
 fn Parent(cx: Scope) -> Element {

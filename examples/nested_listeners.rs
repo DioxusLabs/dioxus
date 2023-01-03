@@ -16,18 +16,18 @@ fn app(cx: Scope) -> Element {
             onclick: move |_| println!("clicked! top"),
             "- div"
             button {
-                onclick: move |_| println!("clicked! bottom propoate"),
-                "Propogate"
+                onclick: move |_| println!("clicked! bottom propagate"),
+                "Propagate"
             }
             button {
                 onclick: move |evt| {
                     println!("clicked! bottom no bubbling");
-                    evt.stop_propogation();
+                    evt.stop_propagation();
                 },
-                "Dont propogate"
+                "Dont propagate"
             }
             button {
-                "Does not handle clicks - only propogate"
+                "Does not handle clicks - only propagate"
             }
         }
     })
