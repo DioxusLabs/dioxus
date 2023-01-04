@@ -79,10 +79,6 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
         if self.node_id_mapping.len() <= element_id.0 {
             self.node_id_mapping.resize(element_id.0 + 1, None);
         }
-        if let Some(Some(old_id)) = self.node_id_mapping.get(element_id.0) {
-            // free the memory associated with the old node
-            self.tree.remove(*old_id);
-        }
         self.node_id_mapping[element_id.0] = Some(node_id);
     }
 
