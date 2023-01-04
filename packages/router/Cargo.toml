@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-router"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2018"
 description = "Cross-platform router for Dioxus apps"
 license = "MIT/Apache-2.0"
@@ -11,7 +11,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus" }
+dioxus = { path = "../dioxus", version = "0.3.0"}
 futures-channel = "0.3.21"
 url = { version = "2.2.2", default-features = false }
 
@@ -50,7 +50,7 @@ log = "0.4.14"
 wasm-logger = "0.2.0"
 wasm-bindgen-test = "0.3"
 gloo-utils = "0.1.2"
-dioxus-web = { path = "../web" }
+dioxus-web = { path = "../web", version = "0.3.0" }
 # dioxus-desktop = { path = "../desktop", optional = true }
 
 # not wasm

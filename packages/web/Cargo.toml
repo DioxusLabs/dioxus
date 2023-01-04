@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-web"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus VirtualDOM renderer for the web browser using websys"
@@ -11,9 +11,9 @@ documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
-dioxus-html = { path = "../html", version = "^0.2.1", features = ["wasm-bind"] }
-dioxus-interpreter-js = { path = "../interpreter", version = "^0.2.1", features = [
+dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
+dioxus-html = { path = "../html", version = "^0.3.0", features = ["wasm-bind"] }
+dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0", features = [
     "sledgehammer"
 ] }
 
@@ -84,8 +84,8 @@ panic_hook = ["console_error_panic_hook"]
 hydrate = []
 
 [dev-dependencies]
-dioxus = { path = "../dioxus" }
+dioxus = { path = "../dioxus", version = "0.3.0" }
 wasm-bindgen-test = "0.3.29"
-dioxus-ssr = { path = "../ssr" }
+dioxus-ssr = { path = "../ssr", version = "0.3.0"}
 wasm-logger = "0.2.0"
 dioxus-web = { path = "." }
