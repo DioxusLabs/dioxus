@@ -59,9 +59,9 @@ impl Scheduler {
 
     /// Drop the future with the given TaskId
     ///
-    /// This does nto abort the task, so you'll want to wrap it in an aborthandle if that's important to you
+    /// This does not abort the task, so you'll want to wrap it in an aborthandle if that's important to you
     pub fn remove(&self, id: TaskId) {
-        self.tasks.borrow_mut().remove(id.0);
+        self.tasks.borrow_mut().try_remove(id.0);
     }
 }
 
