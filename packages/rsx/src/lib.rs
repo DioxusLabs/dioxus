@@ -431,8 +431,8 @@ impl<'a> DynamicContext<'a> {
                         let value = value.to_static().unwrap();
                         quote! {
                             ::dioxus::core::TemplateAttribute::Static {
-                                name: dioxus_elements::#el_name::#name.0,
-                                namespace: dioxus_elements::#el_name::#name.1,
+                                name: dioxus_elements::#el_name.#name().name,
+                                namespace: dioxus_elements::#el_name.#name().namespace,
                                 value: #value,
 
                                 // todo: we don't diff these so we never apply the volatile flag
@@ -481,8 +481,8 @@ impl<'a> DynamicContext<'a> {
 
                 quote! {
                     ::dioxus::core::TemplateNode::Element {
-                        tag: dioxus_elements::#el_name::TAG_NAME,
-                        namespace: dioxus_elements::#el_name::NAME_SPACE,
+                        tag: dioxus_elements::#el_name.tag,
+                        namespace: dioxus_elements::#el_name.namespace,
                         attrs: &[ #attrs ],
                         children: &[ #children ],
                     }

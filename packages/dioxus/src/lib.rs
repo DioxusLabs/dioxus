@@ -27,8 +27,5 @@ pub mod prelude {
     pub use dioxus_core_macro::{format_args_f, inline_props, render, rsx, Props};
 
     #[cfg(feature = "html")]
-    pub use dioxus_html as dioxus_elements;
-
-    #[cfg(feature = "html")]
-    pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
+    pub use dioxus_html::prelude::*;
 }

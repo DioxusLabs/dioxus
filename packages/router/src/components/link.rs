@@ -114,6 +114,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let active = path == cx.props.to;
     let active_class = if active { active_class_name } else { "".into() };
 
+    use dioxus::html::HtmlElements;
+
     cx.render(rsx! {
         a {
             href: "{to}",
@@ -122,30 +124,30 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
             title: format_args!("{}", title.unwrap_or("")),
             prevent_default: "{prevent_default}",
             target: format_args!("{}", if * new_tab { "_blank" } else { "" }),
-            onclick: move |evt| {
-                log::trace!("Clicked link to {}", to);
+            // onclick: move |evt| {
+            //     log::trace!("Clicked link to {}", to);
 
-                if !outerlink {
-                    if let Some(service) = svc {
-                        log::trace!("Pushing route to {}", to);
-                        service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
+            //     if !outerlink {
+            //         if let Some(service) = svc {
+            //             log::trace!("Pushing route to {}", to);
+            //             service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
 
-                        #[cfg(feature = "web")]
-                        {
-                            web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
-                        }
-                    } else {
-                        log::error!(
-                            "Attempted to create a Link to {} outside of a Router context", cx.props
-                            .to,
-                        );
-                    }
-                }
+            //             #[cfg(feature = "web")]
+            //             {
+            //                 web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
+            //             }
+            //         } else {
+            //             log::error!(
+            //                 "Attempted to create a Link to {} outside of a Router context", cx.props
+            //                 .to,
+            //             );
+            //         }
+            //     }
 
-                if let Some(onclick) = cx.props.onclick.as_ref() {
-                    onclick.call(evt);
-                }
-            },
+            //     if let Some(onclick) = cx.props.onclick.as_ref() {
+            //         onclick.call(evt);
+            //     }
+            // },
             children
         }
     })

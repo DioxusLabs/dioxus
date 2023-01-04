@@ -1,6 +1,6 @@
 //
 
-use dioxus::core::{AttributeDescription, CustomElement};
+use dioxus::core::AttributeDescription;
 use std::marker::PhantomData;
 
 fn main() {
@@ -8,6 +8,15 @@ fn main() {
 }
 
 struct HtmlNamespace;
+
+/// The raw definition of an element
+///
+/// This should be compiled away
+pub struct CustomElement<N, E = ()> {
+    pub tag: &'static str,
+    pub namespace: Option<&'static str>,
+    _t: PhantomData<(N, E)>,
+}
 
 type HtmlElement<T = ()> = CustomElement<HtmlNamespace, T>;
 
@@ -17,7 +26,6 @@ impl HtmlElement<link> {
         AttributeDescription {
             name: "crossorigin",
             namespace: None,
-            is_boolean: false,
         }
     }
 
@@ -25,7 +33,6 @@ impl HtmlElement<link> {
         AttributeDescription {
             name: "href",
             namespace: None,
-            is_boolean: false,
         }
     }
 
@@ -33,7 +40,6 @@ impl HtmlElement<link> {
         AttributeDescription {
             name: "hreflang",
             namespace: None,
-            is_boolean: false,
         }
     }
 
@@ -41,7 +47,6 @@ impl HtmlElement<link> {
         AttributeDescription {
             name: "integrity",
             namespace: None,
-            is_boolean: false,
         }
     }
 }

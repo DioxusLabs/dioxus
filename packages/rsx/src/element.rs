@@ -244,7 +244,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrText { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        dioxus_elements::#el_name.#name().name,
                         #value,
                         None,
                         false
@@ -254,7 +254,7 @@ impl ToTokens for ElementAttrNamed {
             ElementAttr::AttrExpression { name, value } => {
                 quote! {
                     __cx.attr(
-                        dioxus_elements::#el_name::#name.0,
+                        dioxus_elements::#el_name.#name().name,
                         #value,
                         None,
                         false

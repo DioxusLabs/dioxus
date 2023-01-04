@@ -91,14 +91,14 @@ pub(crate) fn Slider<'a>(cx: Scope<'a, SliderProps>) -> Element<'a> {
                     update(value_state.current().to_string());
                 }
             },
-            div{
+            div {
                 width: "{fst_width}%",
                 background_color: "rgba(10,10,10,0.5)",
             }
-            div{
+            div {
                 "|"
             }
-            div{
+            div {
                 width: "{snd_width}%",
                 background_color: "rgba(10,10,10,0.5)",
             }

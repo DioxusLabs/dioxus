@@ -18,7 +18,7 @@ mod elements;
 pub use elements::HtmlCtx;
 pub mod events;
 pub mod geometry;
-mod global_attributes;
+// mod global_attributes;
 pub mod input_data;
 mod render_template;
 #[cfg(feature = "wasm-bind")]
@@ -32,9 +32,10 @@ pub use transit::*;
 
 pub use elements::*;
 pub use events::*;
-pub use global_attributes::*;
+// pub use global_attributes::*;
 pub use render_template::*;
 
 pub mod prelude {
+    pub use crate::elements::HtmlElements;
     pub use crate::events::*;
 }

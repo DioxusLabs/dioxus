@@ -19,6 +19,7 @@ members = [
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-rosetta",
+    "packages/custom-elements",
     "docs/guide",
 ]
 
