@@ -1,7 +1,7 @@
 [package]
 name = "dioxus"
-version = "0.3.0"
-authors = ["Jonathan Kelley"]
+version = "0.3.1"
+authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
