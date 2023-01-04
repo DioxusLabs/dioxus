@@ -1117,8 +1117,8 @@ builder_constructors! {
         /// - `time`
         /// - `url`
         /// - `week`
-
         r#type: InputType "type",
+
         // value: String,
         value: String volatile,
     };

@@ -88,11 +88,11 @@ trait_methods! {
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/accesskey>
-    accesskey: "accesskey";
+    accesskey;
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autocapitalize>
-    autocapitalize: "autocapitalize";
+    autocapitalize;
 
 
     /// <https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/autofocus>
@@ -2343,5 +2343,4 @@ trait_methods! {
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
     zoomAndPan: "zoomAndPan";
-
 }

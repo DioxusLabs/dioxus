@@ -5,6 +5,7 @@ mod any_props;
 mod arena;
 mod bump_frame;
 mod create;
+mod custom_elements;
 mod diff;
 mod dirty_scope;
 mod error_boundary;
@@ -21,6 +22,7 @@ mod virtual_dom;
 
 pub(crate) mod innerlude {
     pub use crate::arena::*;
+    pub use crate::custom_elements::*;
     pub use crate::dirty_scope::*;
     pub use crate::error_boundary::*;
     pub use crate::events::*;
@@ -70,10 +72,11 @@ pub(crate) mod innerlude {
 }
 
 pub use crate::innerlude::{
-    fc_to_builder, AnyValue, Attribute, AttributeValue, BorrowedAttributeValue, CapturedError,
-    Component, DynamicNode, Element, ElementId, Event, Fragment, IntoDynNode, LazyNodes, Mutation,
-    Mutations, Properties, RenderReturn, Scope, ScopeId, ScopeState, Scoped, SuspenseContext,
-    TaskId, Template, TemplateAttribute, TemplateNode, VComponent, VNode, VText, VirtualDom,
+    fc_to_builder, AnyValue, Attribute, AttributeDescription, AttributeValue,
+    BorrowedAttributeValue, CapturedError, Component, CustomElement, DynamicNode, Element,
+    ElementId, Event, Fragment, IntoDynNode, LazyNodes, Mutation, Mutations, Properties,
+    RenderReturn, Scope, ScopeId, ScopeState, Scoped, SuspenseContext, TaskId, Template,
+    TemplateAttribute, TemplateNode, VComponent, VNode, VText, VirtualDom,
 };
 
 /// The purpose of this module is to alleviate imports of many common types

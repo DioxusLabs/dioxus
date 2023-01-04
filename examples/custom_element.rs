@@ -3,38 +3,166 @@
 //! Oftentimes, a third party library will provide a webcomponent that you want
 //! to use in your application. This example shows how to create that custom element
 //! directly with the raw_element method on NodeFactory.
+#![allow(non_upper_case_globals, non_snake_case, non_camel_case_types)]
 
-use dioxus::prelude::*;
+use std::marker::PhantomData;
 
-fn main() {
-    let mut dom = VirtualDom::new(app);
-    let _ = dom.rebuild();
+// use dioxus::prelude::*;
+use dioxus::core::{Element, Scope, ScopeState, VirtualDom};
 
-    let output = dioxus_ssr::render(&dom);
+fn main() {}
 
-    println!("{}", output);
-}
+// pub struct StringlyAttr {
+//     name: &'static str,
+//     namespace: Option<&'static str>,
+//     is_boolean: bool,
+// }
 
-fn app(cx: Scope) -> Element {
-    let g = cx.component(component, (), "component");
-    let c = cx.make_node(g);
-    cx.render(rsx! {
-        div { c }
-    })
+// impl StringlyAttr {
+//     pub const fn new(
+//         name: &'static str,
+//         namespace: Option<&'static str>,
+//         is_boolean: bool,
+//     ) -> Self {
+//         Self {
+//             name,
+//             namespace,
+//             is_boolean,
+//         }
+//     }
+// }
 
-    // let nf = NodeFactory::new(cx);
+// pub trait AttributeTransform {}
+// impl AttributeTransform for () {}
 
-    // let mut attrs = dioxus::core::exports::bumpalo::collections::Vec::new_in(nf.bump());
+// macro_rules! custom_elements {
+//     (
+//         // doc comment
+//         $( #[doc = $doc:expr] )*
+//         $trait_def:ident;
 
-    // attrs.push(nf.attr("client-id", format_args!("abc123"), None, false));
+//         $(
+//             $element:ident {
+//                 $(
+//                     $attr:ident: $attr_type:ty,
+//                 )*
+//             },
+//         )*
+//     ) => {
+//         $( #[doc = $doc:expr] )*
+//         pub trait $trait_def {
+//             $(
+//                 const $element: elements::$element = elements::$element;
+//             )*
+//         }
 
-    // attrs.push(nf.attr("name", format_args!("bob"), None, false));
+//         mod elements {
+//             use super::*;
+//             $(
+//                 pub struct $element;
 
-    // attrs.push(nf.attr("age", format_args!("47"), None, false));
+//                 impl $element {
+//                     pub const fn name(&self) -> &'static str {
+//                         stringify!($element)
+//                     }
 
-    // Some(nf.raw_element("my-element", None, &[], attrs.into_bump_slice(), &[], None))
-}
+//                     pub const fn namespace(&self) -> Option<&'static str> {
+//                         None
+//                     }
 
-fn component(cx: Scope) -> Element {
-    todo!()
-}
+//                     pub const fn volatile(&self) -> bool {
+//                         false
+//                     }
+
+//                     $(
+//                         pub const fn $attr(&self) -> $attr_type {
+//                             todo!()
+//                             // $attr_type::new(stringify!($attr), None, false)
+//                         }
+//                     )*
+//                 }
+//             )*
+//         }
+//     };
+// }
+
+// impl HtmlElements for ScopeState {}
+
+// custom_elements! {
+//     HtmlElements;
+
+//     // link {
+//     //     crossorigin: StringlyAttr,
+//     //     href: StringlyAttr,
+//     //     hreflang: StringlyAttr,
+//     //     integrity: StringlyAttr,
+//     // },
+// }
+
+// struct RawElement<N, E = ()> {
+//     tag: &'static str,
+//     namespace: Option<&'static str>,
+//     volatile: bool,
+//     _t: PhantomData<(N, E)>,
+// }
+
+// struct HtmlNamespace;
+// type HtmlElement<T = ()> = RawElement<HtmlNamespace, T>;
+
+// impl<N, E> RawElement<N, E> {
+//     const fn new(tag: &'static str, namespace: Option<&'static str>, volatile: bool) -> Self {
+//         Self {
+//             tag,
+//             namespace,
+//             volatile,
+//             _t: PhantomData,
+//         }
+//     }
+// }
+
+// impl<T> HtmlElement<T> {
+//     const fn class(&self) -> StringlyAttr {
+//         StringlyAttr::new("class", None, false)
+//     }
+
+//     const fn name(&self) -> &'static str {
+//         self.tag
+//     }
+// }
+
+// struct link;
+// impl RawElement<link> {
+//     const fn div_id(&self) -> StringlyAttr {
+//         StringlyAttr::new("id", None, false)
+//     }
+// }
+
+// fn component(cx: Scope) -> Element {
+//     // ScopeState::link.name();
+//     // ScopeState::link.namespace();
+//     // ScopeState::link.crossorigin();
+
+//     todo!()
+// }
+
+// impl CustomElements for ScopeState {}
+// trait CustomElements {
+//     const div: HtmlElement = HtmlElement::new("div", None, false);
+//     const link: HtmlElement<link> = HtmlElement::new("link", None, false);
+// }
+
+// use dioxus::core::{TemplateAttribute, TemplateNode};
+
+// static TEMPLATE_EL: TemplateNode = TemplateNode::Element {
+//     tag: ScopeState::link.tag,
+//     namespace: ScopeState::link.namespace,
+//     attrs: &[
+//         TemplateAttribute::Static {
+//             name: ScopeState::link.class().name,
+//             namespace: ScopeState::link.class().namespace,
+//             value: "asd",
+//         },
+//         TemplateAttribute::Dynamic { id: 0 },
+//     ],
+//     children: &[],
+// };

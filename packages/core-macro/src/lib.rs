@@ -79,3 +79,19 @@ pub fn inline_props(_args: proc_macro::TokenStream, s: TokenStream) -> TokenStre
         Ok(s) => s.to_token_stream().into(),
     }
 }
+
+/// Declare a new namespace of custom elements
+///
+/// #[custom_elements]
+/// pub trait HtmlElements {
+///     const div: Description
+/// }
+///
+#[proc_macro]
+pub fn custom_elements(s: TokenStream) -> TokenStream {
+    todo!()
+    // match syn::parse::<rsx::CallBody>(s) {
+    //     Err(err) => err.to_compile_error().into(),
+    //     Ok(body) => RenderCallBody(body).into_token_stream().into(),
+    // }
+}
