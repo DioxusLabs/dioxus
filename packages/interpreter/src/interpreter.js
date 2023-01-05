@@ -144,8 +144,15 @@ class Interpreter {
     this.nodes[root].textContent = text;
   }
   SetAttribute(id, field, value, ns) {
-    const node = this.nodes[id];
-    this.SetAttributeInner(node, field, value, ns);
+    console.log("set attribute", id, field, value, ns);
+
+    if (value === null) {
+      this.RemoveAttribute(id, field, ns);
+    }
+    else {
+      const node = this.nodes[id];
+      this.SetAttributeInner(node, field, value, ns);
+    }
   }
   SetAttributeInner(node, field, value, ns) {
     const name = field;
@@ -332,9 +339,6 @@ class Interpreter {
         this.SetText(edit.id, edit.value);
         break;
       case "SetAttribute":
-        this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
-        break;
-      case "SetBoolAttribute":
         this.SetAttribute(edit.id, edit.name, edit.value, edit.ns);
         break;
       case "RemoveAttribute":

@@ -160,7 +160,9 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                         align::ContentDistribution::SpaceEvenly => SpaceEvenly,
                         align::ContentDistribution::Stretch => Stretch,
                     },
-                    align::AlignContent::ContentPosition(_, position) => match position {
+                    align::AlignContent::ContentPosition {
+                        value: position, ..
+                    } => match position {
                         align::ContentPosition::Center => Center,
                         align::ContentPosition::Start | align::ContentPosition::FlexStart => {
                             FlexStart
@@ -181,7 +183,9 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                             _ => return,
                         }
                     }
-                    align::JustifyContent::ContentPosition(_, position) => match position {
+                    align::JustifyContent::ContentPosition {
+                        value: position, ..
+                    } => match position {
                         align::ContentPosition::Center => Center,
                         // start ignores -reverse flex-direction but there is no way to specify that in Taffy
                         align::ContentPosition::Start | align::ContentPosition::FlexStart => {
@@ -199,7 +203,9 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                     align::AlignSelf::Auto => Auto,
                     align::AlignSelf::Stretch => Stretch,
                     align::AlignSelf::BaselinePosition(_) => Baseline,
-                    align::AlignSelf::SelfPosition(_overflow, position) => match position {
+                    align::AlignSelf::SelfPosition {
+                        value: position, ..
+                    } => match position {
                         align::SelfPosition::Center => Center,
                         align::SelfPosition::Start
                         | align::SelfPosition::SelfStart
@@ -216,7 +222,9 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                 style.align_items = match align {
                     align::AlignItems::BaselinePosition(_) => Baseline,
                     align::AlignItems::Stretch => Stretch,
-                    align::AlignItems::SelfPosition(_overflow, position) => match position {
+                    align::AlignItems::SelfPosition {
+                        value: position, ..
+                    } => match position {
                         align::SelfPosition::Center => Center,
                         align::SelfPosition::FlexStart => FlexStart,
                         align::SelfPosition::FlexEnd => FlexEnd,

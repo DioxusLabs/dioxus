@@ -19,6 +19,7 @@ members = [
     "packages/native-core",
     "packages/native-core-macro",
     "packages/rsx-rosetta",
+    "packages/signals",
     "docs/guide",
 ]
 
@@ -43,6 +44,7 @@ dioxus = { path = "./packages/dioxus" }
 dioxus-desktop = { path = "./packages/desktop", features = ["transparent"] }
 dioxus-ssr = { path = "./packages/ssr" }
 dioxus-router = { path = "./packages/router" }
+dioxus-signals = { path = "./packages/signals" }
 fermi = { path = "./packages/fermi" }
 futures-util = "0.3.21"
 log = "0.4.14"

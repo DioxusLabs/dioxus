@@ -34,7 +34,7 @@ impl VirtualDom {
             self.scopes[task.scope.0].spawned_tasks.remove(&id);
 
             // Remove it from the scheduler
-            tasks.remove(id.0);
+            tasks.try_remove(id.0);
         }
     }
 

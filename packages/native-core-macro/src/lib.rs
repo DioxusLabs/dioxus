@@ -124,6 +124,17 @@ enum DependencyKind {
 /// # The state attribute
 /// The state macro declares a member that implements the State trait. This allows you to organize your state into multiple isolated components.
 /// Unlike the other attributes, the state attribute does not accept any arguments, because a nested state cannot depend on any other part of the state.
+///
+/// # Custom values
+///
+/// If your state has a custom value type you can specify it with the state attribute.
+///
+/// ```rust, ignore
+/// #[derive(State)]
+/// #[state(custom_value = MyCustomType)]
+/// struct MyStruct {
+///     // ...
+/// }
 #[proc_macro_derive(
     State,
     attributes(node_dep_state, child_dep_state, parent_dep_state, state)
@@ -134,6 +145,33 @@ pub fn state_macro_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let custom_type = ast
+        .attrs
+        .iter()
+        .find(|a| a.path.is_ident("state"))
+        .and_then(|attr| {
+            // parse custom_type = "MyType"
+            let assignment = attr.parse_args::<syn::Expr>().unwrap();
+            if let syn::Expr::Assign(assign) = assignment {
+                let (left, right) = (&*assign.left, &*assign.right);
+                if let syn::Expr::Path(e) = left {
+                    let path = &e.path;
+                    if let Some(ident) = path.get_ident() {
+                        if ident == "custom_value" {
+                            return match right {
+                                syn::Expr::Path(e) => {
+                                    let path = &e.path;
+                                    Some(quote! {#path})
+                                }
+                                _ => None,
+                            };
+                        }
+                    }
+                }
+            }
+            None
+        })
+        .unwrap_or(quote! {()});
     let type_name = &ast.ident;
     let fields: Vec<_> = match &ast.data {
         syn::Data::Struct(data) => match &data.fields {
@@ -162,12 +200,12 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
             let impl_members = state_strct
                 .state_members
                 .iter()
-                .map(|m| m.impl_pass(state_strct.ty));
+                .map(|m| m.impl_pass(state_strct.ty, &custom_type));
 
             let gen = quote! {
                 #(#impl_members)*
-                impl State for #type_name {
-                    const PASSES: &'static [dioxus_native_core::AnyPass<dioxus_native_core::node::Node<Self>>] = &[
+                impl State<#custom_type> for #type_name {
+                    const PASSES: &'static [dioxus_native_core::AnyPass<dioxus_native_core::node::Node<Self, #custom_type>>] = &[
                         #(#passes),*
                     ];
                     const MASKS: &'static [dioxus_native_core::NodeMask] = &[#(#member_types::NODE_MASK),*];
@@ -378,7 +416,11 @@ impl<'a> StateMember<'a> {
     }
 
     /// generate code to call the resolve function for the state. This does not handle checking if resolving the state is necessary, or marking the states that depend on this state as dirty.
-    fn impl_pass(&self, parent_type: &Ident) -> quote::__private::TokenStream {
+    fn impl_pass(
+        &self,
+        parent_type: &Ident,
+        custom_type: impl ToTokens,
+    ) -> quote::__private::TokenStream {
         let ident = &self.mem.ident;
         let get_ctx = if let Some(ctx_ty) = &self.ctx_ty {
             if ctx_ty == &parse_quote!(()) {
@@ -399,8 +441,8 @@ impl<'a> StateMember<'a> {
         let impl_specific = match self.dep_kind {
             DependencyKind::Node => {
                 quote! {
-                    impl dioxus_native_core::NodePass<dioxus_native_core::node::Node<#parent_type>> for #unit_type {
-                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type>, ctx: &dioxus_native_core::SendAnyMap) -> bool {
+                    impl dioxus_native_core::NodePass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type {
+                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>, ctx: &dioxus_native_core::SendAnyMap) -> bool {
                             node.state.#ident.reduce(#node_view, (#(&node.state.#dep_idents,)*), #get_ctx)
                         }
                     }
@@ -437,11 +479,11 @@ impl<'a> StateMember<'a> {
                     }
                 };
                 quote!(
-                    impl dioxus_native_core::UpwardPass<dioxus_native_core::node::Node<#parent_type>> for #unit_type{
+                    impl dioxus_native_core::UpwardPass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type{
                         fn pass<'a>(
                             &self,
-                            node: &mut dioxus_native_core::node::Node<#parent_type>,
-                            children: &mut dyn Iterator<Item = &'a mut dioxus_native_core::node::Node<#parent_type>>,
+                            node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>,
+                            children: &mut dyn Iterator<Item = &'a mut dioxus_native_core::node::Node<#parent_type, #custom_type>>,
                             ctx: &dioxus_native_core::SendAnyMap,
                         ) -> dioxus_native_core::PassReturn {
                             let update = node.state.#ident.reduce(#node_view, children.map(|c| (#(&c.state.#dep_idents,)*)), #get_ctx);
@@ -481,8 +523,8 @@ impl<'a> StateMember<'a> {
                     }
                 };
                 quote!(
-                    impl dioxus_native_core::DownwardPass<dioxus_native_core::node::Node<#parent_type>> for #unit_type {
-                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type>, parent: Option<&mut dioxus_native_core::node::Node<#parent_type>>, ctx: &dioxus_native_core::SendAnyMap) -> dioxus_native_core::PassReturn{
+                    impl dioxus_native_core::DownwardPass<dioxus_native_core::node::Node<#parent_type, #custom_type>> for #unit_type {
+                        fn pass(&self, node: &mut dioxus_native_core::node::Node<#parent_type, #custom_type>, parent: Option<&mut dioxus_native_core::node::Node<#parent_type, #custom_type>>, ctx: &dioxus_native_core::SendAnyMap) -> dioxus_native_core::PassReturn{
                             let update = node.state.#ident.reduce(#node_view, parent.as_ref().map(|p| (#(&p.state.#dep_idents,)*)), #get_ctx);
                             #update
                         }

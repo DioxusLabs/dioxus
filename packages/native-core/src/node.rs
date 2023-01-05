@@ -5,7 +5,7 @@ use std::fmt::Debug;
 
 /// The node is stored client side and stores only basic data about the node.
 #[derive(Debug, Clone)]
-pub struct Node<S: State, V: FromAnyValue = ()> {
+pub struct Node<S: State<V>, V: FromAnyValue + 'static = ()> {
     /// The transformed state of the node.
     pub state: S,
     /// The raw data for the node
@@ -37,7 +37,7 @@ pub enum NodeType<V: FromAnyValue = ()> {
     Placeholder,
 }
 
-impl<S: State, V: FromAnyValue> Node<S, V> {
+impl<S: State<V>, V: FromAnyValue> Node<S, V> {
     pub(crate) fn new(node_type: NodeType<V>) -> Self {
         Node {
             state: S::default(),
@@ -80,10 +80,9 @@ pub enum OwnedAttributeValue<V: FromAnyValue = ()> {
     Int(i64),
     Bool(bool),
     Custom(V),
-    None,
 }
 
-pub trait FromAnyValue {
+pub trait FromAnyValue: Clone {
     fn from_any_value(value: &dyn AnyValue) -> Self;
 }
 
@@ -99,7 +98,6 @@ impl<V: FromAnyValue> Debug for OwnedAttributeValue<V> {
             Self::Int(arg0) => f.debug_tuple("Int").field(arg0).finish(),
             Self::Bool(arg0) => f.debug_tuple("Bool").field(arg0).finish(),
             Self::Custom(_) => f.debug_tuple("Any").finish(),
-            Self::None => write!(f, "None"),
         }
     }
 }
@@ -112,7 +110,7 @@ impl<V: FromAnyValue> From<BorrowedAttributeValue<'_>> for OwnedAttributeValue<V
             BorrowedAttributeValue::Int(int) => Self::Int(int),
             BorrowedAttributeValue::Bool(bool) => Self::Bool(bool),
             BorrowedAttributeValue::Any(any) => Self::Custom(V::from_any_value(&*any)),
-            BorrowedAttributeValue::None => Self::None,
+            BorrowedAttributeValue::None => panic!("None attribute values result in removing the attribute, not converting it to a None value.")
         }
     }
 }
@@ -142,13 +140,6 @@ impl<V: FromAnyValue> OwnedAttributeValue<V> {
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             OwnedAttributeValue::Bool(bool) => Some(*bool),
-            _ => None,
-        }
-    }
-
-    pub fn as_none(&self) -> Option<()> {
-        match self {
-            OwnedAttributeValue::None => Some(()),
             _ => None,
         }
     }
