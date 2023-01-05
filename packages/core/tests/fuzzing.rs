@@ -216,8 +216,6 @@ fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
     cx.needs_update();
     match rand::random::<usize>() % 3 {
         0 | 1 => {
-            // This is dynamicly created every render to trigger the pointer equality check on the template path
-            //  In the future this check should be changed to something more obvious
             let template = create_random_template(Box::leak(
                 format!(
                     "{}{}",
