@@ -41,6 +41,7 @@ serde = { version = "1", features = ["derive"], optional = true }
 tokio = { version = "1", features = ["full"] }
 dioxus = { path = "../dioxus" }
 pretty_assertions = "1.3.0"
+rand = "0.8.5"
 
 [features]
 default = []
