@@ -1,9 +1,9 @@
-use crate::{use_route, RouterContext};
+use crate::{use_route, Routable, RouterContext};
 use dioxus::prelude::*;
 
 /// Props for the [`Link`](struct.Link.html) component.
 #[derive(Props)]
-pub struct LinkProps<'a> {
+pub struct LinkProps<'a, T: Routable = &'a str> {
     /// The route to link to. This can be a relative path, or a full URL.
     ///
     /// ```rust, ignore
@@ -13,7 +13,7 @@ pub struct LinkProps<'a> {
     /// // Relative path
     /// Link { to: "../", "Go Up" }
     /// ```
-    pub to: &'a str,
+    pub to: T,
 
     /// Set the class of the inner link ['a'](https://www.w3schools.com/tags/tag_a.asp) element.
     ///
@@ -77,7 +77,7 @@ pub struct LinkProps<'a> {
 ///     })
 /// }
 /// ```
-pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
+pub fn Link<'a, T: Routable>(cx: Scope<'a, LinkProps<'a, T>>) -> Element {
     let svc = use_context::<RouterContext>(cx);
 
     let LinkProps {
@@ -93,7 +93,8 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
         ..
     } = cx.props;
 
-    let is_http = to.starts_with("http") || to.starts_with("https");
+    let is_http = false;
+    // let is_http = to.starts_with("http") || to.starts_with("https");
     let outerlink = (*autodetect && is_http) || *external;
     let prevent_default = if outerlink { "" } else { "onclick" };
 
@@ -111,36 +112,39 @@ pub fn Link<'a>(cx: Scope<'a, LinkProps<'a>>) -> Element {
     let route = use_route(cx);
     let url = route.url();
     let path = url.path();
-    let active = path == cx.props.to;
+    let active = false;
+    // let active = path == cx.props.to;
     let active_class = if active { active_class_name } else { "".into() };
 
     cx.render(rsx! {
         a {
-            href: "{to}",
+            // href: "{to}",
             class: format_args!("{} {}", class.unwrap_or(""), active_class),
             id: format_args!("{}", id.unwrap_or("")),
             title: format_args!("{}", title.unwrap_or("")),
             prevent_default: "{prevent_default}",
             target: format_args!("{}", if * new_tab { "_blank" } else { "" }),
             onclick: move |evt| {
-                log::trace!("Clicked link to {}", to);
+                // log::trace!("Clicked link to {}", to);
 
-                if !outerlink {
-                    if let Some(service) = svc {
-                        log::trace!("Pushing route to {}", to);
-                        service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
+                // if !outerlink {
+                //     if let Some(service) = svc {
+                //         log::trace!("Pushing route to {}", to);
+                //         // service.push_route(to, cx.props.title.map(|f| f.to_string()), None);
 
-                        #[cfg(feature = "web")]
-                        {
-                            web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
-                        }
-                    } else {
-                        log::error!(
-                            "Attempted to create a Link to {} outside of a Router context", cx.props
-                            .to,
-                        );
-                    }
-                }
+                //         todo!();
+
+                //         #[cfg(feature = "web")]
+                //         {
+                //             web_sys::window().unwrap().scroll_to_with_x_and_y(0.0, 0.0);
+                //         }
+                //     } else {
+                //         log::error!(
+                //             "Attempted to create a Link to {} outside of a Router context", cx.props
+                //             .to,
+                //         );
+                //     }
+                // }
 
                 if let Some(onclick) = cx.props.onclick.as_ref() {
                     onclick.call(evt);

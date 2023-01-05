@@ -1,6 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
 
+pub use dioxus::core_macro::Routable;
+
 mod hooks {
     mod use_route;
     mod use_router;
@@ -13,15 +15,21 @@ mod components {
     #![allow(non_snake_case)]
 
     mod link;
+    mod outlet;
     mod redirect;
     mod route;
     mod router;
 
     pub use link::*;
+    pub use outlet::*;
     pub use redirect::*;
     pub use route::*;
     pub use router::*;
 }
+
+mod routable_trait;
+pub use routable_trait::*;
+
 pub use components::*;
 
 mod cfg;
