@@ -556,7 +556,7 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.borrow_mut();
+        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hook_list.len() {
             hook_list.push(self.hook_arena.alloc(initializer()));
