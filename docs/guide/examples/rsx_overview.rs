@@ -144,13 +144,13 @@ cx.render(rsx!{
         for i in 0..3 {
             // NOTE: the body of the loop is RSX not a rust statement
             div {
-                i
+                "{i}"
             }
         }
     }
     // iterator equivalent
     div {
-        (0..3).map(|i| rsx!{ div { i } })
+        (0..3).map(|i| rsx!{ div { "{i}" } })
     }
 })
     // ANCHOR_END: loops
