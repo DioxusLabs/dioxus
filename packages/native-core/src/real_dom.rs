@@ -227,7 +227,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                         self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    self.tree.remove(old_node_id);
+                    self.remove(old_node_id, &mut nodes_updated);
                 }
                 ReplacePlaceholder { path, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -236,7 +236,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                         self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    self.tree.remove(old_node_id);
+                    self.remove(old_node_id, &mut nodes_updated);
                 }
                 InsertAfter { id, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -326,7 +326,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                 }
                 Remove { id } => {
                     let node_id = self.element_to_node_id(id);
-                    self.tree.remove(node_id);
+                    self.remove(node_id, &mut nodes_updated);
                 }
                 PushRoot { id } => {
                     let node_id = self.element_to_node_id(id);
@@ -405,6 +405,23 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
             }
         }
         new_id
+    }
+
+    fn remove(&mut self, node_id: NodeId, nodes_updated: &mut FxHashMap<RealNodeId, NodeMask>) {
+        let node = self.tree.get(node_id).unwrap();
+        if let NodeType::Element { listeners, .. } = &node.node_data.node_type {
+            for name in listeners.iter() {
+                self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
+            }
+        }
+        if let Some(children) = self.tree.children_ids(node_id) {
+            let children = children.to_vec();
+            for child in children {
+                self.remove(child, nodes_updated);
+            }
+        }
+        self.tree.remove(node_id);
+        mark_dirty(node_id, NodeMask::ALL, nodes_updated);
     }
 }
 
