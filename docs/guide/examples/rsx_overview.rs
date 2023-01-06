@@ -160,9 +160,9 @@ cx.render(rsx!{
 pub fn IfStatements(cx: Scope) -> Element {
     // ANCHOR: ifstatements
 cx.render(rsx!{
-    // use if statements where the body itself is RSX
+    // use if statements without an else
     if true {
-        div { "true" }
+        rsx!(div { "true" })
     }
 })
     // ANCHOR_END: ifstatements
