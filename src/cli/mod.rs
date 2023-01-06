@@ -78,7 +78,7 @@ impl Commands {
         match self {
             Commands::Build(_) => "build",
             Commands::Translate(_) => "translate",
-            Commands::Serve(_) => "sevre",
+            Commands::Serve(_) => "serve",
             Commands::Create(_) => "create",
             Commands::Clean(_) => "clean",
             Commands::Config(_) => "config",

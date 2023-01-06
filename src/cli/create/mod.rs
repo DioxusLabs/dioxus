@@ -16,7 +16,7 @@ pub struct Create {
 
 impl Create {
     pub fn create(self) -> Result<()> {
-        if Self::name_vaild_check(self.name.clone()) {
+        if Self::name_valid_check(self.name.clone()) {
             return custom_error!("❗Unsupported project name.");
         }
 
@@ -77,7 +77,7 @@ impl Create {
         Ok(())
     }
 
-    fn name_vaild_check(name: String) -> bool {
+    fn name_valid_check(name: String) -> bool {
         let r = Regex::new(r"^[a-zA-Z][a-zA-Z0-9\-_]$").unwrap();
         r.is_match(&name)
     }
