@@ -819,7 +819,6 @@ impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
 }
 
 // Note that we're using the E as a generic but this is never crafted anyways.
-#[doc(hidden)]
 pub struct FromNodeIterator;
 impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
 where

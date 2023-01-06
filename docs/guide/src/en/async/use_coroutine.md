@@ -1,12 +1,12 @@
 # Coroutines
 
-Another good tool to keep in your async toolbox are coroutines. Coroutines are futures that can be manually stopped, started, paused, and resumed.
+Another tool in your async toolbox are coroutines. Coroutines are futures that can be manually stopped, started, paused, and resumed.
 
-Like regular futures, code in a Dioxus coroutine will run until the next `await` point before yielding. This low-level control over asynchronous tasks is quite powerful, allowing for infinitely looping tasks like WebSocket polling, background timers, and other periodic actions.
+Like regular futures, code in a coroutine will run until the next `await` point before yielding. This low-level control over asynchronous tasks is quite powerful, allowing for infinitely looping tasks like WebSocket polling, background timers, and other periodic actions.
 
 ## `use_coroutine`
 
-The basic setup for coroutines is the `use_coroutine` hook. Most coroutines we write will be polling loops using async/await.
+The `use_coroutine` hook allows you to create a coroutine. Most coroutines we write will be polling loops using async/await.
 
 ```rust
 fn app(cx: Scope) -> Element {
@@ -50,11 +50,45 @@ if sync.is_running() {
 
 This pattern is where coroutines are extremely useful – instead of writing all the complicated logic for pausing our async tasks like we would with JavaScript promises, the Rust model allows us to just not poll our future.
 
+## Yielding Values
+
+To yield values from a coroutine, simply bring in a `UseState` handle and set the value whenever your coroutine completes its work.
+
+The future must be `'static` – so any values captured by the task cannot carry any references to `cx`, such as a `UseState`.
+
+You can use [to_owned](https://doc.rust-lang.org/std/borrow/trait.ToOwned.html#tymethod.to_owned) to create a clone of the hook handle which can be moved into the async closure.
+
+```rust
+let sync_status = use_state(cx, || Status::Launching);
+let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
+    let sync_status = sync_status.to_owned();
+    async move {
+        loop {
+            delay_ms(1000).await;
+            sync_status.set(Status::Working);
+        }
+    }
+})
+```
+
+To make this a bit less verbose, Dioxus exports the `to_owned!` macro which will create a binding as shown above, which can be quite helpful when dealing with many values.
+
+```rust
+let sync_status = use_state(cx, || Status::Launching);
+let load_status = use_state(cx, || Status::Launching);
+let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
+    to_owned![sync_status, load_status];
+    async move {
+        // ...
+    }
+})
+```
+
 ## Sending Values
 
 You might've noticed the `use_coroutine` closure takes an argument called `rx`. What is that? Well, a common pattern in complex apps is to handle a bunch of async code at once. With libraries like Redux Toolkit, managing multiple promises at once can be challenging and a common source of bugs.
 
-With Coroutines, we have the opportunity to centralize our async logic. The `rx` parameter is an Unbounded Channel for code external to the coroutine to send data *into* the coroutine. Instead of looping on an external service, we can loop on the channel itself, processing messages from within our app without needing to spawn a new future. To send data into the coroutine, we would call "send" on the handle.
+With Coroutines, we can centralize our async logic. The `rx` parameter is an Channel that allows code external to the coroutine to send data *into* the coroutine. Instead of looping on an external service, we can loop on the channel itself, processing messages from within our app without needing to spawn a new future. To send data into the coroutine, we would call "send" on the handle.
 
 
 ```rust
@@ -103,7 +137,7 @@ async fn editor_service(rx: UnboundedReceiver<EditorCommand>) {
 }
 ```
 
-We can combine coroutines with Fermi to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
+We can combine coroutines with [Fermi](https://docs.rs/fermi/latest/fermi/index.html) to emulate Redux Toolkit's Thunk system with much less headache. This lets us store all of our app's state *within* a task and then simply update the "view" values stored in Atoms. It cannot be understated how powerful this technique is: we get all the perks of native Rust tasks with the optimizations and ergonomics of global state. This means your *actual* state does not need to be tied up in a system like Fermi or Redux – the only Atoms that need to exist are those that are used to drive the display/UI.
 
 ```rust
 static USERNAME: Atom<String> = |_| "default".to_string();
@@ -152,27 +186,9 @@ async fn sync_service(mut rx: UnboundedReceiver<SyncAction>, atoms: AtomRoot) {
 }
 ```
 
-## Yielding Values
-
-To yield values from a coroutine, simply bring in a `UseState` handle and set the value whenever your coroutine completes its work.
-
-
-```rust
-let sync_status = use_state(cx, || Status::Launching);
-let sync_task = use_coroutine(cx, |rx: UnboundedReceiver<SyncAction>| {
-    to_owned![sync_status];
-    async move {
-        loop {
-            delay_ms(1000).await;
-            sync_status.set(Status::Working);
-        }
-    }
-})
-```
-
 ## Automatic injection into the Context API
 
-Coroutine handles are automatically injected through the context API. `use_coroutine_handle` with the message type as a generic can be used to fetch a handle.
+Coroutine handles are automatically injected through the context API. You can use the `use_coroutine_handle` hook with the message type as a generic to fetch a handle.
 
 ```rust
 fn Child(cx: Scope) -> Element {
