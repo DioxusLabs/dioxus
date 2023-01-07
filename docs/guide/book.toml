@@ -24,6 +24,8 @@ edit-url-template = "https://github.com/DioxusLabs/dioxus/edit/master/docs/guide
 [output.html.playground]
 editable = true
 line-numbers = true
+# running examples will not work because dioxus is not a included in the playground
+runnable = false
 
 [output.html.search]
 limit-results = 20

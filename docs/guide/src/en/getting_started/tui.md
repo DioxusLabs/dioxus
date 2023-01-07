@@ -8,12 +8,19 @@ You can build a text-based interface that will run in the terminal using Dioxus.
 
 ## Support
 
-TUI support is currently quite experimental. Even the project name will change. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
+TUI support is currently quite experimental. But, if you're willing to venture into the realm of the unknown, this guide will get you started.
+
+- It uses flexbox for the layout
+- It only supports a subset of the attributes and elements
+- Regular widgets will not work in the tui render, but the tui renderer has its own widget components that start with a capital letter. See the [widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/tui_widgets.rs)
+- 1px is one character line height. Your regular CSS px does not translate
+- If your app panics, your terminal is wrecked. This will be fixed eventually
+
 
 ## Getting Set up
 
 
-Start by making a new package and adding our TUI renderer.
+Start by making a new package and adding Dioxus and the TUI renderer as dependancies.
 
 ```shell
 cargo new --bin demo
@@ -34,15 +41,8 @@ To run our app:
 cargo run
 ```
 
-Press "ctrl-c" to close the app. To switch from "ctrl-c" to  just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
+Press "ctrl-c" to close the app. To switch from "ctrl-c" to just "q" to quit you can launch the app with a configuration to disable the default quit and use the root TuiContext to quit on your own.
 
 ```rust
 {{#include ../../../examples/hello_world_tui_no_ctrl_c.rs}}
 ```
-
-## Notes
-
-- Our TUI package uses flexbox for layout
-- Regular widgets will not work in the tui render, but the tui renderer has it's own widget components (see [the widgets example](https://github.com/DioxusLabs/dioxus/blob/master/packages/tui/examples/tui_widgets.rs)).
-- 1px is one character lineheight. Your regular CSS px does not translate.
-- If your app panics, your terminal is wrecked. This will be fixed eventually.
