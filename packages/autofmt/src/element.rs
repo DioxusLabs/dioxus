@@ -124,6 +124,7 @@ impl Buffer {
                 if !children.is_empty() {
                     self.write_body_indented(children)?;
                 }
+
                 self.tabbed_line()?;
             }
         }

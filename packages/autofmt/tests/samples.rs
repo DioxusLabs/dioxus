@@ -30,3 +30,6 @@ twoway! ("key" => key);
 
 // Disabled because we can't handle comments on exprs yet
 twoway! ("multirsx" => multirsx);
+
+// Disabled because we can't handle comments on exprs yet
+twoway! ("commentshard" => commentshard);

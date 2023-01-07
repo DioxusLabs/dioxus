@@ -126,8 +126,13 @@ impl Buffer {
 
     pub fn write_body_no_indent(&mut self, children: &[BodyNode]) -> Result {
         let last_child = children.len();
+        let iter = children.iter().peekable().enumerate();
 
-        for (idx, child) in children.iter().enumerate() {
+        for (idx, child) in iter {
+            if self.current_span_is_primary(child.span()) {
+                self.write_comments(child.span())?;
+            }
+
             match child {
                 // check if the expr is a short
                 BodyNode::RawExpr { .. } => {
@@ -138,9 +143,6 @@ impl Buffer {
                     }
                 }
                 _ => {
-                    if self.current_span_is_primary(child.span()) {
-                        self.write_comments(child.span())?;
-                    }
                     self.tabbed_line()?;
                     self.write_ident(child)?;
                 }
