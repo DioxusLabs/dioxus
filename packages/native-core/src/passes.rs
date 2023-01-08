@@ -12,7 +12,7 @@ use crate::tree::{Tree, TreeView};
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
-pub trait Pass<V: FromAnyValue>: Any {
+pub trait Pass<V: FromAnyValue = ()>: Any {
     /// This is a tuple of (T: Any, ..)
     type ParentDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)

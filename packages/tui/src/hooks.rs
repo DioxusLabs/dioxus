@@ -200,7 +200,7 @@ impl InnerInputState {
         if old_focus != self.focus_state.last_focused_id {
             // elements with listeners will always have a element id
             if let Some(id) = self.focus_state.last_focused_id {
-                let element = dom.tree.get(id).unwrap();
+                let element = dom.get(id).unwrap();
                 if let Some(id) = element.node_data.element_id {
                     resolved_events.push(Event {
                         name: "focus",
@@ -217,7 +217,7 @@ impl InnerInputState {
                 }
             }
             if let Some(id) = old_focus {
-                let element = dom.tree.get(id).unwrap();
+                let element = dom.get(id).unwrap();
                 if let Some(id) = element.node_data.element_id {
                     resolved_events.push(Event {
                         name: "focusout",
