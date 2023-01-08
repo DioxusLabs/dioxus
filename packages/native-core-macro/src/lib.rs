@@ -68,7 +68,7 @@ fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
         .map(|field| &field.ty);
 
     let gen = quote! {
-        impl dioxus_native_core::State for #type_name {
+        impl dioxus_native_core::State<#custom_type> for #type_name {
             fn create_passes() -> Box<[dioxus_native_core::TypeErasedPass<Self>]> {
                 Box::new([
                     #(
