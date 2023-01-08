@@ -44,6 +44,14 @@ impl VirtualDom {
         self.next_reference(template, ElementPath::Root(path))
     }
 
+    pub(crate) fn next_null(&mut self) -> ElementId {
+        let entry = self.elements.vacant_entry();
+        let id = entry.key();
+
+        entry.insert(ElementRef::null());
+        ElementId(id)
+    }
+
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
