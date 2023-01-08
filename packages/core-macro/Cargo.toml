@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-core-macro"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2021"
 description = "Core macro for Dioxus Virtual DOM"
@@ -18,7 +18,7 @@ proc-macro = true
 proc-macro2 = { version = "1.0" }
 quote = "1.0"
 syn = { version = "1.0", features = ["full", "extra-traits"] }
-dioxus-rsx = {  path = "../rsx", version = "0.0.1" }
+dioxus-rsx = {  path = "../rsx", version = "0.0.2" }
 
 # testing
 [dev-dependencies]

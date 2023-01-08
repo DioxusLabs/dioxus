@@ -1,21 +1,21 @@
 use dioxus_core::ElementId;
 
 use crate::{
-    node::{ElementNode, NodeData, NodeType, OwnedAttributeView},
+    node::{ElementNode, FromAnyValue, NodeData, NodeType, OwnedAttributeView},
     state::union_ordered_iter,
     NodeId,
 };
 
 /// A view into a [VNode] with limited access.
 #[derive(Debug)]
-pub struct NodeView<'a> {
-    inner: &'a NodeData,
+pub struct NodeView<'a, V: FromAnyValue = ()> {
+    inner: &'a NodeData<V>,
     mask: NodeMask,
 }
 
-impl<'a> NodeView<'a> {
+impl<'a, V: FromAnyValue> NodeView<'a, V> {
     /// Create a new NodeView from a VNode, and mask.
-    pub fn new(node: &'a NodeData, view: NodeMask) -> Self {
+    pub fn new(node: &'a NodeData<V>, view: NodeMask) -> Self {
         Self {
             inner: node,
             mask: view,
@@ -55,7 +55,9 @@ impl<'a> NodeView<'a> {
     }
 
     /// Get any attributes that are enabled in the mask
-    pub fn attributes<'b>(&'b self) -> Option<impl Iterator<Item = OwnedAttributeView<'a>> + 'b> {
+    pub fn attributes<'b>(
+        &'b self,
+    ) -> Option<impl Iterator<Item = OwnedAttributeView<'a, V>> + 'b> {
         match &self.inner.node_type {
             NodeType::Element(ElementNode { attributes, .. }) => Some(
                 attributes

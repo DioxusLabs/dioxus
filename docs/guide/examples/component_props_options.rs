@@ -5,49 +5,50 @@ fn main() {
     dioxus_desktop::launch(App);
 }
 
+#[rustfmt::skip]
 fn App(cx: Scope) -> Element {
     cx.render(rsx! {
         // ANCHOR: OptionalProps_usage
-        Title {
-            title: "Some Title",
-        },
-        Title {
-            title: "Some Title",
-            subtitle: "Some Subtitle",
-        },
-        // Providing an Option explicitly won't compile though:
-        // Title {
-        //     title: "Some Title",
-        //     subtitle: None,
-        // },
+Title {
+    title: "Some Title",
+},
+Title {
+    title: "Some Title",
+    subtitle: "Some Subtitle",
+},
+// Providing an Option explicitly won't compile though:
+// Title {
+//     title: "Some Title",
+//     subtitle: None,
+// },
         // ANCHOR_END: OptionalProps_usage
 
         // ANCHOR: ExplicitOption_usage
-        ExplicitOption {
-            title: "Some Title",
-            subtitle: None,
-        },
-        ExplicitOption {
-            title: "Some Title",
-            subtitle: Some("Some Title"),
-        },
-        // This won't compile:
-        // ExplicitOption {
-        //     title: "Some Title",
-        // },
+ExplicitOption {
+    title: "Some Title",
+    subtitle: None,
+},
+ExplicitOption {
+    title: "Some Title",
+    subtitle: Some("Some Title"),
+},
+// This won't compile:
+// ExplicitOption {
+//     title: "Some Title",
+// },
         // ANCHOR_END: ExplicitOption_usage
 
         // ANCHOR: DefaultComponent_usage
-        DefaultComponent {
-            number: 5,
-        },
-        DefaultComponent {},
+DefaultComponent {
+    number: 5,
+},
+DefaultComponent {},
         // ANCHOR_END: DefaultComponent_usage
 
         // ANCHOR: IntoComponent_usage
-        IntoComponent {
-            string: "some &str",
-        },
+IntoComponent {
+    string: "some &str",
+},
         // ANCHOR_END: IntoComponent_usage
     })
 }

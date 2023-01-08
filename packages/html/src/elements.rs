@@ -1222,7 +1222,7 @@ builder_constructors! {
         rows: usize DEFAULT,
         spellcheck: BoolOrDefault DEFAULT,
         wrap: Wrap DEFAULT,
-        value: Strign volatile,
+        value: String volatile,
     };
 
 

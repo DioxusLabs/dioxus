@@ -11,19 +11,22 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1" }
-dioxus-html = { path = "../html", version = "^0.2.1" }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1" }
+dioxus-core = { path = "../core", version = "^0.3.0" }
+dioxus-html = { path = "../html", version = "^0.3.0" }
+dioxus-core-macro = { path = "../core-macro", version = "^0.3.0" }
 
 taffy = "0.2.1"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
-anymap = "0.12.1"
+anymap = "1.0.0-beta.2"
 slab = "0.4"
 parking_lot = "0.12.1"
 crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
 
+# for parsing attributes
+lightningcss = "1.0.0-alpha.39"
+
 [dev-dependencies]
 rand = "0.8.5"
-dioxus = { path = "../dioxus", version = "^0.2.1" }
+dioxus = { path = "../dioxus", version = "^0.3.0" }

@@ -4,7 +4,7 @@ use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use crate::node::Node;
+use crate::node::{FromAnyValue, Node};
 use crate::node_ref::NodeView;
 use crate::state::State;
 use crate::tree::TreeViewMut;
@@ -12,7 +12,7 @@ use crate::tree::{Tree, TreeView};
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
-pub trait Pass: Any {
+pub trait Pass<V: FromAnyValue>: Any {
     /// This is a tuple of (T: Any, ..)
     type ParentDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
@@ -23,7 +23,7 @@ pub trait Pass: Any {
 
     fn pass<'a>(
         &mut self,
-        node_view: NodeView,
+        node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
         children: Option<
@@ -58,7 +58,7 @@ pub trait Pass: Any {
         }
     }
 
-    fn to_type_erased<T: AnyMapLike + State>() -> TypeErasedPass<T>
+    fn to_type_erased<T: AnyMapLike + State<V>>() -> TypeErasedPass<T, V>
     where
         Self: Sized,
     {
@@ -72,11 +72,11 @@ pub trait Pass: Any {
             mask: Self::NODE_MASK,
             pass_direction: Self::pass_direction(),
             pass: Box::new(
-                |node_id: NodeId, any_map: &mut Tree<Node<T>>, context: &SendAnyMap| {
+                |node_id: NodeId, any_map: &mut Tree<Node<T, V>>, context: &SendAnyMap| {
                     let (current_node, parent, children) = any_map
                         .node_parent_children_mut(node_id)
                         .expect("tried to run pass on node that does not exist");
-                    let current_node_raw = current_node as *mut Node<T>;
+                    let current_node_raw = current_node as *mut Node<T, V>;
                     let node = Self::NodeDependencies::borrow_elements_from(&current_node.state)
                         .expect("tried to get a pass that does not exist");
                     let parent = parent.map(|parent| {
@@ -105,7 +105,7 @@ pub trait Pass: Any {
                     )
                 },
             )
-                as Box<dyn Fn(NodeId, &mut Tree<Node<T>>, &SendAnyMap) -> bool + Send + Sync>,
+                as Box<dyn Fn(NodeId, &mut Tree<Node<T, V>>, &SendAnyMap) -> bool + Send + Sync>,
         }
     }
 
@@ -145,21 +145,21 @@ pub trait Pass: Any {
     }
 }
 
-pub struct TypeErasedPass<T: AnyMapLike + State> {
+pub struct TypeErasedPass<T: AnyMapLike + State<V>, V: FromAnyValue = ()> {
     pub(crate) this_type_id: TypeId,
     pub(crate) parent_dependant: bool,
     pub(crate) child_dependant: bool,
     pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
-    pass: PassCallback<T>,
+    pass: PassCallback<T, V>,
     pub(crate) pass_direction: PassDirection,
 }
 
-impl<T: AnyMapLike + State> TypeErasedPass<T> {
+impl<T: AnyMapLike + State<V>, V: FromAnyValue> TypeErasedPass<T, V> {
     fn resolve(
         &self,
-        tree: &mut Tree<Node<T>>,
+        tree: &mut Tree<Node<T, V>>,
         mut dirty: DirtyNodes,
         dirty_states: &DirtyNodeStates,
         nodes_updated: &FxDashSet<NodeId>,
@@ -217,7 +217,8 @@ pub enum PassDirection {
     AnyOrder,
 }
 
-type PassCallback<T> = Box<dyn Fn(NodeId, &mut Tree<Node<T>>, &SendAnyMap) -> bool + Send + Sync>;
+type PassCallback<T, V> =
+    Box<dyn Fn(NodeId, &mut Tree<Node<T, V>>, &SendAnyMap) -> bool + Send + Sync>;
 
 pub trait AnyMapLike {
     fn get<T: Any>(&self) -> Option<&T>;
@@ -364,10 +365,10 @@ impl DirtyNodeStates {
     }
 }
 
-pub fn resolve_passes<T: AnyMapLike + State + Send>(
-    tree: &mut Tree<Node<T>>,
+pub fn resolve_passes<T: AnyMapLike + State<V> + Send, V: FromAnyValue + Send>(
+    tree: &mut Tree<Node<T, V>>,
     dirty_nodes: DirtyNodeStates,
-    passes: &[TypeErasedPass<T>],
+    passes: &[TypeErasedPass<T, V>],
     ctx: SendAnyMap,
 ) -> FxDashSet<NodeId> {
     let dirty_states = Arc::new(dirty_nodes);
@@ -411,7 +412,6 @@ pub fn resolve_passes<T: AnyMapLike + State + Send>(
                     i += 1;
                 }
             }
-            // all passes are resolved at the end of the scope
         });
         resolved_passes.extend(resolving.iter().copied());
         resolving.clear()

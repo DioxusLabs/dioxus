@@ -1,4 +1,7 @@
-use crate::passes::{AnyMapLike, TypeErasedPass};
+use crate::{
+    node::FromAnyValue,
+    passes::{AnyMapLike, TypeErasedPass},
+};
 use std::cmp::Ordering;
 
 /// Join two sorted iterators
@@ -37,7 +40,7 @@ pub(crate) fn union_ordered_iter<'a>(
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
-pub trait State: Default + Clone + AnyMapLike + 'static {
+pub trait State<V: FromAnyValue = ()>: Default + Clone + AnyMapLike + 'static {
     #[doc(hidden)]
-    fn create_passes() -> Box<[TypeErasedPass<Self>]>;
+    fn create_passes() -> Box<[TypeErasedPass<Self, V>]>;
 }

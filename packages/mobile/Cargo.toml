@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-mobile"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Mobile-compatible renderer for Dioxus"
@@ -12,7 +12,7 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-desktop = { path = "../desktop", version = "^0.2.3" }
+dioxus-desktop = { path = "../desktop", version = "^0.3.0" }
 
 [lib]
 doctest = false

@@ -1,5 +1,5 @@
 use crate::any_props::AnyProps;
-use crate::innerlude::{VComponent, VPlaceholder, VText};
+use crate::innerlude::{BorrowedAttributeValue, VComponent, VPlaceholder, VText};
 use crate::mutations::Mutation;
 use crate::mutations::Mutation::*;
 use crate::nodes::VNode;
@@ -81,9 +81,7 @@ impl<'b> VirtualDom {
 
         // The best renderers will have templates prehydrated and registered
         // Just in case, let's create the template using instructions anyways
-        if !self.templates.contains_key(&node.template.get().name) {
-            self.register_template(node.template.get());
-        }
+        self.register_template(node.template.get());
 
         // we know that this will generate at least one mutation per node
         self.mutations
@@ -285,7 +283,7 @@ impl<'b> VirtualDom {
         }
     }
 
-    fn write_attribute(&mut self, attribute: &crate::Attribute, id: ElementId) {
+    fn write_attribute(&mut self, attribute: &'b crate::Attribute<'b>, id: ElementId) {
         // Make sure we set the attribute's associated id
         attribute.mounted_element.set(id);
 
@@ -293,9 +291,17 @@ impl<'b> VirtualDom {
         let unbounded_name: &str = unsafe { std::mem::transmute(attribute.name) };
 
         match &attribute.value {
-            AttributeValue::Text(value) => {
+            AttributeValue::Listener(_) => {
+                self.mutations.push(NewEventListener {
+                    // all listeners start with "on"
+                    name: &unbounded_name[2..],
+                    id,
+                })
+            }
+            _ => {
                 // Safety: we promise not to re-alias this text later on after committing it to the mutation
-                let unbounded_value: &str = unsafe { std::mem::transmute(*value) };
+                let value: BorrowedAttributeValue<'b> = (&attribute.value).into();
+                let unbounded_value = unsafe { std::mem::transmute(value) };
 
                 self.mutations.push(SetAttribute {
                     name: unbounded_name,
@@ -304,22 +310,6 @@ impl<'b> VirtualDom {
                     id,
                 })
             }
-            AttributeValue::Bool(value) => self.mutations.push(SetBoolAttribute {
-                name: unbounded_name,
-                value: *value,
-                id,
-            }),
-            AttributeValue::Listener(_) => {
-                self.mutations.push(NewEventListener {
-                    // all listeners start with "on"
-                    name: &unbounded_name[2..],
-                    id,
-                })
-            }
-            AttributeValue::Float(_) => todo!(),
-            AttributeValue::Int(_) => todo!(),
-            AttributeValue::Any(_) => todo!(),
-            AttributeValue::None => todo!(),
         }
     }
 
@@ -397,30 +387,36 @@ impl<'b> VirtualDom {
 
     /// Insert a new template into the VirtualDom's template registry
     pub(crate) fn register_template(&mut self, mut template: Template<'static>) {
-        // First, make sure we mark the template as seen, regardless if we process it
         let (path, byte_index) = template.name.rsplit_once(':').unwrap();
         let byte_index = byte_index.parse::<usize>().unwrap();
-
-        // if hot reloading is enabled, then we need to check for a template that has overriten this one
-        #[cfg(debug_assertions)]
-        if let Some(mut new_template) = self
+        // First, check if we've already seen this template
+        if self
             .templates
-            .get_mut(path)
-            .and_then(|map| map.remove(&usize::MAX))
+            .get(&path)
+            .filter(|set| set.contains_key(&byte_index))
+            .is_none()
         {
-            // the byte index of the hot reloaded template could be different
-            new_template.name = template.name;
-            template = new_template;
-        }
+            // if hot reloading is enabled, then we need to check for a template that has overriten this one
+            #[cfg(debug_assertions)]
+            if let Some(mut new_template) = self
+                .templates
+                .get_mut(path)
+                .and_then(|map| map.remove(&usize::MAX))
+            {
+                // the byte index of the hot reloaded template could be different
+                new_template.name = template.name;
+                template = new_template;
+            }
 
-        self.templates
-            .entry(path)
-            .or_default()
-            .insert(byte_index, template);
+            self.templates
+                .entry(path)
+                .or_default()
+                .insert(byte_index, template);
 
-        // If it's all dynamic nodes, then we don't need to register it
-        if !template.is_completely_dynamic() {
-            self.mutations.templates.push(template);
+            // If it's all dynamic nodes, then we don't need to register it
+            if !template.is_completely_dynamic() {
+                self.mutations.templates.push(template);
+            }
         }
     }
 

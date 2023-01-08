@@ -1,3 +1,4 @@
+use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation};
 use dioxus::prelude::*;
 
@@ -26,17 +27,22 @@ fn basic_syntax_is_a_template(cx: Scope) -> Element {
 #[test]
 fn dual_stream() {
     let mut dom = VirtualDom::new(basic_syntax_is_a_template);
+    let bump = Bump::new();
     let edits = dom.rebuild().santize();
 
     use Mutation::*;
-    assert_eq!(
-        edits.edits,
+    assert_eq!(edits.edits, {
         [
             LoadTemplate { name: "template", index: 0, id: ElementId(1) },
-            SetAttribute { name: "class", value: "123", id: ElementId(1), ns: None },
+            SetAttribute {
+                name: "class",
+                value: (&*bump.alloc("123".into_value(&bump))).into(),
+                id: ElementId(1),
+                ns: None,
+            },
             NewEventListener { name: "click", id: ElementId(1) },
             HydrateText { path: &[0, 0], value: "123", id: ElementId(2) },
-            AppendChildren { id: ElementId(0), m: 1 }
-        ],
-    );
+            AppendChildren { id: ElementId(0), m: 1 },
+        ]
+    });
 }

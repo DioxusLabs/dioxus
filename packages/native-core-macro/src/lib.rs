@@ -23,6 +23,33 @@ pub fn state_macro_derive(input: TokenStream) -> TokenStream {
 }
 
 fn impl_derive_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let custom_type = ast
+        .attrs
+        .iter()
+        .find(|a| a.path.is_ident("state"))
+        .and_then(|attr| {
+            // parse custom_type = "MyType"
+            let assignment = attr.parse_args::<syn::Expr>().unwrap();
+            if let syn::Expr::Assign(assign) = assignment {
+                let (left, right) = (&*assign.left, &*assign.right);
+                if let syn::Expr::Path(e) = left {
+                    let path = &e.path;
+                    if let Some(ident) = path.get_ident() {
+                        if ident == "custom_value" {
+                            return match right {
+                                syn::Expr::Path(e) => {
+                                    let path = &e.path;
+                                    Some(quote! {#path})
+                                }
+                                _ => None,
+                            };
+                        }
+                    }
+                }
+            }
+            None
+        })
+        .unwrap_or(quote! {()});
     let type_name = &ast.ident;
     let fields: Vec<_> = match &ast.data {
         syn::Data::Struct(data) => match &data.fields {

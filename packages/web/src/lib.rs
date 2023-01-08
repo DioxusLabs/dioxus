@@ -189,10 +189,12 @@ pub async fn run_with_props<T: 'static>(root: fn(Scope<T>) -> Element, root_prop
 
     // if should_hydrate {
     // } else {
-    let edits = dom.rebuild();
+    {
+        let edits = dom.rebuild();
 
-    websys_dom.load_templates(&edits.templates);
-    websys_dom.apply_edits(edits.edits);
+        websys_dom.load_templates(&edits.templates);
+        websys_dom.apply_edits(edits.edits);
+    }
 
     // the mutations come back with nothing - we need to actually mount them
     websys_dom.mount();
