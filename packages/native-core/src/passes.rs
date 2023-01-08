@@ -179,7 +179,7 @@ fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
                         dirty_states.insert(*dependant, id, height - 1);
                     }
                 }
-                if result.progress {
+                if result.progress && height > 0 {
                     dirty_states.insert(pass_id, id, height - 1);
                 }
             }
@@ -406,7 +406,7 @@ fn node_pass() {
 
     let add_pass = AnyPass::Node(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
@@ -473,7 +473,7 @@ fn dependant_node_pass() {
     let add_pass = AnyPass::Node(&AddPass);
     let subtract_pass = AnyPass::Node(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
@@ -540,7 +540,7 @@ fn independant_node_pass() {
     let add_pass1 = AnyPass::Node(&AddPass1);
     let add_pass2 = AnyPass::Node(&AddPass2);
     let passes = vec![&add_pass1, &add_pass2];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root(), 0);
     dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
@@ -595,7 +595,7 @@ fn down_pass() {
 
     let add_pass = AnyPass::Downward(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(0), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
@@ -690,7 +690,7 @@ fn dependant_down_pass() {
     let add_pass = AnyPass::Downward(&AddPass);
     let subtract_pass = AnyPass::Downward(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
     dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
@@ -780,9 +780,9 @@ fn up_pass() {
 
     let add_pass = AnyPass::Upward(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(0), grandchild1, 0);
-    dirty_nodes.insert(PassId(0), grandchild2, 0);
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), grandchild1, tree.height(grandchild1).unwrap());
+    dirty_nodes.insert(PassId(0), grandchild2, tree.height(grandchild2).unwrap());
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &2);
@@ -880,9 +880,9 @@ fn dependant_up_pass() {
     let add_pass = AnyPass::Upward(&AddPass);
     let subtract_pass = AnyPass::Upward(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(1), grandchild1, tree.height(grandchild1));
-    dirty_nodes.insert(PassId(1), grandchild2, tree.height(grandchild2));
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(1), grandchild1, tree.height(grandchild1).unwrap());
+    dirty_nodes.insert(PassId(1), grandchild2, tree.height(grandchild2).unwrap());
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     // Tree before:
