@@ -163,14 +163,14 @@ fn create_random_dynamic_node<'a>(cx: &'a ScopeState, depth: usize) -> DynamicNo
             root_ids: Default::default(),
             dynamic_nodes: cx.bump().alloc([cx.component(
                 create_random_element,
-                DepthProps { depth: depth },
+                DepthProps { depth, root: false },
                 "create_random_element",
             )]),
             dynamic_attrs: &[],
         })),
         3 => cx.component(
             create_random_element,
-            DepthProps { depth: depth },
+            DepthProps { depth, root: false },
             "create_random_element",
         ),
         _ => unreachable!(),
@@ -199,22 +199,18 @@ fn create_random_dynamic_attr<'a>(cx: &'a ScopeState) -> Attribute<'a> {
     }
 }
 
-#[test]
-fn debugging() {
-    let template = create_random_template("test");
-    println!("{:#?}", template)
-}
-
 static mut TEMPLATE_COUNT: usize = 0;
 
 #[derive(PartialEq, Props)]
 struct DepthProps {
     depth: usize,
+    root: bool,
 }
 
 fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
     cx.needs_update();
-    match rand::random::<usize>() % 3 {
+    let range = if cx.props.root { 2 } else { 3 };
+    let node = match rand::random::<usize>() % range {
         0 | 1 => {
             let template = create_random_template(Box::leak(
                 format!(
@@ -248,18 +244,20 @@ fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
                         .collect::<Vec<_>>(),
                 ),
             };
-            println!("{:#?}", node);
             Some(node)
         }
         _ => None,
-    }
+    };
+    println!("{:#?}", node);
+    node
 }
 
 // test for panics when creating random nodes and templates
 #[test]
 fn create() {
     for _ in 0..1000 {
-        let mut vdom = VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0 });
+        let mut vdom =
+            VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         vdom.rebuild();
     }
 }
@@ -269,7 +267,8 @@ fn create() {
 #[test]
 fn diff() {
     for _ in 0..100 {
-        let mut vdom = VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0 });
+        let mut vdom =
+            VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         vdom.rebuild();
         for _ in 0..10 {
             vdom.render_immediate();
