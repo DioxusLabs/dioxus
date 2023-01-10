@@ -60,7 +60,10 @@ impl VirtualDom {
         self.ensure_drop_safety(scope_id);
 
         let mut new_nodes = unsafe {
-            self.scopes[scope_id.0].previous_frame().bump_mut().reset();
+            self.scopes[scope_id.0]
+                .previous_frame_mut()
+                .bump_mut()
+                .reset();
 
             let scope = &self.scopes[scope_id.0];
 

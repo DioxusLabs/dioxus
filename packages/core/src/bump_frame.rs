@@ -30,7 +30,8 @@ impl BumpFrame {
     pub(crate) fn bump(&self) -> &Bump {
         unsafe { &*self.bump.get() }
     }
-    pub(crate) unsafe fn bump_mut(&self) -> &mut Bump {
-        unsafe { &mut *self.bump.get() }
+
+    pub(crate) fn bump_mut(&mut self) -> &mut Bump {
+        self.bump.get_mut()
     }
 }
