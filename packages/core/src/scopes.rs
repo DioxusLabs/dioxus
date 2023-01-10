@@ -129,9 +129,17 @@ impl<'src> ScopeState {
     /// It's easy to leak memory here since the drop implementation will not be called for any objects allocated in this arena.
     ///
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
+    // TODO is exclusive ownership guaranteed by something? If not, returning &Bump isn't safe.
+    //
+    // TODO Since the bump allocator does have a reset called on it from another path,
+    // this might be labeled unsafe to ensure all callers know there is a safety contract they are
+    // expected to follow, so their allocations are dropped before the reset on the previous frame
+    // is performed.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump()
+        // TODO - even for listeners and event handlers?
+        // safety: (TODO) here we believe exclusive ownership has been promised.
+        self.previous_frame().bump.with(|bump| unsafe { &*bump })
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -400,6 +408,8 @@ impl<'src> ScopeState {
     /// Allocate some text inside the [`ScopeState`] from [`Arguments`]
     ///
     /// Uses the currently active [`Bump`] allocator
+    // TODO what ensures there is no reset on the other frame's bump allocator? This is a public
+    // function.
     pub fn raw_text(&'src self, args: Arguments) -> &'src str {
         args.as_str().unwrap_or_else(|| {
             use bumpalo::core_alloc::fmt::Write;
@@ -418,6 +428,8 @@ impl<'src> ScopeState {
     ///
     /// "Volatile" referes to whether or not Dioxus should always override the value. This helps prevent the UI in
     /// some renderers stay in sync with the VirtualDom's understanding of the world
+    // TODO what ensures there is no reset on the other frame's bump allocator? This is a public
+    // function.
     pub fn attr(
         &'src self,
         name: &'static str,
@@ -473,6 +485,8 @@ impl<'src> ScopeState {
     }
 
     /// Create a new [`EventHandler`] from an [`FnMut`]
+    // TODO what ensures there is no reset on the other frame's bump allocator? This is a public
+    // function.
     pub fn event_handler<T>(&'src self, f: impl FnMut(T) + 'src) -> EventHandler<'src, T> {
         let handler: &mut dyn FnMut(T) = self.bump().alloc(f);
         let caller = unsafe { BumpBox::from_raw(handler as *mut dyn FnMut(T)) };
@@ -483,6 +497,8 @@ impl<'src> ScopeState {
     /// Create a new [`AttributeValue`] with the listener variant from a callback
     ///
     /// The callback must be confined to the lifetime of the ScopeState
+    // TODO what ensures there is no reset on the other frame's bump allocator? This is a public
+    // function.
     pub fn listener<T: 'static>(
         &'src self,
         mut callback: impl FnMut(Event<T>) + 'src,
@@ -506,6 +522,8 @@ impl<'src> ScopeState {
     }
 
     /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
+    // TODO what ensures there is no reset on the other frame's bump allocator? This is a public
+    // function.
     pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue<'src> {
         // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
         // This is the suggested way to build a bumpbox

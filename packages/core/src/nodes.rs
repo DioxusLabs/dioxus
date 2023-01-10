@@ -703,6 +703,7 @@ where
 {
     fn into_return(self, cx: &'a ScopeState) -> RenderReturn<'a> {
         let f: &mut dyn Future<Output = Element<'a>> = cx.bump().alloc(self);
+        // TODO what is the safety contract here?
         RenderReturn::Pending(unsafe { BumpBox::from_raw(f) })
     }
 }

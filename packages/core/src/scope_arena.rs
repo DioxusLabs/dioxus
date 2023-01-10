@@ -59,8 +59,11 @@ impl VirtualDom {
         // Remove all the outdated listeners
         self.ensure_drop_safety(scope_id);
 
+        // safety: have to assume we have exclusive access to the bump for the previous_frame at
+        // this moment. (TODO how to justify better)
+        self.scopes[scope_id.0].previous_frame().bump.with_mut(|bump| unsafe { (*bump).reset() });
+
         let mut new_nodes = unsafe {
-            self.scopes[scope_id.0].previous_frame().bump_mut().reset();
 
             let scope = &self.scopes[scope_id.0];
 
@@ -133,7 +136,12 @@ impl VirtualDom {
         let frame = scope.previous_frame();
 
         // set the new head of the bump frame
-        let allocated = &*frame.bump().alloc(new_nodes);
+        //
+        // safety: have to assume we have exclusive use of the frame bump at this moment (TODO how
+        // can we word it better?)
+        // safety: and the lifetime of the frame's bump allocation, `allocated`, is tied to the
+        // frame in the next line.
+        let allocated = &*frame.bump.with(|bump| unsafe { (*bump).alloc(new_nodes) });
         frame.node.set(allocated);
 
         // And move the render generation forward by one

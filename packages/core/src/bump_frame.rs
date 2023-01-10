@@ -3,7 +3,7 @@ use bumpalo::Bump;
 use std::cell::{Cell, UnsafeCell};
 
 pub(crate) struct BumpFrame {
-    pub bump: UnsafeCell<Bump>,
+    pub bump: UnsafeCellWith<Bump>,
     pub node: Cell<*const RenderReturn<'static>>,
 }
 
@@ -11,7 +11,7 @@ impl BumpFrame {
     pub(crate) fn new(capacity: usize) -> Self {
         let bump = Bump::with_capacity(capacity);
         Self {
-            bump: UnsafeCell::new(bump),
+            bump: UnsafeCellWith::new(bump),
             node: Cell::new(std::ptr::null()),
         }
     }
@@ -26,11 +26,21 @@ impl BumpFrame {
 
         unsafe { std::mem::transmute(&*node) }
     }
+}
 
-    pub(crate) fn bump(&self) -> &Bump {
-        unsafe { &*self.bump.get() }
+#[derive(Debug)]
+pub(crate) struct UnsafeCellWith<T>(UnsafeCell<T>);
+
+impl<T> UnsafeCellWith<T> {
+    pub(crate) const fn new(data: T) -> UnsafeCellWith<T> {
+        UnsafeCellWith(UnsafeCell::new(data))
     }
-    pub(crate) unsafe fn bump_mut(&self) -> &mut Bump {
-        unsafe { &mut *self.bump.get() }
+
+    pub(crate) fn with<R>(&self, f: impl FnOnce(*const T) -> R) -> R {
+        f(self.0.get())
+    }
+
+    pub(crate) fn with_mut<R>(&self, f: impl FnOnce(*mut T) -> R) -> R {
+        f(self.0.get())
     }
 }

@@ -67,10 +67,14 @@ impl VirtualDom {
             let scope = &self.scopes[scope_id.0];
             let arena = scope.current_frame();
 
-            let ret = arena.bump().alloc(match new_nodes {
+            // safety: (TODO) how do we know we have exclusive access to the bump allocator at this
+            // time?
+            // safety: and the lifetime of the frame's bump allocation, `ret`, is tied to the
+            // frame in the `node.set(ret)` just below.
+            let ret = arena.bump.with(|bump| unsafe { (*bump).alloc(match new_nodes {
                 Some(new) => RenderReturn::Ready(new),
                 None => RenderReturn::default(),
-            });
+            }) });
 
             arena.node.set(ret);
 
