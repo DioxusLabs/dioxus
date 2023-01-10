@@ -7,8 +7,8 @@ description = "HTML Element pack for Dioxus - a concurrent renderer-agnostic Vir
 license = "MIT/Apache-2.0"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
-documentation = "https://docs.rs/dioxus"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react"]
 
 [dependencies]
 dioxus-core = { path = "../core", version = "^0.3.0" }

@@ -20,13 +20,13 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-liveview/latest/dioxus-liveview) |
+[API Docs](https://docs.rs/dioxus-liveview/latest/dioxus_liveview) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
 ## Overview
 
-`dioxus-liveview` provides adapters for running the Dioxus VirtualDom over a websocket connection.
+`dioxus-liveview` provides adapters for running the Dioxus VirtualDom over a WebSocket connection.
 
 The current backend frameworks supported include:
 
@@ -34,9 +34,9 @@ The current backend frameworks supported include:
 - Warp
 - Salvo
 
-Dioxus-LiveView exports a number of primitives to wire up an app into an existing backend framework.
+Dioxus-LiveView exports some primitives to wire up an app into an existing backend framework.
 
-- A threadpool for spawning the `!Send` VirtualDom and interacting with it from the websocket
+- A ThreadPool for spawning the `!Send` VirtualDom and interacting with it from WebSockets
 - An adapter for transforming various socket types into the `LiveViewSocket` type
 - The glue to load the interpreter into your app
 
@@ -51,5 +51,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

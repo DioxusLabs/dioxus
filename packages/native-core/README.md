@@ -19,15 +19,15 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-native-core/latest/dioxus-native-core) |
+[API Docs](https://docs.rs/dioxus-native-core/latest/dioxus_native_core) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
 ## Overview
 
-`dioxus-native-core` provides a number of helpful utilities for lazily resolving computed values of the Dioxus VirtualDom to be used in conjunction with a native rendering engine.
+`dioxus-native-core` provides several helpful utilities for lazily resolving computed values of the Dioxus VirtualDom to be used in conjunction with a native rendering engine.
 
-The main "value-add" of this crate over implementing your own native tree is that this tree is incrementally recomputed using the Dioxus VirtualDom's edit stream. Only parts of the tree that rely on each other will be redrawn - all else will be ignored.
+The main "value-add" of this crate over implementing your native tree is that this tree is incrementally recomputed using the Dioxus VirtualDom's edit stream. Only parts of the tree that rely on each other will be redrawn - all else will be ignored.
 
 
 ## Contributing
@@ -41,5 +41,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

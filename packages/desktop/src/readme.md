@@ -18,10 +18,11 @@ $ cargo new --bin demo
 $ cd app
 ```
 
-Add Dioxus with the `desktop` feature:
+Add Dioxus and the `desktop` renderer feature:
 
 ```shell
-$ cargo add dioxus --features desktop
+$ cargo add dioxus
+$ cargo add dioxus-desktop
 ```
 
 Edit your `main.rs`:
