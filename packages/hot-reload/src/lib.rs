@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use dioxus_core::Template;
 pub use dioxus_hot_reload_macro::hot_reload;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::{FileMap, UpdateResult};
@@ -15,13 +16,30 @@ pub fn init(path: &'static str) {
     if let Ok(crate_dir) = PathBuf::from_str(path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
+        let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(crate_dir.clone())));
         if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
             // listen for connections
             std::thread::spawn({
+                let file_map = file_map.clone();
                 let channels = channels.clone();
                 move || {
                     for connection in local_socket_stream.incoming() {
-                        if let Ok(connection) = connection {
+                        if let Ok(mut connection) = connection {
+                            // send any templates than have changed before the socket connected
+                            let templates: Vec<_> = {
+                                file_map
+                                    .lock()
+                                    .unwrap()
+                                    .map
+                                    .values()
+                                    .filter_map(|(_, template_slot)| *template_slot)
+                                    .collect()
+                            };
+                            for template in templates {
+                                if !send_template(template, &mut connection) {
+                                    continue;
+                                }
+                            }
                             channels.lock().unwrap().push(connection);
                             println!("Connected to hot reloading 🚀");
                         }
@@ -32,7 +50,6 @@ pub fn init(path: &'static str) {
             // watch for changes
             std::thread::spawn(move || {
                 let mut last_update_time = chrono::Local::now().timestamp();
-                let mut file_map = FileMap::<HtmlCtx>::new(crate_dir.clone());
 
                 let (tx, rx) = std::sync::mpsc::channel();
 
@@ -58,13 +75,21 @@ pub fn init(path: &'static str) {
                                 }
 
                                 // find changes to the rsx in the file
-                                match file_map.update_rsx(&path, crate_dir.as_path()) {
+                                match file_map
+                                    .lock()
+                                    .unwrap()
+                                    .update_rsx(&path, crate_dir.as_path())
+                                {
                                     UpdateResult::UpdatedRsx(msgs) => {
                                         for msg in msgs {
-                                            for channel in channels.iter_mut() {
-                                                let msg = serde_json::to_string(&msg).unwrap();
-                                                channel.write_all(msg.as_bytes()).unwrap();
-                                                channel.write_all(&[b'\n']).unwrap();
+                                            let mut i = 0;
+                                            while i < channels.len() {
+                                                let channel = &mut channels[i];
+                                                if send_template(msg, channel) {
+                                                    i += 1;
+                                                } else {
+                                                    channels.remove(i);
+                                                }
                                             }
                                         }
                                     }
@@ -80,5 +105,19 @@ pub fn init(path: &'static str) {
                 }
             });
         }
+    }
+}
+
+fn send_template(template: Template<'static>, channel: &mut impl Write) -> bool {
+    if let Ok(msg) = serde_json::to_string(&template) {
+        if channel.write_all(msg.as_bytes()).is_err() {
+            return false;
+        }
+        if channel.write_all(&[b'\n']).is_err() {
+            return false;
+        }
+        true
+    } else {
+        false
     }
 }

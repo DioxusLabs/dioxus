@@ -17,7 +17,9 @@ pub(crate) fn init(proxy: UnboundedSender<Template<'static>>) {
                     Ok(_) => {
                         let template: Template<'static> =
                             serde_json::from_str(Box::leak(buf.into_boxed_str())).unwrap();
-                        proxy.send(template).unwrap();
+                        if proxy.send(template).is_err() {
+                            return;
+                        }
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {
