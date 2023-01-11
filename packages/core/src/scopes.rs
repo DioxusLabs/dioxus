@@ -131,7 +131,7 @@ impl<'src> ScopeState {
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump()
+        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
