@@ -22,11 +22,14 @@ use std::{
 use std::{io, time::Duration};
 use taffy::Taffy;
 pub use taffy::{geometry::Point, prelude::*};
+use tokio::{select, sync::mpsc::unbounded_channel};
 use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 mod config;
 mod focus;
 mod hooks;
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+mod hot_reload;
 mod layout;
 mod node;
 pub mod prelude;
@@ -144,6 +147,12 @@ fn render_vdom(
         .enable_all()
         .build()?
         .block_on(async {
+            #[cfg(all(feature = "hot-reload", debug_assertions))]
+            let mut hot_reload_rx = {
+                let (hot_reload_tx, hot_reload_rx) = unbounded_channel::<Template<'static>>();
+                hot_reload::init(hot_reload_tx);
+                hot_reload_rx
+            };
             let mut terminal = (!cfg.headless).then(|| {
                 enable_raw_mode().unwrap();
                 let mut stdout = std::io::stdout();
@@ -223,16 +232,21 @@ fn render_vdom(
                     }
                 }
 
-                use futures::future::{select, Either};
+                let mut new_templete = None;
                 {
                     let wait = vdom.wait_for_work();
+                    #[cfg(all(feature = "hot-reload", debug_assertions))]
+                    let hot_reload_wait = hot_reload_rx.recv();
+                    #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+                    let hot_reload_wait = std::future::pending();
+
                     pin_mut!(wait);
 
-                    match select(wait, event_reciever.next()).await {
-                        Either::Left((_a, _b)) => {
-                            //
-                        }
-                        Either::Right((evt, _o)) => {
+                    select! {
+                        _ = wait => {
+
+                        },
+                        evt = event_reciever.next() => {
                             match evt.as_ref().unwrap() {
                                 InputEvent::UserInput(event) => match event {
                                     TermEvent::Key(key) => {
@@ -252,8 +266,17 @@ fn render_vdom(
                             if let InputEvent::UserInput(evt) = evt.unwrap() {
                                 register_event(evt);
                             }
+                        },
+                        Some(template) = hot_reload_wait => {
+                            new_templete = Some(template);
                         }
                     }
+                }
+
+                // if we have a new template, replace the old one
+                if let Some(template) = new_templete {
+                    // println!("reloading template");
+                    vdom.replace_template(template);
                 }
 
                 {
