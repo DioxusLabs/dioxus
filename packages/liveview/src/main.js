@@ -32,9 +32,6 @@ class IPC {
         let edits = JSON.parse(event.data);
         window.interpreter.handleEdits(edits);
       }
-      else {
-        console.log("ponged");
-      }
     };
 
     this.ws = ws;
