@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use wry::application::event::Event;
+use wry::application::event_loop::EventLoopWindowTarget;
 use wry::application::window::Icon;
 use wry::{
     application::window::{Window, WindowBuilder},
@@ -8,12 +10,15 @@ use wry::{
     Result as WryResult,
 };
 
+use crate::desktop_context::UserWindowEvent;
+
 // pub(crate) type DynEventHandlerFn = dyn Fn(&mut EventLoop<()>, &mut WebView);
 
 /// The configuration for the desktop application.
 pub struct Config {
     pub(crate) window: WindowBuilder,
     pub(crate) file_drop_handler: Option<DropHandler>,
+    pub(crate) event_handler: Option<EventHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
     // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
@@ -25,6 +30,7 @@ pub struct Config {
 }
 
 type DropHandler = Box<dyn Fn(&Window, FileDropEvent) -> bool>;
+type EventHandler = Box<dyn Fn(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>)>;
 
 pub(crate) type WryProtocol = (
     String,
@@ -42,6 +48,7 @@ impl Config {
             window,
             protocols: Vec::new(),
             file_drop_handler: None,
+            event_handler: None,
             pre_rendered: None,
             disable_context_menu: !cfg!(debug_assertions),
             resource_dir: None,
@@ -77,14 +84,15 @@ impl Config {
         self
     }
 
-    // /// Set a custom event handler
-    // pub fn with_event_handler(
-    //     mut self,
-    //     handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
-    // ) -> Self {
-    //     self.event_handler = Some(Box::new(handler));
-    //     self
-    // }
+    /// Set a custom wry event handler. This can be used to listen to window and webview events
+    /// This only has an effect on the main window
+    pub fn with_event_handler(
+        mut self,
+        handler: impl Fn(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    ) -> Self {
+        self.event_handler = Some(Box::new(handler));
+        self
+    }
 
     /// Set a file drop handler
     pub fn with_file_drop_handler(

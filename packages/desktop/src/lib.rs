@@ -104,7 +104,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
+pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Config) {
     let event_loop = EventLoop::<UserWindowEvent>::with_user_event();
 
     let proxy = event_loop.create_proxy();
@@ -125,6 +125,8 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let queue = WebviewQueue::default();
 
+    let event_handler = cfg.event_handler.take();
+
     // By default, we'll create a new window when the app starts
     queue.borrow_mut().push(create_new_window(
         cfg,
@@ -134,8 +136,12 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         &queue,
     ));
 
-    event_loop.run(move |window_event, _event_loop, control_flow| {
+    event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
+
+        if let Some(handler) = &event_handler {
+            handler(&window_event, event_loop);
+        }
 
         match window_event {
             Event::WindowEvent {
