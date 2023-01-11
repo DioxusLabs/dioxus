@@ -12,9 +12,6 @@ mod protocol;
 mod waker;
 mod webview;
 
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-mod hot_reload;
-
 pub use cfg::Config;
 pub use desktop_context::{use_window, DesktopContext};
 use desktop_context::{EventData, UserWindowEvent, WebviewQueue};
@@ -111,7 +108,15 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     // Intialize hot reloading if it is enabled
     #[cfg(all(feature = "hot-reload", debug_assertions))]
-    hot_reload::init(proxy.clone());
+    {
+        let proxy = proxy.clone();
+        dioxus_hot_reload::connect(move |template| {
+            let _ = proxy.send_event(UserWindowEvent(
+                EventData::TemplateUpdated(template),
+                unsafe { WindowId::dummy() },
+            ));
+        });
+    }
 
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO

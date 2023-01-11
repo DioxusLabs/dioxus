@@ -28,8 +28,6 @@ use tui::{backend::CrosstermBackend, layout::Rect, Terminal};
 mod config;
 mod focus;
 mod hooks;
-#[cfg(all(feature = "hot-reload", debug_assertions))]
-mod hot_reload;
 mod layout;
 mod node;
 pub mod prelude;
@@ -150,7 +148,9 @@ fn render_vdom(
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             let mut hot_reload_rx = {
                 let (hot_reload_tx, hot_reload_rx) = unbounded_channel::<Template<'static>>();
-                hot_reload::init(hot_reload_tx);
+                dioxus_hot_reload::connect(move |template| {
+                    let _ = hot_reload_tx.send(template);
+                });
                 hot_reload_rx
             };
             let mut terminal = (!cfg.headless).then(|| {
