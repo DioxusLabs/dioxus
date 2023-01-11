@@ -1,6 +1,6 @@
 [package]
 name = "dioxus-ssr"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Jonathan Kelley"]
 edition = "2018"
 description = "Dioxus render-to-string"
@@ -13,10 +13,10 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1", features = ["serialize"] }
+dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 
 [dev-dependencies]
-dioxus = { path = "../dioxus" }
+dioxus = { path = "../dioxus", version = "0.3.0" }
 thiserror = "1.0.23"
 log = "0.4.13"
 fern = { version = "0.6.0", features = ["colored"] }

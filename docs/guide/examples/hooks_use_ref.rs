@@ -8,13 +8,12 @@ fn main() {
 // ANCHOR: component
 fn App(cx: Scope) -> Element {
     let list = use_ref(cx, Vec::new);
-    let list_formatted = format!("{:?}", *list.read());
 
     cx.render(rsx!(
-        p { "Current list: {list_formatted}" }
+        p { "Current list: {list.read():?}" }
         button {
             onclick: move |event| {
-                list.write().push(event)
+                list.with_mut(|list| list.push(event));
             },
             "Click me!"
         }

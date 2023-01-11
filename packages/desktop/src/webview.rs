@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use crate::desktop_context::EventData;
 use crate::protocol;
 use crate::{desktop_context::UserWindowEvent, Config};
 use tao::event_loop::{EventLoopProxy, EventLoopWindowTarget};
@@ -17,7 +18,6 @@ pub fn build(
     let window = builder.build(event_loop).unwrap();
     let file_handler = cfg.file_drop_handler.take();
     let custom_head = cfg.custom_head.clone();
-    let resource_dir = cfg.resource_dir.clone();
     let index_file = cfg.custom_index.clone();
     let root_name = cfg.root_name.clone();
 
@@ -38,20 +38,14 @@ pub fn build(
         .with_transparent(cfg.window.window.transparent)
         .with_url("dioxus://index.html/")
         .unwrap()
-        .with_ipc_handler(move |_window: &Window, payload: String| {
+        .with_ipc_handler(move |window: &Window, payload: String| {
             // defer the event to the main thread
             if let Ok(message) = serde_json::from_str(&payload) {
-                _ = proxy.send_event(UserWindowEvent::Ipc(message));
+                _ = proxy.send_event(UserWindowEvent(EventData::Ipc(message), window.id()));
             }
         })
         .with_custom_protocol(String::from("dioxus"), move |r| {
-            protocol::desktop_handler(
-                r,
-                resource_dir.clone(),
-                custom_head.clone(),
-                index_file.clone(),
-                &root_name,
-            )
+            protocol::desktop_handler(r, custom_head.clone(), index_file.clone(), &root_name)
         })
         .with_file_drop_handler(move |window, evet| {
             file_handler

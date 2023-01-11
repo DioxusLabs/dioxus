@@ -7,7 +7,7 @@ use crate::{
     innerlude::{ErrorBoundary, Scheduler, SchedulerMsg},
     lazynodes::LazyNodes,
     nodes::{ComponentReturn, IntoAttributeValue, IntoDynNode, RenderReturn},
-    Attribute, AttributeValue, Element, Event, Properties, TaskId,
+    AnyValue, Attribute, AttributeValue, Element, Event, Properties, TaskId,
 };
 use bumpalo::{boxed::Box as BumpBox, Bump};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -73,7 +73,7 @@ pub struct ScopeState {
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
 
-    pub(crate) parent: Option<*mut ScopeState>,
+    pub(crate) parent: Option<*const ScopeState>,
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
@@ -85,10 +85,10 @@ pub struct ScopeState {
     pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: FxHashSet<TaskId>,
+    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
-    pub(crate) listeners: RefCell<Vec<*const Attribute<'static>>>,
+    pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
 
     pub(crate) props: Option<Box<dyn AnyProps<'static>>>,
     pub(crate) placeholder: Cell<Option<ElementId>>,
@@ -107,14 +107,6 @@ impl<'src> ScopeState {
         match self.render_cnt.get() % 2 {
             1 => &self.node_arena_1,
             0 => &self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
-    pub(crate) fn previous_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.render_cnt.get() % 2 {
-            1 => &mut self.node_arena_1,
-            0 => &mut self.node_arena_2,
             _ => unreachable!(),
         }
     }
@@ -139,7 +131,7 @@ impl<'src> ScopeState {
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump
+        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -374,11 +366,15 @@ impl<'src> ScopeState {
     pub fn render(&'src self, rsx: LazyNodes<'src, '_>) -> Element<'src> {
         let element = rsx.call(self);
 
-        let mut listeners = self.listeners.borrow_mut();
+        let mut listeners = self.attributes_to_drop.borrow_mut();
         for attr in element.dynamic_attrs {
-            if let AttributeValue::Listener(_) = attr.value {
-                let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
-                listeners.push(unbounded);
+            match attr.value {
+                AttributeValue::Any(_) | AttributeValue::Listener(_) => {
+                    let unbounded = unsafe { std::mem::transmute(attr as *const Attribute) };
+                    listeners.push(unbounded);
+                }
+
+                _ => (),
             }
         }
 
@@ -499,7 +495,7 @@ impl<'src> ScopeState {
             BumpBox::from_raw(self.bump().alloc(move |event: Event<dyn Any>| {
                 if let Ok(data) = event.data.downcast::<T>() {
                     callback(Event {
-                        propogates: event.propogates,
+                        propagates: event.propagates,
                         data,
                     })
                 }
@@ -507,6 +503,17 @@ impl<'src> ScopeState {
         };
 
         AttributeValue::Listener(RefCell::new(Some(boxed)))
+    }
+
+    /// Create a new [`AttributeValue`] with a value that implements [`AnyValue`]
+    pub fn any_value<T: AnyValue>(&'src self, value: T) -> AttributeValue<'src> {
+        // safety: there's no other way to create a dynamicly-dispatched bump box other than alloc + from-raw
+        // This is the suggested way to build a bumpbox
+        //
+        // In theory, we could just use regular boxes
+        let boxed: BumpBox<'src, dyn AnyValue> =
+            unsafe { BumpBox::from_raw(self.bump().alloc(value)) };
+        AttributeValue::Any(RefCell::new(Some(boxed)))
     }
 
     /// Inject an error into the nearest error boundary and quit rendering
@@ -541,7 +548,7 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.borrow_mut();
+        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hook_list.len() {
             hook_list.push(self.hook_arena.alloc(initializer()));

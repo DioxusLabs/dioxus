@@ -31,10 +31,11 @@ impl VirtualDom {
         // If the task completes...
         if task.task.borrow_mut().as_mut().poll(&mut cx).is_ready() {
             // Remove it from the scope so we dont try to double drop it when the scope dropes
-            self.scopes[task.scope.0].spawned_tasks.remove(&id);
+            let scope = &self.scopes[task.scope.0];
+            scope.spawned_tasks.borrow_mut().remove(&id);
 
             // Remove it from the scheduler
-            tasks.remove(id.0);
+            tasks.try_remove(id.0);
         }
     }
 
@@ -63,10 +64,10 @@ impl VirtualDom {
         if let Poll::Ready(new_nodes) = as_pinned_mut.poll_unpin(&mut cx) {
             let fiber = self.acquire_suspense_boundary(leaf.scope_id);
 
-            let scope = &mut self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id.0];
             let arena = scope.current_frame();
 
-            let ret = arena.bump.alloc(match new_nodes {
+            let ret = arena.bump().alloc(match new_nodes {
                 Some(new) => RenderReturn::Ready(new),
                 None => RenderReturn::default(),
             });

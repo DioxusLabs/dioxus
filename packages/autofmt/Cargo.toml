@@ -1,12 +1,12 @@
 [package]
 name = "dioxus-autofmt"
-version = "0.0.0"
+version = "0.3.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-rsx = { path = "../rsx" }
+dioxus-rsx = { path = "../rsx", version = "0.0.2"}
 proc-macro2 = { version = "1.0.6", features = ["span-locations"] }
 quote = "1.0"
 syn = { version = "1.0.11", features = ["full", "extra-traits"] }

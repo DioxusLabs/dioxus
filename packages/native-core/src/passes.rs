@@ -1,112 +1,100 @@
 use crate::tree::{NodeId, TreeView};
-use crate::{FxDashMap, FxDashSet, SendAnyMap};
+use crate::{FxDashSet, SendAnyMap};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::BTreeMap;
 use std::ops::{BitAnd, BitAndAssign, BitOr, BitOrAssign};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct DirtyNodes {
-    map: BTreeMap<u16, FxHashSet<NodeId>>,
+#[derive(Default)]
+struct DirtyNodes {
+    passes_dirty: Vec<u64>,
 }
 
 impl DirtyNodes {
-    pub fn insert(&mut self, depth: u16, node_id: NodeId) {
-        self.map
-            .entry(depth)
-            .or_insert_with(FxHashSet::default)
-            .insert(node_id);
-    }
-
-    fn pop_front(&mut self) -> Option<NodeId> {
-        let (&depth, values) = self.map.iter_mut().next()?;
-        let key = *values.iter().next()?;
-        let node_id = values.take(&key)?;
-        if values.is_empty() {
-            self.map.remove(&depth);
+    fn add_node(&mut self, node_id: NodeId) {
+        let node_id = node_id.0;
+        let index = node_id / 64;
+        let bit = node_id % 64;
+        let encoded = 1 << bit;
+        if let Some(passes) = self.passes_dirty.get_mut(index) {
+            *passes |= encoded;
+        } else {
+            self.passes_dirty.resize(index + 1, 0);
+            self.passes_dirty[index] |= encoded;
         }
-        Some(node_id)
     }
 
-    fn pop_back(&mut self) -> Option<NodeId> {
-        let (&depth, values) = self.map.iter_mut().rev().next()?;
-        let key = *values.iter().next()?;
-        let node_id = values.take(&key)?;
-        if values.is_empty() {
-            self.map.remove(&depth);
-        }
-        Some(node_id)
+    fn is_empty(&self) -> bool {
+        self.passes_dirty.iter().all(|dirty| *dirty == 0)
     }
-}
 
-#[test]
-fn dirty_nodes() {
-    let mut dirty_nodes = DirtyNodes::default();
-
-    dirty_nodes.insert(1, NodeId(1));
-    dirty_nodes.insert(0, NodeId(0));
-    dirty_nodes.insert(2, NodeId(3));
-    dirty_nodes.insert(1, NodeId(2));
-
-    assert_eq!(dirty_nodes.pop_front(), Some(NodeId(0)));
-    assert!(matches!(dirty_nodes.pop_front(), Some(NodeId(1 | 2))));
-    assert!(matches!(dirty_nodes.pop_front(), Some(NodeId(1 | 2))));
-    assert_eq!(dirty_nodes.pop_front(), Some(NodeId(3)));
+    fn pop(&mut self) -> Option<NodeId> {
+        let index = self.passes_dirty.iter().position(|dirty| *dirty != 0)?;
+        let passes = self.passes_dirty[index];
+        let node_id = passes.trailing_zeros();
+        let encoded = 1 << node_id;
+        self.passes_dirty[index] &= !encoded;
+        Some(NodeId((index * 64) + node_id as usize))
+    }
 }
 
 #[derive(Default)]
 pub struct DirtyNodeStates {
-    dirty: FxDashMap<NodeId, Vec<AtomicU64>>,
+    dirty: BTreeMap<u16, FxHashMap<PassId, DirtyNodes>>,
 }
 
 impl DirtyNodeStates {
-    pub fn new(starting_nodes: FxHashMap<NodeId, FxHashSet<PassId>>) -> Self {
-        let this = Self::default();
-        for (node, nodes) in starting_nodes {
-            for pass_id in nodes {
-                this.insert(pass_id, node);
-            }
-        }
-        this
-    }
-
-    pub fn insert(&self, pass_id: PassId, node_id: NodeId) {
-        let pass_id = pass_id.0;
-        let index = pass_id / 64;
-        let bit = pass_id % 64;
-        let encoded = 1 << bit;
-        if let Some(dirty) = self.dirty.get(&node_id) {
-            if let Some(atomic) = dirty.get(index as usize) {
-                atomic.fetch_or(encoded, Ordering::Relaxed);
+    pub fn insert(&mut self, pass_id: PassId, node_id: NodeId, height: u16) {
+        if let Some(dirty) = self.dirty.get_mut(&height) {
+            if let Some(entry) = dirty.get_mut(&pass_id) {
+                entry.add_node(node_id);
             } else {
-                drop(dirty);
-                let mut write = self.dirty.get_mut(&node_id).unwrap();
-                write.resize_with(index as usize + 1, || AtomicU64::new(0));
-                write[index as usize].fetch_or(encoded, Ordering::Relaxed);
+                let mut entry = DirtyNodes::default();
+                entry.add_node(node_id);
+                dirty.insert(pass_id, entry);
             }
         } else {
-            let mut v = Vec::with_capacity(index as usize + 1);
-            v.resize_with(index as usize + 1, || AtomicU64::new(0));
-            v[index as usize].fetch_or(encoded, Ordering::Relaxed);
-            self.dirty.insert(node_id, v);
+            let mut entry = DirtyNodes::default();
+            entry.add_node(node_id);
+            let mut hm = FxHashMap::default();
+            hm.insert(pass_id, entry);
+            self.dirty.insert(height, hm);
         }
     }
 
-    fn all_dirty<T>(&self, pass_id: PassId, dirty_nodes: &mut DirtyNodes, tree: &impl TreeView<T>) {
-        let pass_id = pass_id.0;
-        let index = pass_id / 64;
-        let bit = pass_id % 64;
-        let encoded = 1 << bit;
-        for entry in self.dirty.iter() {
-            let node_id = entry.key();
-            let dirty = entry.value();
-            if let Some(atomic) = dirty.get(index as usize) {
-                if atomic.load(Ordering::Relaxed) & encoded != 0 {
-                    dirty_nodes.insert(tree.height(*node_id).unwrap(), *node_id);
-                }
-            }
+    fn pop_front(&mut self, pass_id: PassId) -> Option<(u16, NodeId)> {
+        let (&height, values) = self
+            .dirty
+            .iter_mut()
+            .find(|(_, values)| values.contains_key(&pass_id))?;
+        let dirty = values.get_mut(&pass_id)?;
+        let node_id = dirty.pop()?;
+        if dirty.is_empty() {
+            values.remove(&pass_id);
         }
+        if values.is_empty() {
+            self.dirty.remove(&height);
+        }
+
+        Some((height, node_id))
+    }
+
+    fn pop_back(&mut self, pass_id: PassId) -> Option<(u16, NodeId)> {
+        let (&height, values) = self
+            .dirty
+            .iter_mut()
+            .rev()
+            .find(|(_, values)| values.contains_key(&pass_id))?;
+        let dirty = values.get_mut(&pass_id)?;
+        let node_id = dirty.pop()?;
+        if dirty.is_empty() {
+            values.remove(&pass_id);
+        }
+        if values.is_empty() {
+            self.dirty.remove(&height);
+        }
+
+        Some((height, node_id))
     }
 }
 
@@ -174,12 +162,12 @@ pub trait UpwardPass<T>: Pass {
 fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
     tree: &mut impl TreeView<T>,
     pass: &P,
-    mut dirty: DirtyNodes,
-    dirty_states: &DirtyNodeStates,
+    dirty_states: &mut DirtyNodeStates,
     nodes_updated: &FxDashSet<NodeId>,
     ctx: &SendAnyMap,
 ) {
-    while let Some(id) = dirty.pop_back() {
+    let pass_id = pass.pass_id();
+    while let Some((height, id)) = dirty_states.pop_back(pass_id) {
         let (node, mut children) = tree.parent_child_mut(id).unwrap();
         let result = pass.pass(node, &mut children, ctx);
         drop(children);
@@ -188,12 +176,11 @@ fn resolve_upward_pass<T, P: UpwardPass<T> + ?Sized>(
             if let Some(id) = tree.parent_id(id) {
                 if result.mark_dirty {
                     for dependant in pass.dependants() {
-                        dirty_states.insert(*dependant, id);
+                        dirty_states.insert(*dependant, id, height - 1);
                     }
                 }
-                if result.progress {
-                    let height = tree.height(id).unwrap();
-                    dirty.insert(height, id);
+                if result.progress && height > 0 {
+                    dirty_states.insert(pass_id, id, height - 1);
                 }
             }
         }
@@ -207,12 +194,12 @@ pub trait DownwardPass<T>: Pass {
 fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
     tree: &mut impl TreeView<T>,
     pass: &P,
-    mut dirty: DirtyNodes,
-    dirty_states: &DirtyNodeStates,
+    dirty_states: &mut DirtyNodeStates,
     nodes_updated: &FxDashSet<NodeId>,
     ctx: &SendAnyMap,
 ) {
-    while let Some(id) = dirty.pop_front() {
+    let pass_id = pass.pass_id();
+    while let Some((height, id)) = dirty_states.pop_front(pass_id) {
         let (node, parent) = tree.node_parent_mut(id).unwrap();
         let result = pass.pass(node, parent, ctx);
         if result.mark_dirty {
@@ -222,12 +209,11 @@ fn resolve_downward_pass<T, P: DownwardPass<T> + ?Sized>(
             for id in tree.children_ids(id).unwrap() {
                 if result.mark_dirty {
                     for dependant in pass.dependants() {
-                        dirty_states.insert(*dependant, *id);
+                        dirty_states.insert(*dependant, *id, height + 1);
                     }
                 }
                 if result.progress {
-                    let height = tree.height(*id).unwrap();
-                    dirty.insert(height, *id);
+                    dirty_states.insert(pass_id, *id, height + 1);
                 }
             }
         }
@@ -241,17 +227,17 @@ pub trait NodePass<T>: Pass {
 fn resolve_node_pass<T, P: NodePass<T> + ?Sized>(
     tree: &mut impl TreeView<T>,
     pass: &P,
-    mut dirty: DirtyNodes,
-    dirty_states: &DirtyNodeStates,
+    dirty_states: &mut DirtyNodeStates,
     nodes_updated: &FxDashSet<NodeId>,
     ctx: &SendAnyMap,
 ) {
-    while let Some(id) = dirty.pop_back() {
+    let pass_id = pass.pass_id();
+    while let Some((height, id)) = dirty_states.pop_back(pass_id) {
         let node = tree.get_mut(id).unwrap();
         if pass.pass(node, ctx) {
             nodes_updated.insert(id);
             for dependant in pass.dependants() {
-                dirty_states.insert(*dependant, id);
+                dirty_states.insert(*dependant, id, height);
             }
         }
     }
@@ -280,90 +266,109 @@ impl<T> AnyPass<T> {
         }
     }
 
-    fn mask(&self) -> MemberMask {
-        match self {
-            Self::Upward(pass) => pass.mask(),
-            Self::Downward(pass) => pass.mask(),
-            Self::Node(pass) => pass.mask(),
-        }
-    }
-
     fn resolve(
         &self,
         tree: &mut impl TreeView<T>,
-        dirty: DirtyNodes,
-        dirty_states: &DirtyNodeStates,
+        dirty_states: &mut DirtyNodeStates,
         nodes_updated: &FxDashSet<NodeId>,
         ctx: &SendAnyMap,
     ) {
         match self {
             Self::Downward(pass) => {
-                resolve_downward_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
+                resolve_downward_pass(tree, *pass, dirty_states, nodes_updated, ctx)
             }
             Self::Upward(pass) => {
-                resolve_upward_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
+                resolve_upward_pass(tree, *pass, dirty_states, nodes_updated, ctx)
             }
-            Self::Node(pass) => {
-                resolve_node_pass(tree, *pass, dirty, dirty_states, nodes_updated, ctx)
-            }
+            Self::Node(pass) => resolve_node_pass(tree, *pass, dirty_states, nodes_updated, ctx),
         }
     }
 }
 
-struct RawPointer<T>(*mut T);
-unsafe impl<T> Send for RawPointer<T> {}
-unsafe impl<T> Sync for RawPointer<T> {}
+pub fn resolve_passes<T, Tr: TreeView<T> + Sync + Send>(
+    tree: &mut Tr,
+    dirty_nodes: DirtyNodeStates,
+    passes: Vec<&AnyPass<T>>,
+    ctx: SendAnyMap,
+) -> FxDashSet<NodeId> {
+    resolve_passes_single_threaded(tree, dirty_nodes, passes, ctx)
+    // TODO: multithreadeding has some safety issues currently that need to be resolved before it can be used
+    // let dirty_states = Arc::new(dirty_nodes);
+    // let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
+    // let mut resolving = Vec::new();
+    // let nodes_updated = Arc::new(FxDashSet::default());
+    // let ctx = Arc::new(ctx);
+    // while !passes.is_empty() {
+    //     let mut currently_borrowed = MemberMask::default();
+    //     std::thread::scope(|s| {
+    //         let mut i = 0;
+    //         while i < passes.len() {
+    //             let pass = &passes[i];
+    //             let pass_id = pass.pass_id();
+    //             let pass_mask = pass.mask();
+    //             if pass
+    //                 .dependancies()
+    //                 .iter()
+    //                 .all(|d| resolved_passes.contains(d) || *d == pass_id)
+    //                 && !pass_mask.overlaps(currently_borrowed)
+    //             {
+    //                 let pass = passes.remove(i);
+    //                 resolving.push(pass_id);
+    //                 currently_borrowed |= pass_mask;
+    //                 let dirty_states = dirty_states.clone();
+    //                 let nodes_updated = nodes_updated.clone();
+    //                 let ctx = ctx.clone();
+    //                 let mut dirty = DirtyNodes::default();
+    //                 // dirty_states.all_dirty(pass_id, &mut dirty, tree);
+    //                 // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
+    //                 let tree_mut_unbounded = unsafe { &mut *(tree as *mut Tr) };
+    //                 s.spawn(move || {
+    //                     pass.resolve(
+    //                         tree_mut_unbounded,
+    //                         dirty,
+    //                         &dirty_states,
+    //                         &nodes_updated,
+    //                         &ctx,
+    //                     );
+    //                 });
+    //             } else {
+    //                 i += 1;
+    //             }
+    //         }
+    //         // all passes are resolved at the end of the scope
+    //     });
+    //     resolved_passes.extend(resolving.iter().copied());
+    //     resolving.clear()
+    // }
+    // std::sync::Arc::try_unwrap(nodes_updated).unwrap()
+}
 
-pub fn resolve_passes<T, Tr: TreeView<T>>(
+pub fn resolve_passes_single_threaded<T, Tr: TreeView<T>>(
     tree: &mut Tr,
     dirty_nodes: DirtyNodeStates,
     mut passes: Vec<&AnyPass<T>>,
     ctx: SendAnyMap,
 ) -> FxDashSet<NodeId> {
-    let dirty_states = Arc::new(dirty_nodes);
+    let mut dirty_states = dirty_nodes;
     let mut resolved_passes: FxHashSet<PassId> = FxHashSet::default();
-    let mut resolving = Vec::new();
     let nodes_updated = Arc::new(FxDashSet::default());
     let ctx = Arc::new(ctx);
     while !passes.is_empty() {
-        let mut currently_borrowed = MemberMask::default();
-        std::thread::scope(|s| {
-            let mut i = 0;
-            while i < passes.len() {
-                let pass = &passes[i];
-                let pass_id = pass.pass_id();
-                let pass_mask = pass.mask();
-                if pass
-                    .dependancies()
-                    .iter()
-                    .all(|d| resolved_passes.contains(d) || *d == pass_id)
-                    && !pass_mask.overlaps(currently_borrowed)
-                {
-                    let pass = passes.remove(i);
-                    resolving.push(pass_id);
-                    currently_borrowed |= pass_mask;
-                    let tree_mut = tree as *mut _;
-                    let raw_ptr = RawPointer(tree_mut);
-                    let dirty_states = dirty_states.clone();
-                    let nodes_updated = nodes_updated.clone();
-                    let ctx = ctx.clone();
-                    s.spawn(move || unsafe {
-                        // let tree_mut: &mut Tr = &mut *raw_ptr.0;
-                        let raw = raw_ptr;
-                        // this is safe because the member_mask acts as a per-member mutex and we have verified that the pass does not overlap with any other pass
-                        let tree_mut: &mut Tr = &mut *raw.0;
-                        let mut dirty = DirtyNodes::default();
-                        dirty_states.all_dirty(pass_id, &mut dirty, tree_mut);
-                        pass.resolve(tree_mut, dirty, &dirty_states, &nodes_updated, &ctx);
-                    });
-                } else {
-                    i += 1;
-                }
+        for (i, pass) in passes.iter().enumerate() {
+            let pass_id = pass.pass_id();
+            if pass
+                .dependancies()
+                .iter()
+                .all(|d| resolved_passes.contains(d) || *d == pass_id)
+            {
+                let pass = passes.remove(i);
+                let nodes_updated = nodes_updated.clone();
+                let ctx = ctx.clone();
+                pass.resolve(tree, &mut dirty_states, &nodes_updated, &ctx);
+                resolved_passes.insert(pass_id);
+                break;
             }
-            // all passes are resolved at the end of the scope
-        });
-        resolved_passes.extend(resolving.iter().copied());
-        resolving.clear()
+        }
     }
     std::sync::Arc::try_unwrap(nodes_updated).unwrap()
 }
@@ -401,8 +406,8 @@ fn node_pass() {
 
     let add_pass = AnyPass::Node(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(0), tree.root());
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &1);
@@ -468,8 +473,8 @@ fn dependant_node_pass() {
     let add_pass = AnyPass::Node(&AddPass);
     let subtract_pass = AnyPass::Node(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(1), tree.root());
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(*tree.get(tree.root()).unwrap(), 0);
@@ -535,9 +540,9 @@ fn independant_node_pass() {
     let add_pass1 = AnyPass::Node(&AddPass1);
     let add_pass2 = AnyPass::Node(&AddPass2);
     let passes = vec![&add_pass1, &add_pass2];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(0), tree.root());
-    dirty_nodes.insert(PassId(1), tree.root());
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), tree.root(), 0);
+    dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &(1, 1));
@@ -590,8 +595,8 @@ fn down_pass() {
 
     let add_pass = AnyPass::Downward(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(0), tree.root());
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &1);
@@ -685,8 +690,8 @@ fn dependant_down_pass() {
     let add_pass = AnyPass::Downward(&AddPass);
     let subtract_pass = AnyPass::Downward(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(1), tree.root());
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(1), tree.root(), 0);
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     // Tree before:
@@ -775,9 +780,9 @@ fn up_pass() {
 
     let add_pass = AnyPass::Upward(&AddPass);
     let passes = vec![&add_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(0), grandchild1);
-    dirty_nodes.insert(PassId(0), grandchild2);
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(0), grandchild1, tree.height(grandchild1).unwrap());
+    dirty_nodes.insert(PassId(0), grandchild2, tree.height(grandchild2).unwrap());
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     assert_eq!(tree.get(tree.root()).unwrap(), &2);
@@ -875,9 +880,9 @@ fn dependant_up_pass() {
     let add_pass = AnyPass::Upward(&AddPass);
     let subtract_pass = AnyPass::Upward(&SubtractPass);
     let passes = vec![&add_pass, &subtract_pass];
-    let dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
-    dirty_nodes.insert(PassId(1), grandchild1);
-    dirty_nodes.insert(PassId(1), grandchild2);
+    let mut dirty_nodes: DirtyNodeStates = DirtyNodeStates::default();
+    dirty_nodes.insert(PassId(1), grandchild1, tree.height(grandchild1).unwrap());
+    dirty_nodes.insert(PassId(1), grandchild2, tree.height(grandchild2).unwrap());
     resolve_passes(&mut tree, dirty_nodes, passes, SendAnyMap::new());
 
     // Tree before:

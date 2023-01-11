@@ -19,8 +19,7 @@ use syn::{
     ext::IdentExt,
     parse::{Parse, ParseBuffer, ParseStream},
     spanned::Spanned,
-    token, AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result,
-    Token,
+    AngleBracketedGenericArguments, Error, Expr, Ident, LitStr, PathArguments, Result, Token,
 };
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -30,6 +29,7 @@ pub struct Component {
     pub fields: Vec<ComponentField>,
     pub children: Vec<BodyNode>,
     pub manual_props: Option<Expr>,
+    pub brace: syn::token::Brace,
 }
 
 impl Component {
@@ -88,13 +88,9 @@ impl Parse for Component {
 
         // if we see a `{` then we have a block
         // else parse as a function-like call
-        if stream.peek(token::Brace) {
-            syn::braced!(content in stream);
-        } else {
-            syn::parenthesized!(content in stream);
-        }
+        let brace = syn::braced!(content in stream);
 
-        let mut body = Vec::new();
+        let mut fields = Vec::new();
         let mut children = Vec::new();
         let mut manual_props = None;
 
@@ -104,7 +100,7 @@ impl Parse for Component {
                 content.parse::<Token![..]>()?;
                 manual_props = Some(content.parse::<Expr>()?);
             } else if content.peek(Ident) && content.peek2(Token![:]) && !content.peek3(Token![:]) {
-                body.push(content.parse::<ComponentField>()?);
+                fields.push(content.parse::<ComponentField>()?);
             } else {
                 children.push(content.parse::<BodyNode>()?);
             }
@@ -117,9 +113,10 @@ impl Parse for Component {
         Ok(Self {
             name,
             prop_gen_args,
-            fields: body,
+            fields,
             children,
             manual_props,
+            brace,
         })
     }
 }

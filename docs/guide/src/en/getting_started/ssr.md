@@ -15,19 +15,7 @@ When working with web frameworks that require `Send`, it is possible to render a
 
 ## Setup
 
-If you just want to render `rsx!` or a VirtualDom to HTML, check out the API docs. It's pretty simple:
-
-```rust
-// We can render VirtualDoms
-let mut vdom = VirtualDom::new(app);
-let _ = vdom.rebuild();
-println!("{}", dioxus_ssr::render_vdom(&vdom));
-
-// Or we can render rsx! calls directly
-println!( "{}", dioxus_ssr::render_lazy(rsx! { h1 { "Hello, world!" } } );
-```
-
-However, for this guide, we're going to show how to use Dioxus SSR with `Axum`.
+For this guide, we're going to show how to use Dioxus SSR with [Axum](https://docs.rs/axum/latest/axum/).
 
 Make sure you have Rust and Cargo installed, and then create a new project:
 
@@ -36,7 +24,7 @@ cargo new --bin demo
 cd app
 ```
 
-Add Dioxus and the `ssr` renderer feature:
+Add Dioxus and the ssr renderer as dependencies:
 
 ```shell
 cargo add dioxus
@@ -86,8 +74,9 @@ And then add our endpoint. We can either render `rsx!` directly:
 
 ```rust
 async fn app_endpoint() -> Html<String> {
+    // render the rsx! macro to HTML
     Html(dioxus_ssr::render_lazy(rsx! {
-            h1 { "hello world!" }
+        div { "hello world!" }
     }))
 }
 ```
@@ -96,12 +85,16 @@ Or we can render VirtualDoms.
 
 ```rust
 async fn app_endpoint() -> Html<String> {
+    // create a component that renders a div with the text "hello world"
     fn app(cx: Scope) -> Element {
-        cx.render(rsx!(h1 { "hello world" }))
+        cx.render(rsx!(div { "hello world" }))
     }
+    // create a VirtualDom with the app component
     let mut app = VirtualDom::new(app);
+    // rebuild the VirtualDom before rendering
     let _ = app.rebuild();
 
+    // render the VirtualDom to HTML
     Html(dioxus_ssr::render_vdom(&app))
 }
 ```

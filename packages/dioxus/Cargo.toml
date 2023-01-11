@@ -1,7 +1,7 @@
 [package]
 name = "dioxus"
-version = "0.2.4"
-authors = ["Jonathan Kelley"]
+version = "0.3.1"
+authors = ["Jonathan Kelley", "Dioxus Labs", "ealmloff"]
 edition = "2021"
 description = "Core functionality for Dioxus - a concurrent renderer-agnostic Virtual DOM for interactive user experiences"
 license = "MIT OR Apache-2.0"
@@ -9,14 +9,14 @@ repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
 keywords = ["dom", "ui", "gui", "react", "wasm"]
-rust-version = "1.60.0"
+rust-version = "1.65.0"
 
 [dependencies]
-dioxus-core = { path = "../core", version = "^0.2.1" }
-dioxus-html = { path = "../html", version = "^0.2.1", optional = true }
-dioxus-core-macro = { path = "../core-macro", version = "^0.2.1", optional = true }
-dioxus-hooks = { path = "../hooks", version = "^0.2.1", optional = true }
-dioxus-rsx = { path = "../rsx", optional = true }
+dioxus-core = { path = "../core", version = "^0.3.0" }
+dioxus-html = { path = "../html", version = "^0.3.0", optional = true }
+dioxus-core-macro = { path = "../core-macro", version = "^0.3.0", optional = true }
+dioxus-hooks = { path = "../hooks", version = "^0.3.0", optional = true }
+dioxus-rsx = { path = "../rsx", version = "0.0.2", optional = true }
 
 [features]
 default = ["macro", "hooks", "html"]

@@ -1,9 +1,9 @@
-use dioxus_core::{ElementId, Mutations, TemplateNode};
+use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
 use std::ops::{Deref, DerefMut, Index, IndexMut};
 
-use crate::node::{Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
+use crate::node::{FromAnyValue, Node, NodeType, OwnedAttributeDiscription, OwnedAttributeValue};
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::passes::DirtyNodeStates;
 use crate::state::State;
@@ -25,9 +25,12 @@ fn mark_dirty(
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
 /// The render state passes from parent to children and or accumulates state from children to parents.
 /// To get started implement [crate::state::ParentDepState], [crate::state::NodeDepState], or [crate::state::ChildDepState] and call [RealDom::apply_mutations] to update the dom and [RealDom::update_state] to update the state of the nodes.
+///
+/// # Custom values
+/// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the varients.
 #[derive(Debug)]
-pub struct RealDom<S: State> {
-    pub tree: Tree<Node<S>>,
+pub struct RealDom<S: State<V>, V: FromAnyValue + 'static = ()> {
+    pub tree: Tree<Node<S, V>>,
     /// a map from element id to real node id
     node_id_mapping: Vec<Option<RealNodeId>>,
     nodes_listening: FxHashMap<String, FxHashSet<RealNodeId>>,
@@ -36,14 +39,14 @@ pub struct RealDom<S: State> {
     root_initialized: bool,
 }
 
-impl<S: State> Default for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> Default for RealDom<S, V> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<S: State> RealDom<S> {
-    pub fn new() -> RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
+    pub fn new() -> RealDom<S, V> {
         let mut root = Node::new(NodeType::Element {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
@@ -76,10 +79,6 @@ impl<S: State> RealDom<S> {
         if self.node_id_mapping.len() <= element_id.0 {
             self.node_id_mapping.resize(element_id.0 + 1, None);
         }
-        if let Some(Some(old_id)) = self.node_id_mapping.get(element_id.0) {
-            // free the memory associated with the old node
-            self.tree.remove(*old_id);
-        }
         self.node_id_mapping[element_id.0] = Some(node_id);
     }
 
@@ -91,7 +90,7 @@ impl<S: State> RealDom<S> {
         current
     }
 
-    fn create_node(&mut self, node: Node<S>) -> RealNodeId {
+    fn create_node(&mut self, node: Node<S, V>) -> RealNodeId {
         let node_id = self.tree.create_node(node);
         let node = self.tree.get_mut(node_id).unwrap();
         node.node_data.node_id = node_id;
@@ -228,7 +227,7 @@ impl<S: State> RealDom<S> {
                         self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    self.tree.remove(old_node_id);
+                    self.remove(old_node_id, &mut nodes_updated);
                 }
                 ReplacePlaceholder { path, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -237,7 +236,7 @@ impl<S: State> RealDom<S> {
                         self.tree.insert_before(old_node_id, new);
                         mark_dirty(new, NodeMask::ALL, &mut nodes_updated);
                     }
-                    self.tree.remove(old_node_id);
+                    self.remove(old_node_id, &mut nodes_updated);
                 }
                 InsertAfter { id, m } => {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
@@ -264,38 +263,32 @@ impl<S: State> RealDom<S> {
                     let node_id = self.element_to_node_id(id);
                     let node = self.tree.get_mut(node_id).unwrap();
                     if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
-                        attributes.insert(
-                            OwnedAttributeDiscription {
+                        if let BorrowedAttributeValue::None = &value {
+                            attributes.remove(&OwnedAttributeDiscription {
                                 name: name.to_string(),
                                 namespace: ns.map(|s| s.to_string()),
                                 volatile: false,
-                            },
-                            crate::node::OwnedAttributeValue::Text(value.to_string()),
-                        );
-                        mark_dirty(
-                            node_id,
-                            NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            &mut nodes_updated,
-                        );
-                    }
-                }
-                SetBoolAttribute { name, value, id } => {
-                    let node_id = self.element_to_node_id(id);
-                    let node = self.tree.get_mut(node_id).unwrap();
-                    if let NodeType::Element { attributes, .. } = &mut node.node_data.node_type {
-                        attributes.insert(
-                            OwnedAttributeDiscription {
-                                name: name.to_string(),
-                                namespace: None,
-                                volatile: false,
-                            },
-                            crate::node::OwnedAttributeValue::Bool(value),
-                        );
-                        mark_dirty(
-                            node_id,
-                            NodeMask::new_with_attrs(AttributeMask::single(name)),
-                            &mut nodes_updated,
-                        );
+                            });
+                            mark_dirty(
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                                &mut nodes_updated,
+                            );
+                        } else {
+                            attributes.insert(
+                                OwnedAttributeDiscription {
+                                    name: name.to_string(),
+                                    namespace: ns.map(|s| s.to_string()),
+                                    volatile: false,
+                                },
+                                OwnedAttributeValue::from(value),
+                            );
+                            mark_dirty(
+                                node_id,
+                                NodeMask::new_with_attrs(AttributeMask::single(name)),
+                                &mut nodes_updated,
+                            );
+                        }
                     }
                 }
                 SetText { value, id } => {
@@ -333,7 +326,7 @@ impl<S: State> RealDom<S> {
                 }
                 Remove { id } => {
                     let node_id = self.element_to_node_id(id);
-                    self.tree.remove(node_id);
+                    self.remove(node_id, &mut nodes_updated);
                 }
                 PushRoot { id } => {
                     let node_id = self.element_to_node_id(id);
@@ -342,13 +335,13 @@ impl<S: State> RealDom<S> {
             }
         }
 
-        let dirty_nodes = DirtyNodeStates::default();
+        let mut dirty_nodes = DirtyNodeStates::default();
         for (&n, mask) in &nodes_updated {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(n) {
+            if let Some(height) = self.tree.height(n) {
                 for (m, p) in S::MASKS.iter().zip(S::PASSES.iter()) {
                     if mask.overlaps(m) {
-                        dirty_nodes.insert(p.pass_id(), n);
+                        dirty_nodes.insert(p.pass_id(), n, height);
                     }
                 }
             }
@@ -358,17 +351,17 @@ impl<S: State> RealDom<S> {
     }
 
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
-    pub fn update_state(
+    pub fn update_state_single_threaded(
         &mut self,
         nodes_updated: DirtyNodeStates,
         ctx: SendAnyMap,
     ) -> FxDashSet<RealNodeId> {
-        S::update(nodes_updated, &mut self.tree, ctx)
+        S::update_single_threaded(nodes_updated, &mut self.tree, ctx)
     }
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
     /// This can be useful to avoid creating duplicate events.
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S>> {
+    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S, V>> {
         if let Some(nodes) = self.nodes_listening.get(event) {
             let mut listening: Vec<_> = nodes.iter().map(|id| &self[*id]).collect();
             listening.sort_by(|n1, n2| {
@@ -413,45 +406,77 @@ impl<S: State> RealDom<S> {
         }
         new_id
     }
+
+    fn remove(&mut self, node_id: NodeId, nodes_updated: &mut FxHashMap<RealNodeId, NodeMask>) {
+        let node = self.tree.get(node_id).unwrap();
+        if let NodeType::Element { listeners, .. } = &node.node_data.node_type {
+            for name in listeners.iter() {
+                self.nodes_listening.get_mut(name).unwrap().remove(&node_id);
+            }
+        }
+        if let Some(children) = self.tree.children_ids(node_id) {
+            let children = children.to_vec();
+            for child in children {
+                self.remove(child, nodes_updated);
+            }
+        }
+        self.tree.remove(node_id);
+        mark_dirty(node_id, NodeMask::ALL, nodes_updated);
+    }
 }
 
-impl<S: State> Deref for RealDom<S> {
-    type Target = Tree<Node<S>>;
+impl<S: State<V> + Sync, V: FromAnyValue> RealDom<S, V>
+where
+    Tree<Node<S, V>>: Sync + Send,
+{
+    /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
+    /// This will resolve the state in parallel
+    pub fn update_state(
+        &mut self,
+        nodes_updated: DirtyNodeStates,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        S::update(nodes_updated, &mut self.tree, ctx)
+    }
+}
+
+impl<S: State<V>, V: FromAnyValue> Deref for RealDom<S, V> {
+    type Target = Tree<Node<S, V>>;
 
     fn deref(&self) -> &Self::Target {
         &self.tree
     }
 }
 
-impl<S: State> DerefMut for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> DerefMut for RealDom<S, V> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.tree
     }
 }
 
-impl<S: State> Index<ElementId> for RealDom<S> {
-    type Output = Node<S>;
+impl<S: State<V>, V: FromAnyValue> Index<ElementId> for RealDom<S, V> {
+    type Output = Node<S, V>;
 
     fn index(&self, id: ElementId) -> &Self::Output {
         self.tree.get(self.element_to_node_id(id)).unwrap()
     }
 }
 
-impl<S: State> Index<RealNodeId> for RealDom<S> {
-    type Output = Node<S>;
+impl<S: State<V>, V: FromAnyValue> Index<RealNodeId> for RealDom<S, V> {
+    type Output = Node<S, V>;
 
     fn index(&self, idx: RealNodeId) -> &Self::Output {
         self.tree.get(idx).unwrap()
     }
 }
 
-impl<S: State> IndexMut<ElementId> for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> IndexMut<ElementId> for RealDom<S, V> {
     fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
         self.tree.get_mut(self.element_to_node_id(id)).unwrap()
     }
 }
 
-impl<S: State> IndexMut<RealNodeId> for RealDom<S> {
+impl<S: State<V>, V: FromAnyValue> IndexMut<RealNodeId> for RealDom<S, V> {
     fn index_mut(&mut self, idx: RealNodeId) -> &mut Self::Output {
         self.tree.get_mut(idx).unwrap()
     }

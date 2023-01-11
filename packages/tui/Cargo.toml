@@ -13,9 +13,9 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { path = "../dioxus", version = "^0.2.1" }
-dioxus-core = { path = "../core", version = "^0.2.1" }
-dioxus-html = { path = "../html", version = "^0.2.1" }
+dioxus = { path = "../dioxus", version = "^0.3.0" }
+dioxus-core = { path = "../core", version = "^0.3.0" }
+dioxus-html = { path = "../html", version = "^0.3.0" }
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.2.0" }
 
@@ -27,7 +27,7 @@ futures = "0.3.19"
 taffy = "0.2.1"
 smallvec = "1.6"
 rustc-hash = "1.1.0"
-anymap = "0.12.1"
+anymap = "1.0.0-beta.2"
 futures-channel = "0.3.25"
 
 [dev-dependencies]

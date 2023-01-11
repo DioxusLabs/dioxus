@@ -347,7 +347,7 @@ impl VirtualDom {
 
         // We will clone this later. The data itself is wrapped in RC to be used in callbacks if required
         let uievent = Event {
-            propogates: Rc::new(Cell::new(bubbles)),
+            propagates: Rc::new(Cell::new(bubbles)),
             data,
         };
 
@@ -388,7 +388,7 @@ impl VirtualDom {
                         cb(uievent.clone());
                     }
 
-                    if !uievent.propogates.get() {
+                    if !uievent.propagates.get() {
                         return;
                     }
                 }
@@ -549,7 +549,7 @@ impl VirtualDom {
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &mut self.scopes[finished_fiber.0];
+                let scope = &self.scopes[finished_fiber.0];
                 let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations
@@ -641,10 +641,7 @@ impl VirtualDom {
 
     /// Swap the current mutations with a new
     fn finalize(&mut self) -> Mutations {
-        // todo: make this a routine
-        let mut out = Mutations::default();
-        std::mem::swap(&mut self.mutations, &mut out);
-        out
+        std::mem::take(&mut self.mutations)
     }
 }
 

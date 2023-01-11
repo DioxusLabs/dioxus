@@ -1,8 +1,8 @@
 use std::cmp::Ordering;
 
-use crate::node::Node;
+use crate::node::{FromAnyValue, Node};
 use crate::node_ref::{NodeMask, NodeView};
-use crate::passes::{resolve_passes, AnyPass, DirtyNodeStates};
+use crate::passes::{resolve_passes, resolve_passes_single_threaded, AnyPass, DirtyNodeStates};
 use crate::tree::TreeView;
 use crate::{FxDashSet, RealNodeId, SendAnyMap};
 
@@ -76,7 +76,7 @@ pub(crate) fn union_ordered_iter<'a>(
 ///     }
 /// }
 /// ```
-pub trait ChildDepState {
+pub trait ChildDepState<V: FromAnyValue = ()> {
     /// The context is passed to the [ChildDepState::reduce] when it is resolved.
     type Ctx;
     /// A state from each child node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
@@ -87,7 +87,7 @@ pub trait ChildDepState {
     /// Resolve the state current node's state from the state of the children, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a, V>,
         children: impl Iterator<Item = <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool
@@ -138,7 +138,7 @@ pub trait ChildDepState {
 ///     }
 /// }
 /// ```
-pub trait ParentDepState {
+pub trait ParentDepState<V: FromAnyValue = ()> {
     /// The context is passed to the [ParentDepState::reduce] when it is resolved.
     type Ctx;
     /// A state from from the parent node that this node depends on. Typically this is Self, but it could be any state that is within the state tree.
@@ -149,7 +149,7 @@ pub trait ParentDepState {
     /// Resolve the state current node's state from the state of the parent node, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a, V>,
         parent: Option<<Self::DepState as ElementBorrowable>::ElementBorrowed<'a>>,
         ctx: &Self::Ctx,
     ) -> bool;
@@ -193,7 +193,7 @@ pub trait ParentDepState {
 ///     }
 /// }
 /// ```
-pub trait NodeDepState {
+pub trait NodeDepState<V: FromAnyValue = ()> {
     /// Depstate must be a tuple containing any number of borrowed elements that are either [ChildDepState], [ParentDepState] or [NodeDepState].
     type DepState: ElementBorrowable;
     /// The state passed to [NodeDepState::reduce] when it is resolved.
@@ -203,21 +203,21 @@ pub trait NodeDepState {
     /// Resolve the state current node's state from the state of the sibling states, the state of the node, and some external context.
     fn reduce<'a>(
         &mut self,
-        node: NodeView,
+        node: NodeView<'a, V>,
         node_state: <Self::DepState as ElementBorrowable>::ElementBorrowed<'a>,
         ctx: &Self::Ctx,
     ) -> bool;
 }
 
 /// Do not implement this trait. It is only meant to be derived and used through [crate::real_dom::RealDom].
-pub trait State: Default + Clone + 'static {
+pub trait State<V: FromAnyValue + 'static>: Default + Clone + 'static {
     #[doc(hidden)]
-    const PASSES: &'static [AnyPass<Node<Self>>];
+    const PASSES: &'static [AnyPass<Node<Self, V>>];
     #[doc(hidden)]
     const MASKS: &'static [NodeMask];
 
     #[doc(hidden)]
-    fn update<T: TreeView<Node<Self>>>(
+    fn update<T: TreeView<Node<Self, V>> + Sync + Send>(
         dirty: DirtyNodeStates,
         tree: &mut T,
         ctx: SendAnyMap,
@@ -225,12 +225,22 @@ pub trait State: Default + Clone + 'static {
         let passes = Self::PASSES.iter().collect();
         resolve_passes(tree, dirty, passes, ctx)
     }
+
+    #[doc(hidden)]
+    fn update_single_threaded<T: TreeView<Node<Self, V>>>(
+        dirty: DirtyNodeStates,
+        tree: &mut T,
+        ctx: SendAnyMap,
+    ) -> FxDashSet<RealNodeId> {
+        let passes = Self::PASSES.iter().collect();
+        resolve_passes_single_threaded(tree, dirty, passes, ctx)
+    }
 }
 
 impl ChildDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce<'a>(&mut self, _: NodeView, _: impl Iterator<Item = ()>, _: &Self::Ctx) -> bool
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _: impl Iterator<Item = ()>, _: &Self::Ctx) -> bool
     where
         Self::DepState: 'a,
     {
@@ -241,7 +251,7 @@ impl ChildDepState for () {
 impl ParentDepState for () {
     type Ctx = ();
     type DepState = ();
-    fn reduce<'a>(&mut self, _: NodeView, _: Option<()>, _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _: Option<()>, _: &Self::Ctx) -> bool {
         false
     }
 }
@@ -249,7 +259,7 @@ impl ParentDepState for () {
 impl NodeDepState for () {
     type DepState = ();
     type Ctx = ();
-    fn reduce(&mut self, _: NodeView, _sibling: (), _: &Self::Ctx) -> bool {
+    fn reduce<'a>(&mut self, _: NodeView<'a>, _sibling: (), _: &Self::Ctx) -> bool {
         false
     }
 }

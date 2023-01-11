@@ -17,6 +17,7 @@ pub struct Element {
     pub attributes: Vec<ElementAttrNamed>,
     pub children: Vec<BodyNode>,
     pub _is_static: bool,
+    pub brace: syn::token::Brace,
 }
 
 impl Parse for Element {
@@ -25,7 +26,7 @@ impl Parse for Element {
 
         // parse the guts
         let content: ParseBuffer;
-        syn::braced!(content in stream);
+        let brace = syn::braced!(content in stream);
 
         let mut attributes: Vec<ElementAttrNamed> = vec![];
         let mut children: Vec<BodyNode> = vec![];
@@ -152,6 +153,7 @@ impl Parse for Element {
             name: el_name,
             attributes,
             children,
+            brace,
             _is_static: false,
         })
     }
@@ -246,8 +248,8 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr(
                         dioxus_elements::#el_name::#name.0,
                         #value,
-                        None,
-                        false
+                        dioxus_elements::#el_name::#name.1,
+                        dioxus_elements::#el_name::#name.2
                     )
                 }
             }
@@ -256,8 +258,8 @@ impl ToTokens for ElementAttrNamed {
                     __cx.attr(
                         dioxus_elements::#el_name::#name.0,
                         #value,
-                        None,
-                        false
+                        dioxus_elements::#el_name::#name.1,
+                        dioxus_elements::#el_name::#name.2
                     )
                 }
             }

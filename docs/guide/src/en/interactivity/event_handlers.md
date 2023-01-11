@@ -1,10 +1,10 @@
 # Event Handlers
 
-Events are interesting things that happen, usually related to something the user has done. For example, some events happen when the user clicks, scrolls, moves the mouse, or types a character. To respond to these actions and make the UI interactive, we need to handle those events.
+Event handlers are used to respond to user actions. For example, an event handler could be triggered when the user clicks, scrolls, moves the mouse, or types a character.
 
-Events are associated with elements. For example, we usually don't care about all the clicks that happen within an app, only those on a particular button. To handle events that happen on an element, we must attach the desired event handler to it.
+Event handlers are attached to elements. For example, we usually don't care about all the clicks that happen within an app, only those on a particular button.
 
-Event handlers are similar to regular attributes, but their name usually starts with `on`- and they accept closures as values. The closure will be called whenever the event is triggered, and will be passed that event.
+Event handlers are similar to regular attributes, but their name usually starts with `on`- and they accept closures as values. The closure will be called whenever the event it listens for is triggered and will be passed that event.
 
 For example, to handle clicks on an element, we can specify an `onclick` handler:
 
@@ -14,20 +14,24 @@ For example, to handle clicks on an element, we can specify an `onclick` handler
 
 ## The `Event` object
 
-Event handlers receive an [`UiEvent`](https://docs.rs/dioxus-core/latest/dioxus_core/struct.UiEvent.html) object containing information about the event. Different types of events contain different types of data. For example, mouse-related events contain [`MouseData`](https://docs.rs/dioxus/latest/dioxus/events/struct.MouseData.html), which tells you things like where the mouse was clicked and what mouse buttons were used.
+Event handlers receive an [`Event`](https://docs.rs/dioxus-core/latest/dioxus_core/struct.Event.html) object containing information about the event. Different types of events contain different types of data. For example, mouse-related events contain [`MouseData`](https://docs.rs/dioxus/latest/dioxus/events/struct.MouseData.html), which tells you things like where the mouse was clicked and what mouse buttons were used.
 
 In the example above, this event data was logged to the terminal:
 
 ```
-Clicked! Event: UiEvent { data: MouseData { coordinates: Coordinates { screen: (468.0, 109.0), client: (73.0, 25.0), element: (63.0, 15.0), page: (73.0, 25.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
-Clicked! Event: UiEvent { data: MouseData { coordinates: Coordinates { screen: (468.0, 109.0), client: (73.0, 25.0), element: (63.0, 15.0), page: (73.0, 25.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
+Clicked! Event: UiEvent { bubble_state: Cell { value: true }, data: MouseData { coordinates: Coordinates { screen: (242.0, 256.0), client: (26.0, 17.0), element: (16.0, 7.0), page: (26.0, 17.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
+Clicked! Event: UiEvent { bubble_state: Cell { value: true }, data: MouseData { coordinates: Coordinates { screen: (242.0, 256.0), client: (26.0, 17.0), element: (16.0, 7.0), page: (26.0, 17.0) }, modifiers: (empty), held_buttons: EnumSet(), trigger_button: Some(Primary) } }
 ```
 
-To learn what the different event types provide, read the [events module docs](https://docs.rs/dioxus/latest/dioxus/events/index.html).
+To learn what the different event types for HTML provide, read the [events module docs](https://docs.rs/dioxus-html/latest/dioxus_html/events/index.html).
 
-### Stopping propagation
+### Event propagation
 
-When you have e.g. a `button` inside a `div`, any click on the `button` is also a click on the `div`. For this reason, Dioxus propagates the click event: first, it is triggered on the target element, then on parent elements. If you want to prevent this behavior, you can call `cancel_bubble()` on the event:
+Some events will trigger first on the element the event originated at upward. For example, a click event on a `button` inside a `div` would first trigger the button's event listener and then the div's event listener.
+
+> For more information about event propigation see [the mdn docs on event bubling](https://developer.mozilla.org/en-US/docs/Learn/JavaScript/Building_blocks/Events#event_bubbling)
+
+If you want to prevent this behavior, you can call `stop_propogation()` on the event:
 
 ```rust
 {{#include ../../../examples/event_nested.rs:rsx}}
@@ -45,7 +49,7 @@ In some instances, might want to avoid this default behavior. For this, you can 
 
 Any event handlers will still be called.
 
-> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior.
+> Normally, in React or JavaScript, you'd call "preventDefault" on the event in the callback. Dioxus does *not* currently support this behavior. Note: this means you cannot conditionally prevent default behavior based on the data in the event.
 
 ## Handler Props
 

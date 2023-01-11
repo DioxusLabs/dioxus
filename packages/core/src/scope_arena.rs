@@ -7,7 +7,6 @@ use crate::{
     scopes::{ScopeId, ScopeState},
     virtual_dom::VirtualDom,
 };
-use bumpalo::Bump;
 use futures_util::FutureExt;
 use std::{
     mem,
@@ -44,15 +43,14 @@ impl VirtualDom {
             hook_idx: Default::default(),
             shared_contexts: Default::default(),
             borrowed_props: Default::default(),
-            listeners: Default::default(),
+            attributes_to_drop: Default::default(),
         }))
     }
 
-    fn acquire_current_scope_raw(&mut self) -> Option<*mut ScopeState> {
-        self.scope_stack
-            .last()
-            .copied()
-            .and_then(|id| self.scopes.get_mut(id.0).map(|f| f.as_mut() as *mut _))
+    fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
+        let id = self.scope_stack.last().copied()?;
+        let scope = self.scopes.get(id.0)?;
+        Some(scope.as_ref())
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {
@@ -62,17 +60,10 @@ impl VirtualDom {
         self.ensure_drop_safety(scope_id);
 
         let mut new_nodes = unsafe {
-            let scope = self.scopes[scope_id.0].as_mut();
+            self.scopes[scope_id.0].previous_frame().bump_mut().reset();
 
-            // if this frame hasn't been intialized yet, we can guess the size of the next frame to be more efficient
-            if scope.previous_frame().bump.allocated_bytes() == 0 {
-                scope.previous_frame_mut().bump =
-                    Bump::with_capacity(scope.current_frame().bump.allocated_bytes());
-            } else {
-                scope.previous_frame_mut().bump.reset();
-            }
+            let scope = &self.scopes[scope_id.0];
 
-            // Make sure to reset the hook counter so we give out hooks in the right order
             scope.hook_idx.set(0);
 
             // safety: due to how we traverse the tree, we know that the scope is not currently aliased
@@ -142,7 +133,7 @@ impl VirtualDom {
         let frame = scope.previous_frame();
 
         // set the new head of the bump frame
-        let allocated = &*frame.bump.alloc(new_nodes);
+        let allocated = &*frame.bump().alloc(new_nodes);
         frame.node.set(allocated);
 
         // And move the render generation forward by one

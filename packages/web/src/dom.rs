@@ -7,7 +7,9 @@
 //! - tests to ensure dyn_into works for various event types.
 //! - Partial delegation?>
 
-use dioxus_core::{ElementId, Mutation, Template, TemplateAttribute, TemplateNode};
+use dioxus_core::{
+    BorrowedAttributeValue, ElementId, Mutation, Template, TemplateAttribute, TemplateNode,
+};
 use dioxus_html::{event_bubbles, CompositionData, FormData};
 use dioxus_interpreter_js::{save_template, Channel};
 use futures_channel::mpsc;
@@ -175,16 +177,33 @@ impl WebsysDom {
                     value,
                     id,
                     ns,
-                } => i.set_attribute(id.0 as u32, name, value, ns.unwrap_or_default()),
-                SetBoolAttribute { name, value, id } => {
-                    i.set_attribute(id.0 as u32, name, if *value { "true" } else { "false" }, "")
-                }
+                } => match value {
+                    BorrowedAttributeValue::Text(txt) => {
+                        i.set_attribute(id.0 as u32, name, txt, ns.unwrap_or_default())
+                    }
+                    BorrowedAttributeValue::Float(f) => {
+                        i.set_attribute(id.0 as u32, name, &f.to_string(), ns.unwrap_or_default())
+                    }
+                    BorrowedAttributeValue::Int(n) => {
+                        i.set_attribute(id.0 as u32, name, &n.to_string(), ns.unwrap_or_default())
+                    }
+                    BorrowedAttributeValue::Bool(b) => i.set_attribute(
+                        id.0 as u32,
+                        name,
+                        if *b { "true" } else { "false" },
+                        ns.unwrap_or_default(),
+                    ),
+                    BorrowedAttributeValue::None => {
+                        i.remove_attribute(id.0 as u32, name, ns.unwrap_or_default())
+                    }
+                    _ => unreachable!(),
+                },
                 SetText { value, id } => i.set_text(id.0 as u32, value),
                 NewEventListener { name, id, .. } => {
-                    i.new_event_listener(name, id.0 as u32, event_bubbles(&name[2..]) as u8);
+                    i.new_event_listener(name, id.0 as u32, event_bubbles(name) as u8);
                 }
                 RemoveEventListener { name, id } => {
-                    i.remove_event_listener(name, id.0 as u32, event_bubbles(&name[2..]) as u8)
+                    i.remove_event_listener(name, id.0 as u32, event_bubbles(name) as u8)
                 }
                 Remove { id } => i.remove(id.0 as u32),
                 PushRoot { id } => i.push_root(id.0 as u32),
@@ -210,11 +229,13 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
 
         "change" | "input" | "invalid" | "reset" | "submit" => read_input_to_data(target),
 
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
-        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
-        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Rc::new(MouseData::from(event))
         }
+        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
+        | "drop" => Rc::new(DragData::from(event)),
+
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             Rc::new(PointerData::from(event))
