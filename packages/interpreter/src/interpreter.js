@@ -144,8 +144,6 @@ class Interpreter {
     this.nodes[root].textContent = text;
   }
   SetAttribute(id, field, value, ns) {
-    console.log("set attribute", id, field, value, ns);
-
     if (value === null) {
       this.RemoveAttribute(id, field, ns);
     }
@@ -228,7 +226,6 @@ class Interpreter {
   }
 
   MakeTemplateNode(node) {
-    console.log("making template node", node);
     switch (node.type) {
       case "Text":
         return document.createTextNode(node.text);

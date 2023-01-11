@@ -549,7 +549,7 @@ impl VirtualDom {
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &mut self.scopes[finished_fiber.0];
+                let scope = &self.scopes[finished_fiber.0];
                 let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations

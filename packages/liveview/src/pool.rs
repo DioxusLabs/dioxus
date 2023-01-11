@@ -127,9 +127,13 @@ where
             _ = vdom.wait_for_work() => {}
 
             evt = ws.next() => {
-                match evt {
+                match evt.as_ref().map(|o| o.as_deref()) {
+                    // respond with a pong every ping to keep the websocket alive
+                    Some(Ok("__ping__")) => {
+                        ws.send("__pong__".to_string()).await?;
+                    }
                     Some(Ok(evt)) => {
-                        if let Ok(IpcMessage { params }) = serde_json::from_str::<IpcMessage>(&evt) {
+                        if let Ok(IpcMessage { params }) = serde_json::from_str::<IpcMessage>(evt) {
                             vdom.handle_event(&params.name, params.data.into_any(), params.element, params.bubbles);
                         }
                     }

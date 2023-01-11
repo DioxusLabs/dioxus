@@ -9,7 +9,7 @@ Component props are a single struct annotated with `#[derive(Props)]`. For a com
 There are 2 flavors of Props structs:
 - Owned props:
   - Don't have an associated lifetime
-  - Implement `PartialEq`, allowing for memoization (if the props don't change, Dioxus won't re-render the component)
+  - Implement `PartialEq`, allow for memoization (if the props don't change, Dioxus won't re-render the component)
 - Borrowed props:
   - [Borrow](https://doc.rust-lang.org/beta/rust-by-example/scope/borrow.html) from a parent component
   - Cannot be memoized due to lifetime constraints
@@ -32,7 +32,7 @@ You can then pass prop values to the component the same way you would pass attri
 
 ### Borrowed Props
 
-Owning props works well if your props are easy to copy around – like a single number. But what if we need to pass a larger data type, like a String from an `App` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it for the subcomponent – but this would be inefficient, especially for larger Strings.
+Owned props work well if your props are easy to copy around – like a single number. But what if we need to pass a larger data type, like a String from an `App` Component to a `TitleCard` subcomponent? A naive solution might be to [`.clone()`](https://doc.rust-lang.org/std/clone/trait.Clone.html) the String, creating a copy of it for the subcomponent – but this would be inefficient, especially for larger Strings.
 
 Rust allows for something more efficient – borrowing the String as a `&str` – this is what Borrowed Props are for!
 
@@ -47,6 +47,7 @@ We can then use the component like this:
 ```
 ![Screenshot: TitleCard component](./images/component_borrowed_props_screenshot.png)
 
+Borrowed props can be very useful, but they do not allow for memorization so they will *always* rerun when the parent scope is rerendered. Because of this Borrowed Props should be reserved for components that are cheap to rerun or places where cloning data is an issue. Using Borrowed Props everywhere will result in large parts of your app rerunning every interaction.
 
 ## Prop Options
 

@@ -19,7 +19,7 @@ Notice the flexibility – you can:
 
 ## Uncontrolled Inputs
 
-As an alternative to controlled inputs, you can simply let the platform keep track of the input values. If we don't tell a HTML input what content it should have, it be editable anyway (this is built into the webview). This approach can be more performant, but less flexible. For example, it's harder to keep the input in sync with another element.
+As an alternative to controlled inputs, you can simply let the platform keep track of the input values. If we don't tell a HTML input what content it should have, it will be editable anyway (this is built into the browser). This approach can be more performant, but less flexible. For example, it's harder to keep the input in sync with another element.
 
 Since you don't necessarily have the current value of the uncontrolled input in state, you can access it either by listening to `oninput` events (similarly to controlled components), or, if the input is part of a form, you can access the form data in the form events (e.g. `oninput` or `onsubmit`):
 
