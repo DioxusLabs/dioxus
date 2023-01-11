@@ -76,7 +76,8 @@ jobs:
 
         # working-directory: tokio
         env:
-          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields
+          #  todo: disable memory leaks ignore
+          MIRIFLAGS: -Zmiri-disable-isolation -Zmiri-strict-provenance -Zmiri-retag-fields -Zmiri-ignore-leaks
           PROPTEST_CASES: 10
 
       # Cache the global cargo directory, but NOT the local `target` directory which

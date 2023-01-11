@@ -209,7 +209,6 @@ fn supports_async() {
         for x in 0..10 {
             let _ = dom.wait_for_work().await;
             let edits = dom.render_immediate();
-            dbg!(edits);
         }
     });
 }
