@@ -13,6 +13,10 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
+dioxus-core = { path = "../core", features = ["serialize"], version = "^0.3.0" }
+dioxus-interpreter-js = { path = "../interpreter", version = "0.3.0" }
+
 tokio = { version = "1.23.0", features = ["full"] }
 futures-util = { version = "0.3.25", default-features = false, features = [
     "sink",
@@ -25,9 +29,7 @@ serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
 tokio-util = { version = "0.7.4", features = ["full"] }
 
-dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
-dioxus-core = { path = "../core", features = ["serialize"], version = "^0.3.0" }
-dioxus-interpreter-js = { path = "../interpreter", version = "0.3.0" }
+interprocess = { version = "1.2.1", optional = true }
 
 # warp
 warp = { version = "0.3.3", optional = true }
@@ -56,8 +58,9 @@ salvo = { version = "0.37.7", features = ["affix", "ws"] }
 tower = "0.4.13"
 
 [features]
-default = []
+default = ["hot-reload"]
 # actix = ["actix-files", "actix-web", "actix-ws"]
+hot-reload = ["interprocess"]
 
 [[example]]
 name = "axum"

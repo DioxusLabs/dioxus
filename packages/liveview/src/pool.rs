@@ -103,6 +103,13 @@ pub async fn run<T>(
 where
     T: Send + 'static,
 {
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    let mut hot_reload_rx = {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        crate::hot_reload::init(tx);
+        rx
+    };
+
     let mut vdom = VirtualDom::new_with_props(app, props);
 
     // todo: use an efficient binary packed format for this
@@ -122,6 +129,11 @@ where
     }
 
     loop {
+        #[cfg(all(feature = "hot-reload", debug_assertions))]
+        let hot_reload_wait = hot_reload_rx.recv();
+        #[cfg(not(all(feature = "hot-reload", debug_assertions)))]
+        let hot_reload_wait = std::future::pending();
+
         tokio::select! {
             // poll any futures or suspense
             _ = vdom.wait_for_work() => {}
@@ -136,6 +148,12 @@ where
                     // log this I guess? when would we get an error here?
                     Some(Err(_e)) => {},
                     None => return Ok(()),
+                }
+            }
+
+            new_template = hot_reload_wait => {
+                if let Some(new_template) = new_template {
+                    vdom.replace_template(new_template);
                 }
             }
         }

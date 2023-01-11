@@ -18,6 +18,8 @@ pub mod adapters {
 
 pub use adapters::*;
 
+#[cfg(all(feature = "hot-reload", debug_assertions))]
+mod hot_reload;
 pub mod pool;
 use futures_util::{SinkExt, StreamExt};
 pub use pool::*;
