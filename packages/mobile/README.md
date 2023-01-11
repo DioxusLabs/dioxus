@@ -19,7 +19,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-mobile/latest/dioxus-mobile) |
+[API Docs](https://docs.rs/dioxus-mobile/latest/dioxus_mobile) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
@@ -94,7 +94,7 @@ fn app(cx: Scope) -> Element {
 }
 ```
 
-To configure the webview, menubar, and other important desktop-specific features, checkout out some of the launch configuration in the [API reference](https://docs.rs/dioxus-mobile/).
+To configure the web view, menubar, and other important desktop-specific features, checkout out some of the launch configurations in the [API reference](https://docs.rs/dioxus-mobile/).
 
 ## Future Steps
 
@@ -113,5 +113,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.
