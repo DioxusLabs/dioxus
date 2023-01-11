@@ -1,35 +1,56 @@
-use crate::Buffer;
+use crate::Writer;
 use dioxus_rsx::*;
 use proc_macro2::Span;
-use std::{fmt::Result, fmt::Write};
-use syn::{spanned::Spanned, Expr};
+use std::{
+    fmt::Result,
+    fmt::{self, Write},
+};
+use syn::{spanned::Spanned, token::Brace, Expr};
 
 #[derive(Debug)]
 enum ShortOptimization {
-    // Special because we want to print the closing bracket immediately
+    /// Special because we want to print the closing bracket immediately
+    ///
+    /// IE
+    /// `div {}` instead of `div { }`
     Empty,
 
-    // Special optimization to put everything on the same line
+    /// Special optimization to put everything on the same line and add some buffer spaces
+    ///
+    /// IE
+    ///
+    /// `div { "asdasd" }` instead of a multiline variant
     Oneliner,
 
-    // Optimization where children flow but props remain fixed on top
+    /// Optimization where children flow but props remain fixed on top
     PropsOnTop,
 
-    // The noisiest optimization where everything flows
+    /// The noisiest optimization where everything flows
     NoOpt,
 }
 
-impl Buffer {
-    pub fn write_element(
-        &mut self,
-        Element {
+/*
+// whitespace
+div {
+    // some whitespace
+    class: "asdasd"
+
+    // whjiot
+    asdasd // whitespace
+}
+*/
+
+impl Writer {
+    pub fn write_element(&mut self, el: &Element) -> Result {
+        let Element {
             name,
             key,
             attributes,
             children,
             _is_static,
-        }: &Element,
-    ) -> Result {
+            brace,
+        } = el;
+
         /*
             1. Write the tag
             2. Write the key
@@ -37,7 +58,7 @@ impl Buffer {
             4. Write the children
         */
 
-        write!(self.buf, "{name} {{")?;
+        write!(self.out, "{name} {{")?;
 
         // decide if we have any special optimizations
         // Default with none, opt the cases in one-by-one
@@ -70,6 +91,9 @@ impl Buffer {
         // If there's nothing at all, empty optimization
         if attributes.is_empty() && children.is_empty() && key.is_none() {
             opt_level = ShortOptimization::Empty;
+
+            // Write comments if they exist
+            self.write_todo_body(brace)?;
         }
 
         // multiline handlers bump everything down
@@ -80,56 +104,56 @@ impl Buffer {
         match opt_level {
             ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
-                write!(self.buf, " ")?;
+                write!(self.out, " ")?;
 
                 self.write_attributes(attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.buf, ", ")?;
+                    write!(self.out, ", ")?;
                 }
 
                 for (id, child) in children.iter().enumerate() {
                     self.write_ident(child)?;
                     if id != children.len() - 1 && children.len() > 1 {
-                        write!(self.buf, ", ")?;
+                        write!(self.out, ", ")?;
                     }
                 }
 
-                write!(self.buf, " ")?;
+                write!(self.out, " ")?;
             }
 
             ShortOptimization::PropsOnTop => {
                 if !attributes.is_empty() || key.is_some() {
-                    write!(self.buf, " ")?;
+                    write!(self.out, " ")?;
                 }
                 self.write_attributes(attributes, key, true)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.buf, ",")?;
+                    write!(self.out, ",")?;
                 }
 
                 if !children.is_empty() {
                     self.write_body_indented(children)?;
                 }
-                self.tabbed_line()?;
+                self.out.tabbed_line()?;
             }
 
             ShortOptimization::NoOpt => {
                 self.write_attributes(attributes, key, false)?;
 
                 if !children.is_empty() && (!attributes.is_empty() || key.is_some()) {
-                    write!(self.buf, ",")?;
+                    write!(self.out, ",")?;
                 }
 
                 if !children.is_empty() {
                     self.write_body_indented(children)?;
                 }
 
-                self.tabbed_line()?;
+                self.out.tabbed_line()?;
             }
         }
 
-        write!(self.buf, "}}")?;
+        write!(self.out, "}}")?;
 
         Ok(())
     }
@@ -144,39 +168,39 @@ impl Buffer {
 
         if let Some(key) = key {
             if !sameline {
-                self.indented_tabbed_line()?;
+                self.out.indented_tabbed_line()?;
             }
             write!(
-                self.buf,
+                self.out,
                 "key: \"{}\"",
                 key.source.as_ref().unwrap().value()
             )?;
             if !attributes.is_empty() {
-                write!(self.buf, ",")?;
+                write!(self.out, ",")?;
                 if sameline {
-                    write!(self.buf, " ")?;
+                    write!(self.out, " ")?;
                 }
             }
         }
 
         while let Some(attr) = attr_iter.next() {
-            self.indent += 1;
+            self.out.indent += 1;
             if !sameline {
                 self.write_comments(attr.attr.start())?;
             }
-            self.indent -= 1;
+            self.out.indent -= 1;
 
             if !sameline {
-                self.indented_tabbed_line()?;
+                self.out.indented_tabbed_line()?;
             }
 
             self.write_attribute(attr)?;
 
             if attr_iter.peek().is_some() {
-                write!(self.buf, ",")?;
+                write!(self.out, ",")?;
 
                 if sameline {
-                    write!(self.buf, " ")?;
+                    write!(self.out, " ")?;
                 }
             }
         }
@@ -188,19 +212,19 @@ impl Buffer {
         match &attr.attr {
             ElementAttr::AttrText { name, value } => {
                 write!(
-                    self.buf,
+                    self.out,
                     "{name}: \"{value}\"",
                     value = value.source.as_ref().unwrap().value()
                 )?;
             }
             ElementAttr::AttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
-                write!(self.buf, "{}: {}", name, out)?;
+                write!(self.out, "{}: {}", name, out)?;
             }
 
             ElementAttr::CustomAttrText { name, value } => {
                 write!(
-                    self.buf,
+                    self.out,
                     "\"{name}\": \"{value}\"",
                     name = name.value(),
                     value = value.source.as_ref().unwrap().value()
@@ -209,7 +233,7 @@ impl Buffer {
 
             ElementAttr::CustomAttrExpression { name, value } => {
                 let out = prettyplease::unparse_expr(value);
-                write!(self.buf, "\"{}\": {}", name.value(), out)?;
+                write!(self.out, "\"{}\": {}", name.value(), out)?;
             }
 
             ElementAttr::EventTokens { name, tokens } => {
@@ -221,17 +245,17 @@ impl Buffer {
                 // a one-liner for whatever reason
                 // Does not need a new line
                 if lines.peek().is_none() {
-                    write!(self.buf, "{}: {}", name, first)?;
+                    write!(self.out, "{}: {}", name, first)?;
                 } else {
-                    writeln!(self.buf, "{}: {}", name, first)?;
+                    writeln!(self.out, "{}: {}", name, first)?;
 
                     while let Some(line) = lines.next() {
-                        self.indented_tab()?;
-                        write!(self.buf, "{}", line)?;
+                        self.out.indented_tab()?;
+                        write!(self.out, "{}", line)?;
                         if lines.peek().is_none() {
-                            write!(self.buf, "")?;
+                            write!(self.out, "")?;
                         } else {
-                            writeln!(self.buf)?;
+                            writeln!(self.out)?;
                         }
                     }
                 }
@@ -255,8 +279,6 @@ impl Buffer {
             ""
         };
 
-        // dbg!(beginning);
-
         beginning.is_empty()
     }
 
@@ -269,6 +291,10 @@ impl Buffer {
         if children.is_empty() {
             // todo: allow elements with comments but no children
             // like div { /* comment */ }
+            // or
+            // div {
+            //  // some helpful
+            // }
             return Some(0);
         }
 
@@ -342,6 +368,35 @@ impl Buffer {
                 Some(total_count)
             }
         }
+    }
+
+    /// empty everything except for some comments
+    fn write_todo_body(&mut self, brace: &Brace) -> fmt::Result {
+        let span = brace.span.span();
+        let start = span.start();
+        let end = span.end();
+
+        if start.line == end.line {
+            return Ok(());
+        }
+
+        writeln!(self.out)?;
+
+        for idx in start.line..end.line {
+            let line = &self.src[idx];
+            if line.trim().starts_with("//") {
+                for _ in 0..self.out.indent + 1 {
+                    write!(self.out, "    ")?
+                }
+                writeln!(self.out, "{}", line.trim()).unwrap();
+            }
+        }
+
+        for _ in 0..self.out.indent {
+            write!(self.out, "    ")?
+        }
+
+        Ok(())
     }
 }
 

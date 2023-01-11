@@ -5,7 +5,7 @@ rsx! {
         class: "asdasd",
 
         // Comments
-        "hello world",
+        "hello world"
 
         // Comments
         expr1,
@@ -18,6 +18,25 @@ rsx! {
         // Comments
         // Comments
         // Comments
-        expr3
+        expr3,
+
+        div {
+            // todo some work in here
+        }
+
+        div {
+            // todo some work in here
+            // todo some work in here
+            //
+            // todo some work in here
+        }
+
+        div {
+            // todo some work in here
+            class: "hello world",
+
+            // todo some work in here
+            class: "hello world"
+        }
     }
 }
