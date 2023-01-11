@@ -137,6 +137,82 @@ fn free_works_on_root_hooks() {
     assert_eq!(Rc::strong_count(&ptr), 1);
 }
 
+#[test]
+fn supports_async() {
+    use std::time::Duration;
+    use tokio::time::sleep;
+
+    fn app(cx: Scope) -> Element {
+        let colors = use_state(&cx, || vec!["green", "blue", "red"]);
+        let padding = use_state(&cx, || 10);
+
+        use_effect(&cx, colors, |colors| async move {
+            sleep(Duration::from_millis(1000)).await;
+            colors.with_mut(|colors| colors.reverse());
+        });
+
+        use_effect(&cx, padding, |padding| async move {
+            sleep(Duration::from_millis(10)).await;
+            padding.with_mut(|padding| {
+                if *padding < 65 {
+                    *padding += 1;
+                } else {
+                    *padding = 5;
+                }
+            });
+        });
+
+        let big = colors[0];
+        let mid = colors[1];
+        let small = colors[2];
+
+        cx.render(rsx! {
+            div {
+                background: "{big}",
+                height: "stretch",
+                width: "stretch",
+                padding: "50",
+                label {
+                    "hello",
+                }
+                div {
+                    background: "{mid}",
+                    height: "auto",
+                    width: "stretch",
+                    padding: "{padding}",
+                    label {
+                        "World",
+                    }
+                    div {
+                        background: "{small}",
+                        height: "auto",
+                        width: "stretch",
+                        padding: "20",
+                        label {
+                            "ddddddd",
+                        }
+                    }
+                },
+            }
+        })
+    }
+
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .build()
+        .unwrap();
+
+    rt.block_on(async {
+        let mut dom = VirtualDom::new(app);
+        let _ = dom.rebuild();
+
+        for x in 0..10 {
+            let _ = dom.wait_for_work().await;
+            let edits = dom.render_immediate();
+        }
+    });
+}
+
 // #[test]
 // fn old_props_arent_stale() {
 //     fn app(cx: Scope) -> Element {
