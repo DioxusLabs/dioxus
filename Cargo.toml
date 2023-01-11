@@ -20,6 +20,8 @@ members = [
     "packages/native-core-macro",
     "packages/rsx-rosetta",
     "packages/signals",
+    "packages/hot-reload",
+    "packages/hot-reload-macro",
     "docs/guide",
 ]
 
@@ -43,6 +45,7 @@ publish = false
 dioxus = { path = "./packages/dioxus" }
 dioxus-desktop = { path = "./packages/desktop", features = ["transparent"] }
 dioxus-ssr = { path = "./packages/ssr" }
+dioxus-hot-reload = { path = "./packages/hot-reload" }
 dioxus-router = { path = "./packages/router" }
 dioxus-signals = { path = "./packages/signals" }
 fermi = { path = "./packages/fermi" }

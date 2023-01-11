@@ -2,43 +2,29 @@
 
 use dioxus_core::Template;
 
-use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
+use interprocess::local_socket::LocalSocketStream;
 use std::io::{BufRead, BufReader};
-use std::time::Duration;
-use std::{sync::Arc, sync::Mutex};
+use wry::application::{event_loop::EventLoopProxy, window::WindowId};
 
-fn handle_error(connection: std::io::Result<LocalSocketStream>) -> Option<LocalSocketStream> {
-    connection
-        .map_err(|error| eprintln!("Incoming connection failed: {}", error))
-        .ok()
-}
+use crate::desktop_context::{EventData, UserWindowEvent};
 
-pub(crate) fn init(proxy: futures_channel::mpsc::UnboundedSender<Template<'static>>) {
-    let latest_in_connection: Arc<Mutex<Option<BufReader<LocalSocketStream>>>> =
-        Arc::new(Mutex::new(None));
-
-    let latest_in_connection_handle = latest_in_connection.clone();
-
-    // connect to processes for incoming data
+pub(crate) fn init(proxy: EventLoopProxy<UserWindowEvent>) {
     std::thread::spawn(move || {
         let temp_file = std::env::temp_dir().join("@dioxusin");
-
-        if let Ok(listener) = LocalSocketListener::bind(temp_file) {
-            for conn in listener.incoming().filter_map(handle_error) {
-                *latest_in_connection_handle.lock().unwrap() = Some(BufReader::new(conn));
-            }
-        }
-    });
-
-    std::thread::spawn(move || {
-        loop {
-            if let Some(conn) = &mut *latest_in_connection.lock().unwrap() {
+        if let Ok(socket) = LocalSocketStream::connect(temp_file.as_path()) {
+            let mut buf_reader = BufReader::new(socket);
+            loop {
                 let mut buf = String::new();
-                match conn.read_line(&mut buf) {
+                match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        let msg: Template<'static> =
+                        let template: Template<'static> =
                             serde_json::from_str(Box::leak(buf.into_boxed_str())).unwrap();
-                        proxy.unbounded_send(msg).unwrap();
+                        proxy
+                            .send_event(UserWindowEvent(
+                                EventData::TemplateUpdated(template),
+                                unsafe { WindowId::dummy() },
+                            ))
+                            .unwrap();
                     }
                     Err(err) => {
                         if err.kind() != std::io::ErrorKind::WouldBlock {
@@ -47,8 +33,6 @@ pub(crate) fn init(proxy: futures_channel::mpsc::UnboundedSender<Template<'stati
                     }
                 }
             }
-            // give the error handler time to take the mutex
-            std::thread::sleep(Duration::from_millis(100));
         }
     });
 }

@@ -8,6 +8,7 @@ use crate::events::IpcMessage;
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
+use dioxus_core::Template;
 use dioxus_core::VirtualDom;
 use serde_json::Value;
 use wry::application::event_loop::EventLoopProxy;
@@ -261,6 +262,8 @@ pub enum EventData {
     Poll,
 
     Ipc(IpcMessage),
+
+    TemplateUpdated(Template<'static>),
 
     NewWindow,
 

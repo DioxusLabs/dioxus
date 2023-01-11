@@ -109,6 +109,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
 
     let proxy = event_loop.create_proxy();
 
+    // Intialize hot reloading if it is enabled
+    #[cfg(all(feature = "hot-reload", debug_assertions))]
+    hot_reload::init(proxy.clone());
+
     // We start the tokio runtime *on this thread*
     // Any future we poll later will use this runtime to spawn tasks and for IO
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -168,6 +172,14 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             }
 
             Event::UserEvent(event) => match event.0 {
+                EventData::TemplateUpdated(template) => {
+                    for webview in webviews.values_mut() {
+                        webview.dom.replace_template(template);
+
+                        poll_vdom(webview);
+                    }
+                }
+
                 EventData::CloseWindow => {
                     webviews.remove(&event.1);
 
