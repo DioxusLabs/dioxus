@@ -6,14 +6,13 @@ use std::{
 };
 
 use dioxus_core::Template;
-pub use dioxus_hot_reload_macro::hot_reload;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::{FileMap, UpdateResult};
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 /// Initialize the hot reloading listener on the given path
-pub fn init(path: &'static str) {
+pub fn init(path: &'static str, listening_paths: &'static [&'static str]) {
     if let Ok(crate_dir) = PathBuf::from_str(path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
@@ -108,4 +107,15 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
             }
         }
     });
+}
+
+#[macro_export]
+macro_rules! hot_reload {
+    () => {
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[])
+    };
+
+    ($($paths: literal,)*,?) => {
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($path,)*])
+    };
 }
