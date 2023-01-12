@@ -68,9 +68,9 @@ rsx! {
 
 ## Usage
 
-> For hot relaoding with the web renderer, see the [dioxus-cli](https://github.com/DioxusLabs/cli) project.
+> This crate implements hot reloading for native compilation targets not WASM. For hot relaoding with the web renderer, see the [dioxus-cli](https://github.com/DioxusLabs/cli) project.
 
-For renderers that support hot reloading add this to your main function before you launch your app to start the hot reloading server:
+Add this to the top of your main function on any renderer that supports hot reloading to start the hot reloading server:
 
 ```rust
 fn main(){
@@ -79,7 +79,7 @@ fn main(){
 }
 ```
 
-The dev server watches on the `src` and `examples` folders in the crate directory by default. To watch on custom paths pass the paths into the hot relaod macro:
+By default the dev server watches on the `src` and `examples` folders in the root crate directory. To watch on custom paths pass the paths into the hot relaod macro:
 
 ```rust
 fn main(){
@@ -108,7 +108,7 @@ fn main(){
 }
 ```
 
-## Implementing hot reloading for a custom renderer
+## Implementing Hot Reloading for a Custom Renderer
 
 To add hot reloading support to your custom renderer you can use the connect function. This will connect to the dev server you just need to provide a way to transfer `Template`s to the `VirtualDom`. Once you implement this your users can use the hot_reload_init function just like any other render.
 
