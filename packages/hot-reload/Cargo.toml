@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus-hot-reload-macro = { path = "../hot-reload-macro" }
 dioxus-rsx = { path = "../rsx" }
 dioxus-core = { path = "../core", features = ["serialize"] }
 dioxus-html = { path = "../html", features = ["hot-reload-context"] }

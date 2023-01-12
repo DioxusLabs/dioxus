@@ -21,7 +21,6 @@ members = [
     "packages/rsx-rosetta",
     "packages/signals",
     "packages/hot-reload",
-    "packages/hot-reload-macro",
     "docs/guide",
 ]
 

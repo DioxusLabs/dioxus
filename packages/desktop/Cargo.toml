@@ -15,6 +15,7 @@ keywords = ["dom", "ui", "gui", "react", "wasm"]
 dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
 dioxus-interpreter-js = { path = "../interpreter", version = "^0.3.0" }
+dioxus-hot-reload = { path = "../hot-reload" }
 
 serde = "1.0.136"
 serde_json = "1.0.79"

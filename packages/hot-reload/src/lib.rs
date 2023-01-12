@@ -1,18 +1,18 @@
 use std::{
-    io::Write,
+    io::{BufRead, BufReader, Write},
     path::PathBuf,
     str::FromStr,
     sync::{Arc, Mutex},
 };
 
 use dioxus_core::Template;
-pub use dioxus_hot_reload_macro::hot_reload;
 use dioxus_html::HtmlCtx;
 use dioxus_rsx::hot_reload::{FileMap, UpdateResult};
-use interprocess::local_socket::LocalSocketListener;
+use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
-pub fn init(path: &'static str) {
+/// Initialize the hot reloading listener on the given path
+pub fn init(path: &'static str, listening_paths: &'static [&'static str]) {
     if let Ok(crate_dir) = PathBuf::from_str(path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
@@ -120,4 +120,40 @@ fn send_template(template: Template<'static>, channel: &mut impl Write) -> bool 
     } else {
         false
     }
+}
+
+/// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
+pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
+    std::thread::spawn(move || {
+        let temp_file = std::env::temp_dir().join("@dioxusin");
+        if let Ok(socket) = LocalSocketStream::connect(temp_file.as_path()) {
+            let mut buf_reader = BufReader::new(socket);
+            loop {
+                let mut buf = String::new();
+                match buf_reader.read_line(&mut buf) {
+                    Ok(_) => {
+                        let template: Template<'static> =
+                            serde_json::from_str(Box::leak(buf.into_boxed_str())).unwrap();
+                        f(template);
+                    }
+                    Err(err) => {
+                        if err.kind() != std::io::ErrorKind::WouldBlock {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[macro_export]
+macro_rules! hot_reload {
+    () => {
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[])
+    };
+
+    ($($paths: literal,)*,?) => {
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($path,)*])
+    };
 }

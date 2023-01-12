@@ -18,6 +18,7 @@ dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.3.0" }
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.2.0" }
+dioxus-hot-reload = { path = "../hot-reload" }
 
 tui = "0.17.0"
 crossterm = "0.23.0"
