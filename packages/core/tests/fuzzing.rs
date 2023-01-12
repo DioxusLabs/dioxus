@@ -36,7 +36,7 @@ fn create_random_template_node(
     attr_idx: &mut usize,
     depth: usize,
 ) -> TemplateNode<'static> {
-    match rand::random::<u8>() % 3 {
+    match rand::random::<u8>() % 4 {
         0 => {
             let attrs = {
                 let attrs: Vec<_> = (0..(rand::random::<usize>() % 10))
@@ -70,7 +70,7 @@ fn create_random_template_node(
                 old_idx
             },
         },
-        2 => TemplateNode::Dynamic {
+        3 => TemplateNode::Dynamic {
             id: {
                 let old_idx = *template_idx;
                 *template_idx += 1;
@@ -258,7 +258,7 @@ fn create() {
     for _ in 0..1000 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        vdom.rebuild();
+        let _ = vdom.rebuild();
     }
 }
 
@@ -269,9 +269,9 @@ fn diff() {
     for _ in 0..100 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
-        vdom.rebuild();
+        let _ = vdom.rebuild();
         for _ in 0..10 {
-            vdom.render_immediate();
+            let _ = vdom.render_immediate();
         }
     }
 }
