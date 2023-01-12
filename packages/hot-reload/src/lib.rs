@@ -12,8 +12,8 @@ use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 /// Initialize the hot reloading listener on the given path
-pub fn init(path: &'static str, listening_paths: &'static [&'static str]) {
-    if let Ok(crate_dir) = PathBuf::from_str(path) {
+pub fn init(root_path: &'static str, listening_paths: &'static [&'static str]) {
+    if let Ok(crate_dir) = PathBuf::from_str(root_path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
         let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(crate_dir.clone())));
@@ -55,12 +55,12 @@ pub fn init(path: &'static str, listening_paths: &'static [&'static str]) {
 
                 let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
 
-                let mut examples_path = crate_dir.clone();
-                examples_path.push("examples");
-                let _ = watcher.watch(&examples_path, RecursiveMode::Recursive);
-                let mut src_path = crate_dir.clone();
-                src_path.push("src");
-                let _ = watcher.watch(&src_path, RecursiveMode::Recursive);
+                for path in listening_paths {
+                    if let Ok(path) = PathBuf::from_str(path) {
+                        let examples_path = crate_dir.join(path);
+                        let _ = watcher.watch(&examples_path, RecursiveMode::Recursive);
+                    }
+                }
 
                 for evt in rx {
                     // Give time for the change to take effect before reading the file
@@ -147,13 +147,17 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
     });
 }
 
+/// Start the hot reloading server
+///
+/// Pass any number of paths to listen for changes on relative to the crate root as strings.
+/// If no paths are passed, it will listen on the src and examples folders.
 #[macro_export]
 macro_rules! hot_reload {
     () => {
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[])
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"])
     };
 
-    ($($paths: literal,)*,?) => {
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($path,)*])
+    ($($paths: literal),*) => {
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*])
     };
 }
