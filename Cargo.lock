@@ -438,16 +438,15 @@ dependencies = [
 
 [[package]]
 name = "console"
-version = "0.15.2"
+version = "0.15.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c050367d967ced717c04b65d8c619d863ef9292ce0c5760028655a2fb298718c"
+checksum = "5556015fe3aad8b968e5d4124980fbe2f6aaee7aeec6b749de1faaa2ca5d0a4c"
 dependencies = [
  "encode_unicode",
  "lazy_static",
  "libc",
- "terminal_size",
  "unicode-width",
- "winapi",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -663,7 +662,7 @@ dependencies = [
 [[package]]
 name = "dioxus-autofmt"
 version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
 dependencies = [
  "dioxus-rsx",
  "prettyplease",
@@ -709,6 +708,7 @@ dependencies = [
  "proc-macro2",
  "regex",
  "reqwest",
+ "rsx-rosetta",
  "serde",
  "serde_json",
  "syn",
@@ -726,7 +726,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.2.1"
-source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
 dependencies = [
  "bumpalo",
  "futures-channel",
@@ -743,7 +743,7 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.2.1"
-source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
 dependencies = [
  "async-trait",
  "dioxus-core",
@@ -759,7 +759,7 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.1"
-source = "git+https://github.com/dioxuslabs/dioxus#641488e825d861a14670ba7a15a535e76d3cee7a"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
 dependencies = [
  "dioxus-core",
  "internment",
@@ -2018,9 +2018,9 @@ checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
 name = "portable-atomic"
-version = "0.3.18"
+version = "0.3.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81bdd679d533107e090c2704a35982fc06302e30898e63ffa26a81155c012e92"
+checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
 name = "ppv-lite86"
@@ -2248,6 +2248,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rsx-rosetta"
+version = "0.0.0"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
+dependencies = [
+ "convert_case",
+ "dioxus-autofmt",
+ "dioxus-rsx",
+ "html_parser",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "rust-argon2"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2379,9 +2393,9 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.151"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fed41fc1a24994d044e6db6935e69511a1153b52c15eb42493b26fa87feba0"
+checksum = "bb7d1f0d3021d347a83e556fc4683dea2ea09d87bccdf88ff5c12545d89d5efb"
 dependencies = [
  "serde_derive",
 ]
@@ -2398,9 +2412,9 @@ dependencies = [
 
 [[package]]
 name = "serde_derive"
-version = "1.0.151"
+version = "1.0.152"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "255abe9a125a985c05190d687b320c12f9b1f0b99445e608c21ba0782c719ad8"
+checksum = "af487d118eecd09402d70a5d72551860e788df87b464af30e5ea6a38c75c541e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2605,16 +2619,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bab24d30b911b2376f3a13cc2cd443142f0c81dda04c118693e35b3835757755"
 dependencies = [
  "winapi-util",
-]
-
-[[package]]
-name = "terminal_size"
-version = "0.1.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "633c1a546cee861a1a6d0dc69ebeca693bf4296661ba7852b9d21d159e0506df"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
