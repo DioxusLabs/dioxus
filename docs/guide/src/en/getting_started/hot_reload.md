@@ -2,7 +2,7 @@
 
 1. Hot reloading allows much faster iteration times inside of rsx calls by interpreting them and streaming the edits.
 2. It is useful when changing the styling/layout of a program, but will not help with changing the logic of a program.
-3. Currently the cli only implements hot reloading for the web renderer. For TUI, desktop, and liveview you can use the hot reload macro.
+3. Currently the cli only implements hot reloading for the web renderer. For TUI, desktop, and LiveView you can use the hot reload macro instead.
 
 # Web
 
@@ -25,7 +25,7 @@ dioxus serve --hot-reload
 
 # Desktop/Liveview/TUI
 
-For desktop, LiveView, and tui, you can place the hot reload macro before your app runs to enable hot reloading.
+For desktop, LiveView, and tui, you can place the hot reload macro at the top of your main function to enable hot reloading.
 
 ## Setup
 
@@ -33,7 +33,7 @@ Add the following to your main function:
 
 ```rust
 fn main() {
-    dioxus::hot_reload_init!();
+    hot_reload_init!();
     // launch your application
 }
 ```
@@ -45,10 +45,6 @@ cargo run
 ```
 2. Change some code within a rsx or render macro
 3. Save and watch the style change without recompiling
-
-## Custom renders
-
-For custom renderers
 
 # Limitations
 1. The interpreter can only use expressions that existed on the last full recompile. If you introduce a new variable or expression to the rsx call, it will trigger a full recompile to capture the expression.

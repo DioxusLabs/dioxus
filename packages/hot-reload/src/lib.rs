@@ -12,7 +12,7 @@ use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 /// Initialize the hot reloading listener on the given path
-pub fn init(root_path: &'static str, listening_paths: &'static [&'static str]) {
+pub fn init(root_path: &'static str, listening_paths: &'static [&'static str], log: bool) {
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
@@ -41,7 +41,9 @@ pub fn init(root_path: &'static str, listening_paths: &'static [&'static str]) {
                                 }
                             }
                             channels.lock().unwrap().push(connection);
-                            println!("Connected to hot reloading 🚀");
+                            if log {
+                                println!("Connected to hot reloading 🚀");
+                            }
                         }
                     }
                 }
@@ -94,7 +96,11 @@ pub fn init(root_path: &'static str, listening_paths: &'static [&'static str]) {
                                         }
                                     }
                                     UpdateResult::NeedsRebuild => {
-                                        println!("Rebuild needed... shutting down hot reloading");
+                                        if log {
+                                            println!(
+                                                "Rebuild needed... shutting down hot reloading"
+                                            );
+                                        }
                                         return;
                                     }
                                 }
@@ -152,14 +158,26 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
 /// Pass any number of paths to listen for changes on relative to the crate root as strings.
 /// If no paths are passed, it will listen on the src and examples folders.
 #[macro_export]
-macro_rules! hot_reload_init_inner {
-    () => {
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"])
+macro_rules! hot_reload_init {
+    ($($t: ident)*) => {
+        #[cfg(debug_assertions)]
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"], hot_reload_init!(log: $($t)*))
     };
 
-    ($($paths: literal),*) => {
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*])
+    ($($paths: literal),* $(,)? $($t: ident)*) => {
+        #[cfg(debug_assertions)]
+        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*], hot_reload_init!(log: $($t)*))
+    };
+
+    (log:) => {
+        false
+    };
+
+    (log: enable logging) => {
+        true
+    };
+
+    (log: disable logging) => {
+        false
     };
 }
-
-pub use hot_reload_init_inner as hot_reload_init;
