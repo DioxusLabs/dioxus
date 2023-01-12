@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         }
 
         Commands::Autoformat(opts) => {
-            if let Err(e) = opts.autoformat() {
+            if let Err(e) = opts.autoformat().await {
                 log::error!("format error: {}", e);
             }
         }
