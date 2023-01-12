@@ -20,7 +20,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-desktop/latest/dioxus-desktop) |
+[API Docs](https://docs.rs/dioxus-desktop/latest/dioxus_desktop) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
@@ -37,10 +37,10 @@ This requires that webview is installed on the target system. WebView is install
 ## Features
 
 - Simple, one-line launch for desktop apps
-- Dioxus virtualdom running on a native thread
+- Dioxus VirtualDom running on a native thread
 - Full HTML/CSS support via `wry` and `tao`
 - Exposed `window` and `Proxy` types from tao for direct window manipulation
-- Helpful hooks for
+- Helpful hooks for accessing the window, WebView, and running javascript.
 
 ## Contributing
 
@@ -53,5 +53,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

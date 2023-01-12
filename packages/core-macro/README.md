@@ -20,7 +20,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-core-macro/latest/dioxus-core-macro) |
+[API Docs](https://docs.rs/dioxus-core-macro/latest/dioxus_core_macro) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
@@ -29,7 +29,7 @@
 `dioxus-core-macro` provides a handful of helpful macros used by the `dioxus` crate. These include:
 
 - The `rsx!` macro that underpins templates and node creation
-- The `inline_props` that transforms function arguments into an auto-derived struct
+- The `inline_props` macro transforms function arguments into an auto-derived struct
 - The `format_args_f` macro which allows f-string formatting with support for expressions
 
 
@@ -44,5 +44,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

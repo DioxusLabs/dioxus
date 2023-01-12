@@ -1,4 +1,4 @@
-use crate::{buffer::Location, Buffer};
+use crate::{writer::Location, Writer};
 use dioxus_rsx::*;
 use quote::ToTokens;
 use std::fmt::{Result, Write};
@@ -19,7 +19,7 @@ enum ShortOptimization {
     NoOpt,
 }
 
-impl Buffer {
+impl Writer {
     pub fn write_component(
         &mut self,
         Component {
@@ -28,6 +28,7 @@ impl Buffer {
             children,
             manual_props,
             prop_gen_args,
+            ..
         }: &Component,
     ) -> Result {
         self.write_component_name(name, prop_gen_args)?;
@@ -82,46 +83,46 @@ impl Buffer {
         match opt_level {
             ShortOptimization::Empty => {}
             ShortOptimization::Oneliner => {
-                write!(self.buf, " ")?;
+                write!(self.out, " ")?;
 
                 self.write_component_fields(fields, manual_props, true)?;
 
                 if !children.is_empty() && !fields.is_empty() {
-                    write!(self.buf, ", ")?;
+                    write!(self.out, ", ")?;
                 }
 
                 for child in children {
                     self.write_ident(child)?;
                 }
 
-                write!(self.buf, " ")?;
+                write!(self.out, " ")?;
             }
 
             ShortOptimization::PropsOnTop => {
-                write!(self.buf, " ")?;
+                write!(self.out, " ")?;
                 self.write_component_fields(fields, manual_props, true)?;
 
                 if !children.is_empty() && !fields.is_empty() {
-                    write!(self.buf, ",")?;
+                    write!(self.out, ",")?;
                 }
 
                 self.write_body_indented(children)?;
-                self.tabbed_line()?;
+                self.out.tabbed_line()?;
             }
 
             ShortOptimization::NoOpt => {
                 self.write_component_fields(fields, manual_props, false)?;
 
                 if !children.is_empty() && !fields.is_empty() {
-                    write!(self.buf, ",")?;
+                    write!(self.out, ",")?;
                 }
 
                 self.write_body_indented(children)?;
-                self.tabbed_line()?;
+                self.out.tabbed_line()?;
             }
         }
 
-        write!(self.buf, "}}")?;
+        write!(self.out, "}}")?;
         Ok(())
     }
 
@@ -133,16 +134,16 @@ impl Buffer {
         let mut name = name.to_token_stream().to_string();
         name.retain(|c| !c.is_whitespace());
 
-        write!(self.buf, "{name}")?;
+        write!(self.out, "{name}")?;
 
         if let Some(generics) = generics {
             let mut written = generics.to_token_stream().to_string();
             written.retain(|c| !c.is_whitespace());
 
-            write!(self.buf, "{}", written)?;
+            write!(self.out, "{}", written)?;
         }
 
-        write!(self.buf, " {{")?;
+        write!(self.out, " {{")?;
 
         Ok(())
     }
@@ -157,18 +158,18 @@ impl Buffer {
 
         while let Some(field) = field_iter.next() {
             if !sameline {
-                self.indented_tabbed_line()?;
+                self.out.indented_tabbed_line()?;
             }
 
             let name = &field.name;
             match &field.content {
                 ContentField::ManExpr(exp) => {
                     let out = prettyplease::unparse_expr(exp);
-                    write!(self.buf, "{}: {}", name, out)?;
+                    write!(self.out, "{}: {}", name, out)?;
                 }
                 ContentField::Formatted(s) => {
                     write!(
-                        self.buf,
+                        self.out,
                         "{}: \"{}\"",
                         name,
                         s.source.as_ref().unwrap().value()
@@ -178,27 +179,27 @@ impl Buffer {
                     let out = prettyplease::unparse_expr(exp);
                     let mut lines = out.split('\n').peekable();
                     let first = lines.next().unwrap();
-                    write!(self.buf, "{}: {}", name, first)?;
+                    write!(self.out, "{}: {}", name, first)?;
                     for line in lines {
-                        self.new_line()?;
-                        self.indented_tab()?;
-                        write!(self.buf, "{}", line)?;
+                        self.out.new_line()?;
+                        self.out.indented_tab()?;
+                        write!(self.out, "{}", line)?;
                     }
                 }
             }
 
             if field_iter.peek().is_some() || manual_props.is_some() {
-                write!(self.buf, ",")?;
+                write!(self.out, ",")?;
 
                 if sameline {
-                    write!(self.buf, " ")?;
+                    write!(self.out, " ")?;
                 }
             }
         }
 
         if let Some(exp) = manual_props {
             if !sameline {
-                self.indented_tabbed_line()?;
+                self.out.indented_tabbed_line()?;
             }
             self.write_manual_props(exp)?;
         }
@@ -258,10 +259,10 @@ impl Buffer {
 
         let first_line = lines.next().unwrap();
 
-        write!(self.buf, "..{first_line}")?;
+        write!(self.out, "..{first_line}")?;
         for line in lines {
-            self.indented_tabbed_line()?;
-            write!(self.buf, "{line}")?;
+            self.out.indented_tabbed_line()?;
+            write!(self.out, "{line}")?;
         }
 
         Ok(())

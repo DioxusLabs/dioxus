@@ -10,6 +10,7 @@ fn main() {
 static NAME: Atom<String> = |_| "world".to_string();
 
 fn app(cx: Scope) -> Element {
+    use_init_atom_root(cx);
     let name = use_read(cx, NAME);
 
     cx.render(rsx! {
