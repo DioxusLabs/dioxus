@@ -1,5 +1,9 @@
 use std::process::exit;
 
+use dioxus_rsx::{BodyNode, CallBody, Component};
+use proc_macro2::{Ident, Span};
+use syn::punctuated::Punctuated;
+
 use super::*;
 
 /// Build the Rust WASM app and all of its assets.
@@ -26,291 +30,111 @@ pub struct Translate {
 
 impl Translate {
     pub fn translate(self) -> Result<()> {
-        let Translate {
-            component,
-            output,
-            file,
-            raw,
-        } = self;
+        // Get the right input for the translation
+        let contents = determine_input(self.file, self.raw)?;
 
-        let contents = match (file, raw) {
-            (Some(input), None) => std::fs::read_to_string(&input).unwrap_or_else(|e| {
-                log::error!("Cloud not read input file: {}.", e);
-                exit(0);
-            }),
-            (None, Some(raw)) => raw,
-            (Some(_), Some(_)) => {
-                log::error!("Only one of --file or --raw can be specified.");
-                exit(0);
-            }
-            (None, None) => {
-                if atty::is(atty::Stream::Stdin) {
-                    return custom_error!("No input file, source, or stdin to translate from.");
-                }
+        // Ensure we're loading valid HTML
+        let dom = html_parser::Dom::parse(&contents)?;
 
-                let mut buffer = String::new();
-                std::io::stdin().read_to_string(&mut buffer).unwrap();
+        // Convert the HTML to RSX
+        let out = convert_html_to_formatted_rsx(&dom, self.component);
 
-                buffer.trim().to_string()
-            }
-        };
-
-        let out_buf = match component {
-            true => format!("{}", convert_html_to_component(&contents).unwrap()),
-            false => {
-                let mut buf = String::new();
-                let dom = Dom::parse(&contents).unwrap();
-                for child in &dom.children {
-                    simple_render_child(&mut buf, child, 0)?;
-                }
-                buf
-            }
-        };
-
-        if let Some(output) = output {
-            std::fs::write(&output, out_buf)?;
-        } else {
-            print!("{}", out_buf);
+        // Write the output
+        match self.output {
+            Some(output) => std::fs::write(&output, out)?,
+            None => print!("{}", out),
         }
 
         Ok(())
     }
 }
 
-/// render without handling svgs or anything
-pub fn simple_render_child(
-    f: &mut impl std::fmt::Write,
-    child: &Node,
-    il: u32,
-) -> std::fmt::Result {
-    write_tabs(f, il)?;
-    match child {
-        Node::Text(t) => writeln!(f, "\"{}\"", t)?,
-        Node::Comment(e) => writeln!(f, "/* {} */", e)?,
-        Node::Element(el) => {
-            // open the tag
-            write!(f, "{} {{ ", &el.name)?;
+pub fn convert_html_to_formatted_rsx(dom: &Dom, component: bool) -> String {
+    let callbody = rsx_rosetta::rsx_from_html(&dom);
 
-            // todo: dioxus will eventually support classnames
-            // for now, just write them with a space between each
-            let class_iter = &mut el.classes.iter();
-            if let Some(first_class) = class_iter.next() {
-                write!(f, "class: \"{}", first_class)?;
-                for next_class in class_iter {
-                    write!(f, " {}", next_class)?;
-                }
-                write!(f, "\",")?;
-            }
-            writeln!(f)?;
-
-            // write the attributes
-            if let Some(id) = &el.id {
-                write_tabs(f, il + 1)?;
-                writeln!(f, "id: \"{}\",", id)?;
-            }
-
-            for (name, value) in &el.attributes {
-                write_tabs(f, il + 1)?;
-
-                use convert_case::{Case, Casing};
-                if name.chars().any(|ch| ch.is_ascii_uppercase() || ch == '-') {
-                    let new_name = name.to_case(Case::Snake);
-                    match value {
-                        Some(val) => writeln!(f, "{}: \"{}\",", new_name, val)?,
-                        None => writeln!(f, "{}: \"\",", new_name)?,
-                    }
-                } else {
-                    if matches!(name.as_str(), "for" | "async" | "type" | "as") {
-                        write!(f, "r#")?
-                    }
-
-                    match value {
-                        Some(val) => writeln!(f, "{}: \"{}\",", name, val)?,
-                        None => writeln!(f, "{}: \"\",", name)?,
-                    }
-                }
-            }
-
-            // now the children
-            for child in &el.children {
-                simple_render_child(f, child, il + 1)?;
-            }
-
-            // close the tag
-            write_tabs(f, il)?;
-            writeln!(f, "}}")?;
-        }
-    };
-    Ok(())
-}
-
-pub fn convert_html_to_component(html: &str) -> Result<ComponentRenderer> {
-    Ok(ComponentRenderer {
-        dom: Dom::parse(html)?,
-        icon_index: 0,
-    })
-}
-
-#[allow(dead_code)]
-pub struct ComponentRenderer {
-    dom: Dom,
-    icon_index: usize,
-}
-
-impl Display for ComponentRenderer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(
-            f,
-            r##"
-fn component(cx: Scope) -> Element {{
-    cx.render(rsx!("##
-        )?;
-        let mut svg_nodes = vec![];
-
-        let mut svg_idx = 0;
-        for child in &self.dom.children {
-            render_child(f, child, 2, &mut svg_nodes, true, &mut svg_idx)?;
-        }
-        write!(
-            f,
-            r##"    ))
-}}"##
-        )?;
-
-        if svg_idx == 0 {
-            return Ok(());
-        }
-
-        writeln!(f, "\n\nmod icons {{")?;
-        writeln!(f, "\tuse super::*;")?;
-
-        let mut id = 0;
-        while let Some(svg) = svg_nodes.pop() {
-            writeln!(
-                f,
-                r##"    pub(super) fn icon_{}(cx: Scope) -> Element {{
-        cx.render(rsx!("##,
-                id
-            )?;
-            write_tabs(f, 3)?;
-
-            render_element(f, svg, 3, &mut svg_nodes, false, &mut 0)?;
-
-            writeln!(f, "\t\t))\n\t}}")?;
-            id += 1;
-        }
-
-        writeln!(f, "}}")?;
-
-        Ok(())
+    match component {
+        true => write_callbody_with_icon_section(callbody),
+        false => dioxus_autofmt::write_block_out(callbody).unwrap(),
     }
 }
 
-fn render_child<'a>(
-    f: &mut Formatter<'_>,
-    child: &'a Node,
-    il: u32,
-    svg_buffer: &mut Vec<&'a Element>,
-    skip_svg: bool,
-    svg_idx: &mut usize,
-) -> std::fmt::Result {
-    write_tabs(f, il)?;
-    match child {
-        Node::Text(t) => writeln!(f, "\"{}\"", t)?,
-        Node::Comment(e) => writeln!(f, "/* {} */", e)?,
-        Node::Element(el) => render_element(f, el, il, svg_buffer, skip_svg, svg_idx)?,
-    };
-    Ok(())
+fn write_callbody_with_icon_section(mut callbody: CallBody) -> String {
+    let mut svgs = vec![];
+
+    rsx_rosetta::collect_svgs(&mut callbody.roots, &mut svgs);
+
+    let mut out = write_component_body(dioxus_autofmt::write_block_out(callbody).unwrap());
+
+    if !svgs.is_empty() {
+        write_svg_section(&mut out, svgs);
+    }
+
+    out
 }
 
-fn render_element<'a>(
-    f: &mut Formatter<'_>,
-    el: &'a Element,
-    il: u32,
-    svg_buffer: &mut Vec<&'a Element>,
-    skip_svg: bool,
-    svg_idx: &mut usize,
-) -> std::fmt::Result {
-    if el.name == "svg" && skip_svg {
-        svg_buffer.push(el);
-        // todo: attach the right icon ID
-        writeln!(f, "icons::icon_{} {{}}", svg_idx)?;
-        *svg_idx += 1;
-        return Ok(());
-    }
-
-    // open the tag
-    write!(f, "{} {{ ", &el.name)?;
-
-    // todo: dioxus will eventually support classnames
-    // for now, just write them with a space between each
-    let class_iter = &mut el.classes.iter();
-    if let Some(first_class) = class_iter.next() {
-        write!(f, "class: \"{}", first_class)?;
-        for next_class in class_iter {
-            write!(f, " {}", next_class)?;
-        }
-        write!(f, "\",")?;
-    }
-    writeln!(f)?;
-
-    // write the attributes
-    if let Some(id) = &el.id {
-        write_tabs(f, il + 1)?;
-        writeln!(f, "id: \"{}\",", id)?;
-    }
-
-    for (name, value) in &el.attributes {
-        write_tabs(f, il + 1)?;
-
-        use convert_case::{Case, Casing};
-        if name.chars().any(|ch| ch.is_ascii_uppercase() || ch == '-') {
-            let new_name = name.to_case(Case::Snake);
-            match value {
-                Some(val) => writeln!(f, "{}: \"{}\",", new_name, val)?,
-                None => writeln!(f, "{}: \"\",", new_name)?,
-            }
-        } else {
-            if matches!(name.as_str(), "for" | "async" | "type" | "as") {
-                write!(f, "r#")?
-            }
-
-            match value {
-                Some(val) => writeln!(f, "{}: \"{}\",", name, val)?,
-                None => writeln!(f, "{}: \"\",", name)?,
-            }
-        }
-    }
-
-    // now the children
-    for child in &el.children {
-        render_child(f, child, il + 1, svg_buffer, skip_svg, svg_idx)?;
-    }
-
-    // close the tag
-    write_tabs(f, il)?;
-    writeln!(f, "}}")?;
-    Ok(())
+fn write_component_body(raw: String) -> String {
+    let mut out = String::from("fn component(cx: Scope) -> Element {\n    cx.render(rsx! {");
+    indent_and_write(&raw, 1, &mut out);
+    out.push_str("    })\n}");
+    out
 }
 
-fn write_tabs(f: &mut impl std::fmt::Write, num: u32) -> std::fmt::Result {
-    for _ in 0..num {
-        write!(f, "    ")?
+fn write_svg_section(out: &mut String, svgs: Vec<BodyNode>) {
+    out.push_str("\n\nmod icons {");
+    out.push_str("\n    use super::*;");
+    for (idx, icon) in svgs.into_iter().enumerate() {
+        let raw = dioxus_autofmt::write_block_out(CallBody { roots: vec![icon] }).unwrap();
+        out.push_str("\n\n    pub fn icon_");
+        out.push_str(&idx.to_string());
+        out.push_str("(cx: Scope) -> Element {\n        cx.render(rsx! {");
+        indent_and_write(&raw, 2, out);
+        out.push_str("        })\n    }");
     }
-    Ok(())
+
+    out.push_str("\n}");
+}
+
+fn indent_and_write(raw: &str, idx: usize, out: &mut String) {
+    for line in raw.lines() {
+        for _ in 0..idx {
+            out.push_str("    ");
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
+fn determine_input(file: Option<String>, raw: Option<String>) -> Result<String> {
+    // Make sure not both are specified
+    if file.is_some() && raw.is_some() {
+        log::error!("Only one of --file or --raw should be specified.");
+        exit(0);
+    }
+
+    if let Some(raw) = raw {
+        return Ok(raw);
+    }
+
+    if let Some(file) = file {
+        return Ok(std::fs::read_to_string(&file)?);
+    }
+
+    // If neither exist, we try to read from stdin
+    if atty::is(atty::Stream::Stdin) {
+        return custom_error!("No input file, source, or stdin to translate from.");
+    }
+
+    let mut buffer = String::new();
+    std::io::stdin().read_to_string(&mut buffer).unwrap();
+
+    Ok(buffer.trim().to_string())
 }
 
 #[test]
 fn generates_svgs() {
-    use std::io::Write;
-
     let st = include_str!("../../../tests/svg.html");
 
-    let out = format!("{:}", convert_html_to_component(st).unwrap());
-    dbg!(&out);
+    let out = convert_html_to_formatted_rsx(&html_parser::Dom::parse(st).unwrap(), true);
 
-    std::fs::File::create("svg_rsx.rs")
-        .unwrap()
-        .write_all(out.as_bytes())
-        .unwrap();
+    println!("{}", out);
 }

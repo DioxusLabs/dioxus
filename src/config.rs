@@ -1,10 +1,11 @@
 use crate::error::Result;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs::File, io::Read, path::PathBuf};
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DioxusConfig {
     pub application: ApplicationConfig,
+
     pub web: WebConfig,
 
     #[serde(default = "default_plugin")]
@@ -16,21 +17,32 @@ fn default_plugin() -> toml::Value {
 }
 
 impl DioxusConfig {
-    pub fn load() -> crate::error::Result<DioxusConfig> {
+    pub fn load() -> crate::error::Result<Option<DioxusConfig>> {
         let crate_dir = crate::cargo::crate_root()?;
 
-        if !crate_dir.join("Dioxus.toml").is_file() {
-            log::warn!("Config file: `Dioxus.toml` not found; using default config.");
-            return Ok(DioxusConfig::default());
-        }
+        // we support either `Dioxus.toml` or `Cargo.toml`
+        let Some(dioxus_conf_file) = acquire_dioxus_toml(crate_dir) else {
+            return Ok(None);
+        };
 
-        let mut dioxus_conf_file = File::open(crate_dir.join("Dioxus.toml"))?;
-        let mut meta_str = String::new();
-        dioxus_conf_file.read_to_string(&mut meta_str)?;
-
-        toml::from_str::<DioxusConfig>(&meta_str)
-        .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+        toml::from_str::<DioxusConfig>(&std::fs::read_to_string(dioxus_conf_file)?)
+            .map_err(|_| crate::Error::Unique("Dioxus.toml parse failed".into()))
+            .map(Some)
     }
+}
+
+fn acquire_dioxus_toml(dir: PathBuf) -> Option<PathBuf> {
+    // prefer uppercase
+    if dir.join("Dioxus.toml").is_file() {
+        return Some(dir.join("Dioxus.toml"));
+    }
+
+    // lowercase is fine too
+    if dir.join("dioxus.toml").is_file() {
+        return Some(dir.join("Dioxus.toml"));
+    }
+
+    None
 }
 
 impl Default for DioxusConfig {
@@ -141,7 +153,7 @@ pub enum ExecutableType {
 
 impl CrateConfig {
     pub fn new() -> Result<Self> {
-        let dioxus_config = DioxusConfig::load()?;
+        let dioxus_config = DioxusConfig::load()?.unwrap_or_default();
 
         let crate_dir = if let Some(package) = &dioxus_config.application.sub_package {
             crate::cargo::crate_root()?.join(package)

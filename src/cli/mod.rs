@@ -16,11 +16,10 @@ use crate::{
     gen_page, server, CrateConfig, Error,
 };
 use clap::{Parser, Subcommand};
-use html_parser::{Dom, Element, Node};
+use html_parser::Dom;
 use regex::Regex;
 use serde::Deserialize;
 use std::{
-    fmt::{Display, Formatter},
     fs::{remove_dir_all, File},
     io::{Read, Write},
     path::PathBuf,

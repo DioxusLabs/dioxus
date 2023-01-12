@@ -1,13 +1,13 @@
 use std::{
-    fs::{create_dir, create_dir_all, remove_dir_all},
-    path::PathBuf, io::{Read, Write},
+    fs::{create_dir, create_dir_all, remove_dir_all, File},
+    io::{Read, Write},
+    path::PathBuf,
 };
-use std::fs::File;
 
-use mlua::UserData;
-use flate2::read::GzDecoder;
-use tar::Archive;
 use crate::tools::extract_zip;
+use flate2::read::GzDecoder;
+use mlua::UserData;
+use tar::Archive;
 
 pub struct PluginFileSystem;
 impl UserData for PluginFileSystem {
@@ -49,9 +49,9 @@ impl UserData for PluginFileSystem {
             }
 
             if file.unwrap().write_all(content.as_bytes()).is_err() {
-                return Ok(false)
+                return Ok(false);
             }
-            
+
             Ok(true)
         });
         methods.add_function("unzip_file", |_, args: (String, String)| {
@@ -64,7 +64,6 @@ impl UserData for PluginFileSystem {
             Ok(true)
         });
         methods.add_function("untar_gz_file", |_, args: (String, String)| {
-
             let file = PathBuf::from(args.0);
             let target = PathBuf::from(args.1);
 
@@ -79,7 +78,6 @@ impl UserData for PluginFileSystem {
             if archive.unpack(&target).is_err() {
                 return Ok(false);
             }
-
 
             Ok(true)
         });

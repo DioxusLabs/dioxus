@@ -82,6 +82,7 @@ dioxus-core = { git = "https://github.com/DioxusLabs/dioxus", features = [
 ] }
 dioxus-autofmt = { git = "https://github.com/dioxuslabs/dioxus" }
 gitignore = "1.0.7"
+rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
 
 [[bin]]
 path = "src/main.rs"

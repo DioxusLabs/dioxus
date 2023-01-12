@@ -715,6 +715,7 @@ dependencies = [
  "proc-macro2",
  "regex",
  "reqwest",
+ "rsx-rosetta",
  "serde",
  "serde_json",
  "syn",
@@ -2266,6 +2267,20 @@ dependencies = [
  "untrusted",
  "web-sys",
  "winapi",
+]
+
+[[package]]
+name = "rsx-rosetta"
+version = "0.0.0"
+source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
+dependencies = [
+ "convert_case",
+ "dioxus-autofmt",
+ "dioxus-rsx",
+ "html_parser",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

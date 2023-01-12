@@ -252,8 +252,8 @@ impl Tool {
 
             if self.target_platform() == "linux" {
                 // This code does not update permissions idk why
-                /*let mut perms = final_file.metadata()?.permissions();
-                perms.set_mode(0o744);*/
+                // let mut perms = final_file.metadata()?.permissions();
+                // perms.set_mode(0o744);
 
                 // Adding to the binary execution rights with "chmod"
                 let mut command = Command::new("chmod");

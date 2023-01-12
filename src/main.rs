@@ -1,81 +1,65 @@
+use anyhow::anyhow;
 use clap::Parser;
 use dioxus_cli::{plugin::PluginManager, *};
-use std::process::exit;
+use Commands::*;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
+
     set_up_logging();
 
-    let dioxus_config = DioxusConfig::load().unwrap_or(DioxusConfig::default());
+    let dioxus_config = DioxusConfig::load()
+        .map_err(|e| anyhow!("Failed to load `dioxus.toml` because: {e}"))?
+        .unwrap_or_else(|| {
+            log::warn!("Your `dioxus.toml` could not be found. Using the default config. To set up this crate with dioxus, use `dioxus init`.");
+            DioxusConfig::default()
+        });
 
-    let plugin_state = PluginManager::init(dioxus_config.plugin);
-
-    if let Err(e) = plugin_state {
-        log::error!("🚫 Plugin system initialization failed: {e}");
-        exit(1);
-    }
+    PluginManager::init(dioxus_config.plugin)
+        .map_err(|e| anyhow!("🚫 Plugin system initialization failed: {e}"))?;
 
     match args.action {
-        Commands::Translate(opts) => {
-            if let Err(e) = opts.translate() {
-                log::error!("🚫 Translate failed: {}", e);
-                exit(1);
-            }
-        }
+        Translate(opts) => opts
+            .translate()
+            .map_err(|e| anyhow!("🚫 Translation of HTML into RSX failed: {}", e)),
 
-        Commands::Build(opts) => {
-            if let Err(e) = opts.build() {
-                log::error!("🚫 Build project failed: {}", e);
-                exit(1);
-            }
-        }
+        Build(opts) => opts
+            .build()
+            .map_err(|e| anyhow!("🚫 Building project failed: {}", e)),
 
-        Commands::Clean(opts) => {
-            if let Err(e) = opts.clean() {
-                log::error!("🚫 Clean project failed: {}", e);
-                exit(1);
-            }
-        }
+        Clean(opts) => opts
+            .clean()
+            .map_err(|e| anyhow!("🚫 Cleaning project failed: {}", e)),
 
-        Commands::Serve(opts) => {
-            if let Err(e) = opts.serve().await {
-                log::error!("🚫 Serve startup failed: {}", e);
-                exit(1);
-            }
-        }
+        Serve(opts) => opts
+            .serve()
+            .await
+            .map_err(|e| anyhow!("🚫 Serving project failed: {}", e)),
 
-        Commands::Create(opts) => {
-            if let Err(e) = opts.create() {
-                log::error!("🚫 Create project failed: {}", e);
-                exit(1);
-            }
-        }
+        Create(opts) => opts
+            .create()
+            .map_err(|e| anyhow!("🚫 Creating new project failed: {}", e)),
 
-        Commands::Config(opts) => {
-            if let Err(e) = opts.config() {
-                log::error!("config error: {}", e);
-                exit(1);
-            }
-        }
+        Config(opts) => opts
+            .config()
+            .map_err(|e| anyhow!("🚫 Configuring new project failed: {}", e)),
 
-        Commands::Plugin(opts) => {
-            if let Err(e) = opts.plugin().await {
-                log::error!("tool error: {}", e);
-            }
-        }
+        Plugin(opts) => opts
+            .plugin()
+            .await
+            .map_err(|e| anyhow!("🚫 Error with plugin: {}", e)),
 
-        Commands::Autoformat(opts) => {
-            if let Err(e) = opts.autoformat().await {
-                log::error!("format error: {}", e);
-            }
-        }
+        Autoformat(opts) => opts
+            .autoformat()
+            .await
+            .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
 
-        Commands::Version(opt) => {
+        Version(opt) => {
             let version = opt.version();
             println!("{}", version);
+
+            Ok(())
         }
     }
-
-    Ok(())
 }
