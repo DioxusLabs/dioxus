@@ -1,3 +1,5 @@
+use std::ptr::NonNull;
+
 use crate::{
     nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
     ScopeId,
@@ -17,7 +19,7 @@ pub(crate) struct ElementRef {
     pub path: ElementPath,
 
     // The actual template
-    pub template: *const VNode<'static>,
+    pub template: Option<NonNull<VNode<'static>>>,
 }
 
 #[derive(Clone, Copy)]
@@ -27,9 +29,9 @@ pub enum ElementPath {
 }
 
 impl ElementRef {
-    pub(crate) fn null() -> Self {
+    pub(crate) fn none() -> Self {
         Self {
-            template: std::ptr::null_mut(),
+            template: None,
             path: ElementPath::Root(0),
         }
     }
@@ -48,7 +50,7 @@ impl VirtualDom {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
 
-        entry.insert(ElementRef::null());
+        entry.insert(ElementRef::none());
         ElementId(id)
     }
 
@@ -57,7 +59,8 @@ impl VirtualDom {
         let id = entry.key();
 
         entry.insert(ElementRef {
-            template: template as *const _ as *mut _,
+            // We know this is non-null because it comes from a reference
+            template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
         });
         ElementId(id)
