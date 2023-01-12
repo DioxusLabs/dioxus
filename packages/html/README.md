@@ -20,7 +20,7 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-html/latest/dioxus-html) |
+[API Docs](https://docs.rs/dioxus-html/latest/dioxus_html) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
@@ -61,7 +61,7 @@ impl DioxusElement for div {
 
 All elements should be defined as a zero-sized-struct (also known as unit struct). These structs are zero-cost and just provide the type-level trickery to Rust for compile-time correct templates.
 
-Attributes would then be implemented as methods on these unit structs.
+Attributes would then be implemented as constants on these unit structs.
 
 The HTML namespace is defined mostly with macros. However, the expanded form would look something like this:
 ```rust
@@ -71,14 +71,8 @@ impl DioxusElement for base {
     const NAME_SPACE: Option<&'static str> = None;
 }
 impl base {
-    #[inline]
-    fn href<'a>(&self, f: NodeFactory<'a>, v: Arguments) -> Attribute<'a> {
-        f.attr("href", v, None, false)
-    }
-    #[inline]
-    fn target<'a>(&self, f: NodeFactory<'a>, v: Arguments) -> Attribute<'a> {
-        f.attr("target", v, None, false)
-    }
+    const href: (&'static str, Option<'static str>, bool) = ("href", None, false);
+    const target: (&'static str, Option<'static str>, bool) = ("target", None, false);
 }
 ```
 Because attributes are defined as methods on the unit struct, they guard the attribute creation behind a compile-time correct interface.
@@ -114,5 +108,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

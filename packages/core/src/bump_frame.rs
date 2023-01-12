@@ -30,6 +30,8 @@ impl BumpFrame {
     pub(crate) fn bump(&self) -> &Bump {
         unsafe { &*self.bump.get() }
     }
+
+    #[allow(clippy::mut_from_ref)]
     pub(crate) unsafe fn bump_mut(&self) -> &mut Bump {
         unsafe { &mut *self.bump.get() }
     }

@@ -11,6 +11,7 @@
 //! The logic for this was borrowed from <https://docs.rs/stack_dst/0.6.1/stack_dst/>. Unfortunately, this crate does not
 //! support non-static closures, so we've implemented the core logic of `ValueA` in this module.
 
+#[allow(unused_imports)]
 use smallbox::{smallbox, space::S16, SmallBox};
 
 use crate::{innerlude::VNode, ScopeState};

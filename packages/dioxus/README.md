@@ -229,7 +229,7 @@ of logic. Hooks provide us a way of retrieving state from the `Scope` and using
 it to render UI elements.
 
 By convention, all hooks are functions that should start with `use_`. We can
-use hooks to define state and modify it from within listeners.
+use hooks to define the state and modify it from within listeners.
 
 ```rust, ignore
 fn app(cx: Scope) -> Element {
@@ -249,7 +249,7 @@ In a sense, hooks let us add a field of state to our component without declaring
 an explicit state struct. However, this means we need to "load" the struct in the right
 order. If that order is wrong, then the hook will pick the wrong state and panic.
 
-Most hooks you'll write are simply composition of other hooks:
+Most hooks you'll write are simply compositions of other hooks:
 
 ```rust, ignore
 fn use_username(cx: &ScopeState, id: Uuid) -> bool {
@@ -309,7 +309,7 @@ Beyond this overview, Dioxus supports:
 
 Good luck!
 
-## Inspiration, Resources, Alternatives and Credits
+## Inspiration, Resources, Alternatives, and Credits
 
 Dioxus is inspired by:
 - React: for its hooks, concurrency, suspense
@@ -318,7 +318,7 @@ Dioxus is inspired by:
 Alternatives to Dioxus include:
 - Yew: supports function components and web, but no SSR, borrowed data, or bump allocation. Rather slow at times.
 - Percy: supports function components, web, ssr, but lacks state management
-- Sycamore: supports function components, web, ssr, but closer to SolidJS than React
+- Sycamore: supports function components, web, ssr, but is closer to SolidJS than React
 - MoonZoom/Seed: opinionated frameworks based on the Elm model (message, update) - no hooks
 
 We've put a lot of work into making Dioxus ergonomic and *familiar*.

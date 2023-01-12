@@ -40,9 +40,9 @@ Inspired by atom-based state management solutions, all state in Fermi starts as 
 static NAME: Atom<&str> = |_| "Dioxus";
 ```
 
-From anywhere in our app, we can read our the value of our atom:
+From anywhere in our app, we can read the value of our atom:
 
-```rust, ignore
+```rust, ignores
 fn NameCard(cx: Scope) -> Element {
     let name = use_read(cx, NAME);
     cx.render(rsx!{ h1 { "Hello, {name}"} })
@@ -83,9 +83,9 @@ $ cargo run --example fermi
 
 ## Features
 
-Broadly our feature set to required to be released includes:
+Broadly our feature set required to be released includes:
 - [x] Support for Atoms
-- [x] Support for AtomRef (for values that aren't clone)
+- [x] Support for AtomRef (for values that aren't `Clone`)
 - [ ] Support for Atom Families
 - [ ] Support for memoized Selectors
 - [ ] Support for memoized SelectorFamilies

@@ -229,11 +229,13 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
 
         "change" | "input" | "invalid" | "reset" | "submit" => read_input_to_data(target),
 
-        "click" | "contextmenu" | "dblclick" | "doubleclick" | "drag" | "dragend" | "dragenter"
-        | "dragexit" | "dragleave" | "dragover" | "dragstart" | "drop" | "mousedown"
-        | "mouseenter" | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
+        "click" | "contextmenu" | "dblclick" | "doubleclick" | "mousedown" | "mouseenter"
+        | "mouseleave" | "mousemove" | "mouseout" | "mouseover" | "mouseup" => {
             Rc::new(MouseData::from(event))
         }
+        "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
+        | "drop" => Rc::new(DragData::from(event)),
+
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
             Rc::new(PointerData::from(event))
