@@ -152,7 +152,7 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
 /// Pass any number of paths to listen for changes on relative to the crate root as strings.
 /// If no paths are passed, it will listen on the src and examples folders.
 #[macro_export]
-macro_rules! hot_reload {
+macro_rules! hot_reload_init_inner {
     () => {
         dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"])
     };
@@ -161,3 +161,5 @@ macro_rules! hot_reload {
         dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*])
     };
 }
+
+pub use hot_reload_init_inner as hot_reload_init;

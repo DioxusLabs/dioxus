@@ -17,12 +17,14 @@ dioxus-html = { path = "../html", version = "^0.3.0", optional = true }
 dioxus-core-macro = { path = "../core-macro", version = "^0.3.0", optional = true }
 dioxus-hooks = { path = "../hooks", version = "^0.3.0", optional = true }
 dioxus-rsx = { path = "../rsx", version = "0.0.2", optional = true }
+dioxus-hot-reload = { path = "../hot-reload", version = "0.1.0", optional = true }
 
 [features]
-default = ["macro", "hooks", "html"]
+default = ["macro", "hooks", "html", "hot-reload"]
 macro = ["dioxus-core-macro", "dioxus-rsx"]
 html = ["dioxus-html"]
 hooks = ["dioxus-hooks"]
+hot-reload = ["dioxus-hot-reload"]
 
 
 [dev-dependencies]
