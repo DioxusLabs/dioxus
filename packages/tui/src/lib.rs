@@ -275,7 +275,6 @@ fn render_vdom(
 
                 // if we have a new template, replace the old one
                 if let Some(template) = new_templete {
-                    // println!("reloading template");
                     vdom.replace_template(template);
                 }
 
