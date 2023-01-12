@@ -282,7 +282,7 @@ impl VirtualDom {
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
-        dom.elements.insert(ElementRef::null());
+        dom.elements.insert(ElementRef::none());
 
         dom
     }
@@ -387,7 +387,7 @@ impl VirtualDom {
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
-            let template = unsafe { &*el_ref.template };
+            let template = unsafe { el_ref.template.unwrap().as_ref() };
             let node_template = template.template.get();
             let target_path = el_ref.path;
 
