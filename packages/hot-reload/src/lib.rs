@@ -32,27 +32,25 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                 let file_map = file_map.clone();
                 let channels = channels.clone();
                 move || {
-                    for connection in local_socket_stream.incoming() {
-                        if let Ok(mut connection) = connection {
-                            // send any templates than have changed before the socket connected
-                            let templates: Vec<_> = {
-                                file_map
-                                    .lock()
-                                    .unwrap()
-                                    .map
-                                    .values()
-                                    .filter_map(|(_, template_slot)| *template_slot)
-                                    .collect()
-                            };
-                            for template in templates {
-                                if !send_template(template, &mut connection) {
-                                    continue;
-                                }
+                    for mut connection in local_socket_stream.incoming().flatten() {
+                        // send any templates than have changed before the socket connected
+                        let templates: Vec<_> = {
+                            file_map
+                                .lock()
+                                .unwrap()
+                                .map
+                                .values()
+                                .filter_map(|(_, template_slot)| *template_slot)
+                                .collect()
+                        };
+                        for template in templates {
+                            if !send_template(template, &mut connection) {
+                                continue;
                             }
-                            channels.lock().unwrap().push(connection);
-                            if log {
-                                println!("Connected to hot reloading 🚀");
-                            }
+                        }
+                        channels.lock().unwrap().push(connection);
+                        if log {
+                            println!("Connected to hot reloading 🚀");
                         }
                     }
                 }
@@ -102,7 +100,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                                 match file_map
                                     .lock()
                                     .unwrap()
-                                    .update_rsx(&path, crate_dir.as_path())
+                                    .update_rsx(path, crate_dir.as_path())
                                 {
                                     UpdateResult::UpdatedRsx(msgs) => {
                                         for msg in msgs {
