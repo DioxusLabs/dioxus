@@ -234,7 +234,10 @@ pub fn virtual_event_from_websys_event(event: web_sys::Event, target: Element) -
             Rc::new(MouseData::from(event))
         }
         "drag" | "dragend" | "dragenter" | "dragexit" | "dragleave" | "dragover" | "dragstart"
-        | "drop" => Rc::new(DragData::from(event)),
+        | "drop" => {
+            let mouse = MouseData::from(event);
+            Rc::new(DragData { mouse })
+        }
 
         "pointerdown" | "pointermove" | "pointerup" | "pointercancel" | "gotpointercapture"
         | "lostpointercapture" | "pointerenter" | "pointerleave" | "pointerover" | "pointerout" => {
