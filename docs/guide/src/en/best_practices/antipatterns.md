@@ -1,6 +1,6 @@
 # Antipatterns
 
-This example shows what not to do and provides a reason why a given pattern is considered an "AntiPattern". Most anti-patterns are considered wrong due performance reasons, or for harming code re-usability.
+This example shows what not to do and provides a reason why a given pattern is considered an "AntiPattern". Most anti-patterns are considered wrong for performance or code re-usability reasons.
 
 ## Unnecessarily Nested Fragments
 
@@ -14,7 +14,7 @@ Only Component and Fragment nodes are susceptible to this issue. Dioxus mitigate
 
 ## Incorrect Iterator Keys
 
-As described in the conditional rendering chapter, list items must have unique keys that are associated with the same items across renders. This helps Dioxus associate state with the contained components, and ensures good diffing performance. Do not omit keys, unless you know that the list is static and will never change.
+As described in the [dynamic rendering chapter](../interactivity/dynamic_rendering.md#the-key-attribute), list items must have unique keys that are associated with the same items across renders. This helps Dioxus associate state with the contained components and ensures good diffing performance. Do not omit keys, unless you know that the list will never change.
 
 ```rust
 {{#include ../../../examples/anti_patterns.rs:iter_keys}}

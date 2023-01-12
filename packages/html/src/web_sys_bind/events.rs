@@ -4,6 +4,7 @@ use crate::events::{
 };
 use crate::geometry::{ClientPoint, Coordinates, ElementPoint, PagePoint, ScreenPoint};
 use crate::input_data::{decode_key_location, decode_mouse_button_set, MouseButton};
+use crate::DragData;
 use keyboard_types::{Code, Key, Modifiers};
 use std::convert::TryInto;
 use std::str::FromStr;
@@ -40,6 +41,7 @@ uncheck_convert![
     CompositionEvent => CompositionData,
     KeyboardEvent    => KeyboardData,
     MouseEvent       => MouseData,
+    MouseEvent       => DragData,
     TouchEvent       => TouchData,
     PointerEvent     => PointerData,
     WheelEvent       => WheelData,
@@ -114,6 +116,14 @@ impl From<&MouseEvent> for MouseData {
             decode_mouse_button_set(e.buttons()),
             modifiers,
         )
+    }
+}
+
+impl From<&MouseEvent> for DragData {
+    fn from(value: &MouseEvent) -> Self {
+        Self {
+            mouse: MouseData::from(value),
+        }
     }
 }
 

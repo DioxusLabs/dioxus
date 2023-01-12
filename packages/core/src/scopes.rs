@@ -73,7 +73,7 @@ pub struct ScopeState {
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
 
-    pub(crate) parent: Option<*mut ScopeState>,
+    pub(crate) parent: Option<*const ScopeState>,
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
@@ -85,7 +85,7 @@ pub struct ScopeState {
     pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: FxHashSet<TaskId>,
+    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
@@ -111,14 +111,6 @@ impl<'src> ScopeState {
         }
     }
 
-    pub(crate) fn previous_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.render_cnt.get() % 2 {
-            1 => &mut self.node_arena_1,
-            0 => &mut self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
     /// Get the name of this component
     pub fn name(&self) -> &str {
         self.name
@@ -139,7 +131,7 @@ impl<'src> ScopeState {
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump
+        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -556,7 +548,7 @@ impl<'src> ScopeState {
     #[allow(clippy::mut_from_ref)]
     pub fn use_hook<State: 'static>(&self, initializer: impl FnOnce() -> State) -> &mut State {
         let cur_hook = self.hook_idx.get();
-        let mut hook_list = self.hook_list.borrow_mut();
+        let mut hook_list = self.hook_list.try_borrow_mut().expect("The hook list is already borrowed: This error is likely caused by trying to use a hook inside a hook which violates the rules of hooks.");
 
         if cur_hook >= hook_list.len() {
             hook_list.push(self.hook_arena.alloc(initializer()));

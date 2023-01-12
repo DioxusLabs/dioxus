@@ -10,7 +10,7 @@ fn main() {
 
 fn app(cx: Scope) -> Element {
     let window = use_window(cx);
-    let emails_sent = use_ref(cx, || vec![]);
+    let emails_sent = use_ref(cx, Vec::new);
 
     let tx = use_coroutine(cx, |mut rx: UnboundedReceiver<String>| {
         to_owned![emails_sent];
@@ -56,7 +56,7 @@ struct ComposeProps {
 }
 
 fn compose(cx: Scope<ComposeProps>) -> Element {
-    let user_input = use_state(cx, || String::new());
+    let user_input = use_state(cx, String::new);
     let window = use_window(cx);
 
     cx.render(rsx! {

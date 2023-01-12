@@ -27,7 +27,7 @@ Dioxus is heavily inspired by React. If you know React, getting started with Dio
 - Comprehensive inline documentation – hover and guides for all HTML elements, listeners, and events.
 - Extremely memory efficient – 0 global allocations for steady-state components.
 - Multi-channel asynchronous scheduler for first-class async support.
-- And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/.
+- And more! Read the [full release post](https://dioxuslabs.com/blog/introducing-dioxus/).
 
 ### Multiplatform
 

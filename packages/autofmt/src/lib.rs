@@ -1,13 +1,14 @@
 use dioxus_rsx::CallBody;
 
-use crate::buffer::*;
 use crate::util::*;
+use crate::writer::*;
 
 mod buffer;
 mod component;
 mod element;
 mod expr;
 mod util;
+mod writer;
 
 /// A modification to the original file to be applied by an IDE
 ///
@@ -101,10 +102,9 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 }
 
 pub fn write_block_out(body: CallBody) -> Option<String> {
-    let mut buf = Buffer {
+    let mut buf = Writer {
         src: vec!["".to_string()],
-        indent: 0,
-        ..Buffer::default()
+        ..Writer::default()
     };
 
     // Oneliner optimization
@@ -120,11 +120,12 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
     let body = syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?;
 
-    let mut buf = Buffer {
+    let mut buf = Writer {
         src: block.lines().map(|f| f.to_string()).collect(),
-        indent: indent_level,
-        ..Buffer::default()
+        ..Writer::default()
     };
+
+    buf.out.indent = indent_level;
 
     // Oneliner optimization
     if buf.is_short_children(&body.roots).is_some() {
@@ -134,8 +135,8 @@ pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
     }
 
     // writing idents leaves the final line ended at the end of the last ident
-    if buf.buf.contains('\n') {
-        buf.new_line().unwrap();
+    if buf.out.buf.contains('\n') {
+        buf.out.new_line().unwrap();
     }
 
     buf.consume()
