@@ -5,7 +5,7 @@
 use bumpalo::Bump;
 use dioxus::core::{ElementId, Mutation::*};
 use dioxus::prelude::*;
-use dioxus_core::{AttributeValue, BorrowedAttributeValue};
+use dioxus_core::BorrowedAttributeValue;
 
 #[test]
 fn attrs_cycle() {

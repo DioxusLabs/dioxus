@@ -1,5 +1,5 @@
 use dioxus::prelude::*;
-use dioxus_desktop::{tao::dpi::PhysicalPosition, use_window, Config, LogicalSize, WindowBuilder};
+use dioxus_desktop::{tao::dpi::PhysicalPosition, use_window, LogicalSize, WindowBuilder};
 
 fn main() {
     dioxus_desktop::launch_cfg(app, make_config());

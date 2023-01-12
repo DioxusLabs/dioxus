@@ -1,12 +1,11 @@
 use dioxus::prelude::*;
-use dioxus_desktop::{use_window, WindowBuilder};
 
 fn main() {
     dioxus_desktop::launch(app);
 }
 
 fn app(cx: Scope) -> Element {
-    let window = use_window(cx);
+    let window = dioxus_desktop::use_window(cx);
 
     cx.render(rsx! {
         div {
