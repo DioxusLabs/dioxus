@@ -923,9 +923,7 @@ impl<'b> VirtualDom {
 
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
-            RenderReturn::Aborted(_) => {
-                return;
-            }
+            RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
             _ => todo!(),
         };
 
