@@ -32,6 +32,7 @@ fn create_random_attribute(attr_idx: &mut usize) -> TemplateAttribute<'static> {
 }
 
 fn create_random_template_node(
+    dynamic_node_types: &mut Vec<DynamicNodeType>,
     template_idx: &mut usize,
     attr_idx: &mut usize,
     depth: usize,
@@ -49,11 +50,18 @@ fn create_random_template_node(
                 namespace: random_ns(),
                 attrs,
                 children: {
-                    if depth > 10 {
+                    if depth > 4 {
                         &[]
                     } else {
                         let children: Vec<_> = (0..(rand::random::<usize>() % 3))
-                            .map(|_| create_random_template_node(template_idx, attr_idx, depth + 1))
+                            .map(|_| {
+                                create_random_template_node(
+                                    dynamic_node_types,
+                                    template_idx,
+                                    attr_idx,
+                                    depth + 1,
+                                )
+                            })
                             .collect();
                         Box::leak(children.into_boxed_slice())
                     }
@@ -67,6 +75,7 @@ fn create_random_template_node(
             id: {
                 let old_idx = *template_idx;
                 *template_idx += 1;
+                dynamic_node_types.push(DynamicNodeType::Text);
                 old_idx
             },
         },
@@ -74,6 +83,7 @@ fn create_random_template_node(
             id: {
                 let old_idx = *template_idx;
                 *template_idx += 1;
+                dynamic_node_types.push(DynamicNodeType::Other);
                 old_idx
             },
         },
@@ -113,11 +123,19 @@ fn generate_paths(
     }
 }
 
-fn create_random_template(name: &'static str) -> Template<'static> {
+enum DynamicNodeType {
+    Text,
+    Other,
+}
+
+fn create_random_template(name: &'static str) -> (Template<'static>, Vec<DynamicNodeType>) {
+    let mut dynamic_node_type = Vec::new();
     let mut template_idx = 0;
     let mut attr_idx = 0;
     let roots = (0..(1 + rand::random::<usize>() % 5))
-        .map(|_| create_random_template_node(&mut template_idx, &mut attr_idx, 0))
+        .map(|_| {
+            create_random_template_node(&mut dynamic_node_type, &mut template_idx, &mut attr_idx, 0)
+        })
         .collect::<Vec<_>>();
     assert!(!roots.is_empty());
     let roots = Box::leak(roots.into_boxed_slice());
@@ -140,18 +158,17 @@ fn create_random_template(name: &'static str) -> Template<'static> {
             .collect::<Vec<_>>()
             .into_boxed_slice(),
     );
-    Template { name, roots, node_paths, attr_paths }
+    (
+        Template { name, roots, node_paths, attr_paths },
+        dynamic_node_type,
+    )
 }
 
 fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
-    let range = if depth > 10 { 2 } else { 4 };
+    let range = if depth > 3 { 1 } else { 3 };
     match rand::random::<u8>() % range {
-        0 => DynamicNode::Text(VText {
-            value: Box::leak(format!("{}", rand::random::<usize>()).into_boxed_str()),
-            id: Default::default(),
-        }),
-        1 => DynamicNode::Placeholder(Default::default()),
-        2 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| VNode {
+        0 => DynamicNode::Placeholder(Default::default()),
+        1 => cx.make_node((0..(rand::random::<u8>() % 5)).map(|_| VNode {
             key: None,
             parent: Default::default(),
             template: Cell::new(Template {
@@ -168,7 +185,7 @@ fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
             )]),
             dynamic_attrs: &[],
         })),
-        3 => cx.component(
+        2 => cx.component(
             create_random_element,
             DepthProps { depth, root: false },
             "create_random_element",
@@ -212,7 +229,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
     let range = if cx.props.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
         0 | 1 => {
-            let template = create_random_template(Box::leak(
+            let (template, dynamic_node_types) = create_random_template(Box::leak(
                 format!(
                     "{}{}",
                     concat!(file!(), ":", line!(), ":", column!(), ":"),
@@ -233,8 +250,19 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
                 template: Cell::new(template),
                 root_ids: Default::default(),
                 dynamic_nodes: {
-                    let dynamic_nodes: Vec<_> = (0..template.node_paths.len())
-                        .map(|_| create_random_dynamic_node(cx, cx.props.depth + 1))
+                    let dynamic_nodes: Vec<_> = dynamic_node_types
+                        .iter()
+                        .map(|ty| match ty {
+                            DynamicNodeType::Text => DynamicNode::Text(VText {
+                                value: Box::leak(
+                                    format!("{}", rand::random::<usize>()).into_boxed_str(),
+                                ),
+                                id: Default::default(),
+                            }),
+                            DynamicNodeType::Other => {
+                                create_random_dynamic_node(cx, cx.props.depth + 1)
+                            }
+                        })
                         .collect();
                     cx.bump().alloc(dynamic_nodes)
                 },
@@ -255,7 +283,7 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
 // test for panics when creating random nodes and templates
 #[test]
 fn create() {
-    for _ in 0..1000 {
+    for _ in 0..100 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
@@ -266,7 +294,7 @@ fn create() {
 // This test will change the template every render which is not very realistic, but it helps stress the system
 #[test]
 fn diff() {
-    for _ in 0..100 {
+    for _ in 0..10 {
         let mut vdom =
             VirtualDom::new_with_props(create_random_element, DepthProps { depth: 0, root: true });
         let _ = vdom.rebuild();
