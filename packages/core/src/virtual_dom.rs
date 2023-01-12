@@ -24,7 +24,9 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+///
 /// #[derive(Props, PartialEq)]
 /// struct AppProps {
 ///     title: String
@@ -39,7 +41,17 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components may be composed to make complex apps.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # #![allow(unused)]
+/// # use dioxus::prelude::*;
+///
+/// # #[derive(Props, PartialEq)]
+/// # struct AppProps {
+/// #     title: String
+/// # }
+///
+/// static ROUTES: &str = "";
+///
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -47,12 +59,33 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///         Footer {}
 ///     ))
 /// }
+///
+/// #[inline_props]
+/// fn NavBar(cx: Scope, routes: &'static str) -> Element {
+///     cx.render(rsx! {
+///         div { "Routes: {routes}" }
+///     })
+/// }
+///
+/// fn Footer(cx: Scope) -> Element {
+///     cx.render(rsx! { div { "Footer" } })
+/// }
+///
+/// #[inline_props]
+/// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+///     cx.render(rsx! {
+///         div { id: "title", children }
+///     })
+/// }
 /// ```
 ///
 /// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
 /// draw the UI.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn App(cx: Scope) -> Element { cx.render(rsx! { div {} }) }
+///
 /// let mut vdom = VirtualDom::new(App);
 /// let edits = vdom.rebuild();
 /// ```

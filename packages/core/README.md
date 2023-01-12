@@ -33,34 +33,45 @@ The `dioxus` crate exports the `rsx` macro which transforms a helpful, simpler s
 
 First, start with your app:
 
-```rust, ignore
+```rust
+# use dioxus::core::Mutations;
+use dioxus::prelude::*;
+
+// First, declare a root component
 fn app(cx: Scope) -> Element {
-    cx.render(rsx!( div { "hello world" } ))
+    cx.render(rsx!{
+        div { "hello world" }
+    })
 }
+
+fn main() {
+    // Next, create a new VirtualDom using this app as the root component.
+    let mut dom = VirtualDom::new(app);
+
+    // The initial render of the dom will generate a stream of edits for the real dom to apply
+    let mutations = dom.rebuild();
+
+    // Somehow, you can apply these edits to the real dom
+    apply_edits_to_real_dom(mutations);
+}
+
+# fn apply_edits_to_real_dom(mutations: Mutations) {}
 ```
 
-Then, we'll want to create a new VirtualDom using this app as the root component.
-
-```rust, ignore
-let mut dom = VirtualDom::new(app);
-```
-
-To build the app into a stream of mutations, we'll use [`VirtualDom::rebuild`]:
-
-```rust, ignore
-let mutations = dom.rebuild();
-
-apply_edits_to_real_dom(mutations);
-```
 
 We can then wait for any asynchronous components or pending futures using the `wait_for_work()` method. If we have a deadline, then we can use render_with_deadline instead:
+```rust
+# #![allow(unused)]
+# use dioxus::prelude::*;
 
-```rust, ignore
+# use std::time::Duration;
+# async fn wait(mut dom: VirtualDom) {
 // Wait for the dom to be marked dirty internally
 dom.wait_for_work().await;
 
 // Or wait for a deadline and then collect edits
-dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
+let mutations = dom.render_with_deadline(tokio::time::sleep(Duration::from_millis(16)));
+# }
 ```
 
 If an event occurs from outside the VirtualDom while waiting for work, then we can cancel the wait using a `select!` block and inject the event.
