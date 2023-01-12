@@ -32,6 +32,6 @@ pub mod prelude {
     #[cfg(feature = "html")]
     pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
 
-    #[cfg(feature = "hot-reload")]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "hot-reload"))]
     pub use dioxus_hot_reload::{self, hot_reload_init};
 }
