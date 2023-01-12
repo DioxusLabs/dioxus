@@ -26,6 +26,7 @@ dioxus serve --hot-reload
 # Desktop/Liveview/TUI
 
 For desktop, LiveView, and tui, you can place the hot reload macro at the top of your main function to enable hot reloading.
+Hot reloading is automatically enabled on debug builds.
 
 ## Setup
 

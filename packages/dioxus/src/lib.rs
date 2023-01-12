@@ -33,5 +33,5 @@ pub mod prelude {
     pub use dioxus_elements::{prelude::*, GlobalAttributes, SvgAttributes};
 
     #[cfg(feature = "hot-reload")]
-    pub use dioxus_hot_reload::hot_reload_init;
+    pub use dioxus_hot_reload::{self, hot_reload_init};
 }

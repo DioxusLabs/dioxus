@@ -6,17 +6,26 @@ use std::{
 };
 
 use dioxus_core::Template;
-use dioxus_html::HtmlCtx;
-use dioxus_rsx::hot_reload::{FileMap, UpdateResult};
+use dioxus_rsx::{
+    hot_reload::{FileMap, UpdateResult},
+    HotReloadingContext,
+};
 use interprocess::local_socket::{LocalSocketListener, LocalSocketStream};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
+#[cfg(debug_assertions)]
+pub use dioxus_html::HtmlCtx;
+
 /// Initialize the hot reloading listener on the given path
-pub fn init(root_path: &'static str, listening_paths: &'static [&'static str], log: bool) {
+pub fn init<Ctx: HotReloadingContext + Send + 'static>(
+    root_path: &'static str,
+    listening_paths: &'static [&'static str],
+    log: bool,
+) {
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
-        let file_map = Arc::new(Mutex::new(FileMap::<HtmlCtx>::new(crate_dir.clone())));
+        let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new(crate_dir.clone())));
         if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
             // listen for connections
             std::thread::spawn({
@@ -159,25 +168,33 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
 /// If no paths are passed, it will listen on the src and examples folders.
 #[macro_export]
 macro_rules! hot_reload_init {
-    ($($t: ident)*) => {
+    ($(@ $ctx:ident)? $($t: ident)*) => {
         #[cfg(debug_assertions)]
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"], hot_reload_init!(log: $($t)*))
+        dioxus_hot_reload::init::<hot_reload_init!(@ctx: $($ctx)?)>(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"], hot_reload_init!(@log: $($t)*))
     };
 
-    ($($paths: literal),* $(,)? $($t: ident)*) => {
+    ($(@ $ctx:ident)? $($paths: literal),* $(,)? $($t: ident)*) => {
         #[cfg(debug_assertions)]
-        dioxus_hot_reload::init(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*], hot_reload_init!(log: $($t)*))
+        dioxus_hot_reload::init::<hot_reload_init!(@ctx: $($ctx)?)>(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*], hot_reload_init!(@log: $($t)*))
     };
 
-    (log:) => {
+    (@log:) => {
         false
     };
 
-    (log: enable logging) => {
+    (@log: enable logging) => {
         true
     };
 
-    (log: disable logging) => {
+    (@log: disable logging) => {
         false
+    };
+
+    (@ctx: $ctx: ident) => {
+        $ctx
+    };
+
+    (@ctx: ) => {
+        dioxus_hot_reload::HtmlCtx
     };
 }

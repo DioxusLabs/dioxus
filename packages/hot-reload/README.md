@@ -97,6 +97,17 @@ fn main(){
 }
 ```
 
+If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resultsing strings.
+
+You can then provide the Context to the macro to make hot reloading work with your custom namespace:
+
+```rust
+fn main(){
+    hot_reload_init!(@MyNamespace /*more configeration*/);
+    // launch your application
+}
+```
+
 ## Implementing hot reloading for a custom renderer
 
 To add hot reloading support to your custom renderer you can use the connect function. This will connect to the dev server you just need to provide a way to transfer `Template`s to the `VirtualDom`. Once you implement this your users can use the hot_reload_init function just like any other render.
