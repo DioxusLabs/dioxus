@@ -143,15 +143,15 @@ fn supports_async() {
     use tokio::time::sleep;
 
     fn app(cx: Scope) -> Element {
-        let colors = use_state(&cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(&cx, || 10);
+        let colors = use_state(cx, || vec!["green", "blue", "red"]);
+        let padding = use_state(cx, || 10);
 
-        use_effect(&cx, colors, |colors| async move {
+        use_effect(cx, colors, |colors| async move {
             sleep(Duration::from_millis(1000)).await;
             colors.with_mut(|colors| colors.reverse());
         });
 
-        use_effect(&cx, padding, |padding| async move {
+        use_effect(cx, padding, |padding| async move {
             sleep(Duration::from_millis(10)).await;
             padding.with_mut(|padding| {
                 if *padding < 65 {
@@ -206,220 +206,9 @@ fn supports_async() {
         let mut dom = VirtualDom::new(app);
         let _ = dom.rebuild();
 
-        for x in 0..10 {
-            let _ = dom.wait_for_work().await;
-            let edits = dom.render_immediate();
+        for _ in 0..10 {
+            dom.wait_for_work().await;
+            let _edits = dom.render_immediate();
         }
     });
 }
-
-// #[test]
-// fn old_props_arent_stale() {
-//     fn app(cx: Scope) -> Element {
-//         dbg!("rendering parent");
-//         let cnt = cx.use_hook(|| 0);
-//         *cnt += 1;
-
-//         if *cnt == 1 {
-//             render!(div { Child { a: "abcdef".to_string() } })
-//         } else {
-//             render!(div { Child { a: "abcdef".to_string() } })
-//         }
-//     }
-
-//     #[derive(Props, PartialEq)]
-//     struct ChildProps {
-//         a: String,
-//     }
-//     fn Child(cx: Scope<ChildProps>) -> Element {
-//         dbg!("rendering child", &cx.props.a);
-//         render!(div { "child {cx.props.a}" })
-//     }
-
-//     let mut dom = new_dom(app, ());
-//     let _ = dom.rebuild();
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-
-//     dbg!("forcing update to child");
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//     dom.work_with_deadline(|| false);
-// }
-
-// #[test]
-// fn basic() {
-//     fn app(cx: Scope) -> Element {
-//         render!(div {
-//             Child { a: "abcdef".to_string() }
-//         })
-//     }
-
-//     #[derive(Props, PartialEq)]
-//     struct ChildProps {
-//         a: String,
-//     }
-
-//     fn Child(cx: Scope<ChildProps>) -> Element {
-//         dbg!("rendering child", &cx.props.a);
-//         render!(div { "child {cx.props.a}" })
-//     }
-
-//     let mut dom = new_dom(app, ());
-//     let _ = dom.rebuild();
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-// }
-
-// #[test]
-// fn leak_thru_children() {
-//     fn app(cx: Scope) -> Element {
-//         cx.render(rsx! {
-//             Child {
-//                 name: "asd".to_string(),
-//             }
-//         });
-//         cx.render(rsx! {
-//             div {}
-//         })
-//     }
-
-//     #[inline_props]
-//     fn Child(cx: Scope, name: String) -> Element {
-//         render!(div { "child {name}" })
-//     }
-
-//     let mut dom = new_dom(app, ());
-//     let _ = dom.rebuild();
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-
-//     dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//     dom.work_with_deadline(|| false);
-// }
-
-// #[test]
-// fn test_pass_thru() {
-//     #[inline_props]
-//     fn NavContainer<'a>(cx: Scope, children: Element<'a>) -> Element {
-//         cx.render(rsx! {
-//             header {
-//                 nav { children }
-//             }
-//         })
-//     }
-
-//     fn NavMenu(cx: Scope) -> Element {
-//         render!(            NavBrand {}
-//             div {
-//                 NavStart {}
-//                 NavEnd {}
-//             }
-//         )
-//     }
-
-//     fn NavBrand(cx: Scope) -> Element {
-//         render!(div {})
-//     }
-
-//     fn NavStart(cx: Scope) -> Element {
-//         render!(div {})
-//     }
-
-//     fn NavEnd(cx: Scope) -> Element {
-//         render!(div {})
-//     }
-
-//     #[inline_props]
-//     fn MainContainer<'a>(
-//         cx: Scope,
-//         nav: Element<'a>,
-//         body: Element<'a>,
-//         footer: Element<'a>,
-//     ) -> Element {
-//         cx.render(rsx! {
-//             div {
-//                 class: "columns is-mobile",
-//                 div {
-//                     class: "column is-full",
-//                     nav,
-//                     body,
-//                     footer,
-//                 }
-//             }
-//         })
-//     }
-
-//     fn app(cx: Scope) -> Element {
-//         let nav = cx.render(rsx! {
-//             NavContainer {
-//                 NavMenu {}
-//             }
-//         });
-//         let body = cx.render(rsx! {
-//             div {}
-//         });
-//         let footer = cx.render(rsx! {
-//             div {}
-//         });
-
-//         cx.render(rsx! {
-//             MainContainer {
-//                 nav: nav,
-//                 body: body,
-//                 footer: footer,
-//             }
-//         })
-//     }
-
-//     let mut dom = new_dom(app, ());
-//     let _ = dom.rebuild();
-
-//     for _ in 0..40 {
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(0)));
-//         dom.work_with_deadline(|| false);
-
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(1)));
-//         dom.work_with_deadline(|| false);
-
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(2)));
-//         dom.work_with_deadline(|| false);
-
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
-//         dom.work_with_deadline(|| false);
-//         dom.handle_message(SchedulerMsg::Immediate(ScopeId(3)));
-//         dom.work_with_deadline(|| false);
-//     }
-// }

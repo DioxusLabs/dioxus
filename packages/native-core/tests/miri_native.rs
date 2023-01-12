@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use dioxus_native_core::*;
 use dioxus_native_core::{
     node_ref::{AttributeMask, NodeView},
     real_dom::RealDom,
@@ -7,13 +6,10 @@ use dioxus_native_core::{
     NodeMask, SendAnyMap,
 };
 use dioxus_native_core_macro::{sorted_str_slice, State};
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{Arc, Mutex};
 use tokio::time::sleep;
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlablaState {}
 
 /// Font style are inherited by default if not specified otherwise by some of the supported attributes.
@@ -88,15 +84,15 @@ fn native_core_is_okay() {
     use std::time::Duration;
 
     fn app(cx: Scope) -> Element {
-        let colors = use_state(&cx, || vec!["green", "blue", "red"]);
-        let padding = use_state(&cx, || 10);
+        let colors = use_state(cx, || vec!["green", "blue", "red"]);
+        let padding = use_state(cx, || 10);
 
-        use_effect(&cx, colors, |colors| async move {
+        use_effect(cx, colors, |colors| async move {
             sleep(Duration::from_millis(1000)).await;
             colors.with_mut(|colors| colors.reverse());
         });
 
-        use_effect(&cx, padding, |padding| async move {
+        use_effect(cx, padding, |padding| async move {
             sleep(Duration::from_millis(10)).await;
             padding.with_mut(|padding| {
                 if *padding < 65 {
@@ -107,9 +103,9 @@ fn native_core_is_okay() {
             });
         });
 
-        let big = colors[0];
-        let mid = colors[1];
-        let small = colors[2];
+        let _big = colors[0];
+        let _mid = colors[1];
+        let _small = colors[2];
 
         cx.render(rsx! {
             blabla {}
@@ -129,16 +125,14 @@ fn native_core_is_okay() {
         let (to_update, _diff) = rdom.lock().unwrap().apply_mutations(muts);
 
         let ctx = SendAnyMap::new();
-        let ctx = SendAnyMap::new();
         rdom.lock().unwrap().update_state(to_update, ctx);
 
-        for x in 0..10 {
+        for _ in 0..10 {
             dom.wait_for_work().await;
 
             let mutations = dom.render_immediate();
             let (to_update, _diff) = rdom.lock().unwrap().apply_mutations(mutations);
 
-            let ctx = SendAnyMap::new();
             let ctx = SendAnyMap::new();
             rdom.lock().unwrap().update_state(to_update, ctx);
         }
