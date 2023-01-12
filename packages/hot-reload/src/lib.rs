@@ -67,9 +67,22 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                 let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
 
                 for path in listening_paths {
-                    if let Ok(path) = PathBuf::from_str(path) {
-                        let examples_path = crate_dir.join(path);
-                        let _ = watcher.watch(&examples_path, RecursiveMode::Recursive);
+                    match PathBuf::from_str(path) {
+                        Ok(path) => {
+                            let full_path = crate_dir.join(path);
+                            if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
+                                if log {
+                                    println!(
+                                        "hot reloading failed to start watching {full_path:?}:\n{err:?}",
+                                    );
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            if log {
+                                println!("hot reloading failed to create path:\n{:?}", err);
+                            }
+                        }
                     }
                 }
 
