@@ -83,7 +83,7 @@ fn create_random_template_node(
 
 fn generate_paths(
     node: &TemplateNode<'static>,
-    current_path: &Vec<u8>,
+    current_path: &[u8],
     node_paths: &mut Vec<Vec<u8>>,
     attr_paths: &mut Vec<Vec<u8>>,
 ) {
@@ -93,22 +93,22 @@ fn generate_paths(
                 match attr {
                     TemplateAttribute::Static { .. } => {}
                     TemplateAttribute::Dynamic { .. } => {
-                        attr_paths.push(current_path.clone());
+                        attr_paths.push(current_path.to_vec());
                     }
                 }
             }
             for (i, child) in children.iter().enumerate() {
-                let mut current_path = current_path.clone();
+                let mut current_path = current_path.to_vec();
                 current_path.push(i as u8);
                 generate_paths(child, &current_path, node_paths, attr_paths);
             }
         }
         TemplateNode::Text { .. } => {}
         TemplateNode::DynamicText { .. } => {
-            node_paths.push(current_path.clone());
+            node_paths.push(current_path.to_vec());
         }
         TemplateNode::Dynamic { .. } => {
-            node_paths.push(current_path.clone());
+            node_paths.push(current_path.to_vec());
         }
     }
 }
@@ -119,12 +119,12 @@ fn create_random_template(name: &'static str) -> Template<'static> {
     let roots = (0..(1 + rand::random::<usize>() % 5))
         .map(|_| create_random_template_node(&mut template_idx, &mut attr_idx, 0))
         .collect::<Vec<_>>();
-    assert!(roots.len() > 0);
+    assert!(!roots.is_empty());
     let roots = Box::leak(roots.into_boxed_slice());
     let mut node_paths = Vec::new();
     let mut attr_paths = Vec::new();
     for (i, root) in roots.iter().enumerate() {
-        generate_paths(root, &vec![i as u8], &mut node_paths, &mut attr_paths);
+        generate_paths(root, &[i as u8], &mut node_paths, &mut attr_paths);
     }
     let node_paths = Box::leak(
         node_paths
@@ -143,7 +143,7 @@ fn create_random_template(name: &'static str) -> Template<'static> {
     Template { name, roots, node_paths, attr_paths }
 }
 
-fn create_random_dynamic_node<'a>(cx: &'a ScopeState, depth: usize) -> DynamicNode<'a> {
+fn create_random_dynamic_node(cx: &ScopeState, depth: usize) -> DynamicNode {
     let range = if depth > 10 { 2 } else { 4 };
     match rand::random::<u8>() % range {
         0 => DynamicNode::Text(VText {
@@ -177,7 +177,7 @@ fn create_random_dynamic_node<'a>(cx: &'a ScopeState, depth: usize) -> DynamicNo
     }
 }
 
-fn create_random_dynamic_attr<'a>(cx: &'a ScopeState) -> Attribute<'a> {
+fn create_random_dynamic_attr(cx: &ScopeState) -> Attribute {
     let value = match rand::random::<u8>() % 6 {
         0 => AttributeValue::Text(Box::leak(
             format!("{}", rand::random::<usize>()).into_boxed_str(),
@@ -207,7 +207,7 @@ struct DepthProps {
     root: bool,
 }
 
-fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
+fn create_random_element(cx: Scope<DepthProps>) -> Element {
     cx.needs_update();
     let range = if cx.props.root { 2 } else { 3 };
     let node = match rand::random::<usize>() % range {
@@ -226,7 +226,7 @@ fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
                 )
                 .into_boxed_str(),
             ));
-            println!("{:#?}", template);
+            println!("{template:#?}");
             let node = VNode {
                 key: None,
                 parent: None,
@@ -248,7 +248,7 @@ fn create_random_element<'a>(cx: Scope<'a, DepthProps>) -> Element<'a> {
         }
         _ => None,
     };
-    println!("{:#?}", node);
+    println!("{node:#?}");
     node
 }
 
