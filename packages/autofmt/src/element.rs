@@ -365,8 +365,8 @@ impl Writer {
                             Some(len) => total_count += len,
                             None => return None,
                         },
-                        BodyNode::ForLoop(_) => todo!(),
-                        BodyNode::IfChain(_) => todo!(),
+                        BodyNode::ForLoop(_forloop) => return None,
+                        BodyNode::IfChain(_chain) => return None,
                     }
                 }
 
