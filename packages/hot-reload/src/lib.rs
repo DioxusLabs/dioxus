@@ -240,7 +240,6 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
                             let mut channels = channels.lock().unwrap();
                             for path in real_paths {
-                                println!("File changed: {:?}", path);
                                 // if this file type cannot be hot reloaded, rebuild the application
                                 if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                                     rebuild();
