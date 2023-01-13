@@ -2,7 +2,6 @@ use crate::Writer;
 use dioxus_rsx::*;
 use proc_macro2::Span;
 use std::{
-    borrow::Borrow,
     fmt::Result,
     fmt::{self, Write},
 };
