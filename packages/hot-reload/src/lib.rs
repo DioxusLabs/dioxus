@@ -155,7 +155,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             }
                         }
                         std::thread::sleep(std::time::Duration::from_millis(10));
-                        if aborted.lock().unwrap().clone() {
+                        if *aborted.lock().unwrap() {
                             break;
                         }
                     }
@@ -203,12 +203,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                         for channel in &mut *channels.lock().unwrap() {
                             send_msg(HotReloadMsg::Shutdown, channel);
                         }
-                    } else {
-                        if log {
-                            println!(
-                                "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
-                            );
-                        }
+                    } else if log {
+                        println!(
+                            "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
+                        );
                     }
                 };
 
