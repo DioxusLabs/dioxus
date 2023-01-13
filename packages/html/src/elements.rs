@@ -294,7 +294,7 @@ builder_constructors! {
         rel: LinkType DEFAULT,
         sizes: String DEFAULT, // FIXME
         title: String DEFAULT, // FIXME
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
         integrity: String DEFAULT,
     };
 
@@ -312,7 +312,7 @@ builder_constructors! {
     /// [`<style>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/style)
     /// element.
     style None {
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
         media: String DEFAULT, // FIXME media query
         nonce: Nonce DEFAULT,
         title: String DEFAULT, // FIXME
@@ -517,7 +517,7 @@ builder_constructors! {
     ol None {
         reversed: Bool DEFAULT,
         start: isize DEFAULT,
-        r#type: OrderedListType DEFAULT,
+        r#type: OrderedListType "type",
     };
 
     /// Build a
@@ -546,7 +546,7 @@ builder_constructors! {
         href: Uri DEFAULT,
         hreflang: LanguageTag DEFAULT,
         target: Target DEFAULT,
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
         // ping: SpacedList<Uri>,
         // rel: SpacedList<LinkType>,
         ping: SpacedList DEFAULT,
@@ -737,7 +737,7 @@ builder_constructors! {
         muted: Bool DEFAULT,
         preload: Preload DEFAULT,
         src: Uri DEFAULT,
-        r#loop: Bool DEFAULT,
+        r#loop: Bool "loop",
     };
 
     /// Build a
@@ -783,7 +783,7 @@ builder_constructors! {
         controls: Bool DEFAULT,
         crossorigin: CrossOrigin DEFAULT,
         height: usize DEFAULT,
-        r#loop: Bool DEFAULT,
+        r#loop: Bool "loop",
         muted: Bool DEFAULT,
         preload: Preload DEFAULT,
         playsinline: Bool DEFAULT,
@@ -801,7 +801,7 @@ builder_constructors! {
     embed None {
         height: usize DEFAULT,
         src: Uri DEFAULT,
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
         width: usize DEFAULT,
     };
 
@@ -819,13 +819,13 @@ builder_constructors! {
         srcdoc: Uri DEFAULT,
         width: usize DEFAULT,
 
-        marginWidth: String DEFAULT,
+        margin_width: String "marginWidth",
         align: String DEFAULT,
         longdesc: String DEFAULT,
 
         scrolling: String DEFAULT,
-        marginHeight: String DEFAULT,
-        frameBorder: String DEFAULT,
+        margin_height: String "marginHeight",
+        frame_border: String "frameBorder",
         // sandbox: SpacedSet<Sandbox>,
     };
 
@@ -837,7 +837,7 @@ builder_constructors! {
         form: Id DEFAULT,
         height: usize DEFAULT,
         name: Id DEFAULT,
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
         typemustmatch: Bool DEFAULT,
         usemap: String DEFAULT, // TODO should be a fragment starting with '#'
         width: usize DEFAULT,
@@ -861,7 +861,7 @@ builder_constructors! {
     /// element.
     source None {
         src: Uri DEFAULT,
-        r#type: Mime DEFAULT,
+        r#type: Mime "type",
     };
 
 
