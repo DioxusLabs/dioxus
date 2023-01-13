@@ -52,6 +52,7 @@ async fn main() -> anyhow::Result<()> {
 
         Autoformat(opts) => opts
             .autoformat()
+            .await
             .map_err(|e| anyhow!("🚫 Error autoformatting RSX: {}", e)),
 
         Version(opt) => {
