@@ -16,8 +16,10 @@ mod webview;
 mod hot_reload;
 
 pub use cfg::Config;
-pub use desktop_context::{use_window, DesktopContext};
-use desktop_context::{EventData, UserWindowEvent, WebviewQueue};
+pub use desktop_context::{
+    use_window, use_wry_event_handler, DesktopContext, WryEventHandler, WryEventHandlerId,
+};
+use desktop_context::{EventData, UserWindowEvent, WebviewQueue, WindowEventHandlers};
 use dioxus_core::*;
 use dioxus_html::HtmlEvent;
 pub use eval::{use_eval, EvalResult};
@@ -104,7 +106,7 @@ pub fn launch_cfg(root: Component, config_builder: Config) {
 ///     })
 /// }
 /// ```
-pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Config) {
+pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) {
     let event_loop = EventLoop::<UserWindowEvent>::with_user_event();
 
     let proxy = event_loop.create_proxy();
@@ -123,9 +125,10 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Conf
     // Store them in a hashmap so we can remove them when they're closed
     let mut webviews = HashMap::<WindowId, WebviewHandler>::new();
 
-    let queue = WebviewQueue::default();
+    // We use this to allow dynamically adding and removing window event handlers
+    let event_handlers = WindowEventHandlers::default();
 
-    let event_handler = cfg.event_handler.take();
+    let queue = WebviewQueue::default();
 
     // By default, we'll create a new window when the app starts
     queue.borrow_mut().push(create_new_window(
@@ -134,14 +137,13 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, mut cfg: Conf
         &proxy,
         VirtualDom::new_with_props(root, props),
         &queue,
+        &event_handlers,
     ));
 
     event_loop.run(move |window_event, event_loop, control_flow| {
         *control_flow = ControlFlow::Wait;
 
-        if let Some(handler) = &event_handler {
-            handler(&window_event, event_loop);
-        }
+        event_handlers.apply_event(&window_event, event_loop);
 
         match window_event {
             Event::WindowEvent {
@@ -246,6 +248,7 @@ fn create_new_window(
     proxy: &EventLoopProxy<UserWindowEvent>,
     dom: VirtualDom,
     queue: &WebviewQueue,
+    event_handlers: &WindowEventHandlers,
 ) -> WebviewHandler {
     let webview = webview::build(&mut cfg, event_loop, proxy.clone());
 
@@ -254,6 +257,7 @@ fn create_new_window(
         proxy.clone(),
         event_loop.clone(),
         queue.clone(),
+        event_handlers.clone(),
     ));
 
     let id = webview.window().id();

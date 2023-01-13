@@ -10,6 +10,8 @@ use crate::WebviewHandler;
 use dioxus_core::ScopeState;
 use dioxus_core::VirtualDom;
 use serde_json::Value;
+use slab::Slab;
+use wry::application::event::Event;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
 #[cfg(target_os = "ios")]
@@ -57,6 +59,8 @@ pub struct DesktopContext {
 
     pub(crate) event_loop: EventLoopWindowTarget<UserWindowEvent>,
 
+    pub(crate) event_handlers: WindowEventHandlers,
+
     #[cfg(target_os = "ios")]
     pub(crate) views: Rc<RefCell<Vec<*mut objc::runtime::Object>>>,
 }
@@ -76,6 +80,7 @@ impl DesktopContext {
         proxy: ProxyType,
         event_loop: EventLoopWindowTarget<UserWindowEvent>,
         webviews: WebviewQueue,
+        event_handlers: WindowEventHandlers,
     ) -> Self {
         Self {
             webview,
@@ -83,6 +88,7 @@ impl DesktopContext {
             event_loop,
             eval: tokio::sync::broadcast::channel(8).0,
             pending_windows: webviews,
+            event_handlers,
             #[cfg(target_os = "ios")]
             views: Default::default(),
         }
@@ -102,6 +108,7 @@ impl DesktopContext {
             &self.proxy,
             dom,
             &self.pending_windows,
+            &self.event_handlers,
         );
 
         let id = window.webview.window().id();
@@ -216,6 +223,22 @@ impl DesktopContext {
         EvalResult::new(self.eval.clone())
     }
 
+    /// Create a wry event handler that listens for wry events.
+    /// This event handler is scoped to the currently active window and will only recieve events that are either global or related to the current window.
+    ///
+    /// The id this function returns can be used to remove the event handler with [`DesktopContext::remove_wry_event_handler`]
+    pub fn create_wry_event_handler(
+        &self,
+        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    ) -> WryEventHandlerId {
+        self.event_handlers.add(self.id(), handler)
+    }
+
+    /// Remove a wry event handler created with [`DesktopContext::create_wry_event_handler`]
+    pub fn remove_wry_event_handler(&self, id: WryEventHandlerId) {
+        self.event_handlers.remove(id)
+    }
+
     /// Push an objc view to the window
     #[cfg(target_os = "ios")]
     pub fn push_view(&self, view: objc_id::ShareId<objc::runtime::Object>) {
@@ -275,4 +298,113 @@ fn is_main_thread() -> bool {
     let cls = Class::get("NSThread").unwrap();
     let result: BOOL = unsafe { msg_send![cls, isMainThread] };
     result != NO
+}
+
+/// The unique identifier of a window event handler. This can be used to later remove the handler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WryEventHandlerId(usize);
+
+#[derive(Clone, Default)]
+pub(crate) struct WindowEventHandlers {
+    handlers: Rc<RefCell<Slab<WryWindowEventHandlerInner>>>,
+}
+
+impl WindowEventHandlers {
+    pub(crate) fn add(
+        &self,
+        window_id: WindowId,
+        handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+    ) -> WryEventHandlerId {
+        WryEventHandlerId(
+            self.handlers
+                .borrow_mut()
+                .insert(WryWindowEventHandlerInner {
+                    window_id,
+                    handler: Box::new(handler),
+                }),
+        )
+    }
+
+    pub(crate) fn remove(&self, id: WryEventHandlerId) {
+        self.handlers.borrow_mut().try_remove(id.0);
+    }
+
+    pub(crate) fn apply_event(
+        &self,
+        event: &Event<UserWindowEvent>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
+        for (_, handler) in self.handlers.borrow_mut().iter_mut() {
+            handler.apply_event(event, target);
+        }
+    }
+}
+
+struct WryWindowEventHandlerInner {
+    window_id: WindowId,
+    handler:
+        Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>,
+}
+
+impl WryWindowEventHandlerInner {
+    fn apply_event(
+        &mut self,
+        event: &Event<UserWindowEvent>,
+        target: &EventLoopWindowTarget<UserWindowEvent>,
+    ) {
+        // if this event does not apply to the window this listener cares about, return
+        match event {
+            Event::WindowEvent { window_id, .. }
+            | Event::MenuEvent {
+                window_id: Some(window_id),
+                ..
+            } => {
+                if *window_id != self.window_id {
+                    return;
+                }
+            }
+            _ => (),
+        }
+        (self.handler)(event, target)
+    }
+}
+
+/// Get a closure that executes any JavaScript in the WebView context.
+pub fn use_wry_event_handler(
+    cx: &ScopeState,
+    handler: impl FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static,
+) -> &WryEventHandler {
+    let desktop = use_window(cx);
+    cx.use_hook(move || {
+        let desktop = desktop.clone();
+
+        let id = desktop.create_wry_event_handler(handler);
+
+        WryEventHandler {
+            handlers: desktop.event_handlers.clone(),
+            id,
+        }
+    })
+}
+
+/// A wry event handler that is scoped to the current component and window. The event handler will only receive events for the window it was created for and global events.
+///
+/// This will automatically be removed when the component is unmounted.
+pub struct WryEventHandler {
+    handlers: WindowEventHandlers,
+    /// The unique identifier of the event handler.
+    pub id: WryEventHandlerId,
+}
+
+impl WryEventHandler {
+    /// Remove the event handler.
+    pub fn remove(&self) {
+        self.handlers.remove(self.id);
+    }
+}
+
+impl Drop for WryEventHandler {
+    fn drop(&mut self) {
+        self.handlers.remove(self.id);
+    }
 }
