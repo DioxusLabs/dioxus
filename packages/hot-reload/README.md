@@ -79,31 +79,32 @@ fn main(){
 }
 ```
 
-By default the dev server watches on the `src` and `examples` folders in the root crate directory. To watch on custom paths pass the paths into the hot relaod macro:
+By default the dev server watches on the root of the crate the macro is called in and ignores changes in the `/target` directory and any directories set in the `.gitignore` file in the root directory. To watch on custom paths pass call the `with_paths` function on the config builder:
 
 ```rust
 fn main(){
-    hot_reload_init!("src", "examples", "assets");
+    hot_reload_init!(Config::new().with_paths(&["src", "examples", "assets"]));
     // launch your application
 }
 ```
 
-By default the hot reloading server will output some logs in the console, to disable these logs pass the `disable logging` flag into the macro:
+By default the hot reloading server will output some logs in the console, to disable these logs call the `with_logging` function on the config builder:
 
 ```rust
 fn main(){
-    hot_reload_init!("src", "examples", "assets", disable logging);
+    hot_reload_init!(Config::new().with_logging(false));
     // launch your application
 }
 ```
 
-If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resultsing strings.
+If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
 
-You can then provide the Context to the macro to make hot reloading work with your custom namespace:
+You can then provide the Context to the builder to make hot reloading work with your custom namespace:
 
 ```rust
 fn main(){
-    hot_reload_init!(@MyNamespace /*more configeration*/);
+    // Note: Use default instead of new if you are using a custom namespace
+    hot_reload_init!(Config::<MyContext>::default());
     // launch your application
 }
 ```
@@ -118,15 +119,22 @@ async fn launch(app: Component) {
     // ...
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-    dioxus_hot_reload::connect(move |template| {
-        let _ = tx.send(template);
+    dioxus_hot_reload::connect(move |msg| {
+        let _ = tx.send(msg);
     });
 
     loop {
         tokio::select! {
-            Some(template) = rx.recv() => {
-                // update the template in the virtual dom
-                vdom.replace_template(template);
+            Some(msg) = rx.recv() => {
+                match msg{
+                    HotReloadMsg::Shutdown => {
+                        // ... shutdown the application
+                    }
+                    HotReloadMsg::UpdateTemplate(template) => {
+                        // update the template in the virtual dom
+                        vdom.replace_template(template);
+                    }
+                }
             }
             _ = vdom.wait_for_work() => {
                 // ...

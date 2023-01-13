@@ -2,6 +2,12 @@
 name = "dioxus-hot-reload"
 version = "0.1.0"
 edition = "2021"
+license = "MIT/Apache-2.0"
+repository = "https://github.com/DioxusLabs/dioxus/"
+homepage = "https://dioxuslabs.com"
+description = "Hot reloading utilites for Dioxus"
+documentation = "https://dioxuslabs.com"
+keywords = ["dom", "ui", "gui", "react", "hot-reloading", "watch"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

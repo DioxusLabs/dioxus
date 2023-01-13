@@ -64,6 +64,7 @@ impl Config<HtmlCtx> {
 }
 
 impl<Ctx: HotReloadingContext> Config<Ctx> {
+    /// Set the root path of the project (where the Cargo.toml file is). This is automatically set by the [`hot_reload_init`] macro.
     pub const fn root(self, path: &'static str) -> Self {
         Self {
             root_path: path,
@@ -71,24 +72,30 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
         }
     }
 
-    pub const fn listening_paths(self, paths: &'static [&'static str]) -> Self {
-        Self {
-            listening_paths: paths,
-            ..self
-        }
-    }
-
-    pub const fn log(self, log: bool) -> Self {
+    /// Set whether to enable logs
+    pub const fn with_logging(self, log: bool) -> Self {
         Self { log, ..self }
     }
 
-    pub const fn rebuild_with(self, rebuild_with: &'static str) -> Self {
+    /// Set the command to run to rebuild the project
+    ///
+    /// For example to restart the application after a change is made, you could use `cargo run`
+    pub const fn with_rebuild_handler(self, rebuild_with: &'static str) -> Self {
         Self {
             rebuild_with: Some(rebuild_with),
             ..self
         }
     }
 
+    /// Set the paths to listen for changes in to trigger hot reloading. If this is a directory it will listen for changes in all files in that directory recursively.
+    pub const fn with_paths(self, paths: &'static [&'static str]) -> Self {
+        Self {
+            listening_paths: paths,
+            ..self
+        }
+    }
+
+    /// Sets paths to ignore changes on. This will override any paths set in the [`Config::with_paths`] method in the case of conflicts.
     pub const fn excluded_paths(self, paths: &'static [&'static str]) -> Self {
         Self {
             excluded_paths: paths,
@@ -313,10 +320,7 @@ pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     });
 }
 
-/// Start the hot reloading server
-///
-/// Pass any number of paths to listen for changes on relative to the crate root as strings.
-/// If no paths are passed, it will listen on the src and examples folders.
+/// Start the hot reloading server with the current directory as the root
 #[macro_export]
 macro_rules! hot_reload_init {
     () => {

@@ -24,6 +24,8 @@ dioxus serve --hot-reload
 For desktop, LiveView, and tui, you can place the hot reload macro at the top of your main function to enable hot reloading.
 Hot reloading is automatically enabled on debug builds.
 
+For more information about hot reloading on native platforms and configuration options see the [dioxus-hot-reload](https://crates.io/crates/dioxus-hot-reload) crate.
+
 ## Setup
 Add the following to your main function:
 
