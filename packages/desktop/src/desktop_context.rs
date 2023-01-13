@@ -8,8 +8,8 @@ use crate::events::IpcMessage;
 use crate::Config;
 use crate::WebviewHandler;
 use dioxus_core::ScopeState;
-use dioxus_core::Template;
 use dioxus_core::VirtualDom;
+use dioxus_hot_reload::HotReloadMsg;
 use serde_json::Value;
 use wry::application::event_loop::EventLoopProxy;
 use wry::application::event_loop::EventLoopWindowTarget;
@@ -263,7 +263,7 @@ pub enum EventData {
 
     Ipc(IpcMessage),
 
-    TemplateUpdated(Template<'static>),
+    HotReloadEvent(HotReloadMsg),
 
     NewWindow,
 

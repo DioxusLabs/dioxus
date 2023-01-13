@@ -112,7 +112,7 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
         let proxy = proxy.clone();
         dioxus_hot_reload::connect(move |template| {
             let _ = proxy.send_event(UserWindowEvent(
-                EventData::TemplateUpdated(template),
+                EventData::HotReloadEvent(template),
                 unsafe { WindowId::dummy() },
             ));
         });
@@ -177,13 +177,18 @@ pub fn launch_with_props<P: 'static>(root: Component<P>, props: P, cfg: Config) 
             }
 
             Event::UserEvent(event) => match event.0 {
-                EventData::TemplateUpdated(template) => {
-                    for webview in webviews.values_mut() {
-                        webview.dom.replace_template(template);
+                EventData::HotReloadEvent(msg) => match msg {
+                    dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
+                        for webview in webviews.values_mut() {
+                            webview.dom.replace_template(template);
 
-                        poll_vdom(webview);
+                            poll_vdom(webview);
+                        }
                     }
-                }
+                    dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                },
 
                 EventData::CloseWindow => {
                     webviews.remove(&event.1);

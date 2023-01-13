@@ -6,6 +6,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dioxus_core::*;
+use dioxus_hot_reload::HotReloadMsg;
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
 use focus::FocusState;
 use futures::{
@@ -147,9 +148,9 @@ fn render_vdom(
         .block_on(async {
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             let mut hot_reload_rx = {
-                let (hot_reload_tx, hot_reload_rx) = unbounded_channel::<Template<'static>>();
-                dioxus_hot_reload::connect(move |template| {
-                    let _ = hot_reload_tx.send(template);
+                let (hot_reload_tx, hot_reload_rx) = unbounded_channel::<HotReloadMsg>();
+                dioxus_hot_reload::connect(move |msg| {
+                    let _ = hot_reload_tx.send(msg);
                 });
                 hot_reload_rx
             };
@@ -232,7 +233,7 @@ fn render_vdom(
                     }
                 }
 
-                let mut new_templete = None;
+                let mut hot_reload_msg = None;
                 {
                     let wait = vdom.wait_for_work();
                     #[cfg(all(feature = "hot-reload", debug_assertions))]
@@ -267,15 +268,22 @@ fn render_vdom(
                                 register_event(evt);
                             }
                         },
-                        Some(template) = hot_reload_wait => {
-                            new_templete = Some(template);
+                        Some(msg) = hot_reload_wait => {
+                            hot_reload_msg = Some(msg);
                         }
                     }
                 }
 
                 // if we have a new template, replace the old one
-                if let Some(template) = new_templete {
-                    vdom.replace_template(template);
+                if let Some(msg) = hot_reload_msg {
+                    match msg {
+                        HotReloadMsg::UpdateTemplate(template) => {
+                            vdom.replace_template(template);
+                        }
+                        HotReloadMsg::Shutdown => {
+                            break;
+                        }
+                    }
                 }
 
                 {

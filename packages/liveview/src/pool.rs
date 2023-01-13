@@ -157,9 +157,16 @@ where
                 }
             }
 
-            new_template = hot_reload_wait => {
-                if let Some(new_template) = new_template {
-                    vdom.replace_template(new_template);
+            msg = hot_reload_wait => {
+                if let Some(msg) = msg {
+                    match msg{
+                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(new_template) => {
+                            vdom.replace_template(new_template);
+                        }
+                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
+                            std::process::exit(0);
+                        },
+                    }
                 }
             }
         }

@@ -15,42 +15,141 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
 #[cfg(debug_assertions)]
 pub use dioxus_html::HtmlCtx;
+use serde::{Deserialize, Serialize};
 
-/// Initialize the hot reloading listener on the given path
-pub fn init<Ctx: HotReloadingContext + Send + 'static>(
+/// A message the hot reloading server sends to the client
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
+pub enum HotReloadMsg {
+    /// A template has been updated
+    #[serde(borrow = "'static")]
+    UpdateTemplate(Template<'static>),
+    /// The program needs to be recompiled, and the client should shut down
+    Shutdown,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Config<Ctx: HotReloadingContext = HtmlCtx> {
     root_path: &'static str,
     listening_paths: &'static [&'static str],
+    excluded_paths: &'static [&'static str],
     log: bool,
-) {
+    rebuild_with: Option<&'static str>,
+    phantom: std::marker::PhantomData<Ctx>,
+}
+
+impl<Ctx: HotReloadingContext> Default for Config<Ctx> {
+    fn default() -> Self {
+        Self {
+            root_path: "",
+            listening_paths: &[""],
+            excluded_paths: &["./target"],
+            log: true,
+            rebuild_with: None,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl Config<HtmlCtx> {
+    pub const fn new() -> Self {
+        Self {
+            root_path: "",
+            listening_paths: &[""],
+            excluded_paths: &["./target"],
+            log: true,
+            rebuild_with: None,
+            phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<Ctx: HotReloadingContext> Config<Ctx> {
+    pub const fn root(self, path: &'static str) -> Self {
+        Self {
+            root_path: path,
+            ..self
+        }
+    }
+
+    pub const fn listening_paths(self, paths: &'static [&'static str]) -> Self {
+        Self {
+            listening_paths: paths,
+            ..self
+        }
+    }
+
+    pub const fn log(self, log: bool) -> Self {
+        Self { log, ..self }
+    }
+
+    pub const fn rebuild_with(self, rebuild_with: &'static str) -> Self {
+        Self {
+            rebuild_with: Some(rebuild_with),
+            ..self
+        }
+    }
+
+    pub const fn excluded_paths(self, paths: &'static [&'static str]) -> Self {
+        Self {
+            excluded_paths: paths,
+            ..self
+        }
+    }
+}
+
+/// Initialize the hot reloading listener
+pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
+    let Config {
+        root_path,
+        listening_paths,
+        log,
+        rebuild_with,
+        excluded_paths,
+        phantom: _,
+    } = cfg;
+
     if let Ok(crate_dir) = PathBuf::from_str(root_path) {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         let channels = Arc::new(Mutex::new(Vec::new()));
         let file_map = Arc::new(Mutex::new(FileMap::<Ctx>::new(crate_dir.clone())));
         if let Ok(local_socket_stream) = LocalSocketListener::bind(temp_file.as_path()) {
+            let aborted = Arc::new(Mutex::new(false));
+
             // listen for connections
             std::thread::spawn({
                 let file_map = file_map.clone();
                 let channels = channels.clone();
+                let aborted = aborted.clone();
+                let _ = local_socket_stream.set_nonblocking(true);
                 move || {
-                    for mut connection in local_socket_stream.incoming().flatten() {
-                        // send any templates than have changed before the socket connected
-                        let templates: Vec<_> = {
-                            file_map
-                                .lock()
-                                .unwrap()
-                                .map
-                                .values()
-                                .filter_map(|(_, template_slot)| *template_slot)
-                                .collect()
-                        };
-                        for template in templates {
-                            if !send_template(template, &mut connection) {
-                                continue;
+                    loop {
+                        if let Ok(mut connection) = local_socket_stream.accept() {
+                            // send any templates than have changed before the socket connected
+                            let templates: Vec<_> = {
+                                file_map
+                                    .lock()
+                                    .unwrap()
+                                    .map
+                                    .values()
+                                    .filter_map(|(_, template_slot)| *template_slot)
+                                    .collect()
+                            };
+                            for template in templates {
+                                if !send_msg(
+                                    HotReloadMsg::UpdateTemplate(template),
+                                    &mut connection,
+                                ) {
+                                    continue;
+                                }
+                            }
+                            channels.lock().unwrap().push(connection);
+                            if log {
+                                println!("Connected to hot reloading 🚀");
                             }
                         }
-                        channels.lock().unwrap().push(connection);
-                        if log {
-                            println!("Connected to hot reloading 🚀");
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                        if aborted.lock().unwrap().clone() {
+                            break;
                         }
                     }
                 }
@@ -65,37 +164,42 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                 let mut watcher = RecommendedWatcher::new(tx, notify::Config::default()).unwrap();
 
                 for path in listening_paths {
-                    match PathBuf::from_str(path) {
-                        Ok(path) => {
-                            let full_path = crate_dir.join(path);
-                            if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
-                                if log {
-                                    println!(
-                                        "hot reloading failed to start watching {full_path:?}:\n{err:?}",
-                                    );
-                                }
-                            }
-                        }
-                        Err(err) => {
-                            if log {
-                                println!("hot reloading failed to create path:\n{:?}", err);
-                            }
+                    let full_path = crate_dir.join(path);
+                    if let Err(err) = watcher.watch(&full_path, RecursiveMode::Recursive) {
+                        if log {
+                            println!(
+                                "hot reloading failed to start watching {full_path:?}:\n{err:?}",
+                            );
                         }
                     }
                 }
 
+                let excluded_paths = excluded_paths
+                    .iter()
+                    .map(|path| crate_dir.join(PathBuf::from(path)))
+                    .collect::<Vec<_>>();
+
                 for evt in rx {
-                    // Give time for the change to take effect before reading the file
-                    std::thread::sleep(std::time::Duration::from_millis(100));
                     if chrono::Local::now().timestamp() > last_update_time {
                         if let Ok(evt) = evt {
-                            let mut channels = channels.lock().unwrap();
-                            for path in &evt.paths {
-                                // skip non rust files
-                                if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                                    continue;
-                                }
+                            let real_paths = evt
+                                .paths
+                                .iter()
+                                .filter(|path| {
+                                    // skip non rust files
+                                    path.extension().and_then(|p| p.to_str()) == Some("rs") &&
+                                    // skip excluded paths
+                                    !excluded_paths.iter().any(|p| path.starts_with(p))
+                                })
+                                .collect::<Vec<_>>();
 
+                            // Give time for the change to take effect before reading the file
+                            if !real_paths.is_empty() {
+                                std::thread::sleep(std::time::Duration::from_millis(100));
+                            }
+
+                            let mut channels = channels.lock().unwrap();
+                            for path in real_paths {
                                 // find changes to the rsx in the file
                                 match file_map
                                     .lock()
@@ -107,7 +211,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                                             let mut i = 0;
                                             while i < channels.len() {
                                                 let channel = &mut channels[i];
-                                                if send_template(msg, channel) {
+                                                if send_msg(
+                                                    HotReloadMsg::UpdateTemplate(msg),
+                                                    channel,
+                                                ) {
                                                     i += 1;
                                                 } else {
                                                     channels.remove(i);
@@ -116,11 +223,23 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                                         }
                                     }
                                     UpdateResult::NeedsRebuild => {
-                                        if log {
-                                            println!(
-                                                "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
-                                            );
+                                        if let Some(rebuild_command) = rebuild_with {
+                                            *aborted.lock().unwrap() = true;
+                                            if log {
+                                                println!("Rebuilding the application...");
+                                            }
+                                            execute::shell(rebuild_command).spawn().expect("Failed to rebuild the application. Is cargo installed?");
+                                            for channel in &mut *channels {
+                                                send_msg(HotReloadMsg::Shutdown, channel);
+                                            }
+                                        } else {
+                                            if log {
+                                                println!(
+                                                    "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
+                                                );
+                                            }
                                         }
+
                                         return;
                                     }
                                 }
@@ -134,8 +253,8 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
     }
 }
 
-fn send_template(template: Template<'static>, channel: &mut impl Write) -> bool {
-    if let Ok(msg) = serde_json::to_string(&template) {
+fn send_msg(msg: HotReloadMsg, channel: &mut impl Write) -> bool {
+    if let Ok(msg) = serde_json::to_string(&msg) {
         if channel.write_all(msg.as_bytes()).is_err() {
             return false;
         }
@@ -149,7 +268,7 @@ fn send_template(template: Template<'static>, channel: &mut impl Write) -> bool 
 }
 
 /// Connect to the hot reloading listener. The callback provided will be called every time a template change is detected
-pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
+pub fn connect(mut f: impl FnMut(HotReloadMsg) + Send + 'static) {
     std::thread::spawn(move || {
         let temp_file = std::env::temp_dir().join("@dioxusin");
         if let Ok(socket) = LocalSocketStream::connect(temp_file.as_path()) {
@@ -158,7 +277,7 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
                 let mut buf = String::new();
                 match buf_reader.read_line(&mut buf) {
                     Ok(_) => {
-                        let template: Template<'static> =
+                        let template: HotReloadMsg =
                             serde_json::from_str(Box::leak(buf.into_boxed_str())).unwrap();
                         f(template);
                     }
@@ -179,33 +298,13 @@ pub fn connect(mut f: impl FnMut(Template<'static>) + Send + 'static) {
 /// If no paths are passed, it will listen on the src and examples folders.
 #[macro_export]
 macro_rules! hot_reload_init {
-    ($(@ $ctx:ident)? $($t: ident)*) => {
+    () => {
         #[cfg(debug_assertions)]
-        dioxus_hot_reload::init::<hot_reload_init!(@ctx: $($ctx)?)>(core::env!("CARGO_MANIFEST_DIR"), &["src", "examples"], hot_reload_init!(@log: $($t)*))
+        dioxus_hot_reload::init(dioxus_hot_reload::Config::new().root(env!("CARGO_MANIFEST_DIR")));
     };
 
-    ($(@ $ctx:ident)? $($paths: literal),* $(,)? $($t: ident)*) => {
+    ($cfg: expr) => {
         #[cfg(debug_assertions)]
-        dioxus_hot_reload::init::<hot_reload_init!(@ctx: $($ctx)?)>(core::env!("CARGO_MANIFEST_DIR"), &[$($paths),*], hot_reload_init!(@log: $($t)*))
-    };
-
-    (@log:) => {
-        false
-    };
-
-    (@log: enable logging) => {
-        true
-    };
-
-    (@log: disable logging) => {
-        false
-    };
-
-    (@ctx: $ctx: ident) => {
-        $ctx
-    };
-
-    (@ctx: ) => {
-        dioxus_hot_reload::HtmlCtx
+        dioxus_hot_reload::init($cfg.root(env!("CARGO_MANIFEST_DIR")));
     };
 }
