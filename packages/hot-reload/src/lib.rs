@@ -166,7 +166,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
             std::thread::spawn(move || {
                 // try to find the gitingore file
                 let gitignore_file_path = crate_dir.join(".gitignore");
-                let gitignore_file = gitignore::File::new(&gitignore_file_path.as_path());
+                let (gitignore, _) = ignore::gitignore::Gitignore::new(gitignore_file_path);
 
                 let mut last_update_time = chrono::Local::now().timestamp();
 
@@ -220,15 +220,16 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 .iter()
                                 .filter(|path| {
                                     // skip non rust files
-                                    matches!(path.extension().and_then(|p| p.to_str()), Some("rs" | "toml" | "css" | "html" | "js")) &&
+                                    matches!(
+                                        path.extension().and_then(|p| p.to_str()),
+                                        Some("rs" | "toml" | "css" | "html" | "js")
+                                    )&&
                                     // skip excluded paths
-                                    !excluded_paths.iter().any(|p| path.starts_with(p)) && match &gitignore_file{
-                                        Ok(file) => match file.is_excluded(path){
-                                            Ok(excluded) => !excluded,
-                                            Err(_) => true,
-                                        },
-                                        Err(_) => true,
-                                    }
+                                    !excluded_paths.iter().any(|p| path.starts_with(p)) &&
+                                    // respect .gitignore
+                                    !gitignore
+                                        .matched_path_or_any_parents(path, false)
+                                        .is_ignore()
                                 })
                                 .collect::<Vec<_>>();
 
