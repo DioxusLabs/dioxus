@@ -668,7 +668,7 @@ dependencies = [
 [[package]]
 name = "dioxus-autofmt"
 version = "0.3.0"
-source = "git+https://github.com/dioxuslabs/dioxus#e283286258170e4460a99a66659e0a37778a1111"
+source = "git+https://github.com/dioxuslabs/dioxus#293ef9c690621bdf9ea024f8db4f27064df4f7f9"
 dependencies = [
  "dioxus-rsx",
  "prettyplease",
@@ -733,7 +733,7 @@ dependencies = [
 [[package]]
 name = "dioxus-core"
 version = "0.3.0"
-source = "git+https://github.com/dioxuslabs/dioxus#e283286258170e4460a99a66659e0a37778a1111"
+source = "git+https://github.com/dioxuslabs/dioxus#293ef9c690621bdf9ea024f8db4f27064df4f7f9"
 dependencies = [
  "bumpalo",
  "futures-channel",
@@ -750,7 +750,7 @@ dependencies = [
 [[package]]
 name = "dioxus-html"
 version = "0.3.0"
-source = "git+https://github.com/dioxuslabs/dioxus#e283286258170e4460a99a66659e0a37778a1111"
+source = "git+https://github.com/dioxuslabs/dioxus#293ef9c690621bdf9ea024f8db4f27064df4f7f9"
 dependencies = [
  "async-trait",
  "dioxus-core",
@@ -766,7 +766,7 @@ dependencies = [
 [[package]]
 name = "dioxus-rsx"
 version = "0.0.2"
-source = "git+https://github.com/dioxuslabs/dioxus#e283286258170e4460a99a66659e0a37778a1111"
+source = "git+https://github.com/dioxuslabs/dioxus#293ef9c690621bdf9ea024f8db4f27064df4f7f9"
 dependencies = [
  "dioxus-core",
  "internment",
@@ -2272,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "rsx-rosetta"
 version = "0.0.0"
-source = "git+https://github.com/dioxuslabs/dioxus#04ca284704b3aa7e18cf7b4f2e573e25df3d47eb"
+source = "git+https://github.com/dioxuslabs/dioxus#293ef9c690621bdf9ea024f8db4f27064df4f7f9"
 dependencies = [
  "convert_case",
  "dioxus-autofmt",
