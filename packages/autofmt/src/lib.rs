@@ -71,8 +71,11 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
         };
 
         let remaining = &contents[end - 1..];
+
         let bracket_end = find_bracket_end(remaining).unwrap();
-        let sub_string = &contents[end..bracket_end + end - 1];
+
+        let sub_string = &remaining[1..bracket_end - 1];
+
         last_bracket_end = bracket_end + end - 1;
 
         let mut new = fmt_block(sub_string, indent_level).unwrap();
@@ -85,7 +88,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             indent_level = 0;
         }
 
-        let end_marker = end + bracket_end - indent_level * 4 - 1;
+        let end_marker = end + bracket_end - indent_level * 4 - 2;
 
         if new == contents[end..end_marker] {
             continue;
@@ -118,7 +121,7 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
 }
 
 pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
-    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).ok()?;
+    let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
     let mut buf = Writer {
         src: block.lines().map(|f| f.to_string()).collect(),
