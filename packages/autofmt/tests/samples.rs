@@ -33,5 +33,6 @@ twoway![
     multirsx,
     commentshard,
     emoji,
-    messy_indent
+    messy_indent,
+    long_exprs
 ];
