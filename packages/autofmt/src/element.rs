@@ -67,7 +67,8 @@ impl Writer {
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes);
         let is_short_attr_list = attr_len < 80;
-        let is_small_children = self.is_short_children(children).is_some();
+        let children_len = self.is_short_children(children);
+        let is_small_children = children_len.is_some();
 
         // if we have few attributes and a lot of children, place the attrs on top
         if is_short_attr_list && !is_small_children {
@@ -85,7 +86,11 @@ impl Writer {
 
         // if we have few children and few attributes, make it a one-liner
         if is_short_attr_list && is_small_children {
-            opt_level = ShortOptimization::Oneliner;
+            if children_len.unwrap() + attr_len + self.out.indent * 4 < 100 {
+                opt_level = ShortOptimization::Oneliner;
+            } else {
+                opt_level = ShortOptimization::PropsOnTop;
+            }
         }
 
         // If there's nothing at all, empty optimization
@@ -360,8 +365,8 @@ impl Writer {
                             Some(len) => total_count += len,
                             None => return None,
                         },
-                        BodyNode::ForLoop(_) => todo!(),
-                        BodyNode::IfChain(_) => todo!(),
+                        BodyNode::ForLoop(_forloop) => return None,
+                        BodyNode::IfChain(_chain) => return None,
                     }
                 }
 

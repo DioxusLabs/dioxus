@@ -37,7 +37,9 @@ rsx! {
 
     // One level compression
     div {
-        a { class: "py-2 px-3 bg-indigo-500 hover:bg-indigo-600 rounded text-xs text-white", href: "#", "Send invitation" }
+        a { class: "py-2 px-3 bg-indigo-500 hover:bg-indigo-600 rounded text-xs text-white", href: "#",
+            "Send invitation"
+        }
     }
 
     // Components
