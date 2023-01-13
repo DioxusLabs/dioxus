@@ -118,7 +118,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(
                                     UpdateResult::NeedsRebuild => {
                                         if log {
                                             println!(
-                                                "Rebuild needed... shutting down hot reloading"
+                                                "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
                                             );
                                         }
                                         return;
