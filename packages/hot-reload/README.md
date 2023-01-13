@@ -97,6 +97,15 @@ fn main(){
 }
 ```
 
+To rebuild the application when the logic changes, you can use the `with_rebuild_command` function on the config builder. This command will be called when hot reloading fails to quickly update the rsx:
+
+```rust
+fn main(){
+    hot_reload_init!(Config::new().with_rebuild_command("cargo run"));
+    // launch your application
+}
+```
+
 If you are using a namespace other than html, you can implement the [HotReloadingContext](https://docs.rs/dioxus-rsx/latest/dioxus_rsx/trait.HotReloadingContext.html) trait to provide a mapping between the rust names of your elements/attributes and the resulting strings.
 
 You can then provide the Context to the builder to make hot reloading work with your custom namespace:

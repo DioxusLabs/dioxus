@@ -80,7 +80,7 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
     /// Set the command to run to rebuild the project
     ///
     /// For example to restart the application after a change is made, you could use `cargo run`
-    pub const fn with_rebuild_handler(self, rebuild_with: &'static str) -> Self {
+    pub const fn with_rebuild_command(self, rebuild_with: &'static str) -> Self {
         Self {
             rebuild_with: Some(rebuild_with),
             ..self
@@ -198,7 +198,8 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                         }
                         execute::shell(rebuild_command)
                             .spawn()
-                            .expect("Failed to rebuild the application. Is cargo installed?");
+                            .expect("Failed to spawn the rebuild command");
+
                         for channel in &mut *channels.lock().unwrap() {
                             send_msg(HotReloadMsg::Shutdown, channel);
                         }
@@ -233,11 +234,12 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
                             // Give time for the change to take effect before reading the file
                             if !real_paths.is_empty() {
-                                std::thread::sleep(std::time::Duration::from_millis(100));
+                                std::thread::sleep(std::time::Duration::from_millis(10));
                             }
 
                             let mut channels = channels.lock().unwrap();
                             for path in real_paths {
+                                println!("File changed: {:?}", path);
                                 // if this file type cannot be hot reloaded, rebuild the application
                                 if path.extension().and_then(|p| p.to_str()) != Some("rs") {
                                     rebuild();
