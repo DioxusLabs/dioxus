@@ -179,6 +179,27 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     .map(|path| crate_dir.join(PathBuf::from(path)))
                     .collect::<Vec<_>>();
 
+                let rebuild = || {
+                    if let Some(rebuild_command) = rebuild_with {
+                        *aborted.lock().unwrap() = true;
+                        if log {
+                            println!("Rebuilding the application...");
+                        }
+                        execute::shell(rebuild_command)
+                            .spawn()
+                            .expect("Failed to rebuild the application. Is cargo installed?");
+                        for channel in &mut *channels.lock().unwrap() {
+                            send_msg(HotReloadMsg::Shutdown, channel);
+                        }
+                    } else {
+                        if log {
+                            println!(
+                                "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
+                            );
+                        }
+                    }
+                };
+
                 for evt in rx {
                     if chrono::Local::now().timestamp() > last_update_time {
                         if let Ok(evt) = evt {
@@ -187,7 +208,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                 .iter()
                                 .filter(|path| {
                                     // skip non rust files
-                                    path.extension().and_then(|p| p.to_str()) == Some("rs") &&
+                                    matches!(path.extension().and_then(|p| p.to_str()), Some("rs" | "toml" | "css" | "html" | "js")) &&
                                     // skip excluded paths
                                     !excluded_paths.iter().any(|p| path.starts_with(p))
                                 })
@@ -200,6 +221,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
 
                             let mut channels = channels.lock().unwrap();
                             for path in real_paths {
+                                // if this file type cannot be hot reloaded, rebuild the application
+                                if path.extension().and_then(|p| p.to_str()) != Some("rs") {
+                                    rebuild();
+                                }
                                 // find changes to the rsx in the file
                                 match file_map
                                     .lock()
@@ -223,22 +248,8 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                         }
                                     }
                                     UpdateResult::NeedsRebuild => {
-                                        if let Some(rebuild_command) = rebuild_with {
-                                            *aborted.lock().unwrap() = true;
-                                            if log {
-                                                println!("Rebuilding the application...");
-                                            }
-                                            execute::shell(rebuild_command).spawn().expect("Failed to rebuild the application. Is cargo installed?");
-                                            for channel in &mut *channels {
-                                                send_msg(HotReloadMsg::Shutdown, channel);
-                                            }
-                                        } else {
-                                            if log {
-                                                println!(
-                                                    "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
-                                                );
-                                            }
-                                        }
+                                        drop(channels);
+                                        rebuild();
 
                                         return;
                                     }
