@@ -42,10 +42,15 @@ static MAIN_JS: &str = include_str!("./main.js");
 /// Once the endpoint is connected, it will send the initial state of the app, and then start
 /// processing user events and returning edits to the liveview instance
 pub fn interpreter_glue(url: &str) -> String {
+    // Activate JavaScript logging in Debug mode:
+    let debug_log = cfg!(debug_assertions);
+    // TODO: Should logging be activated via a feature flag, instead?
+
     format!(
         r#"
 <script>
-    var WS_ADDR = "{url}";
+    var DIOXUS_WS_ADDR = "{url}";
+    var DIOXUS_LOG = {debug_log};
     {INTERPRETER_JS}
     {MAIN_JS}
     main();

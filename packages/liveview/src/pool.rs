@@ -137,8 +137,11 @@ where
                             vdom.handle_event(&params.name, params.data.into_any(), params.element, params.bubbles);
                         }
                     }
-                    // log this I guess? when would we get an error here?
-                    Some(Err(_e)) => {},
+                    Some(Err(e)) => {
+                        log::warn!("Unexpected error: {e:?}");
+                        // TODO: Instead of ignoring errors, should we return (i.e., closing the connection)?
+                        // The WebSocket client would then re-connect, and hopefully the issue solves itself
+                    },
                     None => return Ok(()),
                 }
             }

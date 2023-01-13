@@ -13,6 +13,7 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+log = "0.4.17"
 tokio = { version = "1.23.0", features = ["full"] }
 futures-util = { version = "0.3.25", default-features = false, features = [
     "sink",
