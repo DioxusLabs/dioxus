@@ -1,16 +1,16 @@
 //! pretty printer for rsx!
 use std::fmt::{Result, Write};
 
+use proc_macro2::Span;
+
 use crate::Writer;
 
 impl Writer {
-    pub fn write_raw_expr(&mut self, exp: &syn::Expr) -> Result {
+    pub fn write_raw_expr(&mut self, placement: Span) -> Result {
         /*
         We want to normalize the expr to the appropriate indent level.
         */
 
-        use syn::spanned::Spanned;
-        let placement = exp.span();
         let start = placement.start();
         let end = placement.end();
 

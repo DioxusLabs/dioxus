@@ -34,5 +34,6 @@ twoway![
     commentshard,
     emoji,
     messy_indent,
-    long_exprs
+    long_exprs,
+    ifchain_forloop
 ];
