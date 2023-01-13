@@ -6,7 +6,6 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use dioxus_core::*;
-use dioxus_hot_reload::HotReloadMsg;
 use dioxus_native_core::{real_dom::RealDom, FxDashSet, NodeId, NodeMask, SendAnyMap};
 use focus::FocusState;
 use futures::{
@@ -148,7 +147,8 @@ fn render_vdom(
         .block_on(async {
             #[cfg(all(feature = "hot-reload", debug_assertions))]
             let mut hot_reload_rx = {
-                let (hot_reload_tx, hot_reload_rx) = unbounded_channel::<HotReloadMsg>();
+                let (hot_reload_tx, hot_reload_rx) =
+                    unbounded_channel::<dioxus_hot_reload::HotReloadMsg>();
                 dioxus_hot_reload::connect(move |msg| {
                     let _ = hot_reload_tx.send(msg);
                 });
@@ -277,10 +277,10 @@ fn render_vdom(
                 // if we have a new template, replace the old one
                 if let Some(msg) = hot_reload_msg {
                     match msg {
-                        HotReloadMsg::UpdateTemplate(template) => {
+                        dioxus_hot_reload::HotReloadMsg::UpdateTemplate(template) => {
                             vdom.replace_template(template);
                         }
-                        HotReloadMsg::Shutdown => {
+                        dioxus_hot_reload::HotReloadMsg::Shutdown => {
                             break;
                         }
                     }

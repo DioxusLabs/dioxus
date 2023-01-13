@@ -18,7 +18,7 @@ dioxus-core = { path = "../core", version = "^0.3.0", features = ["serialize"] }
 dioxus-html = { path = "../html", version = "^0.3.0" }
 dioxus-native-core = { path = "../native-core", version = "^0.2.0" }
 dioxus-native-core-macro = { path = "../native-core-macro", version = "^0.2.0" }
-dioxus-hot-reload = { path = "../hot-reload" }
+dioxus-hot-reload = { path = "../hot-reload", optional = true }
 
 tui = "0.17.0"
 crossterm = "0.23.0"
@@ -30,9 +30,6 @@ smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "1.0.0-beta.2"
 futures-channel = "0.3.25"
-interprocess = { version = "1.2.1", optional = true }
-serde = { version = "1.0.136", optional = true }
-serde_json = { version = "1.0.79", optional = true }
 
 [dev-dependencies]
 dioxus = { path = "../dioxus" }
@@ -45,4 +42,4 @@ harness = false
 
 [features]
 default = ["hot-reload"]
-hot-reload = ["interprocess", "serde", "serde_json"]
+hot-reload = ["dioxus-hot-reload"]
