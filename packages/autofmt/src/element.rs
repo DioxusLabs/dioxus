@@ -66,7 +66,7 @@ impl Writer<'_> {
 
         // check if we have a lot of attributes
         let attr_len = self.is_short_attrs(attributes);
-        let is_short_attr_list = attr_len < 80;
+        let is_short_attr_list = (attr_len + self.out.indent * 4) < 80;
         let children_len = self.is_short_children(children);
         let is_small_children = children_len.is_some();
 
