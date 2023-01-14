@@ -19,10 +19,9 @@ pub fn collect_from_item<'a>(item: &'a Item, macros: &mut Vec<CollectedMacro<'a>
 
         // Ignore macros if they're not rsx or render
         Item::Macro(macro_) => {
-            let to_str = macro_.mac.path.segments[0].ident.to_string();
-            // let Some(ident) = &macro_.ident else { return };
-            // let to_str = ident.to_string();
-            if to_str == "rsx" || to_str == "render" {
+            if macro_.mac.path.segments[0].ident == "rsx"
+                || macro_.mac.path.segments[0].ident == "render"
+            {
                 macros.push(&macro_.mac);
             }
         }
@@ -43,10 +42,8 @@ pub fn collect_from_item<'a>(item: &'a Item, macros: &mut Vec<CollectedMacro<'a>
         }
 
         // None of these we can really do anything with at the item level
-        Item::Macro2(m) => {
-            panic!("Macro2: {:?}", m);
-        }
-        Item::Enum(_)
+        Item::Macro2(_)
+        | Item::Enum(_)
         | Item::ExternCrate(_)
         | Item::ForeignMod(_)
         | Item::TraitAlias(_)
@@ -77,9 +74,9 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
     // collect an expr from the exprs, descending into blocks
     match expr {
         Expr::Macro(macro_) => {
-            let macro_name = macro_.mac.path.segments[0].ident.to_string();
-
-            if macro_name == "rsx" {
+            if macro_.mac.path.segments[0].ident == "rsx"
+                || macro_.mac.path.segments[0].ident == "render"
+            {
                 macros.push(&macro_.mac);
             }
         }
