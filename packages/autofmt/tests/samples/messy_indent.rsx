@@ -9,5 +9,5 @@ fn SaveClipboard(cx: Scope) -> Element {
 
     cx.render(rsx! {
         div { "hello world", "hello world", "hello world" }
-})
+    })
 }

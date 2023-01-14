@@ -35,5 +35,6 @@ twoway![
     emoji,
     messy_indent,
     long_exprs,
-    ifchain_forloop
+    ifchain_forloop,
+    t2
 ];

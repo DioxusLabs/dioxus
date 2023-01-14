@@ -1,13 +1,16 @@
+use collect_macros::byte_offset;
 use dioxus_rsx::CallBody;
+use proc_macro2::LineColumn;
+use syn::ExprMacro;
+use syn::MacroDelimiter;
 
-use crate::util::*;
 use crate::writer::*;
 
 mod buffer;
+mod collect_macros;
 mod component;
 mod element;
 mod expr;
-mod util;
 mod writer;
 
 /// A modification to the original file to be applied by an IDE
@@ -41,65 +44,83 @@ pub struct FormattedBlock {
 /// Nested blocks of RSX will be handled automatically
 pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
     let mut formatted_blocks = Vec::new();
-    let mut last_bracket_end = 0;
 
-    use triple_accel::{levenshtein_search, Match};
+    let parsed = syn::parse_file(contents).unwrap();
 
-    for Match { end, start, k } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
-        let open = end;
+    let mut macros = vec![];
+    collect_macros::collect_from_file(&parsed, &mut macros);
 
-        if k > 1 {
+    // No macros, no work to do
+    if macros.is_empty() {
+        return formatted_blocks;
+    }
+
+    let mut writer = Writer {
+        src: contents.lines().collect::<Vec<_>>(),
+        ..Writer::default()
+    };
+
+    // Dont parse nested macros
+    let mut end_span = LineColumn { column: 0, line: 0 };
+    for item in macros {
+        let macro_path = &item.path.segments[0].ident;
+
+        // this macro is inside the last macro we parsed, skip it
+        if macro_path.span().start() < end_span {
             continue;
         }
 
-        // ensure the marker is not nested
-        if start < last_bracket_end {
-            continue;
+        // item.parse_body::<CallBody>();
+        let body = item.parse_body::<CallBody>().unwrap();
+
+        let rsx_start = macro_path.span().start();
+
+        writer.out.indent = &writer.src[rsx_start.line - 1]
+            .chars()
+            .take_while(|c| *c == ' ')
+            .count()
+            / 4;
+
+        // Oneliner optimization
+        if writer.is_short_children(&body.roots).is_some() {
+            writer.write_ident(&body.roots[0]).unwrap();
+        } else {
+            writer.write_body_indented(&body.roots).unwrap();
         }
 
-        let indent_level = {
-            // walk backwards from start until we find a new line
-            let mut lines = contents[..start].lines().rev();
-            match lines.next() {
-                Some(line) => {
-                    if line.starts_with("//") || line.starts_with("///") {
-                        continue;
-                    }
+        // writing idents leaves the final line ended at the end of the last ident
+        if writer.out.buf.contains('\n') {
+            writer.out.new_line().unwrap();
+            writer.out.tab().unwrap();
+        }
 
-                    line.chars().take_while(|c| *c == ' ').count() / 4
-                }
-                None => 0,
-            }
+        let span = match item.delimiter {
+            MacroDelimiter::Paren(_) => todo!(),
+            MacroDelimiter::Brace(b) => b.span,
+            MacroDelimiter::Bracket(_) => todo!(),
         };
 
-        let remaining = &contents[open - 1..];
-        let close = find_bracket_end(remaining).unwrap();
-        // Move the last bracket end to the end of this block to avoid nested blocks
-        last_bracket_end = close + open - 1;
+        let mut formatted = String::new();
 
-        // Format the substring, doesn't include the outer brackets
-        let substring = &remaining[1..close - 1];
+        std::mem::swap(&mut formatted, &mut writer.out.buf);
 
-        // make sure to add back whatever weird whitespace there was at the end
-        let mut remaining_whitespace = substring.chars().rev().take_while(|c| *c == ' ').count();
+        let start = byte_offset(contents, span.start()) + 1;
+        let end = byte_offset(contents, span.end()) - 1;
 
-        let mut new = fmt_block(substring, indent_level).unwrap();
-
-        // if the new string is not multiline, don't try to adjust the marker ending
-        // We want to trim off any indentation that there might be
-        if new.len() <= 80 && !new.contains('\n') {
-            new = format!(" {new} ");
-            remaining_whitespace = 0;
+        if formatted.len() <= 80 && !formatted.contains('\n') {
+            formatted = format!(" {} ", formatted);
         }
 
-        if new == substring {
+        end_span = span.end();
+
+        if contents[start..end] == formatted {
             continue;
         }
 
         formatted_blocks.push(FormattedBlock {
-            formatted: new,
-            start: open,
-            end: last_bracket_end - remaining_whitespace - 1,
+            formatted,
+            start,
+            end,
         });
     }
 
@@ -108,7 +129,25 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 
 pub fn write_block_out(body: CallBody) -> Option<String> {
     let mut buf = Writer {
-        src: vec!["".to_string()],
+        src: vec![""],
+        ..Writer::default()
+    };
+
+    // Oneliner optimization
+    if buf.is_short_children(&body.roots).is_some() {
+        buf.write_ident(&body.roots[0]).unwrap();
+    } else {
+        buf.write_body_indented(&body.roots).unwrap();
+    }
+
+    buf.consume()
+}
+
+pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
+    let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
+
+    let mut buf = Writer {
+        src: raw.lines().collect(),
         ..Writer::default()
     };
 
@@ -126,7 +165,7 @@ pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
     let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
     let mut buf = Writer {
-        src: block.lines().map(|f| f.to_string()).collect(),
+        src: block.lines().collect(),
         ..Writer::default()
     };
 
@@ -182,3 +221,100 @@ pub fn apply_formats(input: &str, blocks: Vec<FormattedBlock>) -> String {
 
     out
 }
+
+#[test]
+fn get_some_blocks() {
+    let contents = include_str!("../tests/samples/long.rsx");
+
+    let out = fmt_file(contents);
+
+    dbg!(out);
+}
+
+// for Match { end, start, k } in levenshtein_search(b"rsx! {", contents.as_bytes()) {
+//     let open = end;
+
+//     if k > 1 {
+//         continue;
+//     }
+
+//     // ensure the marker is not nested
+//     if start < last_bracket_end {
+//         continue;
+//     }
+
+//     let indent_level = {
+//         // walk backwards from start until we find a new line
+//         let mut lines = contents[..start].lines().rev();
+//         match lines.next() {
+//             Some(line) => {
+//                 if line.starts_with("//") || line.starts_with("///") {
+//                     continue;
+//                 }
+
+//                 line.chars().take_while(|c| *c == ' ').count() / 4
+//             }
+//             None => 0,
+//         }
+//     };
+
+//     let remaining = &contents[open - 1..];
+
+//     let rest_with_macro = &contents[start..];
+
+//     dbg!(rest_with_macro);
+
+//     let body = syn::parse_str::<ExprMacro>(rest_with_macro).unwrap();
+
+//     let MacroDelimiter::Brace(brace) = body.mac.delimiter else { panic!() };
+//     // dbg!(brace.span.end());
+//     let lines = &contents[start..]
+//         .lines()
+//         .map(|f| f.to_string())
+//         .collect::<Vec<_>>();
+
+//     dbg!(lines);
+
+//     let close = lines
+//         .iter()
+//         .skip(1)
+//         .take(brace.span.end().line - 1)
+//         .map(|f| f.len())
+//         .sum::<usize>()
+//         + brace.span.end().column
+//         + brace.span.end().line
+//         - 1;
+
+//     // let body = syn::parse::<CallBody>(stream.into()).unwrap();
+
+//     // let close = find_bracket_end(remaining).unwrap();
+
+//     dbg!(close);
+//     // Move the last bracket end to the end of this block to avoid nested blocks
+//     last_bracket_end = close + open - 1;
+
+//     // Format the substring, doesn't include the outer brackets
+//     let substring = &remaining[1..close - 1];
+
+//     // make sure to add back whatever weird whitespace there was at the end
+//     let mut remaining_whitespace = substring.chars().rev().take_while(|c| *c == ' ').count();
+
+//     let mut new = fmt_block(substring, indent_level).unwrap();
+
+//     // if the new string is not multiline, don't try to adjust the marker ending
+//     // We want to trim off any indentation that there might be
+//     if new.len() <= 80 && !new.contains('\n') {
+//         new = format!(" {new} ");
+//         remaining_whitespace = 0;
+//     }
+
+//     if new == substring {
+//         continue;
+//     }
+
+//     formatted_blocks.push(FormattedBlock {
+//         formatted: new,
+//         start: open,
+//         end: last_bracket_end - remaining_whitespace - 1,
+//     });
+// }
