@@ -385,9 +385,7 @@ impl VirtualDom {
         };
 
         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-        if name.starts_with("on") {
-            name = &name[2..];
-        }
+        name = name.trim_start_matches("on");
 
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
