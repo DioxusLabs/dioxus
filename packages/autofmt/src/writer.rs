@@ -135,16 +135,16 @@ impl Writer<'_> {
 
             total += match &attr.attr {
                 ElementAttr::AttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 3
+                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 6
                 }
                 ElementAttr::AttrExpression { name, value } => {
-                    value.span().line_length() + name.span().line_length() + 3
+                    value.span().line_length() + name.span().line_length() + 6
                 }
                 ElementAttr::CustomAttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.value().len() + 3
+                    value.source.as_ref().unwrap().value().len() + name.value().len() + 6
                 }
                 ElementAttr::CustomAttrExpression { name, value } => {
-                    name.value().len() + value.span().line_length() + 3
+                    name.value().len() + value.span().line_length() + 6
                 }
                 ElementAttr::EventTokens { tokens, name } => {
                     let location = Location::new(tokens.span().start());
@@ -164,7 +164,7 @@ impl Writer<'_> {
                         self.cached_formats[&location].len()
                     };
 
-                    len + name.span().line_length() + 3
+                    len + name.span().line_length() + 6
                 }
             };
         }
