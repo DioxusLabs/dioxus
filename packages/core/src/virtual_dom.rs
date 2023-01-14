@@ -384,8 +384,6 @@ impl VirtualDom {
             data,
         };
 
-        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
@@ -396,6 +394,7 @@ impl VirtualDom {
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
                 if attr.name.trim_start_matches("on") == name
                     && target_path.is_ascendant(&this_path)
                 {
