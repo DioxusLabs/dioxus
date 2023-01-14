@@ -97,13 +97,18 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
 
         Expr::Async(b) => collect_from_block(&b.block, macros),
         Expr::Block(b) => collect_from_block(&b.block, macros),
+        Expr::Closure(c) => collect_from_expr(&c.body, macros),
+        Expr::Let(l) => collect_from_expr(&l.expr, macros),
+        Expr::Unsafe(u) => collect_from_block(&u.block, macros),
+        Expr::Loop(l) => collect_from_block(&l.body, macros),
+
         Expr::Call(c) => {
             collect_from_expr(&c.func, macros);
             for expr in c.args.iter() {
                 collect_from_expr(expr, macros);
             }
         }
-        Expr::Closure(c) => collect_from_expr(&c.body, macros),
+
         Expr::ForLoop(b) => {
             collect_from_expr(&b.expr, macros);
             collect_from_block(&b.body, macros);
@@ -121,17 +126,12 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
             }
         }
 
-        Expr::Let(l) => collect_from_expr(&l.expr, macros),
-
         Expr::Return(r) => {
             if let Some(expr) = &r.expr {
                 collect_from_expr(expr, macros);
             }
         }
 
-        Expr::Loop(l) => {
-            collect_from_block(&l.body, macros);
-        }
         Expr::Match(l) => {
             collect_from_expr(&l.expr, macros);
             for arm in l.arms.iter() {
@@ -141,10 +141,6 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
 
                 collect_from_expr(&arm.body, macros);
             }
-        }
-
-        Expr::Unsafe(u) => {
-            collect_from_block(&u.block, macros);
         }
 
         Expr::While(w) => {
@@ -198,15 +194,8 @@ pub fn byte_offset(input: &str, location: LineColumn) -> usize {
 #[test]
 fn parses_file_and_collects_rsx_macros() {
     let contents = include_str!("../tests/samples/long.rsx");
-
     let parsed = syn::parse_file(contents).unwrap();
-
     let mut macros = vec![];
     collect_from_file(&parsed, &mut macros);
-
-    println!("Collected {} macros", macros.len());
-
-    for item in macros {
-        println!("Found macro: {:#?}", item.path.segments[0].ident.span());
-    }
+    assert_eq!(macros.len(), 3);
 }
