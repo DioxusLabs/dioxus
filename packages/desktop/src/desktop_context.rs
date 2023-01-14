@@ -342,9 +342,11 @@ impl WindowEventHandlers {
 
 struct WryWindowEventHandlerInner {
     window_id: WindowId,
-    handler:
-        Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>,
+    handler: WryEventHandlerCallback,
 }
+
+type WryEventHandlerCallback =
+    Box<dyn FnMut(&Event<UserWindowEvent>, &EventLoopWindowTarget<UserWindowEvent>) + 'static>;
 
 impl WryWindowEventHandlerInner {
     fn apply_event(
@@ -381,7 +383,7 @@ pub fn use_wry_event_handler(
         let id = desktop.create_wry_event_handler(handler);
 
         WryEventHandler {
-            handlers: desktop.event_handlers.clone(),
+            handlers: desktop.event_handlers,
             id,
         }
     })
