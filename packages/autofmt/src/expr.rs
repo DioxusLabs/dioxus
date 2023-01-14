@@ -5,7 +5,7 @@ use proc_macro2::Span;
 
 use crate::Writer;
 
-impl Writer {
+impl Writer<'_> {
     pub fn write_raw_expr(&mut self, placement: Span) -> Result {
         /*
         We want to normalize the expr to the appropriate indent level.

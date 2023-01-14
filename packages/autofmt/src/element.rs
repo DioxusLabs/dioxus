@@ -40,7 +40,7 @@ div {
 }
 */
 
-impl Writer {
+impl Writer<'_> {
     pub fn write_element(&mut self, el: &Element) -> Result {
         let Element {
             name,
@@ -276,7 +276,7 @@ impl Writer {
         let start = location.start();
         let line_start = start.line - 1;
 
-        let this_line = self.src[line_start].as_str();
+        let this_line = self.src[line_start];
 
         let beginning = if this_line.len() > start.column {
             this_line[..start.column].trim()

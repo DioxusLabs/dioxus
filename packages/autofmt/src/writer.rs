@@ -10,8 +10,8 @@ use syn::{spanned::Spanned, Expr, ExprIf};
 use crate::buffer::Buffer;
 
 #[derive(Debug, Default)]
-pub struct Writer {
-    pub src: Vec<String>,
+pub struct Writer<'a> {
+    pub src: Vec<&'a str>,
     pub cached_formats: HashMap<Location, String>,
     pub comments: VecDeque<usize>,
     pub out: Buffer,
@@ -31,7 +31,7 @@ impl Location {
     }
 }
 
-impl Writer {
+impl Writer<'_> {
     // Expects to be written directly into place
     pub fn write_ident(&mut self, node: &BodyNode) -> Result {
         match node {
