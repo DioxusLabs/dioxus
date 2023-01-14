@@ -171,7 +171,7 @@ pub fn collect_from_expr<'a>(expr: &'a Expr, macros: &mut Vec<CollectedMacro<'a>
         | Expr::Unary(_)
         | Expr::Verbatim(_) => {}
 
-        _ => {},
+        _ => {}
     };
 }
 
