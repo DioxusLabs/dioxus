@@ -84,7 +84,7 @@ class IPC {
       if (!this.reconnecting) {
         log(`WebSocket closed – code: [${event.code}], reason: [${event.reason}]`);
         log(`Attempting to reconnect`);
-        log(`Note: A WebSocket error will be logged repeatedly, until we are able to reconnect:`);
+        log(`Note: WebSocket errors will be logged below, until we are able to reconnect:`);
 
         // Browsers log un-catchable errors to the developer console, when network requests
         // fail. Those errors will potentially be logged many times until we successfully 
