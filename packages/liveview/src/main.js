@@ -72,13 +72,6 @@ class IPC {
       window.interpreter.handleEdits(edits);
     }
 
-    // TODO: Ideally, there would be a way to set up an action that is sent from the server
-    // to the client after a connection is established, which is executed on disconnects
-    // (e.g., to display a message that says that the server can't be reached).
-    // Is there already such functionality? If not (and it would be difficult to implement),
-    // this can be added via a different PR (probably by someone else).
-    // I think, this could be as simple as "On disconnect, set element $selector to $rsx"
-
     this.reconnecting = false
     
     const onclose = (event) => {
@@ -99,12 +92,6 @@ class IPC {
         // To not add to the noise with our own log messages, we'll not log anything while
         // reconnecting.
 
-        // TODO: I've read, that WebWorker network errors will not be logged to the developer
-        // console. So moving parts of this script to a WebWorker might be a solution.
-        // However, that seems to add too much complexity, to be a reasonable solution, imo.
-        // With incremental re-compilation and the below delay settings the situation doesn't
-        // seem to be too bad.
-        
         this.reconnecting = true;
 
         // For the first 20 seconds, we will delay between attempts to reconnect
@@ -130,12 +117,6 @@ class IPC {
       }
 
       setTimeout(connect, this.reconnectDelay)
-
-      // TODO: Should 'WebSocket auto-reconnect' be optional via a Cargo feature flag?
-      // It does seem to be very useful in both, production and while developing.
-      // However, it is a feature that might send many requests to the server, which might
-      // be unexpected. I think, having it always active and configurable (at runtime),
-      // and documenting the behaviour would be the way to go. But I'm not 100% sure.
     }
 
     connect();
