@@ -93,9 +93,9 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
         }
 
         let span = match item.delimiter {
-            MacroDelimiter::Paren(_) => todo!(),
+            MacroDelimiter::Paren(b) => b.span,
             MacroDelimiter::Brace(b) => b.span,
-            MacroDelimiter::Bracket(_) => todo!(),
+            MacroDelimiter::Bracket(b) => b.span,
         };
 
         let mut formatted = String::new();
