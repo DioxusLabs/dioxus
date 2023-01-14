@@ -349,7 +349,7 @@ impl VirtualDom {
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     pub fn handle_event(
         &mut self,
-        mut name: &str,
+        name: &str,
         data: Rc<dyn Any>,
         element: ElementId,
         bubbles: bool,
@@ -385,7 +385,6 @@ impl VirtualDom {
         };
 
         // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
-        name = name.trim_start_matches("on");
 
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
@@ -397,7 +396,9 @@ impl VirtualDom {
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
-                if attr.name == name && target_path.is_ascendant(&this_path) {
+                if attr.name.trim_start_matches("on") == name
+                    && target_path.is_ascendant(&this_path)
+                {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
