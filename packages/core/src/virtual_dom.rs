@@ -349,7 +349,7 @@ impl VirtualDom {
     /// If you have multiple events, you can call this method multiple times before calling "render_with_deadline"
     pub fn handle_event(
         &mut self,
-        name: &str,
+        mut name: &str,
         data: Rc<dyn Any>,
         element: ElementId,
         bubbles: bool,
@@ -384,6 +384,11 @@ impl VirtualDom {
             data,
         };
 
+        // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+        if name.starts_with("on") {
+            name = &name[2..];
+        }
+
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
@@ -394,9 +399,7 @@ impl VirtualDom {
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
-                // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
-                // we should fix this so that we look for "onclick" instead of "click"
-                if &attr.name[2..] == name && target_path.is_ascendant(&this_path) {
+                if attr.name == name && target_path.is_ascendant(&this_path) {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
