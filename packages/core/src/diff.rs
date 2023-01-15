@@ -916,29 +916,25 @@ impl<'b> VirtualDom {
     }
 
     fn remove_component_node(&mut self, comp: &VComponent, gen_muts: bool) {
+        // Remove the component reference from the vcomponent so they're not tied together
         let scope = comp
             .scope
             .take()
             .expect("VComponents to always have a scope");
 
+        // Remove the component from the dom
         match unsafe { self.scopes[scope.0].root_node().extend_lifetime_ref() } {
             RenderReturn::Ready(t) => self.remove_node(t, gen_muts),
             RenderReturn::Aborted(placeholder) => self.remove_placeholder(placeholder, gen_muts),
             _ => todo!(),
         };
 
+        // Restore the props back to the vcomponent in case it gets rendered again
         let props = self.scopes[scope.0].props.take();
-
-        self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[scope.0].height,
-            id: scope,
-        });
-
         *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
 
-        // make sure to wipe any of its props and listeners
-        self.ensure_drop_safety(scope);
-        self.scopes.remove(scope.0);
+        // Now drop all the resouces
+        self.drop_scope(scope);
     }
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
