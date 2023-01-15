@@ -27,13 +27,12 @@ pub enum HotReloadMsg {
     Shutdown,
 }
 
-#[derive(Debug, Clone, Copy)]
 pub struct Config<Ctx: HotReloadingContext = HtmlCtx> {
     root_path: &'static str,
     listening_paths: &'static [&'static str],
     excluded_paths: &'static [&'static str],
     log: bool,
-    rebuild_with: Option<&'static str>,
+    rebuild_with: Option<Box<dyn FnMut() -> bool + Send + 'static>>,
     phantom: std::marker::PhantomData<Ctx>,
 }
 
@@ -65,7 +64,7 @@ impl Config<HtmlCtx> {
 
 impl<Ctx: HotReloadingContext> Config<Ctx> {
     /// Set the root path of the project (where the Cargo.toml file is). This is automatically set by the [`hot_reload_init`] macro.
-    pub const fn root(self, path: &'static str) -> Self {
+    pub fn root(self, path: &'static str) -> Self {
         Self {
             root_path: path,
             ..self
@@ -73,22 +72,37 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
     }
 
     /// Set whether to enable logs
-    pub const fn with_logging(self, log: bool) -> Self {
+    pub fn with_logging(self, log: bool) -> Self {
         Self { log, ..self }
     }
 
     /// Set the command to run to rebuild the project
     ///
     /// For example to restart the application after a change is made, you could use `cargo run`
-    pub const fn with_rebuild_command(self, rebuild_with: &'static str) -> Self {
+    pub fn with_rebuild_command(self, rebuild_command: &'static str) -> Self {
+        self.with_rebuild_callback(move || {
+            execute::shell(rebuild_command)
+                .spawn()
+                .expect("Failed to spawn the rebuild command");
+            true
+        })
+    }
+
+    /// Set a callback to run to when the project needs to be rebuilt and returns if the server should shut down
+    ///
+    /// For example a CLI application could rebuild the application when a change is made
+    pub fn with_rebuild_callback(
+        self,
+        rebuild_callback: impl FnMut() -> bool + Send + 'static,
+    ) -> Self {
         Self {
-            rebuild_with: Some(rebuild_with),
+            rebuild_with: Some(Box::new(rebuild_callback)),
             ..self
         }
     }
 
     /// Set the paths to listen for changes in to trigger hot reloading. If this is a directory it will listen for changes in all files in that directory recursively.
-    pub const fn with_paths(self, paths: &'static [&'static str]) -> Self {
+    pub fn with_paths(self, paths: &'static [&'static str]) -> Self {
         Self {
             listening_paths: paths,
             ..self
@@ -96,7 +110,7 @@ impl<Ctx: HotReloadingContext> Config<Ctx> {
     }
 
     /// Sets paths to ignore changes on. This will override any paths set in the [`Config::with_paths`] method in the case of conflicts.
-    pub const fn excluded_paths(self, paths: &'static [&'static str]) -> Self {
+    pub fn excluded_paths(self, paths: &'static [&'static str]) -> Self {
         Self {
             excluded_paths: paths,
             ..self
@@ -110,7 +124,7 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
         root_path,
         listening_paths,
         log,
-        rebuild_with,
+        mut rebuild_with,
         excluded_paths,
         phantom: _,
     } = cfg;
@@ -190,23 +204,31 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                     .map(|path| crate_dir.join(PathBuf::from(path)))
                     .collect::<Vec<_>>();
 
-                let rebuild = || {
-                    if let Some(rebuild_command) = rebuild_with {
-                        *aborted.lock().unwrap() = true;
-                        if log {
-                            println!("Rebuilding the application...");
-                        }
-                        execute::shell(rebuild_command)
-                            .spawn()
-                            .expect("Failed to spawn the rebuild command");
+                let mut rebuild = {
+                    let aborted = aborted.clone();
+                    let channels = channels.clone();
+                    move || {
+                        if let Some(rebuild_callback) = &mut rebuild_with {
+                            if log {
+                                println!("Rebuilding the application...");
+                            }
+                            let shutdown = rebuild_callback();
 
-                        for channel in &mut *channels.lock().unwrap() {
-                            send_msg(HotReloadMsg::Shutdown, channel);
+                            if shutdown {
+                                *aborted.lock().unwrap() = true;
+                            }
+
+                            for channel in &mut *channels.lock().unwrap() {
+                                send_msg(HotReloadMsg::Shutdown, channel);
+                            }
+
+                            return shutdown;
+                        } else if log {
+                            println!(
+                                "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
+                            );
                         }
-                    } else if log {
-                        println!(
-                            "Rebuild needed... shutting down hot reloading.\nManually rebuild the application to view futher changes."
-                        );
+                        true
                     }
                 };
 
@@ -240,7 +262,9 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                             for path in real_paths {
                                 // if this file type cannot be hot reloaded, rebuild the application
                                 if path.extension().and_then(|p| p.to_str()) != Some("rs") {
-                                    rebuild();
+                                    if rebuild() {
+                                        return;
+                                    }
                                 }
                                 // find changes to the rsx in the file
                                 match file_map
@@ -266,9 +290,10 @@ pub fn init<Ctx: HotReloadingContext + Send + 'static>(cfg: Config<Ctx>) {
                                     }
                                     UpdateResult::NeedsRebuild => {
                                         drop(channels);
-                                        rebuild();
-
-                                        return;
+                                        if rebuild() {
+                                            return;
+                                        }
+                                        break;
                                     }
                                 }
                             }
