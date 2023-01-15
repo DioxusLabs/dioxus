@@ -394,9 +394,10 @@ impl VirtualDom {
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
-                // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
-                // we should fix this so that we look for "onclick" instead of "click"
-                if &attr.name[2..] == name && target_path.is_ascendant(&this_path) {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                if attr.name.trim_start_matches("on") == name
+                    && target_path.is_ascendant(&this_path)
+                {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
