@@ -15,12 +15,12 @@ fn app(cx: Scope) -> Element {
 
     render! {
         (0..count).map(|_| rsx!{
-            Comp {}
+            drop_child {}
         })
     }
 }
 
-fn Comp(cx: Scope) -> Element {
+fn drop_child(cx: Scope) -> Element {
     cx.use_hook(|| Drops);
     render! {
         div{}
