@@ -938,7 +938,13 @@ impl<'b> VirtualDom {
 
         // make sure to wipe any of its props and listeners
         self.ensure_drop_safety(scope);
-        self.scopes.remove(scope.0);
+        let scope_id = scope.0;
+        let scope = unsafe { self.scopes.get_unchecked_mut(scope.0) };
+        // Drop all the futures once the hooks are dropped
+        for task_id in scope.spawned_tasks.borrow_mut().drain() {
+            scope.tasks.remove(task_id);
+        }
+        self.scopes.remove(scope_id);
     }
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {

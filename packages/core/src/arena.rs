@@ -111,6 +111,11 @@ impl VirtualDom {
         for hook in scope.hook_list.get_mut().drain(..) {
             drop(unsafe { BumpBox::from_raw(hook) });
         }
+
+        // Drop all the futures once the hooks are dropped
+        for task_id in scope.spawned_tasks.borrow_mut().drain() {
+            scope.tasks.remove(task_id);
+        }
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {

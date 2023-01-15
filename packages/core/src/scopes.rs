@@ -319,7 +319,9 @@ impl<'src> ScopeState {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        self.tasks.spawn(self.id, fut)
+        let id = self.tasks.spawn(self.id, fut);
+        self.spawned_tasks.borrow_mut().insert(id);
+        id
     }
 
     /// Spawns the future but does not return the [`TaskId`]
@@ -339,6 +341,8 @@ impl<'src> ScopeState {
             .sender
             .unbounded_send(SchedulerMsg::TaskNotified(id))
             .expect("Scheduler should exist");
+
+        self.spawned_tasks.borrow_mut().insert(id);
 
         id
     }
