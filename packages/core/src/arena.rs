@@ -1,8 +1,8 @@
 use std::ptr::NonNull;
 
 use crate::{
-    nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
-    ScopeId,
+    innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
+    AttributeValue, DynamicNode, ScopeId,
 };
 use bumpalo::boxed::Box as BumpBox;
 
@@ -89,6 +89,11 @@ impl VirtualDom {
 
     // Drop a scope and all its children
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        self.dirty_scopes.remove(&DirtyScope {
+            height: self.scopes[id.0].height,
+            id,
+        });
+
         self.ensure_drop_safety(id);
 
         if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
