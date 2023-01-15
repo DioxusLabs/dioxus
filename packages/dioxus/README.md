@@ -9,8 +9,8 @@
 
 This overview provides a brief introduction to Dioxus. For a more in-depth guide, make sure to check out:
 
-- [Getting Started](https://dioxuslabs.com/guide/setup.html)
-- [Book](https://dioxuslabs.com/guide/)
+- [Getting Started](https://dioxuslabs.com/guide/en/setup.html)
+- [Book](https://dioxuslabs.com/guide/en/)
 - [Reference](https://dioxuslabs.com/reference)
 - [Examples](https://github.com/DioxusLabs/example-projects)
 
