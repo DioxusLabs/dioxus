@@ -23,6 +23,8 @@ slab = "0.4"
 parking_lot = "0.12.1"
 crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
+hashbrown = { version = "0.13.2", features = ["raw"] }
+parking_lot = "0.12.1"
 
 # for parsing attributes
 lightningcss = "1.0.0-alpha.39"
