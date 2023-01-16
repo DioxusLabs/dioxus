@@ -24,7 +24,9 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components are defined as simple functions that take [`Scope`] and return an [`Element`].
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+///
 /// #[derive(Props, PartialEq)]
 /// struct AppProps {
 ///     title: String
@@ -39,7 +41,17 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///
 /// Components may be composed to make complex apps.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # #![allow(unused)]
+/// # use dioxus::prelude::*;
+///
+/// # #[derive(Props, PartialEq)]
+/// # struct AppProps {
+/// #     title: String
+/// # }
+///
+/// static ROUTES: &str = "";
+///
 /// fn App(cx: Scope<AppProps>) -> Element {
 ///     cx.render(rsx!(
 ///         NavBar { routes: ROUTES }
@@ -47,12 +59,33 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 ///         Footer {}
 ///     ))
 /// }
+///
+/// #[inline_props]
+/// fn NavBar(cx: Scope, routes: &'static str) -> Element {
+///     cx.render(rsx! {
+///         div { "Routes: {routes}" }
+///     })
+/// }
+///
+/// fn Footer(cx: Scope) -> Element {
+///     cx.render(rsx! { div { "Footer" } })
+/// }
+///
+/// #[inline_props]
+/// fn Title<'a>(cx: Scope<'a>, children: Element<'a>) -> Element {
+///     cx.render(rsx! {
+///         div { id: "title", children }
+///     })
+/// }
 /// ```
 ///
 /// To start an app, create a [`VirtualDom`] and call [`VirtualDom::rebuild`] to get the list of edits required to
 /// draw the UI.
 ///
-/// ```rust, ignore
+/// ```rust
+/// # use dioxus::prelude::*;
+/// # fn App(cx: Scope) -> Element { cx.render(rsx! { div {} }) }
+///
 /// let mut vdom = VirtualDom::new(App);
 /// let edits = vdom.rebuild();
 /// ```
@@ -249,7 +282,7 @@ impl VirtualDom {
         root.provide_context(Rc::new(ErrorBoundary::new(ScopeId(0))));
 
         // the root element is always given element ID 0 since it's the container for the entire tree
-        dom.elements.insert(ElementRef::null());
+        dom.elements.insert(ElementRef::none());
 
         dom
     }
@@ -354,16 +387,17 @@ impl VirtualDom {
         // Loop through each dynamic attribute in this template before moving up to the template's parent.
         while let Some(el_ref) = parent_path {
             // safety: we maintain references of all vnodes in the element slab
-            let template = unsafe { &*el_ref.template };
+            let template = unsafe { el_ref.template.unwrap().as_ref() };
             let node_template = template.template.get();
             let target_path = el_ref.path;
 
             for (idx, attr) in template.dynamic_attrs.iter().enumerate() {
                 let this_path = node_template.attr_paths[idx];
 
-                // listeners are required to be prefixed with "on", but they come back to the virtualdom with that missing
-                // we should fix this so that we look for "onclick" instead of "click"
-                if &attr.name[2..] == name && target_path.is_ascendant(&this_path) {
+                // Remove the "on" prefix if it exists, TODO, we should remove this and settle on one
+                if attr.name.trim_start_matches("on") == name
+                    && target_path.is_ascendant(&this_path)
+                {
                     listeners.push(&attr.value);
 
                     // Break if the event doesn't bubble anyways
@@ -549,7 +583,7 @@ impl VirtualDom {
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &mut self.scopes[finished_fiber.0];
+                let scope = &self.scopes[finished_fiber.0];
                 let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations

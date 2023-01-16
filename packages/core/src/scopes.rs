@@ -73,7 +73,7 @@ pub struct ScopeState {
     pub(crate) node_arena_1: BumpFrame,
     pub(crate) node_arena_2: BumpFrame,
 
-    pub(crate) parent: Option<*mut ScopeState>,
+    pub(crate) parent: Option<*const ScopeState>,
     pub(crate) id: ScopeId,
 
     pub(crate) height: u32,
@@ -85,7 +85,7 @@ pub struct ScopeState {
     pub(crate) shared_contexts: RefCell<FxHashMap<TypeId, Box<dyn Any>>>,
 
     pub(crate) tasks: Rc<Scheduler>,
-    pub(crate) spawned_tasks: FxHashSet<TaskId>,
+    pub(crate) spawned_tasks: RefCell<FxHashSet<TaskId>>,
 
     pub(crate) borrowed_props: RefCell<Vec<*const VComponent<'static>>>,
     pub(crate) attributes_to_drop: RefCell<Vec<*const Attribute<'static>>>,
@@ -111,14 +111,6 @@ impl<'src> ScopeState {
         }
     }
 
-    pub(crate) fn previous_frame_mut(&mut self) -> &mut BumpFrame {
-        match self.render_cnt.get() % 2 {
-            1 => &mut self.node_arena_1,
-            0 => &mut self.node_arena_2,
-            _ => unreachable!(),
-        }
-    }
-
     /// Get the name of this component
     pub fn name(&self) -> &str {
         self.name
@@ -139,7 +131,7 @@ impl<'src> ScopeState {
     /// If you need to allocate items that need to be dropped, use bumpalo's box.
     pub fn bump(&self) -> &Bump {
         // note that this is actually the previous frame since we use that as scratch space while the component is rendering
-        &self.previous_frame().bump
+        self.previous_frame().bump()
     }
 
     /// Get a handle to the currently active head node arena for this Scope
@@ -327,7 +319,9 @@ impl<'src> ScopeState {
 
     /// Pushes the future onto the poll queue to be polled after the component renders.
     pub fn push_future(&self, fut: impl Future<Output = ()> + 'static) -> TaskId {
-        self.tasks.spawn(self.id, fut)
+        let id = self.tasks.spawn(self.id, fut);
+        self.spawned_tasks.borrow_mut().insert(id);
+        id
     }
 
     /// Spawns the future but does not return the [`TaskId`]
@@ -347,6 +341,8 @@ impl<'src> ScopeState {
             .sender
             .unbounded_send(SchedulerMsg::TaskNotified(id))
             .expect("Scheduler should exist");
+
+        self.spawned_tasks.borrow_mut().insert(id);
 
         id
     }

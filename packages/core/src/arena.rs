@@ -1,6 +1,8 @@
+use std::ptr::NonNull;
+
 use crate::{
-    nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom, AttributeValue, DynamicNode,
-    ScopeId,
+    innerlude::DirtyScope, nodes::RenderReturn, nodes::VNode, virtual_dom::VirtualDom,
+    AttributeValue, DynamicNode, ScopeId,
 };
 use bumpalo::boxed::Box as BumpBox;
 
@@ -17,7 +19,7 @@ pub(crate) struct ElementRef {
     pub path: ElementPath,
 
     // The actual template
-    pub template: *const VNode<'static>,
+    pub template: Option<NonNull<VNode<'static>>>,
 }
 
 #[derive(Clone, Copy)]
@@ -27,9 +29,9 @@ pub enum ElementPath {
 }
 
 impl ElementRef {
-    pub(crate) fn null() -> Self {
+    pub(crate) fn none() -> Self {
         Self {
-            template: std::ptr::null_mut(),
+            template: None,
             path: ElementPath::Root(0),
         }
     }
@@ -44,12 +46,21 @@ impl VirtualDom {
         self.next_reference(template, ElementPath::Root(path))
     }
 
+    pub(crate) fn next_null(&mut self) -> ElementId {
+        let entry = self.elements.vacant_entry();
+        let id = entry.key();
+
+        entry.insert(ElementRef::none());
+        ElementId(id)
+    }
+
     fn next_reference(&mut self, template: &VNode, path: ElementPath) -> ElementId {
         let entry = self.elements.vacant_entry();
         let id = entry.key();
 
         entry.insert(ElementRef {
-            template: template as *const _ as *mut _,
+            // We know this is non-null because it comes from a reference
+            template: Some(unsafe { NonNull::new_unchecked(template as *const _ as *mut _) }),
             path,
         });
         ElementId(id)
@@ -78,6 +89,11 @@ impl VirtualDom {
 
     // Drop a scope and all its children
     pub(crate) fn drop_scope(&mut self, id: ScopeId) {
+        self.dirty_scopes.remove(&DirtyScope {
+            height: self.scopes[id.0].height,
+            id,
+        });
+
         self.ensure_drop_safety(id);
 
         if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
@@ -99,6 +115,11 @@ impl VirtualDom {
         // this means we'll drop hooks bottom-up
         for hook in scope.hook_list.get_mut().drain(..) {
             drop(unsafe { BumpBox::from_raw(hook) });
+        }
+
+        // Drop all the futures once the hooks are dropped
+        for task_id in scope.spawned_tasks.borrow_mut().drain() {
+            scope.tasks.remove(task_id);
         }
     }
 

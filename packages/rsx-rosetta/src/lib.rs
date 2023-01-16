@@ -73,6 +73,7 @@ pub fn rsx_node_from_html(node: &Node) -> Option<BodyNode> {
                 attributes,
                 _is_static: false,
                 key: None,
+                brace: Default::default(),
             }))
         }
 
@@ -107,6 +108,7 @@ pub fn collect_svgs(children: &mut [BodyNode], out: &mut Vec<BodyNode>) {
                     fields: vec![],
                     children: vec![],
                     manual_props: None,
+                    brace: Default::default(),
                 });
 
                 std::mem::swap(child, &mut new_comp);

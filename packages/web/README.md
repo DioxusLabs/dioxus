@@ -5,8 +5,8 @@
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
 
-[crates-badge]: https://img.shields.io/crates/v/rsx-rosetta.svg
-[crates-url]: https://crates.io/crates/rsx-rosetta
+[crates-badge]: https://img.shields.io/crates/v/dioxus-web.svg
+[crates-url]: https://crates.io/crates/dioxus-web
 
 [mit-badge]: https://img.shields.io/badge/license-MIT-blue.svg
 [mit-url]: https://github.com/dioxuslabs/dioxus/blob/master/LICENSE
@@ -19,15 +19,15 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/rsx-rosetta/latest/rsx-rosetta) |
+[API Docs](https://docs.rs/dioxus-web/latest/dioxus_web) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 ## Overview
 
 Run Dioxus in the browser using WebAssembly.
 
-- Relies on sledgehammer and websys to modify the dom
-- Supports instant hotreloading via the Dioxus CLI
+- Relies on [sledgehammer-bindgen](https://github.com/Demonthos/sledgehammer_bindgen) and [web-sys](https://github.com/rustwasm/wasm-bindgen/tree/main/crates/web-sys) to modify the dom
+- Supports instant hot reloading via the Dioxus CLI
 - Around 60k gzipped
 
 ## Contributing
@@ -41,6 +41,6 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.
 

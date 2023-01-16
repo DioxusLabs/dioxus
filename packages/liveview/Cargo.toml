@@ -5,7 +5,7 @@ edition = "2021"
 repository = "https://github.com/DioxusLabs/dioxus/"
 homepage = "https://dioxuslabs.com"
 documentation = "https://dioxuslabs.com"
-keywords = ["dom", "ui", "gui", "react", "wasm"]
+keywords = ["dom", "ui", "gui", "react", "liveview"]
 description = "Build server-side apps with Dioxus"
 license = "MIT/Apache-2.0"
 
@@ -13,18 +13,16 @@ license = "MIT/Apache-2.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.23.0", features = ["full"] }
+thiserror = "1.0.38"
 futures-util = { version = "0.3.25", default-features = false, features = [
     "sink",
 ] }
 futures-channel = { version = "0.3.25", features = ["sink"] }
-pretty_env_logger = "0.4.0"
+tokio = { version = "1.23.0", features = ["time"] }
 tokio-stream = { version = "0.1.11", features = ["net"] }
-
+tokio-util = { version = "0.7.4", features = ["rt"] }
 serde = { version = "1.0.151", features = ["derive"] }
 serde_json = "1.0.91"
-tokio-util = { version = "0.7.4", features = ["full"] }
-
 dioxus-html = { path = "../html", features = ["serialize"], version = "^0.3.0" }
 dioxus-core = { path = "../core", features = ["serialize"], version = "^0.3.0" }
 dioxus-interpreter-js = { path = "../interpreter", version = "0.3.0" }
@@ -34,13 +32,9 @@ warp = { version = "0.3.3", optional = true }
 
 # axum
 axum = { version = "0.6.1", optional = true, features = ["ws"] }
-tower = { version = "0.4.13", optional = true }
 
 # salvo
 salvo = { version = "0.37.7", optional = true, features = ["ws"] }
-thiserror = "1.0.38"
-uuid = { version = "1.2.2", features = ["v4"] }
-anyhow = "1.0.68"
 
 # actix is ... complicated?
 # actix-files = { version = "0.6.2", optional = true }
@@ -48,6 +42,7 @@ anyhow = "1.0.68"
 # actix-ws = { version = "0.2.5", optional = true }
 
 [dev-dependencies]
+pretty_env_logger = { version = "0.4.0" }
 tokio = { version = "1.23.0", features = ["full"] }
 dioxus = { path = "../dioxus", version = "0.3.0" }
 warp = "0.3.3"

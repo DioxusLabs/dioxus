@@ -295,47 +295,31 @@ pub struct DirtyNodes {
 }
 
 impl DirtyNodes {
-    pub fn insert(&mut self, depth: u16, node_id: NodeId) {
-        self.map
-            .entry(depth)
-            .or_insert_with(FxHashSet::default)
-            .insert(node_id);
-    }
-
-    fn pop_front(&mut self) -> Option<NodeId> {
-        let (&depth, values) = self.map.iter_mut().next()?;
-        let key = *values.iter().next()?;
-        let node_id = values.take(&key)?;
-        if values.is_empty() {
-            self.map.remove(&depth);
+    fn add_node(&mut self, node_id: NodeId) {
+        let node_id = node_id.0;
+        let index = node_id / 64;
+        let bit = node_id % 64;
+        let encoded = 1 << bit;
+        if let Some(passes) = self.passes_dirty.get_mut(index) {
+            *passes |= encoded;
+        } else {
+            self.passes_dirty.resize(index + 1, 0);
+            self.passes_dirty[index] |= encoded;
         }
-        Some(node_id)
     }
 
-    fn pop_back(&mut self) -> Option<NodeId> {
-        let (&depth, values) = self.map.iter_mut().rev().next()?;
-        let key = *values.iter().next()?;
-        let node_id = values.take(&key)?;
-        if values.is_empty() {
-            self.map.remove(&depth);
-        }
-        Some(node_id)
+    fn is_empty(&self) -> bool {
+        self.passes_dirty.iter().all(|dirty| *dirty == 0)
     }
-}
 
-#[test]
-fn dirty_nodes() {
-    let mut dirty_nodes = DirtyNodes::default();
-
-    dirty_nodes.insert(1, NodeId(1));
-    dirty_nodes.insert(0, NodeId(0));
-    dirty_nodes.insert(2, NodeId(3));
-    dirty_nodes.insert(1, NodeId(2));
-
-    assert_eq!(dirty_nodes.pop_front(), Some(NodeId(0)));
-    assert!(matches!(dirty_nodes.pop_front(), Some(NodeId(1 | 2))));
-    assert!(matches!(dirty_nodes.pop_front(), Some(NodeId(1 | 2))));
-    assert_eq!(dirty_nodes.pop_front(), Some(NodeId(3)));
+    fn pop(&mut self) -> Option<NodeId> {
+        let index = self.passes_dirty.iter().position(|dirty| *dirty != 0)?;
+        let passes = self.passes_dirty[index];
+        let node_id = passes.trailing_zeros();
+        let encoded = 1 << node_id;
+        self.passes_dirty[index] &= !encoded;
+        Some(NodeId((index * 64) + node_id as usize))
+    }
 }
 
 #[derive(Default)]
@@ -362,6 +346,29 @@ impl DirtyNodeStates {
                 dirty_nodes.insert(tree.height(*node_id).unwrap(), *node_id);
             }
         }
+        if values.is_empty() {
+            self.dirty.remove(&height);
+        }
+
+        Some((height, node_id))
+    }
+
+    fn pop_back(&mut self, pass_id: PassId) -> Option<(u16, NodeId)> {
+        let (&height, values) = self
+            .dirty
+            .iter_mut()
+            .rev()
+            .find(|(_, values)| values.contains_key(&pass_id))?;
+        let dirty = values.get_mut(&pass_id)?;
+        let node_id = dirty.pop()?;
+        if dirty.is_empty() {
+            values.remove(&pass_id);
+        }
+        if values.is_empty() {
+            self.dirty.remove(&height);
+        }
+
+        Some((height, node_id))
     }
 }
 
