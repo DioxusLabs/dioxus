@@ -934,7 +934,7 @@ impl<'b> VirtualDom {
         *comp.props.borrow_mut() = unsafe { std::mem::transmute(props) };
 
         // Now drop all the resouces
-        self.drop_scope(scope);
+        self.drop_scope(scope, false);
     }
 
     fn find_first_element(&self, node: &'b VNode<'b>) -> ElementId {
