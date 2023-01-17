@@ -328,10 +328,8 @@ impl Writer<'_> {
                     None
                 }
             }
-            [BodyNode::RawExpr(ref expr)] => {
-                // TODO: let rawexprs to be inlined
-                get_expr_length(expr)
-            }
+            // TODO: let rawexprs to be inlined
+            [BodyNode::RawExpr(ref expr)] => get_expr_length(expr),
             [BodyNode::Element(ref el)] => {
                 let attr_len = self.is_short_attrs(&el.attributes);
 
