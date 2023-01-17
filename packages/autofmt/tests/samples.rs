@@ -37,5 +37,6 @@ twoway![
     long_exprs,
     ifchain_forloop,
     t2,
-    reallylong
+    reallylong,
+    immediate_expr
 ];
