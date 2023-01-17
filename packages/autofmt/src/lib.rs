@@ -79,12 +79,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
             .count()
             / 4;
 
-        // Oneliner optimization
-        if writer.is_short_children(&body.roots).is_some() {
-            writer.write_ident(&body.roots[0]).unwrap();
-        } else {
-            writer.write_body_indented(&body.roots).unwrap();
-        }
+        write_body(&mut writer, &body);
 
         // writing idents leaves the final line ended at the end of the last ident
         if writer.out.buf.contains('\n') {
@@ -106,8 +101,8 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
         let end = byte_offset(contents, span.end()) - 1;
 
         // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
-        let body_is_solo_expr =
-            body.roots.len() == 1 && matches!(body.roots[0], BodyNode::RawExpr(_));
+        let body_is_solo_expr = body.roots.len() == 1
+            && matches!(body.roots[0], BodyNode::RawExpr(_) | BodyNode::Text(_));
 
         if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
             formatted = format!(" {} ", formatted);
@@ -135,14 +130,28 @@ pub fn write_block_out(body: CallBody) -> Option<String> {
         ..Writer::default()
     };
 
-    // Oneliner optimization
+    write_body(&mut buf, &body);
+
+    buf.consume()
+}
+
+fn write_body(buf: &mut Writer, body: &CallBody) {
+    use std::fmt::Write;
+
     if buf.is_short_children(&body.roots).is_some() {
-        buf.write_ident(&body.roots[0]).unwrap();
+        // write all the indents with spaces and commas between
+        for idx in 0..body.roots.len() - 1 {
+            let ident = &body.roots[idx];
+            buf.write_ident(&ident).unwrap();
+            write!(&mut buf.out.buf, ", ").unwrap();
+        }
+
+        // write the last ident without a comma
+        let ident = &body.roots[body.roots.len() - 1];
+        buf.write_ident(&ident).unwrap();
     } else {
         buf.write_body_indented(&body.roots).unwrap();
     }
-
-    buf.consume()
 }
 
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
@@ -153,12 +162,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
         ..Writer::default()
     };
 
-    // Oneliner optimization
-    if buf.is_short_children(&body.roots).is_some() {
-        buf.write_ident(&body.roots[0]).unwrap();
-    } else {
-        buf.write_body_indented(&body.roots).unwrap();
-    }
+    write_body(&mut buf, &body);
 
     buf.consume()
 }
@@ -173,12 +177,7 @@ pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
 
     buf.out.indent = indent_level;
 
-    // Oneliner optimization
-    if buf.is_short_children(&body.roots).is_some() {
-        buf.write_ident(&body.roots[0]).unwrap();
-    } else {
-        buf.write_body_indented(&body.roots).unwrap();
-    }
+    write_body(&mut buf, &body);
 
     // writing idents leaves the final line ended at the end of the last ident
     if buf.out.buf.contains('\n') {
@@ -194,8 +193,6 @@ pub fn apply_format(input: &str, block: FormattedBlock) -> String {
 
     let (left, _) = input.split_at(start);
     let (_, right) = input.split_at(end);
-
-    // dbg!(&block.formatted);
 
     format!("{}{}{}", left, block.formatted, right)
 }

@@ -38,5 +38,6 @@ twoway![
     ifchain_forloop,
     t2,
     reallylong,
-    immediate_expr
+    immediate_expr,
+    collapse_expr
 ];
