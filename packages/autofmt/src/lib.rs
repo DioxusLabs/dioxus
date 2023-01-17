@@ -142,13 +142,13 @@ fn write_body(buf: &mut Writer, body: &CallBody) {
         // write all the indents with spaces and commas between
         for idx in 0..body.roots.len() - 1 {
             let ident = &body.roots[idx];
-            buf.write_ident(&ident).unwrap();
+            buf.write_ident(ident).unwrap();
             write!(&mut buf.out.buf, ", ").unwrap();
         }
 
         // write the last ident without a comma
         let ident = &body.roots[body.roots.len() - 1];
-        buf.write_ident(&ident).unwrap();
+        buf.write_ident(ident).unwrap();
     } else {
         buf.write_body_indented(&body.roots).unwrap();
     }
