@@ -16,11 +16,8 @@ impl Writer<'_> {
 
         // if the expr is on one line, just write it directly
         if start.line == end.line {
-            write!(
-                self.out,
-                "{}",
-                &self.src[start.line - 1][start.column - 1..end.column].trim()
-            )?;
+            let row = &self.src[start.line - 1][start.column..end.column].trim();
+            write!(self.out, "{}", row)?;
             return Ok(());
         }
 

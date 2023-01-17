@@ -1,6 +1,6 @@
 use crate::writer::*;
 use collect_macros::byte_offset;
-use dioxus_rsx::CallBody;
+use dioxus_rsx::{BodyNode, CallBody};
 use proc_macro2::LineColumn;
 use syn::{ExprMacro, MacroDelimiter};
 
@@ -105,7 +105,11 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
         let start = byte_offset(contents, span.start()) + 1;
         let end = byte_offset(contents, span.end()) - 1;
 
-        if formatted.len() <= 80 && !formatted.contains('\n') {
+        // Rustfmt will remove the space between the macro and the opening paren if the macro is a single expression
+        let body_is_solo_expr =
+            body.roots.len() == 1 && matches!(body.roots[0], BodyNode::RawExpr(_));
+
+        if formatted.len() <= 80 && !formatted.contains('\n') && !body_is_solo_expr {
             formatted = format!(" {} ", formatted);
         }
 
