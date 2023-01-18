@@ -7,16 +7,19 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
 
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+pub struct NodeId(pub usize);
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Node {
-    parent: Option<usize>,
-    children: Vec<usize>,
+    parent: Option<NodeId>,
+    children: Vec<NodeId>,
     height: u16,
 }
 
 pub struct NodeView<'a> {
     tree: &'a Tree,
-    id: usize,
+    id: NodeId,
 }
 
 impl NodeView<'_> {
@@ -49,15 +52,15 @@ impl NodeView<'_> {
         self.get::<Node>().height
     }
 
-    pub fn children_ids(&self) -> Vec<usize> {
+    pub fn children_ids(&self) -> Vec<NodeId> {
         self.get::<Node>().children.clone()
     }
 
-    pub fn parent_id(&self) -> Option<usize> {
+    pub fn parent_id(&self) -> Option<NodeId> {
         self.get::<Node>().parent
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NodeId {
         self.id
     }
 }
@@ -65,7 +68,7 @@ impl NodeView<'_> {
 #[derive(Debug)]
 pub struct Tree {
     nodes: AnySlab,
-    root: usize,
+    root: NodeId,
 }
 
 impl Tree {
@@ -85,7 +88,7 @@ impl Tree {
         self.nodes.get_slab()
     }
 
-    pub fn get_node_data(&self, id: usize) -> MappedRwLockReadGuard<'_, Node> {
+    pub fn get_node_data(&self, id: NodeId) -> MappedRwLockReadGuard<'_, Node> {
         MappedRwLockReadGuard::map(self.node_slab(), |slab| slab.get(id).unwrap())
     }
 
@@ -93,12 +96,12 @@ impl Tree {
         self.nodes.get_slab_mut()
     }
 
-    pub fn get_node_data_mut(&self, id: usize) -> MappedRwLockWriteGuard<'_, Node> {
+    pub fn get_node_data_mut(&self, id: NodeId) -> MappedRwLockWriteGuard<'_, Node> {
         MappedRwLockWriteGuard::map(self.node_slab_mut(), |slab| slab.get_mut(id).unwrap())
     }
 
-    pub fn remove(&mut self, id: usize) {
-        fn recurse(tree: &mut Tree, id: usize) {
+    pub fn remove(&mut self, id: NodeId) {
+        fn recurse(tree: &mut Tree, id: NodeId) {
             let children = { tree.get_node_data(id).children.clone() };
             for child in children {
                 recurse(tree, child);
@@ -117,7 +120,7 @@ impl Tree {
         recurse(self, id);
     }
 
-    fn set_height(&self, node: usize, height: u16) {
+    fn set_height(&self, node: NodeId, height: u16) {
         let children = {
             let mut node = self.get_node_data_mut(node);
             node.height = height;
@@ -138,7 +141,7 @@ impl Tree {
         node
     }
 
-    pub fn add_child(&mut self, parent: usize, new: usize) {
+    pub fn add_child(&mut self, parent: NodeId, new: NodeId) {
         let mut node_state = self.node_slab_mut();
         node_state.get_mut(new).unwrap().parent = Some(parent);
         let parent = node_state.get_mut(parent).unwrap();
@@ -148,7 +151,7 @@ impl Tree {
         self.set_height(new, height);
     }
 
-    pub fn replace(&mut self, old_id: usize, new_id: usize) {
+    pub fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
         {
             let mut node_state = self.node_slab_mut();
             // update the parent's link to the child
@@ -169,7 +172,7 @@ impl Tree {
         self.remove(old_id);
     }
 
-    pub fn insert_before(&mut self, old_id: usize, new_id: usize) {
+    pub fn insert_before(&mut self, old_id: NodeId, new_id: NodeId) {
         let mut node_state = self.node_slab_mut();
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
@@ -186,7 +189,7 @@ impl Tree {
         self.set_height(new_id, height);
     }
 
-    pub fn insert_after(&mut self, old_id: usize, new_id: usize) {
+    pub fn insert_after(&mut self, old_id: NodeId, new_id: NodeId) {
         let mut node_state = self.node_slab_mut();
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
@@ -203,7 +206,7 @@ impl Tree {
         self.set_height(new_id, height);
     }
 
-    pub fn insert<T: Any>(&mut self, id: usize, value: T) {
+    pub fn insert<T: Any>(&mut self, id: NodeId, value: T) {
         self.nodes.add(id, value);
     }
 
@@ -229,43 +232,43 @@ impl Tree {
 }
 
 impl NodeDataView for Tree {
-    fn root(&self) -> usize {
+    fn root(&self) -> NodeId {
         self.root
     }
 
-    fn parent_id(&self, id: usize) -> Option<usize> {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.get_node_data(id).parent
     }
 
-    fn children_ids(&self, id: usize) -> Option<Vec<usize>> {
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
         Some(self.get_node_data(id).children.clone())
     }
 
-    fn height(&self, id: usize) -> Option<u16> {
+    fn height(&self, id: NodeId) -> Option<u16> {
         Some(self.get_node_data(id).height)
     }
 }
 
 pub trait NodeDataView {
-    fn root(&self) -> usize;
+    fn root(&self) -> NodeId;
 
-    fn parent_id(&self, id: usize) -> Option<usize>;
+    fn parent_id(&self, id: NodeId) -> Option<NodeId>;
 
-    fn children_ids(&self, id: usize) -> Option<Vec<usize>>;
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>>;
 
-    fn height(&self, id: usize) -> Option<u16>;
+    fn height(&self, id: NodeId) -> Option<u16>;
 }
 
 pub trait TreeView<T>: Sized + NodeDataView {
-    fn get(&self, id: usize) -> Option<&T>;
+    fn get(&self, id: NodeId) -> Option<&T>;
 
-    fn get_unchecked(&self, id: usize) -> &T {
+    fn get_unchecked(&self, id: NodeId) -> &T {
         unsafe { self.get(id).unwrap_unchecked() }
     }
 
-    fn children(&self, id: usize) -> Option<Vec<&T>>;
+    fn children(&self, id: NodeId) -> Option<Vec<&T>>;
 
-    fn parent(&self, id: usize) -> Option<&T>;
+    fn parent(&self, id: NodeId) -> Option<&T>;
 
     fn traverse_depth_first(&self, mut f: impl FnMut(&T)) {
         let mut stack = vec![self.root()];
@@ -296,15 +299,15 @@ pub trait TreeView<T>: Sized + NodeDataView {
 }
 
 pub trait TreeViewMut<T>: Sized + TreeView<T> {
-    fn get_mut(&mut self, id: usize) -> Option<&mut T>;
+    fn get_mut(&mut self, id: NodeId) -> Option<&mut T>;
 
-    unsafe fn get_mut_unchecked(&mut self, id: usize) -> &mut T {
+    unsafe fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T {
         unsafe { self.get_mut(id).unwrap_unchecked() }
     }
 
-    fn children_mut(&mut self, id: usize) -> Option<Vec<&mut T>>;
+    fn children_mut(&mut self, id: NodeId) -> Option<Vec<&mut T>>;
 
-    fn parent_child_mut(&mut self, id: usize) -> Option<(&mut T, Vec<&mut T>)> {
+    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Vec<&mut T>)> {
         let mut_ptr: *mut Self = self;
         unsafe {
             // Safety: No node has itself as a child.
@@ -316,14 +319,14 @@ pub trait TreeViewMut<T>: Sized + TreeView<T> {
         }
     }
 
-    fn parent_mut(&mut self, id: usize) -> Option<&mut T>;
+    fn parent_mut(&mut self, id: NodeId) -> Option<&mut T>;
 
-    fn node_parent_mut(&mut self, id: usize) -> Option<(&mut T, Option<&mut T>)>;
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)>;
 
     #[allow(clippy::type_complexity)]
     fn node_parent_children_mut(
         &mut self,
-        id: usize,
+        id: NodeId,
     ) -> Option<(&mut T, Option<&mut T>, Option<Vec<&mut T>>)>;
 
     fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(&mut T)) {
@@ -357,117 +360,117 @@ pub trait TreeViewMut<T>: Sized + TreeView<T> {
 pub trait TreeLike {
     fn create_node(&mut self) -> Entry;
 
-    fn add_child(&mut self, parent: usize, child: usize);
+    fn add_child(&mut self, parent: NodeId, child: NodeId);
 
-    fn remove(&mut self, id: usize);
+    fn remove(&mut self, id: NodeId);
 
-    fn replace(&mut self, old: usize, new: usize);
+    fn replace(&mut self, old: NodeId, new: NodeId);
 
-    fn insert_before(&mut self, id: usize, new: usize);
+    fn insert_before(&mut self, id: NodeId, new: NodeId);
 
-    fn insert_after(&mut self, id: usize, new: usize);
+    fn insert_after(&mut self, id: NodeId, new: NodeId);
 }
 
 pub struct TreeStateView<'a, T> {
     nodes_data: MappedRwLockReadGuard<'a, SlabStorage<Node>>,
     nodes: MappedRwLockReadGuard<'a, SlabStorage<T>>,
-    root: usize,
+    root: NodeId,
 }
 
 pub struct TreeStateViewMut<'a, T> {
     nodes_data: MappedRwLockReadGuard<'a, SlabStorage<Node>>,
     nodes: MappedRwLockWriteGuard<'a, SlabStorage<T>>,
-    root: usize,
+    root: NodeId,
 }
 
 impl<'a, T> NodeDataView for TreeStateView<'a, T> {
-    fn root(&self) -> usize {
+    fn root(&self) -> NodeId {
         self.root
     }
 
-    fn children_ids(&self, id: usize) -> Option<Vec<usize>> {
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
         self.nodes_data.get(id).map(|node| node.children.clone())
     }
 
-    fn parent_id(&self, id: usize) -> Option<usize> {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.nodes_data.get(id).and_then(|node| node.parent)
     }
 
-    fn height(&self, id: usize) -> Option<u16> {
+    fn height(&self, id: NodeId) -> Option<u16> {
         self.nodes_data.get(id).map(|n| n.height)
     }
 }
 
 impl<'a, T> TreeView<T> for TreeStateView<'a, T> {
-    fn get(&self, id: usize) -> Option<&T> {
+    fn get(&self, id: NodeId) -> Option<&T> {
         self.nodes.get(id)
     }
 
-    fn children(&self, id: usize) -> Option<Vec<&T>> {
+    fn children(&self, id: NodeId) -> Option<Vec<&T>> {
         let ids = self.children_ids(id);
         ids.map(|ids| ids.iter().map(|id| self.get_unchecked(*id)).collect())
     }
 
-    fn parent(&self, id: usize) -> Option<&T> {
+    fn parent(&self, id: NodeId) -> Option<&T> {
         self.nodes_data
             .get(id)
             .and_then(|node| node.parent.map(|id| self.nodes.get(id).unwrap()))
     }
 
-    fn get_unchecked(&self, id: usize) -> &T {
+    fn get_unchecked(&self, id: NodeId) -> &T {
         unsafe { &self.nodes.get_unchecked(id) }
     }
 }
 
 impl<'a, T> NodeDataView for TreeStateViewMut<'a, T> {
-    fn root(&self) -> usize {
+    fn root(&self) -> NodeId {
         self.root
     }
 
-    fn children_ids(&self, id: usize) -> Option<Vec<usize>> {
+    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
         self.nodes_data.get(id).map(|node| node.children.clone())
     }
 
-    fn parent_id(&self, id: usize) -> Option<usize> {
+    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.nodes_data.get(id).and_then(|node| node.parent)
     }
 
-    fn height(&self, id: usize) -> Option<u16> {
+    fn height(&self, id: NodeId) -> Option<u16> {
         self.nodes_data.get(id).map(|n| n.height)
     }
 }
 
 impl<'a, T> TreeView<T> for TreeStateViewMut<'a, T> {
-    fn get(&self, id: usize) -> Option<&T> {
+    fn get(&self, id: NodeId) -> Option<&T> {
         self.nodes.get(id)
     }
 
-    fn children(&self, id: usize) -> Option<Vec<&T>> {
+    fn children(&self, id: NodeId) -> Option<Vec<&T>> {
         let ids = self.children_ids(id);
         ids.map(|ids| ids.iter().map(|id| self.get_unchecked(*id)).collect())
     }
-    fn parent(&self, id: usize) -> Option<&T> {
+    fn parent(&self, id: NodeId) -> Option<&T> {
         self.nodes_data
             .get(id)
             .and_then(|node| node.parent.map(|id| self.nodes.get(id).unwrap()))
     }
 
-    fn get_unchecked(&self, id: usize) -> &T {
+    fn get_unchecked(&self, id: NodeId) -> &T {
         unsafe { &self.nodes.get_unchecked(id) }
     }
 }
 
 impl<'a, T> TreeViewMut<T> for TreeStateViewMut<'a, T> {
-    fn get_mut(&mut self, id: usize) -> Option<&mut T> {
+    fn get_mut(&mut self, id: NodeId) -> Option<&mut T> {
         self.nodes.get_mut(id)
     }
 
-    fn parent_mut(&mut self, id: usize) -> Option<&mut T> {
+    fn parent_mut(&mut self, id: NodeId) -> Option<&mut T> {
         let parent_id = self.parent_id(id)?;
         unsafe { Some(self.get_mut_unchecked(parent_id)) }
     }
 
-    fn children_mut(&mut self, id: usize) -> Option<Vec<&mut T>> {
+    fn children_mut(&mut self, id: NodeId) -> Option<Vec<&mut T>> {
         // Safety: No node has itself as a parent.
         if let Some(children_ids) = self.children_ids(id) {
             let children_ids = children_ids.to_vec();
@@ -480,11 +483,11 @@ impl<'a, T> TreeViewMut<T> for TreeStateViewMut<'a, T> {
         }
     }
 
-    unsafe fn get_mut_unchecked(&mut self, id: usize) -> &mut T {
+    unsafe fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T {
         unsafe { self.nodes.get_unchecked_mut(id) }
     }
 
-    fn node_parent_mut(&mut self, id: usize) -> Option<(&mut T, Option<&mut T>)> {
+    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
         if let Some(parent_id) = self.parent_id(id) {
             self.nodes
                 .get2_mut(id, parent_id)
@@ -496,7 +499,7 @@ impl<'a, T> TreeViewMut<T> for TreeStateViewMut<'a, T> {
 
     fn node_parent_children_mut(
         &mut self,
-        id: usize,
+        id: NodeId,
     ) -> Option<(&mut T, Option<&mut T>, Option<Vec<&mut T>>)> {
         // Safety: No node has itself as a parent.
         let unbounded_self = unsafe { &mut *(self as *mut Self) };
@@ -506,7 +509,7 @@ impl<'a, T> TreeViewMut<T> for TreeStateViewMut<'a, T> {
         })
     }
 
-    fn parent_child_mut(&mut self, id: usize) -> Option<(&mut T, Vec<&mut T>)> {
+    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Vec<&mut T>)> {
         // Safety: No node will appear as a child twice
         if let Some(children_ids) = self.children_ids(id) {
             debug_assert!(!children_ids.iter().any(|child_id| *child_id == id));
@@ -735,40 +738,45 @@ impl<T> Default for SlabStorage<T> {
 }
 
 trait AnySlabStorageImpl: Any {
-    fn remove(&mut self, id: usize);
+    fn remove(&mut self, id: NodeId);
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 impl<T> SlabStorage<T> {
-    fn get(&self, id: usize) -> Option<&T> {
-        self.data.get(id).and_then(|x| x.as_ref())
+    fn get(&self, id: NodeId) -> Option<&T> {
+        self.data.get(id.0).and_then(|x| x.as_ref())
     }
 
-    unsafe fn get_unchecked(&self, id: usize) -> &T {
-        self.data.get_unchecked(id).as_ref().unwrap_unchecked()
+    unsafe fn get_unchecked(&self, id: NodeId) -> &T {
+        self.data.get_unchecked(id.0).as_ref().unwrap_unchecked()
     }
 
-    fn get_mut(&mut self, id: usize) -> Option<&mut T> {
-        self.data.get_mut(id).and_then(|x| x.as_mut())
+    fn get_mut(&mut self, id: NodeId) -> Option<&mut T> {
+        self.data.get_mut(id.0).and_then(|x| x.as_mut())
     }
 
-    unsafe fn get_unchecked_mut(&mut self, id: usize) -> &mut T {
-        self.data.get_unchecked_mut(id).as_mut().unwrap_unchecked()
+    unsafe fn get_unchecked_mut(&mut self, id: NodeId) -> &mut T {
+        self.data
+            .get_unchecked_mut(id.0)
+            .as_mut()
+            .unwrap_unchecked()
     }
 
-    fn insert(&mut self, id: usize, value: T) {
-        if id >= self.data.len() {
-            self.data.resize_with(id + 1, || None);
+    fn insert(&mut self, id: NodeId, value: T) {
+        let idx = id.0;
+        if idx >= self.data.len() {
+            self.data.resize_with(idx + 1, || None);
         }
-        self.data[id] = Some(value);
+        self.data[idx] = Some(value);
     }
 
-    fn get2_mut(&mut self, id1: usize, id2: usize) -> Option<(&mut T, &mut T)> {
+    fn get2_mut(&mut self, id1: NodeId, id2: NodeId) -> Option<(&mut T, &mut T)> {
         assert!(id1 != id2);
+        let (idx1, idx2) = (id1.0, id2.0);
         let ptr = self.data.as_mut_ptr();
-        let first = unsafe { &mut *ptr.add(id1) };
-        let second = unsafe { &mut *ptr.add(id2) };
+        let first = unsafe { &mut *ptr.add(idx1) };
+        let second = unsafe { &mut *ptr.add(idx2) };
         if let (Some(first), Some(second)) = (first, second) {
             Some((first, second))
         } else {
@@ -778,15 +786,16 @@ impl<T> SlabStorage<T> {
 
     unsafe fn get_many_mut_unchecked(
         &mut self,
-        ids: impl Iterator<Item = usize>,
+        ids: impl Iterator<Item = NodeId>,
     ) -> Option<Vec<&mut T>> {
         let ptr = self.data.as_mut_ptr();
         let mut result = Vec::new();
         for id in ids {
-            if id >= self.data.len() {
+            let idx = id.0;
+            if idx >= self.data.len() {
                 return None;
             }
-            let item = unsafe { &mut *ptr.add(id) };
+            let item = unsafe { &mut *ptr.add(idx) };
             if let Some(item) = item {
                 result.push(item);
             } else {
@@ -798,8 +807,8 @@ impl<T> SlabStorage<T> {
 }
 
 impl<T: 'static> AnySlabStorageImpl for SlabStorage<T> {
-    fn remove(&mut self, id: usize) {
-        self.data[id].take();
+    fn remove(&mut self, id: NodeId) {
+        self.data[id.0].take();
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -817,7 +826,7 @@ struct AnySlab {
         RwLock<Box<dyn AnySlabStorageImpl>>,
         BuildHasherDefault<FxHasher>,
     >,
-    free: VecDeque<usize>,
+    free: VecDeque<NodeId>,
     len: usize,
 }
 
@@ -882,16 +891,16 @@ impl AnySlab {
         } else {
             let id = self.len;
             self.len += 1;
-            id
+            NodeId(id)
         };
         Entry { id, inner: self }
     }
 
-    fn add<T: Any>(&mut self, id: usize, value: T) {
+    fn add<T: Any>(&mut self, id: NodeId, value: T) {
         self.get_or_insert_slab_mut().insert(id, value);
     }
 
-    fn remove(&mut self, id: usize) {
+    fn remove(&mut self, id: NodeId) {
         for slab in self.data.values_mut() {
             slab.write().remove(id);
         }
@@ -904,7 +913,7 @@ impl AnySlab {
 }
 
 pub struct Entry<'a> {
-    id: usize,
+    id: NodeId,
     inner: &'a mut AnySlab,
 }
 
@@ -919,7 +928,7 @@ impl Entry<'_> {
         self.inner.remove(self.id);
     }
 
-    pub fn id(&self) -> usize {
+    pub fn id(&self) -> NodeId {
         self.id
     }
 }
@@ -966,7 +975,10 @@ fn get_many_mut_unchecked() {
 
     {
         let mut i32_slab = slab.get_slab_mut::<i32>();
-        assert!(unsafe { i32_slab.get_many_mut_unchecked([3, 100].into_iter()) }.is_none())
+        assert!(
+            unsafe { i32_slab.get_many_mut_unchecked([NodeId(3), NodeId(100)].into_iter()) }
+                .is_none()
+        )
     }
 }
 
