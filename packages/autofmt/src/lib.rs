@@ -53,10 +53,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
         return formatted_blocks;
     }
 
-    let mut writer = Writer {
-        src: contents.lines().collect::<Vec<_>>(),
-        ..Writer::default()
-    };
+    let mut writer = Writer::new(contents);
 
     // Dont parse nested macros
     let mut end_span = LineColumn { column: 0, line: 0 };
@@ -125,10 +122,7 @@ pub fn fmt_file(contents: &str) -> Vec<FormattedBlock> {
 }
 
 pub fn write_block_out(body: CallBody) -> Option<String> {
-    let mut buf = Writer {
-        src: vec![""],
-        ..Writer::default()
-    };
+    let mut buf = Writer::new("");
 
     write_body(&mut buf, &body);
 
@@ -157,10 +151,7 @@ fn write_body(buf: &mut Writer, body: &CallBody) {
 pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
     let body = syn::parse2::<CallBody>(expr.mac.tokens).unwrap();
 
-    let mut buf = Writer {
-        src: raw.lines().collect(),
-        ..Writer::default()
-    };
+    let mut buf = Writer::new(raw);
 
     write_body(&mut buf, &body);
 
@@ -170,10 +161,7 @@ pub fn fmt_block_from_expr(raw: &str, expr: ExprMacro) -> Option<String> {
 pub fn fmt_block(block: &str, indent_level: usize) -> Option<String> {
     let body = syn::parse_str::<dioxus_rsx::CallBody>(block).unwrap();
 
-    let mut buf = Writer {
-        src: block.lines().collect(),
-        ..Writer::default()
-    };
+    let mut buf = Writer::new(block);
 
     buf.out.indent = indent_level;
 

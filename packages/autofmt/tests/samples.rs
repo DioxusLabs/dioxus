@@ -39,5 +39,6 @@ twoway![
     t2,
     reallylong,
     immediate_expr,
-    collapse_expr
+    collapse_expr,
+    trailing_expr
 ];

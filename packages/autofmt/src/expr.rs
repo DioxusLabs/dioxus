@@ -3,7 +3,7 @@ use std::fmt::{Result, Write};
 
 use proc_macro2::Span;
 
-use crate::Writer;
+use crate::{collect_macros::byte_offset, Writer};
 
 impl Writer<'_> {
     pub fn write_raw_expr(&mut self, placement: Span) -> Result {
@@ -16,7 +16,10 @@ impl Writer<'_> {
 
         // if the expr is on one line, just write it directly
         if start.line == end.line {
-            let row = &self.src[start.line - 1][start.column..end.column].trim();
+            // split counting utf8 chars
+            let start = byte_offset(self.raw_src, start);
+            let end = byte_offset(self.raw_src, end);
+            let row = self.raw_src[start..end].trim();
             write!(self.out, "{}", row)?;
             return Ok(());
         }
