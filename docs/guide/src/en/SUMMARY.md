@@ -7,6 +7,7 @@
   - [Web](getting_started/web.md)
     - [Hot Reload](getting_started/hot_reload.md)
   - [Server-Side Rendering](getting_started/ssr.md)
+  - [Liveview](getting_started/liveview.md)
   - [Terminal UI](getting_started/tui.md)
   - [Mobile](getting_started/mobile.md)
 - [Describing the UI](describing_ui/index.md)

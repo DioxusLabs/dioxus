@@ -61,9 +61,9 @@ fn app(cx: Scope) -> Element {
 
 ## Background
 
-You can use Html-like semantics with stylesheets, inline styles, tree hierarchy, components, and more in your  [`text-based user interface (TUI)`](https://en.wikipedia.org/wiki/Text-based_user_interface) application.
+You can use Html-like semantics with inline styles, tree hierarchy, components, and more in your [`text-based user interface (TUI)`](https://en.wikipedia.org/wiki/Text-based_user_interface) application.
 
-Rink is basically a port of [Ink](https://github.com/vadimdemedes/ink) but for [`Rust`](https://www.rust-lang.org/) and [`Dioxus`](https://dioxuslabs.com/). Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
+Rink is essentially a port of [Ink](https://github.com/vadimdemedes/ink) but for [`Rust`](https://www.rust-lang.org/) and [`Dioxus`](https://dioxuslabs.com/). Rink doesn't depend on Node.js or any other JavaScript runtime, so your binaries are portable and beautiful.
 
 ## Limitations
 
@@ -82,13 +82,14 @@ Rendering a VirtualDom works fine, but the ecosystem of hooks is not yet ready. 
 ## Features
 
 Rink features:
-- [x] Flexbox based layout system
+- [x] Flexbox-based layout system
 - [ ] CSS selectors
 - [x] inline CSS support
 - [x] Built-in focusing system
-- [ ] high-quality keyboard support
-* [ ] Support for events, hooks, and callbacks<sup>1</sup>
-* [ ] Html tags<sup>2</sup>
+* [x] Widgets<sup>1</sup>
+* [ ] Support for events, hooks, and callbacks<sup>2</sup>
+* [ ] Html tags<sup>3</sup>
 
-<sup>1</sup> Basic keyboard and mouse events are implemented.
-<sup>2</sup> Currently, HTML tags don't translate into any meaning inside of rink. So an `input` won't really mean anything nor does it have any additional functionality.
+<sup>1</sup> Currently only a subset of the input element is implemented as a component (not an element). The `Input` component supports sliders, text, numbers, passwords, buttons, and checkboxes.
+<sup>2</sup> Basic keyboard, mouse, and focus events are implemented.
+<sup>3</sup> Currently, most HTML tags don't translate into any meaning inside of Dioxus TUI. So an `input` *element* won't mean anything nor does it have any additional functionality.

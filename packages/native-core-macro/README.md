@@ -19,13 +19,13 @@
 
 [Website](https://dioxuslabs.com) |
 [Guides](https://dioxuslabs.com/guide/) |
-[API Docs](https://docs.rs/dioxus-native-core-macro/latest/dioxus-native-core-macro) |
+[API Docs](https://docs.rs/dioxus-native-core-macro/latest/dioxus_native_core_macro) |
 [Chat](https://discord.gg/XgGxMSkvUM)
 
 
 ## Overview
 
-`dioxus-native-core-macro` provides a handful of macros used by native-core for native renderers like TUI, Blitz, and Freya to derive their own state.
+`dioxus-native-core-macro` provides a handful of macros used by native-core for native renderers like TUI, Blitz, and Freya to derive their state.
 
 
 ## Contributing
@@ -39,5 +39,5 @@ This project is licensed under the [MIT license].
 [mit license]: https://github.com/DioxusLabs/dioxus/blob/master/LICENSE-MIT
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
-for inclusion in Dioxus by you, shall be licensed as MIT, without any additional
+for inclusion in Dioxus by you shall be licensed as MIT without any additional
 terms or conditions.

@@ -195,14 +195,6 @@ impl<'a> VNode<'a> {
             }
         }
     }
-
-    pub(crate) fn clear_listeners(&self) {
-        for attr in self.dynamic_attrs {
-            if let AttributeValue::Listener(l) = &attr.value {
-                l.borrow_mut().take();
-            }
-        }
-    }
 }
 
 /// A static layout of a UI tree that describes a set of dynamic and static nodes.
@@ -819,7 +811,6 @@ impl<'a, 'b> IntoTemplate<'a> for LazyNodes<'a, 'b> {
 }
 
 // Note that we're using the E as a generic but this is never crafted anyways.
-#[doc(hidden)]
 pub struct FromNodeIterator;
 impl<'a, T, I> IntoDynNode<'a, FromNodeIterator> for T
 where
