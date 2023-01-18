@@ -16,7 +16,6 @@ pub struct Config {
     pub(crate) file_drop_handler: Option<DropHandler>,
     pub(crate) protocols: Vec<WryProtocol>,
     pub(crate) pre_rendered: Option<String>,
-    // pub(crate) event_handler: Option<Box<DynEventHandlerFn>>,
     pub(crate) disable_context_menu: bool,
     pub(crate) resource_dir: Option<PathBuf>,
     pub(crate) custom_head: Option<String>,
@@ -76,15 +75,6 @@ impl Config {
         self.window = window;
         self
     }
-
-    // /// Set a custom event handler
-    // pub fn with_event_handler(
-    //     mut self,
-    //     handler: impl Fn(&mut EventLoop<()>, &mut WebView) + 'static,
-    // ) -> Self {
-    //     self.event_handler = Some(Box::new(handler));
-    //     self
-    // }
 
     /// Set a file drop handler
     pub fn with_file_drop_handler(
