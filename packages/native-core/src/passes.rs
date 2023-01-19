@@ -1,18 +1,115 @@
 use anymap::AnyMap;
+use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
-use std::any::{Any, TypeId};
+use std::any::{self, Any, TypeId};
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 use std::sync::Arc;
 
-use crate::node::{FromAnyValue, Node};
+use crate::node::{FromAnyValue, NodeData};
 use crate::node_ref::NodeView;
-use crate::state::State;
-use crate::tree::TreeViewMut;
-use crate::tree::{Tree, TreeView};
+use crate::real_dom::RealDom;
+use crate::tree::{Node, TreeStateView};
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
-pub trait Pass<V: FromAnyValue = ()>: Any {
+#[derive(Default)]
+struct DirtyNodes {
+    passes_dirty: Vec<u64>,
+}
+
+impl DirtyNodes {
+    pub fn add_node(&mut self, node_id: NodeId) {
+        let node_id = node_id.0;
+        let index = node_id / 64;
+        let bit = node_id % 64;
+        let encoded = 1 << bit;
+        if let Some(passes) = self.passes_dirty.get_mut(index) {
+            *passes |= encoded;
+        } else {
+            self.passes_dirty.resize(index + 1, 0);
+            self.passes_dirty[index] |= encoded;
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.passes_dirty.iter().all(|dirty| *dirty == 0)
+    }
+
+    pub fn pop(&mut self) -> Option<NodeId> {
+        let index = self.passes_dirty.iter().position(|dirty| *dirty != 0)?;
+        let passes = self.passes_dirty[index];
+        let node_id = passes.trailing_zeros();
+        let encoded = 1 << node_id;
+        self.passes_dirty[index] &= !encoded;
+        Some(NodeId((index * 64) + node_id as usize))
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct DirtyNodeStates {
+    dirty: Arc<RwLock<BTreeMap<u16, FxDashMap<TypeId, DirtyNodes>>>>,
+}
+
+impl DirtyNodeStates {
+    pub fn insert(&self, pass_id: TypeId, node_id: NodeId, height: u16) {
+        let mut dirty = self.dirty.write();
+        if let Some(dirty) = dirty.get_mut(&height) {
+            if let Some(mut entry) = dirty.get_mut(&pass_id) {
+                entry.add_node(node_id);
+            } else {
+                let mut entry = DirtyNodes::default();
+                entry.add_node(node_id);
+                dirty.insert(pass_id, entry);
+            }
+        } else {
+            let mut entry = DirtyNodes::default();
+            entry.add_node(node_id);
+            let hm = FxDashMap::default();
+            hm.insert(pass_id, entry);
+            dirty.insert(height, hm);
+        }
+    }
+
+    fn pop_front(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
+        let dirty_read = self.dirty.read();
+        let (&height, values) = dirty_read
+            .iter()
+            .find(|(_, values)| values.contains_key(&pass_id))?;
+        let mut dirty = values.get_mut(&pass_id)?;
+        let node_id = dirty.pop()?;
+        if dirty.is_empty() {
+            values.remove(&pass_id);
+        }
+        if values.is_empty() {
+            let mut dirty_write = self.dirty.write();
+            dirty_write.remove(&height);
+        }
+
+        Some((height, node_id))
+    }
+
+    fn pop_back(&self, pass_id: TypeId) -> Option<(u16, NodeId)> {
+        let dirty_read = self.dirty.read();
+        let (&height, values) = dirty_read
+            .iter()
+            .rev()
+            .find(|(_, values)| values.contains_key(&pass_id))?;
+        let mut dirty = values.get_mut(&pass_id)?;
+        let node_id = dirty.pop()?;
+        if dirty.is_empty() {
+            values.remove(&pass_id);
+        }
+        if values.is_empty() {
+            let mut dirty_write = self.dirty.write();
+            dirty_write.remove(&height);
+        }
+
+        Some((height, node_id))
+    }
+}
+
+pub trait Pass<V: FromAnyValue + Send = ()>: Any {
     /// This is a tuple of (T: Any, ..)
     type ParentDependencies: Dependancy;
     /// This is a tuple of (T: Any, ..)
@@ -26,23 +123,21 @@ pub trait Pass<V: FromAnyValue = ()>: Any {
         node_view: NodeView<V>,
         node: <Self::NodeDependencies as Dependancy>::ElementBorrowed<'a>,
         parent: Option<<Self::ParentDependencies as Dependancy>::ElementBorrowed<'a>>,
-        children: Option<
-            impl Iterator<Item = <Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>,
-        >,
+        children: Option<Vec<<Self::ChildDependencies as Dependancy>::ElementBorrowed<'a>>>,
         context: &SendAnyMap,
     ) -> bool;
 
     fn validate() {
         // no type can be a child and parent dependency
-        for type_id in Self::parent_type_ids() {
-            for type_id2 in Self::child_type_ids() {
+        for type_id in Self::parent_type_ids().into_iter().copied() {
+            for type_id2 in Self::child_type_ids().into_iter().copied() {
                 if type_id == type_id2 {
                     panic!("type cannot be both a parent and child dependency");
                 }
             }
         }
         // this type should not be a node dependency
-        for type_id in Self::node_type_ids() {
+        for type_id in Self::node_type_ids().into_iter().copied() {
             if type_id == TypeId::of::<Self>() {
                 panic!("The current type cannot be a node dependency");
             }
@@ -58,85 +153,74 @@ pub trait Pass<V: FromAnyValue = ()>: Any {
         }
     }
 
-    fn to_type_erased<T: AnyMapLike + State<V>>() -> TypeErasedPass<T, V>
+    fn to_type_erased() -> TypeErasedPass<V>
     where
         Self: Sized,
     {
         Self::validate();
         TypeErasedPass {
             this_type_id: TypeId::of::<Self>(),
-            combined_dependancy_type_ids: Self::all_dependanices().into_iter().collect(),
+            combined_dependancy_type_ids: Self::all_dependanices().into_iter().copied().collect(),
             parent_dependant: !Self::parent_type_ids().is_empty(),
             child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
             mask: Self::NODE_MASK,
             pass_direction: Self::pass_direction(),
             pass: Box::new(
-                |node_id: NodeId, any_map: &mut Tree<Node<T, V>>, context: &SendAnyMap| {
-                    let (current_node, parent, children) = any_map
-                        .node_parent_children_mut(node_id)
-                        .expect("tried to run pass on node that does not exist");
-                    let current_node_raw = current_node as *mut Node<T, V>;
-                    let node = Self::NodeDependencies::borrow_elements_from(&current_node.state)
-                        .expect("tried to get a pass that does not exist");
-                    let parent = parent.map(|parent| {
-                        Self::ParentDependencies::borrow_elements_from(&parent.state)
-                            .expect("tried to get a pass that does not exist")
-                    });
-                    let children = children.map(|children| {
-                        children.map(|child| {
-                            Self::ChildDependencies::borrow_elements_from(&child.state)
-                                .expect("tried to get a pass that does not exist")
-                        })
-                    });
-                    // safety: we have varified the pass is valid in the is_valid function
-                    let myself: &mut Self = unsafe {
-                        (*current_node_raw)
-                            .state
-                            .get_mut()
-                            .expect("tried to get a pass that does not exist")
-                    };
+                |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
+                    debug_assert!(!Self::NodeDependencies::type_ids()
+                        .into_iter()
+                        .any(|id| *id == TypeId::of::<Self>()));
+                    // get all of the states from the tree view
+                    // Safety: No node has itself as a parent or child.
+                    let node_raw = tree.get_mut::<Self>(node_id).unwrap() as *mut Self;
+                    let node_data = tree.get_single::<NodeData<V>>(node_id).unwrap();
+                    let node = tree.get::<Self::NodeDependencies>(node_id).unwrap();
+                    let children = tree.children::<Self::ChildDependencies>(node_id);
+                    let parent = tree.parent::<Self::ParentDependencies>(node_id);
+                    let myself = unsafe { &mut *node_raw };
+
                     myself.pass(
-                        NodeView::new(&current_node.node_data, Self::NODE_MASK),
+                        NodeView::new(&node_data, Self::NODE_MASK),
                         node,
                         parent,
                         children,
                         context,
                     )
                 },
-            )
-                as Box<dyn Fn(NodeId, &mut Tree<Node<T, V>>, &SendAnyMap) -> bool + Send + Sync>,
+            ) as PassCallback,
+            phantom: PhantomData,
         }
     }
 
-    fn parent_type_ids() -> Vec<TypeId> {
+    fn parent_type_ids() -> Box<[TypeId]> {
         Self::ParentDependencies::type_ids()
     }
 
-    fn child_type_ids() -> Vec<TypeId> {
+    fn child_type_ids() -> Box<[TypeId]> {
         Self::ChildDependencies::type_ids()
     }
 
-    fn node_type_ids() -> Vec<TypeId> {
+    fn node_type_ids() -> Box<[TypeId]> {
         Self::NodeDependencies::type_ids()
     }
 
-    fn all_dependanices() -> Vec<TypeId> {
-        let mut dependencies = Self::parent_type_ids();
-        dependencies.extend(Self::child_type_ids());
-        dependencies.extend(Self::node_type_ids());
-        dependencies
+    fn all_dependanices() -> Box<[TypeId]> {
+        let mut dependencies = Self::parent_type_ids().to_vec();
+        dependencies.extend(Self::child_type_ids().into_iter());
+        dependencies.extend(Self::node_type_ids().into_iter());
+        dependencies.into_boxed_slice()
     }
 
     fn pass_direction() -> PassDirection {
         if Self::child_type_ids()
             .into_iter()
-            .any(|type_id| type_id == TypeId::of::<Self>())
+            .any(|type_id| *type_id == TypeId::of::<Self>())
         {
             PassDirection::ChildToParent
         } else if Self::parent_type_ids()
             .into_iter()
-            .any(|type_id| type_id == TypeId::of::<Self>())
+            .any(|type_id| *type_id == TypeId::of::<Self>())
         {
             PassDirection::ParentToChild
         } else {
@@ -145,63 +229,57 @@ pub trait Pass<V: FromAnyValue = ()>: Any {
     }
 }
 
-pub struct TypeErasedPass<T: AnyMapLike + State<V>, V: FromAnyValue = ()> {
+pub struct TypeErasedPass<V: FromAnyValue + Send = ()> {
     pub(crate) this_type_id: TypeId,
     pub(crate) parent_dependant: bool,
     pub(crate) child_dependant: bool,
     pub(crate) combined_dependancy_type_ids: FxHashSet<TypeId>,
     pub(crate) dependants: FxHashSet<TypeId>,
     pub(crate) mask: NodeMask,
-    pass: PassCallback<T, V>,
+    pass: PassCallback,
     pub(crate) pass_direction: PassDirection,
+    phantom: PhantomData<V>,
 }
 
-impl<T: AnyMapLike + State<V>, V: FromAnyValue> TypeErasedPass<T, V> {
+impl<V: FromAnyValue + Send> TypeErasedPass<V> {
     fn resolve(
         &self,
-        tree: &mut Tree<Node<T, V>>,
-        mut dirty: DirtyNodes,
-        dirty_states: &DirtyNodeStates,
+        mut tree: TreeStateView,
+        dirty: &DirtyNodeStates,
         nodes_updated: &FxDashSet<NodeId>,
         ctx: &SendAnyMap,
     ) {
         match self.pass_direction {
             PassDirection::ParentToChild => {
-                while let Some(id) = dirty.pop_front() {
-                    if (self.pass)(id, tree, ctx) {
+                while let Some((height, id)) = dirty.pop_front(self.this_type_id) {
+                    if (self.pass)(id, &mut tree, ctx) {
                         nodes_updated.insert(id);
                         for id in tree.children_ids(id).unwrap() {
                             for dependant in &self.dependants {
-                                dirty_states.insert(*dependant, *id);
+                                dirty.insert(*dependant, id, height + 1);
                             }
-
-                            let height = tree.height(*id).unwrap();
-                            dirty.insert(height, *id);
                         }
                     }
                 }
             }
             PassDirection::ChildToParent => {
-                while let Some(id) = dirty.pop_back() {
-                    if (self.pass)(id, tree, ctx) {
+                while let Some((height, id)) = dirty.pop_back(self.this_type_id) {
+                    if (self.pass)(id, &mut tree, ctx) {
                         nodes_updated.insert(id);
                         if let Some(id) = tree.parent_id(id) {
                             for dependant in &self.dependants {
-                                dirty_states.insert(*dependant, id);
+                                dirty.insert(*dependant, id, height - 1);
                             }
-
-                            let height = tree.height(id).unwrap();
-                            dirty.insert(height, id);
                         }
                     }
                 }
             }
             PassDirection::AnyOrder => {
-                while let Some(id) = dirty.pop_back() {
-                    if (self.pass)(id, tree, ctx) {
+                while let Some((height, id)) = dirty.pop_back(self.this_type_id) {
+                    if (self.pass)(id, &mut tree, ctx) {
                         nodes_updated.insert(id);
                         for dependant in &self.dependants {
-                            dirty_states.insert(*dependant, id);
+                            dirty.insert(*dependant, id, height);
                         }
                     }
                 }
@@ -217,30 +295,20 @@ pub enum PassDirection {
     AnyOrder,
 }
 
-type PassCallback<T, V> =
-    Box<dyn Fn(NodeId, &mut Tree<Node<T, V>>, &SendAnyMap) -> bool + Send + Sync>;
+type PassCallback = Box<dyn Fn(NodeId, &mut TreeStateView, &SendAnyMap) -> bool + Send + Sync>;
 
-pub trait AnyMapLike {
-    fn get<T: Any>(&self) -> Option<&T>;
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T>;
+pub trait AnyMapLike<'a> {
+    fn get<T: Any>(self) -> Option<&'a T>;
 }
 
-impl AnyMapLike for AnyMap {
-    fn get<T: Any>(&self) -> Option<&T> {
+impl<'a> AnyMapLike<'a> for &'a AnyMap {
+    fn get<T: Any>(self) -> Option<&'a T> {
         self.get()
     }
-
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
-        self.get_mut()
-    }
 }
 
-impl AnyMapLike for SendAnyMap {
-    fn get<T: Any>(&self) -> Option<&T> {
-        todo!()
-    }
-
-    fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+impl<'a> AnyMapLike<'a> for &'a SendAnyMap {
+    fn get<T: Any>(self) -> Option<&'a T> {
         todo!()
     }
 }
@@ -250,8 +318,10 @@ pub trait Dependancy {
     where
         Self: 'a;
 
-    fn borrow_elements_from<T: AnyMapLike>(map: &T) -> Option<Self::ElementBorrowed<'_>>;
-    fn type_ids() -> Vec<TypeId>;
+    fn borrow_elements_from<'a, T: AnyMapLike<'a> + Copy>(
+        map: T,
+    ) -> Option<Self::ElementBorrowed<'a>>;
+    fn type_ids() -> Box<[TypeId]>;
 }
 
 macro_rules! impl_dependancy {
@@ -260,12 +330,12 @@ macro_rules! impl_dependancy {
             type ElementBorrowed<'a> = ($(&'a $t,)*) where Self: 'a;
 
             #[allow(unused_variables, clippy::unused_unit, non_snake_case)]
-            fn borrow_elements_from<T: AnyMapLike>(map: &T) -> Option<Self::ElementBorrowed<'_>> {
+            fn borrow_elements_from<'a, T: AnyMapLike<'a> + Copy>(map: T) -> Option<Self::ElementBorrowed<'a>> {
                 Some(($(map.get::<$t>()?,)*))
             }
 
-            fn type_ids() -> Vec<TypeId> {
-                vec![$(TypeId::of::<$t>()),*]
+            fn type_ids() -> Box<[TypeId]> {
+                Box::new([$(TypeId::of::<$t>()),*])
             }
         }
     };
@@ -289,96 +359,12 @@ impl_dependancy!(A, B, C, D, E, F, G, H, I, J, K, L, M, N);
 impl_dependancy!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O);
 impl_dependancy!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P);
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct DirtyNodes {
-    map: BTreeMap<u16, FxHashSet<NodeId>>,
-}
-
-impl DirtyNodes {
-    fn add_node(&mut self, node_id: NodeId) {
-        let node_id = node_id.0;
-        let index = node_id / 64;
-        let bit = node_id % 64;
-        let encoded = 1 << bit;
-        if let Some(passes) = self.passes_dirty.get_mut(index) {
-            *passes |= encoded;
-        } else {
-            self.passes_dirty.resize(index + 1, 0);
-            self.passes_dirty[index] |= encoded;
-        }
-    }
-
-    fn is_empty(&self) -> bool {
-        self.passes_dirty.iter().all(|dirty| *dirty == 0)
-    }
-
-    fn pop(&mut self) -> Option<NodeId> {
-        let index = self.passes_dirty.iter().position(|dirty| *dirty != 0)?;
-        let passes = self.passes_dirty[index];
-        let node_id = passes.trailing_zeros();
-        let encoded = 1 << node_id;
-        self.passes_dirty[index] &= !encoded;
-        Some(NodeId((index * 64) + node_id as usize))
-    }
-}
-
-#[derive(Default)]
-pub struct DirtyNodeStates {
-    dirty: FxDashMap<NodeId, FxHashSet<TypeId>>,
-}
-
-impl DirtyNodeStates {
-    pub fn insert(&self, pass_id: TypeId, node_id: NodeId) {
-        if let Some(mut dirty) = self.dirty.get_mut(&node_id) {
-            dirty.insert(pass_id);
-        } else {
-            let mut v = FxHashSet::default();
-            v.insert(pass_id);
-            self.dirty.insert(node_id, v);
-        }
-    }
-
-    fn all_dirty<T>(&self, pass_id: TypeId, dirty_nodes: &mut DirtyNodes, tree: &impl TreeView<T>) {
-        for entry in self.dirty.iter() {
-            let node_id = entry.key();
-            let dirty = entry.value();
-            if dirty.contains(&pass_id) {
-                dirty_nodes.insert(tree.height(*node_id).unwrap(), *node_id);
-            }
-        }
-        if values.is_empty() {
-            self.dirty.remove(&height);
-        }
-
-        Some((height, node_id))
-    }
-
-    fn pop_back(&mut self, pass_id: PassId) -> Option<(u16, NodeId)> {
-        let (&height, values) = self
-            .dirty
-            .iter_mut()
-            .rev()
-            .find(|(_, values)| values.contains_key(&pass_id))?;
-        let dirty = values.get_mut(&pass_id)?;
-        let node_id = dirty.pop()?;
-        if dirty.is_empty() {
-            values.remove(&pass_id);
-        }
-        if values.is_empty() {
-            self.dirty.remove(&height);
-        }
-
-        Some((height, node_id))
-    }
-}
-
-pub fn resolve_passes<T: AnyMapLike + State<V> + Send, V: FromAnyValue + Send>(
-    tree: &mut Tree<Node<T, V>>,
+pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
+    tree: &mut RealDom<V>,
     dirty_nodes: DirtyNodeStates,
-    passes: &[TypeErasedPass<T, V>],
     ctx: SendAnyMap,
 ) -> FxDashSet<NodeId> {
-    let dirty_states = Arc::new(dirty_nodes);
+    let passes = &tree.passes;
     let mut resolved_passes: FxHashSet<TypeId> = FxHashSet::default();
     let mut resolving = Vec::new();
     let nodes_updated = Arc::new(FxDashSet::default());
@@ -399,21 +385,15 @@ pub fn resolve_passes<T: AnyMapLike + State<V> + Send, V: FromAnyValue + Send>(
                     pass_indexes_remaining.remove(i);
                     resolving.push(pass_id);
                     currently_in_use.insert(pass.this_type_id);
-                    // this is safe because each pass only has mutable access to the member associated with this_type_id and we have verified that the pass does not overlap with any other pass currently running
-                    let tree_unbounded_mut = unsafe { &mut *(tree as *mut _) };
-                    let dirty_states = dirty_states.clone();
+                    let tree_view = tree.tree.state_views(
+                        [pass.this_type_id],
+                        pass.combined_dependancy_type_ids.iter().copied(),
+                    );
+                    let dirty_nodes = dirty_nodes.clone();
                     let nodes_updated = nodes_updated.clone();
                     let ctx = ctx.clone();
                     s.spawn(move || {
-                        let mut dirty = DirtyNodes::default();
-                        dirty_states.all_dirty(pass_id, &mut dirty, tree_unbounded_mut);
-                        pass.resolve(
-                            tree_unbounded_mut,
-                            dirty,
-                            &dirty_states,
-                            &nodes_updated,
-                            &ctx,
-                        );
+                        pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
                     });
                 } else {
                     i += 1;

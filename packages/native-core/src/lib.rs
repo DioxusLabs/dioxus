@@ -5,7 +5,6 @@ pub use node_ref::NodeMask;
 pub use passes::AnyMapLike;
 pub use passes::{Dependancy, Pass, TypeErasedPass};
 use rustc_hash::FxHasher;
-pub use state::State;
 pub use tree::NodeId;
 
 pub mod layout_attributes;
@@ -13,7 +12,6 @@ pub mod node;
 pub mod node_ref;
 mod passes;
 pub mod real_dom;
-pub mod state;
 pub mod tree;
 pub mod utils;
 

@@ -20,7 +20,7 @@ smallvec = "1.6"
 rustc-hash = "1.1.0"
 anymap = "1.0.0-beta.2"
 slab = "0.4"
-parking_lot = "0.12.1"
+parking_lot = { version = "0.12.1", features = ["send_guard"] }
 crossbeam-deque = "0.8.2"
 dashmap = "5.4.0"
 hashbrown = { version = "0.13.2", features = ["raw"] }

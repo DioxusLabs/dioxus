@@ -1,16 +1,7 @@
-use crate::{state::State, tree::NodeId};
+use crate::tree::NodeId;
 use dioxus_core::{AnyValue, BorrowedAttributeValue, ElementId};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt::Debug;
-
-/// The node is stored client side and stores only basic data about the node.
-#[derive(Debug, Clone)]
-pub struct Node<S: State<V>, V: FromAnyValue = ()> {
-    /// The transformed state of the node.
-    pub state: S,
-    /// The raw data for the node
-    pub node_data: NodeData<V>,
-}
 
 #[derive(Debug, Clone)]
 pub struct NodeData<V: FromAnyValue = ()> {
@@ -38,21 +29,18 @@ pub enum NodeType<V: FromAnyValue = ()> {
     Placeholder,
 }
 
-impl<S: State<V>, V: FromAnyValue> Node<S, V> {
+impl<V: FromAnyValue> NodeData<V> {
     pub(crate) fn new(node_type: NodeType<V>) -> Self {
-        Node {
-            state: S::default(),
-            node_data: NodeData {
-                element_id: None,
-                node_type,
-                node_id: NodeId(0),
-            },
+        NodeData {
+            element_id: None,
+            node_type,
+            node_id: NodeId(0),
         }
     }
 
     /// get the mounted id of the node
     pub fn mounted_id(&self) -> Option<ElementId> {
-        self.node_data.element_id
+        self.element_id
     }
 }
 

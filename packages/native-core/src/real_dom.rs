@@ -1,15 +1,14 @@
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
+use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
 use rustc_hash::{FxHashMap, FxHashSet};
-use std::ops::{Index, IndexMut};
+use std::any::Any;
 
 use crate::node::{
-    ElementNode, FromAnyValue, Node, NodeData, NodeType, OwnedAttributeDiscription,
-    OwnedAttributeValue,
+    ElementNode, FromAnyValue, NodeData, NodeType, OwnedAttributeDiscription, OwnedAttributeValue,
 };
 use crate::node_ref::{AttributeMask, NodeMask};
 use crate::passes::{resolve_passes, DirtyNodeStates, TypeErasedPass};
-use crate::state::State;
-use crate::tree::{NodeId, Tree, TreeLike, TreeView, TreeViewMut};
+use crate::tree::{EntryBuilder, NodeId, Tree};
 use crate::{FxDashSet, SendAnyMap};
 
 /// A Dom that can sync with the VirtualDom mutations intended for use in lazy renderers.
@@ -18,41 +17,36 @@ use crate::{FxDashSet, SendAnyMap};
 ///
 /// # Custom values
 /// To allow custom values to be passed into attributes implement FromAnyValue on a type that can represent your custom value and specify the V generic to be that type. If you have many different custom values, it can be useful to use a enum type to represent the varients.
-pub struct RealDom<S: State<V>, V: FromAnyValue = ()> {
-    tree: Tree<Node<S, V>>,
+pub struct RealDom<V: FromAnyValue + Send = ()> {
+    pub(crate) tree: Tree,
     /// a map from element id to real node id
     node_id_mapping: Vec<Option<NodeId>>,
     nodes_listening: FxHashMap<String, FxHashSet<NodeId>>,
     stack: Vec<NodeId>,
     templates: FxHashMap<String, Vec<NodeId>>,
-    pub(crate) passes: Box<[TypeErasedPass<S, V>]>,
+    pub(crate) passes: Box<[TypeErasedPass<V>]>,
     pub(crate) nodes_updated: FxHashMap<NodeId, NodeMask>,
     passes_updated: DirtyNodeStates,
     parent_changed_nodes: FxHashSet<NodeId>,
     child_changed_nodes: FxHashSet<NodeId>,
     nodes_created: FxHashSet<NodeId>,
+    phantom: std::marker::PhantomData<V>,
 }
 
-impl<S: State<V>, V: FromAnyValue> Default for RealDom<S, V> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
-    pub fn new() -> RealDom<S, V> {
-        let mut root = Node::new(NodeType::Element(ElementNode {
+impl<V: FromAnyValue + Send + Sync> RealDom<V> {
+    pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
+        let tree = Tree::new();
+        let root_id = tree.root();
+        let root = tree.get_node(root_id);
+        let mut root_node: NodeData<V> = NodeData::new(NodeType::Element(ElementNode {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),
             attributes: FxHashMap::default(),
             listeners: FxHashSet::default(),
         }));
-        root.node_data.element_id = Some(ElementId(0));
-        let mut tree = Tree::new(root);
-        let root_id = tree.root();
-        tree.get_mut(root_id).unwrap().node_data.node_id = root_id;
-
-        let mut passes = S::create_passes();
+        root_node.element_id = Some(ElementId(0));
+        root_node.node_id = root_id;
+        root.insert(root_node);
 
         // resolve dependants for each pass
         for i in 1..passes.len() {
@@ -83,6 +77,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
             parent_changed_nodes: FxHashSet::default(),
             child_changed_nodes: FxHashSet::default(),
             nodes_created: FxHashSet::default(),
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -107,9 +102,9 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
     }
 
     fn set_element_id(&mut self, node_id: NodeId, element_id: ElementId) {
-        let node = self.tree.get_mut(node_id).unwrap();
-        let node_id = node.node_data.node_id;
-        node.node_data.element_id = Some(element_id);
+        let mut node = self.tree.write::<NodeData>(node_id).unwrap();
+        let node_id = node.node_id;
+        node.element_id = Some(element_id);
         if self.node_id_mapping.len() <= element_id.0 {
             self.node_id_mapping.resize(element_id.0 + 1, None);
         }
@@ -124,14 +119,21 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
         current
     }
 
-    fn create_node(&mut self, node: Node<S, V>, mark_dirty: bool) -> NodeId {
-        let node_id = self.tree.create_node(node);
-        let node = self.tree.get_mut(node_id).unwrap();
-        node.node_data.node_id = node_id;
+    fn create_node(
+        &mut self,
+        mut node: NodeData<V>,
+        id: Option<ElementId>,
+        mark_dirty: bool,
+    ) -> EntryBuilder<'_> {
+        let mut node_entry = self.tree.create_node();
+        let node_id = node_entry.id();
+        node.node_id = node_id;
+        node.element_id = id;
+        node_entry.insert(node);
         if mark_dirty {
             self.nodes_created.insert(node_id);
         }
-        node_id
+        node_entry
     }
 
     fn add_child(&mut self, node_id: NodeId, child_id: NodeId) {
@@ -146,7 +148,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                 attrs,
                 children,
             } => {
-                let node = Node::new(NodeType::Element(ElementNode {
+                let node = NodeData::new(NodeType::Element(ElementNode {
                     tag: tag.to_string(),
                     namespace: namespace.map(|s| s.to_string()),
                     attributes: attrs
@@ -169,22 +171,22 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                         .collect(),
                     listeners: FxHashSet::default(),
                 }));
-                let node_id = self.create_node(node, true);
+                let node_id = self.create_node(node, None, true).id();
                 for child in *children {
                     let child_id = self.create_template_node(child);
                     self.add_child(node_id, child_id);
                 }
                 node_id
             }
-            TemplateNode::Text { text } => {
-                self.create_node(Node::new(NodeType::Text(text.to_string())), true)
-            }
-            TemplateNode::Dynamic { .. } => {
-                self.create_node(Node::new(NodeType::Placeholder), true)
-            }
-            TemplateNode::DynamicText { .. } => {
-                self.create_node(Node::new(NodeType::Text(String::new())), true)
-            }
+            TemplateNode::Text { text } => self
+                .create_node(NodeData::new(NodeType::Text(text.to_string())), None, true)
+                .id(),
+            TemplateNode::Dynamic { .. } => self
+                .create_node(NodeData::new(NodeType::Placeholder), None, true)
+                .id(),
+            TemplateNode::DynamicText { .. } => self
+                .create_node(NodeData::new(NodeType::Text(String::new())), None, true)
+                .id(),
         }
     }
 
@@ -214,29 +216,26 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                     self.set_element_id(self.load_child(path), id);
                 }
                 CreatePlaceholder { id } => {
-                    let node = Node::new(NodeType::Placeholder);
-                    let node_id = self.create_node(node, true);
+                    let node = NodeData::new(NodeType::Placeholder);
+                    let node_id = self.create_node(node, None, true).id();
                     self.set_element_id(node_id, id);
                     self.stack.push(node_id);
                 }
                 CreateTextNode { value, id } => {
-                    let node = Node::new(NodeType::Text(value.to_string()));
-                    let node_id = self.create_node(node, true);
-                    let node = self.tree.get_mut(node_id).unwrap();
-                    node.node_data.element_id = Some(id);
+                    let node_data = NodeData::new(NodeType::Text(value.to_string()));
+                    let node_id = self.create_node(node_data, None, true).id();
+                    self.set_element_id(node_id, id);
                     self.stack.push(node_id);
                 }
                 HydrateText { path, value, id } => {
                     let node_id = self.load_child(path);
                     self.set_element_id(node_id, id);
-                    let node = self.tree.get_mut(node_id).unwrap();
-                    if let NodeType::Text(text) = &mut node.node_data.node_type {
+                    let mut node = self.get_mut(node_id).unwrap();
+                    if let NodeTypeMut::Text(text) = node.node_type_mut() {
                         *text = value.to_string();
                     } else {
-                        node.node_data.node_type = NodeType::Text(value.to_string());
+                        node.set_type(NodeType::Text(value.to_string()));
                     }
-
-                    self.mark_dirty(node_id, NodeMask::new().with_text());
                 }
                 LoadTemplate { name, index, id } => {
                     let template_id = self.templates[name][index];
@@ -350,15 +349,14 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
 
     /// Find all nodes that are listening for an event, sorted by there height in the dom progressing starting at the bottom and progressing up.
     /// This can be useful to avoid creating duplicate events.
-    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<&Node<S, V>> {
+    pub fn get_listening_sorted(&self, event: &'static str) -> Vec<NodeId> {
         if let Some(nodes) = self.nodes_listening.get(event) {
-            let mut listening: Vec<_> = nodes.iter().map(|id| self.get(*id).unwrap()).collect();
-            listening.sort_by(|n1, n2| {
-                (self.tree.height(n1.node_data.node_id))
-                    .cmp(&self.tree.height(n2.node_data.node_id))
-                    .reverse()
-            });
-            listening
+            let mut listening: Vec<_> = nodes
+                .iter()
+                .map(|id| (*id, self.tree.height(*id).unwrap()))
+                .collect();
+            listening.sort_by(|(_, h1), (_, h2)| h1.cmp(h2).reverse());
+            listening.into_iter().map(|(id, _)| id).collect()
         } else {
             Vec::new()
         }
@@ -376,158 +374,92 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
     }
 
     fn clone_node(&mut self, node_id: NodeId) -> NodeId {
-        let node = self.tree.get(node_id).unwrap();
-        let new_node = Node {
-            state: node.state.clone(),
-            node_data: node.node_data.clone(),
-        };
-        let new_id = self.create_node(new_node, true);
+        let node = self.get(node_id).unwrap();
+        let new_node = node.node_data().clone();
+        let new_id = self.create_node(new_node, None, true).id();
 
-        let self_ptr = self as *mut Self;
         for child in self.tree.children_ids(node_id).unwrap() {
-            unsafe {
-                // this is safe because no node has itself as a child
-                let self_mut = &mut *self_ptr;
-                let child_id = self_mut.clone_node(*child);
-                self_mut.add_child(new_id, child_id);
-            }
+            let child_id = self.clone_node(child);
+            self.add_child(new_id, child_id);
         }
         new_id
     }
 
+    fn root(&self) -> NodeId {
+        self.tree.root()
+    }
+
+    fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
+        self.tree.contains(id).then(|| NodeRef { id, dom: &self })
+    }
+
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
-        self.tree.get_mut(id).map(|node| NodeMut {
-            node: &mut node.node_data,
+        self.tree.contains(id).then(|| NodeMut {
+            id,
             dirty: NodeMask::new(),
-            nodes_updated: &mut self.nodes_updated,
+            dom: self,
         })
     }
 
     /// WARNING: This escapes the reactive system that the real dom uses. Any changes made with this method will not trigger updates in states when [RealDom::update_state] is called.
-    pub fn get_mut_raw(&mut self, id: NodeId) -> Option<&mut Node<S, V>> {
-        self.tree.get_mut(id)
+    pub fn get_mut_raw(&mut self, id: NodeId) -> Option<&mut NodeData<V>> {
+        self.tree.write(id)
     }
-}
 
-impl<S: State<V> + Send, V: FromAnyValue + Send> RealDom<S, V> {
     /// Update the state of the dom, after appling some mutations. This will keep the nodes in the dom up to date with their VNode counterparts.
     pub fn update_state(
         &mut self,
         ctx: SendAnyMap,
     ) -> (FxDashSet<NodeId>, FxHashMap<NodeId, NodeMask>) {
-        let passes = &self.passes;
         let dirty_nodes = std::mem::take(&mut self.passes_updated);
         let nodes_updated = std::mem::take(&mut self.nodes_updated);
         for (&node, mask) in &nodes_updated {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(node) {
+            if let Some(height) = self.tree.height(node) {
                 for pass in &*self.passes {
                     if mask.overlaps(&pass.mask) {
-                        dirty_nodes.insert(pass.this_type_id, node);
+                        dirty_nodes.insert(pass.this_type_id, node, height);
                     }
                 }
             }
         }
         for node in std::mem::take(&mut self.child_changed_nodes) {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(node) {
+            if let Some(height) = self.tree.height(node) {
                 for pass in &*self.passes {
                     if pass.child_dependant {
-                        dirty_nodes.insert(pass.this_type_id, node);
+                        dirty_nodes.insert(pass.this_type_id, node, height);
                     }
                 }
             }
         }
         for node in std::mem::take(&mut self.parent_changed_nodes) {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(node) {
+            if let Some(height) = self.tree.height(node) {
                 for pass in &*self.passes {
                     if pass.parent_dependant {
-                        dirty_nodes.insert(pass.this_type_id, node);
+                        dirty_nodes.insert(pass.this_type_id, node, height);
                     }
                 }
             }
         }
         for node in std::mem::take(&mut self.nodes_created) {
             // remove any nodes that were created and then removed in the same mutations from the dirty nodes list
-            if self.tree.contains(node) {
+            if let Some(height) = self.tree.height(node) {
                 for pass in &*self.passes {
-                    dirty_nodes.insert(pass.this_type_id, node);
+                    dirty_nodes.insert(pass.this_type_id, node, height);
                 }
             }
         }
 
-        let tree = &mut self.tree;
-
-        (
-            resolve_passes(tree, dirty_nodes, passes, ctx),
-            nodes_updated,
-        )
-    }
-}
-
-impl<S: State<V>, V: FromAnyValue> TreeView<Node<S, V>> for RealDom<S, V> {
-    type Iterator<'a> = <Tree<Node<S, V>> as TreeView<Node<S, V>>>::Iterator<'a>;
-
-    fn root(&self) -> NodeId {
-        self.tree.root()
+        (resolve_passes(self, dirty_nodes, ctx), nodes_updated)
     }
 
-    fn get(&self, id: NodeId) -> Option<&Node<S, V>> {
-        self.tree.get(id)
-    }
-
-    fn children(&self, id: NodeId) -> Option<Self::Iterator<'_>> {
-        self.tree.children(id)
-    }
-
-    fn children_ids(&self, id: NodeId) -> Option<&[NodeId]> {
-        self.tree.children_ids(id)
-    }
-
-    fn parent(&self, id: NodeId) -> Option<&Node<S, V>> {
-        self.tree.parent(id)
-    }
-
-    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        self.tree.parent_id(id)
-    }
-
-    fn height(&self, id: NodeId) -> Option<u16> {
-        self.tree.height(id)
-    }
-
-    fn size(&self) -> usize {
-        self.tree.size()
-    }
-}
-
-impl<S: State<V>, V: FromAnyValue> TreeLike<Node<S, V>> for RealDom<S, V> {
-    fn create_node(&mut self, node: Node<S, V>) -> NodeId {
-        let id = self.tree.create_node(node);
-        self.tree.get_mut(id).unwrap().node_data.node_id = id;
-        self.nodes_created.insert(id);
-        id
-    }
-
-    fn add_child(&mut self, parent: NodeId, child: NodeId) {
-        // mark the parent's children changed
-        self.mark_child_changed(parent);
-        // mark the child's parent changed
-        self.mark_parent_added_or_removed(child);
-        self.tree.add_child(parent, child);
-    }
-
-    fn remove(&mut self, id: NodeId) -> Option<Node<S, V>> {
+    fn remove(&mut self, id: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(id) {
             self.mark_child_changed(parent_id);
         }
         self.tree.remove(id)
-    }
-
-    fn remove_all_children(&mut self, id: NodeId) -> Vec<Node<S, V>> {
-        self.mark_child_changed(id);
-        self.tree.remove_all_children(id)
     }
 
     fn replace(&mut self, old: NodeId, new: NodeId) {
@@ -555,68 +487,108 @@ impl<S: State<V>, V: FromAnyValue> TreeLike<Node<S, V>> for RealDom<S, V> {
     }
 }
 
-impl<S: State<V> + Send, V: FromAnyValue> Index<ElementId> for RealDom<S, V> {
-    type Output = Node<S, V>;
+// impl<V: FromAnyValue> Index<ElementId> for RealDom<V> {
+//     type Output = Node<V>;
 
-    fn index(&self, id: ElementId) -> &Self::Output {
-        self.tree.get(self.element_to_node_id(id)).unwrap()
+//     fn index(&self, id: ElementId) -> &Self::Output {
+//         self.tree.get(self.element_to_node_id(id)).unwrap()
+//     }
+// }
+
+// impl<V: FromAnyValue> Index<NodeId> for RealDom<V> {
+//     type Output = Node<V>;
+
+//     fn index(&self, idx: NodeId) -> &Self::Output {
+//         self.tree.get(idx).unwrap()
+//     }
+// }
+
+// impl<V: FromAnyValue> IndexMut<ElementId> for RealDom<V> {
+//     fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
+//         self.tree.get_mut(self.element_to_node_id(id)).unwrap()
+//     }
+// }
+
+// impl<V: FromAnyValue> IndexMut<NodeId> for RealDom<V> {
+//     fn index_mut(&mut self, idx: NodeId) -> &mut Self::Output {
+//         self.tree.get_mut(idx).unwrap()
+//     }
+// }
+
+pub struct NodeRef<'a, V: FromAnyValue + Send = ()> {
+    id: NodeId,
+    dom: &'a RealDom<V>,
+}
+
+impl<'a, V: FromAnyValue + Send> NodeRef<'a, V> {
+    pub fn node_data(&self) -> &NodeData<V> {
+        self.read().unwrap()
     }
-}
 
-impl<S: State<V> + Send, V: FromAnyValue> Index<NodeId> for RealDom<S, V> {
-    type Output = Node<S, V>;
-
-    fn index(&self, idx: NodeId) -> &Self::Output {
-        self.tree.get(idx).unwrap()
-    }
-}
-
-impl<S: State<V> + Send, V: FromAnyValue> IndexMut<ElementId> for RealDom<S, V> {
-    fn index_mut(&mut self, id: ElementId) -> &mut Self::Output {
-        self.tree.get_mut(self.element_to_node_id(id)).unwrap()
-    }
-}
-
-impl<S: State<V> + Send, V: FromAnyValue> IndexMut<NodeId> for RealDom<S, V> {
-    fn index_mut(&mut self, idx: NodeId) -> &mut Self::Output {
-        self.tree.get_mut(idx).unwrap()
-    }
-}
-
-pub struct NodeMut<'a, V: FromAnyValue = ()> {
-    node: &'a mut NodeData<V>,
-    dirty: NodeMask,
-    nodes_updated: &'a mut FxHashMap<NodeId, NodeMask>,
-}
-
-impl<'a, V: FromAnyValue> NodeMut<'a, V> {
     pub fn node_type(&self) -> &NodeType<V> {
-        &self.node.node_type
+        &self.node_data().node_type
+    }
+
+    pub fn read<T: Any>(&self) -> Option<&T> {
+        self.dom.tree.read(self.id)
+    }
+}
+
+pub struct NodeMut<'a, V: FromAnyValue + Send = ()> {
+    id: NodeId,
+    dom: &'a mut RealDom<V>,
+    dirty: NodeMask,
+}
+
+impl<'a, V: FromAnyValue + Send> NodeMut<'a, V> {
+    fn node_data(&self) -> &NodeData<V> {
+        self.read().unwrap()
+    }
+
+    fn node_data_mut(&mut self) -> &mut NodeData<V> {
+        self.dom.tree.write(self.id).unwrap()
+    }
+
+    pub fn node_type(&self) -> &NodeType<V> {
+        &self.node_data().node_type
     }
 
     pub fn node_type_mut(&mut self) -> NodeTypeMut<'_, V> {
-        match &mut self.node.node_type {
-            NodeType::Element(element) => NodeTypeMut::Element(ElementNodeMut {
-                element,
-                dirty: &mut self.dirty,
-            }),
+        let Self { id, dom, dirty } = self;
+        let node_type = &mut dom.tree.write::<NodeData<V>>(*id).unwrap().node_type;
+        match node_type {
+            NodeType::Element(element) => NodeTypeMut::Element(ElementNodeMut { element, dirty }),
             NodeType::Text(text) => {
-                self.dirty.set_text();
+                dirty.set_text();
                 NodeTypeMut::Text(text)
             }
             NodeType::Placeholder => NodeTypeMut::Placeholder,
         }
     }
+
+    pub fn set_type(&mut self, new: NodeType<V>) {
+        self.node_data_mut().node_type = new;
+        self.dirty = NodeMask::ALL;
+    }
+
+    pub fn read<T: Any>(&self) -> Option<&T> {
+        self.dom.tree.read(self.id)
+    }
+
+    pub fn write<T: Any>(&mut self) -> Option<&T> {
+        todo!("get_mut with mark as dirty")
+    }
 }
 
-impl<V: FromAnyValue> Drop for NodeMut<'_, V> {
+impl<V: FromAnyValue + Send> Drop for NodeMut<'_, V> {
     fn drop(&mut self) {
-        let node_id = self.node.node_id;
+        let node_id = self.node_data().node_id;
         let mask = std::mem::take(&mut self.dirty);
-        if let Some(node) = self.nodes_updated.get_mut(&node_id) {
+        let nodes_updated = &mut self.dom.nodes_updated;
+        if let Some(node) = nodes_updated.get_mut(&node_id) {
             *node = node.union(&mask);
         } else {
-            self.nodes_updated.insert(node_id, mask);
+            nodes_updated.insert(node_id, mask);
         }
     }
 }

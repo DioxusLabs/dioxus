@@ -7,17 +7,19 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+use crate::{AnyMapLike, Dependancy};
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
 pub struct NodeId(pub usize);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Node {
+pub(crate) struct Node {
     parent: Option<NodeId>,
     children: Vec<NodeId>,
     height: u16,
 }
 
-pub struct NodeView<'a> {
+pub(crate) struct NodeView<'a> {
     tree: &'a Tree,
     id: NodeId,
 }
@@ -27,25 +29,21 @@ impl NodeView<'_> {
     where
         T: Any,
     {
-        self.tree.nodes.get_slab_mut::<T>().insert(self.id, data);
+        self.tree.nodes.write_slab::<T>().insert(self.id, data);
     }
 
-    pub fn get<T>(&self) -> MappedRwLockReadGuard<'_, T>
+    pub fn get<T>(&self) -> &T
     where
         T: Any,
     {
-        MappedRwLockReadGuard::map(self.tree.nodes.get_slab::<T>(), |slab| {
-            slab.get(self.id).unwrap()
-        })
+        self.tree.nodes.read_slab::<T>().get(self.id).unwrap()
     }
 
-    pub fn get_mut<T>(&self) -> MappedRwLockWriteGuard<'_, T>
+    pub fn get_mut<T>(&self) -> &mut T
     where
         T: Any,
     {
-        MappedRwLockWriteGuard::map(self.tree.nodes.get_slab_mut::<T>(), |slab| {
-            slab.get_mut(self.id).unwrap()
-        })
+        self.tree.nodes.write_slab::<T>().get_mut(self.id).unwrap()
     }
 
     pub fn height(&self) -> u16 {
@@ -66,7 +64,7 @@ impl NodeView<'_> {
 }
 
 #[derive(Debug)]
-pub struct Tree {
+pub(crate) struct Tree {
     nodes: AnySlab,
     root: NodeId,
 }
@@ -84,20 +82,20 @@ impl Tree {
         Self { nodes, root }
     }
 
-    fn node_slab(&self) -> MappedRwLockReadGuard<'_, SlabStorage<Node>> {
-        self.nodes.get_slab()
+    fn node_slab(&self) -> &SlabStorage<Node> {
+        self.nodes.read_slab()
     }
 
-    pub fn get_node_data(&self, id: NodeId) -> MappedRwLockReadGuard<'_, Node> {
-        MappedRwLockReadGuard::map(self.node_slab(), |slab| slab.get(id).unwrap())
+    pub fn get_node_data(&self, id: NodeId) -> &Node {
+        self.node_slab().get(id).unwrap()
     }
 
-    fn node_slab_mut(&self) -> MappedRwLockWriteGuard<'_, SlabStorage<Node>> {
-        self.nodes.get_slab_mut()
+    fn node_slab_mut(&self) -> &mut SlabStorage<Node> {
+        self.nodes.write_slab()
     }
 
-    pub fn get_node_data_mut(&self, id: NodeId) -> MappedRwLockWriteGuard<'_, Node> {
-        MappedRwLockWriteGuard::map(self.node_slab_mut(), |slab| slab.get_mut(id).unwrap())
+    pub fn get_node_data_mut(&self, id: NodeId) -> &mut Node {
+        self.node_slab_mut().get_mut(id).unwrap()
     }
 
     pub fn remove(&mut self, id: NodeId) {
@@ -131,7 +129,7 @@ impl Tree {
         }
     }
 
-    pub fn create_node(&mut self) -> Entry<'_> {
+    pub fn create_node(&mut self) -> EntryBuilder<'_> {
         let mut node = self.nodes.insert();
         node.insert(Node {
             parent: None,
@@ -206,7 +204,7 @@ impl Tree {
         self.set_height(new_id, height);
     }
 
-    pub fn insert<T: Any>(&mut self, id: NodeId, value: T) {
+    pub fn insert<T: Any + Send + Sync>(&mut self, id: NodeId, value: T) {
         self.nodes.add(id, value);
     }
 
@@ -214,42 +212,60 @@ impl Tree {
         self.nodes.len()
     }
 
-    pub fn state_view<T: Any>(&self) -> TreeStateView<'_, T> {
+    pub fn state_views(
+        &self,
+        immutable: impl IntoIterator<Item = TypeId>,
+        mutable: impl IntoIterator<Item = TypeId>,
+    ) -> TreeStateView<'_> {
         TreeStateView {
             nodes_data: self.node_slab(),
-            nodes: self.nodes.get_slab(),
+            nodes: immutable
+                .into_iter()
+                .map(|id| (id, MaybeRead::Read(self.nodes.data.get(&id).unwrap())))
+                .chain(
+                    mutable
+                        .into_iter()
+                        .map(|id| (id, MaybeRead::Write(self.nodes.data.get_mut(&id).unwrap()))),
+                )
+                .collect(),
             root: self.root,
         }
     }
 
-    pub fn state_view_mut<T: Any>(&mut self) -> TreeStateViewMut<'_, T> {
-        TreeStateViewMut {
-            nodes_data: self.node_slab(),
-            nodes: self.nodes.get_slab_mut(),
-            root: self.root,
-        }
+    pub fn read<T: Any>(&self, id: NodeId) -> Option<&T> {
+        self.nodes.read_slab().get(id)
     }
-}
 
-impl NodeDataView for Tree {
-    fn root(&self) -> NodeId {
+    pub fn write<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
+        self.nodes.write_slab().get_mut(id)
+    }
+
+    pub fn get_node(&self, id: NodeId) -> NodeView<'_> {
+        NodeView { tree: self, id }
+    }
+
+    pub fn contains(&self, id: NodeId) -> bool {
+        self.nodes.contains(id)
+    }
+
+    pub fn root(&self) -> NodeId {
         self.root
     }
 
-    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
+    pub fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.get_node_data(id).parent
     }
 
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
+    pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
         Some(self.get_node_data(id).children.clone())
     }
 
-    fn height(&self, id: NodeId) -> Option<u16> {
+    pub fn height(&self, id: NodeId) -> Option<u16> {
         Some(self.get_node_data(id).height)
     }
 }
 
-pub trait NodeDataView {
+pub(crate) trait NodeDataView {
     fn root(&self) -> NodeId;
 
     fn parent_id(&self, id: NodeId) -> Option<NodeId>;
@@ -259,7 +275,7 @@ pub trait NodeDataView {
     fn height(&self, id: NodeId) -> Option<u16>;
 }
 
-pub trait TreeView<T>: Sized + NodeDataView {
+trait TreeView<T>: Sized + NodeDataView {
     fn get(&self, id: NodeId) -> Option<&T>;
 
     fn get_unchecked(&self, id: NodeId) -> &T {
@@ -298,7 +314,7 @@ pub trait TreeView<T>: Sized + NodeDataView {
     }
 }
 
-pub trait TreeViewMut<T>: Sized + TreeView<T> {
+trait TreeViewMut<T>: Sized + TreeView<T> {
     fn get_mut(&mut self, id: NodeId) -> Option<&mut T>;
 
     unsafe fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T {
@@ -357,175 +373,91 @@ pub trait TreeViewMut<T>: Sized + TreeView<T> {
     }
 }
 
-pub trait TreeLike {
-    fn create_node(&mut self) -> Entry;
-
-    fn add_child(&mut self, parent: NodeId, child: NodeId);
-
-    fn remove(&mut self, id: NodeId);
-
-    fn replace(&mut self, old: NodeId, new: NodeId);
-
-    fn insert_before(&mut self, id: NodeId, new: NodeId);
-
-    fn insert_after(&mut self, id: NodeId, new: NodeId);
+enum MaybeRead<'a> {
+    Read(&'a Box<dyn AnySlabStorageImpl>),
+    Write(&'a mut Box<dyn AnySlabStorageImpl>),
 }
 
-pub struct TreeStateView<'a, T> {
-    nodes_data: MappedRwLockReadGuard<'a, SlabStorage<Node>>,
-    nodes: MappedRwLockReadGuard<'a, SlabStorage<T>>,
+#[derive(Clone, Copy)]
+struct TreeStateViewEntry<'a> {
+    view: &'a TreeStateView<'a>,
+    id: NodeId,
+}
+
+impl<'a> AnyMapLike<'a> for TreeStateViewEntry<'a> {
+    fn get<T: Any>(self) -> Option<&'a T> {
+        self.view.get_slab().and_then(|slab| slab.get(self.id))
+    }
+}
+
+pub struct TreeStateView<'a> {
+    nodes_data: &'a SlabStorage<Node>,
+    nodes: hashbrown::HashMap<TypeId, MaybeRead<'a>, BuildHasherDefault<FxHasher>>,
     root: NodeId,
 }
 
-pub struct TreeStateViewMut<'a, T> {
-    nodes_data: MappedRwLockReadGuard<'a, SlabStorage<Node>>,
-    nodes: MappedRwLockWriteGuard<'a, SlabStorage<T>>,
-    root: NodeId,
-}
+impl<'a> TreeStateView<'a> {
+    fn get_slab<T: Any>(&self) -> Option<&SlabStorage<T>> {
+        self.nodes
+            .get(&TypeId::of::<T>())
+            .and_then(|gaurd| match gaurd {
+                MaybeRead::Read(gaurd) => gaurd.as_any().downcast_ref::<SlabStorage<T>>(),
+                MaybeRead::Write(gaurd) => gaurd.as_any().downcast_ref::<SlabStorage<T>>(),
+            })
+    }
 
-impl<'a, T> NodeDataView for TreeStateView<'a, T> {
+    fn get_slab_mut<T: Any>(&mut self) -> Option<&mut SlabStorage<T>> {
+        self.nodes
+            .get_mut(&TypeId::of::<T>())
+            .and_then(|gaurd| match gaurd {
+                MaybeRead::Read(gaurd) => None,
+                MaybeRead::Write(gaurd) => gaurd.as_any_mut().downcast_mut::<SlabStorage<T>>(),
+            })
+    }
+
     fn root(&self) -> NodeId {
         self.root
     }
 
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
+    pub fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
         self.nodes_data.get(id).map(|node| node.children.clone())
     }
 
-    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
+    pub fn parent_id(&self, id: NodeId) -> Option<NodeId> {
         self.nodes_data.get(id).and_then(|node| node.parent)
     }
 
-    fn height(&self, id: NodeId) -> Option<u16> {
+    pub fn height(&self, id: NodeId) -> Option<u16> {
         self.nodes_data.get(id).map(|n| n.height)
     }
-}
 
-impl<'a, T> TreeView<T> for TreeStateView<'a, T> {
-    fn get(&self, id: NodeId) -> Option<&T> {
-        self.nodes.get(id)
+    pub fn get<T: Dependancy>(&self, id: NodeId) -> Option<T::ElementBorrowed<'_>> {
+        T::borrow_elements_from(self.entry(id))
     }
 
-    fn children(&self, id: NodeId) -> Option<Vec<&T>> {
+    pub fn get_single<T: Any>(&self, id: NodeId) -> Option<&T> {
+        self.get_slab().and_then(|slab| slab.get(id))
+    }
+
+    pub fn get_mut<T: Any>(&mut self, id: NodeId) -> Option<&mut T> {
+        self.get_slab_mut().and_then(|slab| slab.get_mut(id))
+    }
+
+    fn entry(&self, id: NodeId) -> TreeStateViewEntry<'_> {
+        TreeStateViewEntry { view: self, id }
+    }
+
+    pub fn children<T: Dependancy>(&self, id: NodeId) -> Option<Vec<T::ElementBorrowed<'_>>> {
         let ids = self.children_ids(id);
-        ids.map(|ids| ids.iter().map(|id| self.get_unchecked(*id)).collect())
-    }
-
-    fn parent(&self, id: NodeId) -> Option<&T> {
-        self.nodes_data
-            .get(id)
-            .and_then(|node| node.parent.map(|id| self.nodes.get(id).unwrap()))
-    }
-
-    fn get_unchecked(&self, id: NodeId) -> &T {
-        unsafe { &self.nodes.get_unchecked(id) }
-    }
-}
-
-impl<'a, T> NodeDataView for TreeStateViewMut<'a, T> {
-    fn root(&self) -> NodeId {
-        self.root
-    }
-
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>> {
-        self.nodes_data.get(id).map(|node| node.children.clone())
-    }
-
-    fn parent_id(&self, id: NodeId) -> Option<NodeId> {
-        self.nodes_data.get(id).and_then(|node| node.parent)
-    }
-
-    fn height(&self, id: NodeId) -> Option<u16> {
-        self.nodes_data.get(id).map(|n| n.height)
-    }
-}
-
-impl<'a, T> TreeView<T> for TreeStateViewMut<'a, T> {
-    fn get(&self, id: NodeId) -> Option<&T> {
-        self.nodes.get(id)
-    }
-
-    fn children(&self, id: NodeId) -> Option<Vec<&T>> {
-        let ids = self.children_ids(id);
-        ids.map(|ids| ids.iter().map(|id| self.get_unchecked(*id)).collect())
-    }
-    fn parent(&self, id: NodeId) -> Option<&T> {
-        self.nodes_data
-            .get(id)
-            .and_then(|node| node.parent.map(|id| self.nodes.get(id).unwrap()))
-    }
-
-    fn get_unchecked(&self, id: NodeId) -> &T {
-        unsafe { &self.nodes.get_unchecked(id) }
-    }
-}
-
-impl<'a, T> TreeViewMut<T> for TreeStateViewMut<'a, T> {
-    fn get_mut(&mut self, id: NodeId) -> Option<&mut T> {
-        self.nodes.get_mut(id)
-    }
-
-    fn parent_mut(&mut self, id: NodeId) -> Option<&mut T> {
-        let parent_id = self.parent_id(id)?;
-        unsafe { Some(self.get_mut_unchecked(parent_id)) }
-    }
-
-    fn children_mut(&mut self, id: NodeId) -> Option<Vec<&mut T>> {
-        // Safety: No node has itself as a parent.
-        if let Some(children_ids) = self.children_ids(id) {
-            let children_ids = children_ids.to_vec();
-            unsafe {
-                self.nodes
-                    .get_many_mut_unchecked(children_ids.into_iter().rev().map(|id| id))
-            }
-        } else {
-            None
-        }
-    }
-
-    unsafe fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T {
-        unsafe { self.nodes.get_unchecked_mut(id) }
-    }
-
-    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)> {
-        if let Some(parent_id) = self.parent_id(id) {
-            self.nodes
-                .get2_mut(id, parent_id)
-                .map(|(node, parent)| (node, Some(parent)))
-        } else {
-            self.nodes.get_mut(id).map(|node| (node, None))
-        }
-    }
-
-    fn node_parent_children_mut(
-        &mut self,
-        id: NodeId,
-    ) -> Option<(&mut T, Option<&mut T>, Option<Vec<&mut T>>)> {
-        // Safety: No node has itself as a parent.
-        let unbounded_self = unsafe { &mut *(self as *mut Self) };
-        self.node_parent_mut(id).map(move |(node, parent)| {
-            let children = unbounded_self.children_mut(id);
-            (node, parent, children)
+        ids.and_then(|ids| {
+            ids.iter()
+                .map(|id| T::borrow_elements_from(self.entry(*id)))
+                .collect()
         })
     }
 
-    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Vec<&mut T>)> {
-        // Safety: No node will appear as a child twice
-        if let Some(children_ids) = self.children_ids(id) {
-            debug_assert!(!children_ids.iter().any(|child_id| *child_id == id));
-            let mut borrowed = unsafe {
-                let as_vec = children_ids.to_vec();
-                self.nodes
-                    .get_many_mut_unchecked(
-                        as_vec.into_iter().map(|id| id).chain(std::iter::once(id)),
-                    )
-                    .unwrap()
-            };
-            let node = borrowed.pop().unwrap();
-            Some((node, borrowed))
-        } else {
-            None
-        }
+    pub fn parent<T: Dependancy>(&self, id: NodeId) -> Option<T::ElementBorrowed<'_>> {
+        T::borrow_elements_from(self.entry(id))
     }
 }
 
@@ -727,7 +659,7 @@ fn get_node_children_mut() {
 }
 
 #[derive(Debug)]
-struct SlabStorage<T> {
+pub(crate) struct SlabStorage<T> {
     data: Vec<Option<T>>,
 }
 
@@ -737,7 +669,7 @@ impl<T> Default for SlabStorage<T> {
     }
 }
 
-trait AnySlabStorageImpl: Any {
+trait AnySlabStorageImpl: Any + Send + Sync {
     fn remove(&mut self, id: NodeId);
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -806,7 +738,7 @@ impl<T> SlabStorage<T> {
     }
 }
 
-impl<T: 'static> AnySlabStorageImpl for SlabStorage<T> {
+impl<T: 'static + Send + Sync> AnySlabStorageImpl for SlabStorage<T> {
     fn remove(&mut self, id: NodeId) {
         self.data[id.0].take();
     }
@@ -820,12 +752,9 @@ impl<T: 'static> AnySlabStorageImpl for SlabStorage<T> {
     }
 }
 
-struct AnySlab {
-    data: hashbrown::HashMap<
-        TypeId,
-        RwLock<Box<dyn AnySlabStorageImpl>>,
-        BuildHasherDefault<FxHasher>,
-    >,
+pub(crate) struct AnySlab {
+    data: hashbrown::HashMap<TypeId, Box<dyn AnySlabStorageImpl>, BuildHasherDefault<FxHasher>>,
+    filled: Vec<bool>,
     free: VecDeque<NodeId>,
     len: usize,
 }
@@ -850,78 +779,102 @@ impl AnySlab {
     fn new() -> Self {
         Self {
             data: Default::default(),
+            filled: Default::default(),
             free: VecDeque::new(),
             len: 0,
         }
     }
 
-    fn try_get_slab<T: Any>(&self) -> Option<MappedRwLockReadGuard<'_, SlabStorage<T>>> {
+    fn try_read_slab<T: Any>(&self) -> Option<&SlabStorage<T>> {
         self.data
             .get(&TypeId::of::<T>())
-            .map(|x| RwLockReadGuard::map(x.read(), |x| x.as_any().downcast_ref().unwrap()))
+            .map(|x| x.as_any().downcast_ref().unwrap())
     }
 
-    fn get_slab<T: Any>(&self) -> MappedRwLockReadGuard<'_, SlabStorage<T>> {
-        self.try_get_slab().unwrap()
+    fn read_slab<T: Any>(&self) -> &SlabStorage<T> {
+        self.try_read_slab().unwrap()
     }
 
-    fn try_get_slab_mut<T: Any>(&self) -> Option<MappedRwLockWriteGuard<'_, SlabStorage<T>>> {
+    fn try_write_slab<T: Any>(&self) -> Option<&mut SlabStorage<T>> {
         self.data
             .get(&TypeId::of::<T>())
-            .map(|x| RwLockWriteGuard::map(x.write(), |x| x.as_any_mut().downcast_mut().unwrap()))
+            .map(|x| x.as_any_mut().downcast_mut().unwrap())
     }
 
-    fn get_slab_mut<T: Any>(&self) -> MappedRwLockWriteGuard<'_, SlabStorage<T>> {
-        self.try_get_slab_mut().unwrap()
+    fn write_slab<T: Any>(&self) -> &mut SlabStorage<T> {
+        self.try_write_slab().unwrap()
     }
 
-    fn get_or_insert_slab_mut<T: Any>(&mut self) -> MappedRwLockWriteGuard<'_, SlabStorage<T>> {
-        RwLockWriteGuard::map(
-            self.data
-                .entry(TypeId::of::<T>())
-                .or_insert_with(|| RwLock::new(Box::new(SlabStorage::<T>::default())))
-                .write(),
-            |x| x.as_any_mut().downcast_mut().unwrap(),
-        )
+    fn get_slab_mut_borrow<T: Any>(&mut self) -> &mut SlabStorage<T> {
+        self.data
+            .get_mut(&TypeId::of::<T>())
+            .unwrap()
+            .as_any_mut()
+            .downcast_mut()
+            .unwrap()
     }
 
-    fn insert(&mut self) -> Entry<'_> {
+    fn get_or_insert_slab_mut<T: Any + Send + Sync>(&mut self) -> &mut SlabStorage<T> {
+        self.data
+            .entry(TypeId::of::<T>())
+            .or_insert_with(|| Box::new(SlabStorage::<T>::default()))
+            .as_any_mut()
+            .downcast_mut()
+            .unwrap()
+    }
+
+    fn insert(&mut self) -> EntryBuilder<'_> {
         let id = if let Some(id) = self.free.pop_front() {
+            self.filled[id.0] = true;
             id
         } else {
             let id = self.len;
+            self.filled.push(true);
             self.len += 1;
             NodeId(id)
         };
-        Entry { id, inner: self }
+        EntryBuilder { id, inner: self }
     }
 
-    fn add<T: Any>(&mut self, id: NodeId, value: T) {
+    fn add<T: Any + Send + Sync>(&mut self, id: NodeId, value: T) {
         self.get_or_insert_slab_mut().insert(id, value);
     }
 
     fn remove(&mut self, id: NodeId) {
         for slab in self.data.values_mut() {
-            slab.write().remove(id);
+            slab.remove(id);
         }
+        self.filled[id.0] = true;
         self.free.push_back(id);
     }
 
     fn len(&self) -> usize {
         self.len - self.free.len()
     }
+
+    fn contains(&self, id: NodeId) -> bool {
+        self.filled.get(id.0).copied().unwrap_or_default()
+    }
 }
 
-pub struct Entry<'a> {
+pub struct EntryBuilder<'a> {
     id: NodeId,
     inner: &'a mut AnySlab,
 }
 
-impl Entry<'_> {
-    pub fn insert<T: Any>(&mut self, value: T) {
+impl EntryBuilder<'_> {
+    pub fn insert<T: Any + Send + Sync>(&mut self, value: T) {
         self.inner
             .get_or_insert_slab_mut::<T>()
             .insert(self.id, value);
+    }
+
+    pub fn get<T: Any>(&self) -> Option<&T> {
+        self.inner.read_slab().get(self.id)
+    }
+
+    pub fn get_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.inner.write_slab().get_mut(self.id)
     }
 
     pub fn remove(self) {
@@ -946,7 +899,7 @@ fn remove() {
 
     slab.remove(node1_id);
 
-    assert!(slab.get_slab::<i32>().get(node1_id).is_none());
+    assert!(slab.read_slab::<i32>().get(node1_id).is_none());
     assert_eq!(slab.len(), 1);
 }
 
@@ -966,7 +919,7 @@ fn get_many_mut_unchecked() {
     println!("ids: {:#?}", [parent, child, grandchild]);
 
     {
-        let mut i32_slab = slab.get_slab_mut::<i32>();
+        let mut i32_slab = slab.write_slab::<i32>();
         let all =
             unsafe { i32_slab.get_many_mut_unchecked([parent, child, grandchild].into_iter()) }
                 .unwrap();
@@ -974,7 +927,7 @@ fn get_many_mut_unchecked() {
     }
 
     {
-        let mut i32_slab = slab.get_slab_mut::<i32>();
+        let mut i32_slab = slab.write_slab::<i32>();
         assert!(
             unsafe { i32_slab.get_many_mut_unchecked([NodeId(3), NodeId(100)].into_iter()) }
                 .is_none()
@@ -1001,8 +954,8 @@ fn get_many_many_mut_unchecked() {
 
     println!("slab: {:#?}", slab);
 
-    let mut num_entries = slab.get_slab_mut::<i32>();
-    let mut str_entries = slab.get_slab_mut::<&str>();
+    let mut num_entries = slab.write_slab::<i32>();
+    let mut str_entries = slab.write_slab::<&str>();
 
     let all_num = unsafe {
         num_entries

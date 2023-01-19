@@ -2,8 +2,6 @@ use crate::{
     node::{ElementNode, FromAnyValue, NodeType},
     passes::{AnyMapLike, TypeErasedPass},
     real_dom::RealDom,
-    state::State,
-    tree::TreeView,
     NodeId,
 };
 use dioxus_core::{Mutation, Mutations};
