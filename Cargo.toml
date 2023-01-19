@@ -88,3 +88,10 @@ rsx-rosetta = { git = "https://github.com/dioxuslabs/dioxus" }
 path = "src/main.rs"
 
 name = "dioxus"
+
+[profile.release]
+opt-level = 3
+
+[dev-dependencies]
+assert_cmd = "2.0.8"
+predicates = "2.1.5"
