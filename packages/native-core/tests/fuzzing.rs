@@ -1,5 +1,12 @@
 use dioxus::prelude::Props;
 use dioxus_core::*;
+use dioxus_native_core::{
+    node_ref::{AttributeMask, NodeView},
+    real_dom::RealDom,
+    state::{ParentDepState, State},
+    NodeMask, SendAnyMap,
+};
+use dioxus_native_core_macro::{sorted_str_slice, State};
 use std::cell::Cell;
 
 fn random_ns() -> Option<&'static str> {
@@ -287,17 +294,6 @@ fn create_random_element(cx: Scope<DepthProps>) -> Element {
     node
 }
 
-use dioxus::prelude::*;
-use dioxus_native_core::{
-    node_ref::{AttributeMask, NodeView},
-    real_dom::RealDom,
-    state::{ParentDepState, State},
-    NodeMask, SendAnyMap,
-};
-use dioxus_native_core_macro::{sorted_str_slice, State};
-use std::sync::{Arc, Mutex};
-use tokio::time::sleep;
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BlablaState {}
 
@@ -309,12 +305,7 @@ impl ParentDepState for BlablaState {
     const NODE_MASK: NodeMask =
         NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!(["blabla",])));
 
-    fn reduce<'a>(
-        &mut self,
-        _node: NodeView,
-        _parent: Option<(&'a Self,)>,
-        _ctx: &Self::Ctx,
-    ) -> bool {
+    fn reduce(&mut self, _node: NodeView, _parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         false
     }
 }
@@ -323,49 +314,6 @@ impl ParentDepState for BlablaState {
 pub struct NodeState {
     #[parent_dep_state(blabla)]
     blabla: BlablaState,
-}
-
-mod dioxus_elements {
-    macro_rules! builder_constructors {
-        (
-            $(
-                $(#[$attr:meta])*
-                $name:ident {
-                    $(
-                        $(#[$attr_method:meta])*
-                        $fil:ident: $vil:ident,
-                    )*
-                };
-            )*
-        ) => {
-            $(
-                #[allow(non_camel_case_types)]
-                $(#[$attr])*
-                pub struct $name;
-
-                impl $name {
-                    pub const TAG_NAME: &'static str = stringify!($name);
-                    pub const NAME_SPACE: Option<&'static str> = None;
-
-                    $(
-                        pub const $fil: (&'static str, Option<&'static str>, bool) = (stringify!($fil), None, false);
-                    )*
-                }
-
-                impl GlobalAttributes for $name {}
-            )*
-        }
-    }
-
-    pub trait GlobalAttributes {}
-
-    pub trait SvgAttributes {}
-
-    builder_constructors! {
-        blabla {
-
-        };
-    }
 }
 
 // test for panics when creating random nodes and templates
