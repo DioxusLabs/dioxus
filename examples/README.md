@@ -130,36 +130,6 @@ cargo run --example hello_world
 
 [todomvc](./todomvc.rs) - Todo task list example
 
-## Terminal UI
-
-[tui_all_events](../packages/tui/examples/tui_all_events.rs) - All of the terminal events
-
-[tui_border](../packages/tui/examples/tui_border.rs) - Different styles of borders and corners
-
-[tui_buttons](../packages/tui/examples/tui_buttons.rs) - A grid of buttons that work demonstrate the focus system
-
-[tui_color_test](../packages/tui/examples/tui_color_test.rs) - Grid of colors to demonstrate compatablility with different terminal color rendering modes
-
-[tui_colorpicker](../packages/tui/examples/tui_colorpicker.rs) - A colorpicker
-
-[tui_components](../packages/tui/examples/tui_components.rs) - Simple component example
-
-[tui_flex](../packages/tui/examples/tui_flex.rs) - Flexbox support
-
-[tui_hover](../packages/tui/examples/tui_hover.rs) - Detect hover and mouse events
-
-[tui_list](../packages/tui/examples/tui_list.rs) - Renders a list of items
-
-[tui_margin](../packages/tui/examples/tui_margin.rs) - Margins around flexboxes
-
-[tui_quadrants](../packages/tui/examples/tui_quadrants.rs) - Four quadrants
-
-[tui_readme](../packages/tui/examples/tui_readme.rs) - The readme example
-
-[tui_task](../packages/tui/examples/tui_task.rs) - Background tasks
-
-[tui_text](../packages/tui/examples/tui_text.rs) - Simple text example
-
 # TODO
 Missing Features
 - Fine-grained reactivity
