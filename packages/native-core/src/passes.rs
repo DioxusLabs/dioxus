@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::node::{FromAnyValue, NodeData};
 use crate::node_ref::NodeView;
 use crate::real_dom::RealDom;
-use crate::tree::{Node, TreeStateView};
+use crate::tree::{self, Node, TreeStateView};
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
@@ -374,6 +374,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
         let mut currently_in_use = FxHashSet::<TypeId>::default();
         std::thread::scope(|s| {
             let mut i = 0;
+            let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
             while i < pass_indexes_remaining.len() {
                 let passes_idx = pass_indexes_remaining[i];
                 let pass = &passes[passes_idx];
@@ -385,16 +386,18 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
                     pass_indexes_remaining.remove(i);
                     resolving.push(pass_id);
                     currently_in_use.insert(pass.this_type_id);
-                    let tree_view = tree.tree.state_views(
-                        [pass.this_type_id],
+                    dynamically_borrowed_tree.with_view(
                         pass.combined_dependancy_type_ids.iter().copied(),
+                        [pass.this_type_id],
+                        |tree_view| {
+                            let dirty_nodes = dirty_nodes.clone();
+                            let nodes_updated = nodes_updated.clone();
+                            let ctx = ctx.clone();
+                            // s.spawn(move || {
+                            pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
+                            // });
+                        },
                     );
-                    let dirty_nodes = dirty_nodes.clone();
-                    let nodes_updated = nodes_updated.clone();
-                    let ctx = ctx.clone();
-                    s.spawn(move || {
-                        pass.resolve(tree_view, &dirty_nodes, &nodes_updated, &ctx);
-                    });
                 } else {
                     i += 1;
                 }

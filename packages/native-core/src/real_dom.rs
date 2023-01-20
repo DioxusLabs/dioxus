@@ -35,9 +35,9 @@ pub struct RealDom<V: FromAnyValue + Send = ()> {
 
 impl<V: FromAnyValue + Send + Sync> RealDom<V> {
     pub fn new(mut passes: Box<[TypeErasedPass<V>]>) -> RealDom<V> {
-        let tree = Tree::new();
+        let mut tree = Tree::new();
         let root_id = tree.root();
-        let root = tree.get_node(root_id);
+        let mut root = tree.get_node(root_id);
         let mut root_node: NodeData<V> = NodeData::new(NodeType::Element(ElementNode {
             tag: "Root".to_string(),
             namespace: Some("Root".to_string()),

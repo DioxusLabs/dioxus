@@ -1,12 +1,13 @@
 use parking_lot::{
     MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
-use rustc_hash::FxHasher;
+use rustc_hash::{FxHashMap, FxHasher};
 use std::any::{Any, TypeId};
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
 
+use crate::node::NodeData;
 use crate::{AnyMapLike, Dependancy};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
@@ -20,12 +21,12 @@ pub(crate) struct Node {
 }
 
 pub(crate) struct NodeView<'a> {
-    tree: &'a Tree,
+    tree: &'a mut Tree,
     id: NodeId,
 }
 
 impl NodeView<'_> {
-    pub fn insert<T>(&self, data: T)
+    pub fn insert<T>(&mut self, data: T)
     where
         T: Any,
     {
@@ -39,7 +40,7 @@ impl NodeView<'_> {
         self.tree.nodes.read_slab::<T>().get(self.id).unwrap()
     }
 
-    pub fn get_mut<T>(&self) -> &mut T
+    pub fn get_mut<T>(&mut self) -> &mut T
     where
         T: Any,
     {
@@ -90,11 +91,11 @@ impl Tree {
         self.node_slab().get(id).unwrap()
     }
 
-    fn node_slab_mut(&self) -> &mut SlabStorage<Node> {
+    fn node_slab_mut(&mut self) -> &mut SlabStorage<Node> {
         self.nodes.write_slab()
     }
 
-    pub fn get_node_data_mut(&self, id: NodeId) -> &mut Node {
+    pub fn get_node_data_mut(&mut self, id: NodeId) -> &mut Node {
         self.node_slab_mut().get_mut(id).unwrap()
     }
 
@@ -118,7 +119,7 @@ impl Tree {
         recurse(self, id);
     }
 
-    fn set_height(&self, node: NodeId, height: u16) {
+    fn set_height(&mut self, node: NodeId, height: u16) {
         let children = {
             let mut node = self.get_node_data_mut(node);
             node.height = height;
@@ -145,7 +146,6 @@ impl Tree {
         let parent = node_state.get_mut(parent).unwrap();
         parent.children.push(new);
         let height = parent.height + 1;
-        drop(node_state);
         self.set_height(new, height);
     }
 
@@ -162,7 +162,6 @@ impl Tree {
                     }
                 }
                 let height = parent.height + 1;
-                drop(node_state);
                 self.set_height(new_id, height);
             }
         }
@@ -183,7 +182,6 @@ impl Tree {
             .unwrap();
         parent.children.insert(index, new_id);
         let height = parent.height + 1;
-        drop(node_state);
         self.set_height(new_id, height);
     }
 
@@ -200,7 +198,6 @@ impl Tree {
             .unwrap();
         parent.children.insert(index + 1, new_id);
         let height = parent.height + 1;
-        drop(node_state);
         self.set_height(new_id, height);
     }
 
@@ -212,22 +209,9 @@ impl Tree {
         self.nodes.len()
     }
 
-    pub fn state_views(
-        &self,
-        immutable: impl IntoIterator<Item = TypeId>,
-        mutable: impl IntoIterator<Item = TypeId>,
-    ) -> TreeStateView<'_> {
-        TreeStateView {
-            nodes_data: self.node_slab(),
-            nodes: immutable
-                .into_iter()
-                .map(|id| (id, MaybeRead::Read(self.nodes.data.get(&id).unwrap())))
-                .chain(
-                    mutable
-                        .into_iter()
-                        .map(|id| (id, MaybeRead::Write(self.nodes.data.get_mut(&id).unwrap()))),
-                )
-                .collect(),
+    pub fn dynamically_borrowed(&mut self) -> DynamicallyBorrowedTree<'_> {
+        DynamicallyBorrowedTree {
+            nodes: self.nodes.dynamically_borrowed(),
             root: self.root,
         }
     }
@@ -240,7 +224,7 @@ impl Tree {
         self.nodes.write_slab().get_mut(id)
     }
 
-    pub fn get_node(&self, id: NodeId) -> NodeView<'_> {
+    pub fn get_node(&mut self, id: NodeId) -> NodeView<'_> {
         NodeView { tree: self, id }
     }
 
@@ -265,111 +249,34 @@ impl Tree {
     }
 }
 
-pub(crate) trait NodeDataView {
-    fn root(&self) -> NodeId;
-
-    fn parent_id(&self, id: NodeId) -> Option<NodeId>;
-
-    fn children_ids(&self, id: NodeId) -> Option<Vec<NodeId>>;
-
-    fn height(&self, id: NodeId) -> Option<u16>;
+pub(crate) struct DynamicallyBorrowedTree<'a> {
+    nodes: DynamiclyBorrowedAnySlabView<'a>,
+    root: NodeId,
 }
 
-trait TreeView<T>: Sized + NodeDataView {
-    fn get(&self, id: NodeId) -> Option<&T>;
-
-    fn get_unchecked(&self, id: NodeId) -> &T {
-        unsafe { self.get(id).unwrap_unchecked() }
-    }
-
-    fn children(&self, id: NodeId) -> Option<Vec<&T>>;
-
-    fn parent(&self, id: NodeId) -> Option<&T>;
-
-    fn traverse_depth_first(&self, mut f: impl FnMut(&T)) {
-        let mut stack = vec![self.root()];
-        while let Some(id) = stack.pop() {
-            if let Some(node) = self.get(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    stack.extend(children.iter().copied().rev());
-                }
-            }
+impl<'a> DynamicallyBorrowedTree<'a> {
+    pub fn with_view(
+        &self,
+        immutable: impl IntoIterator<Item = TypeId>,
+        mutable: impl IntoIterator<Item = TypeId>,
+        mut f: impl FnMut(TreeStateView),
+    ) {
+        let node_data = self.node_slab();
+        let nodes = FxHashMap::default();
+        {
+            let mut view = TreeStateView {
+                root: self.root,
+                nodes_data: &*node_data,
+                nodes,
+            };
+            f(view)
         }
     }
 
-    fn traverse_breadth_first(&self, mut f: impl FnMut(&T)) {
-        let mut queue = VecDeque::new();
-        queue.push_back(self.root());
-        while let Some(id) = queue.pop_front() {
-            if let Some(node) = self.get(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    for id in children {
-                        queue.push_back(id);
-                    }
-                }
-            }
-        }
-    }
-}
-
-trait TreeViewMut<T>: Sized + TreeView<T> {
-    fn get_mut(&mut self, id: NodeId) -> Option<&mut T>;
-
-    unsafe fn get_mut_unchecked(&mut self, id: NodeId) -> &mut T {
-        unsafe { self.get_mut(id).unwrap_unchecked() }
-    }
-
-    fn children_mut(&mut self, id: NodeId) -> Option<Vec<&mut T>>;
-
-    fn parent_child_mut(&mut self, id: NodeId) -> Option<(&mut T, Vec<&mut T>)> {
-        let mut_ptr: *mut Self = self;
-        unsafe {
-            // Safety: No node has itself as a child.
-            (*mut_ptr).get_mut(id).and_then(|parent| {
-                (*mut_ptr)
-                    .children_mut(id)
-                    .map(|children| (parent, children))
-            })
-        }
-    }
-
-    fn parent_mut(&mut self, id: NodeId) -> Option<&mut T>;
-
-    fn node_parent_mut(&mut self, id: NodeId) -> Option<(&mut T, Option<&mut T>)>;
-
-    #[allow(clippy::type_complexity)]
-    fn node_parent_children_mut(
-        &mut self,
-        id: NodeId,
-    ) -> Option<(&mut T, Option<&mut T>, Option<Vec<&mut T>>)>;
-
-    fn traverse_depth_first_mut(&mut self, mut f: impl FnMut(&mut T)) {
-        let mut stack = vec![self.root()];
-        while let Some(id) = stack.pop() {
-            if let Some(node) = self.get_mut(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    stack.extend(children.iter().copied().rev());
-                }
-            }
-        }
-    }
-
-    fn traverse_breadth_first_mut(&mut self, mut f: impl FnMut(&mut T)) {
-        let mut queue = VecDeque::new();
-        queue.push_back(self.root());
-        while let Some(id) = queue.pop_front() {
-            if let Some(node) = self.get_mut(id) {
-                f(node);
-                if let Some(children) = self.children_ids(id) {
-                    for id in children {
-                        queue.push_back(id);
-                    }
-                }
-            }
-        }
+    fn node_slab(&self) -> MappedRwLockReadGuard<'_, SlabStorage<Node>> {
+        RwLockReadGuard::map(self.nodes.get_slab(TypeId::of::<Node>()).unwrap(), |slab| {
+            slab.as_any().downcast_ref().unwrap()
+        })
     }
 }
 
@@ -379,7 +286,7 @@ enum MaybeRead<'a> {
 }
 
 #[derive(Clone, Copy)]
-struct TreeStateViewEntry<'a> {
+pub struct TreeStateViewEntry<'a> {
     view: &'a TreeStateView<'a>,
     id: NodeId,
 }
@@ -392,7 +299,7 @@ impl<'a> AnyMapLike<'a> for TreeStateViewEntry<'a> {
 
 pub struct TreeStateView<'a> {
     nodes_data: &'a SlabStorage<Node>,
-    nodes: hashbrown::HashMap<TypeId, MaybeRead<'a>, BuildHasherDefault<FxHasher>>,
+    nodes: FxHashMap<TypeId, MaybeRead<'a>>,
     root: NodeId,
 }
 
@@ -443,7 +350,7 @@ impl<'a> TreeStateView<'a> {
         self.get_slab_mut().and_then(|slab| slab.get_mut(id))
     }
 
-    fn entry(&self, id: NodeId) -> TreeStateViewEntry<'_> {
+    pub fn entry(&self, id: NodeId) -> TreeStateViewEntry<'_> {
         TreeStateViewEntry { view: self, id }
     }
 
@@ -458,6 +365,33 @@ impl<'a> TreeStateView<'a> {
 
     pub fn parent<T: Dependancy>(&self, id: NodeId) -> Option<T::ElementBorrowed<'_>> {
         T::borrow_elements_from(self.entry(id))
+    }
+
+    fn traverse_depth_first<T: Dependancy>(&self, mut f: impl FnMut(T::ElementBorrowed<'_>)) {
+        let mut stack = vec![self.root()];
+        while let Some(id) = stack.pop() {
+            if let Some(node) = self.get::<T>(id) {
+                f(node);
+                if let Some(children) = self.children_ids(id) {
+                    stack.extend(children.iter().copied().rev());
+                }
+            }
+        }
+    }
+
+    fn traverse_breadth_first<T: Dependancy>(&self, mut f: impl FnMut(T::ElementBorrowed<'_>)) {
+        let mut queue = VecDeque::new();
+        queue.push_back(self.root());
+        while let Some(id) = queue.pop_front() {
+            if let Some(node) = self.get::<T>(id) {
+                f(node);
+                if let Some(children) = self.children_ids(id) {
+                    for id in children {
+                        queue.push_back(id);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -479,9 +413,9 @@ fn creation() {
     assert_eq!(tree.parent_id(parent_id), None);
     assert_eq!(tree.parent_id(child_id).unwrap(), parent_id);
     assert_eq!(tree.children_ids(parent_id).unwrap(), &[child_id]);
-    let view = tree.state_view::<i32>();
-    assert_eq!(*view.get(parent_id).unwrap(), 1);
-    assert_eq!(*view.get(child_id).unwrap(), 0);
+
+    assert_eq!(*tree.read::<i32>(parent_id).unwrap(), 1);
+    assert_eq!(*tree.read::<i32>(child_id).unwrap(), 0);
 }
 
 #[test]
@@ -512,11 +446,11 @@ fn insertion() {
     assert_eq!(tree.parent_id(child).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
-    let view = tree.state_view::<i32>();
-    assert_eq!(*view.get(parent).unwrap(), 0);
-    assert_eq!(*view.get(before).unwrap(), 1);
-    assert_eq!(*view.get(child).unwrap(), 2);
-    assert_eq!(*view.get(after).unwrap(), 3);
+
+    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
+    assert_eq!(*tree.read::<i32>(child).unwrap(), 2);
+    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
 }
 
 #[test]
@@ -547,13 +481,11 @@ fn deletion() {
     assert_eq!(tree.parent_id(child).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, child, after]);
-    {
-        let view = tree.state_view::<i32>();
-        assert_eq!(*view.get(parent).unwrap(), 0);
-        assert_eq!(*view.get(before).unwrap(), 1);
-        assert_eq!(*view.get(child).unwrap(), 2);
-        assert_eq!(*view.get(after).unwrap(), 3);
-    }
+
+    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
+    assert_eq!(*tree.read::<i32>(child).unwrap(), 2);
+    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
 
     tree.remove(child);
 
@@ -565,13 +497,11 @@ fn deletion() {
     assert_eq!(tree.parent_id(before).unwrap(), parent);
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[before, after]);
-    {
-        let view = tree.state_view::<i32>();
-        assert_eq!(*view.get(parent).unwrap(), 0);
-        assert_eq!(*view.get(before).unwrap(), 1);
-        assert_eq!(view.get(child), None);
-        assert_eq!(*view.get(after).unwrap(), 3);
-    }
+
+    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
+    assert_eq!(*tree.read::<i32>(before).unwrap(), 1);
+    assert_eq!(tree.read::<i32>(child), None);
+    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
 
     tree.remove(before);
 
@@ -581,12 +511,10 @@ fn deletion() {
     assert_eq!(tree.height(after), Some(1));
     assert_eq!(tree.parent_id(after).unwrap(), parent);
     assert_eq!(tree.children_ids(parent).unwrap(), &[after]);
-    {
-        let view = tree.state_view::<i32>();
-        assert_eq!(*view.get(parent).unwrap(), 0);
-        assert_eq!(view.get(before), None);
-        assert_eq!(*view.get(after).unwrap(), 3);
-    }
+
+    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
+    assert_eq!(tree.read::<i32>(before), None);
+    assert_eq!(*tree.read::<i32>(after).unwrap(), 3);
 
     tree.remove(after);
 
@@ -594,11 +522,9 @@ fn deletion() {
     assert_eq!(tree.size(), 1);
     assert_eq!(tree.height(parent), Some(0));
     assert_eq!(tree.children_ids(parent).unwrap(), &[]);
-    {
-        let view = tree.state_view::<i32>();
-        assert_eq!(*view.get(parent).unwrap(), 0);
-        assert_eq!(view.get(after), None);
-    }
+
+    assert_eq!(*tree.read::<i32>(parent).unwrap(), 0);
+    assert_eq!(tree.read::<i32>(after), None);
 }
 
 #[test]
@@ -752,6 +678,30 @@ impl<T: 'static + Send + Sync> AnySlabStorageImpl for SlabStorage<T> {
     }
 }
 
+pub(crate) struct DynamiclyBorrowedAnySlabView<'a> {
+    data: hashbrown::HashMap<
+        TypeId,
+        RwLock<&'a mut dyn AnySlabStorageImpl>,
+        BuildHasherDefault<FxHasher>,
+    >,
+}
+
+impl<'a> DynamiclyBorrowedAnySlabView<'a> {
+    fn get_slab(
+        &self,
+        type_id: TypeId,
+    ) -> Option<RwLockReadGuard<'_, &'a mut dyn AnySlabStorageImpl>> {
+        self.data.get(&type_id).map(|x| x.read())
+    }
+
+    fn get_slab_mut(
+        &self,
+        type_id: TypeId,
+    ) -> Option<RwLockWriteGuard<'_, &'a mut dyn AnySlabStorageImpl>> {
+        self.data.get(&type_id).map(|x| x.write())
+    }
+}
+
 pub(crate) struct AnySlab {
     data: hashbrown::HashMap<TypeId, Box<dyn AnySlabStorageImpl>, BuildHasherDefault<FxHasher>>,
     filled: Vec<bool>,
@@ -795,13 +745,13 @@ impl AnySlab {
         self.try_read_slab().unwrap()
     }
 
-    fn try_write_slab<T: Any>(&self) -> Option<&mut SlabStorage<T>> {
+    fn try_write_slab<T: Any>(&mut self) -> Option<&mut SlabStorage<T>> {
         self.data
-            .get(&TypeId::of::<T>())
+            .get_mut(&TypeId::of::<T>())
             .map(|x| x.as_any_mut().downcast_mut().unwrap())
     }
 
-    fn write_slab<T: Any>(&self) -> &mut SlabStorage<T> {
+    fn write_slab<T: Any>(&mut self) -> &mut SlabStorage<T> {
         self.try_write_slab().unwrap()
     }
 
@@ -854,6 +804,16 @@ impl AnySlab {
 
     fn contains(&self, id: NodeId) -> bool {
         self.filled.get(id.0).copied().unwrap_or_default()
+    }
+
+    fn dynamically_borrowed(&mut self) -> DynamiclyBorrowedAnySlabView<'_> {
+        DynamiclyBorrowedAnySlabView {
+            data: self
+                .data
+                .iter_mut()
+                .map(|(k, v)| (*k, RwLock::new(&mut **v)))
+                .collect(),
+        }
     }
 }
 
