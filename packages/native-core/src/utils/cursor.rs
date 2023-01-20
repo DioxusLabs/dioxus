@@ -1,87 +1,160 @@
-use std::cmp::Ordering;
+use std::{cmp::Ordering, ops::Range};
 
 use dioxus_html::input_data::keyboard_types::{Code, Key, Modifiers};
 
+/// This contains the information about the text that is used by the cursor to handle navigation.
+pub trait Text {
+    /// Returns the line at the given index.
+    fn line(&self, number: usize) -> Option<&Self>;
+    /// Returns the length of the text in characters.
+    fn length(&self) -> usize;
+    /// Returns the number of lines in the text.
+    fn line_count(&self) -> usize;
+    /// Returns the character at the given character index.
+    fn character(&self, idx: usize) -> Option<char>;
+    /// Returns the length of the text before the given line in characters.
+    fn len_before_line(&self, line: usize) -> usize;
+}
+
+impl Text for str {
+    fn line(&self, number: usize) -> Option<&str> {
+        self.lines().nth(number)
+    }
+
+    fn length(&self) -> usize {
+        self.chars().count()
+    }
+
+    fn line_count(&self) -> usize {
+        self.lines().count()
+    }
+
+    fn character(&self, idx: usize) -> Option<char> {
+        self.chars().nth(idx)
+    }
+
+    fn len_before_line(&self, line: usize) -> usize {
+        self.lines()
+            .take(line)
+            .map(|l| l.chars().count())
+            .sum::<usize>()
+    }
+}
+
+/// This contains the information about the text that is used by the cursor to handle editing text.
+pub trait TextEditable<T: Text + ?Sized>: AsRef<T> {
+    /// Inserts a character at the given character index.
+    fn insert_character(&mut self, idx: usize, text: char);
+    /// Deletes the given character range.
+    fn delete_range(&mut self, range: Range<usize>);
+}
+
+impl TextEditable<str> for String {
+    fn insert_character(&mut self, idx: usize, text: char) {
+        self.insert(idx, text);
+    }
+
+    fn delete_range(&mut self, range: Range<usize>) {
+        self.replace_range(range, "");
+    }
+}
+
+/// A cursor position
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Pos {
+    /// The virtual column of the cursor. This can be more than the line length. To get the realized column, use [`Pos::col()`].
     pub col: usize,
+    /// The row of the cursor.
     pub row: usize,
 }
 
 impl Pos {
+    /// Creates a new cursor position.
     pub fn new(col: usize, row: usize) -> Self {
         Self { row, col }
     }
 
-    pub fn up(&mut self, rope: &str) {
-        self.move_row(-1, rope);
+    /// Moves the position up by one line.
+    pub fn up(&mut self, text: &(impl Text + ?Sized)) {
+        self.move_row(-1, text);
     }
 
-    pub fn down(&mut self, rope: &str) {
-        self.move_row(1, rope);
+    /// Moves the position down by one line.
+    pub fn down(&mut self, text: &(impl Text + ?Sized)) {
+        self.move_row(1, text);
     }
 
-    pub fn right(&mut self, rope: &str) {
-        self.move_col(1, rope);
+    /// Moves the position right by one character.
+    pub fn right(&mut self, text: &(impl Text + ?Sized)) {
+        self.move_col(1, text);
     }
 
-    pub fn left(&mut self, rope: &str) {
-        self.move_col(-1, rope);
+    /// Moves the position left by one character.
+    pub fn left(&mut self, text: &(impl Text + ?Sized)) {
+        self.move_col(-1, text);
     }
 
-    pub fn move_row(&mut self, change: i32, rope: &str) {
+    /// Move the position's row by the given amount. (positive is down, negative is up)
+    pub fn move_row(&mut self, change: i32, text: &(impl Text + ?Sized)) {
         let new = self.row as i32 + change;
-        if new >= 0 && new < rope.lines().count() as i32 {
+        if new >= 0 && new < text.line_count() as i32 {
             self.row = new as usize;
         }
     }
 
-    pub fn move_col(&mut self, change: i32, rope: &str) {
-        self.realize_col(rope);
-        let idx = self.idx(rope) as i32;
-        if idx + change >= 0 && idx + change <= rope.len() as i32 {
-            let len_line = self.len_line(rope) as i32;
+    /// Move the position's column by the given amount. (positive is right, negative is left)
+    pub fn move_col(&mut self, change: i32, text: &(impl Text + ?Sized)) {
+        self.realize_col(text);
+        let idx = self.idx(text) as i32;
+        if idx + change >= 0 && idx + change <= text.length() as i32 {
+            let len_line = self.len_line(text) as i32;
             let new_col = self.col as i32 + change;
             let diff = new_col - len_line;
             if diff > 0 {
-                self.down(rope);
+                self.down(text);
                 self.col = 0;
-                self.move_col(diff - 1, rope);
+                self.move_col(diff - 1, text);
             } else if new_col < 0 {
-                self.up(rope);
-                self.col = self.len_line(rope);
-                self.move_col(new_col + 1, rope);
+                self.up(text);
+                self.col = self.len_line(text);
+                self.move_col(new_col + 1, text);
             } else {
                 self.col = new_col as usize;
             }
         }
     }
 
-    pub fn col(&self, rope: &str) -> usize {
-        self.col.min(self.len_line(rope))
+    /// Get the realized column of the position. This is the column, but capped at the line length.
+    pub fn col(&self, text: &(impl Text + ?Sized)) -> usize {
+        self.col.min(self.len_line(text))
     }
 
+    /// Get the row of the position.
     pub fn row(&self) -> usize {
         self.row
     }
 
-    fn len_line(&self, rope: &str) -> usize {
-        let line = rope.lines().nth(self.row).unwrap_or_default();
-        let len = line.len();
-        if len > 0 && line.chars().nth(len - 1) == Some('\n') {
-            len - 1
+    fn len_line(&self, text: &(impl Text + ?Sized)) -> usize {
+        if let Some(line) = text.line(self.row) {
+            let len = line.length();
+            if len > 0 && line.character(len - 1) == Some('\n') {
+                len - 1
+            } else {
+                len
+            }
         } else {
-            len
+            0
         }
     }
 
-    pub fn idx(&self, rope: &str) -> usize {
-        rope.lines().take(self.row).map(|l| l.len()).sum::<usize>() + self.col(rope)
+    /// Get the character index of the position.
+    pub fn idx(&self, text: &(impl Text + ?Sized)) -> usize {
+        text.len_before_line(self.row) + self.col(text)
     }
 
-    // the column can be more than the line length, cap it
-    pub fn realize_col(&mut self, rope: &str) {
-        self.col = self.col(rope);
+    /// If the column is more than the line length, cap it to the line length.
+    pub fn realize_col(&mut self, text: &(impl Text + ?Sized)) {
+        self.col = self.col(text);
     }
 }
 
@@ -97,13 +170,17 @@ impl PartialOrd for Pos {
     }
 }
 
+/// A cursor is a selection of text. It has a start and end position of the selection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cursor {
+    /// The start position of the selection. The start position is the origin of the selection, not necessarily the first position.
     pub start: Pos,
+    /// The end position of the selection. If the end position is None, the cursor is a caret.
     pub end: Option<Pos>,
 }
 
 impl Cursor {
+    /// Create a new cursor with the given start position.
     pub fn from_start(pos: Pos) -> Self {
         Self {
             start: pos,
@@ -111,6 +188,7 @@ impl Cursor {
         }
     }
 
+    /// Create a new cursor with the given start and end position.
     pub fn new(start: Pos, end: Pos) -> Self {
         Self {
             start,
@@ -118,7 +196,8 @@ impl Cursor {
         }
     }
 
-    fn move_cursor(&mut self, f: impl FnOnce(&mut Pos), shift: bool) {
+    /// Move the cursor position. If shift is true, the end position will be moved instead of the start position.
+    pub fn move_cursor(&mut self, f: impl FnOnce(&mut Pos), shift: bool) {
         if shift {
             self.with_end(f);
         } else {
@@ -127,7 +206,7 @@ impl Cursor {
         }
     }
 
-    fn delete_selection(&mut self, text: &mut String) -> [i32; 2] {
+    fn delete_selection<T: Text + ?Sized>(&mut self, text: &mut impl TextEditable<T>) -> [i32; 2] {
         let first = self.first();
         let last = self.last();
         let dr = first.row as i32 - last.row as i32;
@@ -136,7 +215,7 @@ impl Cursor {
         } else {
             first.col as i32 - last.col as i32
         };
-        text.replace_range(first.idx(text)..last.idx(text), "");
+        text.delete_range(first.idx(text.as_ref())..last.idx(text.as_ref()));
         if let Some(end) = self.end.take() {
             if self.start > end {
                 self.start = end;
@@ -145,20 +224,24 @@ impl Cursor {
         [dc, dr]
     }
 
-    pub fn handle_input(
+    /// Handle moving the cursor with the given key.
+    pub fn handle_input<T: Text + ?Sized>(
         &mut self,
         data: &dioxus_html::KeyboardData,
-        text: &mut String,
-        max_width: usize,
+        text: &mut impl TextEditable<T>,
+        max_text_length: usize,
     ) {
         use Code::*;
         match data.code() {
             ArrowUp => {
-                self.move_cursor(|c| c.up(text), data.modifiers().contains(Modifiers::SHIFT));
+                self.move_cursor(
+                    |c| c.up(text.as_ref()),
+                    data.modifiers().contains(Modifiers::SHIFT),
+                );
             }
             ArrowDown => {
                 self.move_cursor(
-                    |c| c.down(text),
+                    |c| c.down(text.as_ref()),
                     data.modifiers().contains(Modifiers::SHIFT),
                 );
             }
@@ -167,22 +250,22 @@ impl Cursor {
                     self.move_cursor(
                         |c| {
                             let mut change = 1;
-                            let idx = c.idx(text);
-                            let length = text.len();
+                            let idx = c.idx(text.as_ref());
+                            let length = text.as_ref().length();
                             while idx + change < length {
-                                let chr = text.chars().nth(idx + change).unwrap();
+                                let chr = text.as_ref().character(idx + change).unwrap();
                                 if chr.is_whitespace() {
                                     break;
                                 }
                                 change += 1;
                             }
-                            c.move_col(change as i32, text);
+                            c.move_col(change as i32, text.as_ref());
                         },
                         data.modifiers().contains(Modifiers::SHIFT),
                     );
                 } else {
                     self.move_cursor(
-                        |c| c.right(text),
+                        |c| c.right(text.as_ref()),
                         data.modifiers().contains(Modifiers::SHIFT),
                     );
                 }
@@ -192,28 +275,28 @@ impl Cursor {
                     self.move_cursor(
                         |c| {
                             let mut change = -1;
-                            let idx = c.idx(text) as i32;
+                            let idx = c.idx(text.as_ref()) as i32;
                             while idx + change > 0 {
-                                let chr = text.chars().nth((idx + change) as usize).unwrap();
+                                let chr = text.as_ref().character((idx + change) as usize).unwrap();
                                 if chr == ' ' {
                                     break;
                                 }
                                 change -= 1;
                             }
-                            c.move_col(change, text);
+                            c.move_col(change, text.as_ref());
                         },
                         data.modifiers().contains(Modifiers::SHIFT),
                     );
                 } else {
                     self.move_cursor(
-                        |c| c.left(text),
+                        |c| c.left(text.as_ref()),
                         data.modifiers().contains(Modifiers::SHIFT),
                     );
                 }
             }
             End => {
                 self.move_cursor(
-                    |c| c.col = c.len_line(text),
+                    |c| c.col = c.len_line(text.as_ref()),
                     data.modifiers().contains(Modifiers::SHIFT),
                 );
             }
@@ -221,64 +304,70 @@ impl Cursor {
                 self.move_cursor(|c| c.col = 0, data.modifiers().contains(Modifiers::SHIFT));
             }
             Backspace => {
-                self.start.realize_col(text);
-                let mut start_idx = self.start.idx(text);
+                self.start.realize_col(text.as_ref());
+                let mut start_idx = self.start.idx(text.as_ref());
                 if self.end.is_some() {
                     self.delete_selection(text);
                 } else if start_idx > 0 {
-                    self.start.left(text);
-                    text.replace_range(start_idx - 1..start_idx, "");
+                    self.start.left(text.as_ref());
+                    text.delete_range(start_idx - 1..start_idx);
                     if data.modifiers().contains(Modifiers::CONTROL) {
-                        start_idx = self.start.idx(text);
+                        start_idx = self.start.idx(text.as_ref());
                         while start_idx > 0
                             && text
-                                .chars()
-                                .nth(start_idx - 1)
+                                .as_ref()
+                                .character(start_idx - 1)
                                 .filter(|c| *c != ' ')
                                 .is_some()
                         {
-                            self.start.left(text);
-                            text.replace_range(start_idx - 1..start_idx, "");
-                            start_idx = self.start.idx(text);
+                            self.start.left(text.as_ref());
+                            text.delete_range(start_idx - 1..start_idx);
+                            start_idx = self.start.idx(text.as_ref());
                         }
                     }
                 }
             }
             Enter => {
-                if text.len() + 1 - self.selection_len(text) <= max_width {
-                    text.insert(self.start.idx(text), '\n');
+                if text.as_ref().length() + 1 - self.selection_len(text.as_ref()) <= max_text_length
+                {
+                    text.insert_character(self.start.idx(text.as_ref()), '\n');
                     self.start.col = 0;
-                    self.start.down(text);
+                    self.start.down(text.as_ref());
                 }
             }
             Tab => {
-                if text.len() + 1 - self.selection_len(text) <= max_width {
-                    self.start.realize_col(text);
+                if text.as_ref().length() + 1 - self.selection_len(text.as_ref()) <= max_text_length
+                {
+                    self.start.realize_col(text.as_ref());
                     self.delete_selection(text);
-                    text.insert(self.start.idx(text), '\t');
-                    self.start.right(text);
+                    text.insert_character(self.start.idx(text.as_ref()), '\t');
+                    self.start.right(text.as_ref());
                 }
             }
             _ => {
-                self.start.realize_col(text);
+                self.start.realize_col(text.as_ref());
                 if let Key::Character(character) = data.key() {
-                    if text.len() + 1 - self.selection_len(text) <= max_width {
+                    if text.as_ref().length() + 1 - self.selection_len(text.as_ref())
+                        <= max_text_length
+                    {
                         self.delete_selection(text);
                         let character = character.chars().next().unwrap();
-                        text.insert(self.start.idx(text), character);
-                        self.start.right(text);
+                        text.insert_character(self.start.idx(text.as_ref()), character);
+                        self.start.right(text.as_ref());
                     }
                 }
             }
         }
     }
 
+    /// Modify the end selection position
     pub fn with_end(&mut self, f: impl FnOnce(&mut Pos)) {
         let mut new = self.end.take().unwrap_or_else(|| self.start.clone());
         f(&mut new);
         self.end.replace(new);
     }
 
+    /// Returns first position of the selection (this could be the start or the end depending on the position)
     pub fn first(&self) -> &Pos {
         if let Some(e) = &self.end {
             e.min(&self.start)
@@ -287,6 +376,7 @@ impl Cursor {
         }
     }
 
+    /// Returns last position of the selection (this could be the start or the end depending on the position)
     pub fn last(&self) -> &Pos {
         if let Some(e) = &self.end {
             e.max(&self.start)
@@ -295,7 +385,8 @@ impl Cursor {
         }
     }
 
-    pub fn selection_len(&self, text: &str) -> usize {
+    /// Returns the length of the selection
+    pub fn selection_len(&self, text: &(impl Text + ?Sized)) -> usize {
         self.last().idx(text) - self.first().idx(text)
     }
 }
