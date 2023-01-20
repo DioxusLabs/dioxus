@@ -206,22 +206,16 @@ impl Cursor {
         }
     }
 
-    fn delete_selection<T: Text + ?Sized>(&mut self, text: &mut impl TextEditable<T>) -> [i32; 2] {
+    /// Delete the currently selected text and update the cursor position.
+    pub fn delete_selection<T: Text + ?Sized>(&mut self, text: &mut impl TextEditable<T>) {
         let first = self.first();
         let last = self.last();
-        let dr = first.row as i32 - last.row as i32;
-        let dc = if dr != 0 {
-            -(last.col as i32)
-        } else {
-            first.col as i32 - last.col as i32
-        };
         text.delete_range(first.idx(text.as_ref())..last.idx(text.as_ref()));
         if let Some(end) = self.end.take() {
             if self.start > end {
                 self.start = end;
             }
         }
-        [dc, dr]
     }
 
     /// Handle moving the cursor with the given key.
