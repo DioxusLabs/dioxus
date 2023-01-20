@@ -29,6 +29,7 @@
 - [ ] pub aspect_ratio: Number, ----> parsing is done, but taffy doesnt support it
 */
 
+use lightningcss::properties::border::LineStyle;
 use lightningcss::properties::{align, display, flex, position, size};
 use lightningcss::{
     properties::{align::GapValue, border::BorderSideWidth, Property, PropertyId},
@@ -45,8 +46,43 @@ use taffy::{
     style::{FlexDirection, PositionType},
 };
 
+#[derive(Default)]
+pub struct LayoutConfigeration {
+    /// the default border widths to use
+    pub border_widths: BorderWidths,
+}
+
+pub struct BorderWidths {
+    /// the default border width to use for thin borders
+    pub thin: f32,
+    /// the default border width to use for medium borders
+    pub medium: f32,
+    /// the default border width to use for thick borders
+    pub thick: f32,
+}
+
+impl Default for BorderWidths {
+    fn default() -> Self {
+        Self {
+            thin: 1.0,
+            medium: 3.0,
+            thick: 5.0,
+        }
+    }
+}
+
 /// applies the entire html namespace defined in dioxus-html
 pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
+    apply_layout_attributes_cfg(name, value, style, &LayoutConfigeration::default())
+}
+
+/// applies the entire html namespace defined in dioxus-html with the specified configeration
+pub fn apply_layout_attributes_cfg(
+    name: &str,
+    value: &str,
+    style: &mut Style,
+    config: &LayoutConfigeration,
+) {
     if let Ok(property) =
         Property::parse_string(PropertyId::from(name), value, ParserOptions::default())
     {
@@ -84,41 +120,85 @@ pub fn apply_layout_attributes(name: &str, value: &str, style: &mut Style) {
                 style.position.right = convert_length_percentage_or_auto(inset.right);
             }
             Property::BorderTopWidth(width) => {
-                style.border.top = convert_border_side_width(width);
+                style.border.top = convert_border_side_width(width, &config.border_widths);
             }
             Property::BorderBottomWidth(width) => {
-                style.border.bottom = convert_border_side_width(width);
+                style.border.bottom = convert_border_side_width(width, &config.border_widths);
             }
             Property::BorderLeftWidth(width) => {
-                style.border.left = convert_border_side_width(width);
+                style.border.left = convert_border_side_width(width, &config.border_widths);
             }
             Property::BorderRightWidth(width) => {
-                style.border.right = convert_border_side_width(width);
+                style.border.right = convert_border_side_width(width, &config.border_widths);
             }
             Property::BorderWidth(width) => {
-                style.border.top = convert_border_side_width(width.top);
-                style.border.bottom = convert_border_side_width(width.bottom);
-                style.border.left = convert_border_side_width(width.left);
-                style.border.right = convert_border_side_width(width.right);
+                style.border.top = convert_border_side_width(width.top, &config.border_widths);
+                style.border.bottom =
+                    convert_border_side_width(width.bottom, &config.border_widths);
+                style.border.left = convert_border_side_width(width.left, &config.border_widths);
+                style.border.right = convert_border_side_width(width.right, &config.border_widths);
             }
             Property::Border(border) => {
-                let width = convert_border_side_width(border.width);
+                let width = convert_border_side_width(border.width, &config.border_widths);
                 style.border.top = width;
                 style.border.bottom = width;
                 style.border.left = width;
                 style.border.right = width;
             }
             Property::BorderTop(top) => {
-                style.border.top = convert_border_side_width(top.width);
+                style.border.top = convert_border_side_width(top.width, &config.border_widths);
             }
             Property::BorderBottom(bottom) => {
-                style.border.bottom = convert_border_side_width(bottom.width);
+                style.border.bottom =
+                    convert_border_side_width(bottom.width, &config.border_widths);
             }
             Property::BorderLeft(left) => {
-                style.border.left = convert_border_side_width(left.width);
+                style.border.left = convert_border_side_width(left.width, &config.border_widths);
             }
             Property::BorderRight(right) => {
-                style.border.right = convert_border_side_width(right.width);
+                style.border.right = convert_border_side_width(right.width, &config.border_widths);
+            }
+            Property::BorderTopStyle(line_style) => {
+                if line_style != LineStyle::None {
+                    style.border.top =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+            }
+            Property::BorderBottomStyle(line_style) => {
+                if line_style != LineStyle::None {
+                    style.border.bottom =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+            }
+            Property::BorderLeftStyle(line_style) => {
+                if line_style != LineStyle::None {
+                    style.border.left =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+            }
+            Property::BorderRightStyle(line_style) => {
+                if line_style != LineStyle::None {
+                    style.border.right =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+            }
+            Property::BorderStyle(styles) => {
+                if styles.top != LineStyle::None {
+                    style.border.top =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+                if styles.bottom != LineStyle::None {
+                    style.border.bottom =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+                if styles.left != LineStyle::None {
+                    style.border.left =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
+                if styles.right != LineStyle::None {
+                    style.border.right =
+                        convert_border_side_width(BorderSideWidth::Medium, &config.border_widths);
+                }
             }
             Property::FlexDirection(flex_direction, _) => {
                 use FlexDirection::*;
@@ -330,12 +410,15 @@ fn convert_length_percentage_or_auto(
     }
 }
 
-fn convert_border_side_width(border_side_width: BorderSideWidth) -> Dimension {
+fn convert_border_side_width(
+    border_side_width: BorderSideWidth,
+    border_width_config: &BorderWidths,
+) -> Dimension {
     match border_side_width {
         BorderSideWidth::Length(Length::Value(value)) => convert_length_value(value),
-        BorderSideWidth::Thick => Dimension::Points(5.0),
-        BorderSideWidth::Medium => Dimension::Points(3.0),
-        BorderSideWidth::Thin => Dimension::Points(1.0),
+        BorderSideWidth::Thick => Dimension::Points(border_width_config.thick),
+        BorderSideWidth::Medium => Dimension::Points(border_width_config.medium),
+        BorderSideWidth::Thin => Dimension::Points(border_width_config.thin),
         _ => todo!(),
     }
 }
