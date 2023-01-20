@@ -18,8 +18,6 @@ cargo run --example hello_world
 
 [custom_assets](./custom_assets.rs) - Include images
 
-[custom_element](./custom_element.rs) - Render webcomponents
-
 [custom_html](./custom_html.rs) - Customize wrapper HTML
 
 [eval](./eval.rs) - Evaluate JS expressions
