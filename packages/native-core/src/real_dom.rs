@@ -195,8 +195,7 @@ impl<S: State<V>, V: FromAnyValue> RealDom<S, V> {
                         text: value.to_string(),
                     });
                     let node_id = self.create_node(node);
-                    let node = self.tree.get_mut(node_id).unwrap();
-                    node.node_data.element_id = Some(id);
+                    self.set_element_id(node_id, id);
                     self.stack.push(node_id);
                     mark_dirty(node_id, NodeMask::new().with_text(), &mut nodes_updated);
                 }

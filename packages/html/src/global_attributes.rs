@@ -1622,22 +1622,22 @@ trait_methods! {
     ascent: "ascent";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/attributeName>
-    attributeName: "attributeName";
+    attribute_name: "attributeName";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/attributeType>
-    attributeType: "attributeType";
+    attribute_type: "attributeType";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/azimuth>
     azimuth: "azimuth";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseFrequency>
-    baseFrequency: "baseFrequency";
+    base_frequency: "baseFrequency";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseline-shift>
     baseline_shift: "baseline-shift";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/baseProfile>
-    baseProfile: "baseProfile";
+    base_profile: "baseProfile";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/bbox>
     bbox: "bbox";
@@ -1652,7 +1652,7 @@ trait_methods! {
     by: "by";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/calcMode>
-    calcMode: "calcMode";
+    calc_mode: "calcMode";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/cap-height>
     cap_height: "cap-height";
@@ -1664,7 +1664,7 @@ trait_methods! {
     clip: "clip";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clipPathUnits>
-    clipPathUnits: "clipPathUnits";
+    clip_path_units: "clipPathUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/clip-path>
     clip_path: "clip-path";
@@ -1688,10 +1688,10 @@ trait_methods! {
     color_rendering: "color-rendering";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/contentScriptType>
-    contentScriptType: "contentScriptType";
+    content_script_type: "contentScriptType";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/contentStyleType>
-    contentStyleType: "contentStyleType";
+    content_style_type: "contentStyleType";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/crossorigin>
     crossorigin: "crossorigin";
@@ -1715,7 +1715,7 @@ trait_methods! {
     descent: "descent";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/diffuseConstant>
-    diffuseConstant: "diffuseConstant";
+    diffuse_constant: "diffuseConstant";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/direction>
     direction: "direction";
@@ -1739,7 +1739,7 @@ trait_methods! {
     dy: "dy";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/edgeMode>
-    edgeMode: "edgeMode";
+    edge_mode: "edgeMode";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/elevation>
     elevation: "elevation";
@@ -1829,13 +1829,13 @@ trait_methods! {
     glyph_orientation_vertical: "glyph-orientation-vertical";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/glyphRef>
-    glyphRef: "glyphRef";
+    glyph_ref: "glyphRef";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/gradientTransform>
-    gradientTransform: "gradientTransform";
+    gradient_transform: "gradientTransform";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/gradientUnits>
-    gradientUnits: "gradientUnits";
+    gradient_units: "gradientUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/hanging>
     hanging: "hanging";
@@ -1889,28 +1889,28 @@ trait_methods! {
     k4: "k4";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kernelMatrix>
-    kernelMatrix: "kernelMatrix";
+    kernel_matrix: "kernelMatrix";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kernelUnitLength>
-    kernelUnitLength: "kernelUnitLength";
+    kernel_unit_length: "kernelUnitLength";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/kerning>
     kerning: "kerning";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keyPoints>
-    keyPoints: "keyPoints";
+    key_points: "keyPoints";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keySplines>
-    keySplines: "keySplines";
+    key_splines: "keySplines";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/keyTimes>
-    keyTimes: "keyTimes";
+    key_times: "keyTimes";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lang>
     lang: "lang";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/lengthAdjust>
-    lengthAdjust: "lengthAdjust";
+    length_adjust: "lengthAdjust";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/letter-spacing>
     letter_spacing: "letter-spacing";
@@ -1919,7 +1919,7 @@ trait_methods! {
     lighting_color: "lighting-color";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/limitingConeAngle>
-    limitingConeAngle: "limitingConeAngle";
+    limiting_cone_angle: "limitingConeAngle";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/local>
     local: "local";
@@ -1930,26 +1930,26 @@ trait_methods! {
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-mid>
     marker_mid: "marker-mid";
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker_start>
-    marker_start: "marker_start";
+    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/marker-start>
+    marker_start: "marker-start";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerHeight>
-    markerHeight: "markerHeight";
+    marker_height: "markerHeight";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerUnits>
-    markerUnits: "markerUnits";
+    marker_units: "markerUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/markerWidth>
-    markerWidth: "markerWidth";
+    marker_width: "markerWidth";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mask>
     mask: "mask";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/maskContentUnits>
-    maskContentUnits: "maskContentUnits";
+    mask_content_units: "maskContentUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/maskUnits>
-    maskUnits: "maskUnits";
+    mask_units: "maskUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/mathematical>
     mathematical: "mathematical";
@@ -1973,7 +1973,7 @@ trait_methods! {
     name: "name";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/numOctaves>
-    numOctaves: "numOctaves";
+    num_octaves: "numOctaves";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/offset>
     offset: "offset";
@@ -2015,16 +2015,16 @@ trait_methods! {
     path: "path";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pathLength>
-    pathLength: "pathLength";
+    path_length: "pathLength";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternContentUnits>
-    patternContentUnits: "patternContentUnits";
+    pattern_content_units: "patternContentUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternTransform>
-    patternTransform: "patternTransform";
+    pattern_transform: "patternTransform";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/patternUnits>
-    patternUnits: "patternUnits";
+    pattern_units: "patternUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/ping>
     ping: "ping";
@@ -2036,22 +2036,22 @@ trait_methods! {
     points: "points";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtX>
-    pointsAtX: "pointsAtX";
+    points_at_x: "pointsAtX";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtY>
-    pointsAtY: "pointsAtY";
+    points_at_y: "pointsAtY";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/pointsAtZ>
-    pointsAtZ: "pointsAtZ";
+    points_at_z: "pointsAtZ";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/preserveAlpha>
-    preserveAlpha: "preserveAlpha";
+    preserve_alpha: "preserveAlpha";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/preserveAspectRatio>
-    preserveAspectRatio: "preserveAspectRatio";
+    preserve_aspect_ratio: "preserveAspectRatio";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/primitiveUnits>
-    primitiveUnits: "primitiveUnits";
+    primitive_units: "primitiveUnits";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/r>
     r: "r";
@@ -2060,13 +2060,13 @@ trait_methods! {
     radius: "radius";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/referrerPolicy>
-    referrerPolicy: "referrerPolicy";
+    referrer_policy: "referrerPolicy";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/refX>
-    refX: "refX";
+    ref_x: "refX";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/refY>
-    refY: "refY";
+    ref_y: "refY";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/rel>
     rel: "rel";
@@ -2075,16 +2075,16 @@ trait_methods! {
     rendering_intent: "rendering-intent";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/repeatCount>
-    repeatCount: "repeatCount";
+    repeat_count: "repeatCount";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/repeatDur>
-    repeatDur: "repeatDur";
+    repeat_dur: "repeatDur";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/requiredExtensions>
-    requiredExtensions: "requiredExtensions";
+    required_extensions: "requiredExtensions";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/requiredFeatures>
-    requiredFeatures: "requiredFeatures";
+    required_features: "requiredFeatures";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/restart>
     restart: "restart";
@@ -2120,22 +2120,22 @@ trait_methods! {
     spacing: "spacing";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/specularConstant>
-    specularConstant: "specularConstant";
+    specular_constant: "specularConstant";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/specularExponent>
-    specularExponent: "specularExponent";
+    specular_exponent: "specularExponent";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/speed>
     speed: "speed";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/spreadMethod>
-    spreadMethod: "spreadMethod";
+    spread_method: "spreadMethod";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/startOffset>
-    startOffset: "startOffset";
+    start_offset: "startOffset";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stdDeviation>
-    stdDeviation: "stdDeviation";
+    std_deviation: "stdDeviation";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stemh>
     stemh: "stemh";
@@ -2144,13 +2144,13 @@ trait_methods! {
     stemv: "stemv";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stitchTiles>
-    stitchTiles: "stitchTiles";
+    stitch_tiles: "stitchTiles";
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop_color>
-    stop_color: "stop_color";
+    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop-color>
+    stop_color: "stop-color";
 
-    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop_opacity>
-    stop_opacity: "stop_opacity";
+    /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/stop-opacity>
+    stop_opacity: "stop-opacity";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/strikethrough-position>
     strikethrough_position: "strikethrough-position";
@@ -2189,25 +2189,25 @@ trait_methods! {
     style: "style";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/surfaceScale>
-    surfaceScale: "surfaceScale";
+    surface_scale: "surfaceScale";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/systemLanguage>
-    systemLanguage: "systemLanguage";
+    system_language: "systemLanguage";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tabindex>
     tabindex: "tabindex";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/tableValues>
-    tableValues: "tableValues";
+    table_values: "tableValues";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/target>
     target: "target";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/targetX>
-    targetX: "targetX";
+    target_x: "targetX";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/targetY>
-    targetY: "targetY";
+    target_y: "targetY";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/text-anchor>
     text_anchor: "text-anchor";
@@ -2219,7 +2219,7 @@ trait_methods! {
     text_rendering: "text-rendering";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/textLength>
-    textLength: "textLength";
+    text_length: "textLength";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/to>
     to: "to";
@@ -2342,6 +2342,6 @@ trait_methods! {
     z: "z";
 
     /// <https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/zoomAndPan>
-    zoomAndPan: "zoomAndPan";
+    zoom_and_pan: "zoomAndPan";
 
 }

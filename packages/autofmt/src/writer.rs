@@ -1,16 +1,18 @@
-use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed};
+use dioxus_rsx::{BodyNode, ElementAttr, ElementAttrNamed, ForLoop};
 use proc_macro2::{LineColumn, Span};
+use quote::ToTokens;
 use std::{
     collections::{HashMap, VecDeque},
     fmt::{Result, Write},
 };
-use syn::{spanned::Spanned, Expr};
+use syn::{spanned::Spanned, Expr, ExprIf};
 
 use crate::buffer::Buffer;
 
-#[derive(Debug, Default)]
-pub struct Writer {
-    pub src: Vec<String>,
+#[derive(Debug)]
+pub struct Writer<'a> {
+    pub raw_src: &'a str,
+    pub src: Vec<&'a str>,
     pub cached_formats: HashMap<Location, String>,
     pub comments: VecDeque<usize>,
     pub out: Buffer,
@@ -30,15 +32,27 @@ impl Location {
     }
 }
 
-impl Writer {
+impl<'a> Writer<'a> {
+    pub fn new(raw_src: &'a str) -> Self {
+        let src = raw_src.lines().collect();
+        Self {
+            raw_src,
+            src,
+            cached_formats: HashMap::new(),
+            comments: VecDeque::new(),
+            out: Buffer::default(),
+        }
+    }
+
     // Expects to be written directly into place
     pub fn write_ident(&mut self, node: &BodyNode) -> Result {
         match node {
             BodyNode::Element(el) => self.write_element(el),
             BodyNode::Component(component) => self.write_component(component),
             BodyNode::Text(text) => self.out.write_text(text),
-            BodyNode::RawExpr(exp) => self.write_raw_expr(exp),
-            _ => Ok(()),
+            BodyNode::RawExpr(exp) => self.write_raw_expr(exp.span()),
+            BodyNode::ForLoop(forloop) => self.write_for_loop(forloop),
+            BodyNode::IfChain(ifchain) => self.write_if_chain(ifchain),
         }
     }
 
@@ -133,16 +147,16 @@ impl Writer {
 
             total += match &attr.attr {
                 ElementAttr::AttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 3
+                    value.source.as_ref().unwrap().value().len() + name.span().line_length() + 6
                 }
                 ElementAttr::AttrExpression { name, value } => {
-                    value.span().line_length() + name.span().line_length() + 3
+                    value.span().line_length() + name.span().line_length() + 6
                 }
                 ElementAttr::CustomAttrText { value, name } => {
-                    value.source.as_ref().unwrap().value().len() + name.value().len() + 3
+                    value.source.as_ref().unwrap().value().len() + name.value().len() + 6
                 }
                 ElementAttr::CustomAttrExpression { name, value } => {
-                    name.value().len() + value.span().line_length() + 3
+                    name.value().len() + value.span().line_length() + 6
                 }
                 ElementAttr::EventTokens { tokens, name } => {
                     let location = Location::new(tokens.span().start());
@@ -162,7 +176,7 @@ impl Writer {
                         self.cached_formats[&location].len()
                     };
 
-                    len + name.span().line_length() + 3
+                    len + name.span().line_length() + 6
                 }
             };
         }
@@ -175,6 +189,31 @@ impl Writer {
             .entry(Location::new(expr.span().start()))
             .or_insert_with(|| prettyplease::unparse_expr(expr))
             .as_str()
+    }
+
+    fn write_for_loop(&mut self, forloop: &ForLoop) -> std::fmt::Result {
+        write!(
+            self.out,
+            "for {} in {} {{",
+            forloop.pat.clone().into_token_stream(),
+            prettyplease::unparse_expr(&forloop.expr)
+        )?;
+
+        if forloop.body.is_empty() {
+            write!(self.out, "}}")?;
+            return Ok(());
+        }
+
+        self.write_body_indented(&forloop.body)?;
+
+        self.out.tabbed_line()?;
+        write!(self.out, "}}")?;
+
+        Ok(())
+    }
+
+    fn write_if_chain(&mut self, ifchain: &ExprIf) -> std::fmt::Result {
+        self.write_raw_expr(ifchain.span())
     }
 }
 

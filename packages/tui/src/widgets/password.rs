@@ -40,8 +40,8 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
     let dragging = use_state(cx, || false);
 
     let text = text_ref.read().clone();
-    let start_highlight = cursor.read().first().idx(&text);
-    let end_highlight = cursor.read().last().idx(&text);
+    let start_highlight = cursor.read().first().idx(&*text);
+    let end_highlight = cursor.read().last().idx(&*text);
     let (text_before_first_cursor, text_after_first_cursor) = text.split_at(start_highlight);
     let (text_highlighted, text_after_second_cursor) =
         text_after_first_cursor.split_at(end_highlight - start_highlight);
@@ -88,7 +88,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
             return;
         }
         let mut text = text_ref.write();
-        cursor.write().handle_input(&k, &mut text, max_len);
+        cursor.write().handle_input(&k, &mut *text, max_len);
         if let Some(input_handler) = &cx.props.raw_oninput {
             input_handler.call(FormData {
                 value: text.clone(),
@@ -147,7 +147,7 @@ pub(crate) fn Password<'a>(cx: Scope<'a, PasswordProps>) -> Element<'a> {
                 // textboxs are only one line tall
                 new.row = 0;
 
-                new.realize_col(&text_ref.read());
+                new.realize_col(text_ref.read().as_str());
                 cursor.set(Cursor::from_start(new));
                 dragging.set(true);
                 let node = tui_query_clone.get(get_root_id(cx).unwrap());

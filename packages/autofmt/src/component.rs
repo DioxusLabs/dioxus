@@ -19,7 +19,7 @@ enum ShortOptimization {
     NoOpt,
 }
 
-impl Writer {
+impl Writer<'_> {
     pub fn write_component(
         &mut self,
         Component {

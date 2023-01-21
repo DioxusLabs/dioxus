@@ -1,6 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use dioxus_native_core::layout_attributes::apply_layout_attributes;
+use dioxus_native_core::layout_attributes::{
+    apply_layout_attributes_cfg, BorderWidths, LayoutConfigeration,
+};
 use dioxus_native_core::node::OwnedAttributeView;
 use dioxus_native_core::node_ref::{AttributeMask, NodeMask, NodeView};
 use dioxus_native_core::state::ChildDepState;
@@ -94,7 +96,18 @@ impl ChildDepState for TaffyLayout {
                         .binary_search(&attribute.name.as_ref())
                         .is_ok());
                     if let Some(text) = value.as_text() {
-                        apply_layout_attributes(&attribute.name, text, &mut style);
+                        apply_layout_attributes_cfg(
+                            &attribute.name,
+                            text,
+                            &mut style,
+                            &LayoutConfigeration {
+                                border_widths: BorderWidths {
+                                    thin: 1.0,
+                                    medium: 1.0,
+                                    thick: 1.0,
+                                },
+                            },
+                        );
                     }
                 }
             }

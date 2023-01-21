@@ -1,26 +1,26 @@
 //! pretty printer for rsx!
 use std::fmt::{Result, Write};
 
-use crate::Writer;
+use proc_macro2::Span;
 
-impl Writer {
-    pub fn write_raw_expr(&mut self, exp: &syn::Expr) -> Result {
+use crate::{collect_macros::byte_offset, Writer};
+
+impl Writer<'_> {
+    pub fn write_raw_expr(&mut self, placement: Span) -> Result {
         /*
         We want to normalize the expr to the appropriate indent level.
         */
 
-        use syn::spanned::Spanned;
-        let placement = exp.span();
         let start = placement.start();
         let end = placement.end();
 
         // if the expr is on one line, just write it directly
         if start.line == end.line {
-            write!(
-                self.out,
-                "{}",
-                &self.src[start.line - 1][start.column - 1..end.column].trim()
-            )?;
+            // split counting utf8 chars
+            let start = byte_offset(self.raw_src, start);
+            let end = byte_offset(self.raw_src, end);
+            let row = self.raw_src[start..end].trim();
+            write!(self.out, "{}", row)?;
             return Ok(());
         }
 
