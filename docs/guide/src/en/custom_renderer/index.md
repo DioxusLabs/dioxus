@@ -2,7 +2,7 @@
 
 Dioxus is an incredibly portable framework for UI development. The lessons, knowledge, hooks, and components you acquire over time can always be used for future projects. However, sometimes those projects cannot leverage a supported renderer or you need to implement your own better renderer.
 
-Great news: the design of the renderer is entirely up to you! We provide suggestions and inspiration with the 1st party renderers, but only really require processing `DomEdits` and sending `UserEvents`.
+Great news: the design of the renderer is entirely up to you! We provide suggestions and inspiration with the 1st party renderers, but only really require processing `Mutations` and sending `UserEvents`.
 
 ## The specifics:
 
@@ -46,114 +46,179 @@ enum Mutation {
 }
 ```
 
-The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the "push_root" method pushes a new "real" DOM node onto the stack and "append_child" and "replace_with" both remove nodes from the stack.
+The Dioxus diffing mechanism operates as a [stack machine](https://en.wikipedia.org/wiki/Stack_machine) where the [LoadTemplate](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.LoadTemplate), [CreatePlaceholder](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.CreatePlaceholder), and [CreateTextNode](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.CreateTextNode) mutations pushes a new "real" DOM node onto the stack and [AppendChildren](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.AppendChildren), [InsertAfter](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.InsertAfter), [InsertBefore](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.InsertBefore), [ReplacePlaceholder](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.ReplacePlaceholder), and [ReplaceWith](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.ReplaceWith) all remove nodes from the stack.
 
+## Node storage
+
+Dioxus saves and loads elements with IDs. Inside the VirtualDOM, this is just tracked as as a u64.
+
+Whenever a `CreateElement` edit is generated during diffing, Dioxus increments its node counter and assigns that new element its current NodeCount. The RealDom is responsible for remembering this ID and pushing the correct node when id is used in a mutation. Dioxus reclaims the IDs of elements when removed. To stay in sync with Dioxus you can use a sparse Vec (Vec<Option<T>>) with possibly unoccupied items. You can use the ids as indexes into the Vec for elements, and grow the Vec when an id does not exist.
 
 ### An Example
 
 For the sake of understanding, let's consider this example – a very simple UI declaration:
 
 ```rust
-rsx!( h1 {"count {x}"} )
+rsx!( h1 {"count: {x}"} )
 ```
 
-To get things started, Dioxus must first navigate to the container of this h1 tag. To "navigate" here, the internal diffing algorithm generates the DomEdit `PushRoot` where the ID of the root is the container.
+#### Building Templates
 
-When the renderer receives this instruction, it pushes the actual Node onto its own stack. The real renderer's stack will look like this:
+The above rsx will create a template that contains one static h1 tag and a placeholder for a dynamic text node. The template contains the static parts of the UI, and ids for the dynamic parts along with the paths to access them.
+
+The template will look something like this:
+
+```rust
+Template {
+    // Some id that is unique for the entire project
+    name: "main.rs:1:1:0",
+    // The root nodes of the template
+    roots: &[
+        TemplateNode::Element {
+            tag: "h1",
+            namespace: None,
+            attrs: &[],
+            children: &[
+                TemplateNode::DynamicText {
+                    id: 0
+                },
+            ],
+        }
+    ],
+    // the path to each of the dynamic nodes
+    node_paths: &[
+        // the path to dynamic node with a id of 0
+        &[
+            // on the first root node
+            0,
+            // the first child of the root node
+            0,
+        ]
+    ],
+    // the path to each of the dynamic attributes
+    attr_paths: &'a [&'a [u8]],
+}
+```
+> For more detailed docs about the struture of templates see the [Template api docs](https://docs.rs/dioxus-core/latest/dioxus_core/prelude/struct.Template.html)
+
+This template will be sent to the renderer in the [list of templates](https://docs.rs/dioxus-core/latest/dioxus_core/struct.Mutations.html#structfield.templates) supplied with the mutations the first time it is used. Any time the renderer encounters a [LoadTemplate](https://docs.rs/dioxus-core/latest/dioxus_core/enum.Mutation.html#variant.LoadTemplate) mutation after this, it should clone the template and store it in the given id.
+
+For dynamic nodes and dynamic text nodes, a placeholder node should be created and inserted into the UI so that the node can be navigated to later.
+
+In HTML renderers, this template could look like:
+
+```html
+<h1>""</h1>
+```
+
+#### Applying Mutations
+
+After the renderer has created all of the new templates, it can begin to process the mutations.
+
+When the renderer starts, it should contain the Root node on the stack and store the Root node with an id of 0. The Root node is the top-level node of the UI. In HTML, this is the `<div id="main">` element.
+
+```rust
+instructions: []
+stack: [
+    RootNode,
+]
+nodes: [
+    RootNode,
+]
+```
+
+The first mutation is a `LoadTemplate` mutation. This tells the renderer to load a root from the template with the given id. The renderer will then push the root node of the template onto the stack and store it with an id for later. In this case, the root node is an h1 element.
 
 ```rust
 instructions: [
-    PushRoot(Container)
+    LoadTemplate {
+        // the id of the template
+        name: "main.rs:1:1:0",
+        // the index of the root node in the template
+        index: 0,
+        // the id to store
+        id: ElementId(1),
+    }
 ]
 stack: [
-    ContainerNode,
+    RootNode,
+    <h1>""</h1>,
+]
+nodes: [
+    RootNode,
+    <h1>""</h1>,
 ]
 ```
 
-Next, Dioxus will encounter the h1 node. The diff algorithm decides that this node needs to be created, so Dioxus will generate the DomEdit `CreateElement`. When the renderer receives this instruction, it will create an unmounted node and push it into its own stack:
+Next, Dioxus will create the dynamic text node. The diff algorithm decides that this node needs to be created, so Dioxus will generate the Mutation `HydrateText`. When the renderer receives this instruction, it will navigate to the placeholder text node in the template and replace it with the new text.
 
 ```rust
 instructions: [
-    PushRoot(Container),
-    CreateElement(h1),
+    LoadTemplate {
+        name: "main.rs:1:1:0",
+        index: 0,
+        id: ElementId(1),
+    },
+    HydrateText {
+        // the id to store the text node
+        id: ElementId(2),
+        // the text to set
+        text: "count: 0",
+    }
 ]
 stack: [
-    ContainerNode,
-    h1,
+    RootNode,
+    <h1>"count: 0"</h1>,
+]
+nodes: [
+    RootNode,
+    <h1>"count: 0"</h1>,
+    "count: 0",
 ]
 ```
-Next, Dioxus sees the text node, and generates the `CreateTextNode` DomEdit:
-```rust
-instructions: [
-    PushRoot(Container),
-    CreateElement(h1),
-    CreateTextNode("hello world")
-]
-stack: [
-    ContainerNode,
-    h1,
-    "hello world"
-]
-```
-Remember, the text node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the text node to the h1 element. It depends on the situation, but in this case, we use `AppendChildren`. This pops the text node off the stack, leaving the h1 element as the next element in line.
+
+Remember, the h1 node is not attached to anything (it is unmounted) so Dioxus needs to generate an Edit that connects the h1 node to the Root. It depends on the situation, but in this case, we use `AppendChildren`. This pops the text node off the stack, leaving the Root element as the next element on the stack.
 
 ```rust
 instructions: [
-    PushRoot(Container),
-    CreateElement(h1),
-    CreateTextNode("hello world"),
-    AppendChildren(1)
+    LoadTemplate {
+        name: "main.rs:1:1:0",
+        index: 0,
+        id: ElementId(1),
+    },
+    HydrateText {
+        id: ElementId(2),
+        text: "count: 0",
+    },
+    AppendChildren {
+        // the id of the parent node
+        id: ElementId(0),
+        // the number of nodes to pop off the stack and append
+        m: 1
+    }
 ]
 stack: [
-    ContainerNode,
-    h1
+    RootNode,
 ]
-```
-We call `AppendChildren` again, popping off the h1 node and attaching it to the parent:
-```rust
-instructions: [
-    PushRoot(Container),
-    CreateElement(h1),
-    CreateTextNode("hello world"),
-    AppendChildren(1),
-    AppendChildren(1)
+nodes: [
+    RootNode,
+    <h1>"count: 0"</h1>,
+    "count: 0",
 ]
-stack: [
-    ContainerNode,
-]
-```
-Finally, the container is popped since we don't need it anymore.
-```rust
-instructions: [
-    PushRoot(Container),
-    CreateElement(h1),
-    CreateTextNode("hello world"),
-    AppendChildren(1),
-    AppendChildren(1),
-    PopRoot
-]
-stack: []
 ```
 Over time, our stack looked like this:
 ```rust
-[]
-[Container]
-[Container, h1]
-[Container, h1, "hello world"]
-[Container, h1]
-[Container]
-[]
+[Root]
+[Root, <h1>""</h1>]
+[Root, <h1>"count: 0"</h1>]
+[Root]
 ```
 
-Notice how our stack is empty once UI has been mounted. Conveniently, this approach completely separates the Virtual DOM and the Real DOM. Additionally, these edits are serializable, meaning we can even manage UIs across a network connection. This little stack machine and serialized edits make Dioxus independent of platform specifics.
+Conveniently, this approach completely separates the Virtual DOM and the Real DOM. Additionally, these edits are serializable, meaning we can even manage UIs across a network connection. This little stack machine and serialized edits make Dioxus independent of platform specifics.
 
 Dioxus is also really fast. Because Dioxus splits the diff and patch phase, it's able to make all the edits to the RealDOM in a very short amount of time (less than a single frame) making rendering very snappy. It also allows Dioxus to cancel large diffing operations if higher priority work comes in while it's diffing.
 
-It's important to note that there _is_ one layer of connectedness between Dioxus and the renderer. Dioxus saves and loads elements (the PushRoot edit) with an ID. Inside the VirtualDOM, this is just tracked as a u64.
-
-Whenever a `CreateElement` edit is generated during diffing, Dioxus increments its node counter and assigns that new element its current NodeCount. The RealDom is responsible for remembering this ID and pushing the correct node when PushRoot(ID) is generated. Dioxus reclaims the IDs of elements when removed. To stay in sync with Dioxus you can use a sparse Vec (Vec<Option<T>>) with possibly unoccupied items. You can use the ids as indexes into the Vec for elements, and grow the Vec when an id does not exist.
-
-This little demo serves to show exactly how a Renderer would need to process an edit stream to build UIs. A set of serialized DomEditss for various demos is available for you to test your custom renderer against.
+This little demo serves to show exactly how a Renderer would need to process an edit stream to build UIs.
 
 ## Event loop
 
@@ -223,35 +288,17 @@ fn virtual_event_from_websys_event(event: &web_sys::Event) -> VirtualEvent {
 
 ## Custom raw elements
 
-If you need to go as far as relying on custom elements for your renderer – you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away (pose no runtime overhead). You can drop in your own elements any time you want, with little hassle. However, you must be absolutely sure your renderer can handle the new type, or it will crash and burn.
+If you need to go as far as relying on custom elements/attributes for your renderer – you totally can. This still enables you to use Dioxus' reactive nature, component system, shared state, and other features, but will ultimately generate different nodes. All attributes and listeners for the HTML and SVG namespace are shuttled through helper structs that essentially compile away. You can drop in your elements any time you want, with little hassle. However, you must be sure your renderer can handle the new namespace.
 
-These custom elements are defined as unit structs with trait implementations.
-
-For example, the `div` element is (approximately!) defined as such:
-
-```rust
-struct div;
-impl div {
-    /// Some glorious documentation about the class property.
-    const TAG_NAME: &'static str = "div";
-    const NAME_SPACE: Option<&'static str> = None;
-    // define the class attribute
-    pub fn class<'a>(&self, cx: NodeFactory<'a>, val: Arguments) -> Attribute<'a> {
-        cx.attr("class", val, None, false)
-    }
-    // more attributes
-}
-```
-
-You've probably noticed that many elements in the `rsx!` macros support on-hover documentation. The approach we take to custom elements means that the unit struct is created immediately where the element is used in the macro. When the macro is expanded, the doc comments still apply to the unit struct, giving tons of in-editor feedback, even inside a proc macro.
+For more examples and information on how to create custom namespaces, see the [`dioxus_html` crate](https://github.com/DioxusLabs/dioxus/blob/master/packages/html/README.md#how-to-extend-it).
 
 # Native Core
 
-If you are creating a renderer in rust, native-core provides some utilities to implement a renderer. It provides an abstraction over DomEdits and handles the layout for you.
+If you are creating a renderer in rust, the [native-core](https://github.com/DioxusLabs/dioxus/tree/master/packages/native-core) crate provides some utilities to implement a renderer. It provides an abstraction over Mutations and Templates and contains helpers that can handle the layout, and text editing for you.
 
-## RealDom
+## The RealDom
 
-The `RealDom` is a higher-level abstraction over updating the Dom. It updates with `DomEdits` and provides a way to incrementally update the state of nodes based on what attributes change.
+The `RealDom` is a higher-level abstraction over updating the Dom. It updates with `Mutations` and provides a way to incrementally update the state of nodes based on attributes or other states that change.
 
 ### Example
 
@@ -269,11 +316,11 @@ cx.render(rsx!{
 })
 ```
 
-In this tree, the color depends on the parent's color. The size depends on the children's size, the current text, and the text size. The border depends on only the current node.
+In this tree, the color depends on the parent's color. The layout depends on the children's layout, the current text, and the text size. The border depends on only the current node.
 
 In the following diagram arrows represent dataflow:
 
-[![](https://mermaid.ink/img/pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)](https://mermaid-js.github.io/mermaid-live-editor/edit#pako:eNqdVNFqgzAU_RXJXizUUZPJmIM-jO0LukdhpCbO0JhIGteW0n9fNK1Oa0brfUnu9VxyzzkXjyCVhIIYZFzu0hwr7X2-JcIzsa3W3wqXuZdKoele22oddfa1Y0Tnfn31muvMfqeCDNq3GmvaNROmaKqZFO1DPTRhP8MOd1fTWYNDvzlmQbBMJZcq9JtjNgY1mLVUhBqQPQeojl3wGCw5PsjqnIe-zXqEL8GZ2Kz0gVMPmoeU3ND4IcuiaLGY2zRouuKncv_qGKv3VodpJe0JVU6QCQ5kgqMyWQVr8hbk4hm1PBcmsuwmnrCVH94rP7xN_ucp8sOB_EPSfz9drYVrkpc_AmH8_yTjJueUc-ntpOJkgt2os9tKjcYlt-DLUiD3UsB2KZCLcwjv3Aq33-g2v0M0xXA0MBy5DUdXi-gcJZriuLmAOSioKjAj5ld8rMsJ0DktaAJicyVYbRKQiJPBVSUx438QpqUCcYb5ls4BrrRcHUTaFizqnWGzR8W5evoFI-bJdw)
+[![](https://mermaid.ink/img/pako:eNqllV1vgjAUhv8K6W4wkQVa2QdLdrHsdlfukmSptEhjoaSWqTH-9xVwONAKst70g5739JzzlO5BJAgFAYi52EQJlsr6fAszS7d1sVhKnCdWJDJFt6peLVs5-9owohK7HFrVcFJ_pxnpmK8VVvRkTJikkWIiaxy1dhP23bUwW1WW5WbPrrqJ4ziR4EJ6dtVN2ls5y1ZztePUcrWZFCvqVEcPPDffvlyS1XoLIQnVgnVvVPR6FU9Zc-6dV453ojjOPbuetRJ57gIeXQR3cez7rjtteZyZQ2j5MqmjqwE0ZW0VKx9RKtgpFewp1aw3sXXFy6TWgiYlv8mfq1scD8ofbBCAfQg8_AMBOAyBxzEIwA4CxgQ99QbQkjnD2KT7_CfxGF8_9WXQEsq5sDZCcjICOXRCri4h6r3NA38Q6Jdi1EOx5w3DGDYYI6MUvJFjM3VoGHUeGoMd6mBnDmh2E3fo7O4Yhf0x4OkBmIKUyhQzol_GfbkcApXQlIYg0EOC5SoEYXbQ-3ChxHyXRSBQsqBTUOREx_7OsAY3BUGM-VqvUsKUkB_1U6vf05gtweEHTk4_HQ?type=png)](https://mermaid.live/edit#pako:eNqllV1vgjAUhv8K6W4wkQVa2QdLdrHsdlfukmSptEhjoaSWqTH-9xVwONAKst70g5739JzzlO5BJAgFAYi52EQJlsr6fAszS7d1sVhKnCdWJDJFt6peLVs5-9owohK7HFrVcFJ_pxnpmK8VVvRkTJikkWIiaxy1dhP23bUwW1WW5WbPrrqJ4ziR4EJ6dtVN2ls5y1ZztePUcrWZFCvqVEcPPDffvlyS1XoLIQnVgnVvVPR6FU9Zc-6dV453ojjOPbuetRJ57gIeXQR3cez7rjtteZyZQ2j5MqmjqwE0ZW0VKx9RKtgpFewp1aw3sXXFy6TWgiYlv8mfq1scD8ofbBCAfQg8_AMBOAyBxzEIwA4CxgQ99QbQkjnD2KT7_CfxGF8_9WXQEsq5sDZCcjICOXRCri4h6r3NA38Q6Jdi1EOx5w3DGDYYI6MUvJFjM3VoGHUeGoMd6mBnDmh2E3fo7O4Yhf0x4OkBmIKUyhQzol_GfbkcApXQlIYg0EOC5SoEYXbQ-3ChxHyXRSBQsqBTUOREx_7OsAY3BUGM-VqvUsKUkB_1U6vf05gtweEHTk4_HQ)
 
 [//]: # "%% mermaid flow chart"
 [//]: # "flowchart TB"
@@ -284,33 +331,42 @@ In the following diagram arrows represent dataflow:
 [//]: # "        direction TB"
 [//]: # "        subgraph div state"
 [//]: # "            direction TB"
-[//]: # "            state1(state)-->color1(color)"
-[//]: # "            state1-->border1(border)"
+[//]: # "            state1(state)---color1(color)"
+[//]: # "            linkStyle 0 stroke-width:10px;"
+[//]: # "            state1---border1(border)"
+[//]: # "            linkStyle 1 stroke-width:10px;"
 [//]: # "            text_width-.->layout_width1(layout width)"
 [//]: # "            linkStyle 2 stroke:#ff5500,stroke-width:4px;"
-[//]: # "            state1-->layout_width1"
+[//]: # "            state1---layout_width1"
+[//]: # "            linkStyle 3 stroke-width:10px;"
 [//]: # "        end"
 [//]: # "        subgraph p state"
 [//]: # "            direction TB"
-[//]: # "            state2(state)-->color2(color)"
+[//]: # "            state2(state)---color2(color)"
+[//]: # "            linkStyle 4 stroke-width:10px;"
 [//]: # "            color1-.->color2"
 [//]: # "            linkStyle 5 stroke:#0000ff,stroke-width:4px;"
-[//]: # "            state2-->border2(border)"
+[//]: # "            state2---border2(border)"
+[//]: # "            linkStyle 6 stroke-width:10px;"
 [//]: # "            text_width-.->layout_width2(layout width)"
 [//]: # "            linkStyle 7 stroke:#ff5500,stroke-width:4px;"
-[//]: # "            state2-->layout_width2"
+[//]: # "            state2---layout_width2"
+[//]: # "            linkStyle 8 stroke-width:10px;"
 [//]: # "            layout_width2-.->layout_width1"
 [//]: # "            linkStyle 9 stroke:#00aa00,stroke-width:4px;"
 [//]: # "        end"
 [//]: # "        subgraph hello world state"
 [//]: # "            direction TB"
-[//]: # "            state3(state)-->border3(border)"
-[//]: # "            state3-->color3(color)"
+[//]: # "            state3(state)---border3(border)"
+[//]: # "            linkStyle 10 stroke-width:10px;"
+[//]: # "            state3---color3(color)"
+[//]: # "            linkStyle 11 stroke-width:10px;"
 [//]: # "            color2-.->color3"
 [//]: # "            linkStyle 12 stroke:#0000ff,stroke-width:4px;"
 [//]: # "            text_width-.->layout_width3(layout width)"
 [//]: # "            linkStyle 13 stroke:#ff5500,stroke-width:4px;"
-[//]: # "            state3-->layout_width3"
+[//]: # "            state3---layout_width3"
+[//]: # "            linkStyle 14 stroke-width:10px;"
 [//]: # "            layout_width3-.->layout_width2"
 [//]: # "            linkStyle 15 stroke:#00aa00,stroke-width:4px;"
 [//]: # "        end"
@@ -319,25 +375,29 @@ In the following diagram arrows represent dataflow:
 To help in building a Dom, native-core provides four traits: State, ChildDepState, ParentDepState, NodeDepState, and a RealDom struct. The ChildDepState, ParentDepState, and NodeDepState provide a way to describe how some information in a node relates to that of its relatives. By providing how to build a single node from its relations, native-core will derive a way to update the state of all nodes for you with ```#[derive(State)]```. Once you have a state you can provide it as a generic to RealDom. RealDom provides all of the methods to interact and update your new dom.
 
 ```rust
+
 use dioxus_native_core::node_ref::*;
 use dioxus_native_core::state::{ChildDepState, NodeDepState, ParentDepState, State};
 use dioxus_native_core_macro::{sorted_str_slice, State};
 
 #[derive(Default, Copy, Clone)]
-struct Size(f32, f32);
+struct Size(f64, f64);
 // Size only depends on the current node and its children, so it implements ChildDepState
 impl ChildDepState for Size {
     // Size accepts a font size context
-    type Ctx = f32;
+    type Ctx = f64;
     // Size depends on the Size part of each child
-    type DepState = Self;
+    type DepState = (Self,);
     // Size only cares about the width, height, and text parts of the current node
     const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!(["width", "height"]))).with_text();
+        NodeMask::new_with_attrs(AttributeMask::Static(&sorted_str_slice!([
+            "width", "height"
+        ])))
+        .with_text();
     fn reduce<'a>(
         &mut self,
         node: NodeView,
-        children: impl Iterator<Item = &'a Self::DepState>,
+        children: impl Iterator<Item = (&'a Self,)>,
         ctx: &Self::Ctx,
     ) -> bool
     where
@@ -347,28 +407,28 @@ impl ChildDepState for Size {
         let mut height;
         if let Some(text) = node.text() {
             // if the node has text, use the text to size our object
-            width = text.len() as f32 * ctx;
+            width = text.len() as f64 * ctx;
             height = *ctx;
         } else {
             // otherwise, the size is the maximum size of the children
             width = children
                 .by_ref()
-                .map(|item| item.0)
+                .map(|(item,)| item.0)
                 .reduce(|accum, item| if accum >= item { accum } else { item })
                 .unwrap_or(0.0);
 
             height = children
-                .map(|item| item.1)
+                .map(|(item,)| item.1)
                 .reduce(|accum, item| if accum >= item { accum } else { item })
                 .unwrap_or(0.0);
         }
         // if the node contains a width or height attribute it overrides the other size
-        for a in node.attributes(){
-            match a.name{
-                "width" => width = a.value.as_float32().unwrap(),
-                "height" => height = a.value.as_float32().unwrap(),
+        for a in node.attributes().into_iter().flatten() {
+            match &*a.attribute.name {
+                "width" => width = a.value.as_float().unwrap(),
+                "height" => height = a.value.as_float().unwrap(),
                 // because Size only depends on the width and height, no other attributes will be passed to the member
-                _ => panic!()
+                _ => panic!(),
             }
         }
         // to determine what other parts of the dom need to be updated we return a boolean that marks if this member changed
@@ -388,17 +448,16 @@ struct TextColor {
 impl ParentDepState for TextColor {
     type Ctx = ();
     // TextColor depends on the TextColor part of the parent
-    type DepState = Self;
+    type DepState = (Self,);
     // TextColor only cares about the color attribute of the current node
     const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::Static(&["color"]));
-    fn reduce(
-        &mut self,
-        node: NodeView,
-        parent: Option<&Self::DepState>,
-        _ctx: &Self::Ctx,
-    ) -> bool {
+    fn reduce(&mut self, node: NodeView, parent: Option<(&Self,)>, _ctx: &Self::Ctx) -> bool {
         // TextColor only depends on the color tag, so getting the first tag is equivilent to looking through all tags
-        let new = match node.attributes().next().map(|attr| attr.name) {
+        let new = match node
+            .attributes()
+            .and_then(|attrs| attrs.next())
+            .map(|attr| attr.attribute.name.as_str())
+        {
             // if there is a color tag, translate it
             Some("red") => TextColor { r: 255, g: 0, b: 0 },
             Some("green") => TextColor { r: 0, g: 255, b: 0 },
@@ -406,7 +465,7 @@ impl ParentDepState for TextColor {
             Some(_) => panic!("unknown color"),
             // otherwise check if the node has a parent and inherit that color
             None => match parent {
-                Some(parent) => *parent,
+                Some((parent,)) => *parent,
                 None => Self::default(),
             },
         };
@@ -420,15 +479,19 @@ impl ParentDepState for TextColor {
 #[derive(Debug, Clone, PartialEq, Default)]
 struct Border(bool);
 // TextColor only depends on the current node, so it implements NodeDepState
-impl NodeDepState<()> for Border {
+impl NodeDepState for Border {
     type Ctx = ();
-   
+    type DepState = ();
+
     // Border does not depended on any other member in the current node
-    const NODE_MASK: NodeMask =
-        NodeMask::new_with_attrs(AttributeMask::Static(&["border"]));
+    const NODE_MASK: NodeMask = NodeMask::new_with_attrs(AttributeMask::Static(&["border"]));
     fn reduce(&mut self, node: NodeView, _sibling: (), _ctx: &Self::Ctx) -> bool {
         // check if the node contians a border attribute
-        let new = Self(node.attributes().next().map(|a| a.name == "border").is_some());
+        let new = Self(
+            node.attributes()
+                .and_then(|attrs| attrs.next().map(|a| a.attribute.name == "border"))
+                .is_some(),
+        );
         // check if the member has changed
         let changed = new != *self;
         *self = new;
@@ -451,7 +514,7 @@ struct ToyState {
 }
 ```
 
-Now that we have our state, we can put it to use in our dom. Re can update the dom with update_state to update the structure of the dom (adding, removing, and changing properties of nodes) and then apply_mutations to update the ToyState for each of the nodes that changed.
+Now that we have our state, we can put it to use in our dom. We can update the dom with update_state to update the structure of the dom (adding, removing, and changing properties of nodes) and then apply_mutations to update the ToyState for each of the nodes that changed.
 ```rust
 fn main(){
     fn app(cx: Scope) -> Element {
@@ -470,7 +533,7 @@ fn main(){
     let to_update = rdom.apply_mutations(vec![mutations]);
     let mut ctx = AnyMap::new();
     // set the font size to 3.3
-    ctx.insert(3.3f32);
+    ctx.insert(3.3f64);
     // update the ToyState for nodes in the real_dom tree
     let _to_rerender = rdom.update_state(&dom, to_update, ctx).unwrap();
 
@@ -484,7 +547,7 @@ fn main(){
                 let mutations = vdom.work_with_deadline(|| false);
                 let to_update = rdom.apply_mutations(mutations);
                 let mut ctx = AnyMap::new();
-                ctx.insert(3.3);
+                ctx.insert(3.3f64);
                 let _to_rerender = rdom.update_state(vdom, to_update, ctx).unwrap();
 
                 // render...
@@ -494,7 +557,34 @@ fn main(){
 ```
 
 ## Layout
-For most platforms, the layout of the Elements will stay the same. The layout_attributes module provides a way to apply HTML attributes to a stretch layout style.
+
+For most platforms, the layout of the Elements will stay the same. The [layout_attributes](https://docs.rs/dioxus-native-core/latest/dioxus_native_core/layout_attributes/index.html) module provides a way to apply HTML attributes a [Taffy](https://docs.rs/taffy/latest/taffy/index.html) layout style.
+
+## Text Editing
+
+To make it easier to implement text editing in rust renderers, `native-core` also contains a renderer-agnostic cursor system. The cursor can handle text editing, selection, and movement with common keyboard shortcuts integrated.
+
+```rust
+let mut cursor = Cursor::default();
+let mut text = String::new();
+
+let keyboard_data = dioxus_html::KeyboardData::new(
+    dioxus_html::input_data::keyboard_types::Key::ArrowRight,
+    dioxus_html::input_data::keyboard_types::Code::ArrowRight,
+    dioxus_html::input_data::keyboard_types::Location::Standard,
+    false,
+    Modifiers::empty(),
+);
+// handle keyboard input with a max text length of 10
+cursor.handle_input(&keyboard_data, &mut text, 10);
+
+// mannually select text between characters 0-5 on the first line (this could be from dragging with a mouse)
+cursor.start = Pos::new(0, 0);
+cursor.end = Some(Pos::new(5, 0));
+
+// delete the selected text and move the cursor to the start of the selection
+cursor.delete_selection(&mut text);
+```
 
 ## Conclusion
-That should be it! You should have nearly all the knowledge required on how to implement your own renderer. We're super interested in seeing Dioxus apps brought to custom desktop renderers, mobile renderers, video game UI, and even augmented reality! If you're interested in contributing to any of these projects, don't be afraid to reach out or join the [community](https://discord.gg/XgGxMSkvUM).
+That should be it! You should have nearly all the knowledge required on how to implement your renderer. We're super interested in seeing Dioxus apps brought to custom desktop renderers, mobile renderers, video game UI, and even augmented reality! If you're interested in contributing to any of these projects, don't be afraid to reach out or join the [community](https://discord.gg/XgGxMSkvUM).
