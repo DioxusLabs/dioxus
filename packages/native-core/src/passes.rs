@@ -372,7 +372,7 @@ pub fn resolve_passes<V: FromAnyValue + Send + Sync>(
     let mut pass_indexes_remaining: Vec<_> = (0..passes.len()).collect::<Vec<_>>();
     while !pass_indexes_remaining.is_empty() {
         let mut currently_in_use = FxHashSet::<TypeId>::default();
-        std::thread::scope(|s| {
+        std::thread::scope(|_| {
             let mut i = 0;
             let dynamically_borrowed_tree = tree.tree.dynamically_borrowed();
             while i < pass_indexes_remaining.len() {
