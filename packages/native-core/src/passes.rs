@@ -1,7 +1,7 @@
 use anymap::AnyMap;
 use parking_lot::RwLock;
 use rustc_hash::FxHashSet;
-use std::any::{self, Any, TypeId};
+use std::any::{Any, TypeId};
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use std::sync::Arc;
 use crate::node::{FromAnyValue, NodeData};
 use crate::node_ref::NodeView;
 use crate::real_dom::RealDom;
-use crate::tree::{self, Node, TreeStateView};
+use crate::tree::TreeStateView;
 use crate::{FxDashMap, FxDashSet, SendAnyMap};
 use crate::{NodeId, NodeMask};
 
@@ -129,22 +129,22 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
 
     fn validate() {
         // no type can be a child and parent dependency
-        for type_id in Self::parent_type_ids().into_iter().copied() {
-            for type_id2 in Self::child_type_ids().into_iter().copied() {
+        for type_id in Self::parent_type_ids().iter().copied() {
+            for type_id2 in Self::child_type_ids().iter().copied() {
                 if type_id == type_id2 {
                     panic!("type cannot be both a parent and child dependency");
                 }
             }
         }
         // this type should not be a node dependency
-        for type_id in Self::node_type_ids().into_iter().copied() {
+        for type_id in Self::node_type_ids().iter().copied() {
             if type_id == TypeId::of::<Self>() {
                 panic!("The current type cannot be a node dependency");
             }
         }
         // no states have the same type id
         if Self::all_dependanices()
-            .into_iter()
+            .iter()
             .collect::<FxDashSet<_>>()
             .len()
             != Self::all_dependanices().len()
@@ -160,7 +160,7 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
         Self::validate();
         TypeErasedPass {
             this_type_id: TypeId::of::<Self>(),
-            combined_dependancy_type_ids: Self::all_dependanices().into_iter().copied().collect(),
+            combined_dependancy_type_ids: Self::all_dependanices().iter().copied().collect(),
             parent_dependant: !Self::parent_type_ids().is_empty(),
             child_dependant: !Self::child_type_ids().is_empty(),
             dependants: FxHashSet::default(),
@@ -169,7 +169,7 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
             pass: Box::new(
                 |node_id: NodeId, tree: &mut TreeStateView, context: &SendAnyMap| {
                     debug_assert!(!Self::NodeDependencies::type_ids()
-                        .into_iter()
+                        .iter()
                         .any(|id| *id == TypeId::of::<Self>()));
                     // get all of the states from the tree view
                     // Safety: No node has itself as a parent or child.
@@ -181,7 +181,7 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
                     let myself = unsafe { &mut *node_raw };
 
                     myself.pass(
-                        NodeView::new(&node_data, Self::NODE_MASK),
+                        NodeView::new(node_data, Self::NODE_MASK),
                         node,
                         parent,
                         children,
@@ -207,19 +207,19 @@ pub trait Pass<V: FromAnyValue + Send = ()>: Any {
 
     fn all_dependanices() -> Box<[TypeId]> {
         let mut dependencies = Self::parent_type_ids().to_vec();
-        dependencies.extend(Self::child_type_ids().into_iter());
-        dependencies.extend(Self::node_type_ids().into_iter());
+        dependencies.extend(Self::child_type_ids().iter());
+        dependencies.extend(Self::node_type_ids().iter());
         dependencies.into_boxed_slice()
     }
 
     fn pass_direction() -> PassDirection {
         if Self::child_type_ids()
-            .into_iter()
+            .iter()
             .any(|type_id| *type_id == TypeId::of::<Self>())
         {
             PassDirection::ChildToParent
         } else if Self::parent_type_ids()
-            .into_iter()
+            .iter()
             .any(|type_id| *type_id == TypeId::of::<Self>())
         {
             PassDirection::ParentToChild

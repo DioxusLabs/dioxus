@@ -1,13 +1,10 @@
-use parking_lot::{
-    MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
-};
+use parking_lot::{MappedRwLockReadGuard, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use rustc_hash::{FxHashMap, FxHasher};
 use std::any::{Any, TypeId};
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
 
-use crate::node::NodeData;
 use crate::{AnyMapLike, Dependancy};
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug, Hash)]
@@ -109,7 +106,7 @@ impl Tree {
             tree.nodes.remove(id);
         }
         {
-            let mut node_data_mut = self.node_slab_mut();
+            let node_data_mut = self.node_slab_mut();
             if let Some(parent) = node_data_mut.get(id).unwrap().parent {
                 let parent = node_data_mut.get_mut(parent).unwrap();
                 parent.children.retain(|&child| child != id);
@@ -141,7 +138,7 @@ impl Tree {
     }
 
     pub fn add_child(&mut self, parent: NodeId, new: NodeId) {
-        let mut node_state = self.node_slab_mut();
+        let node_state = self.node_slab_mut();
         node_state.get_mut(new).unwrap().parent = Some(parent);
         let parent = node_state.get_mut(parent).unwrap();
         parent.children.push(new);
@@ -151,7 +148,7 @@ impl Tree {
 
     pub fn replace(&mut self, old_id: NodeId, new_id: NodeId) {
         {
-            let mut node_state = self.node_slab_mut();
+            let node_state = self.node_slab_mut();
             // update the parent's link to the child
             if let Some(parent_id) = node_state.get(old_id).unwrap().parent {
                 let parent = node_state.get_mut(parent_id).unwrap();
@@ -170,7 +167,7 @@ impl Tree {
     }
 
     pub fn insert_before(&mut self, old_id: NodeId, new_id: NodeId) {
-        let mut node_state = self.node_slab_mut();
+        let node_state = self.node_slab_mut();
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
         node_state.get_mut(new_id).unwrap().parent = Some(parent_id);
@@ -186,7 +183,7 @@ impl Tree {
     }
 
     pub fn insert_after(&mut self, old_id: NodeId, new_id: NodeId) {
-        let mut node_state = self.node_slab_mut();
+        let node_state = self.node_slab_mut();
         let old_node = node_state.get(old_id).unwrap();
         let parent_id = old_node.parent.expect("tried to insert before root");
         node_state.get_mut(new_id).unwrap().parent = Some(parent_id);
@@ -271,7 +268,7 @@ impl<'a> DynamicallyBorrowedTree<'a> {
             nodes.insert(id, MaybeRead::Write(self.nodes.get_slab_mut(id).unwrap()));
         }
         {
-            let mut view = TreeStateView {
+            let view = TreeStateView {
                 root: self.root,
                 nodes_data,
                 nodes,
@@ -324,7 +321,7 @@ impl<'a, 'b> TreeStateView<'a, 'b> {
         self.nodes
             .get_mut(&TypeId::of::<T>())
             .and_then(|gaurd| match gaurd {
-                MaybeRead::Read(gaurd) => None,
+                MaybeRead::Read(_gaurd) => None,
                 MaybeRead::Write(gaurd) => gaurd.as_any_mut().downcast_mut::<SlabStorage<T>>(),
             })
     }
@@ -859,7 +856,7 @@ fn get_many_mut_unchecked() {
     println!("ids: {:#?}", [parent, child, grandchild]);
 
     {
-        let mut i32_slab = slab.write_slab::<i32>();
+        let i32_slab = slab.write_slab::<i32>();
         let all =
             unsafe { i32_slab.get_many_mut_unchecked([parent, child, grandchild].into_iter()) }
                 .unwrap();
@@ -867,7 +864,7 @@ fn get_many_mut_unchecked() {
     }
 
     {
-        let mut i32_slab = slab.write_slab::<i32>();
+        let i32_slab = slab.write_slab::<i32>();
         assert!(
             unsafe { i32_slab.get_many_mut_unchecked([NodeId(3), NodeId(100)].into_iter()) }
                 .is_none()
@@ -894,7 +891,7 @@ fn get_many_many_mut_unchecked() {
 
     println!("slab: {:#?}", slab);
 
-    let mut num_entries = slab.write_slab::<i32>();
+    let num_entries = slab.write_slab::<i32>();
 
     let all_num = unsafe {
         num_entries
@@ -906,7 +903,7 @@ fn get_many_many_mut_unchecked() {
     .unwrap();
 
     assert_eq!(all_num, [&mut 0, &mut 1, &mut 2]);
-    let mut str_entries = slab.write_slab::<&str>();
+    let str_entries = slab.write_slab::<&str>();
 
     let all_str = unsafe {
         str_entries

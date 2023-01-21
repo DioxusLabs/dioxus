@@ -1,5 +1,5 @@
 use dioxus_core::{BorrowedAttributeValue, ElementId, Mutations, TemplateNode};
-use parking_lot::{MappedRwLockReadGuard, MappedRwLockWriteGuard};
+
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::any::Any;
 
@@ -78,14 +78,6 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
             child_changed_nodes: FxHashSet::default(),
             nodes_created: FxHashSet::default(),
             phantom: std::marker::PhantomData,
-        }
-    }
-
-    fn mark_dirty(&mut self, node_id: NodeId, mask: NodeMask) {
-        if let Some(node) = self.nodes_updated.get_mut(&node_id) {
-            *node = node.union(&mask);
-        } else {
-            self.nodes_updated.insert(node_id, mask);
         }
     }
 
@@ -247,7 +239,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
                     for new in new_nodes {
-                        self.tree.insert_before(old_node_id, new);
+                        self.insert_before(old_node_id, new);
                     }
                     self.remove(old_node_id);
                 }
@@ -255,7 +247,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.load_child(path);
                     for new in new_nodes {
-                        self.tree.insert_before(old_node_id, new);
+                        self.insert_before(old_node_id, new);
                     }
                     self.remove(old_node_id);
                 }
@@ -263,7 +255,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
                     let new_nodes = self.stack.split_off(self.stack.len() - m);
                     let old_node_id = self.element_to_node_id(id);
                     for new in new_nodes.into_iter().rev() {
-                        self.tree.insert_after(old_node_id, new);
+                        self.insert_after(old_node_id, new);
                     }
                 }
                 InsertBefore { id, m } => {
@@ -385,12 +377,12 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         new_id
     }
 
-    fn root(&self) -> NodeId {
+    pub fn root(&self) -> NodeId {
         self.tree.root()
     }
 
-    fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
-        self.tree.contains(id).then(|| NodeRef { id, dom: &self })
+    pub fn get(&self, id: NodeId) -> Option<NodeRef<'_, V>> {
+        self.tree.contains(id).then_some(NodeRef { id, dom: self })
     }
 
     pub fn get_mut(&mut self, id: NodeId) -> Option<NodeMut<'_, V>> {
@@ -462,7 +454,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.remove(id)
     }
 
-    fn replace(&mut self, old: NodeId, new: NodeId) {
+    pub fn replace(&mut self, old: NodeId, new: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(old) {
             self.mark_child_changed(parent_id);
             self.mark_parent_added_or_removed(new);
@@ -470,7 +462,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.replace(old, new);
     }
 
-    fn insert_before(&mut self, id: NodeId, new: NodeId) {
+    pub fn insert_before(&mut self, id: NodeId, new: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(id) {
             self.mark_child_changed(parent_id);
             self.mark_parent_added_or_removed(new);
@@ -478,7 +470,7 @@ impl<V: FromAnyValue + Send + Sync> RealDom<V> {
         self.tree.insert_before(id, new);
     }
 
-    fn insert_after(&mut self, id: NodeId, new: NodeId) {
+    pub fn insert_after(&mut self, id: NodeId, new: NodeId) {
         if let Some(parent_id) = self.tree.parent_id(id) {
             self.mark_child_changed(parent_id);
             self.mark_parent_added_or_removed(new);
