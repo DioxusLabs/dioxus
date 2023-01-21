@@ -14,7 +14,6 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 log = "0.4.17"
-tokio = { version = "1.23.0", features = ["full"] }
 thiserror = "1.0.38"
 futures-util = { version = "0.3.25", default-features = false, features = [
     "sink",
