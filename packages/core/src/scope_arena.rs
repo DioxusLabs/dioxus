@@ -49,7 +49,7 @@ impl VirtualDom {
 
     fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
         let id = self.scope_stack.last().copied()?;
-        let scope = self.scopes.get(id.0)?;
+        let scope = self.scopes.get(id)?;
         Some(scope)
     }
 
@@ -60,9 +60,9 @@ impl VirtualDom {
         self.ensure_drop_safety(scope_id);
 
         let mut new_nodes = unsafe {
-            self.scopes[scope_id.0].previous_frame().bump_mut().reset();
+            self.scopes[scope_id].previous_frame().bump_mut().reset();
 
-            let scope = &self.scopes[scope_id.0];
+            let scope = &self.scopes[scope_id];
 
             scope.hook_idx.set(0);
 
@@ -127,7 +127,7 @@ impl VirtualDom {
             }
         };
 
-        let scope = &self.scopes[scope_id.0];
+        let scope = &self.scopes[scope_id];
 
         // We write on top of the previous frame and then make it the current by pushing the generation forward
         let frame = scope.previous_frame();

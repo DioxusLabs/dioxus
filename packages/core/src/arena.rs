@@ -92,21 +92,21 @@ impl VirtualDom {
     // Note: This will not remove any ids from the arena
     pub(crate) fn drop_scope(&mut self, id: ScopeId, recursive: bool) {
         self.dirty_scopes.remove(&DirtyScope {
-            height: self.scopes[id.0].height,
+            height: self.scopes[id].height,
             id,
         });
 
         self.ensure_drop_safety(id);
 
         if recursive {
-            if let Some(root) = self.scopes[id.0].try_root_node() {
+            if let Some(root) = self.scopes[id].try_root_node() {
                 if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                     self.drop_scope_inner(node)
                 }
             }
         }
 
-        let scope = &mut self.scopes[id.0];
+        let scope = &mut self.scopes[id];
 
         // Drop all the hooks once the children are dropped
         // this means we'll drop hooks bottom-up
@@ -119,7 +119,7 @@ impl VirtualDom {
             scope.tasks.remove(task_id);
         }
 
-        self.scopes.remove(id.0);
+        self.scopes.remove(id);
     }
 
     fn drop_scope_inner(&mut self, node: &VNode) {
@@ -140,7 +140,7 @@ impl VirtualDom {
 
     /// Descend through the tree, removing any borrowed props and listeners
     pub(crate) fn ensure_drop_safety(&self, scope_id: ScopeId) {
-        let scope = &self.scopes[scope_id.0];
+        let scope = &self.scopes[scope_id];
 
         // make sure we drop all borrowed props manually to guarantee that their drop implementation is called before we
         // run the hooks (which hold an &mut Reference)

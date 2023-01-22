@@ -5,7 +5,7 @@
 use crate::{
     any_props::VProps,
     arena::{ElementId, ElementRef},
-    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg},
+    innerlude::{DirtyScope, ErrorBoundary, Mutations, Scheduler, SchedulerMsg, ScopeSlab},
     mutations::Mutation,
     nodes::RenderReturn,
     nodes::{Template, TemplateId},
@@ -177,7 +177,7 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: Slab<ScopeState>,
+    pub(crate) scopes: ScopeSlab,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -258,7 +258,7 @@ impl VirtualDom {
             rx,
             scheduler: Scheduler::new(tx),
             templates: Default::default(),
-            scopes: Slab::default(),
+            scopes: Default::default(),
             elements: Default::default(),
             scope_stack: Vec::new(),
             dirty_scopes: BTreeSet::new(),
@@ -291,14 +291,14 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0)
+        self.scopes.get(id)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around
     ///
     /// This scope has a ScopeId of 0 and is the root of the tree
     pub fn base_scope(&self) -> &ScopeState {
-        self.scopes.get(0).unwrap()
+        self.scopes.get(ScopeId(0)).unwrap()
     }
 
     /// Build the virtualdom with a global context inserted into the base scope
@@ -313,7 +313,7 @@ impl VirtualDom {
     ///
     /// Whenever the VirtualDom "works", it will re-render this scope
     pub fn mark_dirty(&mut self, id: ScopeId) {
-        if let Some(scope) = self.scopes.get(id.0) {
+        if let Some(scope) = self.scopes.get(id) {
             let height = scope.height;
             self.dirty_scopes.insert(DirtyScope { height, id });
         }
@@ -324,7 +324,7 @@ impl VirtualDom {
     /// This does not mean the scope is waiting on its own futures, just that the tree that the scope exists in is
     /// currently suspended.
     pub fn is_scope_suspended(&self, id: ScopeId) -> bool {
-        !self.scopes[id.0]
+        !self.scopes[id]
             .consume_context::<Rc<SuspenseContext>>()
             .unwrap()
             .waiting_on
@@ -499,7 +499,7 @@ impl VirtualDom {
     pub fn replace_template(&mut self, template: Template<'static>) {
         self.register_template_first_byte_index(template);
         // iterating a slab is very inefficient, but this is a rare operation that will only happen during development so it's fine
-        for (_, scope) in &self.scopes {
+        for scope in self.scopes.iter() {
             if let Some(RenderReturn::Ready(sync)) = scope.try_root_node() {
                 if sync.template.get().name.rsplit_once(':').unwrap().0
                     == template.name.rsplit_once(':').unwrap().0
@@ -583,7 +583,7 @@ impl VirtualDom {
         loop {
             // first, unload any complete suspense trees
             for finished_fiber in self.finished_fibers.drain(..) {
-                let scope = &self.scopes[finished_fiber.0];
+                let scope = &self.scopes[finished_fiber];
                 let context = scope.has_context::<Rc<SuspenseContext>>().unwrap();
 
                 self.mutations
@@ -607,7 +607,7 @@ impl VirtualDom {
                 self.dirty_scopes.remove(&dirty);
 
                 // If the scope doesn't exist for whatever reason, then we should skip it
-                if !self.scopes.contains(dirty.id.0) {
+                if !self.scopes.contains(dirty.id) {
                     continue;
                 }
 
@@ -626,7 +626,7 @@ impl VirtualDom {
                 // If suspended leaves are present, then we should find the boundary for this scope and attach things
                 // No placeholder necessary since this is a diff
                 if !self.collected_leaves.is_empty() {
-                    let mut boundary = self.scopes[dirty.id.0]
+                    let mut boundary = self.scopes[dirty.id]
                         .consume_context::<Rc<SuspenseContext>>()
                         .unwrap();
 
