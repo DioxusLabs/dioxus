@@ -177,7 +177,7 @@ use std::{any::Any, borrow::BorrowMut, cell::Cell, collections::BTreeSet, future
 pub struct VirtualDom {
     // Maps a template path to a map of byteindexes to templates
     pub(crate) templates: FxHashMap<TemplateId, FxHashMap<usize, Template<'static>>>,
-    pub(crate) scopes: Slab<Box<ScopeState>>,
+    pub(crate) scopes: Slab<ScopeState>,
     pub(crate) dirty_scopes: BTreeSet<DirtyScope>,
     pub(crate) scheduler: Rc<Scheduler>,
 
@@ -291,7 +291,7 @@ impl VirtualDom {
     ///
     /// This is useful for inserting or removing contexts from a scope, or rendering out its root node
     pub fn get_scope(&self, id: ScopeId) -> Option<&ScopeState> {
-        self.scopes.get(id.0).map(|f| f.as_ref())
+        self.scopes.get(id.0)
     }
 
     /// Get the single scope at the top of the VirtualDom tree that will always be around

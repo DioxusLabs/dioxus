@@ -26,7 +26,7 @@ impl VirtualDom {
         let height = unsafe { parent.map(|f| (*f).height + 1).unwrap_or(0) };
         let id = ScopeId(entry.key());
 
-        entry.insert(Box::new(ScopeState {
+        entry.insert(ScopeState {
             parent,
             id,
             height,
@@ -44,13 +44,13 @@ impl VirtualDom {
             shared_contexts: Default::default(),
             borrowed_props: Default::default(),
             attributes_to_drop: Default::default(),
-        }))
+        })
     }
 
     fn acquire_current_scope_raw(&self) -> Option<*const ScopeState> {
         let id = self.scope_stack.last().copied()?;
         let scope = self.scopes.get(id.0)?;
-        Some(scope.as_ref())
+        Some(scope)
     }
 
     pub(crate) fn run_scope(&mut self, scope_id: ScopeId) -> &RenderReturn {

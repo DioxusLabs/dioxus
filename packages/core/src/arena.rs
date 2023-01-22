@@ -99,7 +99,7 @@ impl VirtualDom {
         self.ensure_drop_safety(id);
 
         if recursive {
-            if let Some(root) = self.scopes[id.0].as_ref().try_root_node() {
+            if let Some(root) = self.scopes[id.0].try_root_node() {
                 if let RenderReturn::Ready(node) = unsafe { root.extend_lifetime_ref() } {
                     self.drop_scope_inner(node)
                 }
